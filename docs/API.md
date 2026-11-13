@@ -15,6 +15,7 @@ Base URL: `https://freehire.me/api/v1`
 - [What is not here](#what-is-not-here)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [Filtering jobs](#filtering-jobs)
+- [Onboarding](#onboarding)
 - [Jobs](#jobs)
 - [Fit](#fit)
 - [Companies](#companies)
@@ -250,6 +251,27 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`
 
 - **Only jobs that need a security clearance** — `requires_clearance=true`
+
+## Onboarding
+
+### `POST /onboarding/matches`
+
+**Auth:** Public
+
+Open postings ranked by how well their skills match a caller-supplied skill list, under
+the jobs-search filters in `query`. Public: it is what the CV-first onboarding shows a
+visitor who has no account and so no stored profile. Answers the top ten.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skills` | string[] | yes | Canonical skill tags, at most 50. They rank the answer; they do not filter it. |
+| `query` | string | no | A `/jobs/search` query string (`work_mode=remote&posted_within_days=7`, ...). An unknown param is named in `meta.ignored_params`. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/onboarding/matches"
+```
 
 ## Jobs
 
