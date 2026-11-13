@@ -1,12 +1,8 @@
 package mcpapp
 
 import (
-	"context"
-	"encoding/json"
 	"slices"
 	"strings"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
@@ -60,43 +56,4 @@ func signedInNext(tools []assistant.Tool) nextHints {
 			[2]string{"subscribe", "subscribe for alerts on similar searches"},
 		),
 	}
-}
-
-// withNext adds the hint to a JSON-object tool result of the account server, whose
-// search_jobs and get_job are the in-app assistant's untyped ones. Anything that is not a
-// JSON object, or an empty hint, leaves the result untouched.
-func withNext(h mcp.ToolHandler, hint string) mcp.ToolHandler {
-	if hint == "" {
-		return h
-	}
-	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		res, err := h(ctx, req)
-		if err != nil || res == nil || res.IsError || len(res.Content) != 1 {
-			return res, err
-		}
-		text, ok := res.Content[0].(*mcp.TextContent)
-		if !ok {
-			return res, err
-		}
-		var obj map[string]json.RawMessage
-		if json.Unmarshal([]byte(text.Text), &obj) != nil || obj == nil {
-			return res, err
-		}
-		obj["next"], _ = json.Marshal(hint)
-		if out, merr := json.Marshal(obj); merr == nil {
-			text.Text = string(out)
-		}
-		return res, err
-	}
-}
-
-// nextFor picks the hint for one of the two tools that carry it.
-func (n nextHints) nextFor(tool string) string {
-	switch tool {
-	case toolSearchJobs:
-		return n.search
-	case toolGetJob:
-		return n.job
-	}
-	return ""
 }

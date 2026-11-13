@@ -118,10 +118,6 @@ func staticServerHandlers(t *testing.T) map[string]http.Handler {
 	t.Helper()
 	return map[string]http.Handler{
 		"mixed": MixedHandler([]assistant.Tool{}, "", readerThatFinds(t)),
-		"account": AccountHandler([]assistant.Tool{{
-			Name: "test_tool", Schema: map[string]any{"type": "object"},
-			Run: func(context.Context, int64, json.RawMessage) (any, error) { return nil, nil },
-		}}, "", nil),
 	}
 }
 

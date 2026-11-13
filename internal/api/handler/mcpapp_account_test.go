@@ -3,16 +3,41 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/mcpapp"
 )
 
 const testMCPOrigin = "https://freehire.example"
+
+// stampUser plays the authentication middleware: every request arrives as user 42.
+type stampUser struct{ userID string }
+
+func (s stampUser) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set(mcpapp.AccountUserIDHeader, s.userID)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// connectMCPTools serves tools to userID over the one MCP server /mcp and /mcp/account mount.
+func connectMCPTools(t *testing.T, tools []assistant.Tool, userID string) *mcp.ClientSession {
+	t.Helper()
+	server := httptest.NewServer(mcpapp.MixedHandler(tools, testMCPOrigin, nil))
+	t.Cleanup(server.Close)
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
+		&mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: stampUser{userID}}}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
 
 func mcpAccountApp(assistants *assistantHandlers) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

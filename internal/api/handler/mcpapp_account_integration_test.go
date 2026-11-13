@@ -331,6 +331,12 @@ func assertAccountCatalogue(t *testing.T, session *mcp.ClientSession) {
 	for _, tool := range listed.Tools {
 		served[tool.Name] = true
 	}
+	// /mcp/account serves the catalogue's own search_jobs, not the assistant's `filters` object.
+	for _, tool := range listed.Tools {
+		if schema, _ := json.Marshal(tool.InputSchema); tool.Name == "search_jobs" && !strings.Contains(string(schema), `"work_mode"`) {
+			t.Errorf("search_jobs is not the catalogue's schema: %s", schema)
+		}
+	}
 	for _, name := range []string{
 		"search_jobs", "get_job", "get_company", "search_companies", "check_jobs_open",
 		"similar_jobs", "salary_stats", "job_market_stats", "list_filter_values", "search", "fetch",

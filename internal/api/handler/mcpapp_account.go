@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -19,33 +18,18 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// mountMCPAccount wires the signed-in MCP server at /api/v1/mcp/account. It
-// takes the already-constructed assistantHandlers so it can reuse its tools
-// verbatim — the same capabilities the in-app assistant exposes, not a second
-// implementation of them. Which of them are served is mcpAccountTools' answer for
-// an OAuth grant and mcpKeyTools' for a full-scope API key.
+// mountMCPAccount serves /api/v1/mcp/account, the original URL of the signed-in server, on
+// the same server as /mcp. It stays signed-in only: no bearer token is a 401, never anonymous.
+// HTTP admission is enforced by the operations gateway; authentication stays in Fiber so
+// credential-store failures use the normal error pipeline.
 func mountMCPAccount(
 	api fiber.Router,
 	mw middleware,
 	assistants *assistantHandlers,
 	catalogue *mcpappHandlers,
 ) {
-	granted := adaptor.HTTPHandler(mcpapp.AccountHandler(
-		mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue,
-	))
-	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(
-		mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue,
-	))
-	// HTTP admission is enforced by the operations gateway. Authentication stays
-	// in Fiber so credential-store failures use the normal error pipeline.
-	api.All("/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
-		agentViews(catalogue.agentViews, agentview.SurfaceMCPAccount),
-		func(c *fiber.Ctx) error {
-			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
-				return keyed(c)
-			}
-			return granted(c)
-		})
+	mountMCPServer(api, "/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
+		agentview.SurfaceMCPAccount, assistants, catalogue)
 }
 
 // mcpAccountTools is the in-app assistant's discovery and tracking tools, less
@@ -89,12 +73,11 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	all = append(all, assistants.unreadMailTool(origin))
 	// Read-only, and GET /me/plan is open to a key over REST.
 	all = append(all, assistants.planMCPTool(origin))
-	// An MCP client keeps every result in its context, so it gets the bounded variants.
+	// An MCP client keeps every result in its context, so it gets the bounded facets.
+	// search_jobs, get_job and get_company stay in the list only so the instructions and
+	// prompts see them as served; the catalogue's own tools answer those names.
 	for i, t := range all {
-		switch t.Name {
-		case "search_jobs":
-			all[i] = assistants.searchJobs(false)
-		case "facets":
+		if t.Name == "facets" {
 			all[i] = assistants.facets(false)
 		}
 	}

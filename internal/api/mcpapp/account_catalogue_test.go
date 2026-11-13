@@ -13,12 +13,7 @@ import (
 
 func connectAccountCatalogue(t *testing.T, tools []assistant.Tool, reader Reader) *mcp.ClientSession {
 	t.Helper()
-	server := NewAccountServer(
-		tools,
-		42,
-		"",
-		reader,
-	)
+	server := newMixedServer(tools, 42, "", reader, false)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(t.Context(), serverTransport, nil)
 	if err != nil {
@@ -44,6 +39,9 @@ func TestAccountCatalogueToolsAreCallableAndRemainReadOnly(t *testing.T) {
 		args map[string]any
 		key  string
 	}{
+		"search_jobs":        {args: map[string]any{"query": "go"}, key: "jobs"},
+		"get_job":            {args: map[string]any{"slug": "job-a"}, key: "description"},
+		"get_company":        {args: map[string]any{"slug": "acme"}, key: "slug"},
 		"search_companies":   {args: map[string]any{"query": "acme"}, key: "companies"},
 		"check_jobs_open":    {args: map[string]any{"slugs": []string{"job-a"}}, key: "jobs"},
 		"search":             {args: map[string]any{"query": "go"}, key: "results"},
@@ -54,7 +52,7 @@ func TestAccountCatalogueToolsAreCallableAndRemainReadOnly(t *testing.T) {
 		"list_filter_values": {args: map[string]any{"filter": "skills"}, key: "values"},
 	}
 	if len(listed.Tools) != len(calls) {
-		t.Fatalf("account catalogue advertises %d tools, want %d", len(listed.Tools), len(calls))
+		t.Fatalf("signed-in catalogue advertises %d tools, want %d", len(listed.Tools), len(calls))
 	}
 	for _, tool := range listed.Tools {
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
@@ -103,7 +101,9 @@ func TestAccountCatalogueDoesNotExportPayloadsToAnalytics(t *testing.T) {
 	}
 }
 
-func TestAccountCatalogueKeepsPersonalHandlersAndUserIdentity(t *testing.T) {
+// The catalogue owns search_jobs, get_job and get_company on the one server: the assistant's
+// copies of those names are never registered, so /mcp and /mcp/account publish the same schemas.
+func TestSignedInCatalogueOwnsItsNamesAndKeepsPersonalHandlers(t *testing.T) {
 	tools := []assistant.Tool{}
 	for _, name := range []string{"search_jobs", "get_job", "get_company", "my_jobs"} {
 		tools = append(tools, assistant.Tool{
@@ -118,20 +118,29 @@ func TestAccountCatalogueKeepsPersonalHandlersAndUserIdentity(t *testing.T) {
 		})
 	}
 	session := connectAccountCatalogue(t, tools, readerThatFinds(t))
-	for _, tool := range tools {
-		var got struct {
-			User int64 `json:"account_user"`
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range listed.Tools {
+		schema, _ := json.Marshal(tool.InputSchema)
+		marked := strings.Contains(string(schema), "account_marker")
+		if marked != (tool.Name == "my_jobs") {
+			t.Errorf("%s: account_marker in schema = %v; only the personal my_jobs may carry the assistant's schema", tool.Name, marked)
 		}
-		callJSON(t, session, tool.Name, map[string]any{"account_marker": "keep"}, &got)
-		if got.User != 42 {
-			t.Errorf("%s returned user %d, want authenticated user 42", tool.Name, got.User)
-		}
+	}
+	var got struct {
+		User int64 `json:"account_user"`
+	}
+	callJSON(t, session, "my_jobs", map[string]any{"account_marker": "keep"}, &got)
+	if got.User != 42 {
+		t.Errorf("my_jobs returned user %d, want authenticated user 42", got.User)
 	}
 }
 
-func TestAccountCatalogueUsesAccountMetrics(t *testing.T) {
+func TestSignedInCatalogueUsesMixedMetrics(t *testing.T) {
 	session := connectAccountCatalogue(t, nil, readerThatFinds(t))
-	account := mcpToolCalls.WithLabelValues("account", "check_jobs_open", "success", "")
+	account := mcpToolCalls.WithLabelValues("mixed", "check_jobs_open", "success", "")
 	public := mcpToolCalls.WithLabelValues("public", "check_jobs_open", "success", "")
 	beforeAccount, beforePublic := testutil.ToFloat64(account), testutil.ToFloat64(public)
 	var got JobsOpenResult

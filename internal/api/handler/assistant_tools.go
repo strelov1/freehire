@@ -39,7 +39,7 @@ func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 	return []assistant.Tool{
 		h.getProfileTool(),
 		h.facets(true),
-		h.searchJobs(true),
+		h.searchJobs(),
 		h.getJobTool(),
 		h.getCompanyTool(),
 		h.marketFitTool(),
@@ -259,24 +259,15 @@ func facetIndex(view facetPayload, facet, contains string) map[string]any {
 	return map[string]any{"total": view.Total, "facet": facet, "values": values}
 }
 
-// mcpSearchExcerptRunes bounds the description each MCP search result carries.
+// mcpSearchExcerptRunes bounds the description each vacancy in get_company's page carries.
 const mcpSearchExcerptRunes = 400
 
-// searchJobs builds search_jobs. full rehydrates each result's whole description for the
-// in-app assistant, whose turn caps a tool result. An MCP client caps nothing and keeps
-// every answer in its context, where ten full descriptions ran to ~130 KB (2026-11-05),
-// so MCP gets the opening of each from the index preview and reads the rest via get_job.
-func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
+// searchJobs builds search_jobs for the in-app assistant: each result's whole description is
+// rehydrated, since its turn caps a tool result. MCP serves the catalogue's own search_jobs.
+func (h *assistantHandlers) searchJobs() assistant.Tool {
 	description := "Search open vacancies by keyword and facet filters. Every result carries its full " +
 		"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
 		"Take filter names and values from the facets tool."
-	if !full {
-		// No other tool is named here: the Claude directory policy keeps cross-tool guidance
-		// out of tool descriptions (see mcpapp's TestNoToolDescriptionDirectsTheModelToAnotherTool).
-		description = "Search open vacancies by keyword and facet filters. Every result carries the first " +
-			"400 characters of its description as markdown and its public_slug. " +
-			"Link a vacancy as https://freehire.me/jobs/<public_slug>."
-	}
 	return assistant.Tool{
 		Name:        "search_jobs",
 		Title:       "Search jobs",
@@ -350,18 +341,13 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 			if err != nil {
 				return nil, searchToolError(err)
 			}
-			if full {
-				if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
-					return nil, err
-				}
+			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
+				return nil, err
 			}
 			agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 			jobs := make([]jobview.Job, len(res.Hits))
 			for i, hit := range res.Hits {
 				hit.Description = formatDescription(hit.Description, "markdown")
-				if !full {
-					hit.Description = llm.ClipRunesEllipsis(hit.Description, mcpSearchExcerptRunes)
-				}
 				jobs[i] = hit.Job
 			}
 			return map[string]any{"total": res.Total, "limit": limit, "offset": offset, "jobs": jobs}, nil

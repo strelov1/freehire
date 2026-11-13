@@ -15,16 +15,6 @@ import (
 
 // Local analytics must not retain personal fields from headers, names or error text.
 func TestFailedAccountCallLogsOnlySafeMetadata(t *testing.T) {
-	for _, mixed := range []bool{false, true} {
-		name := "account"
-		if mixed {
-			name = "mixed"
-		}
-		t.Run(name, func(t *testing.T) { testPrivateCallTelemetry(t, mixed) })
-	}
-}
-
-func testPrivateCallTelemetry(t *testing.T, mixed bool) {
 	records := captureToolLogs(t)
 	const email = "jane@example.com"
 
@@ -35,11 +25,7 @@ func testPrivateCallTelemetry(t *testing.T, mixed bool) {
 			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	handler := AccountHandler([]assistant.Tool{tool}, "", nil)
-	if mixed {
-		handler = MixedHandler([]assistant.Tool{tool}, "", readerThatFinds(t))
-	}
-	server := httptest.NewServer(handler)
+	server := httptest.NewServer(MixedHandler([]assistant.Tool{tool}, "", readerThatFinds(t)))
 	t.Cleanup(server.Close)
 
 	header := http.Header{}

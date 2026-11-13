@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
@@ -36,20 +36,7 @@ type mcpToolCaller struct {
 
 func newMCPToolCaller(t *testing.T, h *assistantHandlers, userID int64) *mcpToolCaller {
 	t.Helper()
-	server := mcpapp.NewAccountServer(
-		mcpAccountTools(h, testMCPOrigin),
-		userID,
-		testMCPOrigin,
-		nil,
-	)
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	go func() { _ = server.Run(context.Background(), serverTransport) }()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
-		Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { _ = session.Close() })
+	session := connectMCPTools(t, mcpAccountTools(h, testMCPOrigin), strconv.FormatInt(userID, 10))
 	return &mcpToolCaller{t: t, session: session}
 }
 

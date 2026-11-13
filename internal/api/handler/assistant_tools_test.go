@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -93,46 +92,6 @@ func TestSearchJobsToolPassesQueryAndFacetFilter(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), "go-dev-acme") {
 		t.Errorf("result = %s, want it to carry the public slug the agent links by", payload)
-	}
-}
-
-// An MCP client keeps every result in its context window: ten full descriptions were a
-// ~130 KB answer (measured 2026-11-05), so MCP gets each one's opening and get_job reads.
-func TestMCPSearchJobsCarriesOnlyTheOpeningOfEachDescription(t *testing.T) {
-	s := &recordingSearcher{res: search.SearchResult{
-		Hits:  []search.JobDocument{hitDoc(1, "go-dev-acme", "Go Developer")},
-		Total: 1,
-	}}
-	hit := s.res.Hits[0]
-	hit.Description = "<p>Opening line.</p><p>" + strings.Repeat("tail ", 200) + "</p>"
-	s.res.Hits[0] = hit
-	a := assistantWith(&searchHandlers{search: s, descriptions: fixedDescriptions{body: "<p>Full body from Postgres</p>"}}, nil)
-
-	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "search_jobs")
-	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{"query":"go"}`))
-	if err != nil {
-		t.Fatalf("search_jobs: %v", err)
-	}
-	jobs := out.(map[string]any)["jobs"].([]jobview.Job)
-	got := jobs[0].Description
-	if !strings.HasPrefix(got, "Opening line.") || strings.Contains(got, "<p>") {
-		t.Errorf("description = %q, want the index preview's opening as markdown", got)
-	}
-	if n := len([]rune(got)); n > mcpSearchExcerptRunes+1 || !strings.HasSuffix(got, "…") {
-		t.Errorf("description has %d runes (%q), want at most %d and marked as cut", n, got, mcpSearchExcerptRunes)
-	}
-	payload, _ := json.Marshal(out)
-	if strings.Contains(string(payload), "Postgres") {
-		t.Errorf("result = %s, want no full-text rehydration on the MCP listing", payload)
-	}
-	if !strings.Contains(string(payload), "go-dev-acme") {
-		t.Errorf("result = %s, want the slug get_job reads by", payload)
-	}
-	// The Claude directory policy keeps cross-tool guidance out of a tool's description.
-	for _, other := range mcpKeyTools(a, testMCPOrigin) {
-		if other.Name != tool.Name && strings.Contains(tool.Description, other.Name) {
-			t.Errorf("description names %s: %q", other.Name, tool.Description)
-		}
 	}
 }
 
