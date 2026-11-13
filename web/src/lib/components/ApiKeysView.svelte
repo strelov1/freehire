@@ -5,7 +5,7 @@
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { consumeReauthDraft } from '#lib/recentAuth.js';
+  import { consumeReauthDraft, type ReauthReturnPath } from '#lib/recentAuth.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { announce } from '#lib/announce.svelte.js';
@@ -21,6 +21,9 @@
   // form, and the identity check was spread across both: the password input lived in that
   // form while the revoke dialog demanded a password — from behind a modal backdrop, where
   // no input is reachable. Each dialog now carries its own confirmation.
+  // Where a provider re-authentication lands again: the page this view is mounted on.
+  let { returnTo = '/my/integrations/api-keys' }: { returnTo?: ReauthReturnPath } = $props();
+
   const s = $derived(t(messages, locale()));
 
   let createOpen = $state(false);
@@ -292,7 +295,7 @@
     {/if}
   </div>
 
-  <CreateApiKeyDialog bind:open={createOpen} {onCreated} />
+  <CreateApiKeyDialog bind:open={createOpen} {onCreated} {returnTo} />
 
   <ConfirmDialog
     bind:open={confirmRevokeOpen}
@@ -308,7 +311,7 @@
     <ConfirmIdentity
       bind:this={revokeIdentity}
       bind:password={revokePassword}
-      returnTo="/my/integrations/api-keys"
+      {returnTo}
       prompt={s.revokeDialog.confirmPrompt}
       draft={() => ({ surface: 'revoke-api-key', keyId: revokeTarget?.id ?? 0 })}
       active={confirmRevokeOpen}

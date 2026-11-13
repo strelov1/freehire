@@ -1239,6 +1239,19 @@ func encodeGetApiPlanResponse(response *GetApiPlanOK, w http.ResponseWriter) err
 	return nil
 }
 
+func encodeGetApiUsageResponse(response *GetApiUsageOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetApplicationFollowUpResponse(response *GetApplicationFollowUpOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)

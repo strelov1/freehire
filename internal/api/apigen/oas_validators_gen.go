@@ -200,10 +200,34 @@ func (s *AuthUser) Validate() error {
 			Error: err,
 		})
 	}
+	if err := func() error {
+		if err := s.APITier.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "api_tier",
+			Error: err,
+		})
+	}
 	if len(failures) > 0 {
 		return &validate.Error{Fields: failures}
 	}
 	return nil
+}
+
+func (s AuthUserAPITier) Validate() error {
+	switch s {
+	case "":
+		return nil
+	case "api":
+		return nil
+	case "api_data":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
 }
 
 func (s AuthUserTier) Validate() error {
@@ -2625,6 +2649,29 @@ func (s *GetApiPlanOK) Validate() error {
 	if err := func() error {
 		if err := s.Data.Validate(); err != nil {
 			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "data",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s *GetApiUsageOK) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if s.Data == nil {
+			return errors.New("nil is invalid value")
 		}
 		return nil
 	}(); err != nil {

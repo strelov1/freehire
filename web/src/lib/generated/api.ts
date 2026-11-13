@@ -1793,6 +1793,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/api-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The last 30 UTC days, oldest first; a day without requests is absent. */
+        get: operations["getApiUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/applications/{id}": {
         parameters: {
             query?: never;
@@ -5907,6 +5924,21 @@ export interface components {
             /** Format: date-time */
             until?: string;
         };
+        /** @description The account's API requests on one UTC day. */
+        ApiUsageDay: {
+            /** Format: date */
+            day: string;
+            /**
+             * Format: int64
+             * @description Requests that reached the API with one of the account's credentials.
+             */
+            requests: number;
+            /**
+             * Format: int64
+             * @description The part of `requests` answered with a 4xx or 5xx.
+             */
+            errors: number;
+        };
         ApplyJob: {
             /** @description The day the application was sent, `2026-07-29`. Absent, null or empty means now. */
             applied_on?: string | null;
@@ -6008,6 +6040,11 @@ export interface components {
             tier: components["schemas"]["AuthUserTier"];
             /** @description Whether the account holds a live API key or MCP grant. */
             agent_connected: boolean;
+            /**
+             * @description The API product tier the account holds (see ApiKeyPlan); empty for none.
+             * @enum {string}
+             */
+            api_tier: "" | "api" | "api_data";
         };
         /** @enum {string} */
         AuthUserTier: "free" | "pro" | "ultra";
@@ -14035,6 +14072,37 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ApiKeyPlan"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getApiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApiUsageDay"][];
                     };
                 };
             };

@@ -25,6 +25,7 @@ export const messages = defineMessages(
       '/my/mentorship/bookings': 'Booked with you',
       '/my/mentorship/schedule': 'Schedule',
       '/my/mentorship/profile': 'Mentor profile',
+      '/my/api': 'API',
       '/my/notifications': 'Notifications',
       '/my/integrations': 'Integrations',
       '/my/contributions': 'Contributions',
@@ -46,6 +47,7 @@ export const messages = defineMessages(
       mentor: 'Mentor',
       referrer: 'Referrer',
       employer: 'Employer',
+      api: 'API',
     },
     // `main` has no heading: it is the workspace itself.
     navGroups: {
@@ -77,6 +79,7 @@ export const messages = defineMessages(
         '/my/mentorship/bookings': 'Записи к вам',
         '/my/mentorship/schedule': 'Расписание',
         '/my/mentorship/profile': 'Профиль ментора',
+        '/my/api': 'API',
         '/my/notifications': 'Уведомления',
         '/my/integrations': 'Интеграции',
         // Vacancies the user submitted for review — not posts they published.
@@ -103,6 +106,7 @@ export const messages = defineMessages(
         mentor: 'Ментор',
         referrer: 'Рекомендатель',
         employer: 'Работодатель',
+        api: 'API',
       },
       navGroups: {
         network: 'Сеть',

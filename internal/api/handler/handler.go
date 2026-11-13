@@ -54,6 +54,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
 	"github.com/strelov1/freehire/internal/identity/accounts"
+	"github.com/strelov1/freehire/internal/identity/apiusage"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
@@ -356,6 +357,9 @@ type Config struct {
 	// AgentViews receives the postings served to agents (internal/application/agentview).
 	// Optional: nil records nothing.
 	AgentViews agentview.Sink
+	// APIUsage counts each account's Bearer-authenticated API requests per day
+	// (internal/identity/apiusage). Optional: nil counts nothing.
+	APIUsage *apiusage.Counter
 	// Cache holds values that are expensive to compute and identical for every
 	// caller — today the catalogue-scale snapshot (internal/ingest/catalogstats). Optional:
 	// nil degrades the figures it backs to their approximations, exactly as an
@@ -521,6 +525,9 @@ func Register(app *fiber.App, cfg Config) {
 		browserTools: browsertools.New(),
 	}
 	app.Use(externalCaller(cfg.AuthIntrospectionSecret))
+	if cfg.APIUsage != nil {
+		app.Use(countAPIUsage(cfg.APIUsage))
+	}
 	app.Get("/internal/auth/introspect", newAuthIntrospection(queries, a.issuer, cfg.AuthIntrospectionSecret))
 
 	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,

@@ -4,7 +4,7 @@
   import MentorBookingForm from '#lib/components/MentorBookingForm.svelte';
   import MentorBookingView from '#lib/components/MentorBookingView.svelte';
   import Seo from '#lib/components/Seo.svelte';
-  import { Badge } from '#lib/ui/index.js';
+  import { Badge, onImageError } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -26,9 +26,7 @@
           src={`/api/v1/mentors/${mentor.slug}/photo`}
           alt=""
           class="border-border size-16 shrink-0 rounded-full border object-cover"
-          onerror={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
+          {@attach onImageError((img) => (img.style.display = 'none'))}
         />
       {/if}
       <h1 class="text-2xl font-semibold">{mentor.name}</h1>
