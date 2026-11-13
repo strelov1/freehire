@@ -174,3 +174,33 @@ func TestEveryToolIsAnnouncedReadOnly(t *testing.T) {
 		}
 	}
 }
+
+// A boolean sub-schema (`"candidate_context": true`) is valid JSON Schema, but MCP's own
+// type definitions require every `properties` value to be an object, so a strict client —
+// the TypeScript SDK among them — rejects the WHOLE tools/list answer over one field. The
+// SDK writes `true` for a Go `any` field with nothing to say about it; a description makes
+// it an object. Found by the official MCP conformance suite (tools-list).
+func TestEveryInputPropertyIsAnObjectSchema(t *testing.T) {
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	go func() { _ = newServer(&recordingReader{}, "").Run(context.Background(), serverTransport) }()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	session, err := client.Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	listed, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, tool := range listed.Tools {
+		schema, _ := tool.InputSchema.(map[string]any)
+		props, _ := schema["properties"].(map[string]any)
+		for name, prop := range props {
+			if _, ok := prop.(map[string]any); !ok {
+				t.Errorf("%s.%s = %v, want an object schema", tool.Name, name, prop)
+			}
+		}
+	}
+}

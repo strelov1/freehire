@@ -28,7 +28,10 @@ type SearchInput struct {
 	// CandidateContext is accepted and IGNORED. This surface is anonymous and takes no
 	// candidate PII; the field is declared so an agent sending it gets an answer rather
 	// than a rejection, per the standard's own extensibility rule.
-	CandidateContext any `json:"candidate_context,omitempty"`
+	//
+	// The jsonschema tag is not decoration: without it the SDK publishes the property as the
+	// boolean schema `true`, which strict MCP clients reject for the whole tool list.
+	CandidateContext any `json:"candidate_context,omitempty" jsonschema:"accepted and ignored: this surface is anonymous and takes no candidate data"`
 	// Semantic asks for meaning-based ranking, which is currently not available: a request
 	// that sets it is answered by keywords and the response's `semantic` says unavailable.
 	// An EXTENSION, like IgnoredParams on the response — OJCP has no such field and its

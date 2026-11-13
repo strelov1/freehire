@@ -110,6 +110,30 @@ get (404 for a token or handle that names nothing, 401 without a session). Run i
 against a running server: `uvx schemathesis==4.33.2 run openapi/api.openapi.json --url
 http://localhost:<port>/api/v1`. The signed-in routes answer 401 until the run gets a session.
 
+## MCP protocol conformance: `@modelcontextprotocol/conformance`
+
+The `mcp-conformance` job in `.github/workflows/contract.yml` boots the API like the
+Schemathesis job and runs the official MCP conformance suite (`server` mode, spec 2025-06-18
+and 2025-11-25 scenarios) against `/api/v1/mcp` and `/api/v1/ojcp/mcp`. It checks the
+protocol: initialize, ping, logging, completion, `tools/list` and `prompts/list` structure,
+and the rest of what a client depends on. It does not exercise sign-in: the suite's `auth/*`
+scenarios test CLIENTS, and `/api/v1/mcp/account` answers 401 to the suite, so the account
+endpoint is not covered.
+
+Many scenarios call the suite's reference "everything-server" tools, prompts and resources,
+which a product server does not have. Each endpoint's `.github/mcp-conformance/<name>.yml`
+lists the scenarios that cannot apply, with the reason beside each. The suite exits non-zero
+on a failure that is not listed and on a listed scenario that now passes, so remove an entry
+the moment its scenario passes. To exclude a scenario, add it to `server:` in that file with
+a comment saying why; never to hide a real failure. The package version is pinned in the
+workflow; bump it deliberately, since a new release adds scenarios. Scenarios the suite marks
+"pending" are not in its active set and do not run — notably `json-schema-2020-12`, which checks
+`$schema`/`$defs` handling in tool schemas; pick it up when a bump graduates it.
+
+Run it locally against a server of your own (never production: scenarios call tools):
+`npx @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:<port>/api/v1/mcp
+--expected-failures .github/mcp-conformance/mcp.yml`.
+
 ## Changed-line coverage: diff-cover
 
 Pull requests only. `.github/scripts/diff-cover-gate.sh` runs

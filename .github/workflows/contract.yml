@@ -4,6 +4,7 @@ name: Contract
 # empty database: every answer must have a status, content type and body the contract
 # declares, and no request may make the server fail. Checks the generated code alone
 # cannot: a handler that returns a shape, a status or a 500 the contract does not name.
+# The second job does the same for the MCP servers with the official MCP conformance suite.
 on:
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - Dockerfile
       - docker-compose.yml
       - schemathesis.toml
+      - .github/mcp-conformance/**
       - .github/workflows/contract.yml
   push:
     branches: [main]
@@ -31,6 +33,7 @@ on:
       - Dockerfile
       - docker-compose.yml
       - schemathesis.toml
+      - .github/mcp-conformance/**
       - .github/workflows/contract.yml
   workflow_dispatch:
 
@@ -86,6 +89,49 @@ jobs:
         run: |
           pipx run schemathesis==4.33.2 run openapi/api.openapi.json \
             --url http://localhost:8080/api/v1 --max-examples 50 --workers 2
+
+      - name: API logs
+        if: failure()
+        run: docker compose logs app --tail=200
+
+  # The official MCP conformance suite against the two MCP servers that answer without a
+  # sign-in. The suite calls the tools, prompts and resources of its own reference server;
+  # a product server has none of them, so those scenarios are listed per endpoint, with the
+  # reason, in .github/mcp-conformance/. The suite fails on an unlisted failure and on a
+  # listed scenario that now passes. Nothing here reaches a real account or production.
+  mcp-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start the API, its database and search
+        run: docker compose up -d --build app meilisearch
+
+      - name: Wait for the API
+        run: |
+          for i in $(seq 1 60); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
+            [ "$api" = "200" ] && exit 0
+            echo "attempt $i: api=$api"
+            sleep 3
+          done
+          docker compose logs app --tail=100
+          exit 1
+
+      - name: Run the MCP conformance suite
+        run: |
+          failed=0
+          for pair in mcp:mcp ojcp/mcp:ojcp; do
+            echo "::group::${pair%%:*}"
+            npx --yes @modelcontextprotocol/conformance@0.1.16 server \
+              --url "http://localhost:8080/api/v1/${pair%%:*}" \
+              --expected-failures ".github/mcp-conformance/${pair##*:}.yml" || failed=1
+            echo "::endgroup::"
+          done
+          exit $failed
 
       - name: API logs
         if: failure()

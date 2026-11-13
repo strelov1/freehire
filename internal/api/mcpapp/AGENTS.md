@@ -385,6 +385,11 @@ that sets them inside the enrichment JSON sets nothing at all.
 Drive the server through the SDK's in-memory transport, not by calling handler functions: a
 tool that registers but cannot be called is invisible to a direct call.
 
+The wire protocol is checked in CI by the official MCP conformance suite (`mcp-conformance`
+job in `contract.yml`) against `/api/v1/mcp`. The scenarios that cannot apply to a product
+server are listed, with reasons, in `.github/mcp-conformance/mcp.yml`; see
+[ci-checks](../../../docs/agents/ci-checks.md#mcp-protocol-conformance-modelcontextprotocolconformance).
+
 ## Measured, not assumed
 
 - The SDK **rejects an argument the input schema does not declare** before the handler runs
