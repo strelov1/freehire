@@ -28,7 +28,9 @@ Lock order is jobs, then activity. Closers lock both with `FOR NO KEY UPDATE OF 
 
 A single activity `state_version` changes when lifecycle or the complete cheap-match key changes. The central jobs trigger covers closed_at, content_hash, cities, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, english_level, is_tech, engagement and application_deadline. Snapshot-returned duplicate/privacy state also needs fencing where used. Reopening resets strikes in this trigger.
 
-The cheap update targets activity and compares its current version to the match snapshot. PostgreSQL rechecks that target tuple after waiting. A mismatch returns a distinct fenced result. The caller rolls back that transaction before retrying without the cheap path, avoiding an activity-to-jobs lock reversal. A plain unmatched key can fall through without a lock.
+The cheap update targets activity and compares its current version to the match snapshot. PostgreSQL rechecks that target tuple after waiting. A mismatch returns a distinct fenced result. The caller rolls back before retrying the cheap path from a fresh snapshot, avoiding an activity-to-jobs lock reversal. A changed match key then falls through to full without an activity lock; a metadata-only change returns the current stored company slug. Bound repeated fences and surface failure rather than silently dropping an observation or forcing a stale metadata overwrite.
+
+The version also covers returned company and publication metadata (`company_slug`, `posted_at`, `created_at`). In particular, `RekeyCompanySlugChunk` changes the stored slug without changing its content hash. A cheap retry must observe that slug rather than force a full upsert using the earlier input.
 
 Ordinary observations must leave jobs xmin, xmax and ctid unchanged for the whole already-enriched ingestion transaction. Necessary downstream foreign-key inserts for unenriched jobs are an explicit exception. Full content writes and lifecycle transitions may update jobs.
 

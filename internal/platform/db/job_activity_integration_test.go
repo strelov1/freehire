@@ -166,3 +166,29 @@ func TestJobActivityInsertReplacesPreConstraintOrphan(t *testing.T) {
 		t.Fatal("a new posting inherited the orphan's stale observation")
 	}
 }
+
+func TestJobActivityStateTracksReturnedMetadata(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	for _, tc := range []struct{ column, value string }{
+		{"company_slug", "'new-company'"},
+		{"posted_at", "'2026-01-01T00:00:00Z'"},
+		{"created_at", "'2026-01-01T00:00:00Z'"},
+	} {
+		t.Run(tc.column, func(t *testing.T) {
+			id := insertJob(t, pool, "activity-metadata-"+tc.column)
+			for attempt := range 2 {
+				if _, err := pool.Exec(ctx, `UPDATE jobs SET `+tc.column+`=`+tc.value+` WHERE id=$1`, id); err != nil {
+					t.Fatal(err)
+				}
+				var version int64
+				if err := pool.QueryRow(ctx, `SELECT state_version FROM job_activity WHERE job_id=$1`, id).Scan(&version); err != nil {
+					t.Fatal(err)
+				}
+				if version != 1 {
+					t.Fatalf("metadata write %d: version=%d, want 1", attempt+1, version)
+				}
+			}
+		})
+	}
+}

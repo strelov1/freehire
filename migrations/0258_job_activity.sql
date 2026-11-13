@@ -65,6 +65,7 @@ CREATE TRIGGER job_activity_state AFTER UPDATE OF
     closed_at, content_hash, cities, salary_min_source, salary_max_source,
     salary_currency_source, salary_period_source, english_level, is_tech,
     engagement, application_deadline, duplicate_of, is_private,
+    company_slug, posted_at, created_at,
     -- duplicate_of is derived by a BEFORE trigger from these owners. UPDATE OF
     -- checks the statement's SET list, including the owner rather than its result.
     duplicate_of_role, duplicate_of_aggregator, duplicate_of_fuzzy
@@ -81,5 +82,8 @@ ON jobs FOR EACH ROW WHEN (
     OLD.engagement IS DISTINCT FROM NEW.engagement OR
     OLD.application_deadline IS DISTINCT FROM NEW.application_deadline OR
     OLD.duplicate_of IS DISTINCT FROM NEW.duplicate_of OR
-    OLD.is_private IS DISTINCT FROM NEW.is_private
+    OLD.is_private IS DISTINCT FROM NEW.is_private OR
+    OLD.company_slug IS DISTINCT FROM NEW.company_slug OR
+    OLD.posted_at IS DISTINCT FROM NEW.posted_at OR
+    OLD.created_at IS DISTINCT FROM NEW.created_at
 ) EXECUTE FUNCTION job_activity_state();
