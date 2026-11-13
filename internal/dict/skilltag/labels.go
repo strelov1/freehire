@@ -393,6 +393,7 @@ var displayNames = map[string]string{
 	"newrelic":              "New Relic",
 	"nextjs":                "Next.js",
 	"nifi":                  "NiFi",
+	"ninjaone":              "NinjaOne",
 	"nodejs":                "Node.js",
 	"numpy":                 "NumPy",
 	"oauth":                 "OAuth",
@@ -463,6 +464,7 @@ var displayNames = map[string]string{
 	"wasm":                  "WebAssembly",
 	"webgl":                 "WebGL",
 	"wordpress":             "WordPress",
+	"workspace-one":         "Workspace ONE",
 	"xgboost":               "XGBoost",
 	"zeromq":                "ZeroMQ",
 

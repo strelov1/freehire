@@ -1138,4 +1138,9 @@ var registry = []string{
 	"shutdown-management",
 	"total-productive-maintenance",
 	"turnaround-management",
+	"kandji",
+	"ninjaone",
+	"tanium",
+	"windows-autopilot",
+	"workspace-one",
 }
