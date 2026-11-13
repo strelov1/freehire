@@ -48,9 +48,24 @@ import "./embeddings.tsp";
 import "./support.tsp";
 import "./assistant.tsp";
 import "./account.tsp";
+import "./docs.tsp";
 
 using Http;
 
 @service(#{ title: "freehire API" })
 @server("https://freehire.me/api/v1", "Production")
+@useAuth(CookieSession)
 namespace Freehire;
+
+// Who may call an operation, as the Fiber middleware in front of it decides (mw.cookie,
+// mw.key, none). ogen never sees this: `make api-contract` strips it from the copy ogen
+// reads, so the gates stay in the router. The default is the cookie; an operation that also
+// takes an API key says `@useAuth(SessionOrKey)`, a public one `@useAuth(NoAuth)`.
+
+/** Browser session cookie set on sign-in (HttpOnly, same-origin). */
+model CookieSession is ApiKeyAuth<ApiKeyLocation.cookie, "hire_token">;
+
+/** Personal API key sent as `Authorization: Bearer <token>`. */
+model PersonalApiKey is BearerAuth;
+
+alias SessionOrKey = CookieSession | PersonalApiKey;

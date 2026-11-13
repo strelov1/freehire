@@ -146,12 +146,29 @@ func decodeAddToWatchlistParams(args [1]string, argsEscaped bool, r *http.Reques
 
 // AgentSearchJobsParams is parameters of agentSearchJobs operation.
 type AgentSearchJobsParams struct {
-	Q       OptString `json:",omitempty,omitzero"`
+	// Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default
+	// engine matching: the first words are required and trailing ones are dropped when too few postings
+	// match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every
+	// quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words
+	// matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an
+	// alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`.
+	// Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered,
+	// and default relevance order does not reliably rank a contiguous match above a scattered-token one.
+	// (e.g. `golang`).
+	Q OptString `json:",omitempty,omitzero"`
+	// Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A
+	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
+	// partially applying. (e.g. `title`).
 	QFields OptString `json:",omitempty,omitzero"`
-	Sort    OptString `json:",omitempty,omitzero"`
-	Order   OptString `json:",omitempty,omitzero"`
-	Limit   OptString `json:",omitempty,omitzero"`
-	Offset  OptString `json:",omitempty,omitzero"`
+	// One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
+	// relevance/newest. (e.g. `posted_at`).
+	Sort OptString `json:",omitempty,omitzero"`
+	// `asc` or `desc` (default `desc`). (e.g. `desc`).
+	Order OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`).
+	Offset OptString `json:",omitempty,omitzero"`
 	// `text` or `markdown`; anything else leaves the stored HTML.
 	DescriptionFormat OptString `json:",omitempty,omitzero"`
 	Semantic          OptString `json:",omitempty,omitzero"`
@@ -698,6 +715,7 @@ func decodeApproveEmployerClaimParams(args [1]string, argsEscaped bool, r *http.
 
 // ApproveSubmissionParams is parameters of approveSubmission operation.
 type ApproveSubmissionParams struct {
+	// The submission id. (e.g. `9`).
 	ID string
 }
 
@@ -2339,6 +2357,7 @@ func decodeBuddyUnreactParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // CancelAssistantTurnParams is parameters of cancelAssistantTurn operation.
 type CancelAssistantTurnParams struct {
+	// The session id.
 	ID string
 }
 
@@ -2598,6 +2617,7 @@ func decodeCheckUsernameParams(args [0]string, argsEscaped bool, r *http.Request
 
 // ClearApplicationStageParams is parameters of clearApplicationStage operation.
 type ClearApplicationStageParams struct {
+	// The tracking row id. (e.g. `42`).
 	ID string
 }
 
@@ -2663,6 +2683,7 @@ func decodeClearApplicationStageParams(args [1]string, argsEscaped bool, r *http
 
 // ClearCompanyVoteParams is parameters of clearCompanyVote operation.
 type ClearCompanyVoteParams struct {
+	// The company slug.
 	Slug string
 }
 
@@ -2728,6 +2749,7 @@ func decodeClearCompanyVoteParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // ClearJobVoteParams is parameters of clearJobVote operation.
 type ClearJobVoteParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -2793,6 +2815,7 @@ func decodeClearJobVoteParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // ClearStageParams is parameters of clearStage operation.
 type ClearStageParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -2923,6 +2946,7 @@ func decodeCloseEmployerVacancyParams(args [1]string, argsEscaped bool, r *http.
 
 // CloseThreadParams is parameters of closeThread operation.
 type CloseThreadParams struct {
+	// The thread id.
 	ID string
 }
 
@@ -2988,6 +3012,7 @@ func decodeCloseThreadParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // ConfirmEmailLinkParams is parameters of confirmEmailLink operation.
 type ConfirmEmailLinkParams struct {
+	// The message id.
 	ID string
 }
 
@@ -3168,6 +3193,7 @@ func decodeCountThreadsParams(args [0]string, argsEscaped bool, r *http.Request)
 
 // CreateApplicationFromEmailParams is parameters of createApplicationFromEmail operation.
 type CreateApplicationFromEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -3233,8 +3259,11 @@ func decodeCreateApplicationFromEmailParams(args [1]string, argsEscaped bool, r 
 
 // CreateAssistantSessionParams is parameters of createAssistantSession operation.
 type CreateAssistantSessionParams struct {
+	// One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`. (e.g. `chat`).
 	Preset OptString `json:",omitempty,omitzero"`
-	Job    OptString `json:",omitempty,omitzero"`
+	// Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored
+	// otherwise. (e.g. `senior-go-engineer-acme-1a2b`).
+	Job OptString `json:",omitempty,omitzero"`
 }
 
 func unpackCreateAssistantSessionParams(packed middleware.Parameters) (params CreateAssistantSessionParams) {
@@ -3348,6 +3377,7 @@ func decodeCreateAssistantSessionParams(args [0]string, argsEscaped bool, r *htt
 
 // CreateGhostReportParams is parameters of createGhostReport operation.
 type CreateGhostReportParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -3413,6 +3443,7 @@ func decodeCreateGhostReportParams(args [1]string, argsEscaped bool, r *http.Req
 
 // CreateJobReportParams is parameters of createJobReport operation.
 type CreateJobReportParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -3478,6 +3509,7 @@ func decodeCreateJobReportParams(args [1]string, argsEscaped bool, r *http.Reque
 
 // CreateReplyParams is parameters of createReply operation.
 type CreateReplyParams struct {
+	// The thread id.
 	ID string
 }
 
@@ -3608,6 +3640,7 @@ func decodeDecideMentorProfileParams(args [1]string, argsEscaped bool, r *http.R
 
 // DecideReferralOfferParams is parameters of decideReferralOffer operation.
 type DecideReferralOfferParams struct {
+	// The offer id.
 	ID string
 }
 
@@ -3738,6 +3771,7 @@ func decodeDeclineConversationParams(args [1]string, argsEscaped bool, r *http.R
 
 // DeleteAssistantSessionParams is parameters of deleteAssistantSession operation.
 type DeleteAssistantSessionParams struct {
+	// The session id.
 	ID string
 }
 
@@ -3803,6 +3837,7 @@ func decodeDeleteAssistantSessionParams(args [1]string, argsEscaped bool, r *htt
 
 // DeleteAtomParams is parameters of deleteAtom operation.
 type DeleteAtomParams struct {
+	// The atom id.
 	ID string
 }
 
@@ -3998,6 +4033,7 @@ func decodeDeleteBankedAnswerParams(args [1]string, argsEscaped bool, r *http.Re
 
 // DeleteCVParams is parameters of deleteCV operation.
 type DeleteCVParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -4063,7 +4099,9 @@ func decodeDeleteCVParams(args [1]string, argsEscaped bool, r *http.Request) (pa
 
 // DeleteCompanyFeedbackParams is parameters of deleteCompanyFeedback operation.
 type DeleteCompanyFeedbackParams struct {
-	Slug         string
+	// The company slug. (e.g. `acme`).
+	Slug string
+	// Which category to delete. (e.g. `interview`).
 	FeedbackType OptString `json:",omitempty,omitzero"`
 }
 
@@ -4180,6 +4218,7 @@ func decodeDeleteCompanyFeedbackParams(args [1]string, argsEscaped bool, r *http
 
 // DeleteEmailParams is parameters of deleteEmail operation.
 type DeleteEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -4245,6 +4284,7 @@ func decodeDeleteEmailParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // DeleteEmploymentParams is parameters of deleteEmployment operation.
 type DeleteEmploymentParams struct {
+	// The employment id.
 	ID string
 }
 
@@ -4375,6 +4415,7 @@ func decodeDeleteJobAutoApplyParams(args [1]string, argsEscaped bool, r *http.Re
 
 // DeleteSavedSearchParams is parameters of deleteSavedSearch operation.
 type DeleteSavedSearchParams struct {
+	// The saved-search id. (e.g. `2`).
 	ID string
 }
 
@@ -4440,6 +4481,7 @@ func decodeDeleteSavedSearchParams(args [1]string, argsEscaped bool, r *http.Req
 
 // DeleteSubscriptionParams is parameters of deleteSubscription operation.
 type DeleteSubscriptionParams struct {
+	// The subscription id. (e.g. `1`).
 	ID string
 }
 
@@ -4505,6 +4547,7 @@ func decodeDeleteSubscriptionParams(args [1]string, argsEscaped bool, r *http.Re
 
 // DismissJobParams is parameters of dismissJob operation.
 type DismissJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -4570,6 +4613,7 @@ func decodeDismissJobParams(args [1]string, argsEscaped bool, r *http.Request) (
 
 // DismissJobReportParams is parameters of dismissJobReport operation.
 type DismissJobReportParams struct {
+	// The report id. (e.g. `3`).
 	ID string
 }
 
@@ -4752,6 +4796,7 @@ func decodeDraftCVCoverLetterParams(args [1]string, argsEscaped bool, r *http.Re
 
 // DuplicateCVParams is parameters of duplicateCV operation.
 type DuplicateCVParams struct {
+	// The base CV id.
 	ID string
 }
 
@@ -4882,6 +4927,7 @@ func decodeFileProcessReportParams(args [1]string, argsEscaped bool, r *http.Req
 
 // FindJobParams is parameters of findJob operation.
 type FindJobParams struct {
+	// The posting's URL in the wild. (e.g. `https://boards.greenhouse.io/acme/jobs/123`).
 	URL OptString `json:",omitempty,omitzero"`
 }
 
@@ -5010,6 +5056,7 @@ func decodeFindModeratedUserParams(args [0]string, argsEscaped bool, r *http.Req
 
 // GetApplicationFollowUpParams is parameters of getApplicationFollowUp operation.
 type GetApplicationFollowUpParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -5075,6 +5122,7 @@ func decodeGetApplicationFollowUpParams(args [1]string, argsEscaped bool, r *htt
 
 // GetAssistantSessionParams is parameters of getAssistantSession operation.
 type GetAssistantSessionParams struct {
+	// The session id. (e.g. `b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f`).
 	ID string
 }
 
@@ -5204,6 +5252,7 @@ func decodeGetBillingCheckoutParams(args [0]string, argsEscaped bool, r *http.Re
 
 // GetCVParams is parameters of getCV operation.
 type GetCVParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -5269,6 +5318,7 @@ func decodeGetCVParams(args [1]string, argsEscaped bool, r *http.Request) (param
 
 // GetCVATSDeltaParams is parameters of getCVATSDelta operation.
 type GetCVATSDeltaParams struct {
+	// The tailored CV id.
 	ID string
 }
 
@@ -5399,6 +5449,7 @@ func decodeGetCVCoverLetterParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // GetCVJobMatchParams is parameters of getCVJobMatch operation.
 type GetCVJobMatchParams struct {
+	// The tailored CV id.
 	ID string
 }
 
@@ -5464,6 +5515,7 @@ func decodeGetCVJobMatchParams(args [1]string, argsEscaped bool, r *http.Request
 
 // GetCVTailorContextParams is parameters of getCVTailorContext operation.
 type GetCVTailorContextParams struct {
+	// The tailored CV id.
 	ID string
 }
 
@@ -5529,6 +5581,7 @@ func decodeGetCVTailorContextParams(args [1]string, argsEscaped bool, r *http.Re
 
 // GetDirectApplyFormParams is parameters of getDirectApplyForm operation.
 type GetDirectApplyFormParams struct {
+	// The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`).
 	Slug string
 }
 
@@ -5594,6 +5647,7 @@ func decodeGetDirectApplyFormParams(args [1]string, argsEscaped bool, r *http.Re
 
 // GetEmailParams is parameters of getEmail operation.
 type GetEmailParams struct {
+	// The message id. (e.g. `4821`).
 	ID string
 }
 
@@ -5723,16 +5777,26 @@ func decodeGetEmailPrefsParams(args [0]string, argsEscaped bool, r *http.Request
 
 // GetInboxParams is parameters of getInbox operation.
 type GetInboxParams struct {
-	Source       OptString `json:",omitempty,omitzero"`
-	Status       OptString `json:",omitempty,omitzero"`
-	Link         OptString `json:",omitempty,omitzero"`
-	Q            OptString `json:",omitempty,omitzero"`
-	Unread       OptString `json:",omitempty,omitzero"`
+	// One account: `gmail`, `hosted`, or `external`.
+	Source OptString `json:",omitempty,omitzero"`
+	// One classified label (see the triage vocabulary below). (e.g. `rejection`).
+	Status OptString `json:",omitempty,omitzero"`
+	// One link state: `linked`, `suggested` (awaiting your word), or `unlinked`.
+	Link OptString `json:",omitempty,omitzero"`
+	// Match subject, sender, or body.
+	Q OptString `json:",omitempty,omitzero"`
+	// Only messages you have not opened.
+	Unread OptString `json:",omitempty,omitzero"`
+	// Only mail nothing has judged yet — the agent's work queue.
 	Unclassified OptString `json:",omitempty,omitzero"`
+	// Also list the `other` label the default hides. Asking for it by `status=other` implies this.
 	IncludeOther OptString `json:",omitempty,omitzero"`
-	Body         OptString `json:",omitempty,omitzero"`
-	Limit        OptString `json:",omitempty,omitzero"`
-	Offset       OptString `json:",omitempty,omitzero"`
+	// Include each message body; caps the page at 50.
+	Body OptString `json:",omitempty,omitzero"`
+	// Page size.
+	Limit OptString `json:",omitempty,omitzero"`
+	// Page offset.
+	Offset OptString `json:",omitempty,omitzero"`
 }
 
 func unpackGetInboxParams(packed middleware.Parameters) (params GetInboxParams) {
@@ -6246,8 +6310,10 @@ func decodeGetInboxParams(args [0]string, argsEscaped bool, r *http.Request) (pa
 
 // GetInterviewsParams is parameters of getInterviews operation.
 type GetInterviewsParams struct {
+	// Lower bound, inclusive. (e.g. `2026-08-01T00:00:00Z`).
 	From OptString `json:",omitempty,omitzero"`
-	To   OptString `json:",omitempty,omitzero"`
+	// Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`).
+	To OptString `json:",omitempty,omitzero"`
 }
 
 func unpackGetInterviewsParams(packed middleware.Parameters) (params GetInterviewsParams) {
@@ -6361,6 +6427,7 @@ func decodeGetInterviewsParams(args [0]string, argsEscaped bool, r *http.Request
 
 // GetJobParams is parameters of getJob operation.
 type GetJobParams struct {
+	// The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`).
 	Slug string
 }
 
@@ -6491,6 +6558,7 @@ func decodeGetJobFitParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // GetJobMatchParams is parameters of getJobMatch operation.
 type GetJobMatchParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -6556,6 +6624,7 @@ func decodeGetJobMatchParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // GetMatchAnalysisParams is parameters of getMatchAnalysis operation.
 type GetMatchAnalysisParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -6969,6 +7038,7 @@ func decodeGetMyCalendarParams(args [0]string, argsEscaped bool, r *http.Request
 
 // GetNotificationParams is parameters of getNotification operation.
 type GetNotificationParams struct {
+	// The notification id. (e.g. `5`).
 	ID string
 }
 
@@ -7469,6 +7539,7 @@ func decodeGetTalentFacetsParams(args [0]string, argsEscaped bool, r *http.Reque
 
 // GetTalentMemberParams is parameters of getTalentMember operation.
 type GetTalentMemberParams struct {
+	// The member’s minted catalogue handle. (e.g. `backend-7f2a`).
 	Handle string
 }
 
@@ -7599,6 +7670,7 @@ func decodeGetTalentPhotoParams(args [1]string, argsEscaped bool, r *http.Reques
 
 // GetThreadParams is parameters of getThread operation.
 type GetThreadParams struct {
+	// The thread id.
 	ID     string
 	Cursor OptString `json:",omitempty,omitzero"`
 }
@@ -7716,8 +7788,11 @@ func decodeGetThreadParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // GetTimelineParams is parameters of getTimeline operation.
 type GetTimelineParams struct {
+	// Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a
+	// space in a query string and will be rejected. (e.g. `2026-08-01T00:00:00Z`).
 	From OptString `json:",omitempty,omitzero"`
-	To   OptString `json:",omitempty,omitzero"`
+	// Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`).
+	To OptString `json:",omitempty,omitzero"`
 }
 
 func unpackGetTimelineParams(packed middleware.Parameters) (params GetTimelineParams) {
@@ -7831,6 +7906,7 @@ func decodeGetTimelineParams(args [0]string, argsEscaped bool, r *http.Request) 
 
 // GetTrackedApplicationParams is parameters of getTrackedApplication operation.
 type GetTrackedApplicationParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -7961,6 +8037,7 @@ func decodeGetWatchingParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // HideCompanyFeedbackParams is parameters of hideCompanyFeedback operation.
 type HideCompanyFeedbackParams struct {
+	// The feedback entry id. (e.g. `5`).
 	ID string
 }
 
@@ -8026,9 +8103,12 @@ func decodeHideCompanyFeedbackParams(args [1]string, argsEscaped bool, r *http.R
 
 // InsightsCompaniesParams is parameters of insightsCompanies operation.
 type InsightsCompaniesParams struct {
-	Sort    OptString `json:",omitempty,omitzero"`
+	// Rank by openings or by growth.
+	Sort OptString `json:",omitempty,omitzero"`
+	// Ignore companies below this many open roles.
 	MinOpen OptString `json:",omitempty,omitzero"`
-	Limit   OptString `json:",omitempty,omitzero"`
+	// How many rows.
+	Limit OptString `json:",omitempty,omitzero"`
 }
 
 func unpackInsightsCompaniesParams(packed middleware.Parameters) (params InsightsCompaniesParams) {
@@ -8320,9 +8400,13 @@ func decodeInsightsRolePulseParams(args [0]string, argsEscaped bool, r *http.Req
 
 // InsightsRolesParams is parameters of insightsRoles operation.
 type InsightsRolesParams struct {
-	Country   OptString `json:",omitempty,omitzero"`
-	Sort      OptString `json:",omitempty,omitzero"`
-	Limit     OptString `json:",omitempty,omitzero"`
+	// Scope to one country (ISO code). (e.g. `de`).
+	Country OptString `json:",omitempty,omitzero"`
+	// Rank by open count or by growth. (e.g. `growth`).
+	Sort OptString `json:",omitempty,omitzero"`
+	// How many rows.
+	Limit OptString `json:",omitempty,omitzero"`
+	// Scope to one job category. (e.g. `backend`).
 	Category  OptString `json:",omitempty,omitzero"`
 	Seniority OptString `json:",omitempty,omitzero"`
 }
@@ -8588,9 +8672,12 @@ func decodeInsightsRolesParams(args [0]string, argsEscaped bool, r *http.Request
 
 // InsightsSalaryParams is parameters of insightsSalary operation.
 type InsightsSalaryParams struct {
-	Category  OptString `json:",omitempty,omitzero"`
+	// Scope to one category.
+	Category OptString `json:",omitempty,omitzero"`
+	// Scope to one seniority.
 	Seniority OptString `json:",omitempty,omitzero"`
-	Country   OptString `json:",omitempty,omitzero"`
+	// Scope to one country.
+	Country OptString `json:",omitempty,omitzero"`
 }
 
 func unpackInsightsSalaryParams(packed middleware.Parameters) (params InsightsSalaryParams) {
@@ -8920,10 +9007,14 @@ func decodeInsightsSalaryHistoryParams(args [0]string, argsEscaped bool, r *http
 
 // InsightsSkillsParams is parameters of insightsSkills operation.
 type InsightsSkillsParams struct {
+	// Scope to one category.
 	Category OptString `json:",omitempty,omitzero"`
-	Country  OptString `json:",omitempty,omitzero"`
-	Sort     OptString `json:",omitempty,omitzero"`
-	Limit    OptString `json:",omitempty,omitzero"`
+	// Scope to one country.
+	Country OptString `json:",omitempty,omitzero"`
+	// Rank by open count or growth.
+	Sort OptString `json:",omitempty,omitzero"`
+	// How many rows.
+	Limit OptString `json:",omitempty,omitzero"`
 }
 
 func unpackInsightsSkillsParams(packed middleware.Parameters) (params InsightsSkillsParams) {
@@ -9137,12 +9228,17 @@ func decodeInsightsSkillsParams(args [0]string, argsEscaped bool, r *http.Reques
 
 // InsightsVelocityParams is parameters of insightsVelocity operation.
 type InsightsVelocityParams struct {
+	// Bucket size for the series. (e.g. `week`).
 	Granularity OptString `json:",omitempty,omitzero"`
-	From        OptString `json:",omitempty,omitzero"`
-	To          OptString `json:",omitempty,omitzero"`
-	Category    OptString `json:",omitempty,omitzero"`
-	Seniority   OptString `json:",omitempty,omitzero"`
-	Country     OptString `json:",omitempty,omitzero"`
+	// Start of the window.
+	From OptString `json:",omitempty,omitzero"`
+	// End of the window.
+	To OptString `json:",omitempty,omitzero"`
+	// Scope to one category.
+	Category OptString `json:",omitempty,omitzero"`
+	// Scope to one seniority.
+	Seniority OptString `json:",omitempty,omitzero"`
+	Country   OptString `json:",omitempty,omitzero"`
 }
 
 func unpackInsightsVelocityParams(packed middleware.Parameters) (params InsightsVelocityParams) {
@@ -9456,6 +9552,7 @@ func decodeInsightsVelocityParams(args [0]string, argsEscaped bool, r *http.Requ
 
 // JobApplyFormParams is parameters of jobApplyForm operation.
 type JobApplyFormParams struct {
+	// The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`).
 	Slug string
 }
 
@@ -9521,8 +9618,11 @@ func decodeJobApplyFormParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // JobCopiesParams is parameters of jobCopies operation.
 type JobCopiesParams struct {
-	Slug   string
-	Limit  OptString `json:",omitempty,omitzero"`
+	// The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`).
+	Slug string
+	// Page size, 1–200 (default 50). (e.g. `50`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
 	Offset OptString `json:",omitempty,omitzero"`
 }
 
@@ -9689,6 +9789,7 @@ func decodeJobCopiesParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // JobFacetsParams is parameters of jobFacets operation.
 type JobFacetsParams struct {
+	// Same full-text query as search. (e.g. `golang`).
 	Q OptString `json:",omitempty,omitzero"`
 	// Comma-separated facet params to count instead of all of them.
 	Facets      OptString `json:",omitempty,omitzero"`
@@ -9856,9 +9957,12 @@ func decodeJobFacetsParams(args [0]string, argsEscaped bool, r *http.Request) (p
 
 // JobsActivityParams is parameters of jobsActivity operation.
 type JobsActivityParams struct {
+	// One of `day`, `week`, `month` (default `day`). (e.g. `week`).
 	Granularity OptString `json:",omitempty,omitzero"`
-	From        OptString `json:",omitempty,omitzero"`
-	To          OptString `json:",omitempty,omitzero"`
+	// Start date (UTC). Defaults to a per-granularity window before `to`. (e.g. `2026-01-01`).
+	From OptString `json:",omitempty,omitzero"`
+	// End date (UTC). Defaults to today. (e.g. `2026-06-30`).
+	To OptString `json:",omitempty,omitzero"`
 }
 
 func unpackJobsActivityParams(packed middleware.Parameters) (params JobsActivityParams) {
@@ -10022,6 +10126,7 @@ func decodeJobsActivityParams(args [0]string, argsEscaped bool, r *http.Request)
 
 // LinkEmailParams is parameters of linkEmail operation.
 type LinkEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -10087,6 +10192,7 @@ func decodeLinkEmailParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // LinkRecalledMailParams is parameters of linkRecalledMail operation.
 type LinkRecalledMailParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -10152,6 +10258,7 @@ func decodeLinkRecalledMailParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // ListCVRevisionsParams is parameters of listCVRevisions operation.
 type ListCVRevisionsParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -10217,6 +10324,7 @@ func decodeListCVRevisionsParams(args [1]string, argsEscaped bool, r *http.Reque
 
 // ListCVTracerLinksParams is parameters of listCVTracerLinks operation.
 type ListCVTracerLinksParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -10282,9 +10390,12 @@ func decodeListCVTracerLinksParams(args [1]string, argsEscaped bool, r *http.Req
 
 // ListCompaniesParams is parameters of listCompanies operation.
 type ListCompaniesParams struct {
-	Q      OptString `json:",omitempty,omitzero"`
-	Sort   OptString `json:",omitempty,omitzero"`
-	Limit  OptString `json:",omitempty,omitzero"`
+	// Case-insensitive name substring filter. (e.g. `acme`).
+	Q    OptString `json:",omitempty,omitzero"`
+	Sort OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
 	Offset OptString `json:",omitempty,omitzero"`
 }
 
@@ -10499,8 +10610,11 @@ func decodeListCompaniesParams(args [0]string, argsEscaped bool, r *http.Request
 
 // ListCompanyFeedbackParams is parameters of listCompanyFeedback operation.
 type ListCompanyFeedbackParams struct {
-	Slug   string
-	Limit  OptString `json:",omitempty,omitzero"`
+	// The company slug. (e.g. `acme`).
+	Slug string
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
 	Offset OptString `json:",omitempty,omitzero"`
 }
 
@@ -11001,7 +11115,9 @@ func decodeListConversationReportsParams(args [0]string, argsEscaped bool, r *ht
 
 // ListJobsParams is parameters of listJobs operation.
 type ListJobsParams struct {
-	Limit  OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
 	Offset OptString `json:",omitempty,omitzero"`
 }
 
@@ -11614,7 +11730,9 @@ func decodeListMySessionsParams(args [0]string, argsEscaped bool, r *http.Reques
 
 // ListNotificationsParams is parameters of listNotifications operation.
 type ListNotificationsParams struct {
-	Limit  OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
 	Offset OptString `json:",omitempty,omitzero"`
 }
 
@@ -11793,8 +11911,10 @@ func decodeListRecentThreadsParams(args [0]string, argsEscaped bool, r *http.Req
 
 // ListReferralCVOptionsParams is parameters of listReferralCVOptions operation.
 type ListReferralCVOptionsParams struct {
+	// The company to ask.
 	CompanySlug OptString `json:",omitempty,omitzero"`
-	JobSlug     OptString `json:",omitempty,omitzero"`
+	// The opening the request is made from.
+	JobSlug OptString `json:",omitempty,omitzero"`
 }
 
 func unpackListReferralCVOptionsParams(packed middleware.Parameters) (params ListReferralCVOptionsParams) {
@@ -11915,8 +12035,10 @@ type ListTalentParams struct {
 	Cities          OptString `json:",omitempty,omitzero"`
 	Specializations OptString `json:",omitempty,omitzero"`
 	MinYears        OptString `json:",omitempty,omitzero"`
-	Limit           OptString `json:",omitempty,omitzero"`
-	Offset          OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. Defaults to 24. (e.g. `24`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
+	Offset OptString `json:",omitempty,omitzero"`
 }
 
 func unpackListTalentParams(packed middleware.Parameters) (params ListTalentParams) {
@@ -12546,10 +12668,14 @@ func decodeListThreadsParams(args [0]string, argsEscaped bool, r *http.Request) 
 
 // ListTrackedJobsParams is parameters of listTrackedJobs operation.
 type ListTrackedJobsParams struct {
+	// Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value
+	// is a 400). (e.g. `applied`).
 	Filter  OptString `json:",omitempty,omitzero"`
 	Compact OptString `json:",omitempty,omitzero"`
-	Limit   OptString `json:",omitempty,omitzero"`
-	Offset  OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip. (e.g. `0`).
+	Offset OptString `json:",omitempty,omitzero"`
 }
 
 func unpackListTrackedJobsParams(packed middleware.Parameters) (params ListTrackedJobsParams) {
@@ -12930,12 +13056,18 @@ func decodeListWatchlistParams(args [0]string, argsEscaped bool, r *http.Request
 
 // MarkAllReadInboxParams is parameters of markAllReadInbox operation.
 type MarkAllReadInboxParams struct {
-	Source       OptString `json:",omitempty,omitzero"`
-	Status       OptString `json:",omitempty,omitzero"`
-	Link         OptString `json:",omitempty,omitzero"`
-	Q            OptString `json:",omitempty,omitzero"`
-	Unread       OptString `json:",omitempty,omitzero"`
+	// Narrow to one account.
+	Source OptString `json:",omitempty,omitzero"`
+	// Narrow to one label.
+	Status OptString `json:",omitempty,omitzero"`
+	// Narrow to one link state.
+	Link OptString `json:",omitempty,omitzero"`
+	// Narrow by search.
+	Q      OptString `json:",omitempty,omitzero"`
+	Unread OptString `json:",omitempty,omitzero"`
+	// Narrow to mail nothing has judged yet.
 	Unclassified OptString `json:",omitempty,omitzero"`
+	// Also mark the `other` label the default hides.
 	IncludeOther OptString `json:",omitempty,omitzero"`
 }
 
@@ -13300,6 +13432,7 @@ func decodeMarkAllReadInboxParams(args [0]string, argsEscaped bool, r *http.Requ
 
 // MarkAppliedParams is parameters of markApplied operation.
 type MarkAppliedParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -13430,6 +13563,7 @@ func decodeMarkConversationReadParams(args [1]string, argsEscaped bool, r *http.
 
 // MarkNotificationReadParams is parameters of markNotificationRead operation.
 type MarkNotificationReadParams struct {
+	// The notification id. (e.g. `5`).
 	ID string
 }
 
@@ -13495,6 +13629,7 @@ func decodeMarkNotificationReadParams(args [1]string, argsEscaped bool, r *http.
 
 // MyCompanyFeedbackParams is parameters of myCompanyFeedback operation.
 type MyCompanyFeedbackParams struct {
+	// The company slug. (e.g. `acme`).
 	Slug string
 }
 
@@ -13689,6 +13824,7 @@ func decodeOneClickUnsubscribeParams(args [0]string, argsEscaped bool, r *http.R
 
 // PatchCVParams is parameters of patchCV operation.
 type PatchCVParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -13754,6 +13890,7 @@ func decodePatchCVParams(args [1]string, argsEscaped bool, r *http.Request) (par
 
 // PostAssistantExtendParams is parameters of postAssistantExtend operation.
 type PostAssistantExtendParams struct {
+	// The session id.
 	ID string
 }
 
@@ -13819,6 +13956,7 @@ func decodePostAssistantExtendParams(args [1]string, argsEscaped bool, r *http.R
 
 // PostAssistantVoiceTokenParams is parameters of postAssistantVoiceToken operation.
 type PostAssistantVoiceTokenParams struct {
+	// The session id.
 	ID string
 }
 
@@ -13884,6 +14022,7 @@ func decodePostAssistantVoiceTokenParams(args [1]string, argsEscaped bool, r *ht
 
 // PostAssistantVoiceTurnParams is parameters of postAssistantVoiceTurn operation.
 type PostAssistantVoiceTurnParams struct {
+	// The session id.
 	ID string
 }
 
@@ -14274,6 +14413,7 @@ func decodeRateSupportSessionParams(args [1]string, argsEscaped bool, r *http.Re
 
 // RecallApplicationMailParams is parameters of recallApplicationMail operation.
 type RecallApplicationMailParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -14339,6 +14479,7 @@ func decodeRecallApplicationMailParams(args [1]string, argsEscaped bool, r *http
 
 // RecordApplicationFollowUpParams is parameters of recordApplicationFollowUp operation.
 type RecordApplicationFollowUpParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -14404,6 +14545,7 @@ func decodeRecordApplicationFollowUpParams(args [1]string, argsEscaped bool, r *
 
 // RecordViewParams is parameters of recordView operation.
 type RecordViewParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -14534,6 +14676,7 @@ func decodeRejectCompanyRelationParams(args [1]string, argsEscaped bool, r *http
 
 // RejectEmailLinkParams is parameters of rejectEmailLink operation.
 type RejectEmailLinkParams struct {
+	// The message id.
 	ID string
 }
 
@@ -14664,6 +14807,7 @@ func decodeRejectEmployerClaimParams(args [1]string, argsEscaped bool, r *http.R
 
 // RejectSubmissionParams is parameters of rejectSubmission operation.
 type RejectSubmissionParams struct {
+	// The submission id. (e.g. `9`).
 	ID string
 }
 
@@ -14859,6 +15003,7 @@ func decodeReopenEmployerVacancyParams(args [1]string, argsEscaped bool, r *http
 
 // ReportCompanyFeedbackParams is parameters of reportCompanyFeedback operation.
 type ReportCompanyFeedbackParams struct {
+	// The feedback entry id. (e.g. `5`).
 	ID string
 }
 
@@ -14989,6 +15134,7 @@ func decodeReportConversationParams(args [1]string, argsEscaped bool, r *http.Re
 
 // ReseedCVParams is parameters of reseedCV operation.
 type ReseedCVParams struct {
+	// The CV id (tailored or base).
 	ID string
 }
 
@@ -15119,6 +15265,7 @@ func decodeResolveConversationReportParams(args [1]string, argsEscaped bool, r *
 
 // ResolveJobReportParams is parameters of resolveJobReport operation.
 type ResolveJobReportParams struct {
+	// The report id. (e.g. `3`).
 	ID string
 }
 
@@ -15184,6 +15331,7 @@ func decodeResolveJobReportParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // ResolveReferralRequestParams is parameters of resolveReferralRequest operation.
 type ResolveReferralRequestParams struct {
+	// The request id.
 	ID string
 }
 
@@ -15249,6 +15397,7 @@ func decodeResolveReferralRequestParams(args [1]string, argsEscaped bool, r *htt
 
 // RestoreEmailParams is parameters of restoreEmail operation.
 type RestoreEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -15314,6 +15463,7 @@ func decodeRestoreEmailParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // RetractGhostReportParams is parameters of retractGhostReport operation.
 type RetractGhostReportParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -15821,6 +15971,7 @@ func decodeRunJobFitParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // RunMatchAnalysisParams is parameters of runMatchAnalysis operation.
 type RunMatchAnalysisParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -15886,6 +16037,7 @@ func decodeRunMatchAnalysisParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // SaveJobParams is parameters of saveJob operation.
 type SaveJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -15951,7 +16103,9 @@ func decodeSaveJobParams(args [1]string, argsEscaped bool, r *http.Request) (par
 
 // SearchCitiesParams is parameters of searchCities operation.
 type SearchCitiesParams struct {
-	Q       OptString `json:",omitempty,omitzero"`
+	// Prefix to match. (e.g. `berl`).
+	Q OptString `json:",omitempty,omitzero"`
+	// ISO 3166-1 alpha-2 code to narrow to. (e.g. `DE`).
 	Country OptString `json:",omitempty,omitzero"`
 }
 
@@ -16066,15 +16220,47 @@ func decodeSearchCitiesParams(args [0]string, argsEscaped bool, r *http.Request)
 
 // SearchJobsParams is parameters of searchJobs operation.
 type SearchJobsParams struct {
-	Q                    OptString `json:",omitempty,omitzero"`
-	QFields              OptString `json:",omitempty,omitzero"`
-	Sort                 OptString `json:",omitempty,omitzero"`
-	Order                OptString `json:",omitempty,omitzero"`
-	Limit                OptString `json:",omitempty,omitzero"`
-	Offset               OptString `json:",omitempty,omitzero"`
-	HideSeen             OptString `json:",omitempty,omitzero"`
+	// Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default
+	// engine matching: the first words are required and trailing ones are dropped when too few postings
+	// match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every
+	// quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words
+	// matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an
+	// alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`.
+	// Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered,
+	// and default relevance order does not reliably rank a contiguous match above a scattered-token one.
+	// (e.g. `golang`).
+	Q OptString `json:",omitempty,omitzero"`
+	// Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A
+	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
+	// partially applying. (e.g. `title`).
+	QFields OptString `json:",omitempty,omitzero"`
+	// One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
+	// relevance/newest. (e.g. `posted_at`).
+	Sort OptString `json:",omitempty,omitzero"`
+	// `asc` or `desc` (default `desc`). (e.g. `desc`).
+	Order OptString `json:",omitempty,omitzero"`
+	// Page size, 1–100. (e.g. `20`).
+	Limit OptString `json:",omitempty,omitzero"`
+	// Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`).
+	Offset OptString `json:",omitempty,omitzero"`
+	// `true` leaves out the postings the signed-in caller has already opened (the 1000 most recently
+	// viewed, saved, applied to or hidden), inside the search, so `meta.total` and paging stay accurate. A
+	// per-person preference, not a filter: a saved search ignores it. Without a session or API key it is
+	// not applied and is listed in `meta.ignored_params`. (e.g. `true`).
+	HideSeen OptString `json:",omitempty,omitzero"`
+	// `true` excludes every posting of employers represented in the newest 1,000 applications made by the
+	// signed-in caller. Employers represented only by older applications can remain in results. Applied
+	// inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a
+	// filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value
+	// that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`.
+	// (e.g. `true`).
 	HideAppliedCompanies OptString `json:",omitempty,omitzero"`
-	MinSkillMatch        OptString `json:",omitempty,omitzero"`
+	// Keeps only postings whose skills your profile covers by at least this percent (1–100), across the
+	// whole ranking. Applies only with `sort=match`, to a signed-in caller with profile skills; the read
+	// stops once no later posting can qualify or at a depth bound, and then `meta.total` is a minimum with
+	// `meta.total_is_lower_bound: true`. A per-person preference: a saved search ignores it. Otherwise it
+	// is not applied and is listed in `meta.ignored_params`. (e.g. `70`).
+	MinSkillMatch OptString `json:",omitempty,omitzero"`
 }
 
 func unpackSearchJobsParams(packed middleware.Parameters) (params SearchJobsParams) {
@@ -16603,6 +16789,7 @@ func decodeSendConversationMessageParams(args [1]string, argsEscaped bool, r *ht
 
 // SendDirectApplyParams is parameters of sendDirectApply operation.
 type SendDirectApplyParams struct {
+	// The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`).
 	Slug string
 }
 
@@ -16668,6 +16855,7 @@ func decodeSendDirectApplyParams(args [1]string, argsEscaped bool, r *http.Reque
 
 // SetCVSessionParams is parameters of setCVSession operation.
 type SetCVSessionParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -16733,6 +16921,7 @@ func decodeSetCVSessionParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // SetCVTemplateParams is parameters of setCVTemplate operation.
 type SetCVTemplateParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -16798,6 +16987,7 @@ func decodeSetCVTemplateParams(args [1]string, argsEscaped bool, r *http.Request
 
 // SetCVTracerLinksParams is parameters of setCVTracerLinks operation.
 type SetCVTracerLinksParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -16863,6 +17053,7 @@ func decodeSetCVTracerLinksParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // SetSubscriptionActiveParams is parameters of setSubscriptionActive operation.
 type SetSubscriptionActiveParams struct {
+	// The subscription id. (e.g. `1`).
 	ID string
 }
 
@@ -16928,7 +17119,9 @@ func decodeSetSubscriptionActiveParams(args [1]string, argsEscaped bool, r *http
 
 // SimilarJobsParams is parameters of similarJobs operation.
 type SimilarJobsParams struct {
-	Slug  string
+	// The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`).
+	Slug string
+	// Max similar jobs. (e.g. `10`).
 	Limit OptString `json:",omitempty,omitzero"`
 }
 
@@ -17110,6 +17303,7 @@ func decodeSkillNeighboursParams(args [1]string, argsEscaped bool, r *http.Reque
 
 // StartBaseSessionParams is parameters of startBaseSession operation.
 type StartBaseSessionParams struct {
+	// The base CV id.
 	ID string
 }
 
@@ -17175,6 +17369,7 @@ func decodeStartBaseSessionParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // StartTailorSessionParams is parameters of startTailorSession operation.
 type StartTailorSessionParams struct {
+	// The tailored CV id.
 	ID string
 }
 
@@ -17356,6 +17551,7 @@ func decodeSuggestParams(args [0]string, argsEscaped bool, r *http.Request) (par
 
 // TrackApplicationParams is parameters of trackApplication operation.
 type TrackApplicationParams struct {
+	// The tracking row id (from `/me/tracking`). (e.g. `42`).
 	ID string
 }
 
@@ -17421,6 +17617,7 @@ func decodeTrackApplicationParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // TrackJobParams is parameters of trackJob operation.
 type TrackJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -17486,6 +17683,7 @@ func decodeTrackJobParams(args [1]string, argsEscaped bool, r *http.Request) (pa
 
 // TriageEmailParams is parameters of triageEmail operation.
 type TriageEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -17616,6 +17814,7 @@ func decodeUnbanUserParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // UndismissJobParams is parameters of undismissJob operation.
 type UndismissJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -17681,7 +17880,9 @@ func decodeUndismissJobParams(args [1]string, argsEscaped bool, r *http.Request)
 
 // UndoCVRevisionParams is parameters of undoCVRevision operation.
 type UndoCVRevisionParams struct {
-	ID  string
+	// The CV id.
+	ID string
+	// The revision id, from the history feed.
 	Rid string
 }
 
@@ -17799,7 +18000,9 @@ func decodeUndoCVRevisionParams(args [2]string, argsEscaped bool, r *http.Reques
 
 // UndoCVRevisionBatchParams is parameters of undoCVRevisionBatch operation.
 type UndoCVRevisionBatchParams struct {
-	ID  string
+	// The CV id.
+	ID string
+	// The batch id shared by the revisions to undo.
 	Bid string
 }
 
@@ -17917,6 +18120,7 @@ func decodeUndoCVRevisionBatchParams(args [2]string, argsEscaped bool, r *http.R
 
 // UnlinkEmailParams is parameters of unlinkEmail operation.
 type UnlinkEmailParams struct {
+	// The message id.
 	ID string
 }
 
@@ -17982,6 +18186,7 @@ func decodeUnlinkEmailParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // UnsaveJobParams is parameters of unsaveJob operation.
 type UnsaveJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -18047,6 +18252,7 @@ func decodeUnsaveJobParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // UntrackParams is parameters of untrack operation.
 type UntrackParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -18112,6 +18318,7 @@ func decodeUntrackParams(args [1]string, argsEscaped bool, r *http.Request) (par
 
 // UntrackApplicationParams is parameters of untrackApplication operation.
 type UntrackApplicationParams struct {
+	// The tracking row id. (e.g. `42`).
 	ID string
 }
 
@@ -18177,6 +18384,7 @@ func decodeUntrackApplicationParams(args [1]string, argsEscaped bool, r *http.Re
 
 // UpdateAtomParams is parameters of updateAtom operation.
 type UpdateAtomParams struct {
+	// The atom id.
 	ID string
 }
 
@@ -18242,6 +18450,7 @@ func decodeUpdateAtomParams(args [1]string, argsEscaped bool, r *http.Request) (
 
 // UpdateCVParams is parameters of updateCV operation.
 type UpdateCVParams struct {
+	// The CV id.
 	ID string
 }
 
@@ -18372,6 +18581,7 @@ func decodeUpdateEmployerVacancyParams(args [1]string, argsEscaped bool, r *http
 
 // UpdateEmploymentParams is parameters of updateEmployment operation.
 type UpdateEmploymentParams struct {
+	// The employment id.
 	ID string
 }
 
@@ -18437,6 +18647,7 @@ func decodeUpdateEmploymentParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // UpdateJobParams is parameters of updateJob operation.
 type UpdateJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -18502,6 +18713,7 @@ func decodeUpdateJobParams(args [1]string, argsEscaped bool, r *http.Request) (p
 
 // UpdateSavedSearchParams is parameters of updateSavedSearch operation.
 type UpdateSavedSearchParams struct {
+	// The saved-search id. (e.g. `2`).
 	ID string
 }
 
@@ -18567,6 +18779,7 @@ func decodeUpdateSavedSearchParams(args [1]string, argsEscaped bool, r *http.Req
 
 // UpsertCompanyFeedbackParams is parameters of upsertCompanyFeedback operation.
 type UpsertCompanyFeedbackParams struct {
+	// The company slug. (e.g. `acme`).
 	Slug string
 }
 
@@ -18632,6 +18845,7 @@ func decodeUpsertCompanyFeedbackParams(args [1]string, argsEscaped bool, r *http
 
 // VoteCompanyParams is parameters of voteCompany operation.
 type VoteCompanyParams struct {
+	// The company slug.
 	Slug string
 }
 
@@ -18697,6 +18911,7 @@ func decodeVoteCompanyParams(args [1]string, argsEscaped bool, r *http.Request) 
 
 // VoteJobParams is parameters of voteJob operation.
 type VoteJobParams struct {
+	// The job `public_slug`.
 	Slug string
 }
 
@@ -18762,6 +18977,7 @@ func decodeVoteJobParams(args [1]string, argsEscaped bool, r *http.Request) (par
 
 // WithdrawReferralOfferParams is parameters of withdrawReferralOffer operation.
 type WithdrawReferralOfferParams struct {
+	// The offer id.
 	ID string
 }
 

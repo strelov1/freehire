@@ -163,6 +163,7 @@ func (s *AccountAttributionResult) SetGa4Sent(val bool) {
 
 // Ref: #/components/schemas/AccountLanguageUpdate
 type AccountLanguageUpdate struct {
+	// Supported language code. (e.g. `en`).
 	Language OptString `json:"language"`
 }
 
@@ -238,6 +239,7 @@ func (s *AccountOauthGrant) SetLastUsedAt(val NilDateTime) {
 
 // Ref: #/components/schemas/AccountTimezoneUpdate
 type AccountTimezoneUpdate struct {
+	// IANA timezone name. (e.g. `Europe/Berlin`).
 	Timezone OptString `json:"timezone"`
 	// Leave a timezone that is already set alone.
 	OnlyIfUnset OptBool `json:"only_if_unset"`
@@ -1306,7 +1308,9 @@ func (s *AssistantVoiceToken) SetCallsURL(val string) {
 
 // Ref: #/components/schemas/AssistantVoiceTurn
 type AssistantVoiceTurn struct {
-	Role    OptString `json:"role"`
+	// `user` or `assistant`. (e.g. `user`).
+	Role OptString `json:"role"`
+	// The transcribed/spoken text.
 	Content OptString `json:"content"`
 }
 
@@ -1332,6 +1336,7 @@ func (s *AssistantVoiceTurn) SetContent(val OptString) {
 
 // Ref: #/components/schemas/AuthCode
 type AuthCode struct {
+	// The six-digit code mailed to your address. (e.g. `123456`).
 	Code OptString `json:"code"`
 }
 
@@ -1362,6 +1367,7 @@ func (s *AuthEmailChange) SetEmail(val OptString) {
 
 // Ref: #/components/schemas/AuthPasswordForgot
 type AuthPasswordForgot struct {
+	// Account email. (e.g. `me@example.com`).
 	Email OptString `json:"email"`
 }
 
@@ -1377,8 +1383,11 @@ func (s *AuthPasswordForgot) SetEmail(val OptString) {
 
 // Ref: #/components/schemas/AuthPasswordReset
 type AuthPasswordReset struct {
-	Email    OptString `json:"email"`
-	Code     OptString `json:"code"`
+	// Account email. (e.g. `me@example.com`).
+	Email OptString `json:"email"`
+	// The mailed reset code. (e.g. `123456`).
+	Code OptString `json:"code"`
+	// New password.
 	Password OptString `json:"password"`
 }
 
@@ -4788,6 +4797,7 @@ func (s *CompanyFeedbackPage) SetMeta(val PageMeta) {
 
 // Ref: #/components/schemas/CompanyFeedbackReportRequest
 type CompanyFeedbackReportRequest struct {
+	// Report reason code. (e.g. `spam`).
 	Reason OptString `json:"reason"`
 }
 
@@ -4804,9 +4814,11 @@ func (s *CompanyFeedbackReportRequest) SetReason(val OptString) {
 // Ref: #/components/schemas/CompanyFeedbackRequest
 type CompanyFeedbackRequest struct {
 	// 1 to 5.
-	Rating       OptInt64  `json:"rating"`
+	Rating OptInt64 `json:"rating"`
+	// Review category, e.g. `interview`, `culture`, `compensation`. (e.g. `interview`).
 	FeedbackType OptString `json:"feedback_type"`
-	Body         OptString `json:"body"`
+	// Free-text review. (e.g. `Fast process, clear communication.`).
+	Body OptString `json:"body"`
 }
 
 // GetRating returns the value of Rating.
@@ -6325,6 +6337,7 @@ func (s *CreateReplyCreated) SetData(val ThreadReply) {
 
 // Ref: #/components/schemas/CreateReplyRequest
 type CreateReplyRequest struct {
+	// Your reply.
 	Body OptString `json:"body"`
 	// Nests the reply under another reply; 0 or omitted is top-level.
 	ParentReplyID OptInt64 `json:"parent_reply_id"`
@@ -6448,8 +6461,10 @@ func (s *CreateThreadCreated) SetData(val Thread) {
 type CreateThreadRequest struct {
 	SubjectType OptString `json:"subject_type"`
 	SubjectSlug OptString `json:"subject_slug"`
-	Title       OptString `json:"title"`
-	Body        OptString `json:"body"`
+	// Thread title.
+	Title OptString `json:"title"`
+	// Opening post.
+	Body OptString `json:"body"`
 }
 
 // GetSubjectType returns the value of SubjectType.
@@ -6787,6 +6802,7 @@ func (s *CvCoverLetter) SetModel(val OptString) {
 
 // Ref: #/components/schemas/CvCreate
 type CvCreate struct {
+	// Label; up to 200 characters.
 	Title OptString `json:"title"`
 	// Empty falls back to the caller's saved default, then to the system one.
 	TemplateID OptString `json:"template_id"`
@@ -7098,6 +7114,7 @@ func (s *CvRevisionUndo) SetRevision(val jx.Raw) {
 
 // Ref: #/components/schemas/CvSessionBinding
 type CvSessionBinding struct {
+	// The agent session to bind.
 	SessionID OptString `json:"session_id"`
 }
 
@@ -7113,6 +7130,7 @@ func (s *CvSessionBinding) SetSessionID(val OptString) {
 
 // Ref: #/components/schemas/CvTailorRequest
 type CvTailorRequest struct {
+	// The vacancy to tailor toward.
 	JobSlug OptString `json:"job_slug"`
 	// The base to copy; absent means the default base.
 	BaseCvID OptString `json:"base_cv_id"`
@@ -7342,6 +7360,7 @@ func (s *CvTailored) SetAgentSessionID(val string) {
 
 // Ref: #/components/schemas/CvTemplateChoice
 type CvTemplateChoice struct {
+	// A template id from `/cv-templates`.
 	TemplateID OptString `json:"template_id"`
 }
 
@@ -7440,6 +7459,7 @@ func (s *CvTracerLink) SetLastClickAt(val OptDateTime) {
 
 // Ref: #/components/schemas/CvTracerLinksSetting
 type CvTracerLinksSetting struct {
+	// Turn tracing on or off.
 	Enabled OptBool `json:"enabled"`
 }
 
@@ -7470,9 +7490,12 @@ func (s *CvTracerLinksState) SetTracerLinksEnabled(val bool) {
 
 // Ref: #/components/schemas/CvUpdate
 type CvUpdate struct {
-	Title      OptString `json:"title"`
+	// New label.
+	Title OptString `json:"title"`
+	// New template.
 	TemplateID OptString `json:"template_id"`
-	Document   jx.Raw    `json:"document"`
+	// The whole CV document.
+	Document jx.Raw `json:"document"`
 }
 
 // GetTitle returns the value of Title.
@@ -7952,10 +7975,16 @@ func (s *DirectApplyQuestionType) UnmarshalText(data []byte) error {
 // Names the CV to send: `resume: true` for the uploaded one, or `cv_id`, exactly one.
 // Ref: #/components/schemas/DirectApplyRequest
 type DirectApplyRequest struct {
-	Resume  OptBool                      `json:"resume"`
-	CvID    OptString                    `json:"cv_id"`
+	// Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`. (e.g. `true`).
+	Resume OptBool `json:"resume"`
+	// The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV is a `404`.
+	// (e.g. `6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01`).
+	CvID OptString `json:"cv_id"`
+	// Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.
+	// (e.g. `{"q1":"true"}`).
 	Answers OptDirectApplyRequestAnswers `json:"answers"`
-	Note    OptString                    `json:"note"`
+	// Up to 2000 characters to the employer. (e.g. `Happy to talk this week.`).
+	Note OptString `json:"note"`
 }
 
 // GetResume returns the value of Resume.
@@ -7998,6 +8027,8 @@ func (s *DirectApplyRequest) SetNote(val OptString) {
 	s.Note = val
 }
 
+// Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of its options.
+// (e.g. `{"q1":"true"}`).
 type DirectApplyRequestAnswers map[string]string
 
 func (s *DirectApplyRequestAnswers) init() DirectApplyRequestAnswers {
@@ -10074,8 +10105,10 @@ func (*FitAnalysisResponse) runMatchAnalysisRes() {}
 // A job posting scraped off any page.
 // Ref: #/components/schemas/FitMatchTextRequest
 type FitMatchTextRequest struct {
+	// The posting title.
 	Title OptString `json:"title"`
-	Text  OptString `json:"text"`
+	// The scraped posting text.
+	Text OptString `json:"text"`
 }
 
 // GetTitle returns the value of Title.
@@ -12136,8 +12169,10 @@ func (s *InboxPage) SetMeta(val InboxMeta) {
 // The verdict an agent records for one message. Left-out fields read as empty.
 // Ref: #/components/schemas/InboxTriage
 type InboxTriage struct {
+	// One value from the vocabulary above. (e.g. `interview_invitation`).
 	Signal OptNilString `json:"signal"`
-	Slug   OptNilString `json:"slug"`
+	// Link the message to this application at the same time.
+	Slug OptNilString `json:"slug"`
 	// Stored for display; gates nothing.
 	Confidence OptNilFloat32 `json:"confidence"`
 }
@@ -12529,13 +12564,21 @@ func (s *JobCopy) SetPostedAt(val NilDateTime) {
 // without them.
 // Ref: #/components/schemas/JobCreate
 type JobCreate struct {
-	URL            OptString      `json:"url"`
-	Source         OptString      `json:"source"`
-	Title          OptString      `json:"title"`
-	Company        OptString      `json:"company"`
-	Location       OptString      `json:"location"`
-	Remote         OptBool        `json:"remote"`
-	Description    OptString      `json:"description"`
+	// Link to the posting. (e.g. `https://acme.com/careers/123`).
+	URL OptString `json:"url"`
+	// Source label. (e.g. `manual`).
+	Source OptString `json:"source"`
+	// Job title. (e.g. `Senior Go Engineer`).
+	Title OptString `json:"title"`
+	// Company name. (e.g. `Acme`).
+	Company OptString `json:"company"`
+	// Free-text location.
+	Location OptString `json:"location"`
+	// Whether the role is remote.
+	Remote OptBool `json:"remote"`
+	// Job description.
+	Description OptString `json:"description"`
+	// Posting date.
 	PostedAt       OptNilDateTime `json:"posted_at"`
 	Skills         []string       `json:"skills"`
 	Regions        []string       `json:"regions"`
@@ -12732,11 +12775,15 @@ func (s *JobCreate) SetSalaryPeriod(val OptString) {
 // Exactly one of `job_slug`, `url` and `text`; anything else is a 400.
 // Ref: #/components/schemas/JobDescriptionSource
 type JobDescriptionSource struct {
+	// An existing job’s slug.
 	JobSlug OptString `json:"job_slug"`
-	URL     OptString `json:"url"`
-	Text    OptString `json:"text"`
+	// A job posting URL.
+	URL OptString `json:"url"`
+	// Pasted job description text.
+	Text OptString `json:"text"`
 	// Hints used only with `text`.
-	Title   OptString `json:"title"`
+	Title OptString `json:"title"`
+	// Optional hint, used only alongside `text`.
 	Company OptString `json:"company"`
 }
 
@@ -13081,8 +13128,10 @@ func (s *JobReportReason) UnmarshalText(data []byte) error {
 // Ref: #/components/schemas/JobReportRequest
 type JobReportRequest struct {
 	// From the controlled vocabulary.
-	Reason          OptString `json:"reason"`
-	Details         OptString `json:"details"`
+	Reason OptString `json:"reason"`
+	// Free-text details.
+	Details OptString `json:"details"`
+	// Optional contact handle.
 	ContactTelegram OptString `json:"contact_telegram"`
 }
 
@@ -17552,7 +17601,10 @@ func (s *NotificationSettings) SetQuietHoursEnd(val NilString) {
 // Every field is read as its zero value when left out. Times are `HH:MM`.
 // Ref: #/components/schemas/NotificationSettingsUpdate
 type NotificationSettingsUpdate struct {
-	Enabled             OptNilBool        `json:"enabled"`
+	// Turn notifications on or off.
+	Enabled OptNilBool `json:"enabled"`
+	// Delivery channels: `email`, `telegram`, `push`. Adding `push` needs a device the mobile app has
+	// registered (409 otherwise).
 	Channels            OptNilStringArray `json:"channels"`
 	DigestFrequency     OptNilString      `json:"digest_frequency"`
 	DigestTime          OptNilString      `json:"digest_time"`
@@ -20191,6 +20243,7 @@ func (s *PostJobAutoApplyRetryOK) SetData(val AutoApplyRetried) {
 
 // Ref: #/components/schemas/PrefillRequest
 type PrefillRequest struct {
+	// The job posting URL to parse.
 	URL OptString `json:"url"`
 }
 
@@ -20511,11 +20564,15 @@ func (s *Profile) SetUpdatedAt(val NilDateTime) {
 // The profile as saved.
 // Ref: #/components/schemas/ProfileUpdate
 type ProfileUpdate struct {
-	Specializations   OptNilStringArray `json:"specializations"`
-	Skills            OptNilStringArray `json:"skills"`
-	Seniorities       OptNilStringArray `json:"seniorities"`
-	ExcludedSkills    OptNilStringArray `json:"excluded_skills"`
-	ExcludedSources   OptNilStringArray `json:"excluded_sources"`
+	// One or more job categories (max 5). (e.g. `["backend"]`).
+	Specializations OptNilStringArray `json:"specializations"`
+	// Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`).
+	Skills          OptNilStringArray `json:"skills"`
+	Seniorities     OptNilStringArray `json:"seniorities"`
+	ExcludedSkills  OptNilStringArray `json:"excluded_skills"`
+	ExcludedSources OptNilStringArray `json:"excluded_sources"`
+	// Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language.
+	// (e.g. `["en","ru"]`).
 	JobLanguages      OptNilStringArray `json:"job_languages"`
 	ExcludedCompanies OptNilStringArray `json:"excluded_companies"`
 	// Shaped like LocationPreferences; null or absent keeps none.
@@ -20883,6 +20940,7 @@ func (s *PushToken) SetLastSeenAt(val NilDateTime) {
 
 // Ref: #/components/schemas/PushTokenRegister
 type PushTokenRegister struct {
+	// The Expo push token minted by the device. (e.g. `ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]`).
 	Token OptString `json:"token"`
 	// `ios` or `android`.
 	Platform OptString `json:"platform"`
@@ -20910,6 +20968,7 @@ func (s *PushTokenRegister) SetPlatform(val OptString) {
 
 // Ref: #/components/schemas/PushTokenRemove
 type PushTokenRemove struct {
+	// The token to remove.
 	Token OptString `json:"token"`
 }
 
@@ -21332,6 +21391,7 @@ func (s *ReferralCvKind) UnmarshalText(data []byte) error {
 
 // Ref: #/components/schemas/ReferralDecision
 type ReferralDecision struct {
+	// True approves the referrer; false rejects the offer.
 	Approve OptBool `json:"approve"`
 }
 
@@ -21603,16 +21663,24 @@ func (s *ReferralOfferStatus) UnmarshalText(data []byte) error {
 
 // Ref: #/components/schemas/ReferralRequestCreate
 type ReferralRequestCreate struct {
+	// The company to ask.
 	CompanySlug OptString `json:"company_slug"`
 	// Names the vacancy; an unknown slug is a 404. Wins over `job_id`.
-	JobSlug         OptString    `json:"job_slug"`
-	JobID           OptNilInt64  `json:"job_id"`
-	CvKind          OptString    `json:"cv_kind"`
-	CvID            OptNilString `json:"cv_id"`
-	LinkedinURL     OptString    `json:"linkedin_url"`
-	ContactTelegram OptString    `json:"contact_telegram"`
-	ContactEmail    OptString    `json:"contact_email"`
-	Note            OptString    `json:"note"`
+	JobSlug OptString   `json:"job_slug"`
+	JobID   OptNilInt64 `json:"job_id"`
+	// Which CV to attach: `original` (your uploaded one) or `built`.
+	CvKind OptString `json:"cv_kind"`
+	// The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with no opening
+	// — for any opening at the company (see `cv-options`). Any other CV answers 422.
+	CvID OptNilString `json:"cv_id"`
+	// Your LinkedIn profile URL.
+	LinkedinURL OptString `json:"linkedin_url"`
+	// How the referrer reaches you.
+	ContactTelegram OptString `json:"contact_telegram"`
+	// How the referrer reaches you.
+	ContactEmail OptString `json:"contact_email"`
+	// A short message to the referrer.
+	Note OptString `json:"note"`
 }
 
 // GetCompanySlug returns the value of CompanySlug.
@@ -21757,6 +21825,7 @@ func (s *ReferralRequestStatus) UnmarshalText(data []byte) error {
 // `status` is "contacted" or "declined".
 // Ref: #/components/schemas/ReferralResolve
 type ReferralResolve struct {
+	// `contacted` or `declined`. (e.g. `contacted`).
 	Status OptString `json:"status"`
 }
 
@@ -23436,6 +23505,7 @@ func (s *SavedSearch) SetUpdatedAt(val NilDateTime) {
 // An empty name is refused with a 400, like an out-of-range one.
 // Ref: #/components/schemas/SavedSearchCreate
 type SavedSearchCreate struct {
+	// Display name. (e.g. `Senior Go remote`).
 	Name OptString `json:"name"`
 	// Empty is the valid "show all" snapshot.
 	Query              OptString `json:"query"`
@@ -23502,7 +23572,9 @@ func (s *SavedSearchList) SetMeta(val AlertListMeta) {
 // A partial update: an absent or null field is kept; an empty query is a real "show all".
 // Ref: #/components/schemas/SavedSearchUpdate
 type SavedSearchUpdate struct {
-	Name  OptNilString `json:"name"`
+	// New name (optional).
+	Name OptNilString `json:"name"`
+	// New query (optional).
 	Query OptNilString `json:"query"`
 }
 
@@ -25277,12 +25349,19 @@ func (s *SubmissionPrefill) SetExistingJobSlug(val OptString) {
 // with a 400.
 // Ref: #/components/schemas/SubmissionRequest
 type SubmissionRequest struct {
-	URL         OptNilString `json:"url"`
-	Source      OptNilString `json:"source"`
-	Title       OptNilString `json:"title"`
-	Company     OptNilString `json:"company"`
-	Location    OptNilString `json:"location"`
-	Remote      OptNilBool   `json:"remote"`
+	// Link to the original posting. (e.g. `https://acme.com/careers/123`).
+	URL OptNilString `json:"url"`
+	// Origin hint (optional).
+	Source OptNilString `json:"source"`
+	// Job title. (e.g. `Senior Go Engineer`).
+	Title OptNilString `json:"title"`
+	// Company name. (e.g. `Acme`).
+	Company OptNilString `json:"company"`
+	// Free-text location. (e.g. `Remote — EU`).
+	Location OptNilString `json:"location"`
+	// Whether the role is remote. (e.g. `true`).
+	Remote OptNilBool `json:"remote"`
+	// Job description.
 	Description OptNilString `json:"description"`
 	// RFC 3339.
 	PostedAt       OptNilString      `json:"posted_at"`
@@ -25615,6 +25694,7 @@ func (s *Subscription) SetCreatedAt(val NilDateTime) {
 
 // Ref: #/components/schemas/SubscriptionActive
 type SubscriptionActive struct {
+	// Whether the subscription is active. (e.g. `false`).
 	Active OptBool `json:"active"`
 }
 
@@ -25630,6 +25710,7 @@ func (s *SubscriptionActive) SetActive(val OptBool) {
 
 // Ref: #/components/schemas/SubscriptionCreate
 type SubscriptionCreate struct {
+	// The saved search to subscribe. (e.g. `2`).
 	SavedSearchID OptInt64 `json:"saved_search_id"`
 	// Defaults to telegram when empty.
 	Channel OptString `json:"channel"`
@@ -25943,13 +26024,20 @@ func (s *SupportSession) SetJobID(val OptInt64) {
 // The onboarding survey. Each field is optional.
 // Ref: #/components/schemas/SurveyResponses
 type SurveyResponses struct {
-	JobSearchStage    OptNilString      `json:"job_search_stage"`
+	// One of `not_started`, `searching`, `employed_looking`, `exploring`. (e.g. `searching`).
+	JobSearchStage OptNilString `json:"job_search_stage"`
+	// Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`, `visa_sponsorship`,
+	// `technical_interviews`, `english`, `first_job`, `just_starting`, `other`. `just_starting` stands
+	// alone. Replaces the stored list. (e.g. `["technical_interviews"]`).
 	BiggestChallenges OptNilStringArray `json:"biggest_challenges"`
 	// Kept only while `other` is among the challenges.
-	BiggestChallengeNote  OptNilString `json:"biggest_challenge_note"`
-	CurrentIncomeAmount   OptNilInt64  `json:"current_income_amount"`
+	BiggestChallengeNote OptNilString `json:"biggest_challenge_note"`
+	// What you earn today, in the currency and period below. (e.g. `5000`).
+	CurrentIncomeAmount OptNilInt64 `json:"current_income_amount"`
+	// Three-letter ISO 4217 currency code. (e.g. `USD`).
 	CurrentIncomeCurrency OptNilString `json:"current_income_currency"`
-	CurrentIncomePeriod   OptNilString `json:"current_income_period"`
+	// Income period, e.g. `year`, `month`. (e.g. `month`).
+	CurrentIncomePeriod OptNilString `json:"current_income_period"`
 }
 
 // GetJobSearchStage returns the value of JobSearchStage.
@@ -27123,7 +27211,9 @@ func (s *TrackApplicationOK) SetData(val Interaction) {
 // At least one of the two is required. A field left out or null keeps the stored value.
 // Ref: #/components/schemas/TrackJob
 type TrackJob struct {
+	// Application stage from the vocabulary above. (e.g. `interview`).
 	Stage OptNilString `json:"stage"`
+	// Free-text notes.
 	Notes OptNilString `json:"notes"`
 }
 

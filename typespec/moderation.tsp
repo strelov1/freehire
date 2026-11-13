@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -39,16 +41,19 @@ model ProcessReportRequest {
 // Moderators only (session cookie and the moderator role): look up an account by id,
 // email or username, and ban or unban it. An admin cannot be banned, nor can the caller.
 
+@extension("x-audience", "moderator")
 @tag("Moderation")
 @route("/moderation/users")
 @get
 op findModeratedUser(@query q?: string): Data<ModeratedUser> | Problem;
 
+@extension("x-audience", "moderator")
 @tag("Moderation")
 @route("/moderation/users/{id}/ban")
 @post
 op banUser(@path id: string, @body body: BanRequest): Data<ModeratedUser> | Problem;
 
+@extension("x-audience", "moderator")
 @tag("Moderation")
 @route("/moderation/users/{id}/unban")
 @post

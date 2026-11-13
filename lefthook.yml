@@ -120,37 +120,37 @@ pre-commit:
           exit 1
         fi
 
-    # docs/API*.md and the two Scalar OpenAPI documents are generated from
-    # web/src/lib/docs/{api-spec,filters}.ts and committed, so the same trap as sqlc:
-    # a filter added without regenerating ships with every local check green and only
-    # the `web-work` CI job says so. PR #4321 spent three CI-fix attempts on exactly
-    # this, editing Go while the log said "Run pnpm run gen:openapi".
+    # docs/API*.md and the two Scalar OpenAPI documents are generated from the contract
+    # (openapi/api.openapi.json), web/src/lib/docs/api-supplement.openapi.json and
+    # filters.ts, and committed, so the same trap as sqlc: a contract or filter change
+    # without regenerating ships with every local check green and only the `web-work`
+    # CI job says so. PR #4321 spent three CI-fix attempts on exactly this.
     #
     # The glob is wide on purpose: filters.ts imports ../facets, which pulls in most of
-    # src/lib, and both generators take under a second. The generated outputs are in
+    # src/lib, and the generator takes about a second. The generated outputs are in
     # the glob too, so a hand edit to them, or a merge that brings them in, runs it.
     # No `root:` (see design-system-tokens below): the outputs live outside web/.
-    # svelte-kit sync first: the generators load api-spec.ts through Vite, which needs
+    # svelte-kit sync first: the generator loads filters.ts through Vite, which needs
     # the $app/tsconfig it writes, and a fresh worktree has none.
     api-docs-drift: &api-docs-drift
       glob:
         - "web/src/lib/*.ts"
         - "web/src/lib/**/*.ts"
         - "web/scripts/gen-api-docs.mjs"
-        - "web/scripts/gen-openapi.mjs"
         - "web/scripts/renderFilterSection.mjs"
+        - "web/src/lib/docs/*.json"
         - "web/src/lib/docs/generated/*.json"
+        - "openapi/api.openapi.json"
         - "docs/API.md"
         - "docs/API.internal.md"
       run: |
         set -e
         pnpm --dir web exec svelte-kit sync
         pnpm --dir web run gen:api-docs
-        pnpm --dir web run gen:openapi
         stale="$(git diff --name-only -- docs/API.md docs/API.internal.md web/src/lib/docs/generated)"
         if [ -n "$stale" ]; then
           printf '%s\n' $stale
-          echo 'API docs were stale — the generators have just fixed them; stage the result.'
+          echo 'API docs were stale — the generator has just fixed them; stage the result.'
           exit 1
         fi
 
@@ -376,7 +376,7 @@ commit-msg:
 
 # A merge commit skips pre-commit and runs pre-merge-commit instead, and a merge from
 # main is the usual way generated docs go stale: main brings new outputs (or a new CI
-# check on them) while this branch's api-spec/filters edits are not in them.
+# check on them) while this branch's contract/filters edits are not in them.
 pre-merge-commit:
   commands:
     api-docs-drift: *api-docs-drift

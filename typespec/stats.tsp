@@ -367,40 +367,131 @@ model SourceEntry {
   health: SourceHealth | null;
 }
 
-/** The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so. */
+// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact`
+// says so.
+/**
+ * The canonical numbers behind every "how big is this" figure on the site (the jobs list
+ * total, the /about and /open pages). Backed by one snapshot `cmd/rollup-stats`
+ * republishes periodically, not a live count. `exact: false` means the cache was cold and
+ * the figures fell back to a planner estimate — treat them as approximate when it is
+ * false.
+ */
+@summary("The headline catalogue-scale figures (open jobs, companies, sources, …).")
+@useAuth(NoAuth)
 @tag("Stats")
 @route("/stats/catalog")
 @get
 op catalogScale(): Data<CatalogScale> | Problem;
 
-/** Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a 400. */
+// Added and removed vacancies per period. A bad granularity or date, or a range over
+// 4000 days, is a 400.
+/**
+ * Aggregated to the requested granularity over a date range; the series is dense (missing
+ * periods are 0). Defaults: `granularity=day`, `to`=today, `from` a per-granularity
+ * window before `to`. An unknown granularity or a range over 4000 days is a `400`.
+ */
+@summary("Public time series of added vs. removed vacancies per period.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        period: "2026-06-01",
+        added: 120,
+        removed: 40,
+      },
+      #{
+        period: "2026-06-08",
+        added: 98,
+        removed: 55,
+      },
+    ],
+    meta: #{
+      granularity: "week",
+      from: "2025-06-09",
+      to: "2026-06-08",
+    },
+  },
+})
 @tag("Stats")
 @route("/stats/jobs-activity")
 @get
 op jobsActivity(
+  /** One of `day`, `week`, `month` (default `day`). (e.g. `week`) */
   @query granularity?: string,
+  /**
+   * Start date (UTC). Defaults to a per-granularity window before `to`. (e.g.
+   * `2026-01-01`)
+   */
   @query from?: string,
+  /** End date (UTC). Defaults to today. (e.g. `2026-06-30`) */
   @query to?: string,
 ): JobsActivity | Problem;
 
-/** Cumulative registrations per UTC day. */
+// Cumulative registrations per UTC day.
+/** Aggregate-only — no user identifier is exposed. */
+@summary("Cumulative member growth per UTC day, plus each day's own new-signup count.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        date: "2026-07-27",
+        total: 12840,
+        new: 37,
+      },
+    ],
+  },
+})
 @tag("Stats")
 @route("/stats/user-growth")
 @get
 op userGrowth(): Data<GrowthPoint[]> | Problem;
 
+/**
+ * `viewed` is the only field here that is not a signed-in count: it is bot-filtered
+ * job-page opens by every visitor, signed in or not, so it is orders of magnitude larger
+ * than the rest. It is also the only one that is not all-time — `viewed_since` is the
+ * first day it covers (null before the first rollup), because the bot-filtered counter
+ * shipped without a backfill of the days before it. Every other field is all-time.
+ * Aggregate-only — no user identifier is exposed.
+ */
+@summary("Jobs saved, applied to and viewed across all users, plus CV and inbox usage.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #{
+      saved: 41200,
+      applied: 18730,
+      viewed: 903400,
+      viewed_since: "2026-09-04",
+      cvs_uploaded: 2140,
+      cvs_tailored: 860,
+      alert_subscribers: 970,
+      inboxes_connected: 410,
+      saved_searches: 1290,
+    },
+  },
+})
 @tag("Stats")
 @route("/stats/engagement")
 @get
 op engagementStats(): Data<Engagement> | Problem;
 
-/** The value-to-count distribution of each covered facet, from the daily snapshot. */
+// The value-to-count distribution of each covered facet, from the daily snapshot.
+/**
+ * Served from the facet rollup rather than a live Meilisearch facet count, so a page can
+ * show "what's inside" without paying search for it.
+ */
+@summary("Facet distribution snapshot: countries, skills, seniority, work mode.")
+@useAuth(NoAuth)
 @tag("Stats")
 @route("/stats/facets")
 @get
 op statsFacets(): Data<FacetStats> | Problem;
 
 /** Skills most often listed beside one skill. An unknown skill is an empty list. */
+@useAuth(NoAuth)
 @tag("Stats")
 @route("/stats/skills/{slug}/neighbours")
 @get
@@ -411,13 +502,19 @@ op skillNeighbours(@path slug: string): SkillNeighbours | Problem;
  * role's skill distribution and, for a signed-in caller, their coverage; that answer
  * is then private.
  */
+@summary("Roles (category × seniority) ranked by openings or growth.")
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/roles")
 @get
 op insightsRoles(
+  /** Scope to one country (ISO code). (e.g. `de`) */
   @query country?: string,
+  /** Rank by open count or by growth. (e.g. `growth`) */
   @query sort?: string,
+  /** How many rows. */
   @query limit?: string,
+  /** Scope to one job category. (e.g. `backend`) */
   @query category?: string,
   @query seniority?: string,
 ): {
@@ -425,38 +522,61 @@ op insightsRoles(
   @body body: RolesAnswer;
 } | Problem;
 
+/**
+ * Scope by category or by country, but not both — the rollup behind it is
+ * single-dimensional, so asking for both is a 400.
+ */
+@summary("Skills ranked by openings or growth.")
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/skills")
 @get
 op insightsSkills(
+  /** Scope to one category. */
   @query category?: string,
+  /** Scope to one country. */
   @query country?: string,
+  /** Rank by open count or growth. */
   @query sort?: string,
+  /** How many rows. */
   @query limit?: string,
 ): SkillsAnswer | Problem;
 
+@summary("How fast a slice of the market is hiring, over time.")
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/velocity")
 @get
 op insightsVelocity(
+  /** Bucket size for the series. (e.g. `week`) */
   @query granularity?: string,
+  /** Start of the window. */
   @query from?: string,
+  /** End of the window. */
   @query to?: string,
+  /** Scope to one category. */
   @query category?: string,
+  /** Scope to one seniority. */
   @query seniority?: string,
   @query country?: string,
 ): VelocityAnswer | Problem;
 
+@summary("Salary bands by category, seniority and country.")
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/salary")
 @get
 op insightsSalary(
+  /** Scope to one category. */
   @query category?: string,
+  /** Scope to one seniority. */
   @query seniority?: string,
+  /** Scope to one country. */
   @query country?: string,
 ): SalaryAnswer | Problem;
 
 /** One role × grade × country scope's monthly history; an absent part means every value. */
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/salary/history")
 @get
@@ -466,33 +586,47 @@ op insightsSalaryHistory(
   @query country?: string,
 ): SalaryHistoryAnswer | Problem;
 
+@summary("Companies ranked by hiring activity.")
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/companies")
 @get
 op insightsCompanies(
+  /** Rank by openings or by growth. */
   @query sort?: string,
+  /** Ignore companies below this many open roles. */
   @query min_open?: string,
+  /** How many rows. */
   @query limit?: string,
 ): CompaniesAnswer | Problem;
 
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/role-countries")
 @get
 op insightsRoleCountries(@query countries?: string): RoleCountriesAnswer | Problem;
 
 /** The category is required. */
+@useAuth(NoAuth)
 @tag("Insights")
 @route("/insights/role-pulse")
 @get
 op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
 
-/** The site's own live status plus a sanitized per-provider rollup of the ingest fleet. */
+// The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
+/**
+ * Sanitized: which boards are healthy, cooled or failing, without error text or internal
+ * identifiers.
+ */
+@summary("Ingest-fleet health, per provider.")
+@useAuth(NoAuth)
 @tag("Stats")
 @route("/status")
 @get
 op ingestStatus(): Data<IngestStatus> | Problem;
 
 /** Every source the catalogue is built from, with what it holds and how its crawl is doing. */
+@useAuth(NoAuth)
 @tag("Stats")
 @route("/sources")
 @get

@@ -47,17 +47,20 @@ model OneClickResult {
 // in for a session, and every refusal is the same 404. The two /me routes are the
 // same switches for a signed-in caller (session cookie).
 
+@useAuth(NoAuth)
 @tag("Email preferences")
 @route("/email-prefs")
 @get
 op getEmailPrefs(@query t?: string): Data<EmailPrefs> | Problem;
 
+@useAuth(NoAuth)
 @tag("Email preferences")
 @route("/email-prefs")
 @patch
 op updateEmailPrefs(@body body: EmailPrefsTokenUpdate): Data<EmailPrefs> | Problem;
 
 /** RFC 8058 one-click unsubscribe: turns off only the group the token names. */
+@useAuth(NoAuth)
 @tag("Email preferences")
 @route("/email-prefs/one-click")
 @post

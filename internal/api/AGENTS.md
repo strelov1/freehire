@@ -50,6 +50,19 @@ A migrated route is still a Fiber route: it keeps its middleware chain and ends 
   ogen's `x-ogen-time-format`. Without it ogen writes whole seconds.
 - A binary answer (an image) works: `@body photo: bytes` with a fixed `contentType`.
 - Streams (SSE), websockets and redirects stay hand-written Fiber.
+- The contract is also the public API reference: `web/scripts/gen-api-docs.mjs` renders
+  `/docs/api`, `/docs/api/internal` and `docs/API*.md` from `openapi/api.openapi.json`.
+  So an operation carries its reader-facing text: `@summary`, a doc comment, doc comments
+  on its params and body fields, and an `@opExample` (TypeSpec type-checks it against the
+  operation, so a stale example fails `make api-contract`). The overview and tag
+  descriptions live in `typespec/docs.tsp`.
+- `@useAuth` states who may call an operation and must match the Fiber gate in front of
+  it: the namespace default is the cookie (`mw.cookie`); `mw.key` is
+  `@useAuth(SessionOrKey)`; a route with no gate or `mw.optional` is `@useAuth(NoAuth)`.
+  It decides which reference documents the operation (a key-callable or public one is
+  external, a cookie-only one internal). `@extension("x-audience", "moderator")` marks a
+  moderator route, `"hidden"` one no client can use. ogen never sees `@useAuth`
+  (`scripts/openapi-ogen-input.mjs` strips it), so it gates nothing.
 - Shared mapping helpers live in `handler/contract.go` and nowhere else; reuse them, and put
   a new one there rather than in a group's file (groups moved in parallel wrote the same
   helper twice and broke the build when they met). Present: `optString`, `nilIfEmpty`,

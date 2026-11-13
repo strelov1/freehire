@@ -32,18 +32,21 @@ model Deleted {
 
 // The caller's screening-answer bank. With a session or an API key.
 
+@useAuth(SessionOrKey)
 @tag("Answer bank")
 @route("/me/answer-bank")
 @get
 op listBankedAnswers(): Data<BankedAnswer[]> | Problem;
 
 /** Saves under the question's topic, replacing the answer already there. */
+@useAuth(SessionOrKey)
 @tag("Answer bank")
 @route("/me/answer-bank")
 @put
 op saveBankedAnswer(@body body: SaveBankedAnswer): Data<Saved> | Problem;
 
 /** 400 for an id that is not a number, 404 for one the caller does not own. */
+@useAuth(SessionOrKey)
 @tag("Answer bank")
 @route("/me/answer-bank/{id}")
 @delete

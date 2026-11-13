@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -176,18 +178,21 @@ op closeEmployerVacancy(@path slug: string): Data<EmployerClosed> | Problem;
 op reopenEmployerVacancy(@path slug: string): Data<EmployerClosed> | Problem;
 
 /** Moderators only: the claims that could not auto-activate. */
+@extension("x-audience", "moderator")
 @tag("Employer")
 @route("/employer/claims")
 @get
 op listEmployerPendingClaims(): Data<EmployerAccount[]> | Problem;
 
 /** Moderators only. The user id travels as a string so a non-number keeps its 400. */
+@extension("x-audience", "moderator")
 @tag("Employer")
 @route("/employer/claims/{user_id}/approve")
 @post
 op approveEmployerClaim(@path user_id: string): Data<EmployerAccount> | Problem;
 
 /** Moderators only. */
+@extension("x-audience", "moderator")
 @tag("Employer")
 @route("/employer/claims/{user_id}/reject")
 @post

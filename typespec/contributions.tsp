@@ -60,11 +60,24 @@ model Contribution {
   created_at: utcDateTime | null;
 }
 
+// Finds the catalogue job behind a page, or imports it. 200 when it was already there,
+// 201 when this request created it, 202 when it is queued for later. With a session or
+// an API key.
 /**
- * Finds the catalogue job behind a page, or imports it. 200 when it was already
- * there, 201 when this request created it, 202 when it is queued for later.
- * With a session or an API key.
+ * Five outcomes in one shape, distinguished by status: **200 found** — the catalogue
+ * already carries the vacancy. Either the URL itself is stored (nothing is fetched or
+ * written), or the page turned out to be a second copy of a posting we already carry
+ * under another source, in which case the answer names the one we had; **201 tracked** —
+ * we crawl that board already and the posting just had not landed, so it was imported
+ * now; **201 imported** — imported, and its board queued for onboarding; **201 review** —
+ * imported, but its careers site names no board we can crawl, so the link went to manual
+ * triage; **202 queued** — nothing could read the page, so the link went to manual
+ * triage. `company_slug` is returned whenever the catalogue already carries the employer,
+ * through any source — independent of what became of the board. A URL that is not http(s)
+ * is a 422.
  */
+@summary("Hand freehire a link: import the posting, and the board behind it.")
+@useAuth(SessionOrKey)
 @tag("Contributions")
 @route("/jobs/resolve")
 @post
@@ -83,6 +96,8 @@ op resolveJob(@body body: ResolveJobRequest):
     }
   | Problem;
 
+@summary("The boards you contributed, and their onboarding state.")
+@useAuth(SessionOrKey)
 @tag("Contributions")
 @route("/me/contributions")
 @get

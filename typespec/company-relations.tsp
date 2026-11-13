@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -73,18 +75,21 @@ op proposeCompanyRelation(@path slug: string, @body body: CompanyRelationRequest
 } | Problem;
 
 /** Moderators only, oldest first. */
+@extension("x-audience", "moderator")
 @tag("Company relations")
 @route("/company-relations")
 @get
 op listPendingCompanyRelations(): Data<PendingCompanyRelation[]> | Problem;
 
 /** Moderators only. Approving again resumes a move that failed part-way. */
+@extension("x-audience", "moderator")
 @tag("Company relations")
 @route("/company-relations/{id}/approve")
 @post
 op approveCompanyRelation(@path id: string): Data<CompanyRelationApproval> | Problem;
 
 /** Moderators only. */
+@extension("x-audience", "moderator")
 @tag("Company relations")
 @route("/company-relations/{id}/reject")
 @post

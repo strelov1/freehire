@@ -11,7 +11,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The same query as `/jobs/search`, always with the full description in the chosen format. */
+        /**
+         * Search with full descriptions, for programmatic/agent consumers.
+         * @description Same text query and facet filters as `/jobs/search`, but each result carries the
+         *     `description` in full (verbatim from the database) instead of the truncated index
+         *     preview. Use `description_format` to choose how it is rendered.
+         *
+         *     Plus every filter in the "Filtering jobs" section.
+         */
         get: operations["agentSearchJobs"];
         put?: never;
         post?: never;
@@ -28,13 +35,24 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's chat conversations, newest activity first. */
+        /**
+         * List your chat conversations, newest activity first.
+         * @description Tailoring conversations are not chats — each belongs to a CV — so they never appear
+         *     here.
+         */
         get: operations["listAssistantSessions"];
         put?: never;
         /**
-         * @description Starts a conversation. `preset` picks the kind; `job` names the application an
-         *     interview, debrief or apply session is held against. A session already held for the
-         *     same application, or the same search request, is handed back (200); a new one is a 201.
+         * Start a new conversation.
+         * @description For shortlisting the current jobs list, pass search_query (the complete serialized
+         *     query; an empty string is valid) and a client-generated request_id UUID. Only chat
+         *     sessions accept this binding. Reusing the UUID with the same owner and canonical query
+         *     returns the same session; changing its query returns 409. Unknown search parameters
+         *     return 400 at creation. A condition that cannot be enforced when a search runs (for
+         *     example hide_seen without a readable history) fails that search instead, and the
+         *     assistant reports it rather than widening the search. Search-bound responses include
+         *     search_context: { query, brief }; the original query is immutable and the selection
+         *     brief is local to the conversation.
          */
         post: operations["createAssistantSession"];
         delete?: never;
@@ -50,11 +68,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description One owned conversation with its transcript. */
+        /**
+         * One owned conversation with its full transcript.
+         * @description One owned conversation with its transcript.
+         */
         get: operations["getAssistantSession"];
         put?: never;
         post?: never;
-        /** @description Removes an owned conversation and its transcript. */
+        /**
+         * Delete an owned conversation and its transcript.
+         * @description Returns `204 No Content`.
+         */
         delete: operations["deleteAssistantSession"];
         options?: never;
         head?: never;
@@ -70,7 +94,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Stops the turn running in the session; a session with nothing running is not an error. */
+        /**
+         * Stop the session’s running turn.
+         * @description A no-op (still `204`) when nothing is running — you cannot see whether a turn is live
+         *     before asking.
+         */
         post: operations["cancelAssistantTurn"];
         delete?: never;
         options?: never;
@@ -88,8 +116,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Buys a tailoring session another ceiling's worth of turns. 204 when plan limits are
-         *     not wired.
+         * Buy a CV editing session another ceiling’s worth of turns.
+         * @description A CV editing session is bounded by a turn ceiling as well as by the daily session
+         *     allowance, and a turn past the ceiling is a `402` naming the session. This spends
+         *     another of the day’s CV editing sessions to raise it (no body), and is idempotent under
+         *     a double click — two calls in flight buy one ceiling, not two. `409` on any preset
+         *     other than a CV editing session: a chat is bounded by the daily assistant allowance,
+         *     and a day cannot be topped up. `402` when there is no session left to spend, with the
+         *     same body every refusal carries.
          */
         post: operations["postAssistantExtend"];
         delete?: never;
@@ -107,7 +141,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Mints the short-lived credential for a voice call on an interview session. */
+        /**
+         * Mint a short-lived credential for a hands-free voice call.
+         * @description Only on an `interview` session; `409` otherwise. The audio itself never reaches this
+         *     server: take the returned `value` to `calls_url` (this deployment’s own realtime
+         *     gateway, not api.openai.com directly) to negotiate the WebRTC call. `501` when voice
+         *     mode is not configured.
+         */
         post: operations["postAssistantVoiceToken"];
         delete?: never;
         options?: never;
@@ -124,7 +164,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Appends one completed spoken turn to an interview session's transcript. */
+        /**
+         * Append one completed spoken exchange to the transcript.
+         * @description Only on an `interview` session. Lets a call continued by typing carry the spoken turns
+         *     forward in context. Returns `204 No Content`.
+         */
         post: operations["postAssistantVoiceTurn"];
         delete?: never;
         options?: never;
@@ -139,7 +183,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Readable with a session or an API key, narrow scope included. */
+        /**
+         * The current user (cookie or API key).
+         * @description Readable with a session or an API key, narrow scope included.
+         */
         get: operations["getAuthMe"];
         put?: never;
         post?: never;
@@ -156,7 +203,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The names of the enabled sign-in providers. */
+        /**
+         * List the enabled OAuth providers.
+         * @description The names of the enabled sign-in providers.
+         */
         get: operations["listOauthProviders"];
         put?: never;
         post?: never;
@@ -175,7 +225,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Always answers 202, whether or not the address has an account. */
+        /**
+         * Request a password-reset code by email.
+         * @description Always answers `202`, whether or not the address has an account — this is deliberately
+         *     not an email-enumeration oracle.
+         */
         post: operations["forgotPassword"];
         delete?: never;
         options?: never;
@@ -192,7 +246,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Public: the mailed code is the credential. Revokes every session. */
+        /**
+         * Set a new password against a mailed code.
+         * @description Public — the code is the credential. Success revokes every existing session, so sign in
+         *     fresh with the new password afterward.
+         */
         post: operations["resetPassword"];
         delete?: never;
         options?: never;
@@ -209,6 +267,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Confirm the address with the mailed code. */
         post: operations["confirmEmailVerification"];
         delete?: never;
         options?: never;
@@ -225,7 +284,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Mails the caller a fresh verification code. */
+        /**
+         * Send (or resend) a six-digit email verification code.
+         * @description Mails a fresh code to the caller’s own address, never a body field. Returns
+         *     `202 Accepted`. `409` if the address is already confirmed.
+         */
         post: operations["requestEmailVerification"];
         delete?: never;
         options?: never;
@@ -276,7 +339,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 503 when the store provider cannot be reached. Cookie session only. */
+        /**
+         * Re-read your own store subscription now.
+         * @description For a mobile client that has just completed an App Store or Google Play purchase. The
+         *     purchase finishes on the device before the provider’s webhook reaches us, and if that
+         *     delivery is lost the provider stops retrying after 80 minutes — so without this route a
+         *     paid subscriber can be left looking at a paywall. It names nobody: the account is the
+         *     session’s, and a user id in the request is ignored. Absent entirely where the store
+         *     provider is unconfigured. `status` is `synced` when the plan was written, or
+         *     `no_subscription` when RevenueCat holds nothing for this account; a 503 means the
+         *     provider could not be reached and the hourly reconciler will finish the job.
+         */
         post: operations["syncBillingStore"];
         delete?: never;
         options?: never;
@@ -309,10 +382,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Ranked companies. `q` and the facet params (collections, regions, countries, domains,
-         *     industries, company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage,
-         *     yc_flags, maturity, subindustries) are read from the raw query, comma-joined or repeated;
-         *     a param the listing does not read is reported in `meta.ignored_params`.
+         * List companies with job counts and denormalized facets; optional filters.
+         * @description Most active first. Facet params are repeatable and filter by array overlap (OR within a
+         *     facet, AND across facets), composably with `q`. `meta.total` reports the count matching
+         *     the full filter.
          */
         get: operations["listCompanies"];
         put?: never;
@@ -330,7 +403,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The subindustry vocabulary with company counts, most common first. */
+        /**
+         * Distinct company subindustry vocabulary with company counts.
+         * @description Backs the searchable “Industry” facet’s option list, most common first. Counts are
+         *     unconditional (they do not reflect other active list filters).
+         */
         get: operations["companySubindustries"];
         put?: never;
         post?: never;
@@ -347,12 +424,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Newest first. A page param that does not read falls back to its default. */
+        /**
+         * List a company's feedback, newest first.
+         * @description Newest first. A page param that does not read falls back to its default.
+         */
         get: operations["listCompanyFeedback"];
         put?: never;
-        /** @description Creates or overwrites the caller's review in one category. */
+        /**
+         * Create or overwrite your feedback in one category on a company.
+         * @description One entry per (user, category): posting again in the same `feedback_type` overwrites
+         *     your existing review rather than adding a second one. The response's nested `company`
+         *     field is the freshly recomputed rating count/average, so you can update your own view
+         *     of the company without a second fetch. `422` on an empty body.
+         */
         post: operations["upsertCompanyFeedback"];
-        /** @description Removes the caller's review in one category; a no-op when there is none. */
+        /**
+         * Delete your feedback in one category (no-op if absent).
+         * @description Returns the company's freshly recomputed counters, the same cast/clear shape as the
+         *     vote endpoints.
+         */
         delete: operations["deleteCompanyFeedback"];
         options?: never;
         head?: never;
@@ -366,7 +456,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description All of the caller's own reviews of the company, one per category; empty when none. */
+        /**
+         * Your own feedback on this company, across every category (empty if none).
+         * @description All of the caller's own reviews of the company, one per category; empty when none.
+         */
         get: operations["myCompanyFeedback"];
         put?: never;
         post?: never;
@@ -436,7 +529,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Vote on a company. */
         post: operations["voteCompany"];
+        /** Clear your vote on a company. */
         delete: operations["clearCompanyVote"];
         options?: never;
         head?: never;
@@ -450,7 +545,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Moderators only: every review with a report, most reported first. */
+        /**
+         * Every review with at least one report, most-reported first.
+         * @description Moderators only: every review with a report, most reported first.
+         */
         get: operations["listReportedCompanyFeedback"];
         put?: never;
         post?: never;
@@ -469,7 +567,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only: hides a review. Idempotent. */
+        /**
+         * Hide a review, dropping it from the company's public list and average.
+         * @description Idempotent. 404 for an unknown id.
+         */
         post: operations["hideCompanyFeedback"];
         delete?: never;
         options?: never;
@@ -486,7 +587,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same person is a silent no-op. */
+        /**
+         * Report a specific review.
+         * @description A second report of the same review by you is a silent no-op.
+         */
         post: operations["reportCompanyFeedback"];
         delete?: never;
         options?: never;
@@ -552,7 +656,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The registered typefaces a CV may choose. */
+        /**
+         * The typefaces a CV may use.
+         * @description Read this rather than hard-coding a list: an unregistered `document.style.font_family`
+         *     is dropped on save and the CV renders in the template's own face. `note` names the
+         *     familiar face the entry matches; `css` is a font stack for rendering a preview in a
+         *     browser.
+         */
         get: operations["listCVFonts"];
         put?: never;
         post?: never;
@@ -569,7 +679,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The registered CV templates and their display metadata. */
+        /**
+         * The template gallery.
+         * @description The registered CV templates and their display metadata.
+         */
         get: operations["listCVTemplates"];
         put?: never;
         post?: never;
@@ -841,7 +954,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Up to 20 cities whose name matches, optionally within one country. */
+        /**
+         * Prefix-search city names for autocomplete.
+         * @description Population-ranked prefix search over the embedded city dictionary, optionally narrowed
+         *     to one country. A blank `q` returns an empty list.
+         */
         get: operations["searchCities"];
         put?: never;
         post?: never;
@@ -858,6 +975,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Companies ranked by hiring activity. */
         get: operations["insightsCompanies"];
         put?: never;
         post?: never;
@@ -908,6 +1026,7 @@ export interface paths {
             cookie?: never;
         };
         /**
+         * Roles (category × seniority) ranked by openings or growth.
          * @description Roles ranked by open count or growth. Naming both category and seniority adds the
          *     role's skill distribution and, for a signed-in caller, their coverage; that answer
          *     is then private.
@@ -928,6 +1047,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Salary bands by category, seniority and country. */
         get: operations["insightsSalary"];
         put?: never;
         post?: never;
@@ -961,6 +1081,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Skills ranked by openings or growth.
+         * @description Scope by category or by country, but not both — the rollup behind it is
+         *     single-dimensional, so asking for both is a 400.
+         */
         get: operations["insightsSkills"];
         put?: never;
         post?: never;
@@ -977,6 +1102,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** How fast a slice of the market is hiring, over time. */
         get: operations["insightsVelocity"];
         put?: never;
         post?: never;
@@ -993,10 +1119,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The newest open jobs. It reads no filter: a param other than the page ones is reported in `meta.ignored_params`. */
+        /**
+         * List jobs, newest first, with limit/offset pagination.
+         * @description Takes no filters at all — `limit` and `offset` are the whole vocabulary. Anything else
+         *     is ignored rather than refused, and listed in `meta.ignored_params`: a filter param
+         *     sent here returns the entire catalogue, which is indistinguishable from a narrow result
+         *     unless you check. Use `/jobs/search` to filter.
+         */
         get: operations["listJobs"];
         put?: never;
-        /** @description Moderators only. Creates a hand-curated vacancy. */
+        /**
+         * Create a curated job.
+         * @description Moderators only. Creates a hand-curated vacancy.
+         */
         post: operations["createJob"];
         delete?: never;
         options?: never;
@@ -1011,7 +1146,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The count of postings per facet value under the same filters, keyed by public facet param. */
+        /**
+         * Count of matching jobs per facet value (and numeric stats).
+         * @description Takes the same `q` and facet filter params as search, but returns the distribution of
+         *     values instead of a page of jobs — use it to build filter UIs or see how a filter
+         *     narrows the set. Continuous numeric facets are returned as `stats` (min/max), not
+         *     per-value buckets. `former_employers` is ignored even for signed-in callers.
+         */
         get: operations["jobFacets"];
         put?: never;
         post?: never;
@@ -1028,7 +1169,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Resolves the URL of a posting in the wild to a catalogue slug. */
+        /**
+         * Resolve a posting URL to a catalogue slug.
+         * @description Answers `{"data": null}` when the posting cannot be identified, rather than 404 — "we
+         *     do not carry this" is a normal answer here. Used by the extension to tell whether the
+         *     page you are on is a job we already have. A miss also carries `meta.ats_board`: true
+         *     when the URL sits on an ATS board freehire knows how to crawl, so a client can tell a
+         *     posting worth adding from an arbitrary page.
+         */
         get: operations["findJob"];
         put?: never;
         post?: never;
@@ -1048,9 +1196,18 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Finds the catalogue job behind a page, or imports it. 200 when it was already
-         *     there, 201 when this request created it, 202 when it is queued for later.
-         *     With a session or an API key.
+         * Hand freehire a link: import the posting, and the board behind it.
+         * @description Five outcomes in one shape, distinguished by status: **200 found** — the catalogue
+         *     already carries the vacancy. Either the URL itself is stored (nothing is fetched or
+         *     written), or the page turned out to be a second copy of a posting we already carry
+         *     under another source, in which case the answer names the one we had; **201 tracked** —
+         *     we crawl that board already and the posting just had not landed, so it was imported
+         *     now; **201 imported** — imported, and its board queued for onboarding; **201 review** —
+         *     imported, but its careers site names no board we can crawl, so the link went to manual
+         *     triage; **202 queued** — nothing could read the page, so the link went to manual
+         *     triage. `company_slug` is returned whenever the catalogue already carries the employer,
+         *     through any source — independent of what became of the board. A URL that is not http(s)
+         *     is a 422.
          */
         post: operations["resolveJob"];
         delete?: never;
@@ -1067,10 +1224,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Full-text and faceted search over open postings. Public; a signed-in caller can also use
-         *     `hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match`
-         *     and `sort=match`, which make the answer private. A filter the endpoint does not read is
-         *     named in `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.
+         * Full-text + faceted search over open jobs.
+         * @description Combine free-text `q` with any of the filter params below. Repeated facet params are
+         *     ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude.
+         *     Without `q`, results default to newest first; with `q`, to relevance. A param no filter
+         *     reads is ignored rather than refused, and listed in `meta.ignored_params` — check it,
+         *     since a dropped filter otherwise looks like a broad result.
+         *
+         *     Plus every filter in the "Filtering jobs" section.
          */
         get: operations["searchJobs"];
         put?: never;
@@ -1089,6 +1250,7 @@ export interface paths {
             cookie?: never;
         };
         /**
+         * A single job by its public slug (serves closed jobs too).
          * @description One job by public slug. A signed-in caller also gets their own vote and auto-apply
          *     status. A slug that no longer exists still answers with its posting when its shortcode
          *     names exactly one.
@@ -1099,7 +1261,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Moderators only. Edits a manual vacancy by public slug. */
+        /**
+         * Edit a curated job.
+         * @description Moderators only. Edits a manual vacancy by public slug.
+         */
         patch: operations["updateJob"];
         trace?: never;
     };
@@ -1112,7 +1277,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The body is optional: without a date the application is stamped now. 400 for a date out of range. */
+        /**
+         * Mark the job as applied to.
+         * @description Send `applied_on` to record an application on the day it was actually sent — importing
+         *     a history, or correcting a date already stored. A date you state overrides one we
+         *     inferred. The day is stored at noon UTC, because you are stating a day and midnight
+         *     reads as the previous date west of Greenwich. A date in the future, older than a year,
+         *     or not a calendar date, is a 400. Without a body the application is stamped now, as
+         *     before.
+         */
         post: operations["markApplied"];
         delete?: never;
         options?: never;
@@ -1127,7 +1300,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The application form captured for the job. 404 when none was captured. */
+        /**
+         * The captured ATS application form for the posting.
+         * @description The questions a candidate will have to answer, shaped for reading. Only captured for a
+         *     minority of postings (roughly a sixth of technical ATS platforms are readable at all) —
+         *     no captured form is a `404`, distinguishable from an unknown slug (also `404`, but at
+         *     the job lookup rather than the form lookup).
+         */
         get: operations["jobApplyForm"];
         put?: never;
         post?: never;
@@ -1179,7 +1358,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The open postings a collapsed job stands for, one per city. */
+        /**
+         * Other open postings in the same role cluster (per-city duplicates).
+         * @description The per-city openings folded under one canonical card by content-dedup — each keeps its
+         *     own `location` and `apply_url` so a seeker picks their city. The anchor job itself is
+         *     included. `meta.total` is the whole cluster size, so it stays accurate when the list is
+         *     a capped page.
+         */
         get: operations["jobCopies"];
         put?: never;
         post?: never;
@@ -1196,10 +1381,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment cannot deliver applications. */
+        /**
+         * The application form of a vacancy that takes applications on freehire.
+         * @description Only for a posting whose `direct_apply` is true — its employer published it here and
+         *     receives applications by email. Any other posting is a `404`. Signed in with the
+         *     browser session, the response also carries `applied`, a `prefill` of your earlier
+         *     answers to the same questions, and `cvs` — the CV you tailored for this vacancy and
+         *     whether you uploaded one; an API key never sees those. `open` is false once the vacancy
+         *     closed. `501` when this deployment cannot deliver applications.
+         */
         get: operations["getDirectApplyForm"];
         put?: never;
-        /** @description Sends the caller's application. Cookie session only. */
+        /**
+         * Apply on freehire: the employer receives your CV and answers by email.
+         * @description Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the note
+         *     and your address as Reply-To. One application per vacancy: `409` once it was sent (or
+         *     while it is being sent), `400` naming the first unanswered or invalid question, `403`
+         *     unverified, `410` closed, `429` past the daily limit, `502` when delivery failed —
+         *     applying again retries it.
+         */
         post: operations["sendDirectApply"];
         delete?: never;
         options?: never;
@@ -1216,7 +1416,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Dismiss (swipe away) the job.
+         * @description Only keeps the job out of the swipe deck; it stays visible in the public `/jobs` list
+         *     and search. Idempotent.
+         */
         post: operations["dismissJob"];
+        /** Undismiss the job (no-op if not dismissed). */
         delete: operations["undismissJob"];
         options?: never;
         head?: never;
@@ -1251,11 +1457,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Reports that the job went silent after the caller applied. 403 until the caller's
-         *     address is confirmed, 409 for a closed job or a second report.
+         * File a claim that you applied and got no response.
+         * @description An unproven (unverified) address is a `403`; a closed job or a claim you already have
+         *     on this job is a `409`.
          */
         post: operations["createGhostReport"];
-        /** @description Withdraws the caller's report. 404 when there is none. */
+        /**
+         * Withdraw your claim about this job.
+         * @description A claim that is absent or already withdrawn is a `404`.
+         */
         delete: operations["retractGhostReport"];
         options?: never;
         head?: never;
@@ -1270,8 +1480,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description How well the job's skills are covered by the caller's profile, plus the advisory
-         *     hard-constraint blockers. Deterministic, no model. A caller without a profile is a 404.
+         * Deterministic skill match of the job against your profile (no LLM).
+         * @description How well the job’s skills are covered by your profile skills — exact, adjacent, and
+         *     missing, plus a coverage percent. A caller without a saved profile is a 404.
          */
         get: operations["getJobMatch"];
         put?: never;
@@ -1289,10 +1500,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The cached fit analysis for a job; never calls the model. */
+        /**
+         * The cached AI match analysis for the job (never runs the LLM).
+         * @description Returns the cached analysis, flagged `stale` when your CV or the job changed since it
+         *     was computed, or a null analysis when none is cached. `has_cv` is false when you have
+         *     no stored CV. `allowance` reports how much of today you have used against what the day
+         *     allows, and when it resets. `tailor_allowance` reports the same for CV tailoring, which
+         *     carries its own daily ceiling, so a caller deciding between the two has both figures
+         *     here.
+         */
         get: operations["getMatchAnalysis"];
         put?: never;
-        /** @description Runs the fit analysis and caches it. An unconfigured or failing model answers a null analysis. */
+        /**
+         * Run the three-stage AI match analysis and cache it.
+         * @description Runs the match prompt-chain over your stored CV and the job, caches the result, and
+         *     returns it fresh (no `allowance` on this response). Analysing a new job draws on your
+         *     daily analysis allowance; with none left it is a `402`, and recomputing an
+         *     already-analyzed job is free. `has_cv` is false when no CV is stored; a failing or
+         *     unconfigured LLM returns a null analysis (200).
+         */
         post: operations["runMatchAnalysis"];
         delete?: never;
         options?: never;
@@ -1309,7 +1535,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 404 for an unknown job, 409 for a second open report by the same person. */
+        /**
+         * Report a problem with a job.
+         * @description 404 for an unknown job, 409 for a second open report by the same person.
+         */
         post: operations["createJobReport"];
         delete?: never;
         options?: never;
@@ -1326,8 +1555,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Save (bookmark) the job. */
         post: operations["saveJob"];
-        /** @description Unsaving a job that was never saved answers with the empty interaction. */
+        /**
+         * Unsave the job (no-op if not saved).
+         * @description Unsaving a job that was never saved answers with the empty interaction.
+         */
         delete: operations["unsaveJob"];
         options?: never;
         head?: never;
@@ -1341,7 +1574,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Open postings in the same specialization and place as the job. */
+        /**
+         * Similar jobs within the same location and specialization.
+         * @description Searches the live Meilisearch index with the source job’s known location and
+         *     specialization as mandatory filters, ranked by keyword search on its title. Returns an
+         *     empty list when location or specialization is unknown or no visible matches remain.
+         */
         get: operations["similarJobs"];
         put?: never;
         post?: never;
@@ -1361,7 +1599,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Drops the stage and the apply date; the saved mark, views and notes stay. */
+        /**
+         * Clear the application stage.
+         * @description Drops the stage and the apply date; the saved mark, views and notes stay.
+         */
         delete: operations["clearStage"];
         options?: never;
         head?: never;
@@ -1378,11 +1619,20 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description Takes the job off the board; the view history stays. */
+        /**
+         * Remove the interaction record entirely.
+         * @description Takes the job off the board; the view history stays.
+         */
         delete: operations["untrack"];
         options?: never;
         head?: never;
-        /** @description 400 for an unknown stage or an empty body. */
+        /**
+         * Set the application stage and/or notes.
+         * @description A null field is left unchanged. `stage` is a controlled vocabulary: `preparing`,
+         *     `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`,
+         *     `withdrawn`, `expired` (an unknown value is a 400). `expired` is the outcome for an
+         *     application nobody answered; nothing sets it for you.
+         */
         patch: operations["trackJob"];
         trace?: never;
     };
@@ -1395,6 +1645,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Record that you viewed the job. */
         post: operations["recordView"];
         delete?: never;
         options?: never;
@@ -1411,7 +1662,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Vote on a job. */
         post: operations["voteJob"];
+        /** Clear your vote on a job. */
         delete: operations["clearJobVote"];
         options?: never;
         head?: never;
@@ -1428,8 +1681,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Scores a skill list against the market the query's facet params select. The `skills`
-         *     facet params are not read here and are reported in `meta.ignored_params`.
+         * Score a supplied skill list against the filtered job market.
+         * @description Stateless sibling of the CV verdict: skills come from the request body, the market from
+         *     the facet query params (same vocabulary as search; the `skills` facet is ignored as a
+         *     filter). Reports how many of the role’s vacancies your skills cover and which missing
+         *     skill unlocks the most. `400` on empty skills, `503` when search is unavailable.
          */
         post: operations["marketCoverage"];
         delete?: never;
@@ -1550,9 +1806,16 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove the interaction record entirely, addressed by row id. */
         delete: operations["untrackApplication"];
         options?: never;
         head?: never;
+        /**
+         * Set the application stage and/or notes, addressed by row id.
+         * @description Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead
+         *     of the job slug — needed when a tracked application’s posting was later pruned and has
+         *     no slug left to address it by. Same `stage` vocabulary and body shape.
+         */
         patch: operations["trackApplication"];
         trace?: never;
     };
@@ -1566,6 +1829,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Clear the application stage, addressed by row id. */
         delete: operations["clearApplicationStage"];
         options?: never;
         head?: never;
@@ -1614,8 +1878,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The caller's canonical form fields, all empty bar the account email when no source
-         *     states a contact. Keys are the profile's own and the set grows with it.
+         * Your contact details in canonical autofill fields.
+         * @description Projected from your CV header, with the account email as a fallback — what the
+         *     extension writes into application forms.
          */
         get: operations["getAutofillProfile"];
         put?: never;
@@ -1636,9 +1901,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Fills the form in the caller's own browser through the browser-tool channel. Paid AI
-         *     route (unmetered). Only the extension's own Bearer session is admitted; anything else
-         *     is a 403. The report names what was filled, deferred and left unmapped.
+         * Drive your own browser to fill an application form.
+         * @description Runs the autofill agent over the browser-tool wire — your extension on one end, the
+         *     agent on the other, routed strictly within your own channel. Requires the extension to
+         *     be connected, and authenticates only as the extension itself — a session cookie or an
+         *     API key gets a 403, since this call writes into whatever form your browser has open,
+         *     not just reads it.
          */
         post: operations["runAutofill"];
         delete?: never;
@@ -1991,6 +2259,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The boards you contributed, and their onboarding state. */
         get: operations["listMyContributions"];
         put?: never;
         post?: never;
@@ -2143,9 +2412,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's TAILORED CVs, newest edit first. With a session or an API key. */
+        /**
+         * List your CVs, without their documents.
+         * @description The caller's TAILORED CVs, newest edit first. With a session or an API key.
+         */
         get: operations["listCVs"];
         put?: never;
+        /** Create a CV, optionally seeded from your stored history. */
         post: operations["createCV"];
         delete?: never;
         options?: never;
@@ -2162,7 +2435,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Rebuilds the default base CV from the current seed. */
+        /**
+         * Rebuild your base CV from your current seed.
+         * @description Replaces the base (non-tailored) document from the current seed (experience bank first,
+         *     your résumé's own extract for what the bank doesn't track). Preserves template and
+         *     typography. Does not rewrite tailored copies for specific jobs. 409 when there is no
+         *     usable seed.
+         */
         post: operations["reseedBaseCV"];
         delete?: never;
         options?: never;
@@ -2177,7 +2456,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The base CVs, oldest first, with the default flagged. With a session or an API key. */
+        /**
+         * List your base CVs, without their documents.
+         * @description The non-tailored CVs you can edit, duplicate and tailor from, oldest created first.
+         *     `is_default` marks the one used when a tailor request names no base; `hand_edited`
+         *     marks a base you changed in the editor, which a new CV upload will not overwrite. GET
+         *     /me/cvs lists tailored copies and is unchanged.
+         */
         get: operations["listBaseCVs"];
         put?: never;
         post?: never;
@@ -2197,9 +2482,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with
-         *     the ids and the cached analysis; 402 when the allowance is spent and the vacancy is new.
-         *     With a session or an API key.
+         * Start tailoring a CV toward one vacancy.
+         * @description Copies your base CV into a vacancy-bound tailored one and mints the short-lived
+         *     credential its agent session runs on. Requires a cached match analysis for the job (409
+         *     otherwise) and a base CV — one is seeded from your stored history when you have none,
+         *     and it is a 409 when there is nothing to seed from. Calls no LLM itself.
          */
         post: operations["tailorCV"];
         delete?: never;
@@ -2215,16 +2502,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The document without its contact block to an API key. */
+        /**
+         * One CV with its full document.
+         * @description The document without its contact block to an API key.
+         */
         get: operations["getCV"];
+        /** Replace a CV — title, template and document. */
         put: operations["updateCV"];
         post?: never;
+        /** Delete a CV. */
         delete: operations["deleteCV"];
         options?: never;
         head?: never;
         /**
-         * @description Applies a batch of path operations (`{"ops": [...], "note": ""}`), decoded strictly in
-         *     Go: an unknown field or bad addressing is a 422. With a session or an API key.
+         * Apply a batch of edits, addressed by path.
+         * @description An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV —
+         *     `summary`, `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. Indices
+         *     are 0-based. The whole batch applies or none of it does: an unknown path or an index
+         *     past the end refuses the request without touching the CV. An API key edits as the
+         *     tailoring agent, so the candidate's own fields are refused and a claim about them needs
+         *     `evidence_id` from the experience bank. Every request lands in the CV's history and can
+         *     be undone on its own.
          */
         patch: operations["patchCV"];
         trace?: never;
@@ -2236,6 +2534,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * How tailoring changed this CV's ATS-readiness score.
+         * @description The tailored copy scored against the base CV it came from, with template, page margins
+         *     and typography held identical so the difference reflects content alone — the base is a
+         *     copy rendered with the tailored copy’s formatting, never the stored base itself.
+         *     Recomputed per request, never stored. `available: false` (with `reason`, no `delta`)
+         *     when rendering is unavailable rather than an error. `409` when the CV is not a tailored
+         *     copy, has no base CV to compare against, or its vacancy no longer exists.
+         */
         get: operations["getCVATSDelta"];
         put?: never;
         post?: never;
@@ -2254,7 +2561,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The assistant conversation for a base CV; not behind the paid gate. */
+        /**
+         * Open the agent conversation for a base CV.
+         * @description Returns the assistant conversation bound to one of your base CVs, creating it on first
+         *     use. It is the tailoring workspace's agent without a vacancy: it edits this general CV
+         *     through the same evidence-gated tools. Opening it is free and needs no paid plan; each
+         *     message still passes the assistant's paid gate. 409 for a tailored copy (use the tailor
+         *     session), 404 when the id is not yours.
+         */
         post: operations["startBaseSession"];
         delete?: never;
         options?: never;
@@ -2289,7 +2603,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Copies a base CV as "<title> (copy)"; 409 for a tailored one. */
+        /**
+         * Copy a base CV.
+         * @description Creates a new base CV with the same document, template and appearance, titled "<title>
+         *     (copy)". Only a base can be duplicated: 409 for a tailored copy, 404 when the id is not
+         *     yours.
+         */
         post: operations["duplicateCV"];
         delete?: never;
         options?: never;
@@ -2304,6 +2623,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * How well a tailored CV matches the vacancy it was written for.
+         * @description Deterministic and free — no model call, unlike the AI match analysis. Scored off the
+         *     CV’s rendered PDF text layer against the vacancy alone (no base-CV comparison, unlike
+         *     the ATS delta), so it is cheap enough to refresh after every saved edit.
+         *     `available: false` when nothing about the vacancy could be matched automatically, or
+         *     rendering failed. `409` when the CV is not a tailored copy or its vacancy no longer
+         *     exists.
+         */
         get: operations["getCVJobMatch"];
         put?: never;
         post?: never;
@@ -2322,7 +2650,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Rebuilds one CV from the current seed; destructive. */
+        /**
+         * Rebuild one CV from your current seed.
+         * @description Replaces this CV's content from the current seed (experience bank first, your résumé's
+         *     own extract for what the bank doesn't track). Works on a tailored copy or on a base,
+         *     and touches only that CV: refreshing a tailored copy no longer rewrites any base, and
+         *     refreshing a base — the editor's "Update from my CV", which replaces hand edits —
+         *     leaves its copies alone. Keeps the same id and agent session; preserves template and
+         *     typography. 409 when there is no usable seed. Upload alone does not do this — this is
+         *     the explicit apply.
+         */
         post: operations["reseedCV"];
         delete?: never;
         options?: never;
@@ -2337,7 +2674,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description What changed the CV, newest first. */
+        /**
+         * The edit history of this CV, newest first.
+         * @description Each entry names what changed and where (`paths`), not the edit itself — the operations
+         *     carry your own prior text and stay server-side. `undoable` is false for an entry with
+         *     nothing to reverse (e.g. the CV’s own creation); `reverted` marks an entry already
+         *     undone rather than removing it from the feed.
+         */
         get: operations["listCVRevisions"];
         put?: never;
         post?: never;
@@ -2356,6 +2699,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Reverse every standing edit of one agent turn, newest first.
+         * @description `bid` is a revision’s `batch_id` from the history feed, not a separate id — undoing one
+         *     entry of a batch and then the batch itself is well-defined, since an already-reverted
+         *     entry is simply skipped.
+         */
         post: operations["undoCVRevisionBatch"];
         delete?: never;
         options?: never;
@@ -2372,6 +2721,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Reverse one revision, leaving later edits in place.
+         * @description The undo is itself recorded as a new revision. A `409` when the entry has nothing to
+         *     reverse or the part of the document it changed is already gone.
+         */
         post: operations["undoCVRevision"];
         delete?: never;
         options?: never;
@@ -2387,6 +2741,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Bind an agent session to a CV. */
         put: operations["setCVSession"];
         post?: never;
         delete?: never;
@@ -2402,7 +2757,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The cached fit analysis of a tailored CV, projected for the tailoring agent. */
+        /**
+         * The match analysis a tailored CV should reframe toward.
+         * @description The split that keeps tailoring honest: `missing_have` are requirements your history
+         *     already covers but the CV buries — reframe those — and `missing_gap` are the ones it
+         *     does not, which an agent must ask about rather than invent. Served from cache; calls no
+         *     LLM. 409 when the CV is not a tailored copy or has no analysis. `job.requirements` is
+         *     what the posting itself asks for, in its own words — a fuller list than the missing_*
+         *     split, which is only what the analysis found the CV lacks. Absent when the posting
+         *     states none.
+         */
         get: operations["getCVTailorContext"];
         put?: never;
         post?: never;
@@ -2421,6 +2785,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Mint a fresh agent session for an existing tailored CV.
+         * @description For a tailored CV whose session was lost or never bound. 409 when the CV is not a
+         *     tailored copy.
+         */
         post: operations["startTailorSession"];
         delete?: never;
         options?: never;
@@ -2436,6 +2805,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Switch the template only. */
         put: operations["setCVTemplate"];
         post?: never;
         delete?: never;
@@ -2451,8 +2821,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * What is known about this CV's traced links.
+         * @description One entry per link the PDF carries (header links, project links). Clicks you made on
+         *     your own CV are excluded from the counts; `bot_clicks` is tallied separately rather
+         *     than folded in. `distinct_visitors` is omitted — not zero — on a deployment with no
+         *     visitor salt, since there is no honest count to report.
+         */
         get: operations["listCVTracerLinks"];
-        /** @description 409 when enabling on a deployment with no visitor salt. */
+        /**
+         * Turn link tracing on or off for this CV's PDF.
+         * @description Off is the default for every CV. Turning it on is refused with a `409` on a deployment
+         *     with no visitor salt configured — there would be no honest way to count distinct
+         *     visitors. Turning it off is never refused.
+         */
         put: operations["setCVTracerLinks"];
         post?: never;
         delete?: never;
@@ -2504,9 +2886,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description A batch of messages the caller's own mail client fetched, as `messages`: a list of
-         *     objects with `external_id`, `thread_id`, `from_addr`, `from_name`, `subject`, `body_text`,
-         *     `body_html` and `received_at`. The mail service validates the batch and refuses it whole with a 400.
+         * Push a batch your own mail client fetched.
+         * @description Stored under source `external`. freehire provides no transport here and never
+         *     classifies this mail — that is the point of the tier. `external_id` (the Message-ID in
+         *     practice) is the dedup key: re-pushing the same id updates that message instead of
+         *     storing a copy, so a nightly re-sync is safe. Content columns are refreshed; your read,
+         *     deleted and triage state is not, so a re-sync cannot resurrect deleted mail or wipe a
+         *     verdict. At most 100 messages per call, applied as one transaction — an oversized batch
+         *     is refused, never truncated.
          */
         post: operations["ingestEmails"];
         delete?: never;
@@ -2522,7 +2909,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Opening a message marks it read. 404 for another user's, or an id that is not a number. */
+        /**
+         * One message in full. Marks it read.
+         * @description Use `GET /me/inbox?body=1` instead when sweeping a backlog — `read_at` means "a human
+         *     saw this", and this endpoint sets it.
+         */
         get: operations["getEmail"];
         put?: never;
         post?: never;
@@ -2541,7 +2932,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Records the application from the email and links it, dated by the email. 409 while a suggestion is pending. */
+        /**
+         * Record an application from a message, and link the message to it.
+         * @description The way out of `?link=unlinked`: mail about a job you never tracked. The application is
+         *     dated by the mail's `received_at`, not by now — the application demonstrably existed by
+         *     the time the employer wrote.
+         */
         post: operations["createApplicationFromEmail"];
         delete?: never;
         options?: never;
@@ -2558,6 +2954,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Accept a suggested link.
+         * @description Only a deterministic match — the mail thread, or the company name in the sender or
+         *     subject — links itself. A model's pick lands here as a suggestion instead, and
+         *     `?link=suggested` is the queue of them.
+         */
         post: operations["confirmEmailLink"];
         delete?: never;
         options?: never;
@@ -2574,6 +2976,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Soft-delete a message. Answers 204.
+         * @description A later re-sync will not resurrect it — deletion is reader state, not mail-server
+         *     state.
+         */
         post: operations["deleteEmail"];
         delete?: never;
         options?: never;
@@ -2590,6 +2997,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Attach a message to one of your applications. */
         post: operations["linkEmail"];
         delete?: never;
         options?: never;
@@ -2606,6 +3014,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Dismiss a suggested link without attaching it. */
         post: operations["rejectEmailLink"];
         delete?: never;
         options?: never;
@@ -2622,6 +3031,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Undo a soft-delete. Answers 204. */
         post: operations["restoreEmail"];
         delete?: never;
         options?: never;
@@ -2638,6 +3048,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Record what a message is, and optionally which application it belongs to.
+         * @description The vocabulary is closed: `acknowledgement`, `screening`, `interview_invitation`,
+         *     `assessment`, `offer`, `rejection`, `info_request`, `incomplete_application`, `other`.
+         *     Anything else is refused. A confident verdict on a linked message advances the
+         *     application's stage — strictly forward, never out of a settled stage, and a rejection
+         *     never advances anything by itself.
+         */
         post: operations["triageEmail"];
         delete?: never;
         options?: never;
@@ -2654,6 +3072,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Clear a message's application link; its classification stays. */
         post: operations["unlinkEmail"];
         delete?: never;
         options?: never;
@@ -2668,6 +3087,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your employments and their evidence atoms. */
         get: operations["listExperience"];
         put?: never;
         post?: never;
@@ -2686,7 +3106,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The body is an achievement; its provenance is set by the route, whatever the body says. */
+        /**
+         * Record a new achievement.
+         * @description The only route besides the assistant’s own tool that can add evidence outside a chat
+         *     session, which is why `provenance` is forced to `manual` regardless of what the body
+         *     sends — an authenticated POST with no chat transcript behind it can only honestly be
+         *     the owner’s own words. When the account has opted into requiring it, an empty `context`
+         *     is a 400.
+         */
         post: operations["addAtom"];
         delete?: never;
         options?: never;
@@ -2703,7 +3130,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Folds two owned achievements into one. 409 when they conflict. */
+        /**
+         * Fold two of your atoms into one richer keep.
+         * @description Session-only, unlike its sibling create/edit/delete routes — the merge folds the
+         *     discarded atom’s metrics and skills into the kept one while the kept one’s own
+         *     provenance stands, letting a `manual` atom absorb numbers a model had inferred, so it
+         *     cannot be widened to a key the way the others were.
+         */
         post: operations["mergeAtoms"];
         delete?: never;
         options?: never;
@@ -2719,9 +3152,13 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description A keyed edit leaves the provenance alone. */
+        /**
+         * Edit one evidence atom.
+         * @description A keyed edit leaves the provenance alone.
+         */
         put: operations["updateAtom"];
         post?: never;
+        /** Remove an evidence atom. */
         delete: operations["deleteAtom"];
         options?: never;
         head?: never;
@@ -2737,7 +3174,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The body is a place; its shape is the bank's. */
+        /**
+         * Record a new place — a job or a project.
+         * @description An employment carries no claim of its own (only the atoms attached to it do), so
+         *     nothing about provenance applies here. `kind` is `job` or `project`; a project’s name
+         *     arrives as `name` on the wire (legacy `company` accepted as a fallback), a job’s as
+         *     `company`.
+         */
         post: operations["addEmployment"];
         delete?: never;
         options?: never;
@@ -2753,10 +3196,16 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description The body is a place; blanks are kept. 404 for an id the caller does not own. */
+        /**
+         * Edit one employment.
+         * @description The body is a place; blanks are kept. 404 for an id the caller does not own.
+         */
         put: operations["updateEmployment"];
         post?: never;
-        /** @description 409 for a keyed caller while the place still holds achievements. */
+        /**
+         * Remove an employment and its atoms.
+         * @description 409 for a keyed caller while the place still holds achievements.
+         */
         delete: operations["deleteEmployment"];
         options?: never;
         head?: never;
@@ -2770,10 +3219,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Gmail connection status.
+         * @description `available` reflects whether the instance has Gmail OAuth configured. `status` is
+         *     `needs_reconsent` when Google revoked the grant. Connecting itself is a browser
+         *     redirect (`/me/gmail/connect`), so it is session-only and not part of the key-driven
+         *     surface.
+         */
         get: operations["gmailStatus"];
         put?: never;
         post?: never;
-        /** @description Revokes the grant (best effort) and purges the token and the synced Gmail mail. */
+        /**
+         * Disconnect Gmail and purge the mail it synced.
+         * @description Best-effort revokes the grant at Google, deletes the stored token, and removes the
+         *     Gmail-sourced mail. Mail from the hosted address stays.
+         */
         delete: operations["gmailDisconnect"];
         options?: never;
         head?: never;
@@ -2789,7 +3249,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Starts a background sync. Registered only where Gmail is configured. */
+        /**
+         * Start an incremental sync.
+         * @description Returns as soon as the sync is queued — a full backfill outlives the request — so poll
+         *     the inbox for results rather than reading counts here.
+         */
         post: operations["syncGmail"];
         delete?: never;
         options?: never;
@@ -2805,9 +3269,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The caller's mail, newest first, without deleted messages. Filters: `source`, `status`,
-         *     `link`, `q`, `unread`, `unclassified`, `include_other`; `body` adds each message's body
-         *     (pages are then capped lower). A page param that does not read falls back to its default.
+         * List your mail, newest first, excluding deleted.
+         * @description `?body=1` returns each message's readable text inline and marks nothing read — that is
+         *     the agent read path, so sweeping a backlog never zeroes the owner's unread count
+         *     (`GET /me/emails/{id}` does mark read). Pages carrying bodies are capped at 50. An
+         *     unknown `source`, `status` or `link` value is a 400, never a silently empty page.
          */
         get: operations["getInbox"];
         put?: never;
@@ -2827,7 +3293,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Marks every unread message matching the same filters as the listing. */
+        /**
+         * Mark every unread message matching the filters as read.
+         * @description It takes the same filters as `GET /me/inbox` and marks exactly what that listing shows
+         *     — including the default that hides the `other` label, so an unfiltered call leaves that
+         *     mail unread. There is no undo.
+         */
         post: operations["markAllReadInbox"];
         delete?: never;
         options?: never;
@@ -2842,7 +3313,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's arranged meetings whose start falls in the range. */
+        /**
+         * Arranged meetings whose start falls in the date range.
+         * @description The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move
+         *     or be cancelled, unlike a ledger event which happened and cannot change. `status` is
+         *     `suggested`, `confirmed`, or `cancelled` — a cancelled meeting is still served, not
+         *     withheld. Both bounds are required, RFC3339.
+         */
         get: operations["getInterviews"];
         put?: never;
         post?: never;
@@ -2879,9 +3356,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace
-         *     can open. 404 for an unknown slug, 422 for a URL with no readable vacancy. Session
-         *     cookie only.
+         * Turn a URL, pasted text, or an existing job into one usable by CV tailoring.
+         * @description Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves
+         *     through the same ATS-aware registry `/jobs/resolve` uses (a network fetch); an
+         *     unrecognized URL falls back to a generic scrape; pasted text is stored as a private,
+         *     unlisted job. Returns the slug the tailor workspace should open — an existing job, or a
+         *     freshly created private one. `404` for an unknown `job_slug`, `422` for a URL nothing
+         *     could read.
          */
         post: operations["resolveJobDescription"];
         delete?: never;
@@ -2903,6 +3384,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Set your preferred interface language. */
         patch: operations["updateLanguage"];
         trace?: never;
     };
@@ -2913,11 +3395,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Your hosted freehire address, and whether the feature is configured.
+         * @description `address` is null until you claim one; `available` is false when the instance runs
+         *     without a mailbox domain.
+         */
         get: operations["getMailbox"];
         put?: never;
-        /** @description Registered only where a receiving domain is configured. */
+        /**
+         * Claim your hosted address.
+         * @description Registered only where a receiving domain is configured.
+         */
         post: operations["claimMailbox"];
-        /** @description Drops the mailbox and its received mail; Gmail mail stays. */
+        /**
+         * Release the address; it stops receiving.
+         * @description Drops the mailbox and its received mail; Gmail mail stays.
+         */
         delete: operations["releaseMailbox"];
         options?: never;
         head?: never;
@@ -2931,7 +3424,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Demand for the caller's profile skills, week by week. Session cookie only. */
+        /**
+         * Weekly demand trend for your profile skills.
+         * @description One entry per profile skill seen in at least one open job; a skill never seen is
+         *     omitted rather than reported with a zero. `change_pct` is `null` with fewer than two
+         *     snapshots, or when the earliest snapshot’s count was zero. A profile with no skills yet
+         *     answers an empty `data` array, not an error.
+         */
         get: operations["getMarketPulse"];
         put?: never;
         post?: never;
@@ -2950,7 +3449,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The same coverage for a posting that need not be in the catalogue. */
+        /**
+         * Score any job text against your profile.
+         * @description The same deterministic skill coverage as `GET /jobs/{slug}/match`, but for a page that
+         *     need not be in the catalogue — this is what lets the extension show a match on any job
+         *     page. A caller with no profile is a 404. No LLM, and it draws on no allowance.
+         */
         post: operations["matchText"];
         delete?: never;
         options?: never;
@@ -3193,9 +3697,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Session cookie only. */
+        /**
+         * Your notification rule (gates saved-job reminders and both lifecycle nudges).
+         * @description Session cookie only.
+         */
         get: operations["getNotificationSettings"];
-        /** @description An enabled rule needs a valid channel. Session cookie only. */
+        /**
+         * Change your notification rule.
+         * @description An enabled rule needs a valid channel. Session cookie only.
+         */
         put: operations["updateNotificationSettings"];
         post?: never;
         delete?: never;
@@ -3211,6 +3721,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List your notification-center entries, newest first. */
         get: operations["listNotifications"];
         put?: never;
         post?: never;
@@ -3229,6 +3740,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Mark every unread notification read. */
         post: operations["markAllNotificationsRead"];
         delete?: never;
         options?: never;
@@ -3243,7 +3755,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Another user's id, or one that does not exist, is a 404. */
+        /**
+         * One of your notifications, including its jobs snapshot.
+         * @description Another user's id, or one that does not exist, is a 404.
+         */
         get: operations["getNotification"];
         put?: never;
         post?: never;
@@ -3262,7 +3777,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Idempotent; another user's id, or one that does not exist, is a 404. */
+        /**
+         * Mark one notification read (idempotent).
+         * @description Returns `204 No Content`.
+         */
         post: operations["markNotificationRead"];
         delete?: never;
         options?: never;
@@ -3312,6 +3830,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Record that you have been through the onboarding wizard.
+         * @description Sets `onboarding_completed_at` on your account, which is what stops the app routing you
+         *     into the wizard again. Idempotent: calling it a second time keeps the original
+         *     timestamp and still answers `200`.
+         */
         post: operations["completeOnboarding"];
         delete?: never;
         options?: never;
@@ -3326,7 +3850,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's plan and today's usage, without consuming anything. */
+        /**
+         * Your plan and what it allows today.
+         * @description Which plan you are on and, for every metered AI feature, how much of today you have
+         *     used against what the day allows. Metered features need a paid plan: the free plan's
+         *     allowance is zero. The amount resets at `resets_at`; read `unlimited` per allowance, since
+         *     a paid plan can still have a finite limit for a feature such as `auto-apply`. `enforced`
+         *     says whether that ceiling turns anybody away yet — while
+         *     it is `false` a spent allowance is counted and the action still runs, so do not refuse
+         *     on `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and
+         *     `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and
+         *     on a plan that has ended. `pro_source` is behavioural: a client offering an in-app
+         *     purchase must not offer one to a `stripe` subscriber, who would be charged twice for
+         *     one plan, and a `revenuecat` subscriber must be sent to their store to cancel rather
+         *     than to a web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.
+         */
         get: operations["getMyPlan"];
         put?: never;
         post?: never;
@@ -3343,7 +3881,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Recent usage entries, newest first. */
+        /**
+         * What you spent your allowances on, newest first.
+         * @description Each entry is labelled with what it bought — the job an analysis was run on, the
+         *     vacancy a CV editing session was opened for — rather than an opaque reference. A
+         *     `release` entry is one that was given back because the work produced nothing.
+         */
         get: operations["getMyPlanHistory"];
         put?: never;
         post?: never;
@@ -3360,12 +3903,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `data` is null before the first save. */
+        /**
+         * Your career profile, or null if you have not saved one.
+         * @description `data` is null before the first save.
+         */
         get: operations["getProfile"];
-        /** @description Creates or replaces the profile. */
+        /**
+         * Create or replace your profile.
+         * @description The whole profile is replaced on each save. An unknown specialization (must be a job
+         *     category), empty skills, or an out-of-vocabulary location value is a `400`.
+         */
         put: operations["putProfile"];
         post?: never;
-        /** @description Clears the profile. Idempotent: deleting when none exists is still a 204. */
+        /**
+         * Clear your profile (idempotent).
+         * @description Returns `204 No Content`.
+         */
         delete: operations["deleteProfile"];
         options?: never;
         head?: never;
@@ -3380,12 +3933,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The ATS-readiness report of the caller's stored CV, with any cached model review folded
-         *     in. `has_cv` is false, and `report` null, when no CV is stored.
+         * CV ATS-readiness report (deterministic + any cached LLM review).
+         * @description Scores your stored CV’s structure and its keyword match against the selected role.
+         *     `has_cv` is false when no CV is stored; no profile is a `404`; `503` when search is
+         *     unavailable.
          */
         get: operations["getAtsReport"];
         put?: never;
-        /** @description Runs the model review (paid) over the stored CV, caches it and returns the report. */
+        /**
+         * Run the optional LLM qualitative ATS review and cache it.
+         * @description Runs the LLM review over your stored CV and folds it into the report
+         *     (`reviewed: true`). Best-effort: an unconfigured or failing LLM returns the
+         *     deterministic report (200).
+         */
         post: operations["postAtsReport"];
         delete?: never;
         options?: never;
@@ -3401,8 +3961,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The market-coverage verdict for the caller's profile, scored against the role the
-         *     query's facet params select. Cookie only; 404 without a profile; 503 when search is off.
+         * Market-coverage verdict for your profile skills.
+         * @description How many of your selected role’s open vacancies your skills reach, and which missing
+         *     skill unlocks the most. The role is the request’s facet params (defaulting to your
+         *     specializations). No profile is a `404`; `503` when search is unavailable.
          */
         get: operations["getResumeVerdict"];
         put?: never;
@@ -3454,11 +4016,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List your own registered devices. */
         get: operations["listPushTokens"];
         put?: never;
-        /** @description Registers or refreshes the device's push token; a token is reassigned to the caller. */
+        /**
+         * Register (or reassign) a mobile device’s Expo push token.
+         * @description Upserted by token value, not by user: if a different account signs in on the same
+         *     device, this reassigns the token to the new caller. Returns `204 No Content`.
+         */
         post: operations["registerPushToken"];
-        /** @description A token that is not the caller's is a 404. */
+        /**
+         * Unregister one of your own device tokens.
+         * @description Returns `204 No Content`. `404` if the token is not yours (or unknown).
+         */
         delete: operations["unregisterPushToken"];
         options?: never;
         head?: never;
@@ -3474,7 +4044,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sends a test push to the caller's own registered tokens, never anyone else's. */
+        /**
+         * Send a test push to all of your own registered devices.
+         * @description Never targets another user or a caller-supplied destination — only your own registered
+         *     tokens. Each call fans out one outbound send per device.
+         */
         post: operations["testPushToken"];
         delete?: never;
         options?: never;
@@ -3489,7 +4063,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The CVs tailored for the vacancy (or any at the company), and whether a CV file is stored. */
+        /**
+         * The CVs you can attach to a request into a company.
+         * @description The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the
+         *     company, newest first, and whether you have uploaded a CV file.
+         */
         get: operations["listReferralCVOptions"];
         put?: never;
         post?: never;
@@ -3506,7 +4084,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The open requests for every company the caller is an approved referrer of. */
+        /**
+         * Requests waiting on you as an approved referrer.
+         * @description The open requests for every company the caller is an approved referrer of.
+         */
         get: operations["listIncomingReferralRequests"];
         put?: never;
         post?: never;
@@ -3525,6 +4106,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Mark an incoming request contacted or declined. */
         post: operations["resolveReferralRequest"];
         delete?: never;
         options?: never;
@@ -3539,6 +4121,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your referral offers and their moderation state. */
         get: operations["listMyReferralOffers"];
         put?: never;
         post?: never;
@@ -3558,7 +4141,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** @description 404 when the offer is absent or not the caller's. */
+        /**
+         * Withdraw an offer.
+         * @description 404 when the offer is absent or not the caller's.
+         */
         delete: operations["withdrawReferralOffer"];
         options?: never;
         head?: never;
@@ -3572,9 +4158,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The intros you asked for, and where they stand. */
         get: operations["listMyReferralRequests"];
         put?: never;
-        /** @description 422 for a bad request, 409 for a duplicate or a company with no referral available. */
+        /**
+         * Ask a company's approved referrers for an intro.
+         * @description Validation failures answer 422; a company with no approved referrer answers 409; too
+         *     many open requests answers 429.
+         */
         post: operations["createReferralRequest"];
         delete?: never;
         options?: never;
@@ -3589,11 +4180,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Whether storage is on, a CV is stored, when, and its structured view. Always 200. */
+        /**
+         * Your résumé status (enabled / present / uploaded_at).
+         * @description Always `200`: unconfigured storage or no résumé is a normal state. `structured` carries
+         *     the read-only structured résumé, or null when none is current.
+         */
         get: operations["getResume"];
         put?: never;
         post?: never;
-        /** @description Removes the stored CV. 501 when storage is off. */
+        /**
+         * Delete your stored résumé.
+         * @description Returns `204 No Content`. `501` when object storage is unconfigured.
+         */
         delete: operations["deleteResume"];
         options?: never;
         head?: never;
@@ -3608,7 +4206,13 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Replaces the owned overrides (contacts, headline, summary, languages, certifications). */
+        /**
+         * Override one or more contact-block fields on your profile.
+         * @description Each body field is owned per field: a value you set here takes over that field from
+         *     whatever the structured résumé extract would otherwise contribute. Omit a field to
+         *     leave it as-is; to clear rather than override, use
+         *     `POST /me/resume/contacts/replace-from-cv`.
+         */
         put: operations["putResumeContacts"];
         post?: never;
         delete?: never;
@@ -3626,7 +4230,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Overwrites every owned override from the current structured CV. 409 without one. */
+        /**
+         * Reset every contact override from your current structured résumé.
+         * @description A full reset, not just identity fields — every owned field is replaced from the current
+         *     structured extract. `409` when you have no structured résumé to copy from.
+         */
         post: operations["replaceResumeContactsFromCv"];
         delete?: never;
         options?: never;
@@ -3658,8 +4266,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `data` is null before the first save. */
+        /**
+         * Your stored screening answers, or `null` if you have stated none.
+         * @description `data` is null before the first save.
+         */
         get: operations["getScreeningAnswers"];
+        /**
+         * Update one or more screening answers.
+         * @description A field the body omits is left unchanged; to withdraw an answer, name it in `clear`. An
+         *     unrecognized country code, a currency that is not a three-letter ISO 4217 code, a
+         *     period outside the vocabulary, a non-positive salary, a negative notice period, an
+         *     unknown name in `clear`, or a field both given and cleared is a `400` naming it.
+         */
         put: operations["updateScreeningAnswers"];
         post?: never;
         delete?: never;
@@ -3675,9 +4293,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List your saved searches. */
         get: operations["listSavedSearches"];
         put?: never;
-        /** @description 400 for a bad name, 409 for a duplicate name or the per-user cap. */
+        /**
+         * Save a search.
+         * @description 400 for a bad name, 409 for a duplicate name or the per-user cap.
+         */
         post: operations["createSavedSearch"];
         delete?: never;
         options?: never;
@@ -3695,9 +4317,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete a saved search. */
         delete: operations["deleteSavedSearch"];
         options?: never;
         head?: never;
+        /** Rename or re-query a saved search. */
         patch: operations["updateSavedSearch"];
         trace?: never;
     };
@@ -3708,6 +4332,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your own submission queue. */
         get: operations["listMySubmissions"];
         put?: never;
         post?: never;
@@ -3724,9 +4349,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List your subscriptions. */
         get: operations["listSubscriptions"];
         put?: never;
-        /** @description A non-owned saved search is a 404, a duplicate a 409. */
+        /**
+         * Subscribe a saved search to a digest channel.
+         * @description Channels: `telegram`, `email`, `push`, `webhook`. `push` needs a device the freehire
+         *     mobile app has registered (`GET /me/push-tokens`) — without one the request is refused
+         *     with 409.
+         */
         post: operations["createSubscription"];
         delete?: never;
         options?: never;
@@ -3744,10 +4375,14 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete a subscription. */
         delete: operations["deleteSubscription"];
         options?: never;
         head?: never;
-        /** @description Pauses or resumes. */
+        /**
+         * Pause or resume a subscription.
+         * @description Pauses or resumes.
+         */
         patch: operations["setSubscriptionActive"];
         trace?: never;
     };
@@ -3758,7 +4393,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your stored survey answers. Every field is absent until you answer it. */
         get: operations["getSurvey"];
+        /**
+         * Update one or more survey answers.
+         * @description A field the body omits is left unchanged. A stage or challenge outside its vocabulary,
+         *     `just_starting` beside another challenge, a note when the challenges do not include
+         *     `other`, a currency that is not a three-letter ISO 4217 code, a period outside the
+         *     vocabulary, or a non-positive income is a `400` naming the offending field.
+         */
         put: operations["updateSurvey"];
         post?: never;
         delete?: never;
@@ -3774,9 +4417,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description With a session or an API key. */
+        /**
+         * Your current Talent Network visibility and shareable id.
+         * @description A caller who has never touched the setting reads `"off"` — the column default, not a
+         *     sentinel. `talent_handle` is absent until the first time they join: it is minted then,
+         *     and kept forever after, so leaving and rejoining never changes the URL somebody already
+         *     shared.
+         */
         get: operations["getTalentNetworkMembership"];
-        /** @description Joins or leaves the catalogue. Session cookie only. */
+        /**
+         * Join or leave the Talent Network.
+         * @description Two states, not three: `public` was retired with the mode picker itself, and a request
+         *     asking for it is a 400. Joining for the first time mints the handle the public
+         *     catalogue addresses you by.
+         */
         put: operations["setTalentNetworkVisibility"];
         post?: never;
         delete?: never;
@@ -3792,7 +4446,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's events between `from` and `to` inclusive, oldest first. */
+        /**
+         * What happened to your applications over a date range.
+         * @description The application-event ledger as a dated series, oldest first: applications sent,
+         *     employer replies, follow-ups and stage changes. `occurred_at` is an instant, not a day
+         *     — which day it falls on depends on your timezone, so group it client-side. `observed`
+         *     says whether the date came from a source other than you: mail-derived events carry a
+         *     date the employer set, while a stage you set yourself is dated from when you recorded
+         *     it. `email_id` and `email_subject` are present only while the message exists; deleting
+         *     it hides the content and leaves the event standing. Both bounds are required and may
+         *     span at most 366 days.
+         */
         get: operations["getTimeline"];
         put?: never;
         post?: never;
@@ -3815,6 +4479,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Set your account’s IANA timezone. */
         patch: operations["updateTimezone"];
         trace?: never;
     };
@@ -3826,9 +4491,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The caller's interactions joined with their jobs, most recently touched first. `filter` is
-         *     all, viewed, saved, applied or board (400 otherwise); `compact` drops each card's blurb,
-         *     skills and ghost signal. A page param that does not read falls back to its default.
+         * Your tracked jobs joined with the job data.
+         * @description Each item carries a card of the job with your interaction timestamps alongside it —
+         *     what a list row draws: slug, title, company, closed_at, the stated facets, skills,
+         *     collections, posted_at, and a `blurb` already cut to length. It does NOT carry the
+         *     description; the full job view is on `GET /me/tracking/:slug`. `meta.counts` gives the
+         *     per-filter totals for tab badges. Closed jobs stay listed so your history never
+         *     shrinks.
          */
         get: operations["listTrackedJobs"];
         put?: never;
@@ -3846,7 +4515,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The jobs the caller has run the fit analysis on, newest first. */
+        /**
+         * Jobs you have run the AI match analysis on.
+         * @description Newest first, closed jobs included (with `closed: true`). Each item carries the overall
+         *     score and verdict; `stale` marks an analysis whose CV, job, or model has changed since.
+         *     `meta.allowance` reports where you stand on the day’s analyses. Never runs the LLM.
+         */
         get: operations["listMyAnalyses"];
         put?: never;
         post?: never;
@@ -3863,7 +4537,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The employers the caller has applied to. */
+        /**
+         * Company slugs of the employers you have applied to.
+         * @description Lets the SPA mark "you already applied to this company" on any posting of theirs
+         *     without authenticating the public job reads: compare a posting's `company_slug` against
+         *     this set. Counts applications actually made (not ones still being prepared), keyed by
+         *     the posting's current company slug and resolved through company merges. Newest first,
+         *     drawn from your 1000 most recent applications.
+         */
         get: operations["listAppliedCompanySlugs"];
         put?: never;
         post?: never;
@@ -3880,6 +4561,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The slugs you dismissed, so a client can hide them. */
         get: operations["listDismissedSlugs"];
         put?: never;
         post?: never;
@@ -3896,6 +4578,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Your application-pipeline snapshot (counts per stage).
+         * @description The total application count and the count at each stage, aggregated server-side over
+         *     all of your applications. Every stage of the vocabulary is present, zero included, and
+         *     the counts always sum to `applications`. An application with `applied_at` set but no
+         *     explicit stage counts as `applied`. `reply_rate` compares your own employer-reply rate
+         *     against the rate across every candidate — both sides counted only from applications
+         *     whose owner has a connected mailbox, so a reply would have been seen. It is present
+         *     only once both your own count and the global count reach a minimum sample size; absent
+         *     otherwise, never a zero or an estimate.
+         */
         get: operations["trackingPipeline"];
         put?: never;
         post?: never;
@@ -3912,6 +4605,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Slugs of jobs you have saved.
+         * @description Lets the SPA render the save toggle as filled without authenticating the public job
+         *     reads.
+         */
         get: operations["listSavedSlugs"];
         put?: never;
         post?: never;
@@ -3928,7 +4626,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every posting the caller has interacted with. */
+        /**
+         * Slugs of jobs you have viewed.
+         * @description Every posting the caller has interacted with.
+         */
         get: operations["listViewedSlugs"];
         put?: never;
         post?: never;
@@ -3945,7 +4646,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The caller's application for a job slug with its linked mail. 404 when not tracked. */
+        /**
+         * One tracked application, with the mail linked to it and its history.
+         * @description `events` is the application's ledger, newest first — the apply, employer replies,
+         *     follow-ups, stage changes, scheduled interviews — in the shape `GET /me/timeline`
+         *     serves, bounded at 100 and empty when nothing has happened yet. This read also carries
+         *     the full job view; the listing carries only a card. A slug you do not track is a 404.
+         */
         get: operations["getTrackedApplication"];
         put?: never;
         post?: never;
@@ -3962,9 +4669,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description 409 unless the application is waiting on a reply. */
+        /**
+         * Draft a chase for a silent application.
+         * @description Offered only when the application is in the silent state the tracking board’s own badge
+         *     uses — a `409` otherwise. `recipient`/`recipient_name` are omitted when nobody at the
+         *     company ever replied, which is the common case: the draft is handed to you, nothing is
+         *     sent.
+         */
         get: operations["getApplicationFollowUp"];
         put?: never;
+        /**
+         * Record that you sent a chase.
+         * @description Does not itself affect the silence calculation — that reads when the other side last
+         *     moved, and a chase is not a reply. Idempotent within the hour: a double click
+         *     overwrites the timestamp rather than logging a second event. Returns `204 No Content`.
+         */
         post: operations["recordApplicationFollowUp"];
         delete?: never;
         options?: never;
@@ -3981,7 +4700,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sweeps the mailbox for mail belonging to the application and records suggestions. Paid AI. */
+        /**
+         * Sweep your connected mailbox for mail belonging to this application.
+         * @description For an application whose mail arrived before you connected an inbox, or that a sync
+         *     missed. Runs an LLM pass over your mailbox and returns matches as suggestions — it
+         *     never links or writes the ledger itself; confirm a pick with
+         *     `POST /me/tracking/{slug}/mail-recall/link`. A `503` when no mail gateway is
+         *     configured, a `502` when the model call fails.
+         */
         post: operations["recallApplicationMail"];
         delete?: never;
         options?: never;
@@ -3998,7 +4724,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Imports a message the sweep proposed and links it to the application. */
+        /**
+         * Import and link one message a mail-recall sweep proposed.
+         * @description Imports the message from your mailbox by `provider_id` (from a mail-recall response)
+         *     and links it to the application in one step — the same import-then-link path a Gmail
+         *     sync uses, so the response is the full message body, the same shape
+         *     `POST /me/emails/{id}/link` returns.
+         */
         post: operations["linkRecalledMail"];
         delete?: never;
         options?: never;
@@ -4013,7 +4745,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description With a session or an API key. Zeroes when the gateway cannot be read. */
+        /**
+         * Your AI request activity today.
+         * @description Counts and token usage, not cost — the gateway’s dollar figure is a list price against
+         *     a mixed upstream pool, not what you pay; what you spend is a plan allowance, reported
+         *     by `/me/plan` over this same day. Never fails for a reason you could act on: no usage
+         *     yet, or an unreachable gateway, both answer 200 with zeroes.
+         */
         get: operations["getMyUsage"];
         put?: never;
         post?: never;
@@ -4296,7 +5034,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Moderators only: the offers awaiting a decision. */
+        /**
+         * The offer-moderation queue.
+         * @description Moderators only: the offers awaiting a decision.
+         */
         get: operations["listPendingReferralOffers"];
         put?: never;
         post?: never;
@@ -4315,7 +5056,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only. */
+        /**
+         * Approve or reject an offer.
+         * @description Moderators only.
+         */
         post: operations["decideReferralOffer"];
         delete?: never;
         options?: never;
@@ -4330,7 +5074,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Moderators only. */
+        /**
+         * The pending report queue (moderators).
+         * @description Moderators only.
+         */
         get: operations["listPendingJobReports"];
         put?: never;
         post?: never;
@@ -4349,7 +5096,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only. The body is optional. */
+        /**
+         * Dismiss a report with a reason, optionally telling the reporter.
+         * @description Moderators only. The body is optional.
+         */
         post: operations["dismissJobReport"];
         delete?: never;
         options?: never;
@@ -4366,7 +5116,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only. The body is optional. 404 for an unknown id, 409 for one already decided. */
+        /**
+         * Resolve a report, optionally closing the job and telling the reporter.
+         * @description Moderators only. The body is optional. 404 for an unknown id, 409 for one already decided.
+         */
         post: operations["resolveJobReport"];
         delete?: never;
         options?: never;
@@ -4419,7 +5172,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so. */
+        /**
+         * The headline catalogue-scale figures (open jobs, companies, sources, …).
+         * @description The canonical numbers behind every "how big is this" figure on the site (the jobs list
+         *     total, the /about and /open pages). Backed by one snapshot `cmd/rollup-stats`
+         *     republishes periodically, not a live count. `exact: false` means the cache was cold and
+         *     the figures fell back to a planner estimate — treat them as approximate when it is
+         *     false.
+         */
         get: operations["catalogScale"];
         put?: never;
         post?: never;
@@ -4437,8 +5197,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The embedding backfill's current progress document. Figures not yet measured are null.
-         *     The `/stats/embeddings/stream` route is Server-Sent Events and stays hand-written.
+         * How much of the catalogue carries a semantic embedding, and how fast the rest is going.
+         * @description Backs the public /semantic-search page. `eligible` and `snapshot_covered` come from a
+         *     snapshot `cmd/rollup-stats` measures every few hours (the count is too slow for a
+         *     request); `queued` is the embedding queue, sampled every 15 seconds, and `covered` is
+         *     `snapshot_covered` plus how much the queue has drained since that snapshot — not
+         *     `eligible − queued`, since the queue also carries closed postings waiting to be
+         *     cleared. `rate_per_minute` counts only what left the queue over the last 10 minutes, so
+         *     a batch of new postings arriving at once does not read as negative progress. Any figure
+         *     not yet measured is `null`, never `0`.
          */
         get: operations["getEmbeddingProgress"];
         put?: never;
@@ -4456,6 +5223,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Jobs saved, applied to and viewed across all users, plus CV and inbox usage.
+         * @description `viewed` is the only field here that is not a signed-in count: it is bot-filtered
+         *     job-page opens by every visitor, signed in or not, so it is orders of magnitude larger
+         *     than the rest. It is also the only one that is not all-time — `viewed_since` is the
+         *     first day it covers (null before the first rollup), because the bot-filtered counter
+         *     shipped without a backfill of the days before it. Every other field is all-time.
+         *     Aggregate-only — no user identifier is exposed.
+         */
         get: operations["engagementStats"];
         put?: never;
         post?: never;
@@ -4472,7 +5248,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The value-to-count distribution of each covered facet, from the daily snapshot. */
+        /**
+         * Facet distribution snapshot: countries, skills, seniority, work mode.
+         * @description Served from the facet rollup rather than a live Meilisearch facet count, so a page can
+         *     show "what's inside" without paying search for it.
+         */
         get: operations["statsFacets"];
         put?: never;
         post?: never;
@@ -4489,7 +5269,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a 400. */
+        /**
+         * Public time series of added vs. removed vacancies per period.
+         * @description Aggregated to the requested granularity over a date range; the series is dense (missing
+         *     periods are 0). Defaults: `granularity=day`, `to`=today, `from` a per-granularity
+         *     window before `to`. An unknown granularity or a range over 4000 days is a `400`.
+         */
         get: operations["jobsActivity"];
         put?: never;
         post?: never;
@@ -4523,7 +5308,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Cumulative registrations per UTC day. */
+        /**
+         * Cumulative member growth per UTC day, plus each day's own new-signup count.
+         * @description Aggregate-only — no user identifier is exposed.
+         */
         get: operations["userGrowth"];
         put?: never;
         post?: never;
@@ -4540,7 +5328,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The site's own live status plus a sanitized per-provider rollup of the ingest fleet. */
+        /**
+         * Ingest-fleet health, per provider.
+         * @description Sanitized: which boards are healthy, cooled or failing, without error text or internal
+         *     identifiers.
+         */
         get: operations["ingestStatus"];
         put?: never;
         post?: never;
@@ -4557,10 +5349,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Moderators only. */
+        /**
+         * The pending submission queue (moderators).
+         * @description Moderators only.
+         */
         get: operations["listPendingSubmissions"];
         put?: never;
-        /** @description 409 for a duplicate pending URL or a vacancy already in the catalogue, 403 for a blocked domain. */
+        /**
+         * Submit a vacancy for review.
+         * @description A URL already awaiting review is a `409`, and so is a URL the catalogue already carries
+         *     — matched the way `/jobs/find` matches it, so a link differing only by scheme, `www.`,
+         *     tracking query or trailing slash counts as the same posting. That `409` names the
+         *     existing job (`/jobs/<public_slug>`) in its error.
+         */
         post: operations["createSubmission"];
         delete?: never;
         options?: never;
@@ -4577,7 +5378,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Writes nothing. An unrecognised URL answers 200 with every field empty. */
+        /**
+         * Parse a job URL into a draft submission for review before posting.
+         * @description Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job,
+         *     no submission, no allowance spent. An unrecognized URL returns an empty object rather
+         *     than an error. A URL the catalogue already carries returns only `existing_job_slug`,
+         *     and `POST /submissions` would refuse it.
+         */
         post: operations["prefillSubmission"];
         delete?: never;
         options?: never;
@@ -4594,7 +5401,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only. 404 for an unknown id, 409 for one already decided. */
+        /**
+         * Approve a submission, minting a live job.
+         * @description Moderators only. 404 for an unknown id, 409 for one already decided.
+         */
         post: operations["approveSubmission"];
         delete?: never;
         options?: never;
@@ -4611,7 +5421,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only. The body is optional. */
+        /**
+         * Reject a submission with a reason.
+         * @description Moderators only. The body is optional.
+         */
         post: operations["rejectSubmission"];
         delete?: never;
         options?: never;
@@ -4697,6 +5510,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * The public catalogue of members, filtered and paged.
+         * @description Every filter takes values from a closed vocabulary or a number; there is no free-text
+         *     search, because a card carries no free text to search. Values within one filter are OR,
+         *     different filters narrow together, and an absent filter is identical to an empty one. A
+         *     parameter this endpoint does not read — including one it recognises but cannot parse,
+         *     like `min_years=lots` — is named in `meta.ignored_params` rather than silently widening
+         *     the answer.
+         */
         get: operations["listTalent"];
         put?: never;
         post?: never;
@@ -4713,6 +5535,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * How many members stand behind each filter value.
+         * @description Takes the same filters as the list and answers with the count of members behind every
+         *     value of every facet, plus the total behind the filter itself. Same shape as the
+         *     job-search facet endpoint, so one control renders either.
+         *
+         *     Each facet is counted with its OWN selection removed, while every other filter still
+         *     applies — otherwise picking one skill makes every other skill read zero and the control
+         *     silently becomes single-select.
+         *
+         *     A value nobody carries is absent rather than reported as zero. A value carried by fewer
+         *     members than the floor is offered with its number withheld: the option stays usable,
+         *     and the number does not become a way to name somebody. Counts describe the filter you
+         *     sent and never the whole membership.
+         */
         get: operations["getTalentFacets"];
         put?: never;
         post?: never;
@@ -4729,7 +5566,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description A card is a person: cached privately only, so leaving takes effect at once. */
+        /**
+         * One member’s public card.
+         * @description Four ways of being absent — a member who left, one whose CV extract has gone stale, a
+         *     handle nobody holds, and a string that could not be a handle — all answer the same 404,
+         *     so the route cannot be used to ask whether an account exists. An account’s `username`
+         *     is not an address here. Membership is re-read from the database on every request, so
+         *     leaving takes effect immediately rather than when a cache expires.
+         */
         get: operations["getTalentMember"];
         put?: never;
         post?: never;
@@ -4763,10 +5607,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description A subject's open threads, newest first, keyset-paged. */
+        /**
+         * Public discussion threads.
+         * @description A subject's open threads, newest first, keyset-paged.
+         */
         get: operations["listThreads"];
         put?: never;
-        /** @description Opens a thread on a company or job. */
+        /**
+         * Start a thread.
+         * @description Opens a thread on a company or job.
+         */
         post: operations["createThread"];
         delete?: never;
         options?: never;
@@ -4781,7 +5631,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description A subject's open-thread count. */
+        /**
+         * How many threads there are.
+         * @description A subject's open-thread count.
+         */
         get: operations["countThreads"];
         put?: never;
         post?: never;
@@ -4815,7 +5668,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description A thread with its first page of replies. The id is declared a string and parsed in Go, which keeps the 400 text. */
+        /**
+         * One thread with its replies.
+         * @description A thread with its first page of replies. The id is declared a string and parsed in Go, which keeps the 400 text.
+         */
         get: operations["getThread"];
         put?: never;
         post?: never;
@@ -4834,7 +5690,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moderators only: closes a thread. */
+        /**
+         * Close a thread.
+         * @description Moderators only: closes a thread.
+         */
         post: operations["closeThread"];
         delete?: never;
         options?: never;
@@ -4851,7 +5710,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Posts a reply to an open thread. */
+        /**
+         * Reply to a thread.
+         * @description Posts a reply to an open thread.
+         */
         post: operations["createReply"];
         delete?: never;
         options?: never;
@@ -4898,6 +5760,7 @@ export interface components {
             ga4_sent: boolean;
         };
         AccountLanguageUpdate: {
+            /** @description Supported language code. (e.g. `en`) */
             language?: string;
         };
         /** @description A connected MCP client. */
@@ -4910,6 +5773,7 @@ export interface components {
             last_used_at: string | null;
         };
         AccountTimezoneUpdate: {
+            /** @description IANA timezone name. (e.g. `Europe/Berlin`) */
             timezone?: string;
             /** @description Leave a timezone that is already set alone. */
             only_if_unset?: boolean;
@@ -5072,21 +5936,28 @@ export interface components {
             calls_url: string;
         };
         AssistantVoiceTurn: {
+            /** @description `user` or `assistant`. (e.g. `user`) */
             role?: string;
+            /** @description The transcribed/spoken text. */
             content?: string;
         };
         AuthCode: {
+            /** @description The six-digit code mailed to your address. (e.g. `123456`) */
             code?: string;
         };
         AuthEmailChange: {
             email?: string;
         };
         AuthPasswordForgot: {
+            /** @description Account email. (e.g. `me@example.com`) */
             email?: string;
         };
         AuthPasswordReset: {
+            /** @description Account email. (e.g. `me@example.com`) */
             email?: string;
+            /** @description The mailed reset code. (e.g. `123456`) */
             code?: string;
+            /** @description New password. */
             password?: string;
         };
         AuthPasswordResetResult: {
@@ -5543,6 +6414,7 @@ export interface components {
             meta: components["schemas"]["PageMeta"];
         };
         CompanyFeedbackReportRequest: {
+            /** @description Report reason code. (e.g. `spam`) */
             reason?: string;
         };
         CompanyFeedbackRequest: {
@@ -5551,7 +6423,9 @@ export interface components {
              * @description 1 to 5.
              */
             rating?: number;
+            /** @description Review category, e.g. `interview`, `culture`, `compensation`. (e.g. `interview`) */
             feedback_type?: string;
+            /** @description Free-text review. (e.g. `Fast process, clear communication.`) */
             body?: string;
         };
         /** @description A company's recomputed feedback counters. */
@@ -5725,6 +6599,7 @@ export interface components {
             body?: string;
         };
         CreateReplyRequest: {
+            /** @description Your reply. */
             body?: string;
             /**
              * Format: int64
@@ -5735,7 +6610,9 @@ export interface components {
         CreateThreadRequest: {
             subject_type?: string;
             subject_slug?: string;
+            /** @description Thread title. */
             title?: string;
+            /** @description Opening post. */
             body?: string;
         };
         /** @description Template, typography and margins a new CV starts with; a save replaces the whole set. */
@@ -5782,6 +6659,7 @@ export interface components {
             model?: string;
         };
         CvCreate: {
+            /** @description Label; up to 200 characters. */
             title?: string;
             /** @description Empty falls back to the caller's saved default, then to the system one. */
             template_id?: string;
@@ -5832,9 +6710,11 @@ export interface components {
             revision: unknown;
         };
         CvSessionBinding: {
+            /** @description The agent session to bind. */
             session_id?: string;
         };
         CvTailorRequest: {
+            /** @description The vacancy to tailor toward. */
             job_slug?: string;
             /** @description The base to copy; absent means the default base. */
             base_cv_id?: string;
@@ -5868,6 +6748,7 @@ export interface components {
             agent_session_id: string;
         };
         CvTemplateChoice: {
+            /** @description A template id from `/cv-templates`. */
             template_id?: string;
         };
         /** @description One traced link as the owner reads it. */
@@ -5888,14 +6769,18 @@ export interface components {
             last_click_at?: string;
         };
         CvTracerLinksSetting: {
+            /** @description Turn tracing on or off. */
             enabled?: boolean;
         };
         CvTracerLinksState: {
             tracer_links_enabled: boolean;
         };
         CvUpdate: {
+            /** @description New label. */
             title?: string;
+            /** @description New template. */
             template_id?: string;
+            /** @description The whole CV document. */
             document?: unknown;
         };
         Deleted: {
@@ -5947,11 +6832,24 @@ export interface components {
         DirectApplyQuestionType: "text" | "boolean" | "select";
         /** @description Names the CV to send: `resume: true` for the uploaded one, or `cv_id`, exactly one. */
         DirectApplyRequest: {
+            /**
+             * @description Send the CV file uploaded to your profile. Exactly one of `resume` and `cv_id`. (e.g.
+             *     `true`)
+             */
             resume?: boolean;
+            /**
+             * @description The CV you tailored for THIS vacancy (`cvs.tailored.id` from the form). Any other CV
+             *     is a `404`. (e.g. `6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01`)
+             */
             cv_id?: string;
+            /**
+             * @description Question id → answer; a yes/no answer is `"true"` or `"false"`, a list answer one of
+             *     its options. (e.g. `{"q1":"true"}`)
+             */
             answers?: {
                 [key: string]: string;
             };
+            /** @description Up to 2000 characters to the employer. (e.g. `Happy to talk this week.`) */
             note?: string;
         };
         DirectApplySent: {
@@ -6243,7 +7141,9 @@ export interface components {
         };
         /** @description A job posting scraped off any page. */
         FitMatchTextRequest: {
+            /** @description The posting title. */
             title?: string;
+            /** @description The scraped posting text. */
             text?: string;
         };
         /** @description The 402 a spent or missing fit allowance answers with. */
@@ -6436,7 +7336,9 @@ export interface components {
         };
         /** @description The verdict an agent records for one message. Left-out fields read as empty. */
         InboxTriage: {
+            /** @description One value from the vocabulary above. (e.g. `interview_invitation`) */
             signal?: string | null;
+            /** @description Link the message to this application at the same time. */
             slug?: string | null;
             /** @description Stored for display; gates nothing. */
             confidence?: number | null;
@@ -6496,13 +7398,21 @@ export interface components {
         };
         /** @description The moderator create body. url, title and company are required, and the service refuses a request without them. */
         JobCreate: {
+            /** @description Link to the posting. (e.g. `https://acme.com/careers/123`) */
             url?: string;
+            /** @description Source label. (e.g. `manual`) */
             source?: string;
+            /** @description Job title. (e.g. `Senior Go Engineer`) */
             title?: string;
+            /** @description Company name. (e.g. `Acme`) */
             company?: string;
+            /** @description Free-text location. */
             location?: string;
+            /** @description Whether the role is remote. */
             remote?: boolean;
+            /** @description Job description. */
             description?: string;
+            /** @description Posting date. */
             posted_at?: string | null;
             skills?: string[];
             regions?: string[];
@@ -6517,11 +7427,15 @@ export interface components {
         };
         /** @description Exactly one of `job_slug`, `url` and `text`; anything else is a 400. */
         JobDescriptionSource: {
+            /** @description An existing job’s slug. */
             job_slug?: string;
+            /** @description A job posting URL. */
             url?: string;
+            /** @description Pasted job description text. */
             text?: string;
             /** @description Hints used only with `text`. */
             title?: string;
+            /** @description Optional hint, used only alongside `text`. */
             company?: string;
         };
         JobFindMeta: {
@@ -6563,7 +7477,9 @@ export interface components {
         JobReportRequest: {
             /** @description From the controlled vocabulary. */
             reason?: string;
+            /** @description Free-text details. */
             details?: string;
+            /** @description Optional contact handle. */
             contact_telegram?: string;
         };
         /** @enum {string} */
@@ -6975,7 +7891,12 @@ export interface components {
         };
         /** @description Every field is read as its zero value when left out. Times are `HH:MM`. */
         NotificationSettingsUpdate: {
+            /** @description Turn notifications on or off. */
             enabled?: boolean | null;
+            /**
+             * @description Delivery channels: `email`, `telegram`, `push`. Adding `push` needs a device the
+             *     mobile app has registered (409 otherwise).
+             */
             channels?: string[] | null;
             digest_frequency?: string | null;
             digest_time?: string | null;
@@ -7119,6 +8040,7 @@ export interface components {
             enforced: string[];
         };
         PrefillRequest: {
+            /** @description The job posting URL to parse. */
             url?: string;
         };
         /**
@@ -7207,11 +8129,17 @@ export interface components {
         };
         /** @description The profile as saved. */
         ProfileUpdate: {
+            /** @description One or more job categories (max 5). (e.g. `["backend"]`) */
             specializations?: string[] | null;
+            /** @description Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`) */
             skills?: string[] | null;
             seniorities?: string[] | null;
             excluded_skills?: string[] | null;
             excluded_sources?: string[] | null;
+            /**
+             * @description Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any
+             *     language. (e.g. `["en","ru"]`)
+             */
             job_languages?: string[] | null;
             excluded_companies?: string[] | null;
             /** @description Shaped like LocationPreferences; null or absent keeps none. */
@@ -7259,11 +8187,16 @@ export interface components {
             last_seen_at: string | null;
         };
         PushTokenRegister: {
+            /**
+             * @description The Expo push token minted by the device. (e.g.
+             *     `ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]`)
+             */
             token?: string;
             /** @description `ios` or `android`. */
             platform?: string;
         };
         PushTokenRemove: {
+            /** @description The token to remove. */
             token?: string;
         };
         /** @description What a self-test send did per registered device. */
@@ -7312,6 +8245,7 @@ export interface components {
          */
         ReferralCvKind: "original" | "built";
         ReferralDecision: {
+            /** @description True approves the referrer; false rejects the offer. */
             approve?: boolean;
         };
         /** @description What a referrer sees: the seeker's chosen contact and CV, never their user id. */
@@ -7340,21 +8274,33 @@ export interface components {
         /** @enum {string} */
         ReferralOfferStatus: "pending" | "approved" | "rejected";
         ReferralRequestCreate: {
+            /** @description The company to ask. */
             company_slug?: string;
             /** @description Names the vacancy; an unknown slug is a 404. Wins over `job_id`. */
             job_slug?: string;
             job_id?: number | null;
+            /** @description Which CV to attach: `original` (your uploaded one) or `built`. */
             cv_kind?: string;
+            /**
+             * @description The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with
+             *     no opening — for any opening at the company (see `cv-options`). Any other CV answers
+             *     422.
+             */
             cv_id?: string | null;
+            /** @description Your LinkedIn profile URL. */
             linkedin_url?: string;
+            /** @description How the referrer reaches you. */
             contact_telegram?: string;
+            /** @description How the referrer reaches you. */
             contact_email?: string;
+            /** @description A short message to the referrer. */
             note?: string;
         };
         /** @enum {string} */
         ReferralRequestStatus: "sent" | "contacted" | "declined";
         /** @description `status` is "contacted" or "declined". */
         ReferralResolve: {
+            /** @description `contacted` or `declined`. (e.g. `contacted`) */
             status?: string;
         };
         /** @description A seeker's own request: the target and status, no referrer identity. */
@@ -7563,6 +8509,7 @@ export interface components {
         };
         /** @description An empty name is refused with a 400, like an out-of-range one. */
         SavedSearchCreate: {
+            /** @description Display name. (e.g. `Senior Go remote`) */
             name?: string;
             /** @description Empty is the valid "show all" snapshot. */
             query?: string;
@@ -7575,7 +8522,9 @@ export interface components {
         };
         /** @description A partial update: an absent or null field is kept; an empty query is a real "show all". */
         SavedSearchUpdate: {
+            /** @description New name (optional). */
             name?: string | null;
+            /** @description New query (optional). */
             query?: string | null;
         };
         /** @description One arranged meeting. Unlike an event it can move or be called off. */
@@ -7819,12 +8768,19 @@ export interface components {
         };
         /** @description A vacancy to submit. url, title and company are required; the service refuses a body without them with a 400. */
         SubmissionRequest: {
+            /** @description Link to the original posting. (e.g. `https://acme.com/careers/123`) */
             url?: string | null;
+            /** @description Origin hint (optional). */
             source?: string | null;
+            /** @description Job title. (e.g. `Senior Go Engineer`) */
             title?: string | null;
+            /** @description Company name. (e.g. `Acme`) */
             company?: string | null;
+            /** @description Free-text location. (e.g. `Remote — EU`) */
             location?: string | null;
+            /** @description Whether the role is remote. (e.g. `true`) */
             remote?: boolean | null;
+            /** @description Job description. */
             description?: string | null;
             /** @description RFC 3339. */
             posted_at?: string | null;
@@ -7853,10 +8809,14 @@ export interface components {
             created_at: string | null;
         };
         SubscriptionActive: {
+            /** @description Whether the subscription is active. (e.g. `false`) */
             active?: boolean;
         };
         SubscriptionCreate: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The saved search to subscribe. (e.g. `2`)
+             */
             saved_search_id?: number;
             /** @description Defaults to telegram when empty. */
             channel?: string;
@@ -7902,12 +8862,25 @@ export interface components {
         };
         /** @description The onboarding survey. Each field is optional. */
         SurveyResponses: {
+            /**
+             * @description One of `not_started`, `searching`, `employed_looking`, `exploring`. (e.g.
+             *     `searching`)
+             */
             job_search_stage?: string | null;
+            /**
+             * @description Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`,
+             *     `visa_sponsorship`, `technical_interviews`, `english`, `first_job`, `just_starting`,
+             *     `other`. `just_starting` stands alone. Replaces the stored list. (e.g.
+             *     `["technical_interviews"]`)
+             */
             biggest_challenges?: string[] | null;
             /** @description Kept only while `other` is among the challenges. */
             biggest_challenge_note?: string | null;
+            /** @description What you earn today, in the currency and period below. (e.g. `5000`) */
             current_income_amount?: number | null;
+            /** @description Three-letter ISO 4217 currency code. (e.g. `USD`) */
             current_income_currency?: string | null;
+            /** @description Income period, e.g. `year`, `month`. (e.g. `month`) */
             current_income_period?: string | null;
         };
         /** @description The anonymised card: only what a dictionary can vouch for. */
@@ -8078,7 +9051,9 @@ export interface components {
         };
         /** @description At least one of the two is required. A field left out or null keeps the stored value. */
         TrackJob: {
+            /** @description Application stage from the vocabulary above. (e.g. `interview`) */
             stage?: string | null;
+            /** @description Free-text notes. */
             notes?: string | null;
         };
         TrackedJob: {
@@ -8243,11 +9218,36 @@ export interface operations {
     agentSearchJobs: {
         parameters: {
             query?: {
+                /**
+                 * @description Full-text query over `title`, `company`, `description`, and `location`. Plain words
+                 *     use the default engine matching: the first words are required and trailing ones are
+                 *     dropped when too few postings match, so word order can change the result. Operators:
+                 *     quotes (`"systems engineer"`) require every quoted word in any order (not a
+                 *     contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+                 *     alternative (at most 5, merged and deduplicated); `title:` at the start of an
+                 *     alternative matches it in the title only, e.g.
+                 *     `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
+                 *     alternatives with `q_fields`. Exact-phrase matching is not offered, and default
+                 *     relevance order does not reliably rank a contiguous match above a scattered-token
+                 *     one. (e.g. `golang`)
+                 */
                 q?: string;
+                /**
+                 * @description Comma-separated subset of `title,company,description,location` to restrict `q` to,
+                 *     e.g. `title`. A name outside that set drops the whole parameter (reported in
+                 *     `meta.ignored_params`) rather than partially applying. (e.g. `title`)
+                 */
                 q_fields?: string;
+                /**
+                 * @description One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
+                 *     relevance/newest. (e.g. `posted_at`)
+                 */
                 sort?: string;
+                /** @description `asc` or `desc` (default `desc`). (e.g. `desc`) */
                 order?: string;
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) */
                 offset?: string;
                 /** @description `text` or `markdown`; anything else leaves the stored HTML. */
                 description_format?: string;
@@ -8295,6 +9295,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f",
+                     *           "preset": "chat",
+                     *           "label": "Relocating to Berlin?"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["AssistantSessionList"];
                 };
             };
@@ -8312,7 +9326,15 @@ export interface operations {
     createAssistantSession: {
         parameters: {
             query?: {
+                /**
+                 * @description One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`. (e.g.
+                 *     `chat`)
+                 */
                 preset?: string;
+                /**
+                 * @description Public slug of an application you hold. Required for `interview`/`debrief`/`apply`,
+                 *     ignored otherwise. (e.g. `senior-go-engineer-acme-1a2b`)
+                 */
                 job?: string;
             };
             header?: never;
@@ -8331,6 +9353,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f",
+                     *         "preset": "chat",
+                     *         "label": ""
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AssistantSession"];
                     };
@@ -8363,6 +9394,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. (e.g. `b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f`) */
                 id: string;
             };
             cookie?: never;
@@ -8375,6 +9407,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "session": {
+                     *           "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f",
+                     *           "preset": "chat",
+                     *           "label": "Relocating to Berlin?"
+                     *         },
+                     *         "messages": [
+                     *           {
+                     *             "seq": 1,
+                     *             "role": "user",
+                     *             "content": {
+                     *               "text": "Should I relocate for this role?"
+                     *             }
+                     *           },
+                     *           {
+                     *             "seq": 2,
+                     *             "role": "assistant",
+                     *             "content": {
+                     *               "text": "...",
+                     *               "...": "..."
+                     *             }
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AssistantSessionDetail"];
                     };
@@ -8396,6 +9456,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. */
                 id: string;
             };
             cookie?: never;
@@ -8425,6 +9486,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. */
                 id: string;
             };
             cookie?: never;
@@ -8454,6 +9516,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. */
                 id: string;
             };
             cookie?: never;
@@ -8466,6 +9529,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "turns": 15,
+                     *         "ceiling": 30,
+                     *         "unlimited": false,
+                     *         "allowance": {
+                     *           "feature": "tailor",
+                     *           "used": 2,
+                     *           "limit": 2,
+                     *           "unlimited": false,
+                     *           "enforced": false,
+                     *           "resets_at": "2026-09-01T00:00:00Z"
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AssistantExtension"];
                     };
@@ -8503,6 +9583,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. */
                 id: string;
             };
             cookie?: never;
@@ -8515,6 +9596,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "value": "ek_...",
+                     *         "model": "gpt-realtime",
+                     *         "calls_url": "https://freehire.me/api/v1/realtime/calls"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AssistantVoiceToken"];
                     };
@@ -8536,12 +9626,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The session id. */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "role": "user",
+                 *       "content": "I led the migration to Kubernetes."
+                 *     }
+                 */
                 "application/json": components["schemas"]["AssistantVoiceTurn"];
             };
         };
@@ -8610,6 +9707,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         "google",
+                     *         "github"
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: string[];
                     };
@@ -8635,6 +9740,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "email": "me@example.com"
+                 *     }
+                 */
                 "application/json": components["schemas"]["AuthPasswordForgot"];
             };
         };
@@ -8666,6 +9776,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "email": "me@example.com",
+                 *       "code": "123456",
+                 *       "password": "hunter2hunter2"
+                 *     }
+                 */
                 "application/json": components["schemas"]["AuthPasswordReset"];
             };
         };
@@ -8676,6 +9793,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "reset": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AuthPasswordResetResult"];
                     };
@@ -8833,6 +9957,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "status": "synced"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["BillingStoreSync"];
                     };
@@ -8883,9 +10014,12 @@ export interface operations {
     listCompanies: {
         parameters: {
             query?: {
+                /** @description Case-insensitive name substring filter. (e.g. `acme`) */
                 q?: string;
                 sort?: string;
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
@@ -8932,6 +10066,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "value": "payments",
+                     *           "count": 42
+                     *         },
+                     *         {
+                     *           "value": "developer-tools",
+                     *           "count": 31
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CompanySubindustry"][];
                     };
@@ -8951,11 +10099,14 @@ export interface operations {
     listCompanyFeedback: {
         parameters: {
             query?: {
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
             path: {
+                /** @description The company slug. (e.g. `acme`) */
                 slug: string;
             };
             cookie?: never;
@@ -8968,6 +10119,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 5,
+                     *           "author": "quiet-falcon-42",
+                     *           "rating": 4,
+                     *           "feedback_type": "interview",
+                     *           "body": "Fast process, clear communication.",
+                     *           "created_at": "2026-06-18T09:12:00Z",
+                     *           "updated_at": "2026-06-18T09:12:00Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 12,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["CompanyFeedbackPage"];
                 };
             };
@@ -8987,12 +10158,20 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The company slug. (e.g. `acme`) */
                 slug: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "rating": 4,
+                 *       "feedback_type": "interview",
+                 *       "body": "Fast process, clear communication."
+                 *     }
+                 */
                 "application/json": components["schemas"]["CompanyFeedbackRequest"];
             };
         };
@@ -9003,6 +10182,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 5,
+                     *         "author": "quiet-falcon-42",
+                     *         "rating": 4,
+                     *         "feedback_type": "interview",
+                     *         "body": "Fast process, clear communication.",
+                     *         "created_at": "2026-06-18T09:12:00Z",
+                     *         "updated_at": "2026-06-18T09:12:00Z",
+                     *         "company": {
+                     *           "feedback_count": 12,
+                     *           "feedback_rating_avg": 4.1
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CompanyFeedback"];
                     };
@@ -9022,10 +10218,12 @@ export interface operations {
     deleteCompanyFeedback: {
         parameters: {
             query?: {
+                /** @description Which category to delete. (e.g. `interview`) */
                 feedback_type?: string;
             };
             header?: never;
             path: {
+                /** @description The company slug. (e.g. `acme`) */
                 slug: string;
             };
             cookie?: never;
@@ -9038,6 +10236,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "feedback_count": 11,
+                     *         "feedback_rating_avg": 4
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CompanyFeedbackSummary"];
                     };
@@ -9059,6 +10265,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The company slug. (e.g. `acme`) */
                 slug: string;
             };
             cookie?: never;
@@ -9234,6 +10441,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The company slug. */
                 slug: string;
             };
             cookie?: never;
@@ -9271,6 +10479,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The company slug. */
                 slug: string;
             };
             cookie?: never;
@@ -9335,6 +10544,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The feedback entry id. (e.g. `5`) */
                 id: string;
             };
             cookie?: never;
@@ -9364,6 +10574,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The feedback entry id. (e.g. `5`) */
                 id: string;
             };
             cookie?: never;
@@ -9504,6 +10715,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "tinos",
+                     *           "label": "Tinos",
+                     *           "note": "Times New Roman metrics",
+                     *           "css": "Tinos, \"Times New Roman\", Times, serif"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -9535,6 +10758,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "classic",
+                     *           "name": "Classic"
+                     *         },
+                     *         {
+                     *           "id": "compact",
+                     *           "name": "Compact"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -10156,7 +11393,9 @@ export interface operations {
     searchCities: {
         parameters: {
             query?: {
+                /** @description Prefix to match. (e.g. `berl`) */
                 q?: string;
+                /** @description ISO 3166-1 alpha-2 code to narrow to. (e.g. `DE`) */
                 country?: string;
             };
             header?: never;
@@ -10171,6 +11410,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "value": "Berlin",
+                     *           "country": "DE"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CityMatch"][];
                     };
@@ -10190,8 +11439,11 @@ export interface operations {
     insightsCompanies: {
         parameters: {
             query?: {
+                /** @description Rank by openings or by growth. */
                 sort?: string;
+                /** @description Ignore companies below this many open roles. */
                 min_open?: string;
+                /** @description How many rows. */
                 limit?: string;
             };
             header?: never;
@@ -10285,9 +11537,13 @@ export interface operations {
     insightsRoles: {
         parameters: {
             query?: {
+                /** @description Scope to one country (ISO code). (e.g. `de`) */
                 country?: string;
+                /** @description Rank by open count or by growth. (e.g. `growth`) */
                 sort?: string;
+                /** @description How many rows. */
                 limit?: string;
+                /** @description Scope to one job category. (e.g. `backend`) */
                 category?: string;
                 seniority?: string;
             };
@@ -10321,8 +11577,11 @@ export interface operations {
     insightsSalary: {
         parameters: {
             query?: {
+                /** @description Scope to one category. */
                 category?: string;
+                /** @description Scope to one seniority. */
                 seniority?: string;
+                /** @description Scope to one country. */
                 country?: string;
             };
             header?: never;
@@ -10387,9 +11646,13 @@ export interface operations {
     insightsSkills: {
         parameters: {
             query?: {
+                /** @description Scope to one category. */
                 category?: string;
+                /** @description Scope to one country. */
                 country?: string;
+                /** @description Rank by open count or growth. */
                 sort?: string;
+                /** @description How many rows. */
                 limit?: string;
             };
             header?: never;
@@ -10421,10 +11684,15 @@ export interface operations {
     insightsVelocity: {
         parameters: {
             query?: {
+                /** @description Bucket size for the series. (e.g. `week`) */
                 granularity?: string;
+                /** @description Start of the window. */
                 from?: string;
+                /** @description End of the window. */
                 to?: string;
+                /** @description Scope to one category. */
                 category?: string;
+                /** @description Scope to one seniority. */
                 seniority?: string;
                 country?: string;
             };
@@ -10457,7 +11725,9 @@ export interface operations {
     listJobs: {
         parameters: {
             query?: {
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
@@ -10472,6 +11742,83 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "source": "greenhouse",
+                     *           "manually_added": false,
+                     *           "external_id": "123",
+                     *           "url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "company_slug": "acme",
+                     *           "location": "Remote — EU",
+                     *           "description": "...",
+                     *           "countries": [
+                     *             "DE"
+                     *           ],
+                     *           "regions": [
+                     *             "eu"
+                     *           ],
+                     *           "work_mode": "remote",
+                     *           "skills": [
+                     *             "go",
+                     *             "postgresql"
+                     *           ],
+                     *           "cities": [
+                     *             "Berlin"
+                     *           ],
+                     *           "collections": [
+                     *             "yc"
+                     *           ],
+                     *           "is_tech": "tech",
+                     *           "posted_at": "2026-06-18T00:00:00Z",
+                     *           "created_at": "2026-06-18T09:12:00Z",
+                     *           "updated_at": "2026-06-18T09:12:00Z",
+                     *           "closed_at": null,
+                     *           "enrichment": {
+                     *             "summary": "...",
+                     *             "seniority": "senior",
+                     *             "category": "backend",
+                     *             "employment_type": "full_time",
+                     *             "relocation": "not_supported",
+                     *             "visa_sponsorship": false,
+                     *             "experience_years_min": 5,
+                     *             "english_level": "b2",
+                     *             "education_level": "bachelor",
+                     *             "domains": [
+                     *               "fintech"
+                     *             ],
+                     *             "posting_language": "en",
+                     *             "company_type": "product",
+                     *             "company_size": "51-200",
+                     *             "salary_min": 90000,
+                     *             "salary_max": 130000,
+                     *             "salary_currency": "EUR",
+                     *             "salary_period": "year"
+                     *           },
+                     *           "enriched_at": "2026-06-18T09:20:00Z",
+                     *           "enrichment_version": 7,
+                     *           "view_count": 42,
+                     *           "applied_count": 8,
+                     *           "reality": {
+                     *             "class": "fresh",
+                     *             "age_days": 3,
+                     *             "repost_count": 0,
+                     *             "mass_posting_count": 0,
+                     *             "fake_freshness": false
+                     *           }
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 4213,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown[];
                         meta: components["schemas"]["ListMeta"];
@@ -10498,6 +11845,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "url": "https://acme.com/careers/123",
+                 *       "title": "Senior Go Engineer",
+                 *       "company": "Acme"
+                 *     }
+                 */
                 "application/json": components["schemas"]["JobCreate"];
             };
         };
@@ -10508,6 +11862,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "title": "Senior Go Engineer",
+                     *         "manually_added": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -10527,6 +11890,7 @@ export interface operations {
     jobFacets: {
         parameters: {
             query?: {
+                /** @description Same full-text query as search. (e.g. `golang`) */
                 q?: string;
                 /** @description Comma-separated facet params to count instead of all of them. */
                 facets?: string;
@@ -10544,6 +11908,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "total": 1820,
+                     *         "facets": {
+                     *           "seniority": {
+                     *             "senior": 640,
+                     *             "middle": 410,
+                     *             "junior": 120
+                     *           },
+                     *           "category": {
+                     *             "backend": 700,
+                     *             "frontend": 380
+                     *           }
+                     *         },
+                     *         "stats": {
+                     *           "salary_min": {
+                     *             "min": 20000,
+                     *             "max": 400000
+                     *           }
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                         meta?: components["schemas"]["IgnoredMeta"];
@@ -10564,6 +11952,7 @@ export interface operations {
     findJob: {
         parameters: {
             query?: {
+                /** @description The posting's URL in the wild. (e.g. `https://boards.greenhouse.io/acme/jobs/123`) */
                 url?: string;
             };
             header?: never;
@@ -10578,6 +11967,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-backend-engineer-acme-1a2b"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["JobFindResult"];
                 };
             };
@@ -10652,14 +12048,63 @@ export interface operations {
     searchJobs: {
         parameters: {
             query?: {
+                /**
+                 * @description Full-text query over `title`, `company`, `description`, and `location`. Plain words
+                 *     use the default engine matching: the first words are required and trailing ones are
+                 *     dropped when too few postings match, so word order can change the result. Operators:
+                 *     quotes (`"systems engineer"`) require every quoted word in any order (not a
+                 *     contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+                 *     alternative (at most 5, merged and deduplicated); `title:` at the start of an
+                 *     alternative matches it in the title only, e.g.
+                 *     `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
+                 *     alternatives with `q_fields`. Exact-phrase matching is not offered, and default
+                 *     relevance order does not reliably rank a contiguous match above a scattered-token
+                 *     one. (e.g. `golang`)
+                 */
                 q?: string;
+                /**
+                 * @description Comma-separated subset of `title,company,description,location` to restrict `q` to,
+                 *     e.g. `title`. A name outside that set drops the whole parameter (reported in
+                 *     `meta.ignored_params`) rather than partially applying. (e.g. `title`)
+                 */
                 q_fields?: string;
+                /**
+                 * @description One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
+                 *     relevance/newest. (e.g. `posted_at`)
+                 */
                 sort?: string;
+                /** @description `asc` or `desc` (default `desc`). (e.g. `desc`) */
                 order?: string;
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) */
                 offset?: string;
+                /**
+                 * @description `true` leaves out the postings the signed-in caller has already opened (the 1000 most
+                 *     recently viewed, saved, applied to or hidden), inside the search, so `meta.total` and
+                 *     paging stay accurate. A per-person preference, not a filter: a saved search ignores
+                 *     it. Without a session or API key it is not applied and is listed in
+                 *     `meta.ignored_params`. (e.g. `true`)
+                 */
                 hide_seen?: string;
+                /**
+                 * @description `true` excludes every posting of employers represented in the newest 1,000
+                 *     applications made by the signed-in caller. Employers represented only by older
+                 *     applications can remain in results. Applied inside the search, so `meta.total` and
+                 *     paging describe what is left. A per-person preference, not a filter: a saved search
+                 *     carrying it narrows nothing. Without a session or API key, or with a value that is
+                 *     not a boolean, the search runs unhidden and the param is reported in
+                 *     `meta.ignored_params`. (e.g. `true`)
+                 */
                 hide_applied_companies?: string;
+                /**
+                 * @description Keeps only postings whose skills your profile covers by at least this percent
+                 *     (1–100), across the whole ranking. Applies only with `sort=match`, to a signed-in
+                 *     caller with profile skills; the read stops once no later posting can qualify or at a
+                 *     depth bound, and then `meta.total` is a minimum with
+                 *     `meta.total_is_lower_bound: true`. A per-person preference: a saved search ignores
+                 *     it. Otherwise it is not applied and is listed in `meta.ignored_params`. (e.g. `70`)
+                 */
                 min_skill_match?: string;
             };
             header?: never;
@@ -10694,6 +12139,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
                 slug: string;
             };
             cookie?: never;
@@ -10706,6 +12152,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "title": "Senior Go Engineer",
+                     *         "closed_at": null,
+                     *         "...": "..."
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -10727,12 +12183,18 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "title": "Staff Go Engineer"
+                 *     }
+                 */
                 "application/json": components["schemas"]["JobUpdate"];
             };
         };
@@ -10743,6 +12205,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "...",
+                     *         "title": "Staff Go Engineer"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -10764,6 +12234,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -10801,6 +12272,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
                 slug: string;
             };
             cookie?: never;
@@ -10813,6 +12285,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "provider": "greenhouse",
+                     *         "basics": [
+                     *           "resume",
+                     *           "phone",
+                     *           "linkedin"
+                     *         ],
+                     *         "questions": [
+                     *           {
+                     *             "text": "Why do you want to work here?",
+                     *             "required": true
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -10940,11 +12430,14 @@ export interface operations {
     jobCopies: {
         parameters: {
             query?: {
+                /** @description Page size, 1–200 (default 50). (e.g. `50`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
                 slug: string;
             };
             cookie?: never;
@@ -10957,6 +12450,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "location": "Berlin, Germany",
+                     *           "apply_url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *           "posted_at": "2026-06-18T00:00:00Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 4
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["JobCopiesPage"];
                 };
             };
@@ -10976,6 +12484,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`) */
                 slug: string;
             };
             cookie?: never;
@@ -11009,12 +12518,21 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`) */
                 slug: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "cv_id": "6f1c0c3e-8a51-4c1e-9d55-6a4c1f2b0a01",
+                 *       "answers": {
+                 *         "q1": "true"
+                 *       }
+                 *     }
+                 */
                 "application/json": components["schemas"]["DirectApplyRequest"];
             };
         };
@@ -11025,6 +12543,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "sent": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["DirectApplySent"];
                     };
@@ -11046,6 +12571,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11079,6 +12605,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11183,12 +12710,18 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "applied_on": "2026-07-29"
+                 *     }
+                 */
                 "application/json": components["schemas"]["GhostReportRequest"];
             };
         };
@@ -11199,6 +12732,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "applied_on": "2026-07-29",
+                     *         "created_at": "2026-07-29T10:00:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["GhostReport"];
                     };
@@ -11220,6 +12762,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11249,6 +12792,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11261,6 +12805,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "total": 12,
+                     *         "exact_count": 7,
+                     *         "adjacent_count": 2,
+                     *         "coverage_percent": 75,
+                     *         "matched": [
+                     *           "go",
+                     *           "postgresql"
+                     *         ],
+                     *         "adjacent": [
+                     *           {
+                     *             "name": "typescript",
+                     *             "via": "javascript"
+                     *           }
+                     *         ],
+                     *         "missing": [
+                     *           "kubernetes"
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -11282,6 +12849,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11294,6 +12862,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "has_cv": true,
+                     *         "stale": false,
+                     *         "analysis": {
+                     *           "overall_score": 82,
+                     *           "verdict": "Strong Fit",
+                     *           "dimensions": {
+                     *             "...": "..."
+                     *           },
+                     *           "requirement_match": [
+                     *             {
+                     *               "text": "5+ years Go",
+                     *               "priority": "required",
+                     *               "status": "covered",
+                     *               "evidence": "..."
+                     *             }
+                     *           ],
+                     *           "strengths": [
+                     *             "..."
+                     *           ],
+                     *           "gaps": [
+                     *             "..."
+                     *           ],
+                     *           "recommendation": "..."
+                     *         },
+                     *         "allowance": {
+                     *           "feature": "match",
+                     *           "used": 1,
+                     *           "limit": 3,
+                     *           "unlimited": false,
+                     *           "enforced": false,
+                     *           "resets_at": "2026-09-01T00:00:00Z"
+                     *         },
+                     *         "tailor_allowance": {
+                     *           "feature": "tailor",
+                     *           "used": 0,
+                     *           "limit": 2,
+                     *           "unlimited": false,
+                     *           "enforced": false,
+                     *           "resets_at": "2026-09-01T00:00:00Z"
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["FitAnalysisResponse"];
                 };
             };
@@ -11313,6 +12927,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11325,6 +12940,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "has_cv": true,
+                     *         "stale": false,
+                     *         "analysis": {
+                     *           "overall_score": 82,
+                     *           "verdict": "Strong Fit",
+                     *           "...": "..."
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["FitAnalysisResponse"];
                 };
             };
@@ -11353,6 +12981,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11390,6 +13019,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11423,6 +13053,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11454,10 +13085,12 @@ export interface operations {
     similarJobs: {
         parameters: {
             query?: {
+                /** @description Max similar jobs. (e.g. `10`) */
                 limit?: string;
             };
             header?: never;
             path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
                 slug: string;
             };
             cookie?: never;
@@ -11470,6 +13103,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "...",
+                     *           "title": "...",
+                     *           "...": "..."
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: unknown[];
                     };
@@ -11491,6 +13135,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11524,6 +13169,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11557,6 +13203,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11594,6 +13241,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11627,6 +13275,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11664,6 +13313,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -11701,6 +13351,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "skills": [
+                 *         "go",
+                 *         "postgresql"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["ResumeCoverageRequest"];
             };
         };
@@ -11711,6 +13369,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "total": 1820,
+                     *         "covered": 1400,
+                     *         "coverage_percent": 77,
+                     *         "gaps": [
+                     *           {
+                     *             "name": "kubernetes",
+                     *             "new_vacancies": 120,
+                     *             "unlock_percent": 7
+                     *           }
+                     *         ],
+                     *         "skills": [
+                     *           {
+                     *             "name": "go",
+                     *             "market_frequency": 61,
+                     *             "must_have": true,
+                     *             "status": "strong",
+                     *             "advice": ""
+                     *           }
+                     *         ],
+                     *         "must_have_total": 8,
+                     *         "must_have_covered": 6,
+                     *         "stack_match_percent": 75,
+                     *         "bundles": [
+                     *           {
+                     *             "...": "..."
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                         meta?: components["schemas"]["IgnoredMeta"];
@@ -12025,6 +13716,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tracking row id. (e.g. `42`) */
                 id: string;
             };
             cookie?: never;
@@ -12058,6 +13750,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tracking row id (from `/me/tracking`). (e.g. `42`) */
                 id: string;
             };
             cookie?: never;
@@ -12095,6 +13788,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tracking row id. (e.g. `42`) */
                 id: string;
             };
             cookie?: never;
@@ -12210,6 +13904,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "first_name": "Ilya",
+                     *         "last_name": "Strelov",
+                     *         "email": "you@example.com",
+                     *         "phone": "+1…",
+                     *         "linkedin": "https://linkedin.com/in/you",
+                     *         "portfolio": "https://ilya.dev"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -12241,6 +13947,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "filled": 11,
+                     *         "skipped": 2
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -13496,6 +15210,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "title": "Backend engineer",
+                 *       "seed": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["CvCreate"];
             };
         };
@@ -13568,6 +15288,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "0f2c…",
+                     *           "title": "Backend engineer",
+                     *           "template_id": "classic-ats",
+                     *           "is_default": true,
+                     *           "hand_edited": false,
+                     *           "created_at": "2026-07-01T10:00:00Z",
+                     *           "updated_at": "2026-07-20T18:30:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvBase"][];
                     };
@@ -13633,6 +15368,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13666,6 +15402,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13703,6 +15440,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13732,12 +15470,25 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "ops": [
+                 *         {
+                 *           "kind": "set",
+                 *           "path": "experience[0].bullets[1]",
+                 *           "value": "Cut p99 checkout latency 40% by …",
+                 *           "evidence_id": "a71f…"
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -13769,6 +15520,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13781,6 +15533,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "available": true,
+                     *         "base_cv_id": "0f2c…",
+                     *         "delta": {
+                     *           "base": 62,
+                     *           "tailored": 78,
+                     *           "change": 16,
+                     *           "categories": [
+                     *             {
+                     *               "id": "keyword_coverage",
+                     *               "label": "Keyword coverage",
+                     *               "...": "..."
+                     *             }
+                     *           ],
+                     *           "regressed": false
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvAtsDelta"];
                     };
@@ -13802,6 +15575,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The base CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13814,6 +15588,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "base_cv_id": "0f2c…",
+                     *         "session_id": "s_9f…"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvBaseSession"];
                     };
@@ -13912,6 +15694,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The base CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13945,6 +15728,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
@@ -13957,6 +15741,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "available": true,
+                     *         "score": {
+                     *           "overall": 74,
+                     *           "categories": [
+                     *             {
+                     *               "...": "..."
+                     *             }
+                     *           ],
+                     *           "contributing": [
+                     *             "skills",
+                     *             "requirements"
+                     *           ],
+                     *           "matched_skills": [
+                     *             "go",
+                     *             "postgresql"
+                     *           ],
+                     *           "missing_skills": [
+                     *             "kubernetes"
+                     *           ],
+                     *           "requirements": [
+                     *             {
+                     *               "text": "5+ years Go",
+                     *               "priority": "required",
+                     *               "cached_status": "covered"
+                     *             }
+                     *           ]
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvJobMatch"];
                     };
@@ -13978,6 +15795,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id (tailored or base). */
                 id: string;
             };
             cookie?: never;
@@ -14011,6 +15829,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14023,6 +15842,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b1a2…",
+                     *           "actor": "agent",
+                     *           "origin": "tailoring",
+                     *           "batch_id": "f3c1…",
+                     *           "title": "Reframed 2 bullets toward Kafka",
+                     *           "note": "Emphasized event-bus scale to match the requirement",
+                     *           "paths": [
+                     *             "experience[0].bullets[1]"
+                     *           ],
+                     *           "reverted": false,
+                     *           "undoable": true,
+                     *           "created_at": "2026-07-28T20:10:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14044,7 +15883,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
+                /** @description The batch id shared by the revisions to undo. */
                 bid: string;
             };
             cookie?: never;
@@ -14057,6 +15898,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "0f2c…",
+                     *         "title": "Backend engineer",
+                     *         "template_id": "classic",
+                     *         "created_at": "2026-07-01T10:00:00Z",
+                     *         "updated_at": "2026-07-28T20:16:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvMeta"];
                     };
@@ -14078,7 +15930,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
+                /** @description The revision id, from the history feed. */
                 rid: string;
             };
             cookie?: never;
@@ -14091,6 +15945,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "cv": {
+                     *           "id": "0f2c…",
+                     *           "title": "Backend engineer",
+                     *           "template_id": "classic",
+                     *           "created_at": "2026-07-01T10:00:00Z",
+                     *           "updated_at": "2026-07-28T20:15:00Z"
+                     *         },
+                     *         "revision": {
+                     *           "id": "c4d5…",
+                     *           "actor": "user",
+                     *           "origin": "editor",
+                     *           "title": "Undid \"Reframed 2 bullets toward Kafka\"",
+                     *           "reverts_id": "b1a2…",
+                     *           "reverted": false,
+                     *           "undoable": false,
+                     *           "paths": [
+                     *             "experience[0].bullets[1]"
+                     *           ],
+                     *           "created_at": "2026-07-28T20:15:00Z"
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvRevisionUndo"];
                     };
@@ -14112,6 +15992,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14145,6 +16026,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14157,6 +16039,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job": {
+                     *           "slug": "senior-backend-engineer-acme-1a2b",
+                     *           "title": "Senior Backend Engineer",
+                     *           "company": "Acme",
+                     *           "requirements": [
+                     *             {
+                     *               "text": "5+ years with Go",
+                     *               "priority": "required"
+                     *             }
+                     *           ]
+                     *         },
+                     *         "verdict": "worth_applying",
+                     *         "overall_score": 72,
+                     *         "recommendation": "Lead with the payments migration …",
+                     *         "missing_have": [
+                     *           {
+                     *             "requirement": "Kafka at scale",
+                     *             "evidence": "Ran the event bus at …"
+                     *           }
+                     *         ],
+                     *         "missing_gap": [
+                     *           {
+                     *             "requirement": "Kubernetes operators"
+                     *           }
+                     *         ],
+                     *         "strengths": [
+                     *           "Go",
+                     *           "payments"
+                     *         ],
+                     *         "gaps": [
+                     *           "k8s operators"
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14178,6 +16098,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14190,6 +16111,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "tailor_cv_id": "7d1a…",
+                     *         "base_cv_id": "0f2c…",
+                     *         "session_id": "s_9f…"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvTailorSession"];
                     };
@@ -14211,6 +16141,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14244,6 +16175,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
@@ -14256,6 +16188,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "source_path": "header.links[0]",
+                     *           "destination_url": "https://github.com/you",
+                     *           "traced_url": "https://freehire.me/cv/acme-x7abc",
+                     *           "clicks": 12,
+                     *           "bot_clicks": 3,
+                     *           "distinct_visitors": 9,
+                     *           "last_click_at": "2026-07-20T10:00:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvTracerLink"][];
                     };
@@ -14277,12 +16224,18 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The CV id. */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "enabled": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["CvTracerLinksSetting"];
             };
         };
@@ -14293,6 +16246,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "tracer_links_enabled": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvTracerLinksState"];
                     };
@@ -14415,6 +16375,18 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "messages": [
+                 *         {
+                 *           "external_id": "<CAF...@mail.gmail.com>",
+                 *           "from_addr": "no-reply@us.greenhouse-mail.io",
+                 *           "subject": "Thank you for applying",
+                 *           "received_at": "2026-07-24T09:12:00Z"
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -14425,6 +16397,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "inserted": 1,
+                     *         "updated": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxIngested"];
                     };
@@ -14446,6 +16426,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. (e.g. `4821`) */
                 id: string;
             };
             cookie?: never;
@@ -14479,6 +16460,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14516,6 +16498,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14549,6 +16532,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14578,6 +16562,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14615,6 +16600,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14648,6 +16634,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14677,6 +16664,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14714,6 +16702,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The message id. */
                 id: string;
             };
             cookie?: never;
@@ -14782,6 +16771,16 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "claim": "Cut p99 checkout latency 40%",
+                 *       "employment_id": "3fa8…",
+                 *       "metrics": [
+                 *         "40%",
+                 *         "12k rps"
+                 *       ]
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -14792,6 +16791,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "88b1…",
+                     *         "employment_id": "3fa8…",
+                     *         "claim": "Cut p99 checkout latency 40%",
+                     *         "metrics": [
+                     *           "40%",
+                     *           "12k rps"
+                     *         ],
+                     *         "provenance": "manual"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14817,6 +16830,14 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "ids": [
+                 *         "88b1…",
+                 *         "91c2…"
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["MergeAtoms"];
             };
         };
@@ -14827,6 +16848,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "88b1…",
+                     *         "claim": "Cut p99 checkout latency 40% (12k rps)",
+                     *         "metrics": [
+                     *           "40%",
+                     *           "12k rps"
+                     *         ],
+                     *         "provenance": "manual"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14848,12 +16882,18 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The atom id. */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "claim": "Cut p99 checkout latency 40% (12k rps)"
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -14864,6 +16904,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "88b1…",
+                     *         "claim": "Cut p99 checkout latency 40% (12k rps)",
+                     *         "provenance": "manual"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14885,6 +16934,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The atom id. */
                 id: string;
             };
             cookie?: never;
@@ -14918,6 +16968,15 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "kind": "job",
+                 *       "company": "Acme",
+                 *       "role": "Senior Backend Engineer",
+                 *       "start": "2023-02",
+                 *       "current": true
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -14928,6 +16987,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "3fa8…",
+                     *         "kind": "job",
+                     *         "company": "Acme",
+                     *         "role": "Senior Backend Engineer",
+                     *         "start": "2023-02",
+                     *         "current": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14949,12 +17020,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The employment id. */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "company": "Acme",
+                 *       "role": "Staff Engineer"
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -14965,6 +17043,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "3fa8…",
+                     *         "kind": "job",
+                     *         "company": "Acme",
+                     *         "role": "Staff Engineer"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -14986,6 +17074,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The employment id. */
                 id: string;
             };
             cookie?: never;
@@ -15056,6 +17145,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "connected": false
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["GmailDisconnected"];
                     };
@@ -15087,6 +17183,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "started": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["GmailSyncStarted"];
                     };
@@ -15106,15 +17209,28 @@ export interface operations {
     getInbox: {
         parameters: {
             query?: {
+                /** @description One account: `gmail`, `hosted`, or `external`. */
                 source?: string;
+                /** @description One classified label (see the triage vocabulary below). (e.g. `rejection`) */
                 status?: string;
+                /** @description One link state: `linked`, `suggested` (awaiting your word), or `unlinked`. */
                 link?: string;
+                /** @description Match subject, sender, or body. */
                 q?: string;
+                /** @description Only messages you have not opened. */
                 unread?: string;
+                /** @description Only mail nothing has judged yet — the agent's work queue. */
                 unclassified?: string;
+                /**
+                 * @description Also list the `other` label the default hides. Asking for it by `status=other`
+                 *     implies this.
+                 */
                 include_other?: string;
+                /** @description Include each message body; caps the page at 50. */
                 body?: string;
+                /** @description Page size. */
                 limit?: string;
+                /** @description Page offset. */
                 offset?: string;
             };
             header?: never;
@@ -15146,12 +17262,18 @@ export interface operations {
     markAllReadInbox: {
         parameters: {
             query?: {
+                /** @description Narrow to one account. */
                 source?: string;
+                /** @description Narrow to one label. */
                 status?: string;
+                /** @description Narrow to one link state. */
                 link?: string;
+                /** @description Narrow by search. */
                 q?: string;
                 unread?: string;
+                /** @description Narrow to mail nothing has judged yet. */
                 unclassified?: string;
+                /** @description Also mark the `other` label the default hides. */
                 include_other?: string;
             };
             header?: never;
@@ -15166,6 +17288,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "marked": 12
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxMarked"];
                     };
@@ -15185,7 +17314,9 @@ export interface operations {
     getInterviews: {
         parameters: {
             query?: {
+                /** @description Lower bound, inclusive. (e.g. `2026-08-01T00:00:00Z`) */
                 from?: string;
+                /** @description Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`) */
                 to?: string;
             };
             header?: never;
@@ -15200,6 +17331,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 3,
+                     *           "application_id": 31,
+                     *           "starts_at": "2026-08-20T13:00:00Z",
+                     *           "ends_at": "2026-08-20T13:30:00Z",
+                     *           "title": "Interview with Acme",
+                     *           "join_url": "https://meet.example.com/abc",
+                     *           "status": "confirmed",
+                     *           "company_slug": "acme",
+                     *           "role_title": "Senior Go Engineer",
+                     *           "job_slug": "senior-go-engineer-acme-1a2b"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "from": "2026-08-01T00:00:00Z",
+                     *         "to": "2026-08-31T23:59:59Z",
+                     *         "count": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ScheduledInterview"][];
                         meta: components["schemas"]["TimelineMeta"];
@@ -15257,6 +17411,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "url": "https://boards.greenhouse.io/acme/jobs/123"
+                 *     }
+                 */
                 "application/json": components["schemas"]["JobDescriptionSource"];
             };
         };
@@ -15267,6 +17426,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_slug": "senior-go-engineer-acme-1a2b"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ResolvedJob"];
                     };
@@ -15333,6 +17499,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "available": true,
+                     *         "address": "you@mail.freehire.me"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["MailboxStatus"];
                     };
@@ -15364,6 +17538,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "available": true,
+                     *         "address": "you@mail.freehire.me"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["MailboxStatus"];
                     };
@@ -15395,6 +17577,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "available": true,
+                     *         "address": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["MailboxStatus"];
                     };
@@ -15426,6 +17616,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "skill": "go",
+                     *           "open_count": 640,
+                     *           "change_pct": 12.5,
+                     *           "series": [
+                     *             {
+                     *               "week_start": "2026-07-06",
+                     *               "open_count": 570
+                     *             },
+                     *             {
+                     *               "week_start": "2026-08-10",
+                     *               "open_count": 640
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "week_start": "2026-08-10"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SkillPulse"][];
                         meta: components["schemas"]["MarketPulseMeta"];
@@ -15452,6 +17666,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "title": "Senior Backend Engineer",
+                 *       "text": "We are looking for …"
+                 *     }
+                 */
                 "application/json": components["schemas"]["FitMatchTextRequest"];
             };
         };
@@ -15462,6 +17682,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "coverage_percent": 68,
+                     *         "matched": [
+                     *           "go",
+                     *           "postgresql"
+                     *         ],
+                     *         "missing": [
+                     *           "kubernetes"
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -16096,7 +18330,9 @@ export interface operations {
     listNotifications: {
         parameters: {
             query?: {
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
@@ -16140,6 +18376,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "marked": 3
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["NotificationsMarked"];
                     };
@@ -16161,6 +18404,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The notification id. (e.g. `5`) */
                 id: string;
             };
             cookie?: never;
@@ -16194,6 +18438,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The notification id. (e.g. `5`) */
                 id: string;
             };
             cookie?: never;
@@ -16294,6 +18539,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "onboarding_complete": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["OnboardingCompleted"];
                     };
@@ -16325,6 +18577,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "plan": "free",
+                     *         "resets_at": "2026-09-01T00:00:00Z",
+                     *         "allowances": [
+                     *           {
+                     *             "feature": "tailor",
+                     *             "used": 0,
+                     *             "limit": 0,
+                     *             "unlimited": false,
+                     *             "enforced": true,
+                     *             "resets_at": "2026-09-01T00:00:00Z"
+                     *           },
+                     *           {
+                     *             "feature": "match",
+                     *             "used": 0,
+                     *             "limit": 0,
+                     *             "unlimited": false,
+                     *             "enforced": true,
+                     *             "resets_at": "2026-09-01T00:00:00Z"
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PlanStanding"];
                     };
@@ -16356,6 +18634,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "feature": "match",
+                     *           "day": "2026-08-31",
+                     *           "kind": "consume",
+                     *           "label": "Job analysis",
+                     *           "subtitle": "Senior Backend Engineer at Acme",
+                     *           "created_at": "2026-08-31T09:00:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PlanHistoryEntry"][];
                     };
@@ -16480,6 +18772,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "has_cv": true,
+                     *         "report": {
+                     *           "overall": 78,
+                     *           "potential": 90,
+                     *           "categories": [
+                     *             {
+                     *               "id": "structure",
+                     *               "label": "Structure",
+                     *               "score": 18,
+                     *               "max": 20,
+                     *               "items": [
+                     *                 {
+                     *                   "...": "..."
+                     *                 }
+                     *               ]
+                     *             }
+                     *           ],
+                     *           "strong_keywords": [
+                     *             "go",
+                     *             "postgresql"
+                     *           ],
+                     *           "recommended_keywords": [
+                     *             "kubernetes"
+                     *           ],
+                     *           "reviewed": false
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -16511,6 +18835,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "has_cv": true,
+                     *         "report": {
+                     *           "overall": 78,
+                     *           "reviewed": true,
+                     *           "...": "..."
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -16542,6 +18878,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "total": 1820,
+                     *         "covered": 1400,
+                     *         "coverage_percent": 77,
+                     *         "gaps": [
+                     *           {
+                     *             "name": "kubernetes",
+                     *             "new_vacancies": 120,
+                     *             "unlock_percent": 7
+                     *           }
+                     *         ],
+                     *         "skills": [
+                     *           {
+                     *             "...": "..."
+                     *           }
+                     *         ],
+                     *         "coherence_percent": 64,
+                     *         "bundles": [
+                     *           {
+                     *             "...": "..."
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -16643,6 +19006,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "token": "ExponentPushToken[...]",
+                     *           "platform": "ios",
+                     *           "created_at": "2026-06-19T10:00:00Z",
+                     *           "last_seen_at": "2026-06-19T10:00:00Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PushToken"][];
                         meta: components["schemas"]["AccountTotalMeta"];
@@ -16669,6 +19047,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+                 *       "platform": "ios"
+                 *     }
+                 */
                 "application/json": components["schemas"]["PushTokenRegister"];
             };
         };
@@ -16700,6 +19084,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+                 *     }
+                 */
                 "application/json": components["schemas"]["PushTokenRemove"];
             };
         };
@@ -16737,6 +19126,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "devices": 2,
+                     *         "sent": 1,
+                     *         "pruned": 1,
+                     *         "failed": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["PushTokenTestResult"];
                     };
@@ -16756,7 +19155,9 @@ export interface operations {
     listReferralCVOptions: {
         parameters: {
             query?: {
+                /** @description The company to ask. */
                 company_slug?: string;
+                /** @description The opening the request is made from. */
                 job_slug?: string;
             };
             header?: never;
@@ -16771,6 +19172,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "tailored": [
+                     *           {
+                     *             "id": "6f1c…",
+                     *             "title": "Tailored — Backend Engineer"
+                     *           }
+                     *         ],
+                     *         "has_resume": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralCVOptions"];
                     };
@@ -16823,6 +19237,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The request id. */
                 id: string;
             };
             cookie?: never;
@@ -16891,6 +19306,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The offer id. */
                 id: string;
             };
             cookie?: never;
@@ -16996,6 +19412,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "enabled": true,
+                     *         "present": true,
+                     *         "uploaded_at": "2026-06-19T10:00:00Z",
+                     *         "structured": {
+                     *           "...": "..."
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -17048,6 +19476,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "email": "me@work.com",
+                 *       "phone": "+1 555 0100"
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -17058,6 +19492,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "full_name": "Jane Doe",
+                     *         "email": "me@work.com",
+                     *         "phone": "+1 555 0100",
+                     *         "location": "Berlin, Germany"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -17089,6 +19533,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "full_name": "Jane Doe",
+                     *         "email": "jane@example.com",
+                     *         "location": "Berlin, Germany"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -17147,6 +19600,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "authorized_countries": [
+                     *           "DE",
+                     *           "NL"
+                     *         ],
+                     *         "visa_sponsorship_needed": false,
+                     *         "desired_salary_amount": 90000,
+                     *         "desired_salary_currency": "EUR",
+                     *         "desired_salary_period": "year",
+                     *         "notice_period_days": 30,
+                     *         "willing_to_relocate": true,
+                     *         "age_18_or_older": true,
+                     *         "privacy_consent": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ScreeningAnswers"] | null;
                     };
@@ -17172,6 +19643,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "willing_to_relocate": true,
+                 *       "notice_period_days": 30
+                 *     }
+                 */
                 "application/json": components["schemas"]["ScreeningAnswersUpdate"];
             };
         };
@@ -17182,6 +19659,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "authorized_countries": [
+                     *           "DE",
+                     *           "NL"
+                     *         ],
+                     *         "visa_sponsorship_needed": false,
+                     *         "desired_salary_amount": 90000,
+                     *         "desired_salary_currency": "EUR",
+                     *         "desired_salary_period": "year",
+                     *         "notice_period_days": 30,
+                     *         "willing_to_relocate": true,
+                     *         "age_18_or_older": true,
+                     *         "privacy_consent": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ScreeningAnswers"];
                     };
@@ -17267,6 +19762,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The saved-search id. (e.g. `2`) */
                 id: string;
             };
             cookie?: never;
@@ -17296,6 +19792,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The saved-search id. (e.g. `2`) */
                 id: string;
             };
             cookie?: never;
@@ -17428,6 +19925,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The subscription id. (e.g. `1`) */
                 id: string;
             };
             cookie?: never;
@@ -17457,6 +19955,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The subscription id. (e.g. `1`) */
                 id: string;
             };
             cookie?: never;
@@ -17504,6 +20003,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_search_stage": "searching",
+                     *         "biggest_challenges": [
+                     *           "technical_interviews",
+                     *           "visa_sponsorship"
+                     *         ],
+                     *         "current_income_amount": 5000,
+                     *         "current_income_currency": "USD",
+                     *         "current_income_period": "month"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SurveyResponses"];
                     };
@@ -17529,6 +20042,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "job_search_stage": "searching"
+                 *     }
+                 */
                 "application/json": components["schemas"]["SurveyResponses"];
             };
         };
@@ -17539,6 +20057,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_search_stage": "searching"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SurveyResponses"];
                     };
@@ -17624,7 +20149,9 @@ export interface operations {
     getTimeline: {
         parameters: {
             query?: {
+                /** @description Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a space in a query string and will be rejected. (e.g. `2026-08-01T00:00:00Z`) */
                 from?: string;
+                /** @description Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`) */
                 to?: string;
             };
             header?: never;
@@ -17639,6 +20166,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 7,
+                     *           "kind": "employer_reply",
+                     *           "signal": "interview_invitation",
+                     *           "source": "mail_gmail",
+                     *           "observed": true,
+                     *           "occurred_at": "2026-08-13T09:41:00Z",
+                     *           "company_slug": "derq",
+                     *           "role_title": "Senior Go Engineer",
+                     *           "application_id": 31,
+                     *           "job_slug": "senior-go-engineer-derq-1a2b",
+                     *           "email_id": 42,
+                     *           "email_subject": "Invitation to interview"
+                     *         },
+                     *         {
+                     *           "id": 8,
+                     *           "kind": "stage_set",
+                     *           "signal": "screening",
+                     *           "source": "user",
+                     *           "observed": false,
+                     *           "occurred_at": "2026-08-13T21:15:00Z",
+                     *           "company_slug": "linear",
+                     *           "application_id": 33
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "from": "2026-08-01T00:00:00Z",
+                     *         "to": "2026-08-31T23:59:59Z",
+                     *         "count": 2
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TimelineEvent"][];
                         meta: components["schemas"]["TimelineMeta"];
@@ -17694,9 +20256,15 @@ export interface operations {
     listTrackedJobs: {
         parameters: {
             query?: {
+                /**
+                 * @description Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an
+                 *     unknown value is a 400). (e.g. `applied`)
+                 */
                 filter?: string;
                 compact?: string;
+                /** @description Page size, 1–100. (e.g. `20`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
@@ -17740,6 +20308,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "closed": false,
+                     *           "overall_score": 82,
+                     *           "verdict": "Strong Fit",
+                     *           "analysed_at": "2026-07-11T10:00:00Z",
+                     *           "stale": false
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "allowance": {
+                     *           "feature": "match",
+                     *           "used": 1,
+                     *           "limit": 3,
+                     *           "unlimited": false,
+                     *           "enforced": false,
+                     *           "resets_at": "2026-09-01T00:00:00Z"
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["FitAnalysedJobs"];
                 };
             };
@@ -17769,6 +20363,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         "acme",
+                     *         "globex"
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: string[];
                     };
@@ -17800,6 +20402,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         "junior-php-developer-acme-9z8y"
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: string[];
                     };
@@ -17831,6 +20440,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "applications": 12,
+                     *         "stages": {
+                     *           "applied": 4,
+                     *           "screening": 2,
+                     *           "responded": 1,
+                     *           "interview": 2,
+                     *           "offer": 1,
+                     *           "accepted": 1,
+                     *           "rejected": 1,
+                     *           "withdrawn": 0
+                     *         },
+                     *         "reply_rate": {
+                     *           "you": {
+                     *             "applications": 12,
+                     *             "answered": 4
+                     *           },
+                     *           "global": {
+                     *             "applications": 287,
+                     *             "answered": 97
+                     *           }
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TrackingPipeline"];
                     };
@@ -17862,6 +20498,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         "senior-go-engineer-acme-1a2b",
+                     *         "..."
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: string[];
                     };
@@ -17893,6 +20537,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         "senior-go-engineer-acme-1a2b",
+                     *         "..."
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: string[];
                     };
@@ -17914,6 +20566,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -17947,6 +20600,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -17959,6 +20613,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "subject": "Following up: Senior Go Engineer application",
+                     *         "body": "Hi …",
+                     *         "recipient": "recruiting@acme.com",
+                     *         "recipient_name": "Acme Recruiting",
+                     *         "days_silent": 12
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["MailFollowUpDraft"];
                     };
@@ -17980,6 +20645,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -18009,6 +20675,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -18021,6 +20688,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "scanned": 340,
+                     *         "suggested": [
+                     *           {
+                     *             "id": 0,
+                     *             "provider_id": "18f2a…",
+                     *             "from_addr": "recruiting@acme.com",
+                     *             "from_name": "Acme Recruiting",
+                     *             "subject": "Interview invitation",
+                     *             "received_at": "2026-07-15T09:00:00Z",
+                     *             "invitation": true
+                     *           }
+                     *         ],
+                     *         "invitations": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["MailRecallResult"];
                     };
@@ -18042,6 +20728,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The job `public_slug`. */
                 slug: string;
             };
             cookie?: never;
@@ -18089,6 +20776,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "requests": 42,
+                     *         "failed": 1,
+                     *         "tokens": 118000,
+                     *         "period": "2026-08-31",
+                     *         "resets_at": "2026-09-01T00:00:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Usage"];
                     };
@@ -18780,6 +21478,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The offer id. */
                 id: string;
             };
             cookie?: never;
@@ -18848,6 +21547,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The report id. (e.g. `3`) */
                 id: string;
             };
             cookie?: never;
@@ -18885,6 +21585,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The report id. (e.g. `3`) */
                 id: string;
             };
             cookie?: never;
@@ -19029,6 +21730,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "eligible": 1903114,
+                     *         "covered": 1897020,
+                     *         "snapshot_covered": 1889512,
+                     *         "queued": 6094,
+                     *         "rate_per_minute": 570.4,
+                     *         "eta_seconds": 641,
+                     *         "snapshot_at": "2026-10-19T09:22:03Z",
+                     *         "measured_at": "2026-10-19T12:04:15Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["EmbeddingProgress"];
                     };
@@ -19060,6 +21775,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "saved": 41200,
+                     *         "applied": 18730,
+                     *         "viewed": 903400,
+                     *         "viewed_since": "2026-09-04",
+                     *         "cvs_uploaded": 2140,
+                     *         "cvs_tailored": 860,
+                     *         "alert_subscribers": 970,
+                     *         "inboxes_connected": 410,
+                     *         "saved_searches": 1290
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Engagement"];
                     };
@@ -19110,8 +21840,14 @@ export interface operations {
     jobsActivity: {
         parameters: {
             query?: {
+                /** @description One of `day`, `week`, `month` (default `day`). (e.g. `week`) */
                 granularity?: string;
+                /**
+                 * @description Start date (UTC). Defaults to a per-granularity window before `to`. (e.g.
+                 *     `2026-01-01`)
+                 */
                 from?: string;
+                /** @description End date (UTC). Defaults to today. (e.g. `2026-06-30`) */
                 to?: string;
             };
             header?: never;
@@ -19126,6 +21862,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "period": "2026-06-01",
+                     *           "added": 120,
+                     *           "removed": 40
+                     *         },
+                     *         {
+                     *           "period": "2026-06-08",
+                     *           "added": 98,
+                     *           "removed": 55
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "granularity": "week",
+                     *         "from": "2025-06-09",
+                     *         "to": "2026-06-08"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["JobsActivity"];
                 };
             };
@@ -19186,6 +21943,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "date": "2026-07-27",
+                     *           "total": 12840,
+                     *           "new": 37
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["GrowthPoint"][];
                     };
@@ -19308,6 +22076,11 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "url": "https://boards.greenhouse.io/acme/jobs/123"
+                 *     }
+                 */
                 "application/json": components["schemas"]["PrefillRequest"];
             };
         };
@@ -19318,6 +22091,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "location": "Remote — EU",
+                     *         "description": "...",
+                     *         "work_mode": "remote",
+                     *         "employment_type": "full_time",
+                     *         "seniority": "senior",
+                     *         "skills": [
+                     *           "go"
+                     *         ],
+                     *         "source": "greenhouse"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SubmissionPrefill"];
                     };
@@ -19339,6 +22129,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The submission id. (e.g. `9`) */
                 id: string;
             };
             cookie?: never;
@@ -19372,6 +22163,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The submission id. (e.g. `9`) */
                 id: string;
             };
             cookie?: never;
@@ -19554,7 +22346,9 @@ export interface operations {
                 cities?: components["parameters"]["TalentQuery.cities"];
                 specializations?: components["parameters"]["TalentQuery.specializations"];
                 min_years?: components["parameters"]["TalentQuery.min_years"];
+                /** @description Page size, 1–100. Defaults to 24. (e.g. `24`) */
                 limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
                 offset?: string;
             };
             header?: never;
@@ -19609,6 +22403,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "total": 3,
+                     *         "facets": {
+                     *           "categories": {
+                     *             "backend": 3
+                     *           },
+                     *           "skills": {
+                     *             "go": 3,
+                     *             "kubernetes": 2,
+                     *             "postgresql": 0
+                     *           },
+                     *           "tz": {
+                     *             "Europe": 2
+                     *           }
+                     *         },
+                     *         "stats": {}
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TalentFacets"];
                         meta?: components["schemas"]["IgnoredMeta"];
@@ -19631,6 +22446,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The member’s minted catalogue handle. (e.g. `backend-7f2a`) */
                 handle: string;
             };
             cookie?: never;
@@ -19780,6 +22596,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "count": 214
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ThreadCount"];
                     };
@@ -19834,6 +22657,7 @@ export interface operations {
             };
             header?: never;
             path: {
+                /** @description The thread id. */
                 id: string;
             };
             cookie?: never;
@@ -19865,6 +22689,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The thread id. */
                 id: string;
             };
             cookie?: never;
@@ -19898,6 +22723,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The thread id. */
                 id: string;
             };
             cookie?: never;

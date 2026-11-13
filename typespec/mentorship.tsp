@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -195,6 +197,7 @@ model MentorshipDecideBody {
 }
 
 /** The public directory. */
+@useAuth(NoAuth)
 @tag("Mentorship")
 @route("/mentors")
 @get
@@ -208,12 +211,14 @@ op listMentors(
   @query limit?: string,
 ): MentorshipDirectoryPage | Problem;
 
+@useAuth(NoAuth)
 @tag("Mentorship")
 @route("/mentors/{slug}")
 @get
 op getMentor(@path slug: string): Data<MentorshipMentor> | Problem;
 
 /** The bookable hours in a window, in the viewer's zone. */
+@useAuth(NoAuth)
 @tag("Mentorship")
 @route("/mentors/{slug}/slots")
 @get
@@ -224,6 +229,7 @@ op getMentorSlots(
   @query timezone?: string,
 ): MentorshipSlotsPage | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/mentors/{slug}/bookings")
 @post
@@ -232,32 +238,38 @@ op bookSession(@path slug: string, @body body: MentorshipBookingBody): {
   @body body: Data<MentorshipBooking>;
 } | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/sessions")
 @get
 op listMySessions(@query limit?: string): MentorshipSessionsPage | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/sessions/{id}")
 @get
 op getSession(@path id: string): Data<MentorshipBooking> | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/sessions/{id}/cancel")
 @post
 op cancelSession(@path id: string, @body body?: MentorshipCancelBody): Data<MentorshipBooking> | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/sessions/{id}/review")
 @put
 op reviewSession(@path id: string, @body body: MentorshipReviewBody): Data<MentorshipReview> | Problem;
 
 /** The owner's own profile whatever its status; null when there is none. */
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @get
 op getMyMentorProfile(): Data<MentorshipOwnMentor | null> | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @post
@@ -266,43 +278,51 @@ op submitMentorProfile(@body body: MentorshipProfileBody): {
   @body body: Data<MentorshipOwnMentor>;
 } | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @put
 op updateMentorProfile(@body body: MentorshipProfileBody): Data<MentorshipOwnMentor> | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile")
 @delete
 op withdrawMentorProfile(): NoContentResponse | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile/pause")
 @post
 op pauseMentorProfile(@body body: MentorshipPauseBody): Data<MentorshipOwnMentor> | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/profile/reactivate")
 @post
 op reactivateMentorProfile(): Data<MentorshipOwnMentor> | Problem;
 
 /** The mentor's whole schedule, weekly rows and dated overrides together. */
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/availability")
 @get
 op getMyAvailability(): MentorshipRulesPage | Problem;
 
 /** The owner's resolved calendar for one month (`month=YYYY-MM`, default the current one). */
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/availability/calendar")
 @get
 op getMyCalendar(@query month?: string): MentorshipCalendarPage | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/availability/weekly")
 @put
 op replaceWeeklyAvailability(@body body: BuddyMockWeekly): NoContentResponse | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/availability/overrides")
 @post
@@ -311,18 +331,22 @@ op addAvailabilityOverride(@body body: BuddyMockRule): {
   @body body: Data<BuddyMockRuleOut>;
 } | Problem;
 
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/availability/{id}")
 @delete
 op deleteAvailabilityRule(@path id: string): NoContentResponse | Problem;
 
 /** Who is coming: the mentor's own sessions, each with the seeker's address. */
+@useAuth(SessionOrKey)
 @tag("Mentorship")
 @route("/me/mentorship/bookings")
 @get
 op listMentorBookings(@query limit?: string): MentorshipSessionsPage | Problem;
 
 /** The moderation queue. Moderators only. */
+@useAuth(SessionOrKey)
+@extension("x-audience", "moderator")
 @tag("Mentorship")
 @route("/mentorship/profiles")
 @get
@@ -333,6 +357,8 @@ op listPendingMentorProfiles(): {
   };
 } | Problem;
 
+@useAuth(SessionOrKey)
+@extension("x-audience", "moderator")
 @tag("Mentorship")
 @route("/mentorship/profiles/{id}/decide")
 @post

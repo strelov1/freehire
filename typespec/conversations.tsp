@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -137,6 +139,7 @@ op sendConversationMessage(@path id: string, @body body: ConversationSendRequest
 op markConversationRead(@path id: string, @body body: ConversationReadRequest): NoContentResponse | Problem;
 
 /** Moderators only: the reported conversations. Page params that do not read fall back to their defaults. */
+@extension("x-audience", "moderator")
 @tag("Conversations")
 @route("/moderation/conversation-reports")
 @get
@@ -147,6 +150,7 @@ op listConversationReports(
 ): ConversationReportsPage | Problem;
 
 /** Moderators only: marks a report handled. Idempotent; 404 for an unknown id. */
+@extension("x-audience", "moderator")
 @tag("Conversations")
 @route("/moderation/conversation-reports/{id}/resolve")
 @post

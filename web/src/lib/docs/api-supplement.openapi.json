@@ -1,0 +1,1772 @@
+{
+  "paths": {
+    "/jobs/{slug}/match-analysis/stream": {
+      "get": {
+        "summary": "Run the match analysis over Server-Sent Events.",
+        "description": "The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the match-analysis endpoints). Not a JSON endpoint.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The job `public_slug`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"kind\":\"stage_start\",\"stage\":1,\"label\":\"Extracting requirements\"}\n\ndata: {\"kind\":\"requirements\",\"requirements\":[ { \"...\": \"...\" } ]}\n\ndata: {\"kind\":\"final\",\"analysis\":{\"overall_score\":82,\"verdict\":\"Strong Fit\",\"...\":\"...\"}}"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
+    "/companies/{slug}": {
+      "get": {
+        "summary": "A company and a page of its open jobs.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size for the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip in the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "company": {
+                      "slug": "acme",
+                      "name": "Acme",
+                      "job_count": 12,
+                      "collections": [
+                        "yc"
+                      ],
+                      "regions": [
+                        "eu"
+                      ],
+                      "countries": [
+                        "DE"
+                      ],
+                      "domains": [
+                        "fintech"
+                      ],
+                      "company_types": [
+                        "product"
+                      ],
+                      "company_sizes": [
+                        "51-200"
+                      ],
+                      "industries": [
+                        "payments"
+                      ],
+                      "year_founded": 2015,
+                      "employee_count": 120,
+                      "hq_country": "DE",
+                      "organization_type": "private",
+                      "tagline": "Payments for builders",
+                      "company_info": {
+                        "...": "..."
+                      },
+                      "remote_regions": [
+                        "eu"
+                      ],
+                      "yc_batch": [
+                        "W21"
+                      ],
+                      "yc_status": [
+                        "active"
+                      ],
+                      "yc_stage": [
+                        "series-a"
+                      ],
+                      "yc_flags": [
+                        "hiring"
+                      ],
+                      "maturity": "growth"
+                    },
+                    "jobs": [
+                      {
+                        "public_slug": "...",
+                        "title": "...",
+                        "...": "..."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/closed-jobs": {
+      "get": {
+        "summary": "A company’s closed postings — the company page’s Closed tab.",
+        "description": "A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100).",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip; `offset + limit` may not exceed 2000.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "backend-engineer-acme-1a2b3c4d",
+                      "title": "Backend Engineer",
+                      "closed_at": "2026-10-01T09:00:00Z"
+                    }
+                  ],
+                  "meta": {
+                    "limit": 20,
+                    "offset": 0,
+                    "has_more": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/hiring": {
+      "get": {
+        "summary": "How one company hires over time — the company page’s Hiring tab.",
+        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "One of `day`, `week`, `month` (default `day`).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "week"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Start date (UTC). Defaults to a per-granularity window before `to`.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-01-01"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "End date (UTC). Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-06-30"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "open": 42,
+                    "open_prev": 30,
+                    "growth": 12,
+                    "views": 2114,
+                    "views_prev": 1800,
+                    "series": [
+                      {
+                        "period": "2026-06-01",
+                        "added": 5,
+                        "removed": 2
+                      },
+                      {
+                        "period": "2026-06-08",
+                        "added": 3,
+                        "removed": 4
+                      }
+                    ],
+                    "lifetime": {
+                      "closed": 37,
+                      "median_days": 21.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Create an account and start a session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "description": "Account email (canonical key).",
+                    "example": "me@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Account password."
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user",
+                    "created_at": "2026-06-19T10:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Sign in and start a session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "description": "Account email.",
+                    "example": "me@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Account password."
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Clear the session cookie.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/oauth/{provider}/start": {
+      "get": {
+        "summary": "Begin the OAuth sign-in redirect.",
+        "description": "Browser-only: redirects to the provider, then back to `/auth/oauth/{provider}/callback`, which sets the session cookie and redirects to the app. Not a JSON endpoint.",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "description": "One of the enabled providers.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "google"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "summary": "Sign out every session on the account, including this one.",
+        "description": "Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/oauth/exchange": {
+      "post": {
+        "summary": "Redeem a mobile OAuth callback code for a session.",
+        "description": "Mobile-only: the app’s custom-scheme OAuth callback carries a single-use code (not the session directly); this exchanges it for the session cookie, landing in the app’s own cookie jar. Public — the code is the credential, and a missing/expired/reused one is a `401`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The one-time code from the mobile callback redirect."
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/extension/connect": {
+      "get": {
+        "summary": "Consent screen for \"Sign in with freehire\" from the browser extension.",
+        "description": "Opened by the extension via `chrome.identity.launchWebAuthFlow`, not called directly — renders an HTML consent page, not JSON. `redirect_uri` must be an allowlisted `https://<extension-id>.chromiumapp.org` origin, or this is a `400`. A signed-out visitor is bounced through sign-in first, then back to this same consent step.",
+        "parameters": [
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "description": "The allowlisted chromiumapp.org redirect the extension is listening on.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Opaque value echoed back on completion.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
+        ]
+      },
+      "post": {
+        "summary": "Submit the consent decision and mint the extension’s session token.",
+        "description": "Submitted by the consent screen’s own form, not called directly. On `decision=allow`, 302-redirects to `redirect_uri` with a session token in the URL fragment (never the query, so it is never logged or sent to a server); on anything else, redirects with `error=access_denied`. Not a JSON endpoint.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "redirect_uri": {
+                    "type": "string",
+                    "description": "Must match the allowlisted redirect validated on the GET step."
+                  },
+                  "state": {
+                    "type": "string",
+                    "description": "Opaque value echoed back."
+                  },
+                  "decision": {
+                    "type": "string",
+                    "description": "`allow` or `cancel`.",
+                    "example": "allow"
+                  }
+                },
+                "required": [
+                  "redirect_uri",
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/me/tracking/swipe": {
+      "get": {
+        "summary": "A batch of open jobs for the swipe triage deck.",
+        "description": "Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params`, exactly as in search. `503` when search is unavailable.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Optional full-text query (as in search).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "golang"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1–100.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip; `offset + limit` ≤ 10000.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "...",
+                      "title": "Senior Go Engineer",
+                      "...": "..."
+                    }
+                  ],
+                  "meta": {
+                    "total": 137,
+                    "limit": 20,
+                    "offset": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Tracking"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/messages": {
+      "post": {
+        "summary": "Send a message and stream the turn as Server-Sent Events.",
+        "description": "Body is `{\"text\": \"...\"}` (max ~8000 characters, deployment-configured). The response is `text/event-stream`, not JSON: each frame is `event: <kind>` plus a `data:` line carrying the JSON event (whose own `type` field repeats the kind). Kinds: `queued` (this turn waited for one already running), `user_prompt`, `assistant_text` / `assistant_thought` (streamed deltas), `tool_use` / `tool_result`, `usage`, and exactly one terminal `result` carrying `stop_reason` (`completed`, `cancelled`, or `error`). The turn keeps running even if you stop reading — stopping it is a separate call to `.../cancel`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Your message.",
+                    "example": "Should I relocate for this role?"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: user_prompt\ndata: {\"type\":\"user_prompt\",\"text\":\"Should I relocate for this role?\"}\n\nevent: assistant_text\ndata: {\"type\":\"assistant_text\",\"text\":\"Based on the salary range...\"}\n\nevent: result\ndata: {\"type\":\"result\",\"stop_reason\":\"completed\"}\n\n"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/opening": {
+      "post": {
+        "summary": "Have the assistant speak first, on an `interview`/`debrief` session.",
+        "description": "Streams one turn under a server-side brief (no body), the same SSE shape as `.../messages`. `409` if the session’s preset does not open by itself, or if it already has an assistant message (an opening cannot be re-run).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/sync": {
+      "post": {
+        "summary": "Catch an `apply` session up on its automatic application.",
+        "description": "When the application has events the conversation has not narrated, streams one turn telling the candidate what changed (no body), the same SSE shape as `.../messages`; otherwise `204` and nothing runs. Not charged to the assistant-message allowance. A turn that fails is narrated again on the next call. `409` for a session that is not an `apply` conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/retry": {
+      "post": {
+        "summary": "Resume after a failed turn, without adding another user message.",
+        "description": "Re-runs the loop over the existing history (no body) — the same SSE shape as `.../messages`. `409 \"nothing to retry\"` when the session has no prior user message.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/autopilot": {
+      "post": {
+        "summary": "Run an unattended CV-tailoring pass as one long streamed turn.",
+        "description": "Session-only, not API-key — an unattended run edits a CV, and the browser is the only place you can watch it happen and undo it. Requires a `tailor` session bound to both a CV and a vacancy (`409` otherwise). Same SSE shape as `.../messages`, no body; every edit lands in one revision batch, so undoing the run is reverting that batch.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/me/resume/extract": {
+      "post": {
+        "summary": "Extract a structured profile from an uploaded résumé (no LLM).",
+        "description": "Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/json` `{ \"text\": ... }`). Returns canonical skill slugs, the categories it spans, and the resolved seniority (omitted when unresolved). When storage is configured it also stores the résumé once.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Résumé plain text (JSON path); or send a PDF as multipart field `file`."
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "skills": [
+                      "go",
+                      "postgresql"
+                    ],
+                    "categories": [
+                      "backend"
+                    ],
+                    "seniority": "senior"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/resume": {
+      "put": {
+        "summary": "Store or replace your résumé.",
+        "description": "Accepts a PDF (multipart `file`) or JSON `{ \"text\": ... }`. Returns the résumé metadata. `501` when object storage is unconfigured.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Résumé plain text (JSON path); or send a PDF as multipart field `file`."
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": true,
+                    "uploaded_at": "2026-06-19T10:00:00Z",
+                    "structured": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/telegram": {
+      "get": {
+        "summary": "Your Telegram link status (for digests).",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "linked": true,
+                    "chat_id": 123456789
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Unlink your Telegram account.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/telegram/link": {
+      "post": {
+        "summary": "Start linking your Telegram account.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://t.me/free_hire_bot?start=..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/discord": {
+      "get": {
+        "summary": "Your Discord link status, and whether the paid role is on it.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "linked": true,
+                    "role_granted": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Unlink your Discord account, giving up the paid role with it.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "linked": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/webhook": {
+      "get": {
+        "summary": "Your webhook destination for saved-search matches, or null if none is configured.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "post": {
+        "summary": "Create your webhook destination, or update its URL if one already exists.",
+        "description": "There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here. Before the URL is stored it receives a test delivery (`saved_search_name` \"freehire webhook test\", an empty `jobs` list); a URL that does not answer it with a 2xx is refused with 422, naming what it answered.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Destination URL — must be http or https.",
+                    "example": "https://example.com/hook"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "patch": {
+        "summary": "Enable or disable your webhook destination without changing its URL.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Whether the destination is enabled.",
+                    "example": "false"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": false,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": "2026-09-04T13:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Delete your webhook destination.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/webhook/test": {
+      "post": {
+        "summary": "Send a test delivery to your stored webhook destination.",
+        "description": "The same sample delivery saving a URL sends. A 2xx answer stamps `last_success_at` and returns the destination; anything else is a 422 naming what the destination answered, and changes nothing. 404 when no destination is configured.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": "2026-09-04T13:00:00Z",
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/password": {
+      "post": {
+        "summary": "Change a known password.",
+        "description": "Revokes every session; your own cookie is re-issued at the new generation, so you stay signed in and everyone else is signed out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "current_password": {
+                    "type": "string",
+                    "description": "Your existing password."
+                  },
+                  "new_password": {
+                    "type": "string",
+                    "description": "The replacement."
+                  }
+                },
+                "required": [
+                  "current_password",
+                  "new_password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me": {
+      "delete": {
+        "summary": "Delete your account and everything under it.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/stats/embeddings/stream": {
+      "get": {
+        "summary": "The same document as server-sent events, one per sample.",
+        "description": "A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: progress\ndata: {\"eligible\":1903114,\"covered\":1897020,\"snapshot_covered\":1889512,\"queued\":6094,\"rate_per_minute\":570.4,\"eta_seconds\":641,\"snapshot_at\":\"2026-10-19T09:22:03Z\",\"measured_at\":\"2026-10-19T12:04:15Z\"}"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/me/referrals/offers": {
+      "post": {
+        "summary": "Offer to refer into a company. Multipart — proof required.",
+        "description": "The proof (an offer letter, badge, anything showing you work there) is stored privately and shown only to a moderator; its storage key is never exposed on the wire. The offer is pending until decided.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "company_slug": {
+                    "type": "string",
+                    "description": "The company you can refer into."
+                  },
+                  "linkedin_url": {
+                    "type": "string",
+                    "description": "Your profile, for the moderator to check against."
+                  },
+                  "proof": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Evidence you work there."
+                  }
+                },
+                "required": [
+                  "company_slug",
+                  "proof"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": "b71e…",
+                    "company_slug": "acme",
+                    "company_name": "Acme",
+                    "status": "pending",
+                    "created_at": "2026-07-28T20:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/me/referrals/incoming/{id}/cv": {
+      "get": {
+        "summary": "View the candidate's CV for one incoming request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/referrals/offers/{id}/proof": {
+      "get": {
+        "summary": "View an offer's proof document.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The offer id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ],
+        "x-audience": "moderator"
+      }
+    },
+    "/me/cvs/{id}/pdf": {
+      "get": {
+        "summary": "Render the CV to PDF.",
+        "description": "Answers 501 on a deployment with no typst binary configured; everything else still works.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The CV id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/photo": {
+      "put": {
+        "summary": "Upload (or replace) your headshot.",
+        "description": "Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": true,
+                    "uploaded_at": "2026-08-18T10:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Whether you have a stored headshot, and when it was uploaded.",
+        "description": "`enabled` is false when object storage is not configured — the client should then offer no upload control at all rather than one that answers `501`. `uploaded_at` doubles as a cache-busting value for the image URL.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": false,
+                    "uploaded_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      },
+      "delete": {
+        "summary": "Remove your stored headshot.",
+        "description": "Returns `204 No Content`.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      }
+    },
+    "/me/photo/image": {
+      "get": {
+        "summary": "The stored headshot itself, as image bytes.",
+        "description": "Not a JSON endpoint — the response is `image/jpeg` with a short private cache lifetime (60s), meant to be busted with `?v=<uploaded_at>`. `404` when no headshot is stored.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      }
+    },
+    "/speech/transcriptions": {
+      "post": {
+        "summary": "Transcribe one short audio recording to text.",
+        "description": "Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "text": "remote go engineer roles in Berlin"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
