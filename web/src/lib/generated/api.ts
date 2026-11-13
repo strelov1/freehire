@@ -21458,6 +21458,16 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "skills": [
+                 *         "go",
+                 *         "kubernetes",
+                 *         "postgresql"
+                 *       ],
+                 *       "query": "work_mode=remote&category=backend&posted_within_days=7"
+                 *     }
+                 */
                 "application/json": components["schemas"]["OnboardingMatchesRequest"];
             };
         };

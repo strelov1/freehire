@@ -18341,6 +18341,14 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/OnboardingMatchesRequest"
+              },
+              "example": {
+                "skills": [
+                  "go",
+                  "kubernetes",
+                  "postgresql"
+                ],
+                "query": "work_mode=remote&category=backend&posted_within_days=7"
               }
             }
           }

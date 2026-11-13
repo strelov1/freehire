@@ -270,7 +270,7 @@ visitor who has no account and so no stored profile. Answers the top ten.
 | `query` | string | no | A `/jobs/search` query string (`work_mode=remote&posted_within_days=7`, ...). An unknown param is named in `meta.ignored_params`. |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/onboarding/matches"
+curl -X POST "https://freehire.me/api/v1/onboarding/matches" -H 'Content-Type: application/json' -d '{"skills":["go","kubernetes","postgresql"],"query":"work_mode=remote&category=backend&posted_within_days=7"}'
 ```
 
 ## Jobs

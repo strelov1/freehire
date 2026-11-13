@@ -34,6 +34,14 @@ model OnboardingMatch {
  */
 @tag("Onboarding")
 @useAuth(NoAuth)
+@opExample(#{
+  parameters: #{
+    body: #{
+      skills: #["go", "kubernetes", "postgresql"],
+      query: "work_mode=remote&category=backend&posted_within_days=7",
+    },
+  },
+})
 @route("/onboarding/matches")
 @post
 op onboardingMatches(@body body: OnboardingMatchesRequest): List<OnboardingMatch> | Problem;
