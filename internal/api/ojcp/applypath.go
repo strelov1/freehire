@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
@@ -65,7 +66,7 @@ type ApplyPath struct {
 // there is one. A nil form is the ordinary case for most of the catalogue, not an error.
 func (p Projector) JobPosting(j jobview.Job, form *applyform.Form) JobPosting {
 	posting := jobPostingFrom(j, p.Origin)
-	posting.OfficialJobURL = p.officialJobURL(j)
+	posting.OfficialJobURL = sources.EmployerURL(p.CanonicalURLProviders, j.Source, j.URL)
 	posting.ApplyPaths = p.applyPaths(j, form, posting.URL)
 	return posting
 }

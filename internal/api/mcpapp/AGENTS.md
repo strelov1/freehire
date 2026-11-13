@@ -330,7 +330,7 @@ schemas to hold the line.
 
 Every tool declares `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: true`.
 Incorrect annotation of these three is a named rejection reason in OpenAI's submission
-guidelines. The block is written once (`readOnly()`) and a test walks the REGISTERED tools
+guidelines. The block is written once (`ReadOnly()`) and a test walks the REGISTERED tools
 rather than a list beside them — checked by removing one annotation and watching it fail.
 
 A tool on the catalogue (anonymous) surface that writes anything belongs behind authentication, which

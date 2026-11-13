@@ -75,28 +75,9 @@ type employerContextInput struct {
 // Handler builds the HTTP handler serving the OJCP tools over MCP's streamable transport.
 // Mount it with Fiber's adaptor at the path the manifest declares as `mcp_endpoint`.
 //
-// It is stateless, as the ChatGPT app's server is (see mcpapp.Handler). A stateful session
-// derives its tool contexts from the `initialize` request, whose fasthttp RequestCtx the
-// adaptor's server recycles once that request ends — so a later call would read another
-// request's user values, and the agent view counts would be attributed to the wrong request
-// or lost. All three tools are reads (a request in, an answer out, nothing remembered
-// between calls), so statelessness costs nothing and each call carries its own context.
+// It is stateless, as the ChatGPT app's server is (see mcpapp.StatelessHandler).
 func Handler(r Reader, origin string) http.Handler {
-	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-		return newServer(r, origin)
-	}, &mcp.StreamableHTTPOptions{Stateless: true})
-}
-
-// readOnly is every tool's annotation block, written once. All three read a catalogue that
-// changes outside the conversation; left unset, MCP's defaults announce a tool that may
-// destroy data, which is what a client then warns a person about.
-func readOnly() *mcp.ToolAnnotations {
-	destructive, openWorld := false, true
-	return &mcp.ToolAnnotations{
-		ReadOnlyHint:    true,
-		DestructiveHint: &destructive,
-		OpenWorldHint:   &openWorld,
-	}
+	return mcpapp.StatelessHandler(func() *mcp.Server { return newServer(r, origin) })
 }
 
 func newServer(r Reader, origin string) *mcp.Server {
@@ -105,7 +86,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 
 	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:         toolSearchJobs,
-		Annotations:  readOnly(),
+		Annotations:  mcpapp.ReadOnly(),
 		OutputSchema: searchJobsOutputSchema,
 		Description: "Search freehire's job catalogue. Returns OJCP JobPostings, each with " +
 			"the application paths it can be applied through and whether an agent can submit " +
@@ -119,7 +100,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 
 	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:         toolGetJobDetail,
-		Annotations:  readOnly(),
+		Annotations:  mcpapp.ReadOnly(),
 		OutputSchema: jobDetailOutputSchema,
 		Description:  "Read one posting in full, by the ojcp_id a search result carries.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in jobDetailInput) (*mcp.CallToolResult, ojcp.JobDetailResponse, error) {
@@ -129,7 +110,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 
 	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:        toolGetEmployerContext,
-		Annotations: readOnly(),
+		Annotations: mcpapp.ReadOnly(),
 		Description: "Read what is known about an employer, by the ojcp_employer_id a " +
 			"posting carries — including how many roles they have open right now.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in employerContextInput) (*mcp.CallToolResult, ojcp.EmployerContextResponse, error) {

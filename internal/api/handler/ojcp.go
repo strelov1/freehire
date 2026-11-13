@@ -16,7 +16,6 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // OJCP REST transport. The three read tools, answered over plain HTTP so the conformance
@@ -171,32 +170,19 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 
 	values, unsupported := input.QueryValues()
 	limit, offset := input.Page()
-
-	params := search.SearchParams{
-		Query:  values.Get("q"),
-		Filter: search.FilterFromValues(values),
-		Sort:   defaultSort(values.Get("q")),
-		Limit:  limit,
-		Offset: offset,
-	}
-	res, err := h.search.Search(ctx, params)
-	outcome := semanticOutcomeFor(params, input.WantsSemantic())
-	if outcome == semanticDropped {
-		// A semantic search over no text is the plain filtered listing, so the flag was not
-		// honoured and says so like any dropped param.
-		unsupported = append(unsupported, "semantic")
-	}
-	semantic := outcome.wire(ojcp.SemanticUnavailable)
+	res, outcome, err := runAgentSearch(ctx, h.search, values, limit, offset, input.WantsSemantic())
 	if err != nil {
 		return ojcp.SearchJobsResponse{}, err
 	}
+	// A semantic search over no text is the plain filtered listing, so the flag was not
+	// honoured and says so like any dropped param.
+	unsupported = outcome.noted(unsupported)
 
 	jobs := make([]ojcp.JobPosting, 0, len(res.Hits))
 	for _, hit := range res.Hits {
 		jobs = append(jobs, h.projector.JobPosting(hit.Job, nil))
 	}
 
-	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 	return ojcp.SearchJobsResponse{
 		Query:             values.Get("q"),
 		TotalResults:      int(res.Total),
@@ -204,7 +190,7 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 		Offset:            offset,
 		Jobs:              jobs,
 		IgnoredParams:     unsupported,
-		Semantic:          semantic,
+		Semantic:          outcome.wire(ojcp.SemanticUnavailable),
 	}.Finalize(), nil
 }
 
@@ -223,23 +209,15 @@ func (h *ojcpHandlers) OJCPJobDetail(c *fiber.Ctx) error {
 
 // JobDetail answers `get_job_detail` with no transport around it.
 func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDetailResponse, error) {
-	row, err := publishedJobBySlug(ctx, h.store, ojcpID)
+	row, view, err := loadAgentJob(ctx, func(ctx context.Context, slug string) (db.Job, error) {
+		return publishedJobBySlug(ctx, h.store, slug)
+	}, h.attachReality, ojcpID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ojcp.JobDetailResponse{}, ojcpmcp.NotFoundError{What: "posting"}
 		}
 		return ojcp.JobDetailResponse{}, err
 	}
-
-	view, err := jobview.FromRow(row)
-	if err != nil {
-		return ojcp.JobDetailResponse{}, err
-	}
-	if h.attachReality != nil {
-		h.attachReality(ctx, row, &view)
-	}
-
-	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
 	return ojcp.JobDetailResponse{
 		Job: h.projector.JobPosting(view, applyFormFor(ctx, h.store, row.ID)),
 	}.Finalize(), nil

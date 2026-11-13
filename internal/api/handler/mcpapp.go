@@ -79,24 +79,12 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 
 	values := in.QueryValues()
 	limit, offset := in.Page()
-
-	params := search.SearchParams{
-		Query:  values.Get("q"),
-		Filter: search.FilterFromValues(values),
-		Sort:   defaultSort(values.Get("q")),
-		Limit:  limit,
-		Offset: offset,
-	}
-	ignored := in.Unsupported()
-	res, err := h.search.Search(ctx, params)
-	outcome := semanticOutcomeFor(params, in.WantsSemantic())
-	if outcome == semanticDropped {
-		// No text to apply it to, so the flag was not honoured and says so like any dropped filter.
-		ignored = append(ignored, "semantic")
-	}
+	res, outcome, err := runAgentSearch(ctx, h.search, values, limit, offset, in.WantsSemantic())
 	if err != nil {
 		return mcpapp.SearchJobsResult{}, err
 	}
+	// A dropped semantic flag had no text to apply to, so it says so like any dropped filter.
+	ignored := outcome.noted(in.Unsupported())
 
 	// The hits carry the index's truncated description and are NOT rehydrated from Postgres.
 	// /agent/jobs/search does rehydrate, deliberately, because a programmatic consumer
@@ -108,7 +96,6 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 		jobs = append(jobs, h.projector.JobSummary(hit.Job))
 	}
 
-	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 	return mcpapp.SearchJobsResult{
 		Query:             values.Get("q"),
 		Total:             int(res.Total),
@@ -123,24 +110,15 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 // JobDetail answers `get_job`.
 func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.JobResult, error) {
 	// A private posting answers NOT FOUND rather than forbidden (see agentJobBySlug).
-	row, err := agentJobBySlug(ctx, h.store, slug)
+	row, view, err := loadAgentJob(ctx, func(ctx context.Context, slug string) (db.Job, error) {
+		return agentJobBySlug(ctx, h.store, slug)
+	}, h.attachReality, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}
 		}
 		return mcpapp.JobResult{}, err
 	}
-
-	view, err := jobview.FromRow(row)
-	if err != nil {
-		return mcpapp.JobResult{}, err
-	}
-	// Computed here, on read, rather than taken from the index: the index's reality class
-	// is frozen at push time, and the ghost signal is never stored at all.
-	if h.attachReality != nil {
-		h.attachReality(ctx, row, &view)
-	}
-	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
 	return h.projector.JobDetail(view, applyFormFor(ctx, h.store, row.ID)), nil
 }
 
