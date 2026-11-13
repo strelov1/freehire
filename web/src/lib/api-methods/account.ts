@@ -235,7 +235,7 @@ export function accountApi({ call, request, requestData }: Http) {
   async function createApiKey(name: string, expiresAt?: string, scope?: string): Promise<CreatedApiKey> {
     return requestData<CreatedApiKey>(
       '/api/v1/me/api-keys',
-      jsonBody('POST', { name, expires_at: expiresAt ?? null, scope }),
+      jsonBody('POST', { name, expires_at: expiresAt ?? null, scope } satisfies components['schemas']['ApiKeyCreate']),
     );
   }
 
