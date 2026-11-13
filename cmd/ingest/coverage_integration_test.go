@@ -77,4 +77,20 @@ func TestCoverageAdapterWiring(t *testing.T) {
 	if _, leaked := got["cfoinsights"]; leaked {
 		t.Error("the answer leaked the folded spelling, which the caller never asked about")
 	}
+	// countries must reach the query too: a GB-only employer does not cover a Slovenian board,
+	// while freshco (no country stated) still does (issue #4412).
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
+		                  company_slug_folded, last_seen_at, countries)
+		VALUES ('workday', 'gb:1', 'https://x.test/gb:1', 'Engineer', 'gb:1', 'Co', 'gbco', 'gbco',
+		        now(), '{gb}')`); err != nil {
+		t.Fatalf("seed gb:1: %v", err)
+	}
+	scoped, err := c.NonAggregatorCompanies(ctx, []string{"gbco", "freshco"}, []string{"himalayas"}, []string{"si"})
+	if err != nil {
+		t.Fatalf("NonAggregatorCompanies scoped: %v", err)
+	}
+	if scoped["gbco"] || !scoped["freshco"] {
+		t.Errorf("scoped to si = %v, want only freshco covered", scoped)
+	}
 }
