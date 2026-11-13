@@ -36,6 +36,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/engage/discordlink"
+	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
@@ -364,9 +365,15 @@ func runServer(cfg config.Settings) error {
 		agentViews = agentViewWriter
 	}
 
+	// Per-account daily API request counts for the account's API page; flushed once more
+	// after app.Shutdown below.
+	apiUsage := apiusage.New(db.New(pool))
+	go apiUsage.Run(ctx, apiUsageFlushInterval)
+
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
 		AgentViews:                  agentViews,
+		APIUsage:                    apiUsage,
 		Cache:                       cache.NewRedisCache(redisClient),
 		FrontendOrigin:              cfg.FrontendOrigin,
 		AuthIntrospectionSecret:     cfg.AuthIntrospectionSecret,
@@ -465,6 +472,11 @@ func runServer(cfg config.Settings) error {
 	}
 	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
 	agentViewWriter.Close()
+	flushCtx, cancelFlush := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFlush()
+	if err := apiUsage.Flush(flushCtx); err != nil {
+		log.Printf("apiusage: final flush: %v", err)
+	}
 	return nil
 }
 
@@ -546,6 +558,10 @@ const siteStatusSampleInterval = 5 * time.Minute
 // where the index completes it. That is the whole reason a ticker is enough and a
 // build notification is not worth its plumbing.
 const suggestRefreshInterval = time.Hour
+
+// apiUsageFlushInterval is how often buffered API request counts are written, and so how
+// many a crash can lose.
+const apiUsageFlushInterval = time.Minute
 
 // startSuggestRefresh keeps the recognition set current in the background.
 //

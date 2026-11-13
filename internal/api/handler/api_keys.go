@@ -172,6 +172,28 @@ func (h *authHandlers) GetApiPlan(ctx context.Context) (*apigen.GetApiPlanOK, er
 	return &apigen.GetApiPlanOK{Data: out}, nil
 }
 
+// apiUsageDays is how far back the account's API page charts its requests.
+const apiUsageDays = 30
+
+// GetApiUsage reports the caller's API requests per UTC day over the last apiUsageDays
+// days (today included). Cookie-only, like the rest of key management.
+func (h *authHandlers) GetApiUsage(ctx context.Context) (*apigen.GetApiUsageOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	since := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -(apiUsageDays - 1))
+	rows, err := h.queries.ListAPIUsage(ctx, db.ListAPIUsageParams{UserID: userID, Since: pgtype.Date{Time: since, Valid: true}})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]apigen.ApiUsageDay, len(rows))
+	for i, r := range rows {
+		out[i] = apigen.ApiUsageDay{Day: r.Day.Time, Requests: r.Requests, Errors: r.Errors}
+	}
+	return &apigen.GetApiUsageOK{Data: out}, nil
+}
+
 func apiPlanFrom(row db.GetUserAPIEntitlementRow, now time.Time) apiPlanResponse {
 	apiUntil, dataUntil := row.ApiUntilStripe.Time, row.ApiDataUntilStripe.Time
 	out := apiPlanResponse{Tier: billing.APITierOf(apiUntil, dataUntil, now)}

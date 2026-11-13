@@ -21,6 +21,11 @@ type Querier interface {
 	// than a silent re-stamp of verified_at. An unconfirmed work email is the same miss: a
 	// moderator must never be able to activate a claim on an address nobody proved they read.
 	ActivateCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
+	// Adds one flush of buffered counts: parallel arrays, one element per (account, day).
+	// Additive, so two API processes (blue and green during a flip) flushing the same day
+	// both land.
+	// An account deleted between the request and the flush has nothing left to count against.
+	AddAPIUsage(ctx context.Context, arg AddAPIUsageParams) error
 	// Add a batch all-or-nothing: when the new slugs would take the list past the limit nothing
 	// is written. Slugs already stored are skipped and do not count toward it. `fresh` is how
 	// many were new and `inserted` how many were written, so fresh > 0 with inserted = 0 is the
@@ -3816,6 +3821,9 @@ type Querier interface {
 	// A user's API keys, newest first. Metadata only — never the token_hash. scope is
 	// included so a user can see what each credential is allowed to do.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
+	// The account's daily counts from `since` (a UTC date) on, oldest first. Days with no
+	// requests have no row.
+	ListAPIUsage(ctx context.Context, arg ListAPIUsageParams) ([]ListAPIUsageRow, error)
 	// The boards cmd/ingest crawls for one provider: pending (unproven, still crawled) and
 	// active. Ordered by id for a stable crawl order across runs.
 	ListActiveBoardsForProvider(ctx context.Context, provider string) ([]Board, error)

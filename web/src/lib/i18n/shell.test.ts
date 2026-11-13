@@ -24,8 +24,8 @@ describe('account nav label catalog', () => {
   // A section whose Russian label is legitimately the same word as its English
   // one belongs here, so that "translated to identical text" stays a deliberate,
   // reviewed statement rather than something the drift check cannot tell from
-  // "nobody wrote a translation". Empty today.
-  const SAME_IN_RUSSIAN = new Set<string>();
+  // "nobody wrote a translation". "API" is the product's name in both languages.
+  const SAME_IN_RUSSIAN = new Set<string>(['/my/api']);
 
   it('has an English label for every navigation section', () => {
     const missing = hrefs.filter((href) => !(href in en));

@@ -952,6 +952,46 @@ func (s *ApiKeyPlanTier) UnmarshalText(data []byte) error {
 	}
 }
 
+// The account's API requests on one UTC day.
+// Ref: #/components/schemas/ApiUsageDay
+type ApiUsageDay struct {
+	Day time.Time `json:"day"`
+	// Requests that reached the API with one of the account's credentials.
+	Requests int64 `json:"requests"`
+	// The part of `requests` answered with a 4xx or 5xx.
+	Errors int64 `json:"errors"`
+}
+
+// GetDay returns the value of Day.
+func (s *ApiUsageDay) GetDay() time.Time {
+	return s.Day
+}
+
+// GetRequests returns the value of Requests.
+func (s *ApiUsageDay) GetRequests() int64 {
+	return s.Requests
+}
+
+// GetErrors returns the value of Errors.
+func (s *ApiUsageDay) GetErrors() int64 {
+	return s.Errors
+}
+
+// SetDay sets the value of Day.
+func (s *ApiUsageDay) SetDay(val time.Time) {
+	s.Day = val
+}
+
+// SetRequests sets the value of Requests.
+func (s *ApiUsageDay) SetRequests(val int64) {
+	s.Requests = val
+}
+
+// SetErrors sets the value of Errors.
+func (s *ApiUsageDay) SetErrors(val int64) {
+	s.Errors = val
+}
+
 // Ref: #/components/schemas/ApplyJob
 type ApplyJob struct {
 	// The day the application was sent, `2026-07-29`. Absent, null or empty means now.
@@ -1457,6 +1497,8 @@ type AuthUser struct {
 	Tier AuthUserTier `json:"tier"`
 	// Whether the account holds a live API key or MCP grant.
 	AgentConnected bool `json:"agent_connected"`
+	// The API product tier the account holds (see ApiKeyPlan); empty for none.
+	APITier AuthUserAPITier `json:"api_tier"`
 }
 
 // GetID returns the value of ID.
@@ -1519,6 +1561,11 @@ func (s *AuthUser) GetAgentConnected() bool {
 	return s.AgentConnected
 }
 
+// GetAPITier returns the value of APITier.
+func (s *AuthUser) GetAPITier() AuthUserAPITier {
+	return s.APITier
+}
+
 // SetID sets the value of ID.
 func (s *AuthUser) SetID(val int64) {
 	s.ID = val
@@ -1577,6 +1624,60 @@ func (s *AuthUser) SetTier(val AuthUserTier) {
 // SetAgentConnected sets the value of AgentConnected.
 func (s *AuthUser) SetAgentConnected(val bool) {
 	s.AgentConnected = val
+}
+
+// SetAPITier sets the value of APITier.
+func (s *AuthUser) SetAPITier(val AuthUserAPITier) {
+	s.APITier = val
+}
+
+// The API product tier the account holds (see ApiKeyPlan); empty for none.
+type AuthUserAPITier string
+
+const (
+	AuthUserAPITierEmpty   AuthUserAPITier = ""
+	AuthUserAPITierAPI     AuthUserAPITier = "api"
+	AuthUserAPITierAPIData AuthUserAPITier = "api_data"
+)
+
+// AllValues returns all AuthUserAPITier values.
+func (AuthUserAPITier) AllValues() []AuthUserAPITier {
+	return []AuthUserAPITier{
+		AuthUserAPITierEmpty,
+		AuthUserAPITierAPI,
+		AuthUserAPITierAPIData,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s AuthUserAPITier) MarshalText() ([]byte, error) {
+	switch s {
+	case AuthUserAPITierEmpty:
+		return []byte(s), nil
+	case AuthUserAPITierAPI:
+		return []byte(s), nil
+	case AuthUserAPITierAPIData:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *AuthUserAPITier) UnmarshalText(data []byte) error {
+	switch AuthUserAPITier(data) {
+	case AuthUserAPITierEmpty:
+		*s = AuthUserAPITierEmpty
+		return nil
+	case AuthUserAPITierAPI:
+		*s = AuthUserAPITierAPI
+		return nil
+	case AuthUserAPITierAPIData:
+		*s = AuthUserAPITierAPIData
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
 // Ref: #/components/schemas/AuthUserTier
@@ -10203,6 +10304,21 @@ func (s *GetApiPlanOK) GetData() ApiKeyPlan {
 
 // SetData sets the value of Data.
 func (s *GetApiPlanOK) SetData(val ApiKeyPlan) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetApiUsageOK struct {
+	Data []ApiUsageDay `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetApiUsageOK) GetData() []ApiUsageDay {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetApiUsageOK) SetData(val []ApiUsageDay) {
 	s.Data = val
 }
 

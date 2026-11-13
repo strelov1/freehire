@@ -3,8 +3,12 @@ package handler
 import (
 	"crypto/subtle"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/identity/apiusage"
 )
 
 const localsExternalCallerID = "external_caller_user_id"
@@ -23,5 +27,28 @@ func externalCaller(secret string) fiber.Handler {
 		c.Request().Header.Del(authIntrospectionSecretHeader)
 		c.Request().Header.Del("X-FH-Auth-User")
 		return c.Next()
+	}
+}
+
+// countAPIUsage counts a request toward its account's API usage when the gateway
+// attributed it to an account (externalCaller) and it carries a Bearer credential, so a
+// signed-in visitor browsing the site is never counted. The status is read after the
+// chain: an error the error handler has not rendered yet is counted by its code.
+func countAPIUsage(counter *apiusage.Counter) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID, _ := c.Locals(localsExternalCallerID).(int64)
+		if userID == 0 || !strings.HasPrefix(c.Get(fiber.HeaderAuthorization), "Bearer ") {
+			return c.Next()
+		}
+		err := c.Next()
+		status := c.Response().StatusCode()
+		if err != nil {
+			status = fiber.StatusInternalServerError
+			if fe, ok := err.(*fiber.Error); ok {
+				status = fe.Code
+			}
+		}
+		counter.Record(userID, status >= 400, time.Now())
+		return err
 	}
 }

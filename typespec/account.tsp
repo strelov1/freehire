@@ -45,6 +45,9 @@ model AuthUser {
 
   /** Whether the account holds a live API key or MCP grant. */
   agent_connected: boolean;
+
+  /** The API product tier the account holds (see ApiKeyPlan); empty for none. */
+  api_tier: "" | "api" | "api_data";
 }
 
 model AccountTimezoneUpdate {
@@ -124,6 +127,17 @@ model ApiKeyPlan {
   tier: "" | "api" | "api_data";
 
   until?: utcDateTime;
+}
+
+/** The account's API requests on one UTC day. */
+model ApiUsageDay {
+  day: plainDate;
+
+  /** Requests that reached the API with one of the account's credentials. */
+  requests: int64;
+
+  /** The part of `requests` answered with a 4xx or 5xx. */
+  errors: int64;
 }
 
 /** A connected MCP client. */
@@ -339,6 +353,12 @@ op revokeApiKey(@path id: string): NoContentResponse | Problem;
 @route("/me/api-plan")
 @get
 op getApiPlan(): Data<ApiKeyPlan> | Problem;
+
+/** The last 30 UTC days, oldest first; a day without requests is absent. */
+@tag("Account")
+@route("/me/api-usage")
+@get
+op getApiUsage(): Data<ApiUsageDay[]> | Problem;
 
 @tag("Account")
 @route("/me/oauth-grants")

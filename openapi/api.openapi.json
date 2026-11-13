@@ -6970,6 +6970,50 @@
         ]
       }
     },
+    "/me/api-usage": {
+      "get": {
+        "operationId": "getApiUsage",
+        "description": "The last 30 UTC days, oldest first; a day without requests is absent.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiUsageDay"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Account"
+        ]
+      }
+    },
     "/me/applications/{id}": {
       "patch": {
         "operationId": "trackApplication",
@@ -21127,6 +21171,31 @@
           }
         }
       },
+      "ApiUsageDay": {
+        "type": "object",
+        "required": [
+          "day",
+          "requests",
+          "errors"
+        ],
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Requests that reached the API with one of the account's credentials."
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The part of `requests` answered with a 4xx or 5xx."
+          }
+        },
+        "description": "The account's API requests on one UTC day."
+      },
       "ApplyJob": {
         "type": "object",
         "properties": {
@@ -21375,7 +21444,8 @@
           "language",
           "onboarding_completed_at",
           "tier",
-          "agent_connected"
+          "agent_connected",
+          "api_tier"
         ],
         "properties": {
           "id": {
@@ -21445,6 +21515,15 @@
           "agent_connected": {
             "type": "boolean",
             "description": "Whether the account holds a live API key or MCP grant."
+          },
+          "api_tier": {
+            "type": "string",
+            "enum": [
+              "",
+              "api",
+              "api_data"
+            ],
+            "description": "The API product tier the account holds (see ApiKeyPlan); empty for none."
           }
         },
         "description": "The account as the SPA and the CLI read it."

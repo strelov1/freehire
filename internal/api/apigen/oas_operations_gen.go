@@ -106,6 +106,7 @@ const (
 	ForgotPasswordOperation               OperationName = "ForgotPassword"
 	GetAgentPermissionsOperation          OperationName = "GetAgentPermissions"
 	GetApiPlanOperation                   OperationName = "GetApiPlan"
+	GetApiUsageOperation                  OperationName = "GetApiUsage"
 	GetApplicationFollowUpOperation       OperationName = "GetApplicationFollowUp"
 	GetAssistantSessionOperation          OperationName = "GetAssistantSession"
 	GetAtsReportOperation                 OperationName = "GetAtsReport"

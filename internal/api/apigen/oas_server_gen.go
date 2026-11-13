@@ -586,6 +586,12 @@ type Handler interface {
 	//
 	// GET /me/api-plan
 	GetApiPlan(ctx context.Context) (*GetApiPlanOK, error)
+	// GetApiUsage implements getApiUsage operation.
+	//
+	// The last 30 UTC days, oldest first; a day without requests is absent.
+	//
+	// GET /me/api-usage
+	GetApiUsage(ctx context.Context) (*GetApiUsageOK, error)
 	// GetApplicationFollowUp implements getApplicationFollowUp operation.
 	//
 	// Offered only when the application is in the silent state the tracking board’s own badge uses — a
