@@ -5,7 +5,7 @@
 // carries that slug as its display name — which leaks into the UI, the public
 // /companies/<slug> URL, and breaks logo.dev name resolution.
 //
-//	backfill-company-names [--dry-run]   # needs DATABASE_URL
+//	backfill-company-names [--dry-run] [--provider=paycor]   # needs DATABASE_URL
 //
 // It touches only companies whose name is still slug-like AND that have open
 // jobs, resolves a candidate name per board (bounded-concurrent HTTP), and
@@ -80,6 +80,7 @@ func main() { worker.Main(run) }
 
 func run() int {
 	dryRun := flag.Bool("dry-run", false, "print proposed renames without writing")
+	provider := flag.String("provider", "", "run only the placeholder pass, for this one provider (e.g. paycor)")
 	flag.Parse()
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -93,10 +94,12 @@ func run() int {
 	client := sources.NewClient()
 	registry := companyname.NewRegistry(client)
 
-	rows, err := queries.ListSlugLikeCompaniesForBackfill(ctx)
-	if err != nil {
-		log.Printf("list companies: %v", err)
-		return 1
+	var rows []db.ListSlugLikeCompaniesForBackfillRow
+	if *provider == "" {
+		if rows, err = queries.ListSlugLikeCompaniesForBackfill(ctx); err != nil {
+			log.Printf("list companies: %v", err)
+			return 1
+		}
 	}
 
 	renames, stats := resolveNames(ctx, rows, registry)
@@ -111,7 +114,9 @@ func run() int {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if lcfg := config.LoadLLM(); lcfg.Require() == nil {
+	if *provider != "" && *provider != "adp" {
+		// No model for a run that cannot use it.
+	} else if lcfg := config.LoadLLM(); lcfg.Require() == nil {
 		model, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "company-names")
 		if err != nil {
 			log.Printf("llm: %v", err)
@@ -124,6 +129,14 @@ func run() int {
 		placeholders["adp"] = postingTextResolver{q: queries, model: model, source: "adp"}
 	} else {
 		log.Printf("LLM_* not configured: adp placeholder boards are left for a run that has it")
+	}
+	if *provider != "" {
+		r, ok := placeholders[*provider]
+		if !ok {
+			log.Printf("--provider=%s: no placeholder resolver for it", *provider)
+			return 1
+		}
+		placeholders = companyname.Registry{*provider: r}
 	}
 	boards, err := queries.ListPlaceholderCompanyBoards(ctx, slices.Sorted(maps.Keys(placeholders)))
 	if err != nil {

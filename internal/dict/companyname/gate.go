@@ -183,3 +183,10 @@ func cutSuffixFold(s, suffix string) (string, bool) {
 	}
 	return s, false
 }
+
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return s[len(prefix):], true
+	}
+	return s, false
+}

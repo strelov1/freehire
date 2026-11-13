@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/dict/companyname"
 )
 
 // paycorProber validates a Paycor Recruiting clientId by counting the postings its
@@ -16,9 +18,9 @@ import (
 // listing renders the board's whole open catalogue with no pagination — and because that list
 // is complete the prober can also answer the expected-id check.
 //
-// It publishes no employer name. A tenant themes its listing with its own website chrome, so
-// the page title is marketing copy rather than a name, and the seed's company is what labels
-// the entry; the expected-id check is what ties that name to the board. See
+// Only the branded listing template names the employer, in its <title> (read by
+// companyname.ExtractPaycorTitle, which also backfills existing boards); the plain template
+// names nobody, and the seed's company labels the entry. See
 // internal/ingest/sources/paycor.go for the board format.
 type paycorProber struct{}
 
@@ -53,7 +55,7 @@ const paycorJobAction = "JobIntroduction.action"
 func (paycorProber) dedupKey(clientID string) string { return strings.ToLower(clientID) }
 
 func (p paycorProber) probe(ctx context.Context, c httpClient, clientID string) (string, int, error) {
-	ids, placeholderTitles, err := p.postingIDsAndPlaceholderTitleCount(ctx, c, clientID)
+	ids, placeholderTitles, title, err := p.readListing(ctx, c, clientID)
 	if err != nil {
 		// A missing or closed board 404s and the client surfaces it as an error. For harvest
 		// that just means "not a live paycor board" — skip silently, do not propagate.
@@ -63,31 +65,32 @@ func (p paycorProber) probe(ctx context.Context, c httpClient, clientID string) 
 		placeholderTitles*100 >= len(ids)*paycorPlaceholderTitlePercent {
 		return "", 0, nil
 	}
-	return "", len(ids), nil
+	return companyname.ExtractPaycorTitle(title), len(ids), nil
 }
 
 // postingIDs lists the board's live posting ids. The listing renders every open posting in
 // one page, so an id it does not carry is genuinely not on the board.
 func (paycorProber) postingIDs(ctx context.Context, c httpClient, clientID string) ([]string, error) {
-	ids, _, err := (paycorProber{}).postingIDsAndPlaceholderTitleCount(ctx, c, clientID)
+	ids, _, _, err := (paycorProber{}).readListing(ctx, c, clientID)
 	return ids, err
 }
 
-// postingIDsAndPlaceholderTitleCount reads the complete listing and counts unique postings
-// whose title signals a vendor placeholder, even when an earlier link for that posting is an
-// untitled Apply link.
-func (paycorProber) postingIDsAndPlaceholderTitleCount(ctx context.Context, c httpClient, clientID string) ([]string, int, error) {
+// readListing reads the complete listing: its posting ids, how many unique postings carry a
+// vendor-placeholder title (even when an earlier link for that posting is an untitled Apply
+// link), and the page <title>.
+func (paycorProber) readListing(ctx context.Context, c httpClient, clientID string) (ids []string, placeholderTitles int, title string, err error) {
 	root, err := c.GetHTML(ctx, fmt.Sprintf(
 		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=%s", clientID))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
-	var ids []string
 	seen := map[string]bool{}
 	placeholderSeen := map[string]bool{}
-	placeholderTitles := 0
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "title" && title == "" && n.FirstChild != nil {
+			title = n.FirstChild.Data
+		}
 		if n.Type == html.ElementNode && n.Data == "a" {
 			for _, a := range n.Attr {
 				if a.Key != "href" {
@@ -112,7 +115,7 @@ func (paycorProber) postingIDsAndPlaceholderTitleCount(ctx context.Context, c ht
 		}
 	}
 	visit(root)
-	return ids, placeholderTitles, nil
+	return ids, placeholderTitles, title, nil
 }
 
 // paycorListingTitle prefers Paycor's title-bearing ns-qa attribute, then uses visible link text.
