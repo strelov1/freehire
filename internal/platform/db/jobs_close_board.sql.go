@@ -368,16 +368,24 @@ func (q *Queries) CloseUnseenJobByID(ctx context.Context, id int64) (int64, erro
 }
 
 const closeUnseenJobsBySource = `-- name: CloseUnseenJobsBySource :one
-WITH closed AS (
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = $1
+      AND a.last_seen_at < $2
+      AND NOT (j.external_id LIKE ANY(COALESCE($3::text[], '{}')))
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $1
-      AND last_seen_at < $2
-      AND NOT (external_id LIKE ANY(COALESCE($3::text[], '{}')))
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed
@@ -407,6 +415,7 @@ type CloseUnseenJobsBySourceParams struct {
 // company-scoped CloseUnseenJobs cannot reach. cmd/ingest calls this ONLY after a zero-Failed run
 // of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 // otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
+// Locking and freshness recheck: see CloseUnseenJobs (jobs_close_unseen.sql).
 func (q *Queries) CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error) {
 	row := q.db.QueryRow(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff, arg.SkippedBoardPatterns)
 	var count int64
@@ -600,12 +609,13 @@ func (q *Queries) CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmpty
 }
 
 const unseenJobIDs = `-- name: UnseenJobIDs :many
-SELECT id FROM jobs
-WHERE closed_at IS NULL
-  AND source = $1
-  AND last_seen_at < $2
-  AND company_slug = ANY($3::text[])
-  AND NOT (external_id LIKE ANY(COALESCE($4::text[], '{}')))
+SELECT j.id FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.source = $1
+  AND a.last_seen_at < $2
+  AND j.company_slug = ANY($3::text[])
+  AND NOT (j.external_id LIKE ANY(COALESCE($4::text[], '{}')))
 `
 
 type UnseenJobIDsParams struct {
@@ -651,11 +661,12 @@ func (q *Queries) UnseenJobIDs(ctx context.Context, arg UnseenJobIDsParams) ([]i
 }
 
 const unseenJobIDsBySource = `-- name: UnseenJobIDsBySource :many
-SELECT id FROM jobs
-WHERE closed_at IS NULL
-  AND source = $1
-  AND last_seen_at < $2
-  AND NOT (external_id LIKE ANY(COALESCE($3::text[], '{}')))
+SELECT j.id FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.source = $1
+  AND a.last_seen_at < $2
+  AND NOT (j.external_id LIKE ANY(COALESCE($3::text[], '{}')))
 `
 
 type UnseenJobIDsBySourceParams struct {

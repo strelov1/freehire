@@ -206,6 +206,7 @@ const enqueueSearchTimeCrossings = `-- name: EnqueueSearchTimeCrossings :execrow
 INSERT INTO search_outbox (job_id, job_posted_at)
 SELECT j.id, COALESCE(j.posted_at, j.created_at)
 FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
 CROSS JOIN LATERAL (
     SELECT ($1::bigint[])[array_position($2::text[], j.source)] AS secs
 ) w
@@ -222,8 +223,8 @@ WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
           AND j.posted_at <= $5::timestamptz - make_interval(days => d.days)
     )
     OR (w.secs IS NOT NULL
-        AND j.last_seen_at >  $4::timestamptz - make_interval(secs => w.secs)
-        AND j.last_seen_at <= $5::timestamptz - make_interval(secs => w.secs))
+        AND a.last_seen_at >  $4::timestamptz - make_interval(secs => w.secs)
+        AND a.last_seen_at <= $5::timestamptz - make_interval(secs => w.secs))
   )
 ORDER BY j.id
 ON CONFLICT (job_id) DO NOTHING
@@ -249,8 +250,9 @@ type EnqueueSearchTimeCrossingsParams struct {
 //
 // Nothing else would ever queue them, so without this pass they waited for a full rebuild.
 // A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
-// One sequential pass over the open rows: last_seen_at is deliberately in no index (the
-// liveness touch must stay heap-only), so the caller runs this a few times a day.
+// One sequential pass over the open rows: last_seen_at (job_activity's, joined by primary key) is
+// deliberately in no index (the liveness touch must stay heap-only), so the caller runs this a
+// few times a day.
 // DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
 // thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
 // locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An

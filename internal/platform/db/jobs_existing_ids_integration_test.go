@@ -261,9 +261,11 @@ func TestExistingExternalIDsWithholdsStaleBodiesInSlot(t *testing.T) {
 			t.Fatalf("upsert %s: %v", ext, err)
 		}
 	}
-	// UpsertJob stamps hydrated_at = now(), so age one row by hand rather than waiting.
+	// UpsertJob stamps hydrated_at = now(), so age one row by hand rather than waiting. The seen-set
+	// reads job_activity.hydrated_at.
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET hydrated_at = now() - interval '90 days' WHERE external_id = 'acme:stale'`,
+		`UPDATE job_activity a SET hydrated_at = now() - interval '90 days'
+		 FROM jobs j WHERE j.id = a.job_id AND j.external_id = 'acme:stale'`,
 	); err != nil {
 		t.Fatalf("age acme:stale: %v", err)
 	}
@@ -313,7 +315,7 @@ func TestExistingExternalIDsTreatsNullHydratedAtAsStale(t *testing.T) {
 	if _, err := ingestUpsert(ctx, q, ingestParams("acme:legacy", "Engineer")); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET hydrated_at = NULL`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE job_activity SET hydrated_at = NULL`); err != nil {
 		t.Fatalf("clear hydrated_at: %v", err)
 	}
 
@@ -349,7 +351,7 @@ func TestExistingExternalIDsSlicesStaleRowsAcrossRuns(t *testing.T) {
 			t.Fatalf("upsert %s: %v", ext, err)
 		}
 	}
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET hydrated_at = now() - interval '90 days'`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE job_activity SET hydrated_at = now() - interval '90 days'`); err != nil {
 		t.Fatalf("age rows: %v", err)
 	}
 

@@ -278,7 +278,7 @@ func TestUpsertManualJobClearsItsCloseReason(t *testing.T) {
 
 	author := insertUser(t, pool, "moderator@example.test")
 	manual := manualParams("https://example.test/manual", "Engineer", author, author)
-	job, err := q.UpsertManualJob(ctx, manual)
+	job, err := upsertManual(ctx, q, manual)
 	if err != nil {
 		t.Fatalf("manual upsert: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestUpsertManualJobClearsItsCloseReason(t *testing.T) {
 
 	// Re-submitting the same posting re-asserts it. It must not carry the moderator's
 	// label into its second life.
-	if _, err := q.UpsertManualJob(ctx, manual); err != nil {
+	if _, err := upsertManual(ctx, q, manual); err != nil {
 		t.Fatalf("manual re-upsert: %v", err)
 	}
 	if isClosed(t, pool, job.ID) {

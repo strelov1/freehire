@@ -102,6 +102,8 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 				reset(t)
 				id := insertChunkTestJob(t, pool, "seen", "acme")
 				exec(t, "UPDATE jobs SET last_seen_at = $1 WHERE id = $2", ts(tc.lastSeen), id)
+				// job_activity is what readers compare and the bridge never lowers it, so age it directly.
+				exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(tc.lastSeen), id)
 				clearOutbox(t, pool)
 
 				if _, err := q.TouchJob(ctx, TouchJobParams{
@@ -115,6 +117,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 
 				// The cheap re-crawl write: same rule. The match key is the row's own state.
 				exec(t, "UPDATE jobs SET last_seen_at = $1, content_hash = 'h' WHERE id = $2", ts(tc.lastSeen), id)
+				exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(tc.lastSeen), id)
 				clearOutbox(t, pool)
 				if _, err := q.RefreshUnchangedJob(ctx, RefreshUnchangedJobParams{
 					Source: "test", ExternalID: "seen", ContentHash: pgtype.Text{String: "h", Valid: true},
@@ -136,6 +139,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "held", "acme")
 		exec(t, "UPDATE jobs SET last_seen_at = $1 WHERE id = $2", ts(-20*24*time.Hour), id)
+		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-20*24*time.Hour), id)
 		clearOutbox(t, pool)
 		exec(t, "INSERT INTO search_outbox (job_id, job_posted_at, claimed_at) VALUES ($1, now(), now())", id)
 		var heldEntry int64
@@ -167,7 +171,9 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-15*24*time.Hour-time.Hour), crossedAge)
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-10*24*time.Hour), young)
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
+		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
 		exec(t, "UPDATE jobs SET source = 'nowindow', created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
+		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
 		exec(t, "UPDATE jobs SET created_at = $1, posted_at = $2, last_seen_at = now() WHERE id = $3",
 			ts(-100*24*time.Hour), ts(-15*24*time.Hour-time.Hour), repostedFresh)
 		clearOutbox(t, pool)

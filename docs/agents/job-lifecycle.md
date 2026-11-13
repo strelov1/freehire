@@ -9,6 +9,7 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 - A job is open while `closed_at IS NULL`. Closing is a soft state; nothing hard-deletes jobs. (`cmd/prune`, which removed non-IT postings into `pruned_jobs`, was retired once the catalogue grew broader than IT: `closed_at` means only "the employer took this down".)
 - A closed row keeps its `public_slug`, enrichment and `user_jobs` references; reopening is free.
 - List, search and company surfaces filter `closed_at IS NULL`. Detail still serves a closed job (with `closed_at`) so links and history don't break.
+- Catalogue sweeps exclude private postings, even when their source and age match a sweep.
 - The ingest write stamps `last_seen_at` on every crawl (`RefreshUnchangedJob` when unchanged, `UpsertJob` otherwise). The post-run sweep closes a provider's jobs unseen for 48h. A reappearing posting reopens via the upsert.
 - A board the run SKIPPED (failure cooldown, or the up-to-72h quiet pause of a board whose listing keeps coming back unchanged, see [internal/ingest/pipeline/AGENTS.md](../../internal/ingest/pipeline/AGENTS.md)) is excluded from the company- and source-scoped sweeps (`Stats.SkippedBoards`): its rows were not looked at, so their age proves nothing. The board-scoped close acts only on boards the run finished, so it never reaches one.
 - Self-closing sources (`jobtech`, etc.) are excluded from the unseen sweep; the feed's `removed` events are the authoritative close signal.
@@ -19,6 +20,20 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 - An open posting its source has not shown for more than 14 days (`last_seen_at`) is **hidden from search, not closed** (see "The unseen safety net"). It stays open, its page serves, and it returns when its source lists it again.
 
 ## How it works
+
+Observation state (`last_seen_at`, `hydrated_at`, `liveness_strikes`) is read from
+`job_activity`, keyed by `jobs.id`. `jobs_read` combines it with posting content for
+the existing `db.Job` shape. An insert trigger creates activity even for raw SQL
+inserts. During the compatible rollout, legacy writers still update `jobs`; a
+one-way bridge mirrors them into activity without regressing timestamps. This
+reader release alone does not reduce observation writes.
+
+Closers that depend on freshness lock `jobs` then `job_activity` with
+`FOR NO KEY UPDATE` and recheck the observation after waiting. A plain join in an
+`UPDATE jobs` does not recheck a concurrently refreshed activity tuple. The
+activity `state_version` changes on lifecycle or cheap-match-key changes; reopening
+resets strikes. The later activity-only writer release must wait for every legacy
+reader process to exit, including crawler and liveness workers.
 
 Seven independent mechanisms write `closed_at`, each covering a gap the others can't reach. Six close on evidence; the age rule (4) guesses, which is why every close records its mechanism. The safety nets (5) and (6) read a board's history, not a posting: (5) nothing could reach the board for weeks, (6) everything reached it and found nothing.
 

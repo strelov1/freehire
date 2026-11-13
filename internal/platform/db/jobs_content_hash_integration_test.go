@@ -21,7 +21,11 @@ import (
 // the generated `upsertJob` query-string constant.)
 func ingestUpsert(ctx context.Context, q *Queries, p UpsertJobParams) (Job, error) {
 	row, err := q.UpsertJob(ctx, p)
-	return row.Job, err
+	if err != nil {
+		return Job{}, err
+	}
+	// The upsert returns narrow columns; the complete row is read back through jobs_read.
+	return q.GetJob(ctx, row.ID)
 }
 
 func TestUpsertJobReportsInsertedAndChanged(t *testing.T) {
@@ -59,8 +63,8 @@ func TestUpsertJobReportsInsertedAndChanged(t *testing.T) {
 	if r2.Changed {
 		t.Error("unchanged re-ingest: changed = true, want false")
 	}
-	if r2.Job.ID != r1.Job.ID {
-		t.Fatalf("re-ingest created a new row (%d != %d)", r2.Job.ID, r1.Job.ID)
+	if r2.ID != r1.ID {
+		t.Fatalf("re-ingest created a new row (%d != %d)", r2.ID, r1.ID)
 	}
 
 	// Re-crawl with edited content (new hash): changed, not inserted.

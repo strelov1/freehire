@@ -124,7 +124,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
-RETURNING *;
+RETURNING jobs.id;
 
 -- name: InsertPrivateJob :one
 -- Creates a job visible only to its creator: the jd-tailor-intake private-JD path
@@ -166,7 +166,7 @@ INSERT INTO jobs (
     COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     sqlc.arg(created_by)::bigint, true
 )
-RETURNING *;
+RETURNING jobs.id;
 
 -- name: UpdateManualJob :one
 -- Moderator edit of a hand-curated job, addressed by public_slug and scoped to
@@ -240,7 +240,7 @@ SET title        = sqlc.arg(title),
     updated_by   = sqlc.arg(updated_by)::bigint,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL AND NOT is_private
-RETURNING *;
+RETURNING jobs.id;
 
 -- name: UpdateEmployerJob :one
 -- The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
@@ -298,7 +298,7 @@ WHERE public_slug = sqlc.arg(public_slug)
   AND created_by = sqlc.arg(actor_id)::bigint
   AND source = 'employer'
   AND NOT is_private
-RETURNING *;
+RETURNING jobs.id;
 
 -- name: ListEmployerJobs :many
 -- An employer's own dashboard list: every vacancy this actor created through this path,
@@ -307,7 +307,7 @@ RETURNING *;
 -- ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
 -- postings, not the public catalogue.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE created_by = sqlc.arg(actor_id)::bigint
   AND source = 'employer'
 ORDER BY created_at DESC

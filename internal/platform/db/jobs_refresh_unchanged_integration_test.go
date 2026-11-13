@@ -54,6 +54,11 @@ func seedForRefresh(t *testing.T, pool *pgxpool.Pool, q *Queries, cities []strin
 	); err != nil {
 		t.Fatalf("back-date stamps: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE job_activity a
+		SET last_seen_at=j.last_seen_at, hydrated_at=j.hydrated_at FROM jobs j
+		WHERE a.job_id=j.id AND j.source='greenhouse' AND j.external_id='acme:1'`); err != nil {
+		t.Fatalf("back-date activity: %v", err)
+	}
 
 	got, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "greenhouse", ExternalID: "acme:1"})
 	if err != nil {

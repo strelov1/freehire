@@ -99,7 +99,7 @@ func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, job
 		}
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion: int32(enrich.Version),
-			JobID:         saved.Job.ID,
+			JobID:         saved.ID,
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", f.Source, f.ExternalID, err)
 		}
@@ -107,7 +107,7 @@ func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, job
 		// vacancy reaches /jobs/search and the facet counts only on the next full
 		// rebuild-and-swap. This is a stream, not the occasional curated write: every
 		// other write path (cmd/ingest, cmd/hydrate-adzuna-description) queues here too.
-		if err := qtx.EnqueueSearchOutbox(ctx, saved.Job.ID); err != nil {
+		if err := qtx.EnqueueSearchOutbox(ctx, saved.ID); err != nil {
 			return fmt.Errorf("enqueue search outbox %s/%s: %w", f.Source, f.ExternalID, err)
 		}
 	}

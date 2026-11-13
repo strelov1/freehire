@@ -50,18 +50,25 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
 	// every other write path. The mint query also folds the manual salary into the
 	// enrichment payload so it displays at once.
-	row, err := qtx.UpsertManualJob(ctx, f.UpsertManualParams(actorID))
+	id, err := qtx.UpsertManualJob(ctx, f.UpsertManualParams(actorID))
 	if err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("upsert manual job: %w", err)
 	}
 	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		TargetVersion: r.targetVersion,
-		JobID:         row.ID,
+		JobID:         id,
 	}); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue enrichment: %w", err)
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	// The write returns the id only; the complete row (with its liveness stamps) is read back
+	// through the jobs_read view in the same transaction, so the response is what a later read
+	// would show.
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back manual job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -112,15 +119,19 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := r.q.WithTx(tx)
-	row, err := qtx.UpdateManualJob(ctx, f.UpdateManualParams(slug, actorID))
+	id, err := qtx.UpdateManualJob(ctx, f.UpdateManualParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back manual job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err

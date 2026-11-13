@@ -51,6 +51,12 @@ func backdateStamps(t *testing.T, pool *pgxpool.Pool, externalID string) {
 	); err != nil {
 		t.Fatalf("back-date stamps for %s: %v", externalID, err)
 	}
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE job_activity a SET last_seen_at=j.last_seen_at FROM jobs j
+		 WHERE a.job_id=j.id AND j.source='lever' AND j.external_id=$1`, externalID,
+	); err != nil {
+		t.Fatalf("back-date activity for %s: %v", externalID, err)
+	}
 }
 
 func loadJob(t *testing.T, pool *pgxpool.Pool, externalID string) db.Job {

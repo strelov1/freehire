@@ -271,15 +271,20 @@ func (r *QueriesRepository) Update(ctx context.Context, actorID int64, slug stri
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := r.q.WithTx(tx)
-	row, err := qtx.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
+	id, err := qtx.UpdateEmployerJob(ctx, f.UpdateEmployerParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	if err := qtx.EnqueueSearchOutbox(ctx, row.ID); err != nil {
+	if err := qtx.EnqueueSearchOutbox(ctx, id); err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("enqueue search outbox: %w", err)
+	}
+	// The write returns the id only; read the complete row back in the same transaction.
+	row, err := qtx.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, job.Extras{}, fmt.Errorf("read back employer job: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return job.Job{}, job.Extras{}, err

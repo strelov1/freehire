@@ -70,11 +70,12 @@ FROM unnest($1::text[]) AS asked(folded)
 WHERE EXISTS (
     SELECT 1
     FROM jobs
+    JOIN job_activity a ON a.job_id = jobs.id
     WHERE jobs.company_slug_folded = asked.folded
       AND jobs.closed_at IS NULL
       AND jobs.company_slug <> ''
       AND NOT jobs.is_private
-      AND jobs.last_seen_at > $2
+      AND a.last_seen_at > $2
       AND NOT (jobs.source = ANY($3::text[]))
 )
 `
@@ -116,10 +117,11 @@ type CompaniesWithFreshNonAggregatorCoverageParams struct {
 // real coverage. They are absent from the index because they are not worth SEARCHING, which is
 // a different question from whether we still crawl the company.
 //
-// last_seen_at carries NO index, and must not gain one: RefreshUnchangedJob writes that column
-// alone on the hot re-crawl path precisely because it is unindexed, which keeps the update
-// heap-only. It is a recheck here, over the few open rows the folded index already selected,
-// and EXISTS stops at the first fresh one so a large employer costs no more than a small one.
+// last_seen_at is job_activity's and carries NO index, and must not gain one: the re-crawl's
+// liveness write updates that column alone precisely because it is unindexed, which keeps the
+// update heap-only. It is a recheck here, over the few open rows the folded index already
+// selected (one primary-key probe on job_activity each), and EXISTS stops at the first fresh one
+// so a large employer costs no more than a small one.
 func (q *Queries) CompaniesWithFreshNonAggregatorCoverage(ctx context.Context, arg CompaniesWithFreshNonAggregatorCoverageParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, companiesWithFreshNonAggregatorCoverage, arg.FoldedCompanies, arg.SeenAfter, arg.Aggregators)
 	if err != nil {

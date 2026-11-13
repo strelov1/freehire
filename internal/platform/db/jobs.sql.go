@@ -61,10 +61,11 @@ const findOpenJobByURL = `-- name: FindOpenJobByURL :one
 SELECT COALESCE(canonical.public_slug, j.public_slug)
 FROM jobs j
 LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of AND canonical.closed_at IS NULL
+LEFT JOIN job_activity a ON a.job_id = j.id
 WHERE normalize_job_url(j.url) = normalize_job_url($1)
   AND normalize_job_url($1) <> ''
   AND j.closed_at IS NULL
-ORDER BY (j.duplicate_of IS NULL) DESC, j.last_seen_at DESC, j.id DESC
+ORDER BY (j.duplicate_of IS NULL) DESC, a.last_seen_at DESC, j.id DESC
 LIMIT 1
 `
 
@@ -99,8 +100,8 @@ func (q *Queries) FindOpenJobByURL(ctx context.Context, url string) (string, err
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE id = $1
 `
 
@@ -125,12 +126,10 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.EnrichedAt,
 		&i.EnrichmentVersion,
 		&i.PublicSlug,
-		&i.LastSeenAt,
 		&i.ClosedAt,
 		&i.Countries,
 		&i.Regions,
 		&i.WorkMode,
-		&i.LivenessStrikes,
 		&i.Skills,
 		&i.Seniority,
 		&i.Category,
@@ -170,7 +169,6 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.DuplicateOfFuzzy,
 		&i.RequiresClearance,
 		&i.RequirementsDerived,
-		&i.HydratedAt,
 		&i.AiInterviewReports,
 		&i.Metros,
 		&i.SemanticEmbeddedInputHash,
@@ -180,13 +178,16 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.Perks,
 		&i.ApplicationDeadline,
 		&i.Engagement,
+		&i.LastSeenAt,
+		&i.HydratedAt,
+		&i.LivenessStrikes,
 	)
 	return i, err
 }
 
 const getJobBySlug = `-- name: GetJobBySlug :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE public_slug = $1
 `
 
@@ -211,12 +212,10 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.EnrichedAt,
 		&i.EnrichmentVersion,
 		&i.PublicSlug,
-		&i.LastSeenAt,
 		&i.ClosedAt,
 		&i.Countries,
 		&i.Regions,
 		&i.WorkMode,
-		&i.LivenessStrikes,
 		&i.Skills,
 		&i.Seniority,
 		&i.Category,
@@ -256,7 +255,6 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.DuplicateOfFuzzy,
 		&i.RequiresClearance,
 		&i.RequirementsDerived,
-		&i.HydratedAt,
 		&i.AiInterviewReports,
 		&i.Metros,
 		&i.SemanticEmbeddedInputHash,
@@ -266,13 +264,16 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.Perks,
 		&i.ApplicationDeadline,
 		&i.Engagement,
+		&i.LastSeenAt,
+		&i.HydratedAt,
+		&i.LivenessStrikes,
 	)
 	return i, err
 }
 
 const getJobBySourceExternalID = `-- name: GetJobBySourceExternalID :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE source = $1 AND external_id = $2
 `
 
@@ -304,12 +305,10 @@ func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySour
 		&i.EnrichedAt,
 		&i.EnrichmentVersion,
 		&i.PublicSlug,
-		&i.LastSeenAt,
 		&i.ClosedAt,
 		&i.Countries,
 		&i.Regions,
 		&i.WorkMode,
-		&i.LivenessStrikes,
 		&i.Skills,
 		&i.Seniority,
 		&i.Category,
@@ -349,7 +348,6 @@ func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySour
 		&i.DuplicateOfFuzzy,
 		&i.RequiresClearance,
 		&i.RequirementsDerived,
-		&i.HydratedAt,
 		&i.AiInterviewReports,
 		&i.Metros,
 		&i.SemanticEmbeddedInputHash,
@@ -359,6 +357,9 @@ func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySour
 		&i.Perks,
 		&i.ApplicationDeadline,
 		&i.Engagement,
+		&i.LastSeenAt,
+		&i.HydratedAt,
+		&i.LivenessStrikes,
 	)
 	return i, err
 }
@@ -440,8 +441,8 @@ func (q *Queries) LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz,
 }
 
 const listClosedJobsByCompany = `-- name: ListClosedJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE company_slug = $1 AND closed_at IS NOT NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY closed_at DESC, id DESC
 LIMIT $2 OFFSET $3
@@ -490,12 +491,10 @@ func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJob
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -535,7 +534,6 @@ func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJob
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -545,6 +543,9 @@ func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJob
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -594,8 +595,8 @@ func (q *Queries) ListIndexableJobIDsAfter(ctx context.Context, arg ListIndexabl
 }
 
 const listIndexableJobsByIDAfter = `-- name: ListIndexableJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE id > $1
   AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY id
@@ -647,12 +648,10 @@ func (q *Queries) ListIndexableJobsByIDAfter(ctx context.Context, arg ListIndexa
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -692,7 +691,6 @@ func (q *Queries) ListIndexableJobsByIDAfter(ctx context.Context, arg ListIndexa
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -702,6 +700,9 @@ func (q *Queries) ListIndexableJobsByIDAfter(ctx context.Context, arg ListIndexa
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -753,7 +754,7 @@ func (q *Queries) ListJobIDsAfter(ctx context.Context, arg ListJobIDsAfterParams
 
 const listJobLivenessBySlugs = `-- name: ListJobLivenessBySlugs :many
 SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
-FROM jobs
+FROM jobs_read
 WHERE public_slug = ANY($1::text[])
 `
 
@@ -796,8 +797,8 @@ func (q *Queries) ListJobLivenessBySlugs(ctx context.Context, slugs []string) ([
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $1 OFFSET $2
@@ -845,12 +846,10 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -890,7 +889,6 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -900,6 +898,9 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -912,8 +913,8 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 }
 
 const listJobsByCompany = `-- name: ListJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3
@@ -963,12 +964,10 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1008,7 +1007,6 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1018,6 +1016,9 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -1030,8 +1031,8 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 }
 
 const listJobsByIDAfter = `-- name: ListJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE id > $1
 ORDER BY id
 LIMIT $2
@@ -1072,12 +1073,10 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1117,7 +1116,6 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1127,6 +1125,9 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -1139,8 +1140,8 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 }
 
 const listJobsBySlugCode = `-- name: ListJobsBySlugCode :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE right(public_slug, 8) = $1::text
 `
 
@@ -1176,12 +1177,10 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1221,7 +1220,6 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1231,6 +1229,9 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -1243,8 +1244,8 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 }
 
 const listJobsBySourceAfter = `-- name: ListJobsBySourceAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE source = $1 AND id > $2
 ORDER BY id
 LIMIT $3
@@ -1287,12 +1288,10 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1332,7 +1331,6 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1342,6 +1340,9 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -1354,8 +1355,8 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 }
 
 const listJobsUpdatedAfter = `-- name: ListJobsUpdatedAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE id > $1 AND updated_at >= $2
 ORDER BY id
 LIMIT $3
@@ -1401,12 +1402,10 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1446,7 +1445,6 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1456,6 +1454,9 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -1506,8 +1507,8 @@ func (q *Queries) ListLiveJobIDsAfter(ctx context.Context, arg ListLiveJobIDsAft
 }
 
 const listLiveJobsByIDAfter = `-- name: ListLiveJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE id > $1
   AND (closed_at IS NULL OR closed_at >= $2)
 ORDER BY id
@@ -1566,12 +1567,10 @@ func (q *Queries) ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByI
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -1611,7 +1610,6 @@ func (q *Queries) ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByI
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -1621,6 +1619,9 @@ func (q *Queries) ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByI
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}

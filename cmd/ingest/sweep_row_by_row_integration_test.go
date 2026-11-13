@@ -44,10 +44,15 @@ func sweepTestPosting(source, externalID, title string) job.Job {
 
 func ageJobForSweepTest(t *testing.T, pool *pgxpool.Pool, id int64, seenAgo time.Duration) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(),
+	// The sweep reads job_activity. Backdate the legacy column first: the one-way bridge only ever
+	// moves job_activity forward, so a legacy write made after ageing it would undo the ageing.
+	for _, stmt := range []string{
 		"UPDATE jobs SET last_seen_at = now() - $2::interval WHERE id = $1",
-		id, seenAgo.String()); err != nil {
-		t.Fatalf("backdate last_seen_at for %d: %v", id, err)
+		"UPDATE job_activity SET last_seen_at = now() - $2::interval WHERE job_id = $1",
+	} {
+		if _, err := pool.Exec(context.Background(), stmt, id, seenAgo.String()); err != nil {
+			t.Fatalf("backdate last_seen_at for %d: %v", id, err)
+		}
 	}
 }
 

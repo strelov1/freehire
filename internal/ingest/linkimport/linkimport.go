@@ -243,16 +243,23 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err != nil {
 		return Result{}, false, err
 	}
+	// The upsert returns narrow columns; the complete row (the stored slug, which an existing
+	// row keeps, and the liveness stamps the search-document rules read) comes back through
+	// the jobs_read view, as it stood when the write returned.
+	saved, err := qtx.GetJob(ctx, res.ID)
+	if err != nil {
+		return Result{}, false, err
+	}
 	// Asked AFTER the upsert, because the answer depends on the written row's id. Only a
 	// URL-keyed generic import can shadow a posting we already crawled: a board identity
 	// is deduplicated by UpsertJob's ON CONFLICT (source, external_id) before it gets here.
 	canon, deduped := db.CanonicalJobForRoleRow{}, false
 	if params.Source == linksource.GenericSource {
-		canon, deduped = jobdedup.CanonicalForRole(ctx, qtx, params, res.Job.ID)
+		canon, deduped = jobdedup.CanonicalForRole(ctx, qtx, params, saved.ID)
 	}
 	if deduped {
 		if _, err := qtx.MarkJobDuplicateOfRole(ctx, db.MarkJobDuplicateOfRoleParams{
-			ID:              res.Job.ID,
+			ID:              saved.ID,
 			DuplicateOfRole: pgtype.Int8{Int64: canon.ID, Valid: true},
 		}); err != nil {
 			return Result{}, false, err
@@ -260,7 +267,7 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	} else if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 		// A duplicate never reaches search, so enriching it pays an LLM for an invisible row.
 		TargetVersion: int32(enrich.Version),
-		JobID:         res.Job.ID,
+		JobID:         saved.ID,
 	}); err != nil {
 		return Result{}, false, err
 	}
@@ -270,14 +277,14 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	// MarkJobDuplicateOfRole already queued a visibility update in the transaction.
 	// Let the drain recheck current state instead of submitting a second mutation.
 	if !deduped {
-		im.index(ctx, res)
+		im.index(ctx, saved)
 	}
 
 	out := Result{
-		Source:      res.Job.Source,
-		ExternalID:  res.Job.ExternalID,
-		PublicSlug:  res.Job.PublicSlug,
-		CompanySlug: res.Job.CompanySlug,
+		Source:      saved.Source,
+		ExternalID:  saved.ExternalID,
+		PublicSlug:  saved.PublicSlug,
+		CompanySlug: saved.CompanySlug,
 		Deduped:     deduped,
 	}
 	if deduped {
@@ -298,26 +305,26 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 // The category case is common here specifically: an import is a fresh URL, so enrichment has
 // usually not run yet — the job becomes searchable once the next full reindex re-evaluates it
 // with a category, or immediately if is_tech is already confidently true.
-func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
-	if im.idx == nil || saved.Job.DuplicateOf.Valid || saved.Job.ClosedAt.Valid ||
-		search.Withheld(saved.Job, time.Now(), unseenWindows) {
+func (im *Importer) index(ctx context.Context, saved db.Job) {
+	if im.idx == nil || saved.DuplicateOf.Valid || saved.ClosedAt.Valid ||
+		search.Withheld(saved, time.Now(), unseenWindows) {
 		return
 	}
 	// The job-reality signal needs this role's cluster counts; a lookup failure degrades
 	// to a unique role (counts 1) rather than skipping the push.
 	repost, mass := int64(1), int64(1)
 	if c, err := im.q.RoleClusterCount(ctx, db.RoleClusterCountParams{
-		CompanySlug:     saved.Job.CompanySlug,
-		RoleFingerprint: saved.Job.RoleFingerprint,
+		CompanySlug:     saved.CompanySlug,
+		RoleFingerprint: saved.RoleFingerprint,
 	}); err == nil {
 		repost, mass = c.RepostCount, c.MassCount
 	}
-	doc, err := search.FromJob(saved.Job, sourceTypeOf(saved.Job.Source))
+	doc, err := search.FromJob(saved, sourceTypeOf(saved.Source))
 	if err != nil {
-		log.Printf("linkimport: build index doc for job %d: %v", saved.Job.ID, err)
+		log.Printf("linkimport: build index doc for job %d: %v", saved.ID, err)
 		return
 	}
-	reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
+	reality := jobview.ClassifyReality(saved, time.Now(), int(repost), int(mass))
 	doc.Reality = &reality
 	// Widen the row with the geography of everything it represents — the push is a
 	// complete document replacement, so omitting this replaces the reindex's union with this
@@ -325,15 +332,15 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	// test, and wanting one is what made the old gate default to asking anyway. The wave
 	// query takes a slice, so a single row is a one-element one; an empty result means no
 	// widening, which is exactly what a row representing nobody should get.
-	rows, err := im.q.DuplicateClosureGeoFor(ctx, []int64{saved.Job.ID})
+	rows, err := im.q.DuplicateClosureGeoFor(ctx, []int64{saved.ID})
 	if err != nil {
-		log.Printf("linkimport: duplicate-closure geography for job %d: %v", saved.Job.ID, err)
+		log.Printf("linkimport: duplicate-closure geography for job %d: %v", saved.ID, err)
 		return
 	}
 	for _, g := range rows {
 		doc.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
 	}
 	if err := im.idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {
-		log.Printf("linkimport: index job %d: %v", saved.Job.ID, err)
+		log.Printf("linkimport: index job %d: %v", saved.ID, err)
 	}
 }

@@ -36,15 +36,19 @@
 -- posting would otherwise cost a detail request on every crawl for good. Written as an OR over
 -- the kept cases rather than NOT over the withheld one: a NULL deadline (every source but EURES)
 -- would make the NOT form NULL and drop the row from the set.
-SELECT external_id, is_tech FROM jobs
-WHERE source = sqlc.arg(source)
-  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff))
-  AND (hydrated_at >= sqlc.arg(body_refresh_cutoff)
-       OR abs(hashtext(external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
+--
+-- hydrated_at is job_activity's. LEFT JOIN, so a job without an activity row reads as never
+-- checked (NULL, the same "stale" answer a legacy NULL gave) instead of vanishing from the set.
+SELECT j.external_id, j.is_tech FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
+WHERE j.source = sqlc.arg(source)
+  AND (j.description <> '' OR j.created_at < sqlc.arg(hydration_cutoff))
+  AND (a.hydrated_at >= sqlc.arg(body_refresh_cutoff)
+       OR abs(hashtext(j.external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
           <> sqlc.arg(body_refresh_slot)::bigint)
-  AND (application_deadline IS NULL
-       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
-       OR application_deadline < sqlc.arg(deadline_recheck_from)::date);
+  AND (j.application_deadline IS NULL
+       OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR j.application_deadline < sqlc.arg(deadline_recheck_from)::date);
 
 -- name: ExistingExternalIDsByBoard :many
 -- Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
@@ -62,16 +66,19 @@ WHERE source = sqlc.arg(source)
 -- and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
 -- edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
 -- passed; see ExistingExternalIDs for all three.
-SELECT external_id, is_tech FROM jobs
-WHERE source = sqlc.arg(source)
-  AND external_id LIKE sqlc.arg(pattern)
-  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff))
-  AND (hydrated_at >= sqlc.arg(body_refresh_cutoff)
-       OR abs(hashtext(external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
+--
+-- hydrated_at is job_activity's, read through a LEFT JOIN as in ExistingExternalIDs.
+SELECT j.external_id, j.is_tech FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
+WHERE j.source = sqlc.arg(source)
+  AND j.external_id LIKE sqlc.arg(pattern)
+  AND (j.description <> '' OR j.created_at < sqlc.arg(hydration_cutoff))
+  AND (a.hydrated_at >= sqlc.arg(body_refresh_cutoff)
+       OR abs(hashtext(j.external_id)::bigint) % sqlc.arg(body_refresh_slices)::bigint
           <> sqlc.arg(body_refresh_slot)::bigint)
-  AND (application_deadline IS NULL
-       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
-       OR application_deadline < sqlc.arg(deadline_recheck_from)::date);
+  AND (j.application_deadline IS NULL
+       OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR j.application_deadline < sqlc.arg(deadline_recheck_from)::date);
 
 -- name: TouchJob :one
 -- Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
@@ -88,14 +95,22 @@ WHERE source = sqlc.arg(source)
 -- (not newly saved) would drop out of the sweep and its removed offers would never close.
 -- Lock the prior state before updating: after waiting for a concurrent close,
 -- transition detection must observe the committed closed row, not an older snapshot.
+-- FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
+-- search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
+-- own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
+-- lock does not, and it is all this statement needs. Only the jobs tuple is locked here: release A
+-- still writes the legacy columns, and the one-way bridge takes the activity row after it (jobs
+-- first, the global lock order). last_seen_at, the previous stamp the withheld-then-seen requeue
+-- compares, is job_activity's, read through a LEFT JOIN that does not lock it.
 WITH existing AS MATERIALIZED (
-    SELECT id, closed_at, is_private, duplicate_of, last_seen_at,
+    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
-           (closed_at IS NOT NULL AND (application_deadline IS NULL
-                                       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
-    FROM jobs
-    WHERE jobs.source = sqlc.arg(source) AND jobs.external_id = sqlc.arg(external_id)
-    FOR UPDATE
+           (j.closed_at IS NOT NULL AND (j.application_deadline IS NULL
+                                         OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
+    FROM jobs j
+    LEFT JOIN job_activity a ON a.job_id = j.id
+    WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
+    FOR NO KEY UPDATE OF j
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),

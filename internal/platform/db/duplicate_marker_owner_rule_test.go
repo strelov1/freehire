@@ -19,6 +19,18 @@ var assignsDuplicateOf = regexp.MustCompile(`(?i)^\s*(set\s+)?duplicate_of\s*=`)
 // The trailing comma or paren is what keeps duplicate_of_role from matching.
 var insertsDuplicateOf = regexp.MustCompile(`(?i)\bduplicate_of\s*[,)]`)
 
+// insertColumnsAndValues is the part of a statement from its INSERT INTO jobs up to that
+// insert's own RETURNING clause. Reading duplicate_of back in RETURNING (UpsertJob returns it
+// for the index-push gate) is not a write, and the column-list pattern would otherwise match
+// `jobs.duplicate_of,` there.
+func insertColumnsAndValues(body string, from int) string {
+	rest := body[from:]
+	if i := strings.Index(strings.ToLower(rest), "returning"); i >= 0 {
+		return rest[:i]
+	}
+	return rest
+}
+
 // TestNoQueryWritesDuplicateOfDirectly pins the ownership rule that migration 0115 enforces at
 // runtime.
 //
@@ -73,7 +85,7 @@ func TestNoQueryWritesDuplicateOfDirectly(t *testing.T) {
 						"duplicate_of_role or duplicate_of_fuzzy.", path, stmt.name)
 				}
 			}
-			if strings.Contains(lower, "insert into jobs") && insertsDuplicateOf.MatchString(body) {
+			if i := strings.Index(lower, "insert into jobs"); i >= 0 && insertsDuplicateOf.MatchString(insertColumnsAndValues(body, i)) {
 				t.Errorf("%s: %s names duplicate_of in an INSERT column list — same problem, "+
 					"same fix: insert the owning column.", path, stmt.name)
 			}

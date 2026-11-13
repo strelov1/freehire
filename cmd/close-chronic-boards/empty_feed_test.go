@@ -60,7 +60,7 @@ func TestCloseEmptyFeedBoardsDryRunTouchesNothing(t *testing.T) {
 		t.Fatalf("report = %+v, want 1 board and 1 job", report)
 	}
 
-	after, err := q.GetJob(ctx, job.Job.ID)
+	after, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestCloseEmptyFeedBoardsApplyClosesWithItsOwnReason(t *testing.T) {
 		t.Fatalf("closeEmptyFeedBoards (apply): %v", err)
 	}
 
-	after, err := q.GetJob(ctx, job.Job.ID)
+	after, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
@@ -208,14 +208,14 @@ func TestCloseEmptyFeedBoardsSparesASiblingBoard(t *testing.T) {
 		t.Fatalf("closeEmptyFeedBoards: %v", err)
 	}
 
-	closedRow, err := q.GetJob(ctx, drained.Job.ID)
+	closedRow, err := q.GetJob(ctx, drained.ID)
 	if err != nil {
 		t.Fatalf("get drained: %v", err)
 	}
 	if !closedRow.ClosedAt.Valid {
 		t.Error("the drained board's job should have closed")
 	}
-	siblingRow, err := q.GetJob(ctx, sibling.Job.ID)
+	siblingRow, err := q.GetJob(ctx, sibling.ID)
 	if err != nil {
 		t.Fatalf("get sibling: %v", err)
 	}

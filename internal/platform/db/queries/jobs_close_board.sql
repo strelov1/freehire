@@ -300,21 +300,23 @@ WHERE closed_at IS NULL
 -- one duplicated jobs_pkey value blocked greenhouse's sweep on every run) — so ids are
 -- fetched separately and closed one at a time, letting one bad id be skipped without
 -- blocking the rest.
-SELECT id FROM jobs
-WHERE closed_at IS NULL
-  AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff)
-  AND company_slug = ANY(sqlc.arg(company_slugs)::text[])
-  AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
+SELECT j.id FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.source = sqlc.arg(source)
+  AND a.last_seen_at < sqlc.arg(cutoff)
+  AND j.company_slug = ANY(sqlc.arg(company_slugs)::text[])
+  AND NOT (j.external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
 
 -- name: UnseenJobIDsBySource :many
 -- skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 -- Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
-SELECT id FROM jobs
-WHERE closed_at IS NULL
-  AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff)
-  AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
+SELECT j.id FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.source = sqlc.arg(source)
+  AND a.last_seen_at < sqlc.arg(cutoff)
+  AND NOT (j.external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
 
 -- name: CloseUnseenJobByID :one
 --
@@ -357,16 +359,25 @@ SELECT count(*) FROM closed;
 -- company-scoped CloseUnseenJobs cannot reach. cmd/ingest calls this ONLY after a zero-Failed run
 -- of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 -- otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
-WITH closed AS (
+-- Locking and freshness recheck: see CloseUnseenJobs (jobs_close_unseen.sql).
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = sqlc.arg(source)
+      AND a.last_seen_at < sqlc.arg(cutoff)
+      AND NOT (j.external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')))
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = sqlc.arg(source)
-      AND last_seen_at < sqlc.arg(cutoff)
-      AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')))
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed

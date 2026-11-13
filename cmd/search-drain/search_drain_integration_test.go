@@ -338,6 +338,10 @@ func TestIntegration_SearchDrainSkipsAPostingItsSourceStoppedShowing(t *testing.
 		[]int64{freshID, staleID}, staleID); err != nil {
 		t.Fatalf("stamp last_seen_at: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE job_activity a SET last_seen_at=j.last_seen_at
+		FROM jobs j WHERE a.job_id=j.id AND j.id=ANY($1)`, []int64{freshID, staleID}); err != nil {
+		t.Fatalf("stamp activity last_seen_at: %v", err)
+	}
 	enqueue(t, pool, freshID)
 	enqueue(t, pool, staleID)
 

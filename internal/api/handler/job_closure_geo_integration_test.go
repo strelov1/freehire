@@ -37,10 +37,10 @@ func TestGetJob_ShowsDuplicateClosureGeography(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %s: %v", extID, err)
 		}
-		if _, err := pool.Exec(ctx, "UPDATE jobs SET countries = $2 WHERE id = $1", row.Job.ID, []string{country}); err != nil {
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET countries = $2 WHERE id = $1", row.ID, []string{country}); err != nil {
 			t.Fatalf("set countries %s: %v", extID, err)
 		}
-		return row.Job.ID
+		return row.ID
 	}
 	canon := seed("1", "d365-black-pen-aaaaaaaa", "sz")
 	for i, cc := range []string{"eg", "il"} {

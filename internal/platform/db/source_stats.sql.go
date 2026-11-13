@@ -20,11 +20,12 @@ SELECT source,
        (count(*) FILTER (WHERE coalesce(cardinality(countries), 0) = 0
                            AND coalesce(cardinality(regions), 0) = 0))::bigint AS missing_geo_jobs,
        (count(*) FILTER (WHERE company_slug = ''))::bigint                 AS missing_company_jobs,
-       (count(*) FILTER (WHERE last_seen_at < now() - interval '7 days'))::bigint AS unseen_7d_jobs,
+       (count(*) FILTER (WHERE a.last_seen_at < now() - interval '7 days'))::bigint AS unseen_7d_jobs,
        (count(*) FILTER (WHERE coalesce(posted_at, created_at) < now() - interval '60 days'))::bigint AS posted_over_60d_jobs
-FROM jobs
-WHERE closed_at IS NULL AND NOT is_private
-GROUP BY source
+FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL AND NOT j.is_private
+GROUP BY j.source
 `
 
 type AggregateOpenJobsBySourceRow struct {
@@ -74,7 +75,7 @@ type AggregateOpenJobsBySourceRow struct {
 // The five quality counts (migration 0213) ride the same scan for the same reason: every
 // column they read is narrow, so each FILTER costs CPU on a row already read, not a second
 // pass. "Has no description" is deliberately NOT among them — see above. An unseen posting
-// is measured from last_seen_at, which a crawl refreshes for every posting it lists, so a
+// is measured from job_activity.last_seen_at, which a crawl refreshes for every posting it lists, so a
 // source whose crawl never re-lists (telegram) reads high here permanently; the alert rule
 // watches the change, not the level.
 func (q *Queries) AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpenJobsBySourceRow, error) {

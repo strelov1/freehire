@@ -81,7 +81,7 @@ RETURNING o.id, o.job_id, (j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL
 -- worker then retries the batch one id at a time to isolate and dead-letter the bad
 -- row), and the /similar handler projects them to the public job wire shape.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: StampSemanticEmbeddedBatch :exec

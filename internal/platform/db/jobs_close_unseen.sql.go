@@ -83,17 +83,25 @@ func (q *Queries) CloseRetiredBoardJobs(ctx context.Context, arg CloseRetiredBoa
 }
 
 const closeUnseenJobs = `-- name: CloseUnseenJobs :one
-WITH closed AS (
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = $1
+      AND a.last_seen_at < $2
+      AND j.company_slug = ANY($3::text[])
+      AND NOT (j.external_id LIKE ANY(COALESCE($4::text[], '{}')))
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $1
-      AND last_seen_at < $2
-      AND company_slug = ANY($3::text[])
-      AND NOT (external_id LIKE ANY(COALESCE($4::text[], '{}')))
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed
@@ -131,6 +139,17 @@ type CloseUnseenJobsParams struct {
 // :one rather than :execrows because the CTE moves the row count out of the command tag.
 // count(*) over the closed rows is the same int64 the caller already had, so no call site
 // changes.
+// Observation state lives in job_activity (release A of the job_activity split), so the candidates
+// are chosen by a locking SELECT over jobs JOIN job_activity: FOR NO KEY UPDATE OF j, a locks the
+// jobs tuple first and the activity row second (the one global lock order, which the bridge trigger
+// and every writer share) and RE-EVALUATES `a.last_seen_at < cutoff` on the LATEST version of each
+// row after waiting for a concurrent writer. A plain UPDATE jobs ... FROM job_activity would not: the
+// activity row is not the UPDATE's target, so Postgres would keep the snapshot version and close a
+// posting a crawl had just freshened. NO KEY UPDATE, never FOR UPDATE: a foreign-key child insert
+// (enrichment_outbox, apply_forms, search_outbox) holds KEY SHARE on the jobs tuple while a cheap
+// toucher already holds the activity row, and FOR UPDATE would deadlock against it. ORDER BY j.id
+// takes the locks in one order across overlapping sweeps. INNER JOIN: the lock needs the row, and
+// every job has one (insert trigger + backfill gate).
 func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, closeUnseenJobs,
 		arg.Source,
@@ -144,17 +163,25 @@ func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams
 }
 
 const closeUnseenJobsForBoard = `-- name: CloseUnseenJobsForBoard :one
-WITH closed AS (
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = $1
+      AND a.last_seen_at < $2
+      AND j.external_id LIKE $3
+      AND ($4::text = '' OR j.url LIKE $4::text)
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $1
-      AND last_seen_at < $2
-      AND external_id LIKE $3
-      AND ($4::text = '' OR url LIKE $4::text)
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed
@@ -210,6 +237,7 @@ type CloseUnseenJobsForBoardParams struct {
 //
 // :one rather than :execrows because the CTE moves the row count out of the command tag.
 // count(*) over the closed rows is the same int64 the caller already had.
+// Locking and freshness recheck: see CloseUnseenJobs.
 func (q *Queries) CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJobsForBoardParams) (int64, error) {
 	row := q.db.QueryRow(ctx, closeUnseenJobsForBoard,
 		arg.Source,
@@ -223,17 +251,25 @@ func (q *Queries) CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJo
 }
 
 const closeUnseenJobsForBoards = `-- name: CloseUnseenJobsForBoards :one
-WITH closed AS (
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = $1
+      AND a.last_seen_at < $2
+      AND j.external_id LIKE ANY($3::text[])
+      AND ($4::text = '' OR j.url LIKE $4::text)
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $1
-      AND last_seen_at < $2
-      AND external_id LIKE ANY($3::text[])
-      AND ($4::text = '' OR url LIKE $4::text)
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed
@@ -265,6 +301,8 @@ type CloseUnseenJobsForBoardsParams struct {
 //
 // url_pattern is CloseUnseenJobsForBoard's: ” for every provider but a region-scoped one, whose
 // caller issues one statement per region, all of that region's boards in it.
+// Locking and freshness recheck: see CloseUnseenJobs. The scan joins one primary-key probe on
+// job_activity per open row of the provider: re-EXPLAIN it on workday-sized data.
 func (q *Queries) CloseUnseenJobsForBoards(ctx context.Context, arg CloseUnseenJobsForBoardsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, closeUnseenJobsForBoards,
 		arg.Source,

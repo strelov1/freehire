@@ -102,8 +102,8 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- upserts the job, so writing EXCLUDED unconditionally would let a transient
     -- failure wipe a good description. Keep the stored value when the incoming one is
     -- empty; a non-empty description still overwrites, so real edits propagate.
-    -- (content_hash below stays the incoming fingerprint; the incremental indexer
-    -- rebuilds its doc from the RETURNING row, which carries this preserved value.)
+    -- content_hash below stays the incoming fingerprint; the search drain rebuilds
+    -- its document from the stored row, including the preserved description.
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
     application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
@@ -200,7 +200,12 @@ ON CONFLICT (source, external_id) DO UPDATE SET
 -- a newer body in between, writing the facets of the older one over it would regress the row,
 -- so the update is refused (no row returned) and the next crawl retries the posting.
 WHERE NOT sqlc.arg(body_from_catalogue)::boolean OR jobs.description = EXCLUDED.description
-RETURNING sqlc.embed(jobs),
+-- Narrow on purpose, and never sqlc.embed(jobs): that expands to every jobs column, the
+-- liveness stamps included, which the activity split moves to job_activity. A caller reads the
+-- id, the identity the sweep scope and the index-push gate need, and whether the write left the
+-- row closed; one that needs the whole row (linkimport builds a search document) re-reads it
+-- through GetJob, which reads the jobs_read view.
+RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private, jobs.closed_at,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
@@ -285,7 +290,8 @@ RETURNING sqlc.embed(jobs),
 -- search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 -- extra push.
 WITH prev AS MATERIALIZED (
-    SELECT j.last_seen_at FROM jobs j
+    SELECT a.last_seen_at FROM jobs j
+    LEFT JOIN job_activity a ON a.job_id = j.id
     WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
 ), refreshed AS (
 UPDATE jobs
