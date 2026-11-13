@@ -32,6 +32,7 @@ Base URL: `https://freehire.me/api/v1`
 - [CV](#cv)
 - [Experience](#experience)
 - [Auto-apply](#auto-apply)
+- [Autofill](#autofill)
 - [Billing](#billing)
 - [Buddies](#buddies)
 - [Company relations](#company-relations)
@@ -1810,10 +1811,6 @@ Unlink your Telegram account.
 curl -X DELETE "https://freehire.me/api/v1/me/telegram" -b cookies.txt
 ```
 
-```json
-"(204 No Content)"
-```
-
 ### `POST /me/telegram/link`
 
 **Auth:** Session only
@@ -1958,10 +1955,6 @@ Delete your webhook destination.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/webhook" -b cookies.txt
-```
-
-```json
-"(204 No Content)"
 ```
 
 ### `POST /me/webhook/test`
@@ -2822,6 +2815,33 @@ Re-arms a stuck attempt, or refreshes the answer preview of one awaiting review.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/auto-apply/retry" -b cookies.txt
+```
+
+## Autofill
+
+### `POST /me/autofill/run`
+
+**Auth:** Browser extension only
+
+Drive your own browser to fill an application form.
+
+Runs the autofill agent over the browser-tool wire — your extension on one end, the
+agent on the other, routed strictly within your own channel. Requires the extension to
+be connected, and authenticates only as the extension itself — a session cookie or an
+API key gets a 403, since this call writes into whatever form your browser has open,
+not just reads it.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/autofill/run"
+```
+
+```json
+{
+  "data": {
+    "filled": 11,
+    "skipped": 2
+  }
+}
 ```
 
 ## Billing
@@ -4152,6 +4172,12 @@ curl "https://freehire.me/api/v1/me/photo" -b cookies.txt
 Upload (or replace) your headshot.
 
 Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | string (binary) | yes |  |
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt

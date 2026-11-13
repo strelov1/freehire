@@ -475,8 +475,8 @@
         "summary": "Sign out every session on the account, including this one.",
         "description": "Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.",
         "responses": {
-          "200": {
-            "description": "Success"
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -933,6 +933,21 @@
                   }
                 }
               }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
             }
           }
         },
@@ -981,6 +996,21 @@
                   "text": {
                     "type": "string",
                     "description": "Résumé plain text (JSON path); or send a PDF as multipart field `file`."
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
                   }
                 }
               }
@@ -1045,16 +1075,8 @@
       "delete": {
         "summary": "Unlink your Telegram account.",
         "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "(204 No Content)"
-              }
-            }
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -1280,16 +1302,8 @@
       "delete": {
         "summary": "Delete your webhook destination.",
         "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "(204 No Content)"
-              }
-            }
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -1618,7 +1632,26 @@
         ],
         "tags": [
           "Photo"
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
       },
       "get": {
         "summary": "Whether you have a stored headshot, and when it was uploaded.",
@@ -1652,8 +1685,8 @@
         "summary": "Remove your stored headshot.",
         "description": "Returns `204 No Content`.",
         "responses": {
-          "200": {
-            "description": "Success"
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -1713,7 +1746,26 @@
         ],
         "tags": [
           "Speech"
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

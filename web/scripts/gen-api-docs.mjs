@@ -9,7 +9,8 @@
 //
 // The audience comes from the contract. An operation an API key (or nobody) can call is
 // external; one that needs the browser's session cookie is internal. `x-audience` overrides
-// that: `moderator` is internal whatever the credential, `hidden` is in neither document.
+// that: `moderator` and `extension` are internal whatever the credential, `hidden` is in
+// neither document.
 //
 // The job-search filter section is the one part not in the contract: it is derived from
 // src/lib/docs/filters.ts (loaded through Vite, like og-smoke.mjs does), so it stays in step
@@ -80,21 +81,27 @@ export function mergeSupplement(contract, supplement) {
   return { ...contract, paths };
 }
 
-// 'public' | 'key' | 'cookie' | 'moderator' | 'hidden', from the op's security and x-audience.
-export function accessOf(op, doc) {
-  const audience = op['x-audience'];
-  if (audience === 'hidden' || audience === 'moderator') return audience;
-  const security = op.security ?? doc.security ?? [];
-  if (security.length === 0 || security.some((s) => Object.keys(s).length === 0)) return 'public';
-  return security.some((s) => 'PersonalApiKey' in s) ? 'key' : 'cookie';
-}
-
 const ACCESS_LABELS = {
   public: 'Public',
   key: 'Session or API key',
   cookie: 'Session only',
   moderator: 'Moderator',
+  extension: 'Browser extension only',
+  hidden: 'Not documented',
 };
+
+// 'public' | 'key' | 'cookie' | 'moderator' | 'extension' | 'hidden', from the op's security
+// and x-audience.
+export function accessOf(op, doc) {
+  const audience = op['x-audience'];
+  if (audience) {
+    if (!(audience in ACCESS_LABELS)) throw new Error(`unknown x-audience "${audience}"`);
+    return audience;
+  }
+  const security = op.security ?? doc.security ?? [];
+  if (security.length === 0 || security.some((s) => Object.keys(s).length === 0)) return 'public';
+  return security.some((s) => 'PersonalApiKey' in s) ? 'key' : 'cookie';
+}
 
 function audienceOf(access) {
   if (access === 'hidden') return null;
@@ -176,11 +183,12 @@ function table(headers, rows) {
   ];
 }
 
-const cell = (s) => (s ?? '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '\\|');
+const cell = (s) => (s ?? '').replace(/\s*\n\s*/g, ' ').replace(/[\\|]/g, '\\$&');
 
-function resolveRef(schema, doc) {
-  const name = schema?.$ref?.match(/^#\/components\/schemas\/(.+)$/)?.[1];
-  return name ? doc.components.schemas[name] : schema;
+// A schema or parameter `$ref` into the document's components, or the object itself.
+function resolveRef(node, doc) {
+  const [, section, name] = node?.$ref?.match(/^#\/components\/(\w+)\/(.+)$/) ?? [];
+  return name ? doc.components[section][name] : node;
 }
 
 function typeName(schema) {
@@ -220,7 +228,7 @@ function renderOperation(method, path, op, doc) {
   if (op.summary) out.push('', op.summary);
   if (op.description) out.push('', op.description);
   for (const where of ['path', 'query']) {
-    const params = (op.parameters ?? []).filter((p) => p.in === where);
+    const params = (op.parameters ?? []).map((p) => resolveRef(p, doc)).filter((p) => p.in === where);
     if (!params.length) continue;
     out.push('', where === 'path' ? '**Path parameters**' : '**Query parameters**', '');
     out.push(

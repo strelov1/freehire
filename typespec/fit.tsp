@@ -118,7 +118,7 @@ op getJobMatch(/** The job `public_slug`. */ @path slug: string): Data<unknown> 
   },
   returnType: #{
     data: #{
-      score: 68,
+      coverage_percent: 68,
       matched: #["go", "postgresql"],
       missing: #["kubernetes"],
     },

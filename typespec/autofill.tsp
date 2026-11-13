@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -41,6 +43,7 @@ op getAutofillProfile(): Data<unknown> | Problem;
  */
 @summary("Drive your own browser to fill an application form.")
 @useAuth(SessionOrKey)
+@extension("x-audience", "extension")
 @opExample(#{
   returnType: #{
     data: #{

@@ -677,7 +677,7 @@ curl -X POST "https://freehire.me/api/v1/me/match-text" -H "Authorization: Beare
 ```json
 {
   "data": {
-    "score": 68,
+    "coverage_percent": 68,
     "matched": [
       "go",
       "postgresql"
@@ -3375,6 +3375,13 @@ the answer.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `categories` | string | no |  |
+| `seniorities` | string | no |  |
+| `skills` | string | no |  |
+| `tz` | string | no |  |
+| `cities` | string | no |  |
+| `specializations` | string | no |  |
+| `min_years` | string | no |  |
 | `limit` | string | no | Page size, 1–100. Defaults to 24. (e.g. `24`) |
 | `offset` | string | no | Rows to skip. (e.g. `0`) |
 
@@ -3400,6 +3407,18 @@ A value nobody carries is absent rather than reported as zero. A value carried b
 members than the floor is offered with its number withheld: the option stays usable,
 and the number does not become a way to name somebody. Counts describe the filter you
 sent and never the whole membership.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `categories` | string | no |  |
+| `seniorities` | string | no |  |
+| `skills` | string | no |  |
+| `tz` | string | no |  |
+| `cities` | string | no |  |
+| `specializations` | string | no |  |
+| `min_years` | string | no |  |
 
 ```bash
 curl "https://freehire.me/api/v1/talent/facets"
@@ -4497,31 +4516,6 @@ curl "https://freehire.me/api/v1/me/autofill-profile" -H "Authorization: Bearer 
 }
 ```
 
-### `POST /me/autofill/run`
-
-**Auth:** Session or API key
-
-Drive your own browser to fill an application form.
-
-Runs the autofill agent over the browser-tool wire — your extension on one end, the
-agent on the other, routed strictly within your own channel. Requires the extension to
-be connected, and authenticates only as the extension itself — a session cookie or an
-API key gets a 403, since this call writes into whatever form your browser has open,
-not just reads it.
-
-```bash
-curl -X POST "https://freehire.me/api/v1/me/autofill/run" -H "Authorization: Bearer $FREEHIRE_API_KEY"
-```
-
-```json
-{
-  "data": {
-    "filled": 11,
-    "skipped": 2
-  }
-}
-```
-
 ## DirectApply
 
 ### `GET /jobs/{slug}/direct-apply`
@@ -5106,9 +5100,10 @@ curl "https://freehire.me/api/v1/mentors/<slug>/slots"
 Your plan and what it allows today.
 
 Which plan you are on and, for every metered AI feature, how much of today you have
-used against what the day allows. Every plan offers every feature; what differs is the
-daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather
-than as a number. `enforced` says whether that ceiling turns anybody away yet — while
+used against what the day allows. Metered features need a paid plan: the free plan's
+allowance is zero. The amount resets at `resets_at`; read `unlimited` per allowance, since
+a paid plan can still have a finite limit for a feature such as `auto-apply`. `enforced`
+says whether that ceiling turns anybody away yet — while
 it is `false` a spent allowance is counted and the action still runs, so do not refuse
 on `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and
 `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and
@@ -5129,18 +5124,18 @@ curl "https://freehire.me/api/v1/me/plan" -H "Authorization: Bearer $FREEHIRE_AP
     "allowances": [
       {
         "feature": "tailor",
-        "used": 1,
-        "limit": 2,
+        "used": 0,
+        "limit": 0,
         "unlimited": false,
-        "enforced": false,
+        "enforced": true,
         "resets_at": "2026-09-01T00:00:00Z"
       },
       {
         "feature": "match",
         "used": 0,
-        "limit": 3,
+        "limit": 0,
         "unlimited": false,
-        "enforced": false,
+        "enforced": true,
         "resets_at": "2026-09-01T00:00:00Z"
       }
     ]
@@ -5198,6 +5193,12 @@ curl "https://freehire.me/api/v1/plans"
 Transcribe one short audio recording to text.
 
 Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `file` | string (binary) | yes |  |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/speech/transcriptions" -H "Authorization: Bearer $FREEHIRE_API_KEY"

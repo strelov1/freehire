@@ -4764,60 +4764,6 @@
         ]
       }
     },
-    "/me/autofill/run": {
-      "post": {
-        "operationId": "runAutofill",
-        "summary": "Drive your own browser to fill an application form.",
-        "description": "Runs the autofill agent over the browser-tool wire — your extension on one end, the\nagent on the other, routed strictly within your own channel. Requires the extension to\nbe connected, and authenticates only as the extension itself — a session cookie or an\nAPI key gets a 403, since this call writes into whatever form your browser has open,\nnot just reads it.",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The request has succeeded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {}
-                  },
-                  "description": "A single item: `{\"data\": ...}`."
-                },
-                "example": {
-                  "data": {
-                    "filled": 11,
-                    "skipped": 2
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Autofill"
-        ],
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ]
-      }
-    },
     "/me/contributions": {
       "get": {
         "operationId": "listMyContributions",
@@ -7153,7 +7099,7 @@
                 },
                 "example": {
                   "data": {
-                    "score": 68,
+                    "coverage_percent": 68,
                     "matched": [
                       "go",
                       "postgresql"
@@ -8081,7 +8027,7 @@
       "get": {
         "operationId": "getMyPlan",
         "summary": "Your plan and what it allows today.",
-        "description": "Which plan you are on and, for every metered AI feature, how much of today you have\nused against what the day allows. Every plan offers every feature; what differs is the\ndaily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather\nthan as a number. `enforced` says whether that ceiling turns anybody away yet — while\nit is `false` a spent allowance is counted and the action still runs, so do not refuse\non `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and\n`pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and\non a plan that has ended. `pro_source` is behavioural: a client offering an in-app\npurchase must not offer one to a `stripe` subscriber, who would be charged twice for\none plan, and a `revenuecat` subscriber must be sent to their store to cancel rather\nthan to a web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.",
+        "description": "Which plan you are on and, for every metered AI feature, how much of today you have\nused against what the day allows. Metered features need a paid plan: the free plan's\nallowance is zero. The amount resets at `resets_at`; read `unlimited` per allowance, since\na paid plan can still have a finite limit for a feature such as `auto-apply`. `enforced`\nsays whether that ceiling turns anybody away yet — while\nit is `false` a spent allowance is counted and the action still runs, so do not refuse\non `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and\n`pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and\non a plan that has ended. `pro_source` is behavioural: a client offering an in-app\npurchase must not offer one to a `stripe` subscriber, who would be charged twice for\none plan, and a `revenuecat` subscriber must be sent to their store to cancel rather\nthan to a web page. A tie resolves in the order `stripe`, `revenuecat`, `granted`.",
         "parameters": [],
         "responses": {
           "200": {
@@ -8107,18 +8053,18 @@
                     "allowances": [
                       {
                         "feature": "tailor",
-                        "used": 1,
-                        "limit": 2,
+                        "used": 0,
+                        "limit": 0,
                         "unlimited": false,
-                        "enforced": false,
+                        "enforced": true,
                         "resets_at": "2026-09-01T00:00:00Z"
                       },
                       {
                         "feature": "match",
                         "used": 0,
-                        "limit": 3,
+                        "limit": 0,
                         "unlimited": false,
-                        "enforced": false,
+                        "enforced": true,
                         "resets_at": "2026-09-01T00:00:00Z"
                       }
                     ]
@@ -12489,7 +12435,26 @@
         ],
         "tags": [
           "Speech"
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

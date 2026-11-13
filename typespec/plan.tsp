@@ -57,9 +57,10 @@ model PlanHistoryEntry {
 // The caller's plan and today's usage, without consuming anything.
 /**
  * Which plan you are on and, for every metered AI feature, how much of today you have
- * used against what the day allows. Every plan offers every feature; what differs is the
- * daily amount, and it resets at `resets_at`. A pro caller reads as `unlimited` rather
- * than as a number. `enforced` says whether that ceiling turns anybody away yet — while
+ * used against what the day allows. Metered features need a paid plan: the free plan's
+ * allowance is zero. The amount resets at `resets_at`; read `unlimited` per allowance, since
+ * a paid plan can still have a finite limit for a feature such as `auto-apply`. `enforced`
+ * says whether that ceiling turns anybody away yet — while
  * it is `false` a spent allowance is counted and the action still runs, so do not refuse
  * on `used >= limit` alone. Never runs the LLM. A pro caller also carries `pro_until` and
  * `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on the free plan and
@@ -78,18 +79,18 @@ model PlanHistoryEntry {
       allowances: #[
         #{
           feature: "tailor",
-          used: 1,
-          limit: 2,
+          used: 0,
+          limit: 0,
           unlimited: false,
-          enforced: false,
+          enforced: true,
           resets_at: utcDateTime.fromISO("2026-09-01T00:00:00Z"),
         },
         #{
           feature: "match",
           used: 0,
-          limit: 3,
+          limit: 0,
           unlimited: false,
-          enforced: false,
+          enforced: true,
           resets_at: utcDateTime.fromISO("2026-09-01T00:00:00Z"),
         },
       ],

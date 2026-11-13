@@ -85,6 +85,9 @@
       "name": "Auto-apply"
     },
     {
+      "name": "Autofill"
+    },
+    {
       "name": "Billing"
     },
     {
@@ -2442,6 +2445,61 @@
             }
           }
         }
+      }
+    },
+    "/me/autofill/run": {
+      "post": {
+        "operationId": "runAutofill",
+        "summary": "Drive your own browser to fill an application form.",
+        "description": "Runs the autofill agent over the browser-tool wire — your extension on one end, the\nagent on the other, routed strictly within your own channel. Requires the extension to\nbe connected, and authenticates only as the extension itself — a session cookie or an\nAPI key gets a 403, since this call writes into whatever form your browser has open,\nnot just reads it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "filled": 11,
+                    "skipped": 2
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Autofill"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "x-audience": "extension"
       }
     },
     "/me/buddies": {
@@ -6574,6 +6632,21 @@
                   }
                 }
               }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
             }
           }
         },
@@ -8891,8 +8964,8 @@
         "summary": "Sign out every session on the account, including this one.",
         "description": "Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.",
         "responses": {
-          "200": {
-            "description": "Success"
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -9045,6 +9118,21 @@
                   }
                 }
               }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
             }
           }
         },
@@ -9110,16 +9198,8 @@
       "delete": {
         "summary": "Unlink your Telegram account.",
         "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "(204 No Content)"
-              }
-            }
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -9345,16 +9425,8 @@
       "delete": {
         "summary": "Delete your webhook destination.",
         "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "(204 No Content)"
-              }
-            }
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
@@ -9555,14 +9627,33 @@
         ],
         "tags": [
           "Photo"
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
       },
       "delete": {
         "summary": "Remove your stored headshot.",
         "description": "Returns `204 No Content`.",
         "responses": {
-          "200": {
-            "description": "Success"
+          "204": {
+            "description": "No content"
           }
         },
         "security": [
