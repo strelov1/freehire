@@ -307,6 +307,7 @@ SET last_seen_at = now()
 WHERE source = $1
   AND external_id = ANY($2::text[])
   AND closed_at IS NULL
+  AND NOT is_private
 RETURNING company_slug
 `
 

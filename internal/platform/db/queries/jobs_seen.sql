@@ -194,6 +194,7 @@ SET last_seen_at = now()
 WHERE source = sqlc.arg(source)
   AND external_id = ANY(sqlc.arg(external_ids)::text[])
   AND closed_at IS NULL
+  AND NOT is_private
 RETURNING company_slug;
 
 -- name: CloseCoveredJobs :many
