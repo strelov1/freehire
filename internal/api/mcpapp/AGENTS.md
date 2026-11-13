@@ -15,10 +15,11 @@ widget shows one Connect panel instead of per-card buttons that would fail.
 Per-tool `_meta.securitySchemes` declares access.
 
 The eleven catalogue tools retain their public schemas, previews and widgets.
-The strict bearer-only `/api/v1/mcp/account` alias (`account.go`) retains its
-legacy account `search_jobs`, `get_job` and `get_company` schemas. Both reuse the
-in-app assistant's personal handlers and the catalogue `Reader`; avoid changing
-one endpoint's schemas to match the other.
+`/api/v1/mcp/account` is the same server (`MixedHandler`) at its original URL, kept for
+existing connectors; the only difference is that its Fiber middleware requires a bearer
+credential, so it is signed-in only and never anonymous. There is one server and one
+tool list: the in-app assistant's own `search_jobs`, `get_job` and `get_company` are
+never registered here (`catalogueOwned`), the catalogue's are.
 
 Fiber authentication in `internal/api/handler/mcpapp_account.go` clears external
 `AccountUserIDHeader` values before resolving credentials, including anonymous
@@ -97,8 +98,7 @@ Both results carry one short `next` sentence (`next.go`): signed in, the follow-
 tools the session is actually served (an API key has no auto-apply); signed out, a pointer at
 signing in instead of tools it cannot call. It is the same text for every call of a session
 and once per response, never per job: the result is replayed into the model's context every
-turn. On the typed catalogue tools it is a plain struct field; on the account server's untyped
-tools `withNext` adds it to the JSON object.
+turn. It is a plain struct field of the typed catalogue tools.
 
 ## A session the freehire CLI opened
 
@@ -157,14 +157,14 @@ carries no description vectors, so the request is answered by keywords and the r
   bodies is what it is for. Here ten of those in one turn is the context window spent on
   text the model reduces to a line each. `summaryMaxChars` bounds the preview here rather
   than trusting the caller, because the bound is a property of this tool and not of whoever
-  filled the field. The signed-in server takes its `search_jobs` from the in-app assistant,
-  whose own copy rehydrates; `mcpKeyTools` (which `mcpAccountTools` builds on, so OAuth
-  grants and API keys alike) serves `searchJobs(false)` instead — the index preview clipped
-  to the same 400 runes. Before 2026-11-05 it served the rehydrating copy, ~130 KB a call.
-  `facets` follows the same split: `facets(false)` answers with the filter names and how many
-  values each has, and lists one filter's values when named in `facet` (narrowed by
+  filled the field. The in-app assistant's own copy
+  rehydrates and is never served over MCP: the catalogue's `search_jobs`
+  answers there, with the index preview. Before 2026-11-05 MCP served the rehydrating copy,
+  ~130 KB a call. The signed-in `facets` is bounded the same way: `mcpKeyTools` swaps in
+  `facets(false)`, which answers with the filter names and how many values each has, and lists one filter's values when named in `facet` (narrowed by
   `contains`, which shares `ContainsMatcher` with `list_filter_values`). The whole vocabulary
-  was ~125 KB, and `list_filter_values` does not cover every facet, metros among them.
+  was ~125 KB. `facets` stays beside `list_filter_values` because the latter does not cover every
+  facet: metros, `company_slug`, the boolean facets and the numeric ranges (`stats`) are only here.
 - **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
   `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
   resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a
@@ -216,7 +216,7 @@ OJCP surface uses). A search result carries only `first_seen_at`.
   slugs in one Postgres read (`ListJobLivenessBySlugs`). It reports a CLOSED posting as closed
   — that is the point of the tool — so it does not reuse `publishedToAgents`, which refuses
   closed postings; private and duplicate postings still answer not_found.
-- **`get_job`** (here and on the account server) loads through `agentJobBySlug`, NOT
+- **`get_job`** loads through `agentJobBySlug`, NOT
   `publishedToAgents`: search reads an index that trails the database, so it hands out slugs
   that closed or became duplicates since the push, and a not_found for a slug the previous
   turn returned is what four agent reports in one day were about (2026-11-07). A closed
@@ -265,7 +265,7 @@ person types — the vocabulary itself, never a copy. A free-text argument (`sta
 `postings`) offers nothing: a client replaces the whole field with what it picks, so a
 suggestion for one word of "Go and Kubernetes" would erase the rest.
 
-A signed-in session (the account alias, and the canonical endpoint with a grant or key) also gets
+A signed-in session (either URL, with a grant or key) also gets
 `accountPrompts` (`account_prompts.go`): `jobs_for_my_profile`, `set_up_my_profile`,
 `whats_new_in_my_alerts` and `apply_to_saved_jobs`. They DO name tools and their order, since the
 sequence is the point; each is offered only when every tool it needs is served, so an API key
@@ -334,8 +334,8 @@ guidelines. The block is written once (`readOnly()`) and a test walks the REGIST
 rather than a list beside them — checked by removing one annotation and watching it fail.
 
 A tool on the catalogue (anonymous) surface that writes anything belongs behind authentication, which
-this surface does not have — that is what `account.go`'s separate, authenticated server is
-for; do not add a write tool here instead of there.
+this surface does not have — that is what the signed-in tool set (`mixed.go`'s personal
+tools, behind the middleware) is for; do not add a write tool to the catalogue instead.
 
 The account server's annotations come from each tool's own `assistant.Effect` —
 `EffectReads`, `EffectAdds` (nothing already held is lost: `save_job`, `apply_job`) or

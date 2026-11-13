@@ -77,24 +77,25 @@ func TestNextHint_OnTheCatalogueTools(t *testing.T) {
 	}
 }
 
-func TestNextHint_OnTheAccountServerFollowsServedTools(t *testing.T) {
+func TestNextHint_FollowsServedTools(t *testing.T) {
+	jobArgs := map[string]any{"slug": "senior-go-engineer-acme-abc123"}
 	keyed := namedTools("search_jobs", "get_job", "save_job", "subscribe")
-	session := connectAccountCatalogue(t, keyed, nil)
-	got := nextOf(t, session, "get_job", map[string]any{})
+	session := connectAccountCatalogue(t, keyed, readerThatFinds(t))
+	got := nextOf(t, session, "get_job", jobArgs)
 	if !strings.Contains(got, "save_job") || strings.Contains(got, "auto_apply_start") {
 		t.Errorf("a key without auto-apply must not be offered it: %q", got)
 	}
 
-	granted := connectAccountCatalogue(t, namedTools("search_jobs", "get_job", "save_job", "auto_apply_start"), nil)
-	if got := nextOf(t, granted, "get_job", map[string]any{}); !strings.Contains(got, "auto_apply_start") {
+	granted := connectAccountCatalogue(t, namedTools("search_jobs", "get_job", "save_job", "auto_apply_start"), readerThatFinds(t))
+	if got := nextOf(t, granted, "get_job", jobArgs); !strings.Contains(got, "auto_apply_start") {
 		t.Errorf("a grant is offered auto-apply: %q", got)
 	}
 	// save_job alone must not drag track_job into the hint.
-	if got := nextOf(t, session, "get_job", map[string]any{}); strings.Contains(got, "track_job") {
+	if got := nextOf(t, session, "get_job", jobArgs); strings.Contains(got, "track_job") {
 		t.Errorf("a session without track_job is offered it: %q", got)
 	}
 	// Only the two result-bearing tools carry a hint.
-	other := connectAccountCatalogue(t, namedTools("my_jobs", "save_job"), nil)
+	other := connectAccountCatalogue(t, namedTools("my_jobs", "save_job"), readerThatFinds(t))
 	if got := nextOf(t, other, "my_jobs", map[string]any{}); got != "" {
 		t.Errorf("my_jobs carries a hint: %q", got)
 	}

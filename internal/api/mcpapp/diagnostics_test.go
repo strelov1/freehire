@@ -27,7 +27,7 @@ func TestAccountToolFailureHasSafeDiagnostics(t *testing.T) {
 	tool := assistant.Tool{Name: "probe", Run: func(context.Context, int64, json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("private-query-token: %w", pgx.ErrNoRows)
 	}}
-	result, err := loggedAccountTool(tool.Name, accountToolHandler(tool, 42))(ctx, &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{}})
+	result, err := loggedTool("mixed", tool.Name, accountToolHandler(tool, 42))(ctx, &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{}})
 	if err != nil || !result.IsError {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
@@ -61,7 +61,7 @@ func TestHTTPToolErrorCorrelatesWithResponseAndResolvedIdentity(t *testing.T) {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "api_key", UserID: 42, KeyID: 73, Scope: "full"})
 		c.Request().Header.Set(AccountUserIDHeader, "42")
 		return c.Next()
-	}, adaptor.HTTPHandler(AccountHandler([]assistant.Tool{tool}, "", nil)))
+	}, adaptor.HTTPHandler(MixedHandler([]assistant.Tool{tool}, "", nil)))
 	req := httptest.NewRequestWithContext(t.Context(), "POST", "/mcp/account", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"probe","arguments":{}}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")

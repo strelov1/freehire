@@ -31,8 +31,11 @@ func TestAccountPrompts_AreListedAndRenderTheirToolOrder(t *testing.T) {
 	want := []string{"apply_to_saved_jobs", "jobs_for_my_profile", "set_up_my_profile", "whats_new_in_my_alerts"}
 
 	account := connectAccountCatalogue(t, granted, nil)
-	if got := promptNames(t, account); !slices.Equal(got, want) {
-		t.Fatalf("account prompts = %v, want %v", got, want)
+	got := promptNames(t, account)
+	for _, name := range want {
+		if !slices.Contains(got, name) {
+			t.Fatalf("account prompts = %v, want %v among them", got, want)
+		}
 	}
 	text, err := promptText(t, account, "apply_to_saved_jobs", nil)
 	if err != nil {
@@ -85,8 +88,10 @@ func TestAccountPrompts_SetUpWalksTheGuidedSetup(t *testing.T) {
 func TestAccountPrompts_FollowTheServedTools(t *testing.T) {
 	keyed := connectAccountCatalogue(t, namedTools("get_profile", "search_jobs"), nil)
 	got := promptNames(t, keyed)
-	if !slices.Equal(got, []string{"jobs_for_my_profile", "set_up_my_profile"}) {
-		t.Fatalf("a key is offered %v", got)
+	for name, offered := range map[string]bool{"jobs_for_my_profile": true, "set_up_my_profile": true, "apply_to_saved_jobs": false, "whats_new_in_my_alerts": false} {
+		if slices.Contains(got, name) != offered {
+			t.Fatalf("a key is offered %v, want %s offered = %v", got, name, offered)
+		}
 	}
 	text, err := promptText(t, keyed, "set_up_my_profile", nil)
 	if err != nil {

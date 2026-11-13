@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 )
 
 func TestDictionaryMCPUsesWebsiteValidation(t *testing.T) {
@@ -78,26 +76,21 @@ func TestDictionaryMCPProtocol(t *testing.T) {
 		}
 		return 1, "pending", nil
 	}}}
-	server := mcpapp.NewAccountServer(h.dictionaryMCPTools(), 42, testMCPOrigin, nil)
-	ct, st := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(t.Context(), st, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ss.Close() }()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(), ct, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = session.Close() }()
+	session := connectMCPTools(t, h.dictionaryMCPTools(), "42")
 	listed, err := session.ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tools) != 1 || listed.Tools[0].Name != suggestDictionaryTermToolName {
-		t.Fatalf("tools=%v", listed.Tools)
+	var tool *mcp.Tool
+	for _, listedTool := range listed.Tools {
+		if listedTool.Name == suggestDictionaryTermToolName {
+			tool = listedTool
+		}
 	}
-	annotations := listed.Tools[0].Annotations
+	if tool == nil {
+		t.Fatalf("%s is not served: %v", suggestDictionaryTermToolName, listed.Tools)
+	}
+	annotations := tool.Annotations
 	if annotations == nil || annotations.ReadOnlyHint || annotations.DestructiveHint == nil || *annotations.DestructiveHint || annotations.IdempotentHint {
 		t.Fatalf("wrong annotations: %+v", annotations)
 	}

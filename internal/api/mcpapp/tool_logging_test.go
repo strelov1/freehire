@@ -53,40 +53,23 @@ func nextToolLog(t *testing.T, records logRecords) map[string]any {
 
 func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 	const private = "private-query-token-and-result@example.invalid"
-	for _, surface := range []string{"mixed", "account"} {
+	for _, surface := range []string{"mixed"} {
 		t.Run(surface, func(t *testing.T) {
 			records := captureToolLogs(t)
 			release := make(chan struct{})
 			// Unblock a failed test before closing its SDK sessions.
 			unblock := sync.OnceFunc(func() { close(release) })
 			defer unblock()
-			var server *mcp.Server
-			if surface == "mixed" {
-				reader := readerThatFinds(t)
-				reader.searchJobs = func(ctx context.Context, in SearchInput) (SearchJobsResult, error) {
-					select {
-					case <-release:
-					case <-ctx.Done():
-						return SearchJobsResult{}, ctx.Err()
-					}
-					return SearchJobsResult{Query: in.Query}, nil
+			reader := readerThatFinds(t)
+			reader.searchJobs = func(ctx context.Context, in SearchInput) (SearchJobsResult, error) {
+				select {
+				case <-release:
+				case <-ctx.Done():
+					return SearchJobsResult{}, ctx.Err()
 				}
-				server = newMixedServer(nil, 0, "", reader, false)
-			} else {
-				server = NewAccountServer(
-					[]assistant.Tool{{Name: toolSearchJobs, Schema: map[string]any{"type": "object"}, Run: func(ctx context.Context, _ int64, _ json.RawMessage) (any, error) {
-						select {
-						case <-release:
-						case <-ctx.Done():
-							return nil, ctx.Err()
-						}
-						return map[string]string{"private": private}, nil
-					}}},
-					987654321,
-					"",
-					nil,
-				)
+				return SearchJobsResult{Query: in.Query}, nil
 			}
+			server := newMixedServer(nil, 0, "", reader, false)
 			clientTransport, serverTransport := mcp.NewInMemoryTransports()
 			serverSession, err := server.Connect(t.Context(), serverTransport, nil)
 			if err != nil {
@@ -253,7 +236,7 @@ func TestToolLogNamesTheArgumentAHandlerRefused(t *testing.T) {
 			var in struct{}
 			return nil, assistant.DecodeArgs(raw, &in)
 		}}
-	server := NewAccountServer([]assistant.Tool{tool}, 1, "", nil)
+	server := newMixedServer([]assistant.Tool{tool}, 1, "", nil, false)
 	clientT, serverT := mcp.NewInMemoryTransports()
 	go func() { _ = server.Run(t.Context(), serverT) }()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(), clientT, nil)

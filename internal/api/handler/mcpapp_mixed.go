@@ -16,14 +16,27 @@ func mountMCP(
 	assistants *assistantHandlers,
 	catalogue *mcpappHandlers,
 ) {
+	mountMCPServer(api, "/mcp",
+		mcpAuthenticate(assistants, catalogue.origin, mcpapp.MixedResourceMetadataPath, true),
+		agentview.SurfaceMCP, assistants, catalogue)
+}
+
+// mountMCPServer mounts the one MCP server at path: an OAuth grant gets mcpAccountTools, a
+// full-scope API key mcpKeyTools. authenticate decides whether an anonymous caller gets in.
+func mountMCPServer(
+	api fiber.Router,
+	path string,
+	authenticate fiber.Handler,
+	surface string,
+	assistants *assistantHandlers,
+	catalogue *mcpappHandlers,
+) {
 	granted := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue))
 	keyed := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue))
-	api.All("/mcp",
-		mcpAuthenticate(assistants, catalogue.origin, mcpapp.MixedResourceMetadataPath, true),
-		agentViews(catalogue.agentViews, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
-			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
-				return keyed(c)
-			}
-			return granted(c)
-		})
+	api.All(path, authenticate, agentViews(catalogue.agentViews, surface), func(c *fiber.Ctx) error {
+		if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
+			return keyed(c)
+		}
+		return granted(c)
+	})
 }

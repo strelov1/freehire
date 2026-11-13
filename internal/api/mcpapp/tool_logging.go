@@ -170,10 +170,6 @@ func AddObservedTool[In, Out any](
 	})
 }
 
-func loggedAccountTool(name string, handler mcp.ToolHandler) mcp.ToolHandler {
-	return loggedTool("account", name, handler)
-}
-
 func loggedTool(surface, name string, handler mcp.ToolHandler) mcp.ToolHandler {
 	registerTool(name)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

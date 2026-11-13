@@ -1,4 +1,4 @@
-package mcpapp_test
+package mcpapp
 
 import (
 	"context"
@@ -11,12 +11,30 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 )
 
-func TestNewAccountServer_RunsToolAsTheResolvedUser(t *testing.T) {
+// connectSignedIn serves tools to user 42 over the one server both /mcp and /mcp/account mount.
+func connectSignedIn(t *testing.T, tools []assistant.Tool) *mcp.ClientSession {
+	t.Helper()
+	server := newMixedServer(tools, 42, "", nil, false)
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
+		Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func TestSignedInServer_RunsToolAsTheResolvedUser(t *testing.T) {
 	var gotUserID int64
-	tool := assistant.Tool{
+	session := connectSignedIn(t, []assistant.Tool{{
 		Name:        "whoami",
 		Description: "test tool",
 		Schema:      map[string]any{"type": "object"},
@@ -24,29 +42,9 @@ func TestNewAccountServer_RunsToolAsTheResolvedUser(t *testing.T) {
 			gotUserID = userID
 			return map[string]any{"user_id": userID}, nil
 		},
-	}
-	server := mcpapp.NewAccountServer(
-		[]assistant.Tool{tool},
-		42,
-		"",
-		nil,
-	)
-	if server == nil {
-		t.Fatal("NewAccountServer returned nil")
-	}
+	}})
 
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- server.Run(context.Background(), serverTransport) }()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	session, err := client.Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("CallTool: %v", err)
 	}
@@ -58,33 +56,17 @@ func TestNewAccountServer_RunsToolAsTheResolvedUser(t *testing.T) {
 	}
 }
 
-func TestNewAccountServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
-	tool := assistant.Tool{
+func TestSignedInServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
+	session := connectSignedIn(t, []assistant.Tool{{
 		Name:        "failing",
 		Description: "always fails",
 		Schema:      map[string]any{"type": "object"},
 		Run: func(context.Context, int64, json.RawMessage) (any, error) {
 			return nil, errors.New("boom")
 		},
-	}
-	server := mcpapp.NewAccountServer(
-		[]assistant.Tool{tool},
-		1,
-		"",
-		nil,
-	)
+	}})
 
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	go func() { _ = server.Run(context.Background(), serverTransport) }()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	session, err := client.Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "failing", Arguments: map[string]any{}})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "failing", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("CallTool transport error: %v", err)
 	}
@@ -93,13 +75,9 @@ func TestNewAccountServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
 	}
 }
 
-// AccountHandler no longer authenticates — that moved to a Fiber middleware in
-// mountMCPAccount (internal/api/handler/mcpapp_account.go), which can report an
-// infra failure through the normal classify/report pipeline; a bare
-// net/http.Handler has no such pipeline to report through. These two tests
-// cover AccountHandler's own remaining contract: trust the resolved user id the
-// middleware already validated and stamped onto the request.
-func TestAccountHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
+// MixedHandler trusts the user id the Fiber middleware (mountMCPServer in
+// internal/api/handler) already validated and stamped onto the request.
+func TestMixedHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 	var gotUserID int64
 	tool := assistant.Tool{
 		Name:   "whoami",
@@ -109,25 +87,18 @@ func TestAccountHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 			return map[string]any{"user_id": userID}, nil
 		},
 	}
-	handler := mcpapp.AccountHandler([]assistant.Tool{tool}, "", nil)
-
-	server := httptest.NewServer(handler)
+	server := httptest.NewServer(MixedHandler([]assistant.Tool{tool}, "", nil))
 	defer server.Close()
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, server.URL, nil)
-	if err != nil {
-		t.Fatalf("NewRequest: %v", err)
-	}
-	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
-
+	header := http.Header{AccountUserIDHeader: {"42"}}
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: headerRoundTripper{req.Header}}}, nil)
+	session, err := client.Connect(t.Context(), &mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: headerRoundTripper{header}}}, nil)
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
 	defer func() { _ = session.Close() }()
 
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("CallTool: %v", err)
 	}
@@ -139,15 +110,13 @@ func TestAccountHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 	}
 }
 
-func TestAccountHandler_MissingTrustedHeaderIsAnInternalError(t *testing.T) {
-	// Reaching AccountHandler with no resolved user id means the auth
-	// middleware was skipped or misconfigured — a wiring bug, not a caller
-	// mistake, so it must read as 500, not as the caller's fault.
-	handler := mcpapp.AccountHandler(nil, "", nil)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+func TestMixedHandler_MalformedTrustedHeaderIsAnInternalError(t *testing.T) {
+	// A malformed stamped id means the auth middleware was skipped or misconfigured: a wiring
+	// bug, not a caller mistake, so it must read as 500, not as the caller's fault.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
+	req.Header.Set(AccountUserIDHeader, "not-a-number")
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	MixedHandler(nil, "", nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
@@ -166,29 +135,15 @@ func (rt headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 // A read tool and a write tool must be told apart in the annotations a client sees: a client
 // asks a person to confirm a write and may run a read without asking, so a missing hint
 // turns every search into a confirmation prompt — and a wrong one skips the prompt on a write.
-func TestNewAccountServer_AnnotatesReadsAndWrites(t *testing.T) {
+func TestSignedInServer_AnnotatesReadsAndWrites(t *testing.T) {
 	noop := func(context.Context, int64, json.RawMessage) (any, error) { return nil, nil }
-	server := mcpapp.NewAccountServer(
-		[]assistant.Tool{
-			{Name: "reader", Description: "reads", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectReads, Run: noop},
-			{Name: "adder", Description: "adds", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectAdds, Run: noop},
-			{Name: "undeclared", Description: "declares nothing", Schema: map[string]any{"type": "object"}, Run: noop},
-		},
-		1,
-		"",
-		nil,
-	)
+	session := connectSignedIn(t, []assistant.Tool{
+		{Name: "reader", Description: "reads", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectReads, Run: noop},
+		{Name: "adder", Description: "adds", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectAdds, Run: noop},
+		{Name: "undeclared", Description: "declares nothing", Schema: map[string]any{"type": "object"}, Run: noop},
+	})
 
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	go func() { _ = server.Run(context.Background(), serverTransport) }()
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	session, err := client.Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	defer func() { _ = session.Close() }()
-
-	listed, err := session.ListTools(context.Background(), nil)
+	listed, err := session.ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
@@ -219,25 +174,17 @@ func TestNewAccountServer_AnnotatesReadsAndWrites(t *testing.T) {
 
 // A call the model got wrong is the caller's mistake, not a server fault: the metric that
 // counts internal_error must not fill up with bad arguments.
-func TestNewAccountServer_InvalidArgumentsAreInvalidRequest(t *testing.T) {
-	tool := assistant.Tool{
+func TestSignedInServer_InvalidArgumentsAreInvalidRequest(t *testing.T) {
+	session := connectSignedIn(t, []assistant.Tool{{
 		Name:   "strict",
 		Schema: map[string]any{"type": "object"},
 		Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
 			var in struct{}
 			return nil, assistant.DecodeArgs(raw, &in)
 		},
-	}
-	server := mcpapp.NewAccountServer([]assistant.Tool{tool}, 1, "", nil)
-	clientT, serverT := mcp.NewInMemoryTransports()
-	go func() { _ = server.Run(context.Background(), serverT) }()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(), clientT, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = session.Close() }()
+	}})
 
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "strict", Arguments: map[string]any{"bogus": 1}})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "strict", Arguments: map[string]any{"bogus": 1}})
 	if err != nil {
 		t.Fatalf("CallTool transport error: %v", err)
 	}
