@@ -12,36 +12,35 @@ import (
 )
 
 const refreshUnchangedJob = `-- name: RefreshUnchangedJob :one
-WITH hit AS MATERIALIZED (
-    SELECT j.id, j.source, j.company_slug, j.duplicate_of, j.is_private,
-           COALESCE(j.posted_at, j.created_at) AS eff_posted_at,
-           a.last_seen_at AS prev_seen_at, a.state_version AS ver
-    FROM jobs j
+WITH prev AS MATERIALIZED (
+    SELECT j.id, a.last_seen_at FROM jobs j
     JOIN job_activity a ON a.job_id = j.id
-    WHERE j.source = $1
-      AND j.external_id = $2
-      AND j.content_hash = $3
-      AND j.cities = COALESCE($4::text[], '{}')
-      AND j.salary_min_source IS NOT DISTINCT FROM $5
-      AND j.salary_max_source IS NOT DISTINCT FROM $6
-      AND j.salary_currency_source = $7
-      AND j.salary_period_source = $8
-      AND j.english_level = $9
-      AND j.is_tech IS NOT DISTINCT FROM $10
-      AND j.engagement = COALESCE($11::text[], '{}')
-      AND j.application_deadline IS NOT DISTINCT FROM COALESCE($12::date, j.application_deadline)
-      AND (j.application_deadline IS NULL OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
-      AND j.closed_at IS NULL
+    WHERE j.source = $1 AND j.external_id = $2
+    FOR NO KEY UPDATE OF j, a
 ), refreshed AS (
-    UPDATE job_activity a
-    SET last_seen_at = GREATEST(now(), a.last_seen_at),
-        -- Not when the "identical" body is the stored one the pipeline substituted for a failed
-        -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
-        hydrated_at  = CASE WHEN $13::boolean THEN a.hydrated_at
-                            ELSE GREATEST(now(), a.hydrated_at) END
-    FROM hit h
-    WHERE a.job_id = h.id AND a.state_version = h.ver
-    RETURNING h.id, h.source, h.company_slug, h.duplicate_of, h.is_private, h.prev_seen_at, h.eff_posted_at
+UPDATE jobs
+SET last_seen_at = now(),
+    -- Not when the "identical" body is the stored one the pipeline substituted for a failed
+    -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
+    hydrated_at  = CASE WHEN $3::boolean THEN jobs.hydrated_at ELSE now() END
+FROM prev p
+WHERE jobs.id = p.id
+  AND jobs.source = $1
+  AND jobs.external_id = $2
+  AND jobs.content_hash = $4
+  AND jobs.cities = COALESCE($5::text[], '{}')
+  AND jobs.salary_min_source IS NOT DISTINCT FROM $6
+  AND jobs.salary_max_source IS NOT DISTINCT FROM $7
+  AND jobs.salary_currency_source = $8
+  AND jobs.salary_period_source = $9
+  AND jobs.english_level = $10
+  AND jobs.is_tech IS NOT DISTINCT FROM $11
+  AND jobs.engagement = COALESCE($12::text[], '{}')
+  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE($13::date, jobs.application_deadline)
+  AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+  AND jobs.closed_at IS NULL
+RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
+          p.last_seen_at AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
 ), requeued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM refreshed
@@ -51,15 +50,13 @@ WITH hit AS MATERIALIZED (
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
-SELECT id, source, company_slug, duplicate_of, false::boolean AS fenced FROM refreshed
-UNION ALL
-SELECT id, source, company_slug, duplicate_of, true::boolean FROM hit
-WHERE NOT EXISTS (SELECT 1 FROM refreshed)
+SELECT id, source, company_slug, duplicate_of FROM refreshed
 `
 
 type RefreshUnchangedJobParams struct {
 	Source               string             `json:"source"`
 	ExternalID           string             `json:"external_id"`
+	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 	ContentHash          pgtype.Text        `json:"content_hash"`
 	Cities               []string           `json:"cities"`
 	SalaryMinSource      pgtype.Int4        `json:"salary_min_source"`
@@ -70,7 +67,6 @@ type RefreshUnchangedJobParams struct {
 	IsTech               pgtype.Bool        `json:"is_tech"`
 	Engagement           []string           `json:"engagement"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
-	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
 }
 
@@ -79,7 +75,6 @@ type RefreshUnchangedJobRow struct {
 	Source      string      `json:"source"`
 	CompanySlug string      `json:"company_slug"`
 	DuplicateOf pgtype.Int8 `json:"duplicate_of"`
-	Fenced      bool        `json:"fenced"`
 }
 
 // The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
@@ -91,10 +86,8 @@ type RefreshUnchangedJobRow struct {
 // tuple — re-TOASTing a ~2.5KB description and touching every index on the table — to move a
 // timestamp.
 //
-// The ONLY write is to job_activity (last_seen_at and hydrated_at); the jobs tuple is read,
-// never written and never locked, which is what the split is for. The match key is read from jobs
-// in `hit`; the target of the UPDATE is the activity row, so a writer that changed the row while
-// this statement waited for the activity lock is detected by state_version (see FENCE below).
+// last_seen_at is the ONLY column written, and it is deliberately in no index, so the update is
+// heap-only and maintains none of them.
 //
 // updated_at is deliberately NOT stamped, so the column comes to mean "content last changed"
 // rather than "last crawled". Two live readers see that: the jobs sitemap serves it as <lastmod>
@@ -150,27 +143,23 @@ type RefreshUnchangedJobRow struct {
 // that cannot fetch a posting's detail drops the posting rather than writing a body-less row
 // (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 // which is precisely the case a staleness check over updated_at would misread as never-read.
-//
-// FENCE. A refresh that waits for the activity row (a closer, a content write, a metadata
-// rekey holds it) is re-evaluated on the LATEST version of that row but against the SNAPSHOT of
-// jobs, so a predicate on jobs cannot notice the change. job_activity.state_version is bumped by
-// the state trigger (migration 0258) on every write to a column this match key reads, so
-// comparing it with the version read in the same snapshot catches exactly that. A snapshot hit
-// the fence rejected comes back with fenced = true and writes and enqueues nothing; no row at
-// all means nothing matched (pgx.ErrNoRows, the signal for the full upsert). A fenced statement
-// has ALREADY locked the activity row and keeps the lock to the end of its transaction, so the
-// caller must roll back and retry from a fresh transaction; falling through to UpsertJob in the
-// same one takes the jobs tuple after the activity row, the reverse of the global lock order.
+// Like last_seen_at it is in no index, so the update stays heap-only.
 //
 // One thing IS queued: a canonical posting re-seen after search had withheld it for going
 // unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
 // drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
 // search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 // extra push.
+// Lock order: `prev` locks the jobs row and then the activity row, FOR NO KEY UPDATE, and the UPDATE
+// joins it, so both are held before the statement queues anything. Release A took the activity row
+// last, through the legacy bridge trigger at the end of the statement, AFTER the search_outbox write
+// below; a writer that takes the activity row first and then queues (release B) interleaved with it
+// and the two deadlocked. A row without an activity row does not match this cheap path.
 func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error) {
 	row := q.db.QueryRow(ctx, refreshUnchangedJob,
 		arg.Source,
 		arg.ExternalID,
+		arg.BodyFromCatalogue,
 		arg.ContentHash,
 		arg.Cities,
 		arg.SalaryMinSource,
@@ -181,7 +170,6 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.IsTech,
 		arg.Engagement,
 		arg.ApplicationDeadline,
-		arg.BodyFromCatalogue,
 		arg.WithheldIfSeenBefore,
 	)
 	var i RefreshUnchangedJobRow
@@ -190,7 +178,6 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		&i.Source,
 		&i.CompanySlug,
 		&i.DuplicateOf,
-		&i.Fenced,
 	)
 	return i, err
 }
@@ -240,7 +227,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason
+    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, replace($6, '-', ''), $7, $8,
@@ -256,9 +243,9 @@ INSERT INTO jobs (
     -- facets above are. COALESCE keeps the column NOT NULL when a posting yields
     -- none: an empty array and "never processed" are the same fact here.
     COALESCE($38::jsonb, '[]'::jsonb),
-    -- The row's liveness and hydration live in job_activity, created by the insert trigger; the
-    -- caller stamps them in the SAME transaction with ObserveJobActivity (job.Upsert).
-    $39::date,
+    -- A first ingest reads the posting's body, so the row starts out freshly hydrated. NULL
+    -- is reserved for the rows that predate the column (see 0144), which read as stale.
+    now(), $39::date,
     CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
     CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
 )
@@ -351,9 +338,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
         WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
         ELSE jobs.requirements_derived
     END,
-    -- Reopening is the state trigger's business (migration 0258): it resets the strike count on a
-    -- closed-to-open flip, so the two-strike grace survives a reopen. The crawl's observation
-    -- (last_seen_at, hydrated_at) is job_activity's and is stamped by ObserveJobActivity.
+    -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
+    -- reopen (the row was closed) resets the strike count so a single later expired
+    -- probe can't immediately re-close it — the two-strike grace survives a reopen.
+    last_seen_at = now(),
     closed_at = CASE
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN COALESCE(jobs.closed_at, now())
@@ -361,10 +349,16 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_reason = CASE
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN 'expired' ELSE '' END,
+    liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
+    -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
+    -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
+    -- the other half: a body that came back byte-identical takes that statement, and stamps
+    -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
+    -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
+    hydrated_at  = CASE WHEN $40::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
 WHERE NOT $40::boolean OR jobs.description = EXCLUDED.description
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private, jobs.closed_at,
-    (old.closed_at IS NOT NULL)::boolean AS reset_strikes,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
@@ -419,15 +413,14 @@ type UpsertJobParams struct {
 }
 
 type UpsertJobRow struct {
-	ID           int64              `json:"id"`
-	Source       string             `json:"source"`
-	CompanySlug  string             `json:"company_slug"`
-	DuplicateOf  pgtype.Int8        `json:"duplicate_of"`
-	IsPrivate    bool               `json:"is_private"`
-	ClosedAt     pgtype.Timestamptz `json:"closed_at"`
-	ResetStrikes bool               `json:"reset_strikes"`
-	Inserted     pgtype.Bool        `json:"inserted"`
-	Changed      bool               `json:"changed"`
+	ID          int64              `json:"id"`
+	Source      string             `json:"source"`
+	CompanySlug string             `json:"company_slug"`
+	DuplicateOf pgtype.Int8        `json:"duplicate_of"`
+	IsPrivate   bool               `json:"is_private"`
+	ClosedAt    pgtype.Timestamptz `json:"closed_at"`
+	Inserted    pgtype.Bool        `json:"inserted"`
+	Changed     bool               `json:"changed"`
 }
 
 // Single atomic write: upsert the company (only when the slug is non-empty,
@@ -461,10 +454,6 @@ type UpsertJobRow struct {
 // id, the identity the sweep scope and the index-push gate need, and whether the write left the
 // row closed; one that needs the whole row (linkimport builds a search document) re-reads it
 // through GetJob, which reads the jobs_read view.
-// reset_strikes: the row was closed before this write (PostgreSQL 18 RETURNING old). The old statement
-// cleared the strike count whenever it overwrote a closed row, including one an expired deadline
-// leaves closed; the state trigger covers only the closed-to-open flip, so the caller passes this to
-// ObserveJobActivity and the exception stays exact without another query.
 func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error) {
 	row := q.db.QueryRow(ctx, upsertJob,
 		arg.Source,
@@ -516,7 +505,6 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		&i.DuplicateOf,
 		&i.IsPrivate,
 		&i.ClosedAt,
-		&i.ResetStrikes,
 		&i.Inserted,
 		&i.Changed,
 	)

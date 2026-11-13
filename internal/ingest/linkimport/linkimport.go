@@ -239,7 +239,7 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	}
 	defer tx.Rollback(ctx)
 	qtx := im.q.WithTx(tx)
-	res, err := job.Upsert(ctx, tx, params)
+	res, err := qtx.UpsertJob(ctx, params)
 	if err != nil {
 		return Result{}, false, err
 	}

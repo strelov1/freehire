@@ -10,10 +10,10 @@
 
 ## B. Switch ordinary writers to compact activity
 
-- [x] B1. Add state-change fencing covering lifecycle and the complete cheap match key, with concurrent lifecycle/content regression tests.
-- [x] B2. Move unchanged refresh, live touch and covered refresh to activity-only writes; prove main-row xmin/xmax/ctid stability.
-- [x] B3. Release fenced cheap transactions before full fallback; preserve form/enrichment/search side effects and full upsert/reopen semantics.
-- [x] B4. Move strike and hydration writers; remove every legacy-column reference from runtime SQL, including generated full-row returns.
+- [ ] B1. Add state-change fencing covering lifecycle and the complete cheap match key, with concurrent lifecycle/content regression tests.
+- [ ] B2. Move unchanged refresh, live touch and covered refresh to activity-only writes; prove main-row xmin/xmax/ctid stability.
+- [ ] B3. Release fenced cheap transactions before full fallback; preserve form/enrichment/search side effects and full upsert/reopen semantics.
+- [ ] B4. Move strike and hydration writers; remove every legacy-column reference from runtime SQL, including generated full-row returns.
 - [ ] B5. Run required checks and independent review; publish/deploy B only after the reader gate; verify running binaries and observation costs.
 
 ## C. Contract and measure
@@ -22,3 +22,5 @@
 - [ ] C2. Add a new cleanup migration removing the bridge and old columns while preserving the read projection and insertion invariant.
 - [ ] C3. Run required checks and review; deploy cleanup under the documented lock/worker constraints.
 - [ ] C4. Measure tuple/WAL/read performance, record limitations, finish runtime verification and archive/sync this OpenSpec change.
+
+The writer implementation and its verification are preserved in #4545. It is temporarily deferred from the reader-repair release: pre-reader processes still consume the legacy columns. Reintroduce that patch only after A5/A6 and the external-reader, binary-drain and read-cost gates pass.

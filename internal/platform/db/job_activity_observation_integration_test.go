@@ -626,16 +626,14 @@ func TestResetLivenessStrikesClearsActivityWhateverTheLegacyColumnSays(t *testin
 			if err := New(pool).ResetLivenessStrikes(context.Background(), id); err != nil {
 				t.Fatalf("reset: %v", err)
 			}
-			// Release B: the count is job_activity's alone; the legacy column is inert and is neither
-			// read nor written, whatever it says.
-			if a, _ := obsStrikes(t, pool, id); a != 0 {
-				t.Fatalf("after reset activity=%d, want 0", a)
+			if a, l := obsStrikes(t, pool, id); a != 0 || l != 0 {
+				t.Fatalf("after reset activity=%d legacy=%d, want 0/0", a, l)
 			}
 		})
 	}
 }
 
-func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
+func TestMarkLivenessExpiredCountsFromActivityAndWritesBothPlaces(t *testing.T) {
 	ctx := context.Background()
 	t.Run("activity ahead of a frozen legacy column", func(t *testing.T) {
 		pool := startPostgres(t)
@@ -647,8 +645,8 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		if err != nil || res.LivenessStrikes != 5 || res.ClosedAt.Valid {
 			t.Fatalf("mark = %+v, %v; want strike 5 and still open", res, err)
 		}
-		if a, l := obsStrikes(t, pool, id); a != 5 || l != 0 {
-			t.Fatalf("activity=%d legacy=%d, want 5 in activity and the inert legacy column left at 0", a, l)
+		if a, l := obsStrikes(t, pool, id); a != 5 || l != 5 {
+			t.Fatalf("activity=%d legacy=%d, want 5/5", a, l)
 		}
 		res, err = New(pool).MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: id, Threshold: 6})
 		if err != nil || res.LivenessStrikes != 6 || !res.ClosedAt.Valid {
@@ -673,8 +671,8 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		if err != nil || res.LivenessStrikes != 1 {
 			t.Fatalf("mark = %+v, %v; want strike 1", res, err)
 		}
-		if a, _ := obsStrikes(t, pool, id); a != 1 {
-			t.Fatalf("activity=%d, want 1 counted from activity, not from the legacy 1", a)
+		if a, l := obsStrikes(t, pool, id); a != 1 || l != 1 {
+			t.Fatalf("activity=%d legacy=%d, want 1/1 (the bridge does not fire for 1 -> 1)", a, l)
 		}
 	})
 	t.Run("computed count equals the stale legacy value and closes", func(t *testing.T) {
@@ -693,8 +691,8 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		if err != nil || res.LivenessStrikes != 1 || !res.ClosedAt.Valid {
 			t.Fatalf("mark = %+v, %v; want strike 1 and closed", res, err)
 		}
-		if a, _ := obsStrikes(t, pool, id); a != 1 {
-			t.Fatalf("activity=%d, want 1", a)
+		if a, l := obsStrikes(t, pool, id); a != 1 || l != 1 {
+			t.Fatalf("activity=%d legacy=%d, want 1/1", a, l)
 		}
 		var queued int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox WHERE job_id = $1`, id).Scan(&queued); err != nil || queued != 1 {
@@ -868,14 +866,14 @@ func TestRealWritersReopenWhatACloserClosedFirst(t *testing.T) {
 			if _, err := q.RefreshUnchangedJob(ctx, obsRefreshParams()); !errors.Is(err, pgx.ErrNoRows) {
 				t.Fatalf("cheap refresh of a closed row: err = %v, want pgx.ErrNoRows", err)
 			}
-			if _, err := upsertObserved(ctx, q, obsHashedParams()); err != nil {
+			if _, err := q.UpsertJob(ctx, obsHashedParams()); err != nil {
 				t.Fatalf("full upsert: %v", err)
 			}
 			if got := obsClosedExternalIDs(t, pool); len(got) != 0 {
 				t.Fatalf("closed = %v after the upsert, want it reopened", got)
 			}
-			if a, _ := obsStrikes(t, pool, id); a != 0 {
-				t.Fatalf("strikes after reopen: activity=%d, want 0 (the state trigger resets a reopen)", a)
+			if a, l := obsStrikes(t, pool, id); a != 0 || l != 0 {
+				t.Fatalf("strikes after reopen: activity=%d legacy=%d, want 0/0", a, l)
 			}
 			if age := obsSeenAge(t, pool, id); age > time.Minute {
 				t.Fatalf("activity last_seen_at is %s old after the reopening upsert", age)

@@ -163,9 +163,11 @@ LIMIT sqlc.arg(max_rows);
 -- Locking and the compare-and-set: see CloseUnseenJobs. `locked` reads the strike count from the
 -- LOCKED activity row, the one value every writer keeps current.
 --
--- The strike count lives only in job_activity (release B); jobs carries none. The statement still
--- stamps jobs.updated_at on every strike, as it always has, and closes the row once the threshold
--- is reached.
+-- Release A writes the count to BOTH places: job_activity explicitly, and the legacy jobs column
+-- for readers older than release A. The one-way bridge fires only when the legacy value CHANGES,
+-- and while writers move to job_activity the legacy value goes stale, so a computed count that
+-- happens to equal the stale legacy one would never reach job_activity through it. Both writes
+-- carry the same value, so the bridge firing as well is idempotent.
 WITH locked AS MATERIALIZED (
     SELECT j.id, j.closed_at, a.liveness_strikes
     FROM jobs j
@@ -189,7 +191,8 @@ WITH locked AS MATERIALIZED (
 -- write (and before the triggers that jobs write fires), instead of relying on the order Postgres
 -- happens to run independent data-modifying CTEs in.
 UPDATE jobs
-SET -- A close only when `locked` saw the row open: if another mechanism closed it between candidate
+SET liveness_strikes = b.strikes,
+    -- A close only when `locked` saw the row open: if another mechanism closed it between candidate
     -- selection and this write, its closed_at/closed_reason are the true record of when and why, and
     -- this probe must not overwrite either.
     closed_at = CASE WHEN b.closing THEN now() ELSE jobs.closed_at END,
@@ -197,13 +200,32 @@ SET -- A close only when `locked` saw the row open: if another mechanism closed 
     updated_at = now()
 FROM bumped b
 WHERE jobs.id = b.job_id
-RETURNING jobs.id, b.strikes AS liveness_strikes, jobs.closed_at;
+RETURNING jobs.id, jobs.liveness_strikes, jobs.closed_at;
 
 -- name: ResetLivenessStrikes :exec
 -- A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 -- expired probes can close a job. Guarded to the non-zero case so probing an
--- already-clean job does not churn the row or lock it. The count is job_activity's, so this
--- writes that row alone: the jobs tuple is neither written nor locked.
-UPDATE job_activity
+-- already-clean job does not churn the row or lock it.
+--
+-- The guard reads job_activity, the current count, and both places are written (see
+-- MarkLivenessExpired for why): a legacy column that is already 0 while job_activity holds 4 must
+-- still reset job_activity, and the bridge would not fire for a legacy 0 -> 0. The legacy column is
+-- written only when it is not already 0, so the wide jobs tuple is untouched in that case. Locking:
+-- see CloseUnseenJobs.
+WITH locked AS MATERIALIZED (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.id = sqlc.arg(id) AND a.liveness_strikes <> 0
+    FOR NO KEY UPDATE OF j, a
+), cleared AS (
+    UPDATE job_activity a
+    SET liveness_strikes = 0
+    FROM locked l
+    WHERE a.job_id = l.id
+    RETURNING a.job_id
+)
+UPDATE jobs
 SET liveness_strikes = 0
-WHERE job_id = sqlc.arg(id) AND liveness_strikes <> 0;
+FROM cleared c
+WHERE jobs.id = c.job_id AND jobs.liveness_strikes <> 0;

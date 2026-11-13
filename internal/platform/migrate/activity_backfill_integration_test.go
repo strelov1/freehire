@@ -5,6 +5,7 @@ package migrate_test
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -154,8 +155,8 @@ func activityBackfillMigrations(t *testing.T, prefix string) []migrate.Migration
 			selected = append(selected, m)
 		}
 	}
-	if len(selected) != 3 {
-		t.Fatalf("activity backfill migrations: got %d, want 3", len(selected))
+	if len(selected) != 4 {
+		t.Fatalf("activity backfill migrations: got %d, want 4", len(selected))
 	}
 	return selected
 }
@@ -190,7 +191,8 @@ func TestActivityBackfillIsRecordedBeforeForeignKeyLockRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 2 || applied[0] != migrations[1].Version || applied[1] != migrations[2].Version {
-		t.Fatalf("retry applied %v, want only foreign key and validation", applied)
+	want := []string{migrations[1].Version, migrations[2].Version, migrations[3].Version}
+	if !slices.Equal(applied, want) {
+		t.Fatalf("retry applied %v, want only foreign key steps and validation %v", applied, want)
 	}
 }
