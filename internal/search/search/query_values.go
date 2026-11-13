@@ -68,7 +68,8 @@ var closedFacets = map[string]func(string) bool{
 		_, ok := skilltag.Resolve(val)
 		return ok
 	},
-	"is_tech":              oneOf(boolValues),
+	// is_tech filters on the served "tech" / "non_tech" string (jobview.isTechFacet), not a boolean.
+	"is_tech":              oneOf([]string{"tech", "non_tech"}),
 	RequiresClearanceParam: oneOf(boolValues),
 	ViaRecruiterParam:      oneOf(boolValues),
 	// EquityNotStated is a reserved value the filter maps to NOT EXISTS.

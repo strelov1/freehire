@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "freehire API",
-    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.\n\n## External vs internal endpoints\n\nThis reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal).\n\n## Filtering jobs\n\n\n\nExcept where noted below, these parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.\n\n\n\n- Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.\n\n- Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.\n\n- Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.\n\n- Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.\n\n- Geography is a single OR group: `regions`, `countries`, `metros` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means \"in Europe **or** in Italy\", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The four name a single concept — *where* — so picking two places reads as \"either\", which is what makes `regions=eu&countries=BR` (\"Europe or Brazil\") useful. There is no AND to switch on: `_mode=and` does not apply to geography.\n\n- Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.\n\n- A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{\"data\": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.\n\n\n\n### Facets\n\n\n\nEvery facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, sequoia, accel, greylock, usv, bond, lightspeed, index-ventures, softbank-vision-fund, founders-fund, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |\n\n| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |\n\n| `work_mode` | Work format | remote, hybrid, onsite |\n\n| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, it_support, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, occupational_safety, product, project_management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, social_services, science, manufacturing, public_safety, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other. The retired value management is still accepted and answered as role_type=people_manager |\n\n| `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |\n\n| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |\n\n| `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means \"no marker\", not \"IC\" |\n\n| `skills` | Skills | Open vocabulary — call /jobs/facets for live values |\n\n| `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |\n\n| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |\n\n| `countries` | Countries | Open vocabulary — call /jobs/facets for live values |\n\n| `cities` | City | Open vocabulary — call /jobs/facets for live values. Recognized dictionary aliases such as München and Köln resolve to their canonical city names. |\n\n| `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |\n\n| `relocation` | Relocation | not_supported, supported, required |\n\n| `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |\n\n| `engagement` | Contract terms | ir35_outside, ir35_inside, w2, 1099, c2c, contract_to_hire, b2b, uop, umowa_zlecenie, umowa_o_dzielo, clt, pj, tk, gph, samozanyaty, ip, freiberuflich, arbeitnehmerueberlassung, zzp, auto_entrepreneur, portage_salarial, autonomo, monotributo — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type |\n\n| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |\n\n| `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |\n\n| `reality` | Posting reality | fresh, stale, likely-evergreen |\n\n| `salary_currency` | Currency | USD, EUR, GBP, RUB |\n\n| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |\n\n| `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |\n\n| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |\n\n| `source_type` | Source type | ats, company, aggregator, social |\n\n| `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |\n\n| `source` | Source | Open vocabulary — call /jobs/facets for live values |\n\n| `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |\n\n| `education_level` | Education level | none, bachelor, master, phd |\n\n| `salary_period` | Salary period | year, month, day, hour |\n\n\n\n### Numeric & boolean filters\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `visa_sponsorship` | Visa sponsorship | true, false |\n\n| `requires_clearance` | Security clearance required | true, false |\n\n| `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |\n\n| `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |\n\n| `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |\n\n| `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |\n\n| `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |\n\n| `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |\n\n| `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all, unless experience_include_unspecified is set |\n\n| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound |\n\n| `experience_only_seniority_unspecified` | Experience only without a level | true — apply either experience bound only to the jobs that carry no seniority level; a job with a level passes the bound whatever it states. With seniority and seniority_include_unspecified this reads \"one of these levels, or no level and within the bound\". Has no effect without a bound |\n\n| `seniority_include_unspecified` | Include unstated seniority | true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority |\n\n| `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |\n\n| `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |\n\n| `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the \"short form\" filter). Jobs with no form freehire could read are excluded: unknown is not short |\n\n\n\n### Recipes\n\n\n\n- **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`\n\n- **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`\n\n- **One country only — no region param, or it widens back out** — `countries=IT&employment_type=contract`\n\n- **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`\n\n- **Exclude outstaff companies** — `company_type_exclude=outstaff`\n\n- **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`\n\n- **Excluding jobs that need a security clearance** — `clearance_levels=none`\n\n- **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`\n\n- **Only jobs that need a security clearance** — `requires_clearance=true`",
+    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.\n\n## External vs internal endpoints\n\nThis reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal).\n\n## Filtering jobs\n\n\n\nExcept where noted below, these parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.\n\n\n\n- Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.\n\n- Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.\n\n- Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.\n\n- Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.\n\n- Geography is a single OR group: `regions`, `countries`, `metros` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means \"in Europe **or** in Italy\", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The four name a single concept — *where* — so picking two places reads as \"either\", which is what makes `regions=eu&countries=BR` (\"Europe or Brazil\") useful. There is no AND to switch on: `_mode=and` does not apply to geography.\n\n- Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.\n\n- A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{\"data\": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.\n\n\n\n### Facets\n\n\n\nEvery facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, sequoia, accel, greylock, usv, bond, lightspeed, index-ventures, softbank-vision-fund, founders-fund, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |\n\n| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |\n\n| `work_mode` | Work format | remote, hybrid, onsite |\n\n| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, it_support, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, occupational_safety, product, project_management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, social_services, science, manufacturing, public_safety, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other. The retired value management is still accepted and answered as role_type=people_manager |\n\n| `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |\n\n| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |\n\n| `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means \"no marker\", not \"IC\" |\n\n| `skills` | Skills | Open vocabulary — call /jobs/facets for live values |\n\n| `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |\n\n| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |\n\n| `countries` | Countries | Open vocabulary — call /jobs/facets for live values |\n\n| `cities` | City | Open vocabulary — call /jobs/facets for live values. Recognized dictionary aliases such as München and Köln resolve to their canonical city names. |\n\n| `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |\n\n| `relocation` | Relocation | not_supported, supported, required |\n\n| `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |\n\n| `engagement` | Contract terms | ir35_outside, ir35_inside, w2, 1099, c2c, contract_to_hire, b2b, uop, umowa_zlecenie, umowa_o_dzielo, clt, pj, tk, gph, samozanyaty, ip, freiberuflich, arbeitnehmerueberlassung, zzp, auto_entrepreneur, portage_salarial, autonomo, monotributo — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type |\n\n| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |\n\n| `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |\n\n| `reality` | Posting reality | fresh, stale, likely-evergreen |\n\n| `salary_currency` | Currency | USD, EUR, GBP, RUB |\n\n| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |\n\n| `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |\n\n| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |\n\n| `source_type` | Source type | ats, company, aggregator, social |\n\n| `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |\n\n| `source` | Source | Open vocabulary — call /jobs/facets for live values |\n\n| `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |\n\n| `education_level` | Education level | none, bachelor, master, phd |\n\n| `salary_period` | Salary period | year, month, day, hour |\n\n| `is_tech` | Technical role | tech, non_tech |\n\n\n\n### Numeric & boolean filters\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `visa_sponsorship` | Visa sponsorship | true, false |\n\n| `requires_clearance` | Security clearance required | true, false |\n\n| `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |\n\n| `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |\n\n| `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |\n\n| `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |\n\n| `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |\n\n| `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |\n\n| `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all, unless experience_include_unspecified is set |\n\n| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound |\n\n| `experience_only_seniority_unspecified` | Experience only without a level | true — apply either experience bound only to the jobs that carry no seniority level; a job with a level passes the bound whatever it states. With seniority and seniority_include_unspecified this reads \"one of these levels, or no level and within the bound\". Has no effect without a bound |\n\n| `seniority_include_unspecified` | Include unstated seniority | true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority |\n\n| `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |\n\n| `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |\n\n| `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the \"short form\" filter). Jobs with no form freehire could read are excluded: unknown is not short |\n\n| `auto_apply_available` | Auto-apply can attempt it | true — only postings whose ATS freehire auto-apply can currently attempt to fill and submit for; a provider-eligibility signal, never a guarantee the submission succeeds |\n\n| `work_mode_remote_anywhere` | Remote from anywhere, other modes at home | true — with `remote` and a physical work_mode both selected and a geography facet set, reads \"remote anywhere, OR hybrid/onsite within the geography\" instead of ANDing them. Otherwise, or with work_mode_mode=and, it changes nothing |\n\n| `work_mode_remote_regions` | Remote arm: regions | Region values, as regions — bound the remote arm of work_mode_remote_anywhere. Read only while it is in force |\n\n| `work_mode_remote_countries` | Remote arm: countries | ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force |\n\n\n\n### Recipes\n\n\n\n- **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`\n\n- **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`\n\n- **One country only — no region param, or it widens back out** — `countries=IT&employment_type=contract`\n\n- **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`\n\n- **Exclude outstaff companies** — `company_type_exclude=outstaff`\n\n- **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`\n\n- **Excluding jobs that need a security clearance** — `clearance_levels=none`\n\n- **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`\n\n- **Only jobs that need a security clearance** — `requires_clearance=true`",
     "version": "1.0.0"
   },
   "servers": [
@@ -143,7 +143,7 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over `title`, `company`, `description`, and `location`. Plain words\nuse the default engine matching: the first words are required and trailing ones are\ndropped when too few postings match, so word order can change the result. Operators:\nquotes (`\"systems engineer\"`) require every quoted word in any order (not a\ncontiguous phrase); `-word` excludes; uppercase `OR` between words matches any\nalternative (at most 5, merged and deduplicated); `title:` at the start of an\nalternative matches it in the title only, e.g.\n`title:\"product owner\" -junior OR title:produktchef`. Narrow the fields of the other\nalternatives with `q_fields`. Exact-phrase matching is not offered, and default\nrelevance order does not reliably rank a contiguous match above a scattered-token\none. (e.g. `golang`)",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. The first\nwords are required and trailing ones are dropped when too few postings match, so word\norder can change the result. Operators: quotes require every quoted word in any order\n(not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any\nalternative (at most 5); `title:` at the start of an alternative matches it in the\ntitle only, e.g. `title:\"product owner\" -junior OR title:produktchef`. `q_fields`\nnarrows the other alternatives. No exact-phrase matching. (e.g. `golang`)",
             "schema": {
               "type": "string"
             },
@@ -2308,7 +2308,7 @@
       "get": {
         "operationId": "jobFacets",
         "summary": "Count of matching jobs per facet value (and numeric stats).",
-        "description": "Takes the same `q` and facet filter params as search, but returns the distribution of\nvalues instead of a page of jobs — use it to build filter UIs or see how a filter\nnarrows the set. Continuous numeric facets are returned as `stats` (min/max), not\nper-value buckets. `former_employers` is ignored even for signed-in callers.",
+        "description": "The same `q` and filters as search, answered with the count of postings per facet value\nand `stats` (min/max) for the numeric facets. `former_employers` and `watchlist` are\nignored. Narrow with `facets=`; naming `company_slug` there adds `companies_total` and\n`top_companies`.",
         "parameters": [
           {
             "name": "q",
@@ -2324,7 +2324,7 @@
             "name": "facets",
             "in": "query",
             "required": false,
-            "description": "Comma-separated facet params to count instead of all of them.",
+            "description": "Comma-separated facet params to count instead of all of them, e.g. `skills,seniority`.\n`company_slug` is counted only when named here. An unknown name is a 400, and so is\ncombining it with `disjunctive`, or `company_slug` with an `OR` query.",
             "schema": {
               "type": "string"
             },
@@ -2334,6 +2334,7 @@
             "name": "disjunctive",
             "in": "query",
             "required": false,
+            "description": "`true` counts each facet under the full filter MINUS its own selection, so a selected\nfacet still shows its siblings' counts — what a live filter sidebar wants. Costs one\nquery per facet.",
             "schema": {
               "type": "string"
             },
@@ -2556,13 +2557,13 @@
       "get": {
         "operationId": "searchJobs",
         "summary": "Full-text + faceted search over open jobs.",
-        "description": "Combine free-text `q` with any of the filter params below. Repeated facet params are\nORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude.\nWithout `q`, results default to newest first; with `q`, to relevance. A param no filter\nreads is ignored rather than refused, and listed in `meta.ignored_params` — check it,\nsince a dropped filter otherwise looks like a broad result.\n\nPlus every filter in the \"Filtering jobs\" section.",
+        "description": "Free-text `q` plus any filter (the \"Filtering jobs\" section). Repeated values OR;\n`<param>_mode=and` requires all, `<param>_exclude` excludes. Newest first without `q`,\nby relevance with it. An unread param is listed in `meta.ignored_params`: check it, a\ndropped filter looks like a broad result.",
         "parameters": [
           {
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Full-text query over `title`, `company`, `description`, and `location`. Plain words\nuse the default engine matching: the first words are required and trailing ones are\ndropped when too few postings match, so word order can change the result. Operators:\nquotes (`\"systems engineer\"`) require every quoted word in any order (not a\ncontiguous phrase); `-word` excludes; uppercase `OR` between words matches any\nalternative (at most 5, merged and deduplicated); `title:` at the start of an\nalternative matches it in the title only, e.g.\n`title:\"product owner\" -junior OR title:produktchef`. Narrow the fields of the other\nalternatives with `q_fields`. Exact-phrase matching is not offered, and default\nrelevance order does not reliably rank a contiguous match above a scattered-token\none. (e.g. `golang`)",
+            "description": "Full-text query over `title`, `company`, `description`, and `location`. The first\nwords are required and trailing ones are dropped when too few postings match, so word\norder can change the result. Operators: quotes require every quoted word in any order\n(not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any\nalternative (at most 5); `title:` at the start of an alternative matches it in the\ntitle only, e.g. `title:\"product owner\" -junior OR title:produktchef`. `q_fields`\nnarrows the other alternatives. No exact-phrase matching. (e.g. `golang`)",
             "schema": {
               "type": "string"
             },
@@ -2722,8 +2723,8 @@
                   "data": {
                     "public_slug": "senior-go-engineer-acme-1a2b",
                     "title": "Senior Go Engineer",
-                    "closed_at": null,
-                    "...": "..."
+                    "company": "Acme",
+                    "closed_at": null
                   }
                 }
               }
@@ -3738,9 +3739,9 @@
                 "example": {
                   "data": [
                     {
-                      "public_slug": "...",
-                      "title": "...",
-                      "...": "..."
+                      "public_slug": "senior-go-engineer-acme-1a2b",
+                      "title": "Senior Go Engineer",
+                      "company": "Acme"
                     }
                   ]
                 }
@@ -10877,12 +10878,14 @@
     "/suggest": {
       "get": {
         "operationId": "suggest",
-        "description": "Search-box suggestions. 503 when search is not configured.",
+        "summary": "Complete what is being typed into a search box.",
+        "description": "Completes a PHRASE, not a word: `senior software engineer go` completes to Senior\nSoftware Engineer at Google. Each row carries every part it names; apply them all.\nTypos are forgiven in the trailing fragment only. An empty `q` returns no rows. 503 when\nsearch is not configured.",
         "parameters": [
           {
             "name": "q",
             "in": "query",
             "required": false,
+            "description": "The partly-typed query, matched against posting titles, skills, categories and companies.",
             "schema": {
               "type": "string"
             },
@@ -11584,6 +11587,7 @@
     },
     "/companies/{slug}": {
       "get": {
+        "operationId": "getCompany",
         "summary": "A company and a page of its open jobs.",
         "parameters": [
           {
@@ -11676,12 +11680,33 @@
                     },
                     "jobs": [
                       {
-                        "public_slug": "...",
-                        "title": "...",
-                        "...": "..."
+                        "public_slug": "senior-go-engineer-acme-1a2b",
+                        "title": "Senior Go Engineer",
+                        "company": "Acme"
                       }
                     ]
                   }
+                },
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CompanyPage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -12456,6 +12481,397 @@
           }
         }
       }
+    },
+    "/ojcp/v1/search": {
+      "post": {
+        "operationId": "ojcpSearchJobs",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "OJCP: search jobs",
+        "description": "The `search_jobs` tool of the [Open Job Context Protocol](https://spec.ojcp.dev/) over REST: each result is an OJCP `JobPosting` with the paths it can be applied through. Discovery: `/.well-known/ojcp.json`; MCP: `/api/v1/ojcp/mcp`. A filter it cannot honour is named in `ignored_params`.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "An OJCP `search_jobs` input. Unrecognised fields are ignored rather than\nrefused, per the standard's extensibility rule.\n",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "object",
+                    "properties": {
+                      "city": {
+                        "type": "string"
+                      },
+                      "country": {
+                        "type": "string"
+                      },
+                      "remote_ok": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "filters": {
+                    "type": "object",
+                    "properties": {
+                      "employment_type": {
+                        "type": "string"
+                      },
+                      "experience_level": {
+                        "type": "string"
+                      },
+                      "salary_min": {
+                        "type": "number"
+                      },
+                      "salary_max": {
+                        "type": "number"
+                      },
+                      "posted_within_days": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "pagination": {
+                    "type": "object",
+                    "properties": {
+                      "limit": {
+                        "type": "integer",
+                        "maximum": 50,
+                        "default": 10
+                      },
+                      "offset": {
+                        "type": "integer",
+                        "default": 0
+                      }
+                    }
+                  },
+                  "semantic": {
+                    "type": "boolean",
+                    "description": "Extension. `true` asks for meaning-based ranking, which is\ncurrently not available: the answer is the keyword search and\n`semantic` says `unavailable`. Without a non-empty `query` it is\nreported in `ignored_params` instead.\n"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An OJCP search-jobs response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "query",
+                    "total_results",
+                    "returned",
+                    "offset",
+                    "jobs"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "total_results": {
+                      "type": "integer"
+                    },
+                    "returned": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "An OJCP JobPosting."
+                      }
+                    },
+                    "ignored_params": {
+                      "type": "array",
+                      "description": "Input fields this provider could not honour.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "semantic": {
+                      "type": "string",
+                      "enum": [
+                        "applied",
+                        "unavailable"
+                      ],
+                      "description": "Extension. Which search answered a request that sent\n`semantic: true`; omitted when it did not.\n"
+                    },
+                    "total_is_lower_bound": {
+                      "type": "boolean",
+                      "description": "Extension. True when `total_results` is a minimum (what this\npage reaches, plus one when there is a next page), not a count\nof the match.\n"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "OJCP error `invalid_request`: the body is not valid JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "error_code",
+                    "message"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OJCP error `provider_error`: search is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "error_code",
+                    "message"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/ojcp/v1/jobs/{slug}": {
+      "get": {
+        "operationId": "ojcpJobDetail",
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "OJCP: read one posting",
+        "description": "The `get_job_detail` tool, by the `ojcp_id` a search result carries.\n",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The posting's ojcp_id (its public_slug)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An OJCP job-detail response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "job"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "job": {
+                      "type": "object",
+                      "description": "An OJCP JobPosting."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "OJCP error `job_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "error_code",
+                    "message"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/ojcp/v1/employers/{slug}": {
+      "get": {
+        "operationId": "ojcpEmployerContext",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "OJCP: read an employer",
+        "description": "The `get_employer_context` tool, by the `ojcp_employer_id` a posting carries.\nIncludes `open_roles_count`, the one figure a single posting cannot state.\n",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The employer's ojcp_employer_id (its company slug)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An OJCP employer-context response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "employer_id",
+                    "name"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "employer_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "industries": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "open_roles_count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "OJCP error `employer_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ojcp_version",
+                    "error_code",
+                    "message"
+                  ],
+                  "properties": {
+                    "ojcp_version": {
+                      "type": "string"
+                    },
+                    "error_code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
     }
   },
   "components": {
@@ -12605,7 +13021,9 @@
             },
             "description": "Absent when every param was read."
           },
-          "ignored_values": {},
+          "ignored_values": {
+            "$ref": "#/components/schemas/IgnoredValues"
+          },
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
@@ -13330,7 +13748,7 @@
         "properties": {
           "value": {
             "type": "string",
-            "description": "The city's canonical name, the value the filters take."
+            "description": "Canonical city name — pass it verbatim to the `cities` facet, which matches nothing on a near miss."
           },
           "country": {
             "type": "string",
@@ -13376,6 +13794,200 @@
             "format": "int64"
           }
         }
+      },
+      "CompanyDetail": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "job_count": {
+            "type": "integer"
+          },
+          "tagline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "company_info": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Homepage, description, and other profile fields where known."
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remote_regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Regions the company hires remotely in, derived from its open postings."
+          },
+          "company_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "company_sizes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hq_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "year_founded": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "employee_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "organization_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "yc_batch": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "yc_status": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "yc_stage": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "yc_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "feedback_count": {
+            "type": "integer"
+          },
+          "feedback_rating_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upvote_count": {
+            "type": "integer"
+          },
+          "downvote_count": {
+            "type": "integer"
+          },
+          "my_vote": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calling user's vote; 0 or null without a signed-in caller."
+          }
+        },
+        "description": "The company summary plus the profile fields served only on the detail endpoint."
       },
       "CompanyFeedback": {
         "type": "object",
@@ -13577,6 +14189,56 @@
           }
         },
         "description": "A row of the catalogue: the company, its open-job count and a few company-info facts for the card."
+      },
+      "CompanyPage": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/CompanyDetail"
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          },
+          "referral_available": {
+            "type": "boolean",
+            "description": "Whether an employee referral offer exists for this company."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/CompanyRef"
+          },
+          "subsidiaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompanyRef"
+            },
+            "description": "Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none."
+          }
+        },
+        "description": "The `/companies/{slug}` answer: the company and a page of its open jobs."
+      },
+      "CompanyRef": {
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "job_count"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "job_count": {
+            "type": "integer",
+            "description": "Open jobs the related company has."
+          }
+        },
+        "description": "A related company: the parent that owns this one, or a subsidiary it owns. It is a\nseparate company with its own page and jobs, not another name for this one."
       },
       "CompanySubindustry": {
         "type": "object",
@@ -14745,7 +15407,9 @@
               "$ref": "#/components/schemas/IgnoredParam"
             }
           },
-          "ignored_values": {}
+          "ignored_values": {
+            "$ref": "#/components/schemas/IgnoredValues"
+          }
         },
         "description": "The meta of a single-item answer, sent only to carry a warning."
       },
@@ -14763,6 +15427,17 @@
           }
         },
         "description": "A query param the endpoint did not read: unknown, or known but unreadable\n(`min_years=lots`). Either way the answer is wider than the caller asked for."
+      },
+      "IgnoredValues": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": "Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value\noutside its vocabulary — keyed by the parameter as sent, each listing the unknown values.\nThe value is still applied and matches no posting: alone it empties the answer, beside\nother values it adds nothing to their OR, and in `_exclude` it excludes nothing.",
+        "x-raw-json": true
       },
       "InboxApplicationDetail": {
         "type": "object",
@@ -15293,6 +15968,290 @@
         },
         "description": "The caller's interaction with one job. Every timestamp, the stage and the notes are null\nuntil the job is viewed, saved, applied to, dismissed or tracked."
       },
+      "Job": {
+        "type": "object",
+        "required": [
+          "public_slug",
+          "title",
+          "company"
+        ],
+        "properties": {
+          "public_slug": {
+            "type": "string",
+            "description": "Stable public identifier. The freehire page is https://freehire.me/jobs/{public_slug}."
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The employer's own application URL. This is where an applicant goes. Empty when\n`direct_apply` is true: that vacancy has no page elsewhere."
+          },
+          "direct_apply": {
+            "type": "boolean",
+            "description": "True for a vacancy its employer published on freehire that takes applications only on\nits freehire page (`https://freehire.me/jobs/{slug}`). Absent for every other posting."
+          },
+          "location": {
+            "type": "string",
+            "description": "The posting's own location string, verbatim and unnormalized. Filter on the geography facets instead."
+          },
+          "source": {
+            "type": "string",
+            "description": "Origin slug — the ATS or board this posting was crawled from."
+          },
+          "external_id": {
+            "type": "string",
+            "description": "The source's own identifier for the posting."
+          },
+          "application_deadline": {
+            "type": "string",
+            "format": "date",
+            "description": "Source-stated last application day, inclusive. Absent when the source states no deadline."
+          },
+          "manually_added": {
+            "type": "boolean",
+            "description": "True for a hand-curated posting rather than an automated crawl."
+          },
+          "description": {
+            "type": "string",
+            "description": "Stored verbatim HTML by default. `searchJobs` serves a truncated preview;\n`agentSearchJobs` and `getJob` serve the full body, and `agentSearchJobs` can convert\nit via `description_format`."
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "work_mode": {
+            "type": "string",
+            "enum": [
+              "remote",
+              "hybrid",
+              "onsite"
+            ],
+            "description": "Absent when the posting's format could not be resolved."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Curated collection slugs of the posting's company."
+          },
+          "is_tech": {
+            "type": "string",
+            "enum": [
+              "tech",
+              "non_tech"
+            ],
+            "description": "Absent when unknown."
+          },
+          "requires_clearance": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting states a government security-clearance\nrequirement. Absent otherwise — there is no `false`, because \"no requirement was\ndetected\" is not the same claim as \"this posting needs no clearance\"."
+          },
+          "via_recruiter": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting states that it is published by an\nintermediary on a client's behalf. Absent otherwise — a recruiter who never says so is\nnot detected, so absence does not mean the employer posted it."
+          },
+          "equity": {
+            "type": "string",
+            "enum": [
+              "salary_and_equity",
+              "equity_only"
+            ],
+            "description": "What the posting states about equity compensation: `salary_and_equity` (offered beside\ncash pay) or `equity_only` (equity is the whole pay). Absent when the posting states\nneither — \"not stated\", not \"no equity\"."
+          },
+          "clearance_levels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "confidential",
+                "secret",
+                "top_secret",
+                "ts_sci",
+                "public_trust",
+                "interim",
+                "other"
+              ]
+            },
+            "description": "The security-clearance levels the posting states. Present exactly when\n`requires_clearance` is, absent otherwise. `other` is a non-US scheme or a clearance\nstated with no level."
+          },
+          "perks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Benefits the description states it offers (see the `perks` filter for the\nvocabulary). Empty when it names none of them — not a claim that the job offers none."
+          },
+          "engagement": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The legal terms the posting states it engages its worker on (see the `engagement`\nfilter for the vocabulary). Empty when it does not say."
+          },
+          "auto_apply_available": {
+            "type": "boolean",
+            "description": "Present and `true` only when the posting's ATS provider is one freehire's auto-apply\nfeature can currently attempt to fill and submit for. Absent otherwise — a best-effort\nprovider-eligibility signal, never a guarantee of successful submission."
+          },
+          "apply_questions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "How many questions the posting's application form REQUIRES beyond the standard fields\nevery form asks for (name, contact details, CV, cover letter), counted from the form\nfreehire captured from the employer's ATS. Optional questions, the equal-opportunity\nsurvey and consent boxes are not counted. `0` means no REQUIRED question beyond the\nbasics. Absent when freehire holds no form for the posting — \"not known\", never\n\"long\". Served by search hits and the job detail; a list read straight from the\ndatabase may omit it."
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When freehire first saw the posting."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a re-crawl last confirmed the posting was still live."
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Non-null once the posting is no longer open. Only `getJob` ever serves such a row."
+          },
+          "enrichment": {
+            "$ref": "#/components/schemas/JobEnrichment"
+          },
+          "enriched_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enrichment_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bumped when the enrichment contract changes — use it to detect re-enriched rows."
+          },
+          "my_vote": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calling user's vote; 0 or null without a signed-in caller."
+          },
+          "reality": {
+            "$ref": "#/components/schemas/JobReality"
+          },
+          "ghost": {
+            "$ref": "#/components/schemas/JobGhost"
+          },
+          "view_count": {
+            "type": "integer"
+          },
+          "applied_count": {
+            "type": "integer"
+          },
+          "upvote_count": {
+            "type": "integer"
+          },
+          "downvote_count": {
+            "type": "integer"
+          }
+        },
+        "description": "One posting, as every job endpoint serves it."
+      },
       "JobCopiesMeta": {
         "type": "object",
         "required": [
@@ -15357,6 +16316,70 @@
         },
         "description": "One per-city opening folded under a canonical job."
       },
+      "JobEnrichment": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "The one synthesized field — a 1-2 sentence synopsis, always present on an enriched posting."
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "relocation": {
+            "type": "string"
+          },
+          "visa_sponsorship": {
+            "type": "boolean"
+          },
+          "timezone_note": {
+            "type": "string"
+          },
+          "salary_min": {
+            "type": "integer"
+          },
+          "salary_max": {
+            "type": "integer"
+          },
+          "salary_currency": {
+            "type": "string"
+          },
+          "salary_period": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "experience_years_min": {
+            "type": "integer"
+          },
+          "english_level": {
+            "type": "string"
+          },
+          "education_level": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "posting_language": {
+            "type": "string"
+          },
+          "company_type": {
+            "type": "string"
+          },
+          "company_size": {
+            "type": "string"
+          }
+        },
+        "description": "Model-extracted attributes, every field omitted when the posting did not state it.\n`work_mode`, `regions`, `countries`, `cities` and `skills` are deliberately NOT here —\nthose are served top-level from the deterministic dictionaries, and the model's own\nvalues for them are not published."
+      },
       "JobFindMeta": {
         "type": "object",
         "required": [
@@ -15402,6 +16425,66 @@
           }
         },
         "description": "The posting a page URL is, when the catalogue carries it."
+      },
+      "JobGhost": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string",
+            "description": "How strongly the evidence reads, e.g. `possible`."
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Which criteria fired, e.g. `evergreen_posting`, `ats_absent`."
+          },
+          "criteria_total": {
+            "type": "integer",
+            "description": "How many criteria exist, so `criteria` reads as N-of-total."
+          },
+          "contributors": {
+            "type": "integer",
+            "description": "Number of independent user reports, once past the disclosure gate."
+          },
+          "ats_checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the posting was last looked for on the employer's own ATS. Present only when the `ats_absent` criterion fired.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "Hedged \"is anyone actually hiring for this\" verdict, raised only when evidence fires —\nmost postings carry none, so an absent value means \"no signal\", never \"verified real\".\nAttached by `searchJobs`, `getJob` and the plain jobs list. NOT attached by\n`agentSearchJobs` or `getSimilarJobs`, so its absence on those two is not evidence\neither way."
+      },
+      "JobReality": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "stale",
+              "likely-evergreen"
+            ]
+          },
+          "age_days": {
+            "type": "integer"
+          },
+          "repost_count": {
+            "type": "integer",
+            "description": "How many times this role has been reposted."
+          },
+          "mass_posting_count": {
+            "type": "integer",
+            "description": "How many near-identical postings the same role cluster holds."
+          },
+          "fake_freshness": {
+            "type": "boolean",
+            "description": "True when the stated posting date looks refreshed rather than real."
+          }
+        },
+        "description": "Signals about whether the posting reflects a real, current opening."
       },
       "JobReport": {
         "type": "object",
@@ -15528,7 +16611,9 @@
             },
             "description": "Absent when every param was read."
           },
-          "ignored_values": {},
+          "ignored_values": {
+            "$ref": "#/components/schemas/IgnoredValues"
+          },
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
@@ -15596,7 +16681,9 @@
             },
             "description": "Absent when every param was read."
           },
-          "ignored_values": {},
+          "ignored_values": {
+            "$ref": "#/components/schemas/IgnoredValues"
+          },
           "total_is_lower_bound": {
             "type": "boolean",
             "description": "True when `total` counts only what was read, not the whole match."
@@ -18650,18 +19737,20 @@
         ],
         "properties": {
           "text": {
-            "type": "string"
+            "type": "string",
+            "description": "The whole phrase the row names — the recognised prefix plus the completion, e.g. \"Senior Software Engineer Google\"."
           },
           "parts": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuggestionPart"
-            }
+            },
+            "description": "Every part the row applies. Apply ALL of them: a row naming a role and a company that is\napplied as only one of the two silently discards what the caller typed."
           },
           "jobs": {
             "type": "integer",
             "format": "int64",
-            "description": "How many open jobs the suggestion finds."
+            "description": "Open postings behind the completion. Never zero — a suggestion that leads to an empty page is withheld."
           }
         }
       },
@@ -18682,14 +19771,16 @@
         ],
         "properties": {
           "kind": {
-            "$ref": "#/components/schemas/SuggestionKind"
+            "$ref": "#/components/schemas/SuggestionKind",
+            "description": "Which vocabulary the part comes from, and so which parameter it applies to: `skill` →\n`skills`, `category` → `category`, `company` → `company_slug`. A `title` names no facet\nand is applied as `q`."
           },
           "slug": {
             "type": "string",
-            "description": "The dictionary slug, when the part is one."
+            "description": "The facet value to apply. Absent for a `title`."
           },
           "text": {
-            "type": "string"
+            "type": "string",
+            "description": "How this part reads on its own."
           }
         },
         "description": "One recognised piece of the query: a dictionary term, or text still being typed."

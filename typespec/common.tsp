@@ -1,3 +1,7 @@
+import "@typespec/openapi";
+
+using TypeSpec.OpenAPI;
+
 namespace Freehire;
 
 /** A single item: `{"data": ...}`. */
@@ -24,6 +28,18 @@ model IgnoredParam {
   did_you_mean?: string;
 }
 
+/**
+ * Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value
+ * outside its vocabulary — keyed by the parameter as sent, each listing the unknown values.
+ * The value is still applied and matches no posting: alone it empties the answer, beside
+ * other values it adds nothing to their OR, and in `_exclude` it excludes nothing.
+ */
+// ogen would encode a map in random key order, so the handlers write this as raw JSON
+// (contractIgnoredValues sorts it): scripts/openapi-ogen-input.mjs hands ogen an untyped
+// schema for a model carrying `x-raw-json`.
+@extension("x-raw-json", true)
+model IgnoredValues is Record<string[]>;
+
 /** Where a page sits in the whole list. */
 model PageMeta {
   total: int64;
@@ -37,7 +53,7 @@ model ListMeta {
 
   /** Absent when every param was read. */
   ignored_params?: IgnoredParam[];
-  ignored_values?: unknown;
+  ignored_values?: IgnoredValues;
 
   /** True when `total` counts only what was read, not the whole match. */
   total_is_lower_bound?: boolean;
@@ -52,7 +68,7 @@ model List<T> {
 /** The meta of a single-item answer, sent only to carry a warning. */
 model IgnoredMeta {
   ignored_params?: IgnoredParam[];
-  ignored_values?: unknown;
+  ignored_values?: IgnoredValues;
 }
 
 /** A single item that read query params: `{"data": ...}`, plus `meta` when one was dropped. */

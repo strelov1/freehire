@@ -202,8 +202,8 @@ op findJob(/** The posting's URL in the wild. (e.g. `https://boards.greenhouse.i
     data: #{
       public_slug: "senior-go-engineer-acme-1a2b",
       title: "Senior Go Engineer",
+      company: "Acme",
       closed_at: null,
-      `...`: "...",
     },
   },
 })

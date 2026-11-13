@@ -4451,7 +4451,8 @@ func (s *CheckUsernameOK) SetData(val AccountUsernameAvailability) {
 
 // Ref: #/components/schemas/CityMatch
 type CityMatch struct {
-	// The city's canonical name, the value the filters take.
+	// Canonical city name — pass it verbatim to the `cities` facet, which matches nothing on a near
+	// miss.
 	Value string `json:"value"`
 	// ISO 3166-1 alpha-2, lower case.
 	Country string `json:"country"`
@@ -25804,9 +25805,14 @@ func (s *SuggestOK) SetMeta(val SuggestMeta) {
 
 // Ref: #/components/schemas/Suggestion
 type Suggestion struct {
-	Text  string           `json:"text"`
+	// The whole phrase the row names — the recognised prefix plus the completion, e.g. "Senior Software
+	// Engineer Google".
+	Text string `json:"text"`
+	// Every part the row applies. Apply ALL of them: a row naming a role and a company that is applied as
+	// only one of the two silently discards what the caller typed.
 	Parts []SuggestionPart `json:"parts"`
-	// How many open jobs the suggestion finds.
+	// Open postings behind the completion. Never zero — a suggestion that leads to an empty page is
+	// withheld.
 	Jobs int64 `json:"jobs"`
 }
 
@@ -25899,10 +25905,14 @@ func (s *SuggestionKind) UnmarshalText(data []byte) error {
 // One recognised piece of the query: a dictionary term, or text still being typed.
 // Ref: #/components/schemas/SuggestionPart
 type SuggestionPart struct {
+	// Which vocabulary the part comes from, and so which parameter it applies to: `skill` → `skills`,
+	// `category` → `category`, `company` → `company_slug`. A `title` names no facet and is applied as
+	// `q`.
 	Kind SuggestionKind `json:"kind"`
-	// The dictionary slug, when the part is one.
+	// The facet value to apply. Absent for a `title`.
 	Slug OptString `json:"slug"`
-	Text string    `json:"text"`
+	// How this part reads on its own.
+	Text string `json:"text"`
 }
 
 // GetKind returns the value of Kind.

@@ -146,15 +146,13 @@ func decodeAddToWatchlistParams(args [1]string, argsEscaped bool, r *http.Reques
 
 // AgentSearchJobsParams is parameters of agentSearchJobs operation.
 type AgentSearchJobsParams struct {
-	// Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default
-	// engine matching: the first words are required and trailing ones are dropped when too few postings
-	// match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every
-	// quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words
-	// matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an
-	// alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`.
-	// Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered,
-	// and default relevance order does not reliably rank a contiguous match above a scattered-token one.
-	// (e.g. `golang`).
+	// Full-text query over `title`, `company`, `description`, and `location`. The first words are required
+	// and trailing ones are dropped when too few postings match, so word order can change the result.
+	// Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word`
+	// excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of
+	// an alternative matches it in the title only, e.g.
+	// `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No
+	// exact-phrase matching. (e.g. `golang`).
 	Q OptString `json:",omitempty,omitzero"`
 	// Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A
 	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
@@ -9791,8 +9789,12 @@ func decodeJobCopiesParams(args [1]string, argsEscaped bool, r *http.Request) (p
 type JobFacetsParams struct {
 	// Same full-text query as search. (e.g. `golang`).
 	Q OptString `json:",omitempty,omitzero"`
-	// Comma-separated facet params to count instead of all of them.
-	Facets      OptString `json:",omitempty,omitzero"`
+	// Comma-separated facet params to count instead of all of them, e.g. `skills,seniority`.
+	// `company_slug` is counted only when named here. An unknown name is a 400, and so is combining it
+	// with `disjunctive`, or `company_slug` with an `OR` query.
+	Facets OptString `json:",omitempty,omitzero"`
+	// `true` counts each facet under the full filter MINUS its own selection, so a selected facet still
+	// shows its siblings' counts — what a live filter sidebar wants. Costs one query per facet.
 	Disjunctive OptString `json:",omitempty,omitzero"`
 }
 
@@ -16220,15 +16222,13 @@ func decodeSearchCitiesParams(args [0]string, argsEscaped bool, r *http.Request)
 
 // SearchJobsParams is parameters of searchJobs operation.
 type SearchJobsParams struct {
-	// Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default
-	// engine matching: the first words are required and trailing ones are dropped when too few postings
-	// match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every
-	// quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words
-	// matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an
-	// alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`.
-	// Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered,
-	// and default relevance order does not reliably rank a contiguous match above a scattered-token one.
-	// (e.g. `golang`).
+	// Full-text query over `title`, `company`, `description`, and `location`. The first words are required
+	// and trailing ones are dropped when too few postings match, so word order can change the result.
+	// Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word`
+	// excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of
+	// an alternative matches it in the title only, e.g.
+	// `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No
+	// exact-phrase matching. (e.g. `golang`).
 	Q OptString `json:",omitempty,omitzero"`
 	// Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A
 	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
@@ -17435,6 +17435,7 @@ func decodeStartTailorSessionParams(args [1]string, argsEscaped bool, r *http.Re
 
 // SuggestParams is parameters of suggest operation.
 type SuggestParams struct {
+	// The partly-typed query, matched against posting titles, skills, categories and companies.
 	Q OptString `json:",omitempty,omitzero"`
 	// 1 to 20, default 5. A value that does not read falls back to the default.
 	Limit OptString `json:",omitempty,omitzero"`

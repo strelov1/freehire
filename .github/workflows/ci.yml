@@ -1102,13 +1102,14 @@ jobs:
       # (openapi/api.openapi.json, itself checked by the api-contract job), the hand
       # supplement for routes outside it, and filters.ts, and committed. Same ratchet as
       # the `sqlc` and `contracts` jobs; it lives here because the generator loads
-      # filters.ts through Vite, whose toolchain this job already installed. Unrelated to
-      # web/static/openapi.yaml (the narrow ChatGPT Actions schema, linted in `artifacts`).
+      # filters.ts through Vite, whose toolchain this job already installed. The same run
+      # writes static/openapi.yaml, the narrow ChatGPT Actions schema (linted in
+      # `artifacts`, guarded by `api-breaking`).
       - name: Assert the generated API reference matches the contract
         run: |
           pnpm run gen:api-docs
-          if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md src/lib/docs/generated)" ]; then
-            git --no-pager diff --stat -- ../docs/API.md ../docs/API.internal.md src/lib/docs/generated
+          if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md src/lib/docs/generated static/openapi.yaml)" ]; then
+            git --no-pager diff --stat -- ../docs/API.md ../docs/API.internal.md src/lib/docs/generated static/openapi.yaml
             echo
             echo 'The API reference is stale. Run "pnpm run gen:api-docs" in web/ and commit the result. This is not a bug in the code: regenerating fixes it (the api-docs-drift pre-commit hook does it for you).'
             exit 1
