@@ -22,14 +22,12 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// list_unread_mail over both authenticated MCP endpoints, against real Postgres: a grant and
+// list_unread_mail over the MCP endpoint, against real Postgres: a grant and
 // a full-scope key both see it (REST /me/inbox admits both), it lists only the caller's unread
 // application mail, an injected instruction in a subject comes back as one line of data, a
 // confirmed link names its job, reading marks nothing, and a first Gmail sync shows.
 func TestMCPUnreadMail(t *testing.T) {
-	for _, endpoint := range []string{"/api/v1/mcp", "/api/v1/mcp/account"} {
-		t.Run(endpoint, func(t *testing.T) { testMCPUnreadMail(t, endpoint) })
-	}
+	testMCPUnreadMail(t, "/api/v1/mcp")
 }
 
 func testMCPUnreadMail(t *testing.T, endpoint string) {
@@ -106,8 +104,7 @@ func testMCPUnreadMail(t *testing.T, endpoint string) {
 	catalogue := newMCPAppHandlers(nil, nil, queries, testMCPOrigin)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCP(api, middleware{}, assistants, catalogue)
-	mountMCPAccount(api, middleware{}, assistants, catalogue)
+	mountMCP(api, assistants, catalogue)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 

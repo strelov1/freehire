@@ -163,7 +163,7 @@ func alertSearchSchema(props map[string]any) map[string]any {
 // sets (exclusions, match-all modes, visa and the like) are kept as they were.
 //
 // Unknown filter NAMES are refused (assistantFilterArgs.values, the search_jobs rule); a
-// value outside a closed vocabulary is DROPPED and named, the rule the anonymous server's
+// value outside a closed vocabulary is DROPPED and named, the rule the catalogue's
 // search_jobs follows: kept, it would narrow the alert to nothing, and a person would wait
 // for mail that can never come.
 func applyAlertSearch(base url.Values, a alertSearchArgs) (url.Values, []string, error) {

@@ -169,12 +169,14 @@ func TestTheMountedRouteSpeaksMCPOverHTTP(t *testing.T) {
 	// that works in memory and 404s or hangs behind the adaptor is the whole feature broken,
 	// and it is exactly the shape of failure the OJCP manifest hit in production.
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.All("/mcp", adaptor.HTTPHandler(mcpapp.MixedHandler(nil, "", mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{}))))
+	app.All("/mcp", adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(&fakeSearcher{}, nil, fakeOJCPStore{}))))
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	// What mcpAuthenticate stamps for a verified credential.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 
 	resp, err := app.Test(req)
 	if err != nil {

@@ -117,7 +117,7 @@ func TestStatelessListSubscriptionCompletesWithoutWaiting(t *testing.T) {
 func staticServerHandlers(t *testing.T) map[string]http.Handler {
 	t.Helper()
 	return map[string]http.Handler{
-		"mixed": MixedHandler([]assistant.Tool{}, "", readerThatFinds(t)),
+		"mixed": Handler([]assistant.Tool{}, "", readerThatFinds(t)),
 	}
 }
 

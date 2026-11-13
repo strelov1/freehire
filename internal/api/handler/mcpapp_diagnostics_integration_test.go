@@ -34,7 +34,7 @@ func TestMCPAuthDiagnosticsResolveKeyWithoutLoggingToken(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Use(observability.RequestIDs())
-	app.Post("/probe", mcpAccountAuthenticate(&assistantHandlers{queries: queries}, testMCPOrigin), func(c *fiber.Ctx) error {
+	app.Post("/probe", mcpAuthenticate(&assistantHandlers{queries: queries}, testMCPOrigin), func(c *fiber.Ctx) error {
 		observability.RequestLogger(c.Context()).Info("authenticated")
 		return c.SendStatus(200)
 	})

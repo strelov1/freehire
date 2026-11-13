@@ -1,40 +1,41 @@
 # internal/api/mcpapp
 
-The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
-OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
-56 tools; personal calls without authentication never reach business code.
-ChatGPT (User-Agent `openai-mcp`) gets an error result carrying `mcp/www_authenticate`,
-the in-band challenge its Apps SDK opens sign-in from. Every other host gets HTTP 401 with
-`WWW-Authenticate`, because Grok and Claude.ai ignore the in-band challenge and open sign-in
-only on the specification's 401 — an anonymous connection there otherwise never sees a way to
-sign in. Grok (`grok-connectors-manager`) and Claude.ai (`Claude-User`) go further: they offer
-sign-in only while a connector is added, and a 401 later in a conversation opens nothing, so
-an anonymous request from them is refused outright (`signsInOnlyAtConnect`) and those two
-hosts have no anonymous search. `search_jobs`/`get_job` results carry `_meta["freehire.me/account"].signed_in` so the
-widget shows one Connect panel instead of per-card buttons that would fail.
-Per-tool `_meta.securitySchemes` declares access.
+The MCP at `/api/v1/mcp` (`mixed.go`) serves the catalogue and account tools to a
+signed-in caller only. There is no anonymous session: a request without a credential is a
+401 with `WWW-Authenticate` before it reaches this package (`mcpAuthenticate` in
+`internal/api/handler/mcpapp_account.go`), and `mcpapp.Handler` refuses with a 500 a request
+that arrives with no stamped identity, because that is a wiring error.
 
-The eleven catalogue tools retain their public schemas, previews and widgets.
-`/api/v1/mcp/account` is the same server (`MixedHandler`) at its original URL, kept for
-existing connectors; the only difference is that its Fiber middleware requires a bearer
-credential, so it is signed-in only and never anonymous. There is one server and one
-tool list: the in-app assistant's own `search_jobs`, `get_job` and `get_company` are
-never registered here (`catalogueOwned`), the catalogue's are.
+**Why no anonymous part (2026-11-13).** The 401 on the FIRST request is the MCP
+authorization spec's only signal that a server needs sign-in. Claude.ai, Grok, Cursor and the
+CLIs act on it while a connector is being added, and never later. When this endpoint also
+served anonymous catalogue reads (#4161), Claude.ai's "Add custom connector" got a 200 on
+initialize and reported "Couldn't determine how this server signs in". The in-band
+`mcp/www_authenticate` challenge that let anonymous ChatGPT sessions step up is an Apps SDK
+mechanism the other hosts ignore. Patching it per User-Agent (`Claude-User`,
+`grok-connectors-manager`) did not reach the connector-add probe. Re-adding an anonymous
+surface brings that failure back for every host except ChatGPT.
 
-Fiber authentication in `internal/api/handler/mcpapp_account.go` clears external
-`AccountUserIDHeader` values before resolving credentials, including anonymous
-requests. Invalid credentials fail closed instead of falling back to anonymous.
-The canonical URL has path-specific protected-resource metadata; the root
-well-known document continues to identify the account alias for existing clients.
+Every tool declares `_meta.securitySchemes` `oauth2`. The eleven catalogue tools keep
+their schemas, previews and widgets. The in-app assistant's own `search_jobs`, `get_job`
+and `get_company` are never registered here (`catalogueOwned`); the catalogue's are.
+`/api/v1/mcp/account`, the earlier signed-in alias, was removed in the same change.
+
+Fiber authentication clears external `AccountUserIDHeader` values before resolving
+credentials. Invalid credentials fail closed. Both the root
+`/.well-known/oauth-protected-resource` and the path-inserted
+`/.well-known/oauth-protected-resource/api/v1/mcp` (`ResourceMetadataPath`, the one the
+challenge names) describe `/api/v1/mcp`.
 
 An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
 /authorize and /token, `oauth_grants.resource`): the URI must be on this deployment's origin
 (scheme and host case-insensitive, default port ignored, no query or fragment) with path
-`/api/v1/mcp` or `/api/v1/mcp/account` (one trailing slash tolerated), else `invalid_target`.
-Only the PATH is stored, so a frontend-origin change cannot orphan a grant.
-`AuthenticateOAuthGrant` matches on the endpoint path, so a grant bound to the other endpoint
-is refused like an unknown token (401 `invalid_token`) without touching `last_used_at`. A grant with NULL `resource`
-(legacy, or a client that sent none) stays valid on both. REST does not read the binding: a
+`/api/v1/mcp` (one trailing slash tolerated), else `invalid_target` — the removed
+`/api/v1/mcp/account` included. Only the PATH is stored, so a frontend-origin change cannot
+orphan a grant. `AuthenticateOAuthGrant` matches on the endpoint path, so a grant still bound
+to `/api/v1/mcp/account` is refused like an unknown token (401 `invalid_token`) without
+touching `last_used_at`. A grant with NULL `resource` (legacy, or a client that sent none)
+stays valid. REST does not read the binding: a
 grant is admitted wherever a key goes, and REST is not an MCP server. No refresh tokens exist.
 
 It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
@@ -114,7 +115,7 @@ turn. It is a plain struct field of the typed catalogue tools.
 
 `freehire mcp` (in the `freehire-cli` repository) runs the canonical endpoint over stdio
 for local hosts, and the CLI's client sends `User-Agent: freehire-cli/<version>`. For that
-User-Agent alone `MixedHandler` appends `cliSessionInstructions`: the CLI is on the agent's
+User-Agent alone `mcpapp.Handler` appends `cliSessionInstructions`: the CLI is on the agent's
 shell, so whole result sets (`freehire search … --json`, which reads `/agent/jobs/search`
 with full descriptions) and the CV PDF go to disk rather than into context. That is why
 the MCP results here can stay bounded. It lives in the instructions, not in `next`: having
@@ -275,11 +276,11 @@ person types — the vocabulary itself, never a copy. A free-text argument (`sta
 `postings`) offers nothing: a client replaces the whole field with what it picks, so a
 suggestion for one word of "Go and Kubernetes" would erase the rest.
 
-A signed-in session (either URL, with a grant or key) also gets
+Every session (with a grant or key) also gets
 `accountPrompts` (`account_prompts.go`): `jobs_for_my_profile`, `set_up_my_profile`,
 `whats_new_in_my_alerts` and `apply_to_saved_jobs`. They DO name tools and their order, since the
 sequence is the point; each is offered only when every tool it needs is served, so an API key
-never sees the auto-apply one. Anonymous connections get the catalogue prompts alone.
+never sees the auto-apply one.
 
 ## The widget
 
@@ -332,7 +333,7 @@ that ignores `_meta.ui` sees exactly what it saw before.
 
 Anthropic's directory policy rules out tool descriptions that instruct the model about other
 tools ("call get_job for the full text" was in three places). A tool or field description
-states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newMixedServer`).
+states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newServer`).
 `TestNoToolDescriptionDirectsTheModelToAnotherTool` walks the registered tools and both
 schemas to hold the line.
 
@@ -343,9 +344,9 @@ Incorrect annotation of these three is a named rejection reason in OpenAI's subm
 guidelines. The block is written once (`ReadOnly()`) and a test walks the REGISTERED tools
 rather than a list beside them — checked by removing one annotation and watching it fail.
 
-A tool on the catalogue (anonymous) surface that writes anything belongs behind authentication, which
-this surface does not have — that is what the signed-in tool set (`mixed.go`'s personal
-tools, behind the middleware) is for; do not add a write tool to the catalogue instead.
+A catalogue tool stays read-only even though every caller is signed in now: a write belongs
+in the account tool set (`mixed.go`'s personal tools), whose annotations come from each
+tool's `assistant.Effect`. Do not add a write tool to the catalogue.
 
 The account server's annotations come from each tool's own `assistant.Effect` —
 `EffectReads`, `EffectAdds` (nothing already held is lost: `save_job`, `apply_job`) or
@@ -363,7 +364,7 @@ An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is 
 server only ever acts for the person who approved the connection. `accountInstructions`
 describes the account boundary and the tool groups actually served, opens with one line on what
 freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
-`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters (the anonymous catalogue session keeps 512);
+`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters;
 Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.
@@ -395,9 +396,8 @@ that sets them inside the enrichment JSON sets nothing at all.
 Drive the server through the SDK's in-memory transport, not by calling handler functions: a
 tool that registers but cannot be called is invisible to a direct call.
 
-The wire protocol is checked in CI by the official MCP conformance suite (`mcp-conformance`
-job in `contract.yml`) against `/api/v1/mcp`. The scenarios that cannot apply to a product
-server are listed, with reasons, in `.github/mcp-conformance/mcp.yml`; see
+The official MCP conformance suite (`mcp-conformance` job in `contract.yml`) cannot check
+this server: it sends no credential and `/api/v1/mcp` answers it 401. Only OJCP is covered; see
 [ci-checks](../../../docs/agents/ci-checks.md#mcp-protocol-conformance-modelcontextprotocolconformance).
 
 ## Measured, not assumed

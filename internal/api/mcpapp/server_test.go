@@ -24,7 +24,7 @@ func connect(t *testing.T, r Reader) *mcp.ClientSession {
 	ctx := context.Background()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	server, err := newMixedServer(nil, 0, "", r, false).Connect(ctx, serverTransport, nil)
+	server, err := newServer(nil, 42, "", r, false).Connect(ctx, serverTransport, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}

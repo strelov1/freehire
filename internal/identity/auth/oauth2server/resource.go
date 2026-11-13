@@ -10,22 +10,20 @@ import (
 // one this server protects.
 var ErrInvalidTarget = errors.New("invalid_target")
 
-// MCP resource paths. A grant is bound to one of them: the PATH is what is
-// stored, never the origin-qualified URL, so a later change of the frontend
-// origin (domain move, www/apex) does not orphan bound grants. The origin is
-// checked when the resource is requested.
-const (
-	MCPResourcePath        = "/api/v1/mcp"
-	MCPAccountResourcePath = "/api/v1/mcp/account"
-)
+// MCPResourcePath is the one MCP resource. A grant is bound to it by PATH, never
+// the origin-qualified URL, so a later change of the frontend origin (domain move,
+// www/apex) does not orphan bound grants. The origin is checked when the resource
+// is requested. "/api/v1/mcp/account" was a second resource until that endpoint was
+// removed; a grant still bound to it is refused at /api/v1/mcp.
+const MCPResourcePath = "/api/v1/mcp"
 
 // CanonicalResource validates the `resource` values a request carried against
 // this deployment's origin and returns the single MCP resource PATH to bind, or
 // "" when none was sent.
 //
 // Each value must be an absolute URI whose scheme and host (case-insensitive,
-// default port ignored) are origin's and whose path, compared exactly, is one
-// of the two MCP endpoints, with one trailing slash tolerated (clients
+// default port ignored) are origin's and whose path, compared exactly, is the
+// MCP endpoint, with one trailing slash tolerated (clients
 // canonicalise inconsistently). No query (a bare "?" included), fragment or
 // userinfo is accepted. A request names one resource, so several distinct
 // values are refused.
@@ -57,8 +55,7 @@ func resourcePath(wantOrigin, raw string) (string, error) {
 	if got, ok := originKey(raw); !ok || got != wantOrigin {
 		return "", ErrInvalidTarget
 	}
-	switch path := strings.TrimSuffix(u.Path, "/"); path {
-	case MCPResourcePath, MCPAccountResourcePath:
+	if path := strings.TrimSuffix(u.Path, "/"); path == MCPResourcePath {
 		return path, nil
 	}
 	return "", ErrInvalidTarget

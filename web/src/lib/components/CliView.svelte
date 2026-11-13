@@ -369,8 +369,8 @@
 
     <h3 class="mt-12 text-lg font-semibold tracking-tight">Or connect by URL — nothing to install</h3>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      In Claude, add a custom connector; in ChatGPT, add a custom MCP server. Use the same address for public search and
-      OAuth account access.
+      In Claude, add a custom connector; in ChatGPT, add a custom MCP server. Your assistant asks you to sign in to
+      freehire when you add it.
     </p>
     <div class="mt-6 max-w-2xl rounded-xl border border-border bg-secondary/40 p-4">
       <div class="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 px-3 py-2">
@@ -378,8 +378,8 @@
         {@render copyButton(mcpUrl, 'MCP URL')}
       </div>
       <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-        Search jobs, employers and market data without an account. Sign in through your assistant to read your profile,
-        save jobs, update tracking and manage alerts. Hosted MCP uses OAuth, with no API key to paste. The <a
+        Search jobs, employers and market data, read your profile, save jobs, update tracking and manage alerts. Hosted
+        MCP uses OAuth, with no API key to paste. The <a
           href={resolve('/mcp')}
           class="font-medium text-foreground underline-offset-4 hover:underline">MCP setup guide</a
         >

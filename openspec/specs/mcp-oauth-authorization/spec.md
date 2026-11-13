@@ -35,7 +35,7 @@ The system SHALL serve `GET /.well-known/oauth-authorization-server` (RFC 8414) 
 
 #### Scenario: A client discovers which authorization server protects the MCP resource
 - **WHEN** a client GETs `/.well-known/oauth-protected-resource`
-- **THEN** the response's `resource` names the `/api/v1/mcp/account` endpoint and `authorization_servers` names this deployment's origin
+- **THEN** the response's `resource` names the `/api/v1/mcp` endpoint and `authorization_servers` names this deployment's origin, and `/.well-known/oauth-protected-resource/api/v1/mcp` answers the same document
 
 ### Requirement: Consent Authorization Flow
 The system SHALL show a consent screen on `GET /api/v1/oauth/authorize` for a signed-in visitor presenting a valid `client_id`, a `redirect_uri` registered to that client, `response_type=code`, and `code_challenge_method=S256`; SHALL redirect a sessionless visitor to sign in and return to the same authorize request; and SHALL act on the decision only via `POST /api/v1/oauth/authorize`, issuing a single-use authorization code on approval and an `access_denied` error on refusal, in both cases as a 302 redirect to the client's `redirect_uri` carrying the original `state`.

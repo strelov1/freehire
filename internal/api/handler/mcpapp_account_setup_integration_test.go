@@ -134,13 +134,13 @@ func newSetupFixture(t *testing.T, email string) setupFixture {
 		plans:   plan.NewStore(queries, pool, plan.DefaultConfig()),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
+	mountMCP(app.Group("/api/v1"), assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	t.Cleanup(server.Close)
 	// The background derivation has no extractor here and records a failure; wait for it so
 	// the goroutine is done with the database before the test tears it down.
 	t.Cleanup(func() { waitForExtractOutcome(t, store, userID) })
-	return setupFixture{userID: userID, blobs: blobs, store: store, url: server.URL + "/api/v1/mcp/account", token: token}
+	return setupFixture{userID: userID, blobs: blobs, store: store, url: server.URL + "/api/v1/mcp", token: token}
 }
 
 func (f setupFixture) connect(t *testing.T) *mcp.ClientSession {

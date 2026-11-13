@@ -16,7 +16,6 @@ func oauthMetadataApp() *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
 	app.Get("/api/v1/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
-	app.Get("/api/v1/oauth/metadata/protected-resource/mcp", h.OAuthMixedResourceMetadata)
 	return app
 }
 
@@ -67,41 +66,18 @@ func TestOAuthProtectedResourceMetadata(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.Resource == "" || len(out.AuthorizationServers) == 0 {
+	if out.Resource != "https://freehire.me/api/v1/mcp" || len(out.AuthorizationServers) != 1 || out.AuthorizationServers[0] != "https://freehire.me" {
 		t.Errorf("out = %+v", out)
 	}
 }
 
-func TestOAuthMixedResourceMetadata(t *testing.T) {
-	app := oauthMetadataApp()
-	for path, want := range map[string]string{
-		"/api/v1/oauth/metadata/protected-resource":     "https://freehire.me/api/v1/mcp/account",
-		"/api/v1/oauth/metadata/protected-resource/mcp": "https://freehire.me/api/v1/mcp",
-	} {
-		resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), "GET", path, nil))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out protectedResourceMetadata
-		err = json.NewDecoder(resp.Body).Decode(&out)
-		resp.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if out.Resource != want || len(out.AuthorizationServers) != 1 || out.AuthorizationServers[0] != "https://freehire.me" {
-			t.Fatalf("%s: %+v", path, out)
-		}
-	}
-}
-
 // A FRONTEND_ORIGIN with a trailing slash must not leak a double slash into the
-// advertised resources: they are what clients send back as `resource`.
+// advertised resource: it is what clients send back as `resource`.
 func TestOAuthProtectedResourceMetadata_TrailingSlashOrigin(t *testing.T) {
 	const origin = "https://freehire.me/"
 	h := &authHandlers{frontendOrigin: origin}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/account", h.OAuthProtectedResourceMetadata)
-	app.Get("/mixed", h.OAuthMixedResourceMetadata)
+	app.Get("/resource", h.OAuthProtectedResourceMetadata)
 	app.Get("/as", h.OAuthAuthorizationServerMetadata)
 
 	get := func(path string, out any) {
@@ -119,15 +95,13 @@ func TestOAuthProtectedResourceMetadata_TrailingSlashOrigin(t *testing.T) {
 		Issuer string `json:"issuer"`
 	}
 	get("/as", &as)
-	for path, wantPath := range map[string]string{"/account": oauth2server.MCPAccountResourcePath, "/mixed": oauth2server.MCPResourcePath} {
-		var doc protectedResourceMetadata
-		get(path, &doc)
-		got, err := oauth2server.CanonicalResource(origin, []string{doc.Resource})
-		if err != nil || got != wantPath {
-			t.Errorf("%s: advertised resource %q is not accepted (got %q, %v)", path, doc.Resource, got, err)
-		}
-		if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != as.Issuer {
-			t.Errorf("%s: authorization_servers = %v, want [%s]", path, doc.AuthorizationServers, as.Issuer)
-		}
+	var doc protectedResourceMetadata
+	get("/resource", &doc)
+	got, err := oauth2server.CanonicalResource(origin, []string{doc.Resource})
+	if err != nil || got != oauth2server.MCPResourcePath {
+		t.Errorf("advertised resource %q is not accepted (got %q, %v)", doc.Resource, got, err)
+	}
+	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != as.Issuer {
+		t.Errorf("authorization_servers = %v, want [%s]", doc.AuthorizationServers, as.Issuer)
 	}
 }

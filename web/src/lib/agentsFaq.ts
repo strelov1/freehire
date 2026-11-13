@@ -10,12 +10,12 @@ export const AGENTS_FAQ: FaqItem[] = [
   {
     question: 'Do I need Pro or an account to get started?',
     answer:
-      'The built-in freehire Assistant is included in Pro and uses your signed-in account. Public job search, employer data and market figures through MCP or CLI need no freehire account. Connect your account when you want to save jobs, update application stages or use your profile. Your external assistant may have its own subscription requirements.',
+      'The built-in freehire Assistant is included in Pro and uses your signed-in account. Public job search, employer data and market figures through the CLI need no freehire account. The hosted MCP asks you to sign in to freehire when you connect it, and the same connection then saves jobs, updates application stages and uses your profile. Your external assistant may have its own subscription requirements.',
   },
   {
     question: 'How do I connect my account?',
     answer:
-      'For MCP, use the same server address for public search and personal tools. Approve OAuth in your browser when you connect your account. Codex uses codex mcp login freehire; Claude Code uses claude mcp login freehire or its /mcp authentication control. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
+      'For MCP, add the server address and approve OAuth in your browser when your assistant asks; the hosted MCP needs a freehire account. Codex uses codex mcp login freehire; Claude Code uses its /mcp authentication control. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
   },
   {
     question: 'Can my assistant submit applications for me?',

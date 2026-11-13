@@ -3,7 +3,7 @@
 // Integration test proving an MCP OAuth grant (freehire#3114) authenticates
 // exactly where a full-scope API key already does — the REST surface every
 // non-browser client (the CLI, freehire-mcp) actually calls, not merely the
-// signed-in MCP server at /api/v1/mcp/account. Run with:
+// MCP server at /api/v1/mcp. Run with:
 // go test -tags=integration ./internal/api/handler/
 package handler
 

@@ -47,14 +47,9 @@ func TestAccountPrompts_AreListedAndRenderTheirToolOrder(t *testing.T) {
 	}
 
 	// The canonical endpoint offers them to a signed-in person next to the catalogue prompts.
-	mixed := connectServer(t, newMixedServer(granted, 42, testOrigin, readerThatFinds(t), false))
+	mixed := connectServer(t, newServer(granted, 42, testOrigin, readerThatFinds(t), false))
 	if got := promptNames(t, mixed); !slices.Contains(got, "jobs_for_my_profile") || !slices.Contains(got, promptJobsForStack) {
 		t.Errorf("signed-in canonical prompts = %v", got)
-	}
-	// An anonymous connection is offered only the catalogue ones.
-	anon := connectServer(t, newMixedServer(granted, 0, testOrigin, readerThatFinds(t), false))
-	if got := promptNames(t, anon); slices.Contains(got, "jobs_for_my_profile") {
-		t.Errorf("anonymous prompts offer a personal workflow: %v", got)
 	}
 }
 

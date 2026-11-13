@@ -25,10 +25,10 @@ func (s stampUser) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// connectMCPTools serves tools to userID over the one MCP server /mcp and /mcp/account mount.
+// connectMCPTools serves tools to userID over the MCP server /mcp mounts.
 func connectMCPTools(t *testing.T, tools []assistant.Tool, userID string) *mcp.ClientSession {
 	t.Helper()
-	server := httptest.NewServer(mcpapp.MixedHandler(tools, testMCPOrigin, nil))
+	server := httptest.NewServer(mcpapp.Handler(tools, testMCPOrigin, nil))
 	t.Cleanup(server.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
 		&mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: stampUser{userID}}}, nil)
@@ -41,20 +41,13 @@ func connectMCPTools(t *testing.T, tools []assistant.Tool, userID string) *mcp.C
 
 func mcpAccountApp(assistants *assistantHandlers) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mw := middleware{}
-	api := app.Group("/api/v1")
-	mountMCPAccount(
-		api,
-		mw,
-		assistants,
-		&mcpappHandlers{origin: testMCPOrigin},
-	)
+	mountMCP(app.Group("/api/v1"), assistants, &mcpappHandlers{origin: testMCPOrigin})
 	return app
 }
 
 func TestMCPAccountMount_RejectsMissingBearer(t *testing.T) {
 	app := mcpAccountApp(&assistantHandlers{})
-	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -69,18 +62,20 @@ func TestMCPAccountMount_RejectsMissingBearer(t *testing.T) {
 // resource_metadata pointer, and a client that does not fall back to guessing the
 // well-known path has no other way to find our authorization server.
 func TestMCPAccountMount_UnauthorizedNamesResourceMetadata(t *testing.T) {
-	const wantMetadata = `resource_metadata="` + testMCPOrigin + `/.well-known/oauth-protected-resource"`
+	const wantMetadata = `resource_metadata="` + testMCPOrigin + mcpapp.ResourceMetadataPath + `"`
 	cases := map[string]struct {
 		authorization string
 		wantError     bool
 	}{
+		// The first request of a connector being added: it must be told to sign in, never
+		// served anonymously, or Claude.ai and Grok add the connector without sign-in.
 		"no bearer at all": {authorization: ""},
 		"not a bearer":     {authorization: "Basic Zm9vOmJhcg=="},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			app := mcpAccountApp(&assistantHandlers{})
-			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp/account", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/mcp", nil)
 			if tc.authorization != "" {
 				req.Header.Set(fiber.HeaderAuthorization, tc.authorization)
 			}
@@ -104,7 +99,7 @@ func TestMCPAccountMount_UnauthorizedNamesResourceMetadata(t *testing.T) {
 }
 
 // The signed-in MCP server announces each tool's effect from the tool's own Effect, and a
-// client skips the confirmation prompt on a read. Walks the set mountMCPAccount actually
+// client skips the confirmation prompt on a read. Walks the set mountMCP actually
 // serves, so a tool added to it must be classified here to pass — which is the point: the
 // decision is one a person makes once, looking at what the tool does.
 func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {

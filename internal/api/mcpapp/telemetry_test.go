@@ -155,7 +155,7 @@ func TestClientFamilyDoesNotAliasItsInput(t *testing.T) {
 
 func TestClientAttributionFallsBackAfterGenericHandshake(t *testing.T) {
 	records := captureToolLogs(t)
-	server := httptest.NewServer(MixedHandler(nil, "", readerThatFinds(t)))
+	server := httptest.NewServer(Handler(nil, "", readerThatFinds(t)))
 	defer server.Close()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "Generic MCP Client", Version: "1"}, nil).Connect(t.Context(), &mcp.StreamableClientTransport{
 		Endpoint: server.URL, HTTPClient: &http.Client{Transport: withHeaders{http.Header{"User-Agent": []string{"Claude-User/1.0"}, AccountUserIDHeader: []string{"42"}}}},

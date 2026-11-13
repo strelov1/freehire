@@ -12,27 +12,12 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/api/mcpapp"
-	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
-
-// mountMCPAccount serves /api/v1/mcp/account, the original URL of the signed-in server, on
-// the same server as /mcp. It stays signed-in only: no bearer token is a 401, never anonymous.
-// HTTP admission is enforced by the operations gateway; authentication stays in Fiber so
-// credential-store failures use the normal error pipeline.
-func mountMCPAccount(
-	api fiber.Router,
-	mw middleware,
-	assistants *assistantHandlers,
-	catalogue *mcpappHandlers,
-) {
-	mountMCPServer(api, "/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
-		agentview.SurfaceMCPAccount, assistants, catalogue)
-}
 
 // mcpAccountTools is the in-app assistant's discovery and tracking tools, less
 // the one that only works inside our own client, plus job alerts, dictionary suggestions,
@@ -86,50 +71,36 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
 
-// localsMCPAccountViaKey marks a request mcpAccountAuthenticate resolved through an
+// localsMCPViaKey marks a request mcpAuthenticate resolved through an
 // API key rather than an OAuth grant, so the mount serves it mcpKeyTools.
-const localsMCPAccountViaKey = "mcpAccount.viaKey"
+const localsMCPViaKey = "mcpAccount.viaKey"
 
 // localsMCPUserID carries the validated identity to Fiber consumers such as agentViews.
 const localsMCPUserID = "mcp.userID"
 
-// mcpAccountAuthenticate resolves the Authorization: Bearer token to a user id
-// and stamps it onto the request as mcpapp.AccountUserIDHeader, overwriting
-// whatever a caller sent there — nothing downstream of this middleware ever
-// sees an unvalidated value. The token is an OAuth grant's or, failing that, a
-// full-scope API key's — the mirror of apiKeys.AuthenticateAPIKey, which lets a
-// grant into every REST route a key may use. A narrow (cv) key is a 403: the
-// credential is real, it is simply not allowed here. A missing or unrecognized
-// token is a routine 401 (never reported, per this package's Error Convention);
-// any other failure resolving it — a database error, not an unknown token — is
-// returned bare so the fall-through renders a 500 AND reports it, instead of
-// being folded into the same "invalid token" answer a real caller mistake gets.
+// mcpAuthenticate resolves the Authorization: Bearer token to a user id and stamps it
+// onto the request as mcpapp.AccountUserIDHeader, overwriting whatever a caller sent
+// there — nothing downstream of this middleware ever sees an unvalidated value. The token
+// is an OAuth grant's or, failing that, a full-scope API key's — the mirror of
+// apiKeys.AuthenticateAPIKey, which lets a grant into every REST route a key may use. A
+// narrow (cv) key is a 403: the credential is real, it is simply not allowed here. A
+// missing or unrecognized token is a routine 401 (never reported, per this package's Error
+// Convention); any other failure resolving it — a database error, not an unknown token — is
+// returned bare so the fall-through renders a 500 AND reports it, instead of being folded
+// into the same "invalid token" answer a real caller mistake gets.
 //
-// Every 401 carries a WWW-Authenticate challenge naming the protected-resource
-// metadata. The MCP authorization spec requires it: it is how a client that has
-// only this URL discovers which authorization server to sign in with. Without
-// it a client must guess the well-known path, and one that does not guess has
-// no way to connect at all.
-func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", oauth2server.MCPAccountResourcePath, false)
-}
-
-func mcpAuthenticate(
-	assistants *assistantHandlers,
-	frontendOrigin string,
-	metadataPath string,
-	resourcePath string,
-	allowAnonymous bool,
-) fiber.Handler {
-	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
+// There is no anonymous session. Every 401 carries a WWW-Authenticate challenge naming the
+// protected-resource metadata, and that 401 on the FIRST request is the MCP authorization
+// spec's only signal that a server needs sign-in: Claude.ai, Grok, Cursor and the CLIs open
+// sign-in from it while a connector is being added and never later. A server that answers
+// an unauthenticated initialize 200 is, to them, a server without sign-in.
+func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
+	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + mcpapp.ResourceMetadataPath + `"`
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
 		c.Request().Header.Del(mcpapp.AccountUserIDHeader)
 		const prefix = "Bearer "
 		authorization := c.Get(fiber.HeaderAuthorization)
-		if authorization == "" && allowAnonymous {
-			return c.Next()
-		}
 		if !strings.HasPrefix(authorization, prefix) {
 			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "missing_bearer_token")
 			c.Set(fiber.HeaderWWWAuthenticate, challenge)
@@ -137,13 +108,13 @@ func mcpAuthenticate(
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
-		// The grant lookup itself refuses a grant bound to another MCP endpoint (it
-		// matches on resourcePath), so a wrong-endpoint token reads as unknown here:
+		// The grant lookup itself refuses a grant bound to another resource (it matches
+		// on the endpoint path), so a wrong-resource token reads as unknown here:
 		// no last_used_at touch, and the same invalid_token answer (RFC 6750) as any
 		// other refused token, after the API-key branch finds nothing either.
 		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), db.AuthenticateOAuthGrantParams{
 			AccessTokenHash: oauth2server.HashToken(token),
-			Endpoint:        pgconv.Text(resourcePath),
+			Endpoint:        pgconv.Text(oauth2server.MCPResourcePath),
 		})
 		userID := grant.UserID
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -157,7 +128,7 @@ func mcpAuthenticate(
 				return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired token")
 			case keyErr != nil:
 				observability.LogAuthFailure(c, fiber.StatusInternalServerError, "credential_lookup_failed")
-				return fmt.Errorf("authenticate api key for mcp account: %w", keyErr)
+				return fmt.Errorf("authenticate api key for mcp: %w", keyErr)
 			}
 			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "api_key", UserID: key.UserID, KeyID: key.ID, Scope: key.Scope})
 			if key.Scope != auth.ScopeFull {
@@ -165,13 +136,13 @@ func mcpAuthenticate(
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
 			userID, err = key.UserID, nil
-			c.Locals(localsMCPAccountViaKey, true)
+			c.Locals(localsMCPViaKey, true)
 		}
 		if err != nil {
 			observability.LogAuthFailure(c, fiber.StatusInternalServerError, "credential_lookup_failed")
-			return fmt.Errorf("authenticate oauth grant for mcp account: %w", err)
+			return fmt.Errorf("authenticate oauth grant for mcp: %w", err)
 		}
-		if c.Locals(localsMCPAccountViaKey) == nil {
+		if c.Locals(localsMCPViaKey) == nil {
 			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "oauth_grant", UserID: userID})
 		}
 

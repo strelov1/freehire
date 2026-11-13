@@ -4,7 +4,8 @@ name: Contract
 # empty database: every answer must have a status, content type and body the contract
 # declares, and no request may make the server fail. Checks the generated code alone
 # cannot: a handler that returns a shape, a status or a 500 the contract does not name.
-# The second job does the same for the MCP servers with the official MCP conformance suite.
+# The second job does the same for the OJCP MCP server with the official MCP conformance suite.
+# /api/v1/mcp requires OAuth and the suite cannot send a credential, so it is not covered.
 on:
   pull_request:
     paths:
@@ -123,15 +124,9 @@ jobs:
 
       - name: Run the MCP conformance suite
         run: |
-          failed=0
-          for pair in mcp:mcp ojcp/mcp:ojcp; do
-            echo "::group::${pair%%:*}"
-            npx --yes @modelcontextprotocol/conformance@0.1.16 server \
-              --url "http://localhost:8080/api/v1/${pair%%:*}" \
-              --expected-failures ".github/mcp-conformance/${pair##*:}.yml" || failed=1
-            echo "::endgroup::"
-          done
-          exit $failed
+          npx --yes @modelcontextprotocol/conformance@0.1.16 server \
+            --url "http://localhost:8080/api/v1/ojcp/mcp" \
+            --expected-failures ".github/mcp-conformance/ojcp.yml"
 
       - name: API logs
         if: failure()

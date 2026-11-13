@@ -1,7 +1,6 @@
 # internal/application/agentview
 
-Records the job postings served to agents — the hosted MCP servers (`/mcp`,
-`/mcp/account`), OJCP (`/ojcp/v1/*`, `/ojcp/mcp`) and `/api/v1/agent/jobs/search` — as
+Records the job postings served to agents — the hosted MCP server (`/mcp`), OJCP (`/ojcp/v1/*`, `/ojcp/mcp`) and `/api/v1/agent/jobs/search` — as
 a JSON Lines log, and aggregates it into per-day unique views. It is the agent-side
 twin of [viewlog](../viewlog/AGENTS.md): nginx's access log cannot see these, since
 every MCP call is a POST to one URL and a search answer is a list.
@@ -10,7 +9,7 @@ every MCP call is a POST to one URL and a search answer is a list.
   `c.Context().SetUserValue`; fasthttp's `RequestCtx.Value` reads user values and the
   adaptor hands that context to the MCP SDK, so `Record` finds the scope inside a tool.
   `Record` without a scope does nothing — that is what keeps the in-app assistant,
-  which shares `search_jobs`/`get_job` with `/mcp/account`, out of the log.
+  which shares tools with `/mcp`, out of the log.
 - **Never log what nginx already counts.** `GET /api/v1/jobs/<slug>` is in `uniques`
   already; recording it here would count one read twice.
 - **One file per UTC day** (`agent-views-YYYY-MM-DD.jsonl`), named by each event's own

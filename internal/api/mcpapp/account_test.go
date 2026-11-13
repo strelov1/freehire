@@ -13,10 +13,10 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// connectSignedIn serves tools to user 42 over the one server both /mcp and /mcp/account mount.
+// connectSignedIn serves tools to user 42 over the server /mcp mounts.
 func connectSignedIn(t *testing.T, tools []assistant.Tool) *mcp.ClientSession {
 	t.Helper()
-	server := newMixedServer(tools, 42, "", nil, false)
+	server := newServer(tools, 42, "", nil, false)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(t.Context(), serverTransport, nil)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestSignedInServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
 	}
 }
 
-// MixedHandler trusts the user id the Fiber middleware (mountMCPServer in
+// Handler trusts the user id the Fiber middleware (mountMCPServer in
 // internal/api/handler) already validated and stamped onto the request.
 func TestMixedHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 	var gotUserID int64
@@ -87,7 +87,7 @@ func TestMixedHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 			return map[string]any{"user_id": userID}, nil
 		},
 	}
-	server := httptest.NewServer(MixedHandler([]assistant.Tool{tool}, "", nil))
+	server := httptest.NewServer(Handler([]assistant.Tool{tool}, "", nil))
 	defer server.Close()
 
 	header := http.Header{AccountUserIDHeader: {"42"}}
@@ -116,7 +116,7 @@ func TestMixedHandler_MalformedTrustedHeaderIsAnInternalError(t *testing.T) {
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)
 	req.Header.Set(AccountUserIDHeader, "not-a-number")
 	rec := httptest.NewRecorder()
-	MixedHandler(nil, "", nil).ServeHTTP(rec, req)
+	Handler(nil, "", nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)

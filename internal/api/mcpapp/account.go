@@ -84,7 +84,7 @@ func accountInstructions(tools []assistant.Tool) string {
 // accountAnnotations declares what a tool does to the account, from the effect the tool
 // itself carries. A client reads these to decide whether to ask the person before a call,
 // so they are not decoration: unset, every search is a confirmation prompt. Every tool is
-// open-world for the same reason the anonymous server's are: the catalogue and the
+// open-world for the same reason the catalogue tools are: the catalogue and the
 // tracking board both change outside this conversation, on the website.
 func accountAnnotations(t assistant.Tool) *mcp.ToolAnnotations {
 	destructive, openWorld := t.Effect == assistant.EffectOverwrites, true
@@ -98,7 +98,7 @@ func accountAnnotations(t assistant.Tool) *mcp.ToolAnnotations {
 }
 
 // accountToolHandler closes over the request's resolved userID — set once, when
-// newMixedServer is built per request — so
+// newServer is built per request — so
 // every call this session makes runs as that user and no other. The JSON error
 // envelope mirrors assistant.Registry.Call's own failure rendering, reproduced
 // here rather than reused directly since the SDK's CallToolResult shape differs
@@ -152,10 +152,10 @@ func errorResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
 
-// AccountUserIDHeader is the internal, request-scoped header MixedHandler
+// AccountUserIDHeader is the internal, request-scoped header Handler
 // trusts for the caller's resolved user id. It is set by the Fiber middleware
 // that authenticates the bearer token BEFORE this handler ever runs (see
-// mountMCPServer in internal/api/handler) — never read from, or trusted from,
+// mcpAuthenticate in internal/api/handler) — never read from, or trusted from,
 // an external caller.
 //
 // Authentication lives in that middleware rather than here because a bare

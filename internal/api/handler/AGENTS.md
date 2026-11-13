@@ -89,7 +89,7 @@ metadata is attribution only; it never grants application permissions.
 ## Every `/api/v1/me/*` route refuses an anonymous caller (`signed_in_door.go`)
 
 - **This is load-bearing outside the repo.** Cloudflare challenges the hosting/VPN networks the enumeration fleet rents, and a CLI cannot solve a challenge; the edge rule exempts `/api/v1/me/*` precisely because nothing there answers without a credential, so the exemption hands the fleet nothing. A public read added under `/me/` would quietly reopen it to the fleet.
-- The same edge rule also exempts paths starting `/api/v1/mcp` (that is `/api/v1/mcp` and `/api/v1/mcp/account`; the OJCP server at `/api/v1/ojcp/mcp` is still challenged) and `/.well-known/oauth-*`, since 2026-11-09: an MCP client cannot solve a challenge either, and a VPN user's connector failed with "Couldn't reach". Unlike `/me/*`, `/api/v1/mcp` answers anonymous callers (the public tools), so from the fleet's networks those reads are now held back only by the origin gateway's `agentsearch` quota. Loosening that quota, or adding a heavier public MCP tool, reopens the catalogue to the fleet.
+- The same edge rule also exempts paths starting `/api/v1/mcp` (that is `/api/v1/mcp`; the OJCP server at `/api/v1/ojcp/mcp` is still challenged) and `/.well-known/oauth-*`, since 2026-11-09: an MCP client cannot solve a challenge either, and a VPN user's connector failed with "Couldn't reach". Since 2026-11-13 `/api/v1/mcp` answers an anonymous caller 401, so the exemption no longer opens any catalogue read to the fleet.
 - `/api/v1/me/api/<rest>` is the signed-in door: it checks `RequireAuthOrKey` and serves the request as `/api/v1/<rest>`, which is how a signed-in CLI on a VPN reaches the public reads. The CLI uses it only after the edge has answered a challenge (`cf-mitigated: challenge`). The target route keeps every gate of its own. It rewrites the path and lets routing continue rather than calling `RestartRouting`, which would replay the app-wide middleware and count and log every request twice; so it must stay mounted before every `/api/v1` route.
 
 ## Account Deletion (`me_delete.go`)
@@ -118,9 +118,9 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 - `CreateApplicationFromEmail` records an application from mail and links it in one call. It **borrows `jobtracking`** rather than writing its own apply, so the `applied_count`-increments-once rule stays in one place; the application is dated by the email's `received_at`, never `now()`. Mail carrying a pending suggestion is a **409** — the matcher already proposed an answer, and overwriting it silently would make `link_source = 'manual'` a lie about a decision the caller never saw.
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
-`/mcp` and `/mcp/account` are one server: `mountMCPServer` (`mcpapp_mixed.go`) mounts
-`mcpapp.MixedHandler` at both paths, differing only in the authenticate middleware
-(`/mcp/account` requires a bearer credential). `mcpKeyTools` / `mcpAccountTools` pick the set;
+`mountMCP` (`mcpapp_mixed.go`) mounts `mcpapp.Handler` at `/mcp` behind
+`mcpAuthenticate`, which requires a bearer credential (no anonymous session; see
+[mcpapp](../mcpapp/AGENTS.md)). `mcpKeyTools` / `mcpAccountTools` pick the set;
 `search_jobs`, `get_job` and `get_company` in it are never served, the catalogue answers
 those names (`searchJobs()` and the rest are the in-app assistant's alone).
 

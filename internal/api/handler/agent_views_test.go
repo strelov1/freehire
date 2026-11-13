@@ -36,7 +36,7 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 7}, {ID: 9}}}}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.MixedHandler(nil, "", mcpappUnder(fake, nil, fakeOJCPStore{}))))
+		adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(fake, nil, fakeOJCPStore{}))))
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"go"}}}`
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
@@ -80,7 +80,7 @@ func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
 func mountedMCP(sink agentview.Sink, store fakeOJCPStore) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
-		adaptor.HTTPHandler(mcpapp.MixedHandler(nil, "", mcpappUnder(&fakeSearcher{}, nil, store))))
+		adaptor.HTTPHandler(mcpapp.Handler(nil, "", mcpappUnder(&fakeSearcher{}, nil, store))))
 	return app
 }
 
@@ -184,12 +184,17 @@ func TestAnAgentSearchIsRecorded(t *testing.T) {
 func TestAnAccountRequestIsKeyedByTheVerifiedAccount(t *testing.T) {
 	sink := &recordingSink{}
 	app := fiber.New()
-	app.Get("/x", agentViews(sink, agentview.SurfaceMCPAccount), func(c *fiber.Ctx) error {
+	app.Get("/x", func(c *fiber.Ctx) error {
+		// What mcpAuthenticate leaves behind for a verified credential.
+		c.Locals(localsMCPUserID, int64(42))
+		return c.Next()
+	}, agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
 		agentview.Record(c.Context(), agentview.KindDetail, []int64{1})
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
-	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
+	// A caller-sent identity header is not what decides the viewer.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "7")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)

@@ -2,7 +2,7 @@
 
 // Integration tests for RFC 8707 resource indicators on the OAuth server
 // against a real Postgres: the resource is validated at /authorize and /token,
-// bound to the grant, and enforced by the two MCP endpoints. Run with:
+// bound to the grant, and enforced by the MCP endpoint. Run with:
 // go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -21,7 +21,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -59,8 +58,7 @@ func newResourceFixture(t *testing.T, name string) *resourceFixture {
 	assistants := &assistantHandlers{queries: q}
 	ok := func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) }
 	f.probe = fiber.New(fiber.Config{ErrorHandler: RenderError})
-	f.probe.Post("/api/v1/mcp", mcpAuthenticate(assistants, testMCPOrigin, mcpapp.MixedResourceMetadataPath, oauth2server.MCPResourcePath, true), ok)
-	f.probe.Post("/api/v1/mcp/account", mcpAccountAuthenticate(assistants, testMCPOrigin), ok)
+	f.probe.Post("/api/v1/mcp", mcpAuthenticate(assistants, testMCPOrigin), ok)
 	return f
 }
 
@@ -127,6 +125,17 @@ func (f *resourceFixture) callMCP(t *testing.T, path, token string) (int, http.H
 	return resp.StatusCode, resp.Header
 }
 
+// grantRow reads the stored resource binding and last_used_at of token's grant.
+func (f *resourceFixture) grantRow(t *testing.T, token string) (resource *string, lastUsed *time.Time) {
+	t.Helper()
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT resource, last_used_at FROM oauth_grants WHERE access_token_hash = $1`,
+		oauth2server.HashToken(token)).Scan(&resource, &lastUsed); err != nil {
+		t.Fatalf("read grant: %v", err)
+	}
+	return resource, lastUsed
+}
+
 // grantToken runs authorize + token and returns the access token.
 func (f *resourceFixture) grantToken(t *testing.T, authorizeResource string, tokenResource string) string {
 	t.Helper()
@@ -174,62 +183,56 @@ func TestOAuthResource_UnknownResourceAtAuthorizeRedirectsInvalidTarget(t *testi
 	}
 }
 
-func TestOAuthResource_BindingRoundTripsAndIsEnforcedPerEndpoint(t *testing.T) {
+// /api/v1/mcp/account was a second resource until the endpoint was removed: asking for
+// it now is invalid_target, like any resource this server does not protect.
+func TestOAuthResource_TheRemovedAccountResourceIsInvalidTarget(t *testing.T) {
+	f := newResourceFixture(t, "res-account-1")
+	loc := f.authorize(t, resourceAccount)
+	if got := loc.Query().Get("error"); got != "invalid_target" || loc.Query().Get("code") != "" {
+		t.Fatalf("Location %s, want invalid_target and no code", loc)
+	}
+}
+
+func TestOAuthResource_BindingRoundTripsAndIsEnforced(t *testing.T) {
 	f := newResourceFixture(t, "res-bind-1")
 
-	account := f.grantToken(t, "HTTPS://"+strings.ToUpper(strings.TrimPrefix(testMCPOrigin, "https://"))+"/api/v1/mcp/account/", "") // case and trailing slash tolerated
-	mixed := f.grantToken(t, resourceMixed, "")
+	mixed := f.grantToken(t, "HTTPS://"+strings.ToUpper(strings.TrimPrefix(testMCPOrigin, "https://"))+"/api/v1/mcp/", "") // case and trailing slash tolerated
 	legacy := f.grantToken(t, "", "")
-
-	cases := []struct {
-		name, token, path string
-		want              int
-	}{
-		{"account grant at account", account, "/api/v1/mcp/account", 200},
-		{"account grant at mixed", account, "/api/v1/mcp", 401},
-		{"mixed grant at mixed", mixed, "/api/v1/mcp", 200},
-		{"mixed grant at account", mixed, "/api/v1/mcp/account", 401},
-		{"unbound grant at account", legacy, "/api/v1/mcp/account", 200},
-		{"unbound grant at mixed", legacy, "/api/v1/mcp", 200},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			status, header := f.callMCP(t, tc.path, tc.token)
-			if status != tc.want {
-				t.Fatalf("status = %d, want %d", status, tc.want)
-			}
-			if tc.want == 401 {
-				if got := header.Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) || !strings.Contains(got, "resource_metadata=") {
-					t.Errorf("WWW-Authenticate = %q, want invalid_token + resource_metadata", got)
-				}
+	for name, token := range map[string]string{"bound grant": mixed, "unbound grant": legacy} {
+		t.Run(name, func(t *testing.T) {
+			if status, _ := f.callMCP(t, "/api/v1/mcp", token); status != 200 {
+				t.Fatalf("status = %d, want 200", status)
 			}
 		})
 	}
 
-	t.Run("the binding is stored as the path and a refused call leaves no trace", func(t *testing.T) {
-		var stored string
-		var lastUsed *time.Time
-		hash := oauth2server.HashToken(account)
-		read := func() {
-			if err := f.pool.QueryRow(context.Background(),
-				`SELECT resource, last_used_at FROM oauth_grants WHERE access_token_hash = $1`, hash).Scan(&stored, &lastUsed); err != nil {
-				t.Fatalf("read grant: %v", err)
-			}
+	t.Run("the binding is stored as the path", func(t *testing.T) {
+		if stored, _ := f.grantRow(t, mixed); stored == nil || *stored != oauth2server.MCPResourcePath {
+			t.Errorf("stored resource = %v, want the path %q", stored, oauth2server.MCPResourcePath)
 		}
-		read()
-		if stored != oauth2server.MCPAccountResourcePath {
-			t.Errorf("stored resource = %q, want the path %q", stored, oauth2server.MCPAccountResourcePath)
+	})
+
+	t.Run("a grant bound to the removed account resource is refused and leaves no trace", func(t *testing.T) {
+		if _, err := f.pool.Exec(context.Background(),
+			`UPDATE oauth_grants SET resource = '/api/v1/mcp/account' WHERE access_token_hash = $1`, oauth2server.HashToken(mixed)); err != nil {
+			t.Fatalf("rebind grant: %v", err)
 		}
-		before := lastUsed
-		_, _ = f.callMCP(t, "/api/v1/mcp", account) // wrong endpoint
-		read()
-		if (before == nil) != (lastUsed == nil) || (before != nil && !before.Equal(*lastUsed)) {
-			t.Errorf("last_used_at moved on a refused call: %v -> %v", before, lastUsed)
+		_, before := f.grantRow(t, mixed)
+		status, header := f.callMCP(t, "/api/v1/mcp", mixed)
+		if status != 401 {
+			t.Fatalf("status = %d, want 401", status)
+		}
+		if got := header.Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) || !strings.Contains(got, "resource_metadata=") {
+			t.Errorf("WWW-Authenticate = %q, want invalid_token + resource_metadata", got)
+		}
+		if _, after := f.grantRow(t, mixed); (before == nil) != (after == nil) || (before != nil && !before.Equal(*after)) {
+			t.Errorf("last_used_at moved on a refused call: %v -> %v", before, after)
 		}
 	})
 
 	t.Run("REST still admits a bound grant", func(t *testing.T) {
-		identity, err := apiKeys{f.q}.AuthenticateAPIKey(context.Background(), oauth2server.HashToken(account))
+		bound := f.grantToken(t, resourceMixed, "")
+		identity, err := apiKeys{f.q}.AuthenticateAPIKey(context.Background(), oauth2server.HashToken(bound))
 		if err != nil || identity.UserID != f.userID || !identity.OAuthGrant {
 			t.Fatalf("identity = %+v, err %v; want the grant's user", identity, err)
 		}
@@ -250,7 +253,7 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 		}
 	})
 
-	t.Run("a resource contradicting the bound one is invalid_target", func(t *testing.T) {
+	t.Run("the removed account resource is invalid_target at /token too", func(t *testing.T) {
 		code := f.authorize(t, resourceMixed).Query().Get("code")
 		status, body := f.exchange(t, code, resourceAccount)
 		if status != fiber.StatusBadRequest || body["error"] != "invalid_target" {
@@ -266,12 +269,12 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 	})
 
 	t.Run("a resource sent only at /token binds the grant", func(t *testing.T) {
-		token := f.grantToken(t, "", resourceAccount)
-		if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 401 {
-			t.Errorf("at /mcp: status %d, want 401", got)
+		token := f.grantToken(t, "", resourceMixed)
+		if stored, _ := f.grantRow(t, token); stored == nil || *stored != oauth2server.MCPResourcePath {
+			t.Errorf("stored resource = %v, want %q", stored, oauth2server.MCPResourcePath)
 		}
-		if got, _ := f.callMCP(t, "/api/v1/mcp/account", token); got != 200 {
-			t.Errorf("at /mcp/account: status %d, want 200", got)
+		if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 200 {
+			t.Errorf("at /mcp: status %d, want 200", got)
 		}
 	})
 }
@@ -309,7 +312,7 @@ func TestOAuthResource_MultipartBodiesAreRefused(t *testing.T) {
 		cookie, _ := f.iss.Issue(f.userID, testTokenVersion)
 		ct, body := multipartBody(t, url.Values{
 			"decision": {"allow"}, "client_id": {f.client}, "redirect_uri": {resourceCB}, "state": {"xyz"},
-			"code_challenge": {challengeForVerifier(resourceVerif)}, "code_challenge_method": {"S256"}, "resource": {resourceAccount},
+			"code_challenge": {challengeForVerifier(resourceVerif)}, "code_challenge_method": {"S256"}, "resource": {resourceMixed},
 		})
 		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/authorize", body)
 		req.Header.Set("Content-Type", ct)
@@ -328,7 +331,7 @@ func TestOAuthResource_MultipartBodiesAreRefused(t *testing.T) {
 	})
 
 	t.Run("token request", func(t *testing.T) {
-		code := f.authorize(t, resourceAccount).Query().Get("code")
+		code := f.authorize(t, resourceMixed).Query().Get("code")
 		ct, body := multipartBody(t, url.Values{
 			"grant_type": {"authorization_code"}, "code": {code}, "client_id": {f.client},
 			"redirect_uri": {resourceCB}, "code_verifier": {resourceVerif},
@@ -351,14 +354,14 @@ func TestOAuthResource_MultipartBodiesAreRefused(t *testing.T) {
 	})
 }
 
-// With a trailing-slash FRONTEND_ORIGIN the advertised resources must still be
-// ones a client can bind and use.
+// With a trailing-slash FRONTEND_ORIGIN the advertised resource must still be one
+// a client can bind and use.
 func TestOAuthResource_AdvertisedResourceBindsUnderTrailingSlashOrigin(t *testing.T) {
 	f := newResourceFixture(t, "res-slash-1")
 	f.h.frontendOrigin = testMCPOrigin + "/"
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/account", f.h.OAuthProtectedResourceMetadata)
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/account", nil))
+	app.Get("/resource", f.h.OAuthProtectedResourceMetadata)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/resource", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
@@ -369,10 +372,7 @@ func TestOAuthResource_AdvertisedResourceBindsUnderTrailingSlashOrigin(t *testin
 	}
 
 	token := f.grantToken(t, doc.Resource, "")
-	if got, _ := f.callMCP(t, "/api/v1/mcp/account", token); got != 200 {
-		t.Errorf("at /mcp/account: status %d, want 200", got)
-	}
-	if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 401 {
-		t.Errorf("at /mcp: status %d, want 401", got)
+	if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 200 {
+		t.Errorf("at /mcp: status %d, want 200", got)
 	}
 }

@@ -8,10 +8,9 @@ import (
 
 // registerCatalogueTools adds the catalogue reads the signed-in assistant does not own.
 // Its search_jobs, get_job and get_company retain their account-specific schemas.
-func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
-	AddObservedTool(
+func registerCatalogueTools(server *mcp.Server, r Reader) {
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolSearchCompanies,
 			Title: "Search employers",
@@ -25,9 +24,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolCheckJobsOpen,
 			Title: "Check whether postings are still open",
@@ -43,9 +41,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolSearch,
 			Title: "Search jobs (research)",
@@ -59,9 +56,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolFetch,
 			Title: "Read one job posting (research)",
@@ -75,9 +71,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolSimilarJobs,
 			Title: "Find similar postings",
@@ -91,9 +86,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolSalaryStats,
 			Title: "Salary ranges",
@@ -107,9 +101,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolMarketStats,
 			Title: "Job market breakdown",
@@ -123,9 +116,8 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	AddObservedTool(
+	addCatalogueTool(
 		server,
-		surface,
 		&mcp.Tool{
 			Name:  toolFilterValues,
 			Title: "List filter values",
