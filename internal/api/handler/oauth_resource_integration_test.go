@@ -231,7 +231,8 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforced(t *testing.T) {
 	})
 
 	t.Run("REST still admits a bound grant", func(t *testing.T) {
-		identity, err := apiKeys{f.q}.AuthenticateAPIKey(context.Background(), oauth2server.HashToken(legacy))
+		bound := f.grantToken(t, resourceMixed, "")
+		identity, err := apiKeys{f.q}.AuthenticateAPIKey(context.Background(), oauth2server.HashToken(bound))
 		if err != nil || identity.UserID != f.userID || !identity.OAuthGrant {
 			t.Fatalf("identity = %+v, err %v; want the grant's user", identity, err)
 		}

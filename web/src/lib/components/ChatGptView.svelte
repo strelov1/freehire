@@ -50,8 +50,8 @@
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
           {MCP_CATALOG_PITCH} Ask ChatGPT for roles that match your stack, location and salary expectations, and explore the
-          results as job cards. Search without a freehire account, then connect with OAuth to save your shortlist and keep
-          track of your applications.
+          results as job cards. Sign in to freehire with OAuth when you connect, then save your shortlist and keep track of
+          your applications.
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
