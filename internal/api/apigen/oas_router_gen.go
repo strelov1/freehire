@@ -19679,7 +19679,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = SuggestOperation
-								r.summary = ""
+								r.summary = "Complete what is being typed into a search box."
 								r.operationID = "suggest"
 								r.operationGroup = ""
 								r.pathPattern = "/suggest"

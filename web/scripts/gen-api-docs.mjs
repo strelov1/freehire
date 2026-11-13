@@ -1,11 +1,12 @@
 // Generates the API reference from the HTTP contract: openapi/api.openapi.json (compiled from
 // typespec/ by `make api-contract`) plus web/src/lib/docs/api-supplement.openapi.json, the
 // hand-written routes the contract does not describe yet (auth, SSE streams, binary reads).
-// Writes four files, two per audience:
+// Writes four files, two per audience, and the ChatGPT Actions schema:
 //
 //   src/lib/docs/generated/api-reference.openapi.json            the /docs/api Scalar page
 //   src/lib/docs/generated/api-reference.internal.openapi.json   the /docs/api/internal page
 //   ../docs/API.md, ../docs/API.internal.md                       the same, as Markdown
+//   static/openapi.yaml                                           freehire.me/openapi.yaml (chatgptSchema.mjs)
 //
 // The audience comes from the contract. An operation an API key (or nobody) can call is
 // external; one that needs the browser's session cookie is internal. `x-audience` overrides
@@ -23,12 +24,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'vite';
 import { renderFilterSectionLines } from './renderFilterSection.mjs';
+import { renderChatGptSchema } from './chatgptSchema.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..');
 const contractFile = resolve(webRoot, '..', 'openapi', 'api.openapi.json');
 const supplementFile = resolve(webRoot, 'src', 'lib', 'docs', 'api-supplement.openapi.json');
 const generatedDir = resolve(webRoot, 'src', 'lib', 'docs', 'generated');
+const chatGptFile = resolve(webRoot, 'static', 'openapi.yaml');
+const chatGptInfoFile = resolve(here, 'chatgpt-openapi-info.md');
 
 const OUTPUTS = {
   external: {
@@ -324,6 +328,10 @@ async function main() {
     const count = Object.values(openapi.paths).reduce((n, item) => n + Object.keys(item).length, 0);
     console.log(`${audience}: ${count} operations -> ${out.openapi}, ${out.markdown}`);
   }
+  // JSON is YAML: the file keeps the address the GPT imports from.
+  const chatGpt = renderChatGptSchema(doc, filters, await readFile(chatGptInfoFile, 'utf8'));
+  await writeFile(chatGptFile, `${JSON.stringify(chatGpt, null, 2)}\n`);
+  console.log(`chatgpt: ${Object.keys(chatGpt.paths).length} paths -> ${chatGptFile}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

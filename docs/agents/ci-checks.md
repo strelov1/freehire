@@ -97,7 +97,9 @@ a Go test (the `llmkey` binding, the layering table).
 
 `scripts/check-openapi-breaking.sh` (the `api-breaking` CI job) runs oasdiff over
 `web/static/openapi.yaml` against main and fails on a change that would break an existing
-client — a removed field, a narrowed bound, a weaker response promise. A deliberate break
+client — a removed field, a narrowed bound, a weaker response promise. The file is generated
+from the contract (`pnpm run gen:api-docs`), so a break there starts in `typespec/`,
+`web/src/lib/docs/filters.ts` or the supplement. A deliberate break
 passes with an `API-Break: <reason>` commit trailer.
 
 ## Contract fuzzing: Schemathesis
@@ -182,8 +184,9 @@ have their own runner, so `unittest discover` would report "Ran 0 tests" and pas
 The `artifacts` CI job: `web/static/install.sh` is served at `freehire.me/install.sh` to be
 piped into `sh`, so shellcheck covers every tracked `*.sh`; both Dockerfiles go through
 hadolint (`.hadolint.yaml` argues its two exclusions, and a finding wrong for one line
-carries `# hadolint ignore=` beside it); and `web/static/openapi.yaml` is validated against
-the OpenAPI specification, since it is a static asset nothing else parses.
+carries `# hadolint ignore=` beside it); and `web/static/openapi.yaml` (generated from the
+contract, see above) is validated against the OpenAPI specification, since it is served as a
+static asset nothing else parses.
 
 ## Shared JS dependencies: `pnpm check:deps`
 

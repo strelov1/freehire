@@ -36,6 +36,7 @@ import "./billing.tsp";
 import "./plan.tsp";
 import "./direct-apply.tsp";
 import "./jobs.tsp";
+import "./job-wire.tsp";
 import "./companies.tsp";
 import "./search.tsp";
 import "./resume.tsp";

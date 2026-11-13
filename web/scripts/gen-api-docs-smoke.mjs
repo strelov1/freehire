@@ -5,6 +5,7 @@
 //   node scripts/gen-api-docs-smoke.mjs   # asserts; exits non-zero on failure
 
 import { accessOf, loadSources, mergeSupplement, renderMarkdown, renderOpenApi } from './gen-api-docs.mjs';
+import { renderChatGptSchema } from './chatgptSchema.mjs';
 
 const checks = [];
 function assert(name, cond) {
@@ -89,6 +90,42 @@ async function main() {
       refs.every((r) => d.components.schemas[r.split('/').pop()]),
     );
   }
+
+  // The ChatGPT Actions schema: the public operation names, 3.0.3, the filters it must declare.
+  const gpt = renderChatGptSchema(doc, filters, 'info');
+  const gptOps = Object.values(gpt.paths).flatMap((item) => Object.values(item));
+  const gptOp = (id) => gptOps.find((op) => op.operationId === id);
+  assert('gpt: twelve operations', gptOps.length === 12);
+  assert(
+    'gpt: keeps the published operationIds',
+    gptOp('getJobFacets') && gptOp('searchCompanies') && !gptOp('jobFacets'),
+  );
+  assert('gpt: OpenAPI 3.0.3, no 3.1 null type', gpt.openapi === '3.0.3' && !JSON.stringify(gpt).includes('"null"'));
+  const searchParam = (name) =>
+    gptOp('searchJobs')
+      .parameters.map((p) => (p.$ref ? gpt.components.parameters[p.$ref.split('/').pop()] : p))
+      .find((p) => p.name === name);
+  assert('gpt: a closed facet carries its enum', searchParam('seniority')?.schema.items.enum?.includes('senior'));
+  assert('gpt: a facet has its _exclude and _mode', searchParam('skills_exclude') && searchParam('skills_mode'));
+  assert('gpt: geography has no _mode', !searchParam('countries_mode'));
+  assert('gpt: a scalar filter is typed', searchParam('visa_sponsorship')?.schema.type === 'boolean');
+  assert('gpt: company filters on searchCompanies', Boolean(gpt.components.parameters['company.yc_batch']));
+  assert(
+    'gpt: job data is typed',
+    JSON.stringify(gptOp('getJob').responses['200']).includes('#/components/schemas/Job'),
+  );
+  assert(
+    'gpt: every schema ref resolves',
+    (JSON.stringify(gpt).match(/#\/components\/schemas\/[^"]+/g) ?? []).every(
+      (r) => gpt.components.schemas[r.split('/').pop()],
+    ),
+  );
+  const long = structuredClone(doc);
+  long.paths['/geo/cities'].get.description = 'x'.repeat(301);
+  assert(
+    'gpt: an operation description over 300 characters throws',
+    throws(() => renderChatGptSchema(long, filters, '')),
+  );
 
   let failed = 0;
   for (const c of checks) {

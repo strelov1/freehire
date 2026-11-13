@@ -196,6 +196,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `salary_period` | Salary period | year, month, day, hour |
 
+| `is_tech` | Technical role | tech, non_tech |
+
 ### Numeric & boolean filters
 
 | Param | Filter | Values |
@@ -231,6 +233,14 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |
 
 | `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the "short form" filter). Jobs with no form freehire could read are excluded: unknown is not short |
+
+| `auto_apply_available` | Auto-apply can attempt it | true — only postings whose ATS freehire auto-apply can currently attempt to fill and submit for; a provider-eligibility signal, never a guarantee the submission succeeds |
+
+| `work_mode_remote_anywhere` | Remote from anywhere, other modes at home | true — with `remote` and a physical work_mode both selected and a geography facet set, reads "remote anywhere, OR hybrid/onsite within the geography" instead of ANDing them. Otherwise, or with work_mode_mode=and, it changes nothing |
+
+| `work_mode_remote_regions` | Remote arm: regions | Region values, as regions — bound the remote arm of work_mode_remote_anywhere. Read only while it is in force |
+
+| `work_mode_remote_countries` | Remote arm: countries | ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force |
 
 ### Recipes
 
@@ -432,8 +442,8 @@ curl "https://freehire.me/api/v1/jobs/<slug>"
   "data": {
     "public_slug": "senior-go-engineer-acme-1a2b",
     "title": "Senior Go Engineer",
-    "closed_at": null,
-    "...": "..."
+    "company": "Acme",
+    "closed_at": null
   }
 }
 ```
@@ -520,6 +530,46 @@ curl "https://freehire.me/api/v1/jobs/<slug>/copies"
     "total": 4
   }
 }
+```
+
+### `POST /ojcp/v1/search`
+
+**Auth:** Public
+
+OJCP: search jobs
+
+The `search_jobs` tool of the [Open Job Context Protocol](https://spec.ojcp.dev/) over REST: each result is an OJCP `JobPosting` with the paths it can be applied through. Discovery: `/.well-known/ojcp.json`; MCP: `/api/v1/ojcp/mcp`. A filter it cannot honour is named in `ignored_params`.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | no |  |
+| `location` | object | no |  |
+| `filters` | object | no |  |
+| `pagination` | object | no |  |
+| `semantic` | boolean | no | Extension. `true` asks for meaning-based ranking, which is currently not available: the answer is the keyword search and `semantic` says `unavailable`. Without a non-empty `query` it is reported in `ignored_params` instead.  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/ojcp/v1/search"
+```
+
+### `GET /ojcp/v1/jobs/{slug}`
+
+**Auth:** Public
+
+OJCP: read one posting
+
+The `get_job_detail` tool, by the `ojcp_id` a search result carries.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The posting's ojcp_id (its public_slug). |
+
+```bash
+curl "https://freehire.me/api/v1/ojcp/v1/jobs/<slug>"
 ```
 
 ## Fit
@@ -911,9 +961,9 @@ curl "https://freehire.me/api/v1/companies/<slug>"
     },
     "jobs": [
       {
-        "public_slug": "...",
-        "title": "...",
-        "...": "..."
+        "public_slug": "senior-go-engineer-acme-1a2b",
+        "title": "Senior Go Engineer",
+        "company": "Acme"
       }
     ]
   }
@@ -1016,6 +1066,25 @@ curl "https://freehire.me/api/v1/companies/<slug>/hiring"
 }
 ```
 
+### `GET /ojcp/v1/employers/{slug}`
+
+**Auth:** Public
+
+OJCP: read an employer
+
+The `get_employer_context` tool, by the `ojcp_employer_id` a posting carries.
+Includes `open_roles_count`, the one figure a single posting cannot state.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer's ojcp_employer_id (its company slug). |
+
+```bash
+curl "https://freehire.me/api/v1/ojcp/v1/employers/<slug>"
+```
+
 ## Search
 
 Full-text job search with the shared filter vocabulary, facet counts, similar jobs and the reference data behind search.
@@ -1036,7 +1105,7 @@ Plus every filter in the "Filtering jobs" section.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
+| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. The first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No exact-phrase matching. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
@@ -1086,18 +1155,18 @@ curl "https://freehire.me/api/v1/geo/cities"
 
 Count of matching jobs per facet value (and numeric stats).
 
-Takes the same `q` and facet filter params as search, but returns the distribution of
-values instead of a page of jobs — use it to build filter UIs or see how a filter
-narrows the set. Continuous numeric facets are returned as `stats` (min/max), not
-per-value buckets. `former_employers` is ignored even for signed-in callers.
+The same `q` and filters as search, answered with the count of postings per facet value
+and `stats` (min/max) for the numeric facets. `former_employers` and `watchlist` are
+ignored. Narrow with `facets=`; naming `company_slug` there adds `companies_total` and
+`top_companies`.
 
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `q` | string | no | Same full-text query as search. (e.g. `golang`) |
-| `facets` | string | no | Comma-separated facet params to count instead of all of them. |
-| `disjunctive` | string | no |  |
+| `facets` | string | no | Comma-separated facet params to count instead of all of them, e.g. `skills,seniority`. `company_slug` is counted only when named here. An unknown name is a 400, and so is combining it with `disjunctive`, or `company_slug` with an `OR` query. |
+| `disjunctive` | string | no | `true` counts each facet under the full filter MINUS its own selection, so a selected facet still shows its siblings' counts — what a live filter sidebar wants. Costs one query per facet. |
 
 ```bash
 curl "https://freehire.me/api/v1/jobs/facets"
@@ -1134,19 +1203,16 @@ curl "https://freehire.me/api/v1/jobs/facets"
 
 Full-text + faceted search over open jobs.
 
-Combine free-text `q` with any of the filter params below. Repeated facet params are
-ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude.
-Without `q`, results default to newest first; with `q`, to relevance. A param no filter
-reads is ignored rather than refused, and listed in `meta.ignored_params` — check it,
-since a dropped filter otherwise looks like a broad result.
-
-Plus every filter in the "Filtering jobs" section.
+Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR;
+`<param>_mode=and` requires all, `<param>_exclude` excludes. Newest first without `q`,
+by relevance with it. An unread param is listed in `meta.ignored_params`: check it, a
+dropped filter looks like a broad result.
 
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
+| `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. The first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No exact-phrase matching. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
@@ -1190,9 +1256,9 @@ curl "https://freehire.me/api/v1/jobs/<slug>/similar"
 {
   "data": [
     {
-      "public_slug": "...",
-      "title": "...",
-      "...": "..."
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme"
     }
   ]
 }
@@ -1221,13 +1287,18 @@ curl -X POST "https://freehire.me/api/v1/search/interpret"
 
 **Auth:** Public
 
-Search-box suggestions. 503 when search is not configured.
+Complete what is being typed into a search box.
+
+Completes a PHRASE, not a word: `senior software engineer go` completes to Senior
+Software Engineer at Google. Each row carries every part it names; apply them all.
+Typos are forgiven in the trailing fragment only. An empty `q` returns no rows. 503 when
+search is not configured.
 
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `q` | string | no |  |
+| `q` | string | no | The partly-typed query, matched against posting titles, skills, categories and companies. |
 | `limit` | string | no | 1 to 20, default 5. A value that does not read falls back to the default. |
 
 ```bash

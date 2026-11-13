@@ -40,13 +40,10 @@ model AgentJobSearchPage {
 // endpoint does not read is named in `meta.ignored_params`, a value outside a closed
 // vocabulary in `meta.ignored_values`.
 /**
- * Combine free-text `q` with any of the filter params below. Repeated facet params are
- * ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude.
- * Without `q`, results default to newest first; with `q`, to relevance. A param no filter
- * reads is ignored rather than refused, and listed in `meta.ignored_params` — check it,
- * since a dropped filter otherwise looks like a broad result.
- *
- * Plus every filter in the "Filtering jobs" section.
+ * Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR;
+ * `<param>_mode=and` requires all, `<param>_exclude` excludes. Newest first without `q`,
+ * by relevance with it. An unread param is listed in `meta.ignored_params`: check it, a
+ * dropped filter looks like a broad result.
  */
 @summary("Full-text + faceted search over open jobs.")
 @useAuth(NoAuth)
@@ -55,17 +52,13 @@ model AgentJobSearchPage {
 @get
 op searchJobs(
   /**
-   * Full-text query over `title`, `company`, `description`, and `location`. Plain words
-   * use the default engine matching: the first words are required and trailing ones are
-   * dropped when too few postings match, so word order can change the result. Operators:
-   * quotes (`"systems engineer"`) require every quoted word in any order (not a
-   * contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
-   * alternative (at most 5, merged and deduplicated); `title:` at the start of an
-   * alternative matches it in the title only, e.g.
-   * `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
-   * alternatives with `q_fields`. Exact-phrase matching is not offered, and default
-   * relevance order does not reliably rank a contiguous match above a scattered-token
-   * one. (e.g. `golang`)
+   * Full-text query over `title`, `company`, `description`, and `location`. The first
+   * words are required and trailing ones are dropped when too few postings match, so word
+   * order can change the result. Operators: quotes require every quoted word in any order
+   * (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+   * alternative (at most 5); `title:` at the start of an alternative matches it in the
+   * title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields`
+   * narrows the other alternatives. No exact-phrase matching. (e.g. `golang`)
    */
   @query q?: string,
   /**
@@ -133,17 +126,13 @@ op searchJobs(
 @get
 op agentSearchJobs(
   /**
-   * Full-text query over `title`, `company`, `description`, and `location`. Plain words
-   * use the default engine matching: the first words are required and trailing ones are
-   * dropped when too few postings match, so word order can change the result. Operators:
-   * quotes (`"systems engineer"`) require every quoted word in any order (not a
-   * contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
-   * alternative (at most 5, merged and deduplicated); `title:` at the start of an
-   * alternative matches it in the title only, e.g.
-   * `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
-   * alternatives with `q_fields`. Exact-phrase matching is not offered, and default
-   * relevance order does not reliably rank a contiguous match above a scattered-token
-   * one. (e.g. `golang`)
+   * Full-text query over `title`, `company`, `description`, and `location`. The first
+   * words are required and trailing ones are dropped when too few postings match, so word
+   * order can change the result. Operators: quotes require every quoted word in any order
+   * (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+   * alternative (at most 5); `title:` at the start of an alternative matches it in the
+   * title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields`
+   * narrows the other alternatives. No exact-phrase matching. (e.g. `golang`)
    */
   @query q?: string,
   /**
@@ -176,10 +165,10 @@ op agentSearchJobs(
 // The count of postings per facet value under the same filters, keyed by public facet
 // param.
 /**
- * Takes the same `q` and facet filter params as search, but returns the distribution of
- * values instead of a page of jobs — use it to build filter UIs or see how a filter
- * narrows the set. Continuous numeric facets are returned as `stats` (min/max), not
- * per-value buckets. `former_employers` is ignored even for signed-in callers.
+ * The same `q` and filters as search, answered with the count of postings per facet value
+ * and `stats` (min/max) for the numeric facets. `former_employers` and `watchlist` are
+ * ignored. Narrow with `facets=`; naming `company_slug` there adds `companies_total` and
+ * `top_companies`.
  */
 @summary("Count of matching jobs per facet value (and numeric stats).")
 @useAuth(NoAuth)
@@ -214,9 +203,18 @@ op jobFacets(
   /** Same full-text query as search. (e.g. `golang`) */
   @query q?: string,
 
-  /** Comma-separated facet params to count instead of all of them. */
+  /**
+   * Comma-separated facet params to count instead of all of them, e.g. `skills,seniority`.
+   * `company_slug` is counted only when named here. An unknown name is a 400, and so is
+   * combining it with `disjunctive`, or `company_slug` with an `OR` query.
+   */
   @query facets?: string,
 
+  /**
+   * `true` counts each facet under the full filter MINUS its own selection, so a selected
+   * facet still shows its siblings' counts — what a live filter sidebar wants. Costs one
+   * query per facet.
+   */
   @query disjunctive?: string,
 ): DataWithIgnored<unknown> | Problem;
 
@@ -232,9 +230,9 @@ op jobFacets(
   returnType: #{
     data: #[
       #{
-        public_slug: "...",
-        title: "...",
-        `...`: "...",
+        public_slug: "senior-go-engineer-acme-1a2b",
+        title: "Senior Go Engineer",
+        company: "Acme",
       },
     ],
   },

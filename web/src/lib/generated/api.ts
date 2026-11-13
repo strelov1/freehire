@@ -1148,10 +1148,10 @@ export interface paths {
         };
         /**
          * Count of matching jobs per facet value (and numeric stats).
-         * @description Takes the same `q` and facet filter params as search, but returns the distribution of
-         *     values instead of a page of jobs — use it to build filter UIs or see how a filter
-         *     narrows the set. Continuous numeric facets are returned as `stats` (min/max), not
-         *     per-value buckets. `former_employers` is ignored even for signed-in callers.
+         * @description The same `q` and filters as search, answered with the count of postings per facet value
+         *     and `stats` (min/max) for the numeric facets. `former_employers` and `watchlist` are
+         *     ignored. Narrow with `facets=`; naming `company_slug` there adds `companies_total` and
+         *     `top_companies`.
          */
         get: operations["jobFacets"];
         put?: never;
@@ -1225,13 +1225,10 @@ export interface paths {
         };
         /**
          * Full-text + faceted search over open jobs.
-         * @description Combine free-text `q` with any of the filter params below. Repeated facet params are
-         *     ORed; add `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude.
-         *     Without `q`, results default to newest first; with `q`, to relevance. A param no filter
-         *     reads is ignored rather than refused, and listed in `meta.ignored_params` — check it,
-         *     since a dropped filter otherwise looks like a broad result.
-         *
-         *     Plus every filter in the "Filtering jobs" section.
+         * @description Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR;
+         *     `<param>_mode=and` requires all, `<param>_exclude` excludes. Newest first without `q`,
+         *     by relevance with it. An unread param is listed in `meta.ignored_params`: check it, a
+         *     dropped filter looks like a broad result.
          */
         get: operations["searchJobs"];
         put?: never;
@@ -5460,7 +5457,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Search-box suggestions. 503 when search is not configured. */
+        /**
+         * Complete what is being typed into a search box.
+         * @description Completes a PHRASE, not a word: `senior software engineer go` completes to Senior
+         *     Software Engineer at Google. Each row carries every part it names; apply them all.
+         *     Typos are forgiven in the trailing fragment only. An empty `q` returns no rows. 503 when
+         *     search is not configured.
+         */
         get: operations["suggest"];
         put?: never;
         post?: never;
@@ -5838,7 +5841,7 @@ export interface components {
             offset: number;
             /** @description Absent when every param was read. */
             ignored_params?: components["schemas"]["IgnoredParam"][];
-            ignored_values?: unknown;
+            ignored_values?: components["schemas"]["IgnoredValues"];
             /** @description True when `total` counts only what was read, not the whole match. */
             total_is_lower_bound?: boolean;
             /** @description "unavailable" when `semantic=true` was asked and the request was answered by keywords. */
@@ -6398,7 +6401,7 @@ export interface components {
             category: string;
         };
         CityMatch: {
-            /** @description The city's canonical name, the value the filters take. */
+            /** @description Canonical city name — pass it verbatim to the `cities` facet, which matches nothing on a near miss. */
             value: string;
             /** @description ISO 3166-1 alpha-2, lower case. */
             country: string;
@@ -6413,6 +6416,41 @@ export interface components {
             min_open: number;
             /** Format: int64 */
             limit: number;
+        };
+        /** @description The company summary plus the profile fields served only on the detail endpoint. */
+        CompanyDetail: {
+            slug: string;
+            name: string;
+            job_count?: number;
+            tagline?: string | null;
+            /** @description Homepage, description, and other profile fields where known. */
+            company_info?: {
+                [key: string]: unknown;
+            } | null;
+            industries?: string[];
+            domains?: string[];
+            collections?: string[];
+            regions?: string[];
+            countries?: string[];
+            /** @description Regions the company hires remotely in, derived from its open postings. */
+            remote_regions?: string[];
+            company_types?: string[];
+            company_sizes?: string[];
+            hq_country?: string | null;
+            year_founded?: number | null;
+            employee_count?: number | null;
+            organization_type?: string | null;
+            maturity?: string | null;
+            yc_batch?: string[];
+            yc_status?: string[];
+            yc_stage?: string[];
+            yc_flags?: string[];
+            feedback_count?: number;
+            feedback_rating_avg?: number | null;
+            upvote_count?: number;
+            downvote_count?: number;
+            /** @description The calling user's vote; 0 or null without a signed-in caller. */
+            my_vote?: number | null;
         };
         /** @description One review. The persona handle is the only author identity ever sent. */
         CompanyFeedback: {
@@ -6486,6 +6524,26 @@ export interface components {
              * @description How many people reported an AI interviewer. Absent at zero, so a badge never shows a bare 0.
              */
             ai_interview_reports?: number;
+        };
+        /** @description The `/companies/{slug}` answer: the company and a page of its open jobs. */
+        CompanyPage: {
+            company?: components["schemas"]["CompanyDetail"];
+            jobs?: components["schemas"]["Job"][];
+            /** @description Whether an employee referral offer exists for this company. */
+            referral_available?: boolean;
+            parent?: components["schemas"]["CompanyRef"];
+            /** @description Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none. */
+            subsidiaries?: components["schemas"]["CompanyRef"][];
+        };
+        /**
+         * @description A related company: the parent that owns this one, or a subsidiary it owns. It is a
+         *     separate company with its own page and jobs, not another name for this one.
+         */
+        CompanyRef: {
+            slug: string;
+            name: string;
+            /** @description Open jobs the related company has. */
+            job_count: number;
         };
         CompanyRelationApproval: {
             kind: string;
@@ -7232,7 +7290,7 @@ export interface components {
         /** @description The meta of a single-item answer, sent only to carry a warning. */
         IgnoredMeta: {
             ignored_params?: components["schemas"]["IgnoredParam"][];
-            ignored_values?: unknown;
+            ignored_values?: components["schemas"]["IgnoredValues"];
         };
         /**
          * @description A query param the endpoint did not read: unknown, or known but unreadable
@@ -7241,6 +7299,17 @@ export interface components {
         IgnoredParam: {
             param: string;
             did_you_mean?: string;
+        };
+        /**
+         * @description Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value
+         *     outside its vocabulary — keyed by the parameter as sent, each listing the unknown values.
+         *     On a facet the value is still applied and matches no posting: alone it empties the
+         *     answer, beside other values it adds nothing to their OR, in `_exclude` it excludes
+         *     nothing. A boolean or modifier param reads it its own way (`requires_clearance=flase`
+         *     reads as true, `visa_sponsorship=yes` filters nothing), so the answer may be wider.
+         */
+        IgnoredValues: {
+            [key: string]: string[];
         };
         /** @description The job, the caller's interaction with it, the linked mail and the history. */
         InboxApplicationDetail: {
@@ -7399,6 +7468,131 @@ export interface components {
              */
             percent_off: number;
         };
+        /** @description One posting, as every job endpoint serves it. */
+        Job: {
+            /** @description Stable public identifier. The freehire page is https://freehire.me/jobs/{public_slug}. */
+            public_slug: string;
+            title: string;
+            company: string;
+            company_slug?: string;
+            /**
+             * @description The employer's own application URL. This is where an applicant goes. Empty when
+             *     `direct_apply` is true: that vacancy has no page elsewhere.
+             */
+            url?: string;
+            /**
+             * @description True for a vacancy its employer published on freehire that takes applications only on
+             *     its freehire page (`https://freehire.me/jobs/{slug}`). Absent for every other posting.
+             */
+            direct_apply?: boolean;
+            /** @description The posting's own location string, verbatim and unnormalized. Filter on the geography facets instead. */
+            location?: string;
+            /** @description Origin slug — the ATS or board this posting was crawled from. */
+            source?: string;
+            /** @description The source's own identifier for the posting. */
+            external_id?: string;
+            /**
+             * Format: date
+             * @description Source-stated last application day, inclusive. Absent when the source states no deadline.
+             */
+            application_deadline?: string;
+            /** @description True for a hand-curated posting rather than an automated crawl. */
+            manually_added?: boolean;
+            /**
+             * @description Stored verbatim HTML by default. `searchJobs` serves a truncated preview;
+             *     `agentSearchJobs` and `getJob` serve the full body, and `agentSearchJobs` can convert
+             *     it via `description_format`.
+             */
+            description?: string;
+            regions?: string[];
+            countries?: string[];
+            cities?: string[];
+            metros?: string[];
+            /**
+             * @description Absent when the posting's format could not be resolved.
+             * @enum {string}
+             */
+            work_mode?: "remote" | "hybrid" | "onsite";
+            skills?: string[];
+            /** @description Curated collection slugs of the posting's company. */
+            collections?: string[];
+            /**
+             * @description Absent when unknown.
+             * @enum {string}
+             */
+            is_tech?: "tech" | "non_tech";
+            /**
+             * @description Present and `true` only when the posting states a government security-clearance
+             *     requirement. Absent otherwise — there is no `false`, because "no requirement was
+             *     detected" is not the same claim as "this posting needs no clearance".
+             */
+            requires_clearance?: boolean;
+            /**
+             * @description Present and `true` only when the posting states that it is published by an
+             *     intermediary on a client's behalf. Absent otherwise — a recruiter who never says so is
+             *     not detected, so absence does not mean the employer posted it.
+             */
+            via_recruiter?: boolean;
+            /**
+             * @description What the posting states about equity compensation: `salary_and_equity` (offered beside
+             *     cash pay) or `equity_only` (equity is the whole pay). Absent when the posting states
+             *     neither — "not stated", not "no equity".
+             * @enum {string}
+             */
+            equity?: "salary_and_equity" | "equity_only";
+            /**
+             * @description The security-clearance levels the posting states. Present exactly when
+             *     `requires_clearance` is, absent otherwise. `other` is a non-US scheme or a clearance
+             *     stated with no level.
+             */
+            clearance_levels?: ("confidential" | "secret" | "top_secret" | "ts_sci" | "public_trust" | "interim" | "other")[];
+            /**
+             * @description Benefits the description states it offers (see the `perks` filter for the
+             *     vocabulary). Empty when it names none of them — not a claim that the job offers none.
+             */
+            perks?: string[];
+            /**
+             * @description The legal terms the posting states it engages its worker on (see the `engagement`
+             *     filter for the vocabulary). Empty when it does not say.
+             */
+            engagement?: string[];
+            /**
+             * @description Present and `true` only when the posting's ATS provider is one freehire's auto-apply
+             *     feature can currently attempt to fill and submit for. Absent otherwise — a best-effort
+             *     provider-eligibility signal, never a guarantee of successful submission.
+             */
+            auto_apply_available?: boolean;
+            /**
+             * @description How many questions the posting's application form REQUIRES beyond the standard fields
+             *     every form asks for (name, contact details, CV, cover letter), counted from the form
+             *     freehire captured from the employer's ATS. Optional questions, the equal-opportunity
+             *     survey and consent boxes are not counted. `0` means no REQUIRED question beyond the
+             *     basics. Absent when freehire holds no form for the posting — "not known", never
+             *     "long". Served by search hits and the job detail; a list read straight from the
+             *     database may omit it.
+             */
+            apply_questions?: number;
+            posted_at?: string | null;
+            /** @description When freehire first saw the posting. */
+            created_at?: string | null;
+            updated_at?: string | null;
+            /** @description When a re-crawl last confirmed the posting was still live. */
+            last_seen_at?: string | null;
+            /** @description Non-null once the posting is no longer open. Only `getJob` ever serves such a row. */
+            closed_at?: string | null;
+            enrichment?: components["schemas"]["JobEnrichment"];
+            enriched_at?: string | null;
+            /** @description Bumped when the enrichment contract changes — use it to detect re-enriched rows. */
+            enrichment_version?: number | null;
+            /** @description The calling user's vote; 0 or null without a signed-in caller. */
+            my_vote?: number | null;
+            reality?: components["schemas"]["JobReality"];
+            ghost?: components["schemas"]["JobGhost"];
+            view_count?: number;
+            applied_count?: number;
+            upvote_count?: number;
+            downvote_count?: number;
+        };
         JobCopiesMeta: {
             /**
              * Format: int64
@@ -7459,6 +7653,59 @@ export interface components {
             /** @description Optional hint, used only alongside `text`. */
             company?: string;
         };
+        /**
+         * @description Model-extracted attributes, every field omitted when the posting did not state it.
+         *     `work_mode`, `regions`, `countries`, `cities` and `skills` are deliberately NOT here —
+         *     those are served top-level from the deterministic dictionaries, and the model's own
+         *     values for them are not published.
+         */
+        JobEnrichment: {
+            /** @description The one synthesized field — a 1-2 sentence synopsis, always present on an enriched posting. */
+            summary?: string;
+            employment_type?: string;
+            relocation?: string;
+            visa_sponsorship?: boolean;
+            timezone_note?: string;
+            salary_min?: number;
+            salary_max?: number;
+            salary_currency?: string;
+            salary_period?: string;
+            seniority?: string;
+            experience_years_min?: number;
+            english_level?: string;
+            education_level?: string;
+            category?: string;
+            domains?: string[];
+            posting_language?: string;
+            company_type?: string;
+            company_size?: string;
+        };
+        /** @description The `/jobs/facets` answer: posting counts per facet value under the request's filters. */
+        JobFacetCounts: {
+            total: number;
+            /** @description Facet name to a map of value to matching-posting count. */
+            facets: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** @description Numeric ranges (min/max) for the continuous facets — `salary_min`, `salary_max`, `experience_years_min`. */
+            stats?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /**
+             * @description Present only when `facets=` names `company_slug`: the exact number of distinct
+             *     companies among the matching postings.
+             */
+            companies_total?: number;
+            /**
+             * @description Present only when `facets=` names `company_slug`: the companies with the most matching
+             *     postings, in descending count. Replaces a `company_slug` entry in `facets`.
+             */
+            top_companies?: components["schemas"]["TopCompany"][];
+        };
         JobFindMeta: {
             /** @description Whether the URL sits on an ATS board freehire knows how to crawl. */
             ats_board: boolean;
@@ -7471,6 +7718,40 @@ export interface components {
         /** @description The posting a page URL is, when the catalogue carries it. */
         JobFoundPosting: {
             public_slug: string;
+        };
+        /**
+         * @description Hedged "is anyone actually hiring for this" verdict, raised only when evidence fires —
+         *     most postings carry none, so an absent value means "no signal", never "verified real".
+         *     Attached by `searchJobs`, `getJob` and the plain jobs list. NOT attached by
+         *     `agentSearchJobs` or `getSimilarJobs`, so its absence on those two is not evidence
+         *     either way.
+         */
+        JobGhost: {
+            /** @description How strongly the evidence reads, e.g. `possible`. */
+            level?: string;
+            /** @description Which criteria fired, e.g. `evergreen_posting`, `ats_absent`. */
+            criteria?: string[];
+            /** @description How many criteria exist, so `criteria` reads as N-of-total. */
+            criteria_total?: number;
+            /** @description Number of independent user reports, once past the disclosure gate. */
+            contributors?: number;
+            /**
+             * Format: date-time
+             * @description When the posting was last looked for on the employer's own ATS. Present only when the `ats_absent` criterion fired.
+             */
+            ats_checked_at?: string;
+        };
+        /** @description Signals about whether the posting reflects a real, current opening. */
+        JobReality: {
+            /** @enum {string} */
+            class?: "fresh" | "stale" | "likely-evergreen";
+            age_days?: number;
+            /** @description How many times this role has been reposted. */
+            repost_count?: number;
+            /** @description How many near-identical postings the same role cluster holds. */
+            mass_posting_count?: number;
+            /** @description True when the stated posting date looks refreshed rather than real. */
+            fake_freshness?: boolean;
         };
         JobReport: {
             /** Format: int64 */
@@ -7514,7 +7795,7 @@ export interface components {
             offset: number;
             /** @description Absent when every param was read. */
             ignored_params?: components["schemas"]["IgnoredParam"][];
-            ignored_values?: unknown;
+            ignored_values?: components["schemas"]["IgnoredValues"];
             /** @description True when `total` counts only what was read, not the whole match. */
             total_is_lower_bound?: boolean;
         };
@@ -7545,7 +7826,7 @@ export interface components {
             offset: number;
             /** @description Absent when every param was read. */
             ignored_params?: components["schemas"]["IgnoredParam"][];
-            ignored_values?: unknown;
+            ignored_values?: components["schemas"]["IgnoredValues"];
             /** @description True when `total` counts only what was read, not the whole match. */
             total_is_lower_bound?: boolean;
         };
@@ -8868,11 +9149,16 @@ export interface components {
             count: number;
         };
         Suggestion: {
+            /** @description The whole phrase the row names — the recognised prefix plus the completion, e.g. "Senior Software Engineer Google". */
             text: string;
+            /**
+             * @description Every part the row applies. Apply ALL of them: a row naming a role and a company that is
+             *     applied as only one of the two silently discards what the caller typed.
+             */
             parts: components["schemas"]["SuggestionPart"][];
             /**
              * Format: int64
-             * @description How many open jobs the suggestion finds.
+             * @description Open postings behind the completion. Never zero — a suggestion that leads to an empty page is withheld.
              */
             jobs: number;
         };
@@ -8880,9 +9166,15 @@ export interface components {
         SuggestionKind: "title" | "skill" | "category" | "company";
         /** @description One recognised piece of the query: a dictionary term, or text still being typed. */
         SuggestionPart: {
+            /**
+             * @description Which vocabulary the part comes from, and so which parameter it applies to: `skill` →
+             *     `skills`, `category` → `category`, `company` → `company_slug`. A `title` names no facet
+             *     and is applied as `q`.
+             */
             kind: components["schemas"]["SuggestionKind"];
-            /** @description The dictionary slug, when the part is one. */
+            /** @description The facet value to apply. Absent for a `title`. */
             slug?: string;
+            /** @description How this part reads on its own. */
             text: string;
         };
         SupportRating: {
@@ -9087,6 +9379,13 @@ export interface components {
             /** Format: int64 */
             count: number;
         };
+        /** @description A company and how many of the matching postings it holds. */
+        TopCompany: {
+            slug: string;
+            /** @description Display name; the slug when the company has none yet. */
+            name: string;
+            count: number;
+        };
         /** @description At least one of the two is required. A field left out or null keeps the stored value. */
         TrackJob: {
             /** @description Application stage from the vocabulary above. (e.g. `interview`) */
@@ -9257,17 +9556,13 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Full-text query over `title`, `company`, `description`, and `location`. Plain words
-                 *     use the default engine matching: the first words are required and trailing ones are
-                 *     dropped when too few postings match, so word order can change the result. Operators:
-                 *     quotes (`"systems engineer"`) require every quoted word in any order (not a
-                 *     contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
-                 *     alternative (at most 5, merged and deduplicated); `title:` at the start of an
-                 *     alternative matches it in the title only, e.g.
-                 *     `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
-                 *     alternatives with `q_fields`. Exact-phrase matching is not offered, and default
-                 *     relevance order does not reliably rank a contiguous match above a scattered-token
-                 *     one. (e.g. `golang`)
+                 * @description Full-text query over `title`, `company`, `description`, and `location`. The first
+                 *     words are required and trailing ones are dropped when too few postings match, so word
+                 *     order can change the result. Operators: quotes require every quoted word in any order
+                 *     (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+                 *     alternative (at most 5); `title:` at the start of an alternative matches it in the
+                 *     title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields`
+                 *     narrows the other alternatives. No exact-phrase matching. (e.g. `golang`)
                  */
                 q?: string;
                 /**
@@ -11930,8 +12225,17 @@ export interface operations {
             query?: {
                 /** @description Same full-text query as search. (e.g. `golang`) */
                 q?: string;
-                /** @description Comma-separated facet params to count instead of all of them. */
+                /**
+                 * @description Comma-separated facet params to count instead of all of them, e.g. `skills,seniority`.
+                 *     `company_slug` is counted only when named here. An unknown name is a 400, and so is
+                 *     combining it with `disjunctive`, or `company_slug` with an `OR` query.
+                 */
                 facets?: string;
+                /**
+                 * @description `true` counts each facet under the full filter MINUS its own selection, so a selected
+                 *     facet still shows its siblings' counts — what a live filter sidebar wants. Costs one
+                 *     query per facet.
+                 */
                 disjunctive?: string;
             };
             header?: never;
@@ -12087,17 +12391,13 @@ export interface operations {
         parameters: {
             query?: {
                 /**
-                 * @description Full-text query over `title`, `company`, `description`, and `location`. Plain words
-                 *     use the default engine matching: the first words are required and trailing ones are
-                 *     dropped when too few postings match, so word order can change the result. Operators:
-                 *     quotes (`"systems engineer"`) require every quoted word in any order (not a
-                 *     contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
-                 *     alternative (at most 5, merged and deduplicated); `title:` at the start of an
-                 *     alternative matches it in the title only, e.g.
-                 *     `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other
-                 *     alternatives with `q_fields`. Exact-phrase matching is not offered, and default
-                 *     relevance order does not reliably rank a contiguous match above a scattered-token
-                 *     one. (e.g. `golang`)
+                 * @description Full-text query over `title`, `company`, `description`, and `location`. The first
+                 *     words are required and trailing ones are dropped when too few postings match, so word
+                 *     order can change the result. Operators: quotes require every quoted word in any order
+                 *     (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any
+                 *     alternative (at most 5); `title:` at the start of an alternative matches it in the
+                 *     title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields`
+                 *     narrows the other alternatives. No exact-phrase matching. (e.g. `golang`)
                  */
                 q?: string;
                 /**
@@ -12195,8 +12495,8 @@ export interface operations {
                      *       "data": {
                      *         "public_slug": "senior-go-engineer-acme-1a2b",
                      *         "title": "Senior Go Engineer",
-                     *         "closed_at": null,
-                     *         "...": "..."
+                     *         "company": "Acme",
+                     *         "closed_at": null
                      *       }
                      *     }
                      */
@@ -13145,9 +13445,9 @@ export interface operations {
                      * @example {
                      *       "data": [
                      *         {
-                     *           "public_slug": "...",
-                     *           "title": "...",
-                     *           "...": "..."
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme"
                      *         }
                      *       ]
                      *     }
@@ -22283,6 +22583,7 @@ export interface operations {
     suggest: {
         parameters: {
             query?: {
+                /** @description The partly-typed query, matched against posting titles, skills, categories and companies. */
                 q?: string;
                 /** @description 1 to 20, default 5. A value that does not read falls back to the default. */
                 limit?: string;

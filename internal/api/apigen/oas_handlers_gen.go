@@ -16102,10 +16102,9 @@ func (s *Server) handleJobCopiesRequest(args [1]string, argsEscaped bool, w http
 
 // handleJobFacetsRequest handles jobFacets operation.
 //
-// Takes the same `q` and facet filter params as search, but returns the distribution of values instead
-// of a page of jobs — use it to build filter UIs or see how a filter narrows the set. Continuous
-// numeric facets are returned as `stats` (min/max), not per-value buckets. `former_employers` is
-// ignored even for signed-in callers.
+// The same `q` and filters as search, answered with the count of postings per facet value and `stats`
+// (min/max) for the numeric facets. `former_employers` and `watchlist` are ignored. Narrow with
+// `facets=`; naming `company_slug` there adds `companies_total` and `top_companies`.
 //
 // GET /jobs/facets
 func (s *Server) handleJobFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -27654,13 +27653,9 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 
 // handleSearchJobsRequest handles searchJobs operation.
 //
-// Combine free-text `q` with any of the filter params below. Repeated facet params are ORed; add
-// `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude. Without `q`, results
-// default to newest first; with `q`, to relevance. A param no filter reads is ignored rather than
-// refused, and listed in `meta.ignored_params` — check it, since a dropped filter otherwise looks
-// like a broad result.
-//
-// Plus every filter in the "Filtering jobs" section.
+// Free-text `q` plus any filter (the "Filtering jobs" section). Repeated values OR; `<param>_mode=and`
+// requires all, `<param>_exclude` excludes. Newest first without `q`, by relevance with it. An unread
+// param is listed in `meta.ignored_params`: check it, a dropped filter looks like a broad result.
 //
 // GET /jobs/search
 func (s *Server) handleSearchJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29296,7 +29291,9 @@ func (s *Server) handleSubmitMentorProfileRequest(args [0]string, argsEscaped bo
 
 // handleSuggestRequest handles suggest operation.
 //
-// Search-box suggestions. 503 when search is not configured.
+// Completes a PHRASE, not a word: `senior software engineer go` completes to Senior Software Engineer
+// at Google. Each row carries every part it names; apply them all. Typos are forgiven in the trailing
+// fragment only. An empty `q` returns no rows. 503 when search is not configured.
 //
 // GET /suggest
 func (s *Server) handleSuggestRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29329,7 +29326,7 @@ func (s *Server) handleSuggestRequest(args [0]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SuggestOperation,
-			OperationSummary: "",
+			OperationSummary: "Complete what is being typed into a search box.",
 			OperationID:      "suggest",
 			Body:             nil,
 			RawBody:          rawBody,
