@@ -107,7 +107,7 @@ func (r Runner) streamCompanyCanonical(ctx context.Context, e sources.CompanyEnt
 // aggregatorCoverageForBatch resolves the ingest-time coverage gate for a buffered board's
 // whole raw fetch in one batched call, up front.
 func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, canon companyCanonical) aggregatorCoverage {
-	aggregators, applies := r.aggregatorGate(e)
+	aggregators, countries, applies := r.aggregatorGate(e)
 	if !applies {
 		return nil
 	}
@@ -118,7 +118,7 @@ func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.Compan
 	if len(slugs) == 0 {
 		return nil
 	}
-	covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators)
+	covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators, countries)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s): coverage lookup failed, gate disabled for this board: %v",
 			e.Provider, e.Board, e.Company, err)
@@ -174,7 +174,7 @@ func distinctSlugs(companies []string) []string {
 // ingestStream's emit callback, which already serializes access under its own mutex, so the
 // cache needs no locking of its own. See aggregatorGate for the shared applicability check.
 func (r Runner) streamAggregatorCoverage(ctx context.Context, e sources.CompanyEntry) aggregatorCoverage {
-	aggregators, applies := r.aggregatorGate(e)
+	aggregators, countries, applies := r.aggregatorGate(e)
 	if !applies {
 		return nil
 	}
@@ -186,7 +186,7 @@ func (r Runner) streamAggregatorCoverage(ctx context.Context, e sources.CompanyE
 		if v, ok := cache[companySlug]; ok {
 			return v
 		}
-		result, err := r.Coverage.NonAggregatorCompanies(ctx, []string{companySlug}, aggregators)
+		result, err := r.Coverage.NonAggregatorCompanies(ctx, []string{companySlug}, aggregators, countries)
 		if err != nil {
 			log.Printf("ingest: %s board %q (%s): coverage lookup failed for company %q, not gated: %v",
 				e.Provider, e.Board, e.Company, companySlug, err)

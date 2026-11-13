@@ -243,17 +243,18 @@ func (r Runner) closeCovered(ctx context.Context, e sources.CompanyEntry, extern
 // Coverage port must be wired AND the provider must be an aggregator (an ATS or
 // single-company board is never gated, regardless of what Coverage would report — see
 // TestRunIgnoresCoverageForATSProvider). When it applies, it also returns the aggregator
-// provider list both callers need to pass to CoverageLookup. The classification MUST come
-// from sources.Taxonomy(), not r.Registry: a keyed adapter's credential lives only on the
-// crawl host, so a keyless host's classification would wrongly read it as non-aggregator
-// (see the aggregator-ats-coverage-skip design doc).
-func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators []string, applies bool) {
+// provider list and the board's market countries (sources.MarketCountries; nil when the
+// aggregator is not national) both callers need to pass to CoverageLookup. The
+// classification MUST come from sources.Taxonomy(), not r.Registry: a keyed adapter's
+// credential lives only on the crawl host, so a keyless host's classification would wrongly
+// read it as non-aggregator (see the aggregator-ats-coverage-skip design doc).
+func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators, countries []string, applies bool) {
 	if r.Coverage == nil {
-		return nil, false
+		return nil, nil, false
 	}
 	taxonomy := sources.Taxonomy()
 	if !sources.IsAggregator(taxonomy, e.Provider) {
-		return nil, false
+		return nil, nil, false
 	}
-	return sources.AggregatorProviders(taxonomy), true
+	return sources.AggregatorProviders(taxonomy), sources.MarketCountries(taxonomy, e), true
 }

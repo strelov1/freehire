@@ -83,6 +83,9 @@ func (hzz) boardless() {}
 // Thousands of employers post here, each named per vacancy.
 func (hzz) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (hzz) marketCountries(CompanyEntry) []string { return []string{"hr"} }
+
 // hzzPosting is one vacancy the feeds name.
 type hzzPosting struct {
 	id     int64

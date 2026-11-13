@@ -58,17 +58,18 @@ const coverageBatchSize = 500
 // ask is a field rather than a direct call so the fold-and-credit mapping either side of the
 // query is testable without a database.
 type coverage struct {
-	ask func(ctx context.Context, folded, aggregators []string, seenAfter time.Time) ([]string, error)
+	ask func(ctx context.Context, folded, aggregators, countries []string, seenAfter time.Time) ([]string, error)
 }
 
 // newCoverage wires the gate to the ingest pool, alongside newDBStore and newBoardHealth.
 func newCoverage(pool *pgxpool.Pool) *coverage {
 	q := db.New(pool)
 	return &coverage{
-		ask: func(ctx context.Context, folded, aggregators []string, seenAfter time.Time) ([]string, error) {
+		ask: func(ctx context.Context, folded, aggregators, countries []string, seenAfter time.Time) ([]string, error) {
 			return q.CompaniesWithFreshNonAggregatorCoverage(ctx, db.CompaniesWithFreshNonAggregatorCoverageParams{
 				FoldedCompanies: folded,
 				Aggregators:     aggregators,
+				Countries:       countries,
 				SeenAfter:       pgtype.Timestamptz{Time: seenAfter, Valid: true},
 			})
 		},
@@ -78,13 +79,13 @@ func newCoverage(pool *pgxpool.Pool) *coverage {
 // NonAggregatorCompanies implements pipeline.CoverageLookup. companySlugs arrive as the
 // alias-resolved slugs the upsert would store, and the answer is keyed by those same values —
 // the fold is this type's business and never leaks out of it.
-func (c *coverage) NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error) {
+func (c *coverage) NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error) {
 	covered := make(map[string]bool)
 	seenAfter := time.Now().Add(-coverageFreshness)
 	folded, owners := foldedBatch(companySlugs)
 	for start := 0; start < len(folded); start += coverageBatchSize {
 		end := min(start+coverageBatchSize, len(folded))
-		answer, err := c.ask(ctx, folded[start:end], aggregators, seenAfter)
+		answer, err := c.ask(ctx, folded[start:end], aggregators, countries, seenAfter)
 		if err != nil {
 			return nil, fmt.Errorf("ingest: aggregator coverage lookup: %w", err)
 		}

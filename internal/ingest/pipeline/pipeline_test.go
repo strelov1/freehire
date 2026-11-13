@@ -142,13 +142,15 @@ type fakeCoverage struct {
 	covered        map[string]bool // exact company_slug -> covered
 	calls          [][]string      // each call's companySlugs argument, in order
 	aggregatorArgs [][]string      // each call's aggregators argument, in order
+	countryArgs    [][]string      // each call's countries argument, in order
 	err            error
 }
 
-func (f *fakeCoverage) NonAggregatorCompanies(_ context.Context, companySlugs, aggregators []string) (map[string]bool, error) {
+func (f *fakeCoverage) NonAggregatorCompanies(_ context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, append([]string(nil), companySlugs...))
 	f.aggregatorArgs = append(f.aggregatorArgs, append([]string(nil), aggregators...))
+	f.countryArgs = append(f.countryArgs, countries)
 	f.mu.Unlock()
 	if f.err != nil {
 		return nil, f.err

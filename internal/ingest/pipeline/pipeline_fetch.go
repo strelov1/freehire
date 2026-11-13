@@ -124,7 +124,7 @@ type fetchedBoard struct {
 // crawl is already under way, and reporting no coverage costs a wasted request per posting
 // where reporting coverage wrongly would cost a body the catalogue needed.
 func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func([]string) map[string]bool {
-	aggregators, applies := r.aggregatorGate(e)
+	aggregators, countries, applies := r.aggregatorGate(e)
 	if !applies {
 		return nil
 	}
@@ -140,7 +140,7 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 		if len(slugs) == 0 {
 			return nil
 		}
-		covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators)
+		covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators, countries)
 		if err != nil {
 			log.Printf("ingest: %s board %q (%s): coverage probe failed, hydrating every posting: %v",
 				e.Provider, e.Board, e.Company, err)

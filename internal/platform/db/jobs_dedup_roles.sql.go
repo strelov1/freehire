@@ -77,6 +77,9 @@ WHERE EXISTS (
       AND NOT jobs.is_private
       AND a.last_seen_at > $2
       AND NOT (jobs.source = ANY($3::text[]))
+      AND (cardinality(coalesce($4::text[], '{}')) = 0
+           OR cardinality(jobs.countries) = 0
+           OR jobs.countries && $4::text[])
 )
 `
 
@@ -84,6 +87,7 @@ type CompaniesWithFreshNonAggregatorCoverageParams struct {
 	FoldedCompanies []string           `json:"folded_companies"`
 	SeenAfter       pgtype.Timestamptz `json:"seen_after"`
 	Aggregators     []string           `json:"aggregators"`
+	Countries       []string           `json:"countries"`
 }
 
 // The ingest-time aggregator coverage gate: of the companies asked about, which still have an
@@ -122,8 +126,18 @@ type CompaniesWithFreshNonAggregatorCoverageParams struct {
 // update heap-only. It is a recheck here, over the few open rows the folded index already
 // selected (one primary-key probe on job_activity each), and EXISTS stops at the first fresh one
 // so a large employer costs no more than a small one.
+//
+// countries scopes the answer to a national-market aggregator's countries (sources.MarketCountries;
+// empty = unscoped): a covering row must hire in one of them or state no country, the same rule
+// SuppressAggregatorDuplicatesForCompanies matches twins by. Matching on the name alone let a
+// foreign employer of the same name discard a local one's postings (issue #4412).
 func (q *Queries) CompaniesWithFreshNonAggregatorCoverage(ctx context.Context, arg CompaniesWithFreshNonAggregatorCoverageParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, companiesWithFreshNonAggregatorCoverage, arg.FoldedCompanies, arg.SeenAfter, arg.Aggregators)
+	rows, err := q.db.Query(ctx, companiesWithFreshNonAggregatorCoverage,
+		arg.FoldedCompanies,
+		arg.SeenAfter,
+		arg.Aggregators,
+		arg.Countries,
+	)
 	if err != nil {
 		return nil, err
 	}

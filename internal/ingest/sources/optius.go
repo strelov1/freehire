@@ -72,6 +72,9 @@ func (optius) boardless() {}
 // Hundreds of employers and agencies post here, each named per posting.
 func (optius) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (optius) marketCountries(CompanyEntry) []string { return []string{"si"} }
+
 // optiusCard is one listing card: what the gate and the job need before the page is bought.
 type optiusCard struct {
 	id      string

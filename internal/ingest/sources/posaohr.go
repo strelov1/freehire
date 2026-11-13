@@ -99,6 +99,9 @@ func (posaoHR) boardless() {}
 // Hundreds of employers and agencies post here, each named per posting.
 func (posaoHR) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (posaoHR) marketCountries(CompanyEntry) []string { return []string{"hr"} }
+
 // posaoHRCard is one listing card: what the gate and the job need before the page is bought.
 type posaoHRCard struct {
 	id       int64

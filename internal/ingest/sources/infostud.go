@@ -77,6 +77,9 @@ func (infostud) boardless() {}
 // Thousands of employers post here, each named per posting.
 func (infostud) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (infostud) marketCountries(CompanyEntry) []string { return []string{"rs"} }
+
 // infostudCard is one search result: what the gate and the job need before the body is bought.
 type infostudCard struct {
 	ID              int64  `json:"id"`

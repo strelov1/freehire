@@ -53,7 +53,7 @@ func TestCoverageAdapterWiring(t *testing.T) {
 
 	got, err := c.NonAggregatorCompanies(ctx,
 		[]string{"freshco", "staleco", "aggonly", "cfo-insights", "nobodyco"},
-		[]string{"himalayas", "remoteok"})
+		[]string{"himalayas", "remoteok"}, nil)
 	if err != nil {
 		t.Fatalf("NonAggregatorCompanies: %v", err)
 	}
