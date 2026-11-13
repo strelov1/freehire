@@ -499,6 +499,8 @@ func TestExtractPaycorTitle(t *testing.T) {
 		"Ohio Valley Residential Services – Balancing Mission, Management": "",
 		"Mysite":                                "",
 		"Add Company Name":                      "",
+		"Jobs at Company Name":                  "",
+		"Careers at Add Company Name":           "",
 		"Company Name":                          "",
 		"neighorhood":                           "",
 		"GR Metrology Employment Opportunities": "GR Metrology",

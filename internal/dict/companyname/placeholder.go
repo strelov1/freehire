@@ -196,9 +196,11 @@ var paycorTitleLabels = map[string]bool{
 	"who we are": true, "feedback": true, "applicant tracking": true, "current openings": true,
 	"current opportunities": true, "career opportunities": true, "employment opportunities": true,
 	"job opportunities": true, "open positions": true, "mysite": true,
-	// Template placeholders a tenant never filled in.
-	"company name": true, "add company name": true,
 }
+
+// paycorTemplatePlaceholders are the template's stock names a tenant never filled in. Unlike a
+// label they are never cut off a part: a title left holding one names nobody.
+var paycorTemplatePlaceholders = map[string]bool{"company name": true, "add company name": true}
 
 // paycorTitleLabelOrder fixes the order labels are cut in, so a title reads the same every run.
 var paycorTitleLabelOrder = slices.Sorted(maps.Keys(paycorTitleLabels))
@@ -231,7 +233,8 @@ func ExtractPaycorTitle(title string) string {
 			continue
 		}
 		// A second candidate is ambiguous; an all-lower-case one is a stray word ("neighorhood").
-		if name != "" || !strings.ContainsFunc(part, unicode.IsUpper) {
+		if name != "" || paycorTemplatePlaceholders[strings.ToLower(part)] ||
+			!strings.ContainsFunc(part, unicode.IsUpper) {
 			return ""
 		}
 		name = part

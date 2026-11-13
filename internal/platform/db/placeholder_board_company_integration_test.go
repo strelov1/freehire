@@ -141,3 +141,60 @@ func TestCompanySlugAliasAcceptsBoardName(t *testing.T) {
 		t.Fatal("InsertCompanySlugAlias(guess): want the reason check to refuse it, got nil")
 	}
 }
+
+// TestRenamePlaceholderBoardJobsQueuesSearch pins that a rename reaches search: the moved row's
+// indexed company and slug change, so an open, canonical, public posting is queued in the same
+// statement, while a closed or private one (never indexed) is not.
+func TestRenamePlaceholderBoardJobsQueuesSearch(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+	truncate(t, pool)
+
+	const board = "8a7883d074274b7d01744b8825240e7f"
+	seed := func(externalID string) int64 {
+		t.Helper()
+		p := ingestParams(externalID, "Engineer")
+		p.Source, p.Company, p.CompanySlug = "paycor", board, board
+		job, err := ingestUpsert(ctx, q, p)
+		if err != nil {
+			t.Fatalf("seed %s: %v", externalID, err)
+		}
+		return job.ID
+	}
+	open := seed(board + ":1")
+	closed := seed(board + ":2")
+	private := seed(board + ":3")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", closed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE id = $1", private); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM search_outbox"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := q.RenamePlaceholderBoardJobs(ctx, RenamePlaceholderBoardJobsParams{
+		Name: "Salvagnini America, Inc.", NewSlug: "salvagnini-america-inc",
+		Source: "paycor", BoardPattern: board + ":%", OldName: board,
+	}); err != nil {
+		t.Fatalf("RenamePlaceholderBoardJobs: %v", err)
+	}
+
+	rows, err := pool.Query(ctx, "SELECT job_id FROM search_outbox ORDER BY job_id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var queued []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		queued = append(queued, id)
+	}
+	if len(queued) != 1 || queued[0] != open {
+		t.Errorf("queued = %v, want only the open posting %d", queued, open)
+	}
+}
