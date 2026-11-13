@@ -98,19 +98,21 @@ WHERE j.source = sqlc.arg(source)
 -- FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
 -- search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
 -- own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
--- lock does not, and it is all this statement needs. Only the jobs tuple is locked here: release A
--- still writes the legacy columns, and the one-way bridge takes the activity row after it (jobs
--- first, the global lock order). last_seen_at, the previous stamp the withheld-then-seen requeue
--- compares, is job_activity's, read through a LEFT JOIN that does not lock it.
+-- lock does not, and it is all this statement needs. The jobs tuple AND the activity row are locked
+-- here, in that order, before anything is queued: release A still writes the legacy columns and its
+-- one-way bridge would take the activity row only at the end of the statement, AFTER the
+-- search_outbox writes below, while a writer that locks the activity row first and then queues
+-- (release B) deadlocks with that. last_seen_at, the previous stamp the withheld-then-seen requeue
+-- compares, is the locked activity row's.
 WITH existing AS MATERIALIZED (
     SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
            (j.closed_at IS NOT NULL AND (j.application_deadline IS NULL
                                          OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
-    LEFT JOIN job_activity a ON a.job_id = j.id
+    JOIN job_activity a ON a.job_id = j.id
     WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
-    FOR NO KEY UPDATE OF j
+    FOR NO KEY UPDATE OF j, a
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),

@@ -289,17 +289,25 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
 -- drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
 -- search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 -- extra push.
+-- Lock order: `prev` locks the jobs row and then the activity row, FOR NO KEY UPDATE, and the UPDATE
+-- joins it, so both are held before the statement queues anything. Release A took the activity row
+-- last, through the legacy bridge trigger at the end of the statement, AFTER the search_outbox write
+-- below; a writer that takes the activity row first and then queues (release B) interleaved with it
+-- and the two deadlocked. A row without an activity row does not match this cheap path.
 WITH prev AS MATERIALIZED (
-    SELECT a.last_seen_at FROM jobs j
-    LEFT JOIN job_activity a ON a.job_id = j.id
+    SELECT j.id, a.last_seen_at FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
     WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
+    FOR NO KEY UPDATE OF j, a
 ), refreshed AS (
 UPDATE jobs
 SET last_seen_at = now(),
     -- Not when the "identical" body is the stored one the pipeline substituted for a failed
     -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
     hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END
-WHERE jobs.source = sqlc.arg(source)
+FROM prev p
+WHERE jobs.id = p.id
+  AND jobs.source = sqlc.arg(source)
   AND jobs.external_id = sqlc.arg(external_id)
   AND jobs.content_hash = sqlc.arg(content_hash)
   AND jobs.cities = COALESCE(sqlc.arg(cities)::text[], '{}')
@@ -314,7 +322,7 @@ WHERE jobs.source = sqlc.arg(source)
   AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND jobs.closed_at IS NULL
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
-          (SELECT p.last_seen_at FROM prev p) AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
+          p.last_seen_at AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
 ), requeued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM refreshed

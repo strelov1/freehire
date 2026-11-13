@@ -6863,6 +6863,11 @@ type Querier interface {
 	// drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
 	// search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 	// extra push.
+	// Lock order: `prev` locks the jobs row and then the activity row, FOR NO KEY UPDATE, and the UPDATE
+	// joins it, so both are held before the statement queues anything. Release A took the activity row
+	// last, through the legacy bridge trigger at the end of the statement, AFTER the search_outbox write
+	// below; a writer that takes the activity row first and then queues (release B) interleaved with it
+	// and the two deadlocked. A row without an activity row does not match this cheap path.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dynamic client registration (RFC 7591). client_id is server-generated, random,
 	// and not a secret — it identifies the client, it does not authenticate it (PKCE
@@ -7965,10 +7970,12 @@ type Querier interface {
 	// FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
 	// search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
 	// own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
-	// lock does not, and it is all this statement needs. Only the jobs tuple is locked here: release A
-	// still writes the legacy columns, and the one-way bridge takes the activity row after it (jobs
-	// first, the global lock order). last_seen_at, the previous stamp the withheld-then-seen requeue
-	// compares, is job_activity's, read through a LEFT JOIN that does not lock it.
+	// lock does not, and it is all this statement needs. The jobs tuple AND the activity row are locked
+	// here, in that order, before anything is queued: release A still writes the legacy columns and its
+	// one-way bridge would take the activity row only at the end of the statement, AFTER the
+	// search_outbox writes below, while a writer that locks the activity row first and then queues
+	// (release B) deadlocks with that. last_seen_at, the previous stamp the withheld-then-seen requeue
+	// compares, is the locked activity row's.
 	// A touch writes no content, so a posting closed under an older dictionary would reopen
 	// carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
 	// deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
