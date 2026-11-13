@@ -16,6 +16,12 @@ The `internal/platform/db` package — generated sqlc code, hand-written SQL que
   projection; `TestJobsReadCoversEveryJobsColumn` checks it. Read observation predicates
   from activity, including inside writers, so compatible workers can overlap a writer
   cutover. Freshness-dependent closers lock jobs then activity with `FOR NO KEY UPDATE`.
+- Full posting writes go through `job.Upsert` in a `pgx.Tx`: `UpsertJob` then
+  `ObserveJobActivity` as a second command. An INSERT trigger's new activity row is
+  not visible to a same-statement UPDATE CTE. A fenced cheap refresh must roll back
+  before retrying; it already holds activity and cannot safely take the jobs lock.
+  `UpsertJob` uses PostgreSQL 18 `RETURNING old.closed_at` to preserve strike reset
+  semantics for an expired posting that stays closed.
 - Fresh volumes get the whole `migrations/` dir via Postgres initdb (mounted into `/docker-entrypoint-initdb.d`, applied once on first init, in filename order). Every existing database (prod included) is migrated by `cmd/migrate` (`go run ./cmd/migrate`), which applies only files not yet recorded in `schema_migrations` (version = filename) — one transaction per file, under a session advisory lock. Changing an already-applied migration does NOT re-apply it; add a new file instead.
 - **An EXPANSIVE migration is applied before the deploy that reads it, not with it.** Adding
   a nullable column is safe to run ahead of time and unreadable by the previous binary, but

@@ -62,7 +62,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason
+    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
@@ -78,9 +78,9 @@ INSERT INTO jobs (
     -- facets above are. COALESCE keeps the column NOT NULL when a posting yields
     -- none: an empty array and "never processed" are the same fact here.
     COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
-    -- A first ingest reads the posting's body, so the row starts out freshly hydrated. NULL
-    -- is reserved for the rows that predate the column (see 0144), which read as stale.
-    now(), sqlc.narg(application_deadline)::date,
+    -- The row's liveness and hydration live in job_activity, created by the insert trigger; the
+    -- caller stamps them in the SAME transaction with ObserveJobActivity (job.Upsert).
+    sqlc.narg(application_deadline)::date,
     CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
     CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
 )
@@ -177,10 +177,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
         WHEN EXCLUDED.description <> '' THEN EXCLUDED.requirements_derived
         ELSE jobs.requirements_derived
     END,
-    -- The crawl saw the posting: refresh liveness and reopen if it was closed. A
-    -- reopen (the row was closed) resets the strike count so a single later expired
-    -- probe can't immediately re-close it — the two-strike grace survives a reopen.
-    last_seen_at = now(),
+    -- Reopening is the state trigger's business (migration 0258): it resets the strike count on a
+    -- closed-to-open flip, so the two-strike grace survives a reopen. The crawl's observation
+    -- (last_seen_at, hydrated_at) is job_activity's and is stamped by ObserveJobActivity.
     closed_at = CASE
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN COALESCE(jobs.closed_at, now())
@@ -188,13 +187,6 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_reason = CASE
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN 'expired' ELSE '' END,
-    liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
-    -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
-    -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
-    -- the other half: a body that came back byte-identical takes that statement, and stamps
-    -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
-    -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
-    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
 -- A substituted body was read before this statement took the row lock. If another write stored
 -- a newer body in between, writing the facets of the older one over it would regress the row,
@@ -205,7 +197,12 @@ WHERE NOT sqlc.arg(body_from_catalogue)::boolean OR jobs.description = EXCLUDED.
 -- id, the identity the sweep scope and the index-push gate need, and whether the write left the
 -- row closed; one that needs the whole row (linkimport builds a search document) re-reads it
 -- through GetJob, which reads the jobs_read view.
+-- reset_strikes: the row was closed before this write (PostgreSQL 18 RETURNING old). The old statement
+-- cleared the strike count whenever it overwrote a closed row, including one an expired deadline
+-- leaves closed; the state trigger covers only the closed-to-open flip, so the caller passes this to
+-- ObserveJobActivity and the exception stays exact without another query.
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private, jobs.closed_at,
+    (old.closed_at IS NOT NULL)::boolean AS reset_strikes,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
@@ -225,8 +222,10 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
 -- tuple — re-TOASTing a ~2.5KB description and touching every index on the table — to move a
 -- timestamp.
 --
--- last_seen_at is the ONLY column written, and it is deliberately in no index, so the update is
--- heap-only and maintains none of them.
+-- The ONLY write is to job_activity (last_seen_at and hydrated_at); the jobs tuple is read,
+-- never written and never locked, which is what the split is for. The match key is read from jobs
+-- in `hit`; the target of the UPDATE is the activity row, so a writer that changed the row while
+-- this statement waited for the activity lock is detected by state_version (see FENCE below).
 --
 -- updated_at is deliberately NOT stamped, so the column comes to mean "content last changed"
 -- rather than "last crawled". Two live readers see that: the jobs sitemap serves it as <lastmod>
@@ -282,39 +281,53 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
 -- that cannot fetch a posting's detail drops the posting rather than writing a body-less row
 -- (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 -- which is precisely the case a staleness check over updated_at would misread as never-read.
--- Like last_seen_at it is in no index, so the update stays heap-only.
+--
+-- FENCE. A refresh that waits for the activity row (a closer, a content write, a metadata
+-- rekey holds it) is re-evaluated on the LATEST version of that row but against the SNAPSHOT of
+-- jobs, so a predicate on jobs cannot notice the change. job_activity.state_version is bumped by
+-- the state trigger (migration 0258) on every write to a column this match key reads, so
+-- comparing it with the version read in the same snapshot catches exactly that. A snapshot hit
+-- the fence rejected comes back with fenced = true and writes and enqueues nothing; no row at
+-- all means nothing matched (pgx.ErrNoRows, the signal for the full upsert). A fenced statement
+-- has ALREADY locked the activity row and keeps the lock to the end of its transaction, so the
+-- caller must roll back and retry from a fresh transaction; falling through to UpsertJob in the
+-- same one takes the jobs tuple after the activity row, the reverse of the global lock order.
 --
 -- One thing IS queued: a canonical posting re-seen after search had withheld it for going
 -- unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
 -- drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
 -- search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 -- extra push.
-WITH prev AS MATERIALIZED (
-    SELECT a.last_seen_at FROM jobs j
-    LEFT JOIN job_activity a ON a.job_id = j.id
-    WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
+WITH hit AS MATERIALIZED (
+    SELECT j.id, j.source, j.company_slug, j.duplicate_of, j.is_private,
+           COALESCE(j.posted_at, j.created_at) AS eff_posted_at,
+           a.last_seen_at AS prev_seen_at, a.state_version AS ver
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.source = sqlc.arg(source)
+      AND j.external_id = sqlc.arg(external_id)
+      AND j.content_hash = sqlc.arg(content_hash)
+      AND j.cities = COALESCE(sqlc.arg(cities)::text[], '{}')
+      AND j.salary_min_source IS NOT DISTINCT FROM sqlc.arg(salary_min_source)
+      AND j.salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
+      AND j.salary_currency_source = sqlc.arg(salary_currency_source)
+      AND j.salary_period_source = sqlc.arg(salary_period_source)
+      AND j.english_level = sqlc.arg(english_level)
+      AND j.is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
+      AND j.engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
+      AND j.application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline)
+      AND (j.application_deadline IS NULL OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+      AND j.closed_at IS NULL
 ), refreshed AS (
-UPDATE jobs
-SET last_seen_at = now(),
-    -- Not when the "identical" body is the stored one the pipeline substituted for a failed
-    -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
-    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END
-WHERE jobs.source = sqlc.arg(source)
-  AND jobs.external_id = sqlc.arg(external_id)
-  AND jobs.content_hash = sqlc.arg(content_hash)
-  AND jobs.cities = COALESCE(sqlc.arg(cities)::text[], '{}')
-  AND jobs.salary_min_source IS NOT DISTINCT FROM sqlc.arg(salary_min_source)
-  AND jobs.salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
-  AND jobs.salary_currency_source = sqlc.arg(salary_currency_source)
-  AND jobs.salary_period_source = sqlc.arg(salary_period_source)
-  AND jobs.english_level = sqlc.arg(english_level)
-  AND jobs.is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
-  AND jobs.engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
-  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, jobs.application_deadline)
-  AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
-  AND jobs.closed_at IS NULL
-RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
-          (SELECT p.last_seen_at FROM prev p) AS prev_seen_at, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at
+    UPDATE job_activity a
+    SET last_seen_at = GREATEST(now(), a.last_seen_at),
+        -- Not when the "identical" body is the stored one the pipeline substituted for a failed
+        -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
+        hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN a.hydrated_at
+                            ELSE GREATEST(now(), a.hydrated_at) END
+    FROM hit h
+    WHERE a.job_id = h.id AND a.state_version = h.ver
+    RETURNING h.id, h.source, h.company_slug, h.duplicate_of, h.is_private, h.prev_seen_at, h.eff_posted_at
 ), requeued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM refreshed
@@ -324,4 +337,7 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
-SELECT id, source, company_slug, duplicate_of FROM refreshed;
+SELECT id, source, company_slug, duplicate_of, false::boolean AS fenced FROM refreshed
+UNION ALL
+SELECT id, source, company_slug, duplicate_of, true::boolean FROM hit
+WHERE NOT EXISTS (SELECT 1 FROM refreshed);
