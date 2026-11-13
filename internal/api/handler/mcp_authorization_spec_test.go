@@ -13,6 +13,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -29,9 +30,9 @@ import (
 // mounts) on a loopback port, with that port as the deployment origin. The
 // SvelteKit app proxies /.well-known/* to the API in production; the shim below
 // replays that mapping, read from the SvelteKit route files themselves.
-func specServer(t *testing.T) (origin string, get func(url string) *http.Response, post func(endpoint, userAgent, body string) *http.Response) {
+func specServer(t *testing.T) (origin string, get func(url string) specResponse, post func(endpoint, userAgent, body string) specResponse) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,31 +57,43 @@ func specServer(t *testing.T) (origin string, get func(url string) *http.Respons
 	t.Cleanup(func() { _ = app.Shutdown() })
 
 	client := &http.Client{} // follows the shim's redirect to the internal path
-	get = func(url string) *http.Response {
+	get = func(url string) specResponse {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("GET %s: %v", url, err)
-		}
-		t.Cleanup(func() { resp.Body.Close() })
-		return resp
+		return drain(t, client, req)
 	}
-	post = func(endpoint, userAgent, body string) *http.Response {
+	post = func(endpoint, userAgent, body string) specResponse {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, origin+endpoint, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")
 		req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 		req.Header.Set("User-Agent", userAgent)
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatalf("POST %s: %v", endpoint, err)
-		}
-		t.Cleanup(func() { resp.Body.Close() })
-		return resp
+		return drain(t, client, req)
 	}
 	return origin, get, post
+}
+
+// specResponse is a response read to the end, so no test holds a body open.
+type specResponse struct {
+	URL        string
+	StatusCode int
+	Header     http.Header
+	Body       []byte
+}
+
+func drain(t *testing.T, client *http.Client, req *http.Request) specResponse {
+	t.Helper()
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", req.Method, req.URL, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("%s %s: %v", req.Method, req.URL, err)
+	}
+	return specResponse{URL: resp.Request.URL.String(), StatusCode: resp.StatusCode, Header: resp.Header, Body: body}
 }
 
 var proxyCall = regexp.MustCompile(`proxyWellKnownJSON\(\s*fetch,\s*'([^']+)'`)
@@ -134,16 +147,16 @@ type serverMetadata struct {
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 }
 
-func decodeSpecJSON(t *testing.T, resp *http.Response, into any) {
+func decodeSpecJSON(t *testing.T, resp specResponse, into any) {
 	t.Helper()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("%s: status %d, want 200", resp.Request.URL, resp.StatusCode)
+		t.Fatalf("%s: status %d, want 200", resp.URL, resp.StatusCode)
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-		t.Fatalf("%s: Content-Type %q, want application/json", resp.Request.URL, ct)
+		t.Fatalf("%s: Content-Type %q, want application/json", resp.URL, ct)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
-		t.Fatalf("%s: %v", resp.Request.URL, err)
+	if err := json.Unmarshal(resp.Body, into); err != nil {
+		t.Fatalf("%s: %v", resp.URL, err)
 	}
 }
 
