@@ -169,6 +169,25 @@ func IsAggregator(reg map[string]Source, provider string) bool {
 	return ok
 }
 
+// nationalMarket is an aggregator that lists one country's job market, so the coverage gate
+// credits an employer's own board only where that board hires in the same country. Without
+// it the gate matched by company name alone: a Slovenian "Arriva d.o.o." on mojedelo was
+// discarded because the UK Arriva's Workday board is crawled, and "Echo center d.o.o." because
+// an unrelated US "echo" is (issue #4412, ~400 of ~3,700 mojedelo postings a run).
+type nationalMarket interface {
+	marketCountries(e CompanyEntry) []string
+}
+
+// MarketCountries returns the lowercase alpha-2 countries the board e lists for an aggregator
+// scoped to a national market, or nil for one that is not (the gate then stays country-blind).
+// reg must be Taxonomy(), as for IsAggregator.
+func MarketCountries(reg map[string]Source, e CompanyEntry) []string {
+	if m, ok := reg[e.Provider].(nationalMarket); ok {
+		return m.marketCountries(e)
+	}
+	return nil
+}
+
 // BoardKeyedProviders returns the sorted provider names in reg whose adapter is addressed by
 // a board id — every adapter that is not boardless. A caller that wants to say something about
 // ONE board (cmd/harvest-boards validating a candidate) needs this: a boardless adapter serves

@@ -88,6 +88,9 @@ func (nsz) boardless() {}
 // Hundreds of employers post here, each named per vacancy.
 func (nsz) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (nsz) marketCountries(CompanyEntry) []string { return []string{"rs"} }
+
 // nszCard is one vacancy as the search lists it, still in the site's script.
 type nszCard struct {
 	ID       string

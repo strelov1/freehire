@@ -172,3 +172,60 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		}
 	})
 }
+
+// TestCompaniesWithFreshNonAggregatorCoverageByCountry pins the national-market scope: asked
+// with countries, only a posting hiring in one of them, or stating none, covers its company —
+// the rule SuppressAggregatorDuplicatesForCompanies matches twins by. Country-blind, the UK
+// Arriva's Workday board discarded the Slovenian Arriva's mojedelo postings (issue #4412).
+func TestCompaniesWithFreshNonAggregatorCoverageByCountry(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+
+	seed := func(t *testing.T, externalID, slug string, countries []string) {
+		t.Helper()
+		_, err := pool.Exec(ctx, `
+			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
+			                  company_slug_folded, last_seen_at, countries)
+			VALUES ('workday', $1, 'https://x.test/'||$1, 'Engineer', $1, 'Co', $2, $2, now(), $3)`,
+			externalID, slug, countries)
+		if err != nil {
+			t.Fatalf("seed %s: %v", externalID, err)
+		}
+	}
+	seed(t, "gb:1", "arriva", []string{"gb"})
+	seed(t, "si:1", "akrapovic", []string{"si"})
+	seed(t, "many:1", "jysk", []string{"de", "si"})
+	seed(t, "none:1", "litostroj", []string{})
+
+	ask := func(t *testing.T, countries []string) map[string]bool {
+		t.Helper()
+		rows, err := q.CompaniesWithFreshNonAggregatorCoverage(ctx, CompaniesWithFreshNonAggregatorCoverageParams{
+			FoldedCompanies: []string{"arriva", "akrapovic", "jysk", "litostroj"},
+			Aggregators:     aggregatorSources,
+			SeenAfter:       pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+			Countries:       countries,
+		})
+		if err != nil {
+			t.Fatalf("CompaniesWithFreshNonAggregatorCoverage: %v", err)
+		}
+		got := make(map[string]bool, len(rows))
+		for _, r := range rows {
+			got[r] = true
+		}
+		return got
+	}
+
+	scoped := ask(t, []string{"si"})
+	for slug, want := range map[string]bool{"arriva": false, "akrapovic": true, "jysk": true, "litostroj": true} {
+		if scoped[slug] != want {
+			t.Errorf("scoped to si: %s covered = %v, want %v", slug, scoped[slug], want)
+		}
+	}
+	// nil is what an unscoped aggregator passes: the gate stays country-blind.
+	for _, slug := range []string{"arriva", "akrapovic", "jysk", "litostroj"} {
+		if !ask(t, nil)[slug] {
+			t.Errorf("unscoped: %s must be covered", slug)
+		}
+	}
+}

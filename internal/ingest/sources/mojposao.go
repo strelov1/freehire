@@ -110,6 +110,14 @@ func (mojposao) Provider() string { return "mojposao" }
 // Thousands of employers post here, each named per posting.
 func (mojposao) aggregator() {}
 
+// Each board is one country's market (see nationalMarket): mojposao.hr Croatia, mojposao.ba Bosnia.
+func (mojposao) marketCountries(e CompanyEntry) []string {
+	if m, ok := mojposaoMarkets[strings.ToLower(strings.TrimSpace(e.Board))]; ok {
+		return []string{m.country}
+	}
+	return nil
+}
+
 // mojposaoCard is one search result: what the gate and the job need before the body is bought.
 type mojposaoCard struct {
 	ID           string      `json:"id"`

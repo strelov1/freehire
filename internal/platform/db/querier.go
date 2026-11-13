@@ -1133,6 +1133,11 @@ type Querier interface {
 	// update heap-only. It is a recheck here, over the few open rows the folded index already
 	// selected (one primary-key probe on job_activity each), and EXISTS stops at the first fresh one
 	// so a large employer costs no more than a small one.
+	//
+	// countries scopes the answer to a national-market aggregator's countries (sources.MarketCountries;
+	// empty = unscoped): a covering row must hire in one of them or state no country, the same rule
+	// SuppressAggregatorDuplicatesForCompanies matches twins by. Matching on the name alone let a
+	// foreign employer of the same name discard a local one's postings (issue #4412).
 	CompaniesWithFreshNonAggregatorCoverage(ctx context.Context, arg CompaniesWithFreshNonAggregatorCoverageParams) ([]string, error)
 	// Company slugs worth running the fuzzy-description pass over: a company that still has more
 	// than one open CANONICAL posting after the exact role-cluster and aggregator passes, so there

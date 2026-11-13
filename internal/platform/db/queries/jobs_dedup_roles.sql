@@ -64,6 +64,11 @@ SELECT EXISTS (
 -- update heap-only. It is a recheck here, over the few open rows the folded index already
 -- selected (one primary-key probe on job_activity each), and EXISTS stops at the first fresh one
 -- so a large employer costs no more than a small one.
+--
+-- countries scopes the answer to a national-market aggregator's countries (sources.MarketCountries;
+-- empty = unscoped): a covering row must hire in one of them or state no country, the same rule
+-- SuppressAggregatorDuplicatesForCompanies matches twins by. Matching on the name alone let a
+-- foreign employer of the same name discard a local one's postings (issue #4412).
 SELECT asked.folded::text AS company_slug_folded
 FROM unnest(sqlc.arg(folded_companies)::text[]) AS asked(folded)
 WHERE EXISTS (
@@ -76,6 +81,9 @@ WHERE EXISTS (
       AND NOT jobs.is_private
       AND a.last_seen_at > sqlc.arg(seen_after)
       AND NOT (jobs.source = ANY(sqlc.arg(aggregators)::text[]))
+      AND (cardinality(coalesce(sqlc.arg(countries)::text[], '{}')) = 0
+           OR cardinality(jobs.countries) = 0
+           OR jobs.countries && sqlc.arg(countries)::text[])
 );
 
 -- name: CanonicalJobForRole :one

@@ -84,6 +84,9 @@ func (mojedelo) boardless() {}
 // Thousands of employers and staffing agencies post here, each named per posting.
 func (mojedelo) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (mojedelo) marketCountries(CompanyEntry) []string { return []string{"si"} }
+
 type mojedeloNamed struct {
 	Name        string `json:"name"`
 	Translation string `json:"translation"`

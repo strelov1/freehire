@@ -220,8 +220,12 @@ type BoardHealth interface {
 // content_hash moves, and the write that stamps the column on the common path
 // (RefreshUnchangedJob) deliberately writes nothing else and enqueues nothing — so an indexed
 // copy would be most wrong for exactly the actively-crawled rows the gate must credit.
+//
+// countries, when non-empty, narrows coverage to postings in one of those countries or in none
+// stated: a national-market aggregator's postings (sources.MarketCountries) are covered only by
+// an employer board that hires there, not by a foreign employer of the same name (issue #4412).
 type CoverageLookup interface {
-	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error)
+	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error)
 }
 
 // aggregatorCoverage answers whether a company (keyed by the company_slug normalize.Slug

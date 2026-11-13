@@ -100,6 +100,9 @@ func (ess) boardless() {}
 // Thousands of employers post here, each named per vacancy.
 func (ess) aggregator() {}
 
+// One country's market (see nationalMarket).
+func (ess) marketCountries(CompanyEntry) []string { return []string{"si"} }
+
 // essSearchRequest is the listing query the search page posts. Every filter must be present: an
 // absent array is not read as "no filter", and the sort must be a number.
 type essSearchRequest struct {
