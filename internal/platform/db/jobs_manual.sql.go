@@ -712,10 +712,11 @@ ON CONFLICT (source, external_id) DO UPDATE SET
         ELSE jobs.enrichment
     END,
     updated_by   = $40::bigint,
-    -- A moderator re-create reopens the job. The state trigger (migration 0258) resets the
-    -- strike count on that closed-to-open flip, so the two-strike liveness grace survives it.
+    -- A moderator re-create reopens the job; reset the strike count too so the
+    -- two-strike liveness grace survives a reopen (see UpsertJob).
     closed_at    = NULL,
     closed_reason = '',
+    liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
 RETURNING jobs.id
 `
