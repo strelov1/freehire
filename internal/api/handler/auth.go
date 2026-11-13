@@ -654,9 +654,11 @@ func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return auth.APIKeyIdentity{}, err
 	}
-	userID, err := a.q.AuthenticateOAuthGrant(ctx, tokenHash)
+	grant, err := a.q.AuthenticateOAuthGrant(ctx, tokenHash)
 	if err != nil {
 		return auth.APIKeyIdentity{}, err
 	}
-	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull, OAuthGrant: true}, nil
+	// grant.Resource is deliberately not consulted: it scopes which MCP endpoint
+	// the grant is for, and a REST route is not an MCP server.
+	return auth.APIKeyIdentity{UserID: grant.UserID, Scope: auth.ScopeFull, OAuthGrant: true}, nil
 }

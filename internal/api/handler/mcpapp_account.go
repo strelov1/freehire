@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/observability"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // mountMCPAccount serves /api/v1/mcp/account, the original URL of the signed-in server, on
@@ -109,15 +110,17 @@ const localsMCPUserID = "mcp.userID"
 // it a client must guess the well-known path, and one that does not guess has
 // no way to connect at all.
 func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", false)
+	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", oauth2server.MCPAccountResourcePath, false)
 }
 
 func mcpAuthenticate(
 	assistants *assistantHandlers,
 	frontendOrigin string,
 	metadataPath string,
+	resourcePath string,
 	allowAnonymous bool,
 ) fiber.Handler {
+	endpoint := strings.TrimSuffix(frontendOrigin, "/") + resourcePath
 	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
@@ -134,7 +137,15 @@ func mcpAuthenticate(
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
-		userID, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), oauth2server.HashToken(token))
+		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), oauth2server.HashToken(token))
+		userID := grant.UserID
+		if err == nil && !oauth2server.ResourceAllows(pgconv.TextString(grant.Resource), endpoint) {
+			// RFC 8707 / MCP authorization: a token issued for another resource is
+			// not valid here. Same answer as an unknown token — sign in again.
+			c.Set(fiber.HeaderWWWAuthenticate, challenge+`, error="invalid_token"`)
+			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "token_resource_mismatch")
+			return fiber.NewError(fiber.StatusUnauthorized, "token was issued for a different resource")
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			key, keyErr := assistants.queries.AuthenticateAPIKey(c.Context(), auth.HashAPIKey(token))
 			switch {

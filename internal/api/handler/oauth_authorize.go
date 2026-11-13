@@ -32,6 +32,9 @@ type authorizeParams struct {
 	State               string
 	CodeChallenge       string
 	CodeChallengeMethod string
+	// Resource is the RFC 8707 MCP resource the grant will be bound to, already
+	// canonical, or "" for an unbound grant. Set by resolveAuthorizeResource.
+	Resource string
 }
 
 func parseAuthorizeParams(responseType, clientID, redirectURI, state, challenge, method string) (authorizeParams, error) {
@@ -62,6 +65,48 @@ func (h *authHandlers) resolveAuthorizeClient(ctx context.Context, params author
 	return client, nil
 }
 
+// redirectToClient sends the browser back to the client's redirect_uri with the
+// given result params in the query string (not a fragment — a native app's
+// loopback listener reads a 302's query, it cannot run JavaScript against one).
+func redirectToClient(c *fiber.Ctx, redirectURI string, vals url.Values) error {
+	loc, err := url.Parse(redirectURI)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
+	}
+	q := loc.Query()
+	for k, v := range vals {
+		q[k] = v
+	}
+	loc.RawQuery = q.Encode()
+	return c.Redirect(loc.String(), fiber.StatusFound)
+}
+
+// resolveAuthorizeResource validates the optional RFC 8707 `resource` once the
+// client and redirect_uri are trusted. An unknown resource is answered the way
+// RFC 6749 4.1.2.1 says an authorize error is, by redirecting invalid_target to
+// the client — which is why this runs after resolveAuthorizeClient: before it,
+// the redirect_uri is not safe to send anything to.
+func (h *authHandlers) resolveAuthorizeResource(c *fiber.Ctx, params *authorizeParams, values [][]byte) (done bool, err error) {
+	resource, err := oauth2server.CanonicalResource(h.frontendOrigin, bytesToStrings(values))
+	if err != nil {
+		return true, redirectToClient(c, params.RedirectURI, url.Values{
+			"error":             {"invalid_target"},
+			"error_description": {"resource is not a freehire MCP endpoint"},
+			"state":             {params.State},
+		})
+	}
+	params.Resource = resource
+	return false, nil
+}
+
+func bytesToStrings(values [][]byte) []string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = string(v)
+	}
+	return out
+}
+
 // OAuthAuthorize shows the consent screen, or sends a sessionless visitor to sign
 // in first — the same two-outcome shape as ExtensionConnect. GET only ever reads;
 // it issues nothing.
@@ -75,6 +120,10 @@ func (h *authHandlers) OAuthAuthorize(c *fiber.Ctx) error {
 	}
 	client, err := h.resolveAuthorizeClient(c.Context(), params)
 	if err != nil {
+		return err
+	}
+
+	if done, err := h.resolveAuthorizeResource(c, &params, c.Context().QueryArgs().PeekMulti("resource")); done {
 		return err
 	}
 
@@ -119,6 +168,9 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if _, err := h.resolveAuthorizeClient(c.Context(), params); err != nil {
 		return err
 	}
+	if done, err := h.resolveAuthorizeResource(c, &params, c.Context().PostArgs().PeekMulti("resource")); done {
+		return err
+	}
 
 	if c.FormValue("decision") == decisionSwitch {
 		return h.switchAccount(c, h.oauthSignInURL(params))
@@ -139,18 +191,7 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 		return fmt.Errorf("read session generation for user %d: %w", userID, err)
 	}
 
-	redirect := func(vals url.Values) error {
-		loc, err := url.Parse(params.RedirectURI)
-		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid redirect_uri")
-		}
-		q := loc.Query()
-		for k, v := range vals {
-			q[k] = v
-		}
-		loc.RawQuery = q.Encode()
-		return c.Redirect(loc.String(), fiber.StatusFound)
-	}
+	redirect := func(vals url.Values) error { return redirectToClient(c, params.RedirectURI, vals) }
 
 	if c.FormValue("decision") != "allow" {
 		return redirect(url.Values{"error": {"access_denied"}, "state": {params.State}})
@@ -169,6 +210,7 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 		CodeChallenge:      params.CodeChallenge,
 		IssuedTokenVersion: pgtype.Int4{Int32: version, Valid: true},
 		ExpiresAt:          pgconv.Timestamptz(&expiresAt),
+		Resource:           pgconv.Text(params.Resource),
 	})
 	if err != nil {
 		return fmt.Errorf("persist authorization code for user %d: %w", userID, err)
@@ -180,14 +222,18 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 // oauthSignInURL sends a sessionless visitor to sign in, then back to this exact
 // authorize request. Mirrors signInURL in extension_connect.go.
 func (h *authHandlers) oauthSignInURL(params authorizeParams) string {
-	returnTo := "/api/v1/oauth/authorize?" + url.Values{
+	back := url.Values{
 		"response_type":         {"code"},
 		"client_id":             {params.ClientID},
 		"redirect_uri":          {params.RedirectURI},
 		"state":                 {params.State},
 		"code_challenge":        {params.CodeChallenge},
 		"code_challenge_method": {params.CodeChallengeMethod},
-	}.Encode()
+	}
+	if params.Resource != "" {
+		back.Set("resource", params.Resource)
+	}
+	returnTo := "/api/v1/oauth/authorize?" + back.Encode()
 	q := url.Values{"returnTo": {returnTo}, "via": {"web"}}
 	return strings.TrimSuffix(h.frontendOrigin, "/") + "/signin?" + q.Encode()
 }
@@ -217,6 +263,16 @@ func redirectDestination(redirectURI string) string {
 // beside the self-chosen client name, because the host is what a phishing
 // registration cannot fake.
 func oauthConsentPage(clientName, email, origin string, params authorizeParams) (string, error) {
+	hidden := []hiddenField{
+		{"client_id", params.ClientID},
+		{"redirect_uri", params.RedirectURI},
+		{"state", params.State},
+		{"code_challenge", params.CodeChallenge},
+		{"code_challenge_method", params.CodeChallengeMethod},
+	}
+	if params.Resource != "" {
+		hidden = append(hidden, hiddenField{"resource", params.Resource})
+	}
 	return renderConsentScreen(consentScreen{
 		Title:       clientName + " wants to access your freehire account",
 		SignedIn:    email,
@@ -225,13 +281,7 @@ func oauthConsentPage(clientName, email, origin string, params authorizeParams) 
 		Destination: redirectDestination(params.RedirectURI),
 		Caution:     clientName + " chose its own name; freehire has not verified it. Allow only if you started this connection yourself.",
 		Action:      "/api/v1/oauth/authorize",
-		Hidden: []hiddenField{
-			{"client_id", params.ClientID},
-			{"redirect_uri", params.RedirectURI},
-			{"state", params.State},
-			{"code_challenge", params.CodeChallenge},
-			{"code_challenge_method", params.CodeChallengeMethod},
-		},
-		Origin: origin,
+		Hidden:      hidden,
+		Origin:      origin,
 	})
 }

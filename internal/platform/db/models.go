@@ -1365,6 +1365,7 @@ type OauthAuthorizationCode struct {
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	IssuedTokenVersion pgtype.Int4        `json:"issued_token_version"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 type OauthClient struct {
@@ -1398,6 +1399,7 @@ type OauthGrant struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 // Send ledger for the founder signup sequence. PK (user_id, step) = one send per pair, ever.

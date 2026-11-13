@@ -99,17 +99,18 @@ type revokedCodeRow struct {
 	redir  string
 	chal   string
 	ver    pgtype.Int4
+	res    pgtype.Text
 }
 
 func (r *revokedCodeRow) Scan(dest ...any) error {
 	if !r.read {
-		if err := r.row.Scan(&r.client, &r.user, &r.redir, &r.chal, &r.ver); err != nil {
+		if err := r.row.Scan(&r.client, &r.user, &r.redir, &r.chal, &r.ver, &r.res); err != nil {
 			return err
 		}
 		r.fire()
 		r.read = true
 	}
-	if len(dest) != 5 {
+	if len(dest) != 6 {
 		return pgx.ErrNoRows
 	}
 	*(dest[0].(*string)) = r.client
@@ -117,6 +118,7 @@ func (r *revokedCodeRow) Scan(dest ...any) error {
 	*(dest[2].(*string)) = r.redir
 	*(dest[3].(*string)) = r.chal
 	*(dest[4].(*pgtype.Int4)) = r.ver
+	*(dest[5].(*pgtype.Text)) = r.res
 	return nil
 }
 

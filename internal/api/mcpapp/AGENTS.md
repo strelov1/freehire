@@ -27,6 +27,13 @@ requests. Invalid credentials fail closed instead of falling back to anonymous.
 The canonical URL has path-specific protected-resource metadata; the root
 well-known document continues to identify the account alias for existing clients.
 
+An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
+/authorize and /token, `oauth_grants.resource`): `/api/v1/mcp` or `/api/v1/mcp/account`,
+a trailing slash tolerated, anything else `invalid_target`. `mcpAuthenticate` refuses a
+grant bound to the other endpoint with 401 `invalid_token`. A grant with NULL `resource`
+(legacy, or a client that sent none) stays valid on both. REST does not read the binding: a
+grant is admitted wherever a key goes, and REST is not an MCP server. No refresh tokens exist.
+
 It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
 grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
 key and no grant, manages job alerts through these same tools instead of a second

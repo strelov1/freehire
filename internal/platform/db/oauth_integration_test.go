@@ -123,12 +123,12 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Fatal("grant.ID is zero")
 		}
 
-		gotUserID, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1")
+		got, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1")
 		if err != nil {
 			t.Fatalf("AuthenticateOAuthGrant (before bump): %v", err)
 		}
-		if gotUserID != alice {
-			t.Errorf("user id = %d, want %d", gotUserID, alice)
+		if got.UserID != alice {
+			t.Errorf("user id = %d, want %d", got.UserID, alice)
 		}
 
 		if _, err := q.BumpUserTokenVersion(ctx, alice); err != nil {

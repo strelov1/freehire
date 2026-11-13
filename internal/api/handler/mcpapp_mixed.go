@@ -6,6 +6,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
 // mountMCP serves the public catalogue and account tools at one URL. Invalid
@@ -17,7 +18,7 @@ func mountMCP(
 	catalogue *mcpappHandlers,
 ) {
 	mountMCPServer(api, "/mcp",
-		mcpAuthenticate(assistants, catalogue.origin, mcpapp.MixedResourceMetadataPath, true),
+		mcpAuthenticate(assistants, catalogue.origin, mcpapp.MixedResourceMetadataPath, oauth2server.MCPResourcePath, true),
 		agentview.SurfaceMCP, assistants, catalogue)
 }
 
