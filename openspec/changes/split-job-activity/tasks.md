@@ -6,6 +6,8 @@
 - [x] A4. Add reader/view completeness guards, update fixtures and documentation, and validate representative read plans.
 - [ ] A5. Run unit/full integration/build/vet/lint/sqlc checks, simplify and independent review; publish and deploy additive release A; verify backfill and drain pre-A readers.
 
+- [ ] A6. Ship the compatible observation lock-order follow-up and drain unsafe initial-A ingest writers before the activity-only cutover.
+
 ## B. Switch ordinary writers to compact activity
 
 - [ ] B1. Add state-change fencing covering lifecycle and the complete cheap match key, with concurrent lifecycle/content regression tests.

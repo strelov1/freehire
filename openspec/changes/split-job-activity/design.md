@@ -8,7 +8,16 @@ Candidate B is the base. The independent review adds a content/lifecycle fence, 
 
 Release A adds the table, insert invariant, temporary one-way legacy update bridge, state fence, bounded backfill, foreign key and view. Every observation reader and closer moves to activity. Ordinary writers continue updating legacy columns; the bridge mirrors them in the same transaction. Probe increments and resets explicitly update both rows, in jobs-then-activity lock order, because a computed strike can equal a frozen legacy value and therefore not fire the changed-value bridge. Their data-modifying CTEs have explicit return dependencies. This release is additive and temporarily increases writes.
 
-Before B, inventory executable build revisions on both core and operator and wait until every pre-A reader exits. A workers may overlap B: their reads use activity and their old writes still mirror. Do not infer this gate from the API revision alone.
+Before B, inventory executable build revisions on both core and operator and wait until every pre-A reader exits. A workers with the compatible lock ordering below may overlap B: their reads use activity and their old writes still mirror. Do not infer this gate from the API revision alone.
+
+The compatible lock-order follow-up must also precede B. The initial A bridge locks activity
+at statement end, after its touch/cheap-refresh outbox CTEs. That order deadlocks with B's
+activity-first observations. Both legacy statements now lock jobs then activity before
+queueing. Drain ingest binaries from before this follow-up before enabling B writers;
+current observation reads alone do not establish compatibility. The transition does not
+pause the crawler fleet or accept known deadlock failures.
+The gate also requires the validated backfill and insert invariant: a missing activity row
+is a broken invariant, and the full touch now fails instead of silently observing it.
 
 Release B moves all observation writers to activity, with explicit returns that never expand the base row's legacy columns. New inserts preserve body hydration semantics. Before C, drain every process naming legacy columns and inspect private operations code, host scripts and dashboards.
 
