@@ -141,7 +141,10 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"data factory", "azure-data-factory"},
 	{"microsoft purview", "microsoft-purview"},
 	{"microsoft sentinel", "microsoft-sentinel"},
-	{"microsoft defender", "microsoft-defender"},
+	{"microsoft defender", "microsoft-defender"}, {"defender for endpoint", "microsoft-defender"},
+	// Bare "autopilot" is Tesla's too, and "workspace one" reads "a shared workspace one day a week".
+	{"windows autopilot", "windows-autopilot"},
+	{"vmware workspace one", "workspace-one"}, {"omnissa workspace one", "workspace-one"}, {"workspace one uem", "workspace-one"},
 	{"exchange online", "microsoft-exchange"},
 	{"dynamics 365", "microsoft-dynamics"},
 	{"google cloud run", "cloud-run"}, {"cloud run", "cloud-run"},
