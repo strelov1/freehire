@@ -14,7 +14,7 @@ import (
 )
 
 // accessTokenTTL is the grant's fixed lifetime. No refresh token exists in this
-// server — the issue asks for grants that "expire after 30 days," not ones that
+// server (so a resource binding has nothing to be carried across) — the issue asks for grants that "expire after 30 days," not ones that
 // renew themselves; re-approving the consent screen mints a fresh one.
 const accessTokenTTL = 30 * 24 * time.Hour
 
@@ -28,6 +28,11 @@ type tokenResponse struct {
 // the caller authenticates with the code and PKCE verifier, not a session; this is
 // the one step a public, non-browser client makes directly, no cookie involved.
 func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
+	if !isURLEncodedForm(c) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid_request", "error_description": "the token request must be application/x-www-form-urlencoded",
+		})
+	}
 	if c.FormValue("grant_type") != "authorization_code" {
 		return fiber.NewError(fiber.StatusBadRequest, "unsupported grant_type")
 	}
@@ -37,6 +42,13 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 	verifier := c.FormValue("code_verifier")
 	if code == "" || clientID == "" || redirectURI == "" || verifier == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "code, client_id, redirect_uri and code_verifier are required")
+	}
+
+	// Validated before the code is consumed: a malformed or foreign resource is
+	// a request error, not a reason to burn a code the client could re-send.
+	tokenResource, err := oauth2server.CanonicalResource(h.frontendOrigin, bytesToStrings(c.Context().PostArgs().PeekMulti("resource")))
+	if err != nil {
+		return invalidTarget(c, "resource is not a freehire MCP endpoint")
 	}
 
 	row, err := h.queries.ConsumeOAuthAuthorizationCode(c.Context(), oauth2server.HashToken(code))
@@ -56,6 +68,16 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 	}
 	if !oauth2server.VerifyPKCE(row.CodeChallenge, verifier) {
 		return fiber.NewError(fiber.StatusBadRequest, "code_verifier does not match code_challenge")
+	}
+	// The grant is bound to the resource the code was authorized for; a resource
+	// sent only here binds a grant whose code carried none, but cannot contradict
+	// one it did (RFC 8707 2.2).
+	resource := pgconv.TextString(row.Resource)
+	if resource != "" && tokenResource != "" && tokenResource != resource {
+		return invalidTarget(c, "resource does not match the authorization request")
+	}
+	if resource == "" {
+		resource = tokenResource
 	}
 
 	// The grant is stamped with the generation the CONSUMED code was bound to —
@@ -78,6 +100,7 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 		AccessTokenHash:    hash,
 		IssuedTokenVersion: version,
 		ExpiresAt:          pgconv.Timestamptz(&expiresAt),
+		Resource:           pgconv.Text(resource),
 	}); err != nil {
 		return fmt.Errorf("persist oauth grant for user %d: %w", row.UserID, err)
 	}
@@ -87,4 +110,10 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 		TokenType:   "Bearer",
 		ExpiresIn:   int(accessTokenTTL.Seconds()),
 	})
+}
+
+// invalidTarget is RFC 8707's token-endpoint refusal: a 400 carrying the OAuth
+// error code a client library keys on, not a bare message.
+func invalidTarget(c *fiber.Ctx, description string) error {
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid_target", "error_description": description})
 }

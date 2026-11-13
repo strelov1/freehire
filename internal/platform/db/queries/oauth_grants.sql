@@ -11,8 +11,8 @@
 -- writes during rollout — never satisfies the exchange's equality latch either.
 -- squawk-ignore prefer-bigint-over-int -- mirrors users.token_version (int, 0041_account_security.sql), which this column is compared against
 INSERT INTO oauth_authorization_codes
-    (code_hash, client_id, user_id, redirect_uri, code_challenge, issued_token_version, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+    (code_hash, client_id, user_id, redirect_uri, code_challenge, issued_token_version, expires_at, resource)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: ConsumeOAuthAuthorizationCode :one
 -- Redeem a code for its grant-building fields, deleting it in the same statement
@@ -36,14 +36,16 @@ WHERE c.code_hash = $1
   AND c.user_id = u.id
   AND c.issued_token_version = u.token_version
 RETURNING c.client_id, c.user_id, c.redirect_uri, c.code_challenge,
-          c.issued_token_version;
+          c.issued_token_version, c.resource;
 
 -- name: CreateOAuthGrant :one
 -- Issue the long-lived access token for an approved client. issued_token_version
 -- is the caller's users.token_version at this moment — see the table comment in
 -- the migration for how that makes revocation free.
-INSERT INTO oauth_grants (user_id, client_id, access_token_hash, issued_token_version, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+-- resource is the RFC 8707 MCP resource the grant is bound to; NULL is unbound
+-- and valid on every MCP endpoint.
+INSERT INTO oauth_grants (user_id, client_id, access_token_hash, issued_token_version, expires_at, resource)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, expires_at;
 
 -- name: AuthenticateOAuthGrant :one
@@ -54,21 +56,30 @@ RETURNING id, created_at, expires_at;
 -- covers unknown, expired, and revoked-by-version-bump alike; the caller reads
 -- that as 401, same as AuthenticateAPIKey's contract. It also keeps
 -- users.last_active_at current, as AuthenticateAPIKey does.
+--
+-- endpoint is the MCP resource PATH the caller serves, or NULL for a caller that
+-- is not an MCP endpoint (REST). A grant bound to a different path does not
+-- match, so a wrong-endpoint token is refused like an unknown one and never
+-- touches last_used_at / last_active_at; an unbound grant (resource NULL) matches
+-- every endpoint.
 WITH g AS (
     UPDATE oauth_grants
     SET last_used_at = now()
     FROM users
-    WHERE oauth_grants.access_token_hash = $1
+    WHERE oauth_grants.access_token_hash = sqlc.arg('access_token_hash')
       AND oauth_grants.user_id = users.id
       AND oauth_grants.expires_at > now()
       AND oauth_grants.issued_token_version = users.token_version
-    RETURNING oauth_grants.user_id
+      AND (sqlc.narg('endpoint')::text IS NULL
+           OR oauth_grants.resource IS NULL
+           OR oauth_grants.resource = sqlc.narg('endpoint')::text)
+    RETURNING oauth_grants.user_id, oauth_grants.resource
 ), seen AS (
     UPDATE users AS su SET last_active_at = now()
     FROM g
     WHERE su.id = g.user_id AND su.last_active_at < now() - interval '1 day'
 )
-SELECT g.user_id FROM g;
+SELECT g.user_id, g.resource FROM g;
 
 -- name: ResolveOAuthGrantIdentity :one
 -- Read-only credential identity and entitlements with the same liveness rules as

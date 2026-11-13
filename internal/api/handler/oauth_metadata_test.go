@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
 func oauthMetadataApp() *fiber.App {
@@ -88,6 +90,44 @@ func TestOAuthMixedResourceMetadata(t *testing.T) {
 		}
 		if out.Resource != want || len(out.AuthorizationServers) != 1 || out.AuthorizationServers[0] != "https://freehire.me" {
 			t.Fatalf("%s: %+v", path, out)
+		}
+	}
+}
+
+// A FRONTEND_ORIGIN with a trailing slash must not leak a double slash into the
+// advertised resources: they are what clients send back as `resource`.
+func TestOAuthProtectedResourceMetadata_TrailingSlashOrigin(t *testing.T) {
+	const origin = "https://freehire.me/"
+	h := &authHandlers{frontendOrigin: origin}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/account", h.OAuthProtectedResourceMetadata)
+	app.Get("/mixed", h.OAuthMixedResourceMetadata)
+	app.Get("/as", h.OAuthAuthorizationServerMetadata)
+
+	get := func(path string, out any) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, path, nil))
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		defer resp.Body.Close()
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+	}
+	var as struct {
+		Issuer string `json:"issuer"`
+	}
+	get("/as", &as)
+	for path, wantPath := range map[string]string{"/account": oauth2server.MCPAccountResourcePath, "/mixed": oauth2server.MCPResourcePath} {
+		var doc protectedResourceMetadata
+		get(path, &doc)
+		got, err := oauth2server.CanonicalResource(origin, []string{doc.Resource})
+		if err != nil || got != wantPath {
+			t.Errorf("%s: advertised resource %q is not accepted (got %q, %v)", path, doc.Resource, got, err)
+		}
+		if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != as.Issuer {
+			t.Errorf("%s: authorization_servers = %v, want [%s]", path, doc.AuthorizationServers, as.Issuer)
 		}
 	}
 }

@@ -234,7 +234,13 @@ type Querier interface {
 	// covers unknown, expired, and revoked-by-version-bump alike; the caller reads
 	// that as 401, same as AuthenticateAPIKey's contract. It also keeps
 	// users.last_active_at current, as AuthenticateAPIKey does.
-	AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error)
+	//
+	// endpoint is the MCP resource PATH the caller serves, or NULL for a caller that
+	// is not an MCP endpoint (REST). A grant bound to a different path does not
+	// match, so a wrong-endpoint token is refused like an unknown one and never
+	// touches last_used_at / last_active_at; an unbound grant (resource NULL) matches
+	// every endpoint.
+	AuthenticateOAuthGrant(ctx context.Context, arg AuthenticateOAuthGrantParams) (AuthenticateOAuthGrantRow, error)
 	// Same idea as SearchOutboxMetrics, but this queue has THREE terminal-ish states rather
 	// than two, so it cannot be a copy of it.
 	//
@@ -1652,6 +1658,8 @@ type Querier interface {
 	// Issue the long-lived access token for an approved client. issued_token_version
 	// is the caller's users.token_version at this moment — see the table comment in
 	// the migration for how that makes revocation free.
+	// resource is the RFC 8707 MCP resource the grant is bound to; NULL is unbound
+	// and valid on every MCP endpoint.
 	CreateOAuthGrant(ctx context.Context, arg CreateOAuthGrantParams) (CreateOAuthGrantRow, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique

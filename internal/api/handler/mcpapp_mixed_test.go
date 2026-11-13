@@ -11,11 +11,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
 func TestMixedMCPAnonymousIdentityBoundary(t *testing.T) {
 	app := fiber.New()
-	app.Post("/", mcpAuthenticate(&assistantHandlers{}, testMCPOrigin, mcpapp.MixedResourceMetadataPath, true), func(c *fiber.Ctx) error {
+	app.Post("/", mcpAuthenticate(&assistantHandlers{}, testMCPOrigin, mcpapp.MixedResourceMetadataPath, oauth2server.MCPResourcePath, true), func(c *fiber.Ctx) error {
 		if c.Get(mcpapp.AccountUserIDHeader) != "" {
 			t.Error("external identity reached handler")
 		}

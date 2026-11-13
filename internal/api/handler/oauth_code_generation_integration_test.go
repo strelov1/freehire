@@ -99,17 +99,18 @@ type revokedCodeRow struct {
 	redir  string
 	chal   string
 	ver    pgtype.Int4
+	res    pgtype.Text
 }
 
 func (r *revokedCodeRow) Scan(dest ...any) error {
 	if !r.read {
-		if err := r.row.Scan(&r.client, &r.user, &r.redir, &r.chal, &r.ver); err != nil {
+		if err := r.row.Scan(&r.client, &r.user, &r.redir, &r.chal, &r.ver, &r.res); err != nil {
 			return err
 		}
 		r.fire()
 		r.read = true
 	}
-	if len(dest) != 5 {
+	if len(dest) != 6 {
 		return pgx.ErrNoRows
 	}
 	*(dest[0].(*string)) = r.client
@@ -117,6 +118,7 @@ func (r *revokedCodeRow) Scan(dest ...any) error {
 	*(dest[2].(*string)) = r.redir
 	*(dest[3].(*string)) = r.chal
 	*(dest[4].(*pgtype.Int4)) = r.ver
+	*(dest[5].(*pgtype.Text)) = r.res
 	return nil
 }
 
@@ -225,7 +227,7 @@ func TestOAuthToken_RaceRevocationBetweenConsumeAndGrant(t *testing.T) {
 	// The grant the handler just created carries the DEAD generation, so it can
 	// never authenticate — exactly what a revocation that lost the race must
 	// guarantee.
-	if _, err := queries.AuthenticateOAuthGrant(context.Background(), oauth2server.HashToken(out.AccessToken)); err == nil {
+	if _, err := queries.AuthenticateOAuthGrant(context.Background(), db.AuthenticateOAuthGrantParams{AccessTokenHash: oauth2server.HashToken(out.AccessToken)}); err == nil {
 		t.Fatal("grant minted after an interleaved revocation authenticates; the consumed code's generation was upgraded")
 	}
 	var issued int32
@@ -378,7 +380,7 @@ func TestOAuthToken_AcceptsCodeApprovedAfterRevocation(t *testing.T) {
 	if issued != current {
 		t.Errorf("grant issued_token_version = %d, want the current %d", issued, current)
 	}
-	if _, err := queries.AuthenticateOAuthGrant(context.Background(), oauth2server.HashToken(out.AccessToken)); err != nil {
+	if _, err := queries.AuthenticateOAuthGrant(context.Background(), db.AuthenticateOAuthGrantParams{AccessTokenHash: oauth2server.HashToken(out.AccessToken)}); err != nil {
 		t.Fatalf("fresh grant does not authenticate: %v", err)
 	}
 }

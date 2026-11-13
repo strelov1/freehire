@@ -125,7 +125,7 @@ func TestOAuthGrantsEndToEnd(t *testing.T) {
 			t.Fatalf("status = %d, want 204", resp.StatusCode)
 		}
 
-		if _, err := queries.AuthenticateOAuthGrant(context.Background(), "grant-hash-1"); err == nil {
+		if _, err := queries.AuthenticateOAuthGrant(context.Background(), db.AuthenticateOAuthGrantParams{AccessTokenHash: "grant-hash-1"}); err == nil {
 			t.Error("revoked grant still authenticates")
 		}
 	})

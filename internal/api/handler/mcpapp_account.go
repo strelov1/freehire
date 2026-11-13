@@ -15,7 +15,9 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // mountMCPAccount serves /api/v1/mcp/account, the original URL of the signed-in server, on
@@ -109,13 +111,14 @@ const localsMCPUserID = "mcp.userID"
 // it a client must guess the well-known path, and one that does not guess has
 // no way to connect at all.
 func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", false)
+	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", oauth2server.MCPAccountResourcePath, false)
 }
 
 func mcpAuthenticate(
 	assistants *assistantHandlers,
 	frontendOrigin string,
 	metadataPath string,
+	resourcePath string,
 	allowAnonymous bool,
 ) fiber.Handler {
 	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
@@ -134,7 +137,15 @@ func mcpAuthenticate(
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
-		userID, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), oauth2server.HashToken(token))
+		// The grant lookup itself refuses a grant bound to another MCP endpoint (it
+		// matches on resourcePath), so a wrong-endpoint token reads as unknown here:
+		// no last_used_at touch, and the same invalid_token answer (RFC 6750) as any
+		// other refused token, after the API-key branch finds nothing either.
+		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), db.AuthenticateOAuthGrantParams{
+			AccessTokenHash: oauth2server.HashToken(token),
+			Endpoint:        pgconv.Text(resourcePath),
+		})
+		userID := grant.UserID
 		if errors.Is(err, pgx.ErrNoRows) {
 			key, keyErr := assistants.queries.AuthenticateAPIKey(c.Context(), auth.HashAPIKey(token))
 			switch {

@@ -20,14 +20,27 @@ WITH g AS (
       AND oauth_grants.user_id = users.id
       AND oauth_grants.expires_at > now()
       AND oauth_grants.issued_token_version = users.token_version
-    RETURNING oauth_grants.user_id
+      AND ($2::text IS NULL
+           OR oauth_grants.resource IS NULL
+           OR oauth_grants.resource = $2::text)
+    RETURNING oauth_grants.user_id, oauth_grants.resource
 ), seen AS (
     UPDATE users AS su SET last_active_at = now()
     FROM g
     WHERE su.id = g.user_id AND su.last_active_at < now() - interval '1 day'
 )
-SELECT g.user_id FROM g
+SELECT g.user_id, g.resource FROM g
 `
+
+type AuthenticateOAuthGrantParams struct {
+	AccessTokenHash string      `json:"access_token_hash"`
+	Endpoint        pgtype.Text `json:"endpoint"`
+}
+
+type AuthenticateOAuthGrantRow struct {
+	UserID   int64       `json:"user_id"`
+	Resource pgtype.Text `json:"resource"`
+}
 
 // Resolve a presented bearer token to its owning user, touching last_used_at in
 // the same statement. A grant is live only while BOTH hold: it has not outlived
@@ -36,11 +49,17 @@ SELECT g.user_id FROM g
 // covers unknown, expired, and revoked-by-version-bump alike; the caller reads
 // that as 401, same as AuthenticateAPIKey's contract. It also keeps
 // users.last_active_at current, as AuthenticateAPIKey does.
-func (q *Queries) AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (int64, error) {
-	row := q.db.QueryRow(ctx, authenticateOAuthGrant, accessTokenHash)
-	var user_id int64
-	err := row.Scan(&user_id)
-	return user_id, err
+//
+// endpoint is the MCP resource PATH the caller serves, or NULL for a caller that
+// is not an MCP endpoint (REST). A grant bound to a different path does not
+// match, so a wrong-endpoint token is refused like an unknown one and never
+// touches last_used_at / last_active_at; an unbound grant (resource NULL) matches
+// every endpoint.
+func (q *Queries) AuthenticateOAuthGrant(ctx context.Context, arg AuthenticateOAuthGrantParams) (AuthenticateOAuthGrantRow, error) {
+	row := q.db.QueryRow(ctx, authenticateOAuthGrant, arg.AccessTokenHash, arg.Endpoint)
+	var i AuthenticateOAuthGrantRow
+	err := row.Scan(&i.UserID, &i.Resource)
+	return i, err
 }
 
 const consumeOAuthAuthorizationCode = `-- name: ConsumeOAuthAuthorizationCode :one
@@ -51,7 +70,7 @@ WHERE c.code_hash = $1
   AND c.user_id = u.id
   AND c.issued_token_version = u.token_version
 RETURNING c.client_id, c.user_id, c.redirect_uri, c.code_challenge,
-          c.issued_token_version
+          c.issued_token_version, c.resource
 `
 
 type ConsumeOAuthAuthorizationCodeRow struct {
@@ -60,6 +79,7 @@ type ConsumeOAuthAuthorizationCodeRow struct {
 	RedirectUri        string      `json:"redirect_uri"`
 	CodeChallenge      string      `json:"code_challenge"`
 	IssuedTokenVersion pgtype.Int4 `json:"issued_token_version"`
+	Resource           pgtype.Text `json:"resource"`
 }
 
 // Redeem a code for its grant-building fields, deleting it in the same statement
@@ -85,14 +105,15 @@ func (q *Queries) ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash st
 		&i.RedirectUri,
 		&i.CodeChallenge,
 		&i.IssuedTokenVersion,
+		&i.Resource,
 	)
 	return i, err
 }
 
 const createOAuthAuthorizationCode = `-- name: CreateOAuthAuthorizationCode :exec
 INSERT INTO oauth_authorization_codes
-    (code_hash, client_id, user_id, redirect_uri, code_challenge, issued_token_version, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+    (code_hash, client_id, user_id, redirect_uri, code_challenge, issued_token_version, expires_at, resource)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateOAuthAuthorizationCodeParams struct {
@@ -103,6 +124,7 @@ type CreateOAuthAuthorizationCodeParams struct {
 	CodeChallenge      string             `json:"code_challenge"`
 	IssuedTokenVersion pgtype.Int4        `json:"issued_token_version"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 // Record a freshly minted authorization code after the user approves consent.
@@ -125,13 +147,14 @@ func (q *Queries) CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOA
 		arg.CodeChallenge,
 		arg.IssuedTokenVersion,
 		arg.ExpiresAt,
+		arg.Resource,
 	)
 	return err
 }
 
 const createOAuthGrant = `-- name: CreateOAuthGrant :one
-INSERT INTO oauth_grants (user_id, client_id, access_token_hash, issued_token_version, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO oauth_grants (user_id, client_id, access_token_hash, issued_token_version, expires_at, resource)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, expires_at
 `
 
@@ -141,6 +164,7 @@ type CreateOAuthGrantParams struct {
 	AccessTokenHash    string             `json:"access_token_hash"`
 	IssuedTokenVersion int32              `json:"issued_token_version"`
 	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	Resource           pgtype.Text        `json:"resource"`
 }
 
 type CreateOAuthGrantRow struct {
@@ -152,6 +176,8 @@ type CreateOAuthGrantRow struct {
 // Issue the long-lived access token for an approved client. issued_token_version
 // is the caller's users.token_version at this moment — see the table comment in
 // the migration for how that makes revocation free.
+// resource is the RFC 8707 MCP resource the grant is bound to; NULL is unbound
+// and valid on every MCP endpoint.
 func (q *Queries) CreateOAuthGrant(ctx context.Context, arg CreateOAuthGrantParams) (CreateOAuthGrantRow, error) {
 	row := q.db.QueryRow(ctx, createOAuthGrant,
 		arg.UserID,
@@ -159,6 +185,7 @@ func (q *Queries) CreateOAuthGrant(ctx context.Context, arg CreateOAuthGrantPara
 		arg.AccessTokenHash,
 		arg.IssuedTokenVersion,
 		arg.ExpiresAt,
+		arg.Resource,
 	)
 	var i CreateOAuthGrantRow
 	err := row.Scan(&i.ID, &i.CreatedAt, &i.ExpiresAt)
