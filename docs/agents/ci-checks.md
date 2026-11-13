@@ -126,7 +126,9 @@ lists the scenarios that cannot apply, with the reason beside each. The suite ex
 on a failure that is not listed and on a listed scenario that now passes, so remove an entry
 the moment its scenario passes. To exclude a scenario, add it to `server:` in that file with
 a comment saying why; never to hide a real failure. The package version is pinned in the
-workflow; bump it deliberately, since a new release adds scenarios.
+workflow; bump it deliberately, since a new release adds scenarios. Scenarios the suite marks
+"pending" are not in its active set and do not run — notably `json-schema-2020-12`, which checks
+`$schema`/`$defs` handling in tool schemas; pick it up when a bump graduates it.
 
 Run it locally against a server of your own (never production: scenarios call tools):
 `npx @modelcontextprotocol/conformance@0.1.16 server --url http://localhost:<port>/api/v1/mcp

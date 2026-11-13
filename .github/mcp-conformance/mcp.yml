@@ -32,7 +32,8 @@ server:
   # baseline mode counts as a failure. The server is stateless by design (no Mcp-Session-Id;
   # see mcpapp.Handler), so there is no session to give.
   - server-sse-multiple-streams
-  # The suite probes a LOCALHOST server with a rebinding Host header and expects a 4xx.
-  # This endpoint is public behind a reverse proxy and serves any Host by design; DNS
-  # rebinding protection is for servers bound to a loopback address.
+  # Runs only because CI reaches the server on localhost: it sends a foreign Host header and
+  # expects a 4xx. This endpoint is public behind a reverse proxy and serves any Host by
+  # design. An accepted trade-off, not a pending fix: this entry goes stale only if the
+  # server starts rejecting foreign Hosts.
   - dns-rebinding-protection
