@@ -1,5 +1,5 @@
 /** The freehire iPhone app's App Store listing — the only push-notification receiver.
- *  Read by the footer's store button and the onboarding tour's push channel.
+ *  Read by the footer's store button and the parked product introduction.
  *
  *  NO country segment, on purpose. The listing's own share link is `/br/app/...`, which
  *  pins every visitor to the Brazilian storefront; without one Apple redirects each visitor

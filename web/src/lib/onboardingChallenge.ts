@@ -1,73 +1,8 @@
-// Which screens the onboarding tour shows, and the logic its screens share: the order
-// specializations are offered in, how challenge answers combine, and what helps with each.
-//
-// Pure and Svelte-free (mirrors onboarding.ts / facetModel.ts), so each rule is
-// unit-testable in plain Node rather than only observable by signing in as somebody.
+// The onboarding flow's last question, "What's in your way right now?": how its answers
+// combine, and what on freehire helps with each. Pure and Svelte-free, so each rule is
+// tested in plain Node. The vocabulary and its labels live in surveyOptions.ts.
 
-import { JOB_CHALLENGE_JUST_STARTING } from './surveyOptions';
-
-/** One screen of the tour. */
-export type StepKind = 'cv' | 'feed' | 'alerts' | 'agent' | 'challenge' | 'tailor' | 'extension';
-
-/** Every step, in the order shown. The CV comes first because a parsed CV fills in the
- *  feed step; the two paid features come last, after everything that is free. */
-export const TOUR_STEPS: StepKind[] = ['cv', 'feed', 'alerts', 'agent', 'challenge', 'tailor', 'extension'];
-
-/** The steps that only introduce a feature and store nothing. */
-const INTRO_STEPS = new Set<StepKind>(['agent', 'tailor', 'extension']);
-
-/** What this account already has, one flag per step that stores something. */
-export interface TourAnswered {
-  hasResume: boolean;
-  /** The search profile exists, which needs a specialization and a skill. */
-  hasFeed: boolean;
-  /** The profile alert is subscribed on at least one channel. */
-  hasAlert: boolean;
-  hasChallenge: boolean;
-}
-
-function isAnswered(step: StepKind, a: TourAnswered): boolean {
-  switch (step) {
-    case 'cv':
-      return a.hasResume;
-    case 'feed':
-      return a.hasFeed;
-    case 'alerts':
-      return a.hasAlert;
-    case 'challenge':
-      return a.hasChallenge;
-    default:
-      return false;
-  }
-}
-
-/** The steps this account is shown. Every account is routed here once — a new one, and
- *  each existing one again when the tour replaced the wizard — so a step it has already
- *  answered is skipped, and the introductions come along only when there is something to
- *  ask. An empty plan means "nothing to ask": the caller marks onboarding complete without
- *  rendering a screen. */
-export function plannedSteps(answered: TourAnswered): StepKind[] {
-  const asks = TOUR_STEPS.filter((s) => !INTRO_STEPS.has(s) && !isAnswered(s, answered));
-  if (asks.length === 0) return [];
-  return TOUR_STEPS.filter((s) => INTRO_STEPS.has(s) || asks.includes(s));
-}
-
-/** Specializations with the technical ones first, each half ordered by how many open jobs
- *  it holds. The catalogue's largest categories are not technical (healthcare alone
- *  outnumbers software engineering four to one), while most people signing up are — so a
- *  plain count order buries the answer most of them are looking for. Without counts the
- *  given order is kept within each half (the sort is stable). */
-export function orderSpecializations<T extends { value: string }>(
-  options: readonly T[],
-  counts: Record<string, number> | null,
-  tech: ReadonlySet<string>,
-): T[] {
-  return [...options].sort(
-    (a, b) =>
-      Number(tech.has(b.value)) - Number(tech.has(a.value)) ||
-      (counts ? (counts[b.value] ?? 0) - (counts[a.value] ?? 0) : 0),
-  );
-}
+import { JOB_CHALLENGE_JUST_STARTING, JOB_CHALLENGE_OPTIONS } from './surveyOptions';
 
 /** Pick or unpick one challenge answer. "Just starting" says nothing is hard yet, so it
  *  replaces every other answer and any other answer replaces it — the same rule the server
@@ -136,8 +71,8 @@ const TIP = {
   },
   feed: {
     icon: 'feed',
-    title: 'Your feed is already set',
-    body: 'The feed and your alerts follow what you picked a few steps ago.',
+    title: 'A feed that follows your answers',
+    body: 'Once saved, your feed and alert follow the role and place you picked.',
     href: '/jobs',
   },
   skills: {
@@ -229,7 +164,20 @@ const TIPS: Record<string, ChallengeTip[]> = {
   other: [TIP.feed, TIP.tracking],
 };
 
-/** The tips for the picked answers together, in the order picked, each tip once. */
+export const MAX_TIPS = 4;
+
+/** The tips for the picked answers together, in the order picked, each tip once, at most
+ *  `MAX_TIPS` — a short list gets read. */
 export function challengeTips(picked: readonly string[]): ChallengeTip[] {
-  return [...new Set(picked.flatMap((v) => TIPS[v] ?? []))];
+  return [...new Set(picked.flatMap((v) => TIPS[v] ?? []))].slice(0, MAX_TIPS);
+}
+
+const LABELS: Record<string, string> = Object.fromEntries(JOB_CHALLENGE_OPTIONS.map((o) => [o.value, o.label]));
+
+/** The answer as one chip: the first pick, and how many more. Null for none. */
+export function challengeChip(picked: readonly string[]): string | null {
+  const [first, ...rest] = picked;
+  if (first === undefined) return null;
+  const label = LABELS[first] ?? first;
+  return rest.length ? `${label} +${rest.length}` : label;
 }

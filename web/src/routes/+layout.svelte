@@ -1,15 +1,12 @@
 <script lang="ts">
   import { navigating, page, updated } from '$app/state';
   import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
-  import { gotoPath } from '#lib/gotoPath.js';
-  import { resolve } from '$app/paths';
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import { initTheme } from '#lib/theme.svelte.js';
   import { adoptBrowserTimezone, currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
-  import { safeRedirect } from '#lib/safeRedirect.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockReserveClass } from '#lib/messagingDock.js';
@@ -90,17 +87,18 @@
   // the page in place of the marketing footer's link columns.
   // The full-bleed account routes (the assistant chat, CV tailoring — see
   // isFullBleedRoute) size themselves to the exact viewport height and get no
-  // footer at all, same as /onboarding and /signin, both their own full-screen
-  // pages (a fixed inset-0 overlay covers TopBar too).
+  // footer at all, and neither do /signin (a full-screen overlay that covers TopBar
+  // too) and /onboarding (a single-task flow whose next step is the only way on).
   const isAccountRoute = $derived(isAccountArea(page.url.pathname));
   const hideFooter = $derived(
     isFullBleedRoute(page.url.pathname) || page.url.pathname === '/onboarding' || page.url.pathname === '/signin',
   );
   const compactFooter = $derived(isAccountRoute && !hideFooter);
 
-  // The onboarding gate: auto-redirect a signed-in visitor who has not been shown the tour
-  // to /onboarding (which bounces an anonymous visitor straight on to /signin — see that
-  // page's own gate).
+  // The onboarding gate: auto-redirect a signed-in visitor who has not been shown the
+  // onboarding flow to /onboarding, once. The flow itself is open to everyone — an
+  // anonymous visitor can run it from the CV to the results — so nothing is gated the
+  // other way: an account that already completed it may come back to it any time.
   //
   // The condition is one explicit account fact, `onboarding_completed_at`. It used to be
   // "does this account have a CV", which was a fair proxy while the wizard was about the
@@ -110,13 +108,13 @@
   // new question permanently.
   //
   // It rides on the user read the layout already makes, so there is no separate fetch to
-  // wait for. The tour marks the account complete the moment it is shown, so this fires
+  // wait for. The flow marks the account complete the moment it is shown, so this fires
   // at most once; `onboardingGate.dismissed` covers the rest of that visit, before the
   // session read picks the marker up.
   const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
     // Not on /signin: it navigates to its own returnTo the moment the session flips, and a
-    // redirect fired in between races that navigation. The tour, opened for an instant,
+    // redirect fired in between races that navigation. The flow, opened for an instant,
     // would record itself as shown and the visitor would never see it.
     const path = page.url.pathname;
     if (
@@ -129,24 +127,6 @@
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
       void goto(onboardingUrl(page.url.pathname + page.url.search));
     }
-  });
-
-  // The other direction — bounce AWAY from /onboarding once there is truly nothing to do
-  // there (signed in AND already marked complete) — is checked only at ARRIVAL: a direct,
-  // bookmarked or stale visit. The page itself always navigates elsewhere on its own way
-  // out, and it is the page that writes the completion marker, so reacting to that write
-  // live would yank the candidate off the wizard the instant they finished their last step
-  // instead of letting it navigate them. Hence untrack().
-  //
-  // Honors the same `returnTo` the page itself would have used, so a stale link at least
-  // lands the visitor back where they started rather than home.
-  $effect(() => {
-    if (page.url.pathname !== '/onboarding') return;
-    untrack(() => {
-      if (isAuthenticated() && currentUser()?.onboarding_completed_at != null) {
-        void gotoPath(safeRedirect(page.url.searchParams.get('returnTo')) ?? resolve('/'));
-      }
-    });
   });
 
   // Re-apply the persisted theme once mounted (the singleton may have been

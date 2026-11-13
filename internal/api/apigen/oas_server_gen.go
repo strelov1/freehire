@@ -1540,6 +1540,14 @@ type Handler interface {
 	//
 	// GET /companies/{slug}/process-reports/mine
 	MyProcessReports(ctx context.Context, params MyProcessReportsParams) (*MyProcessReportsOK, error)
+	// OnboardingMatches implements onboardingMatches operation.
+	//
+	// Open postings ranked by how well their skills match a caller-supplied skill list, under the
+	// jobs-search filters in `query`. Public: it is what the CV-first onboarding shows a visitor who has
+	// no account and so no stored profile. Answers the top ten.
+	//
+	// POST /onboarding/matches
+	OnboardingMatches(ctx context.Context, req *OnboardingMatchesRequest) (*OnboardingMatchesOK, error)
 	// OneClickUnsubscribe implements oneClickUnsubscribe operation.
 	//
 	// RFC 8058 one-click unsubscribe: turns off only the group the token names.

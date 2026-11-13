@@ -243,6 +243,7 @@ const (
 	MergeAtomsOperation                   OperationName = "MergeAtoms"
 	MyCompanyFeedbackOperation            OperationName = "MyCompanyFeedback"
 	MyProcessReportsOperation             OperationName = "MyProcessReports"
+	OnboardingMatchesOperation            OperationName = "OnboardingMatches"
 	OneClickUnsubscribeOperation          OperationName = "OneClickUnsubscribe"
 	PatchCVOperation                      OperationName = "PatchCV"
 	PauseMentorProfileOperation           OperationName = "PauseMentorProfile"

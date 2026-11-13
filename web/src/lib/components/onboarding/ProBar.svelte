@@ -1,5 +1,5 @@
 <script lang="ts">
-  // What is paid on this step, and the way to the plans.
+  // What is paid in a section, and the way to the plans.
   import { resolve } from '$app/paths';
   import { Button } from '#lib/ui/index.js';
 

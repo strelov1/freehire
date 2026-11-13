@@ -1,5 +1,6 @@
 <script lang="ts">
-  // What a feature does, in four short lines — the body of the tour's two Pro steps.
+  // What a feature does, in four short lines — the body of the two Pro sections on
+  // /my/getting-started.
   import type { Component } from 'svelte';
   import { Badge } from '#lib/ui/index.js';
 

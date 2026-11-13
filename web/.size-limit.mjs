@@ -29,7 +29,8 @@ const ROUTE_LIMITS = {
   '/jobs': 258_700,
   '/jobs/[slug]': 354_100,
   '/companies/[slug]': 275_900,
-  '/onboarding': 344_500,
+  // The CV-first flow replaced the seven-step tour on 2026-11-12: 180.9 kB measured, plus ~10%.
+  '/onboarding': 199_000,
   '/my/tracking': 315_700,
   '/agents': 312_200,
   '/docs/api': 176_300,

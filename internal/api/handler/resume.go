@@ -92,13 +92,13 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware, contract fibe
 	api.Post("/me/profile/ats-report", mw.cookie, mw.paidAI(unmeteredAI), contract)
 
 	// Resume skill extraction takes an optional session. Signed in, it feeds the profile
-	// edit modal and the onboarding wizard (extracted skills merge into the profile), and
+	// edit modal (extracted skills merge into the profile), and
 	// when S3 storage is configured it also stores the résumé once (the single upload
 	// point); when not, it stays stateless (parsed and discarded, only canonical slugs
 	// returned). Signed out — the AI search lets a visitor attach a CV — it is always
 	// stateless and calls no model, so a guest costs PDF parsing and nothing else, bounded
-	// per address. The /me/ path stays: renaming it would break the profile and onboarding
-	// callers for no behavioural gain.
+	// per address. The /me/ path stays: renaming it would break its callers for no
+	// behavioural gain.
 	//
 	// Open to free, like PUT /me/resume below, and deliberately NOT behind mw.paidAI. The
 	// structured extraction it kicks off in the background for a signed-in caller is a
@@ -130,6 +130,12 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware, contract fibe
 	// and calls no model; the model review and tailoring are what the account is for.
 	// IP-limited, since there is no caller to key by.
 	api.Post("/cv/roast", h.RoastCV)
+
+	// The CV-first onboarding's read: the model parse plus the dictionary profile and the
+	// ATS score, for a visitor with or without an account, storing nothing. The one model
+	// call a guest gets, free (plan.WithFreeAI); the operations gateway bounds guests per
+	// address. Open to free like the stored-CV parse, so never behind mw.paidAI.
+	api.Post("/onboarding/cv", mw.optional, h.ParseOnboardingCV)
 }
 
 // resumeTextRequest is the JSON body for the pasted-text path.

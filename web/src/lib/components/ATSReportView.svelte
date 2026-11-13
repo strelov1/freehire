@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import type { ATSReport } from '#lib/types.js';
   import { announce } from '#lib/announce.svelte.js';
+  import { atsTone as tone } from '#lib/atsScore.js';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
   // from five weighted categories, each with per-item point attribution, plus the
@@ -15,12 +16,6 @@
   const strong = $derived(report.strong_keywords ?? []);
   const recommended = $derived(report.recommended_keywords ?? []);
   const suggestions = $derived(report.suggestions ?? []);
-
-  function tone(score: number): string {
-    if (score >= 75) return 'text-primary';
-    if (score >= 50) return 'text-warning-strong';
-    return 'text-destructive';
-  }
 
   // Copy the suggestions as an LLM-ready prompt so the user can paste them into a
   // chat and have the model apply them to the CV.

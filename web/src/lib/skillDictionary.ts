@@ -1,5 +1,5 @@
 // The skills typeahead's candidate universe — canonical tokens with live job counts,
-// shared by the profile form, the Skills tab and the onboarding tour (all need the same
+// shared by the profile form and the Skills tab (both need the same
 // source the job-search filter panel uses, not a bundled/static list) — and the one search
 // every skills picker runs over it.
 

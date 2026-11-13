@@ -45,7 +45,8 @@ transaction. `store.go` is the transaction around it and nothing else.
   `WithPaidAI`/`PaidAI` mark a context as having passed it; `internal/api/handler`'s
   binding refuses to hand out a model client without that mark — or without
   `WithFreeAI`, the named exception for the calls every account gets: the stored-CV parse,
-  the search interpretation ("Describe with AI") and the support agent. Support is
+  the onboarding CV read (`POST /onboarding/cv`, the only one open to a guest), the search
+  interpretation ("Describe with AI") and the support agent. Support is
   `FeatureSupport`, deliberately NOT in `AllFeatures()` — it is not part of a plan, so
   no tier table, plans page or upgrade nudge touches it. `ConsumeSupport` draws on ONE flat
   daily figure for every account (`SUPPORT_DAILY_MESSAGES`, default 20); a conversation holds
@@ -72,7 +73,11 @@ transaction. `store.go` is the transaction around it and nothing else.
   (`RESUME_EXTRACT_MODEL`, falling back to `LLM_MODEL`). Every upload entry point
   (`PUT /me/resume`, `/me/resume/extract`, the MCP `add_cv` tool, which takes only a first CV)
   reaches it through one `storeCV`, and the mark is set inside the derivation, not by the
-  caller. The parse was paid until 2026-10-19
+  caller. The onboarding CV read (`onboarding_cv.go`) runs the same extractor in the request,
+  for a visitor with or without an account, and stores nothing: a guest spends the service
+  credential (never the binding, which would mint a key for account 0), and the operations
+  gateway's `onboarding-cv-guest` budget bounds guests per IP — the app holds no counter. The
+  parse was paid until 2026-10-19
   and that cost paying customers: a CV uploaded before upgrading was never parsed, upgrading
   did not re-run it, and the experience bank every paid feature reads stayed empty. Support
   (`POST /support/sessions/:id/messages`, `assistant_support.go`) meters itself through

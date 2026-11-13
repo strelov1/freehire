@@ -21,8 +21,7 @@
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
   import { tailorHref } from '#lib/tailorHref.js';
-  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptSignIn, signinUrl } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';
   import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
   import { freshnessBadges } from '#lib/freshness.js';
@@ -410,14 +409,14 @@
     if (!applied) showApplyPrompt = true;
   }
 
-  // Gate — "Sign up" routes to /onboarding, which bounces an anonymous visitor to
-  // /signin to register before continuing into the CV/profile wizard; "View without
-  // signing in" opens the posting in a new tab (the navigation the click was holding
-  // back).
+  // Gate — "Sign up" opens /signin's register form and returns to this posting (the
+  // layout routes a new account through /onboarding once, and that page can skip
+  // straight back here); "View without signing in" opens the posting in a new tab (the
+  // navigation the click was holding back).
   function signUpFromGate() {
     showSignInPrompt = false;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-    void goto(onboardingUrl(page.url.pathname + page.url.search));
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo: page.url.pathname + page.url.search }));
   }
 
   function signInFromGate() {

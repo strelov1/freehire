@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The tour shares the canonical MCP setup and its optional OAuth sign-in instructions.
+  // Getting started: search from an AI assistant over MCP. Shares the canonical MCP setup
+  // and its optional OAuth sign-in instructions.
   import McpSetup from '#lib/components/McpSetup.svelte';
 </script>
 

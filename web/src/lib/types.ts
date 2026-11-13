@@ -88,3 +88,4 @@ export type * from './wire-types/settings';
 export type * from './wire-types/community';
 export type * from './wire-types/experience';
 export type * from './wire-types/mentors';
+export type * from './wire-types/onboarding';
