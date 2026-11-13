@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -35,6 +36,7 @@ type resourceFixture struct {
 	h      *authHandlers
 	iss    *auth.Issuer
 	q      *db.Queries
+	pool   *pgxpool.Pool
 	userID int64
 	client string
 	tokens *fiber.App
@@ -45,7 +47,7 @@ func newResourceFixture(t *testing.T, name string) *resourceFixture {
 	t.Helper()
 	pool := startPostgres(t)
 	q := db.New(pool)
-	f := &resourceFixture{q: q, client: "client-" + name, iss: auth.NewIssuer("test-secret", time.Hour)}
+	f := &resourceFixture{q: q, pool: pool, client: "client-" + name, iss: auth.NewIssuer("test-secret", time.Hour)}
 	f.userID = seedOAuthUser(t, pool, name+"@example.test")
 	seedOAuthTestClient(t, q, f.client, []string{resourceCB})
 	f.h = &authHandlers{queries: q, issuer: f.iss, frontendOrigin: testMCPOrigin}
@@ -173,7 +175,7 @@ func TestOAuthResource_UnknownResourceAtAuthorizeRedirectsInvalidTarget(t *testi
 func TestOAuthResource_BindingRoundTripsAndIsEnforcedPerEndpoint(t *testing.T) {
 	f := newResourceFixture(t, "res-bind-1")
 
-	account := f.grantToken(t, resourceAccount+"/", "") // trailing slash tolerated
+	account := f.grantToken(t, "HTTPS://"+strings.ToUpper(strings.TrimPrefix(testMCPOrigin, "https://"))+"/api/v1/mcp/account/", "") // case and trailing slash tolerated
 	mixed := f.grantToken(t, resourceMixed, "")
 	legacy := f.grantToken(t, "", "")
 
@@ -201,6 +203,28 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforcedPerEndpoint(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("the binding is stored as the path and a refused call leaves no trace", func(t *testing.T) {
+		var stored string
+		var lastUsed *time.Time
+		hash := oauth2server.HashToken(account)
+		read := func() {
+			if err := f.pool.QueryRow(context.Background(),
+				`SELECT resource, last_used_at FROM oauth_grants WHERE access_token_hash = $1`, hash).Scan(&stored, &lastUsed); err != nil {
+				t.Fatalf("read grant: %v", err)
+			}
+		}
+		read()
+		if stored != oauth2server.MCPAccountResourcePath {
+			t.Errorf("stored resource = %q, want the path %q", stored, oauth2server.MCPAccountResourcePath)
+		}
+		before := lastUsed
+		f.callMCP(t, "/api/v1/mcp", account) // wrong endpoint
+		read()
+		if (before == nil) != (lastUsed == nil) || (before != nil && !before.Equal(*lastUsed)) {
+			t.Errorf("last_used_at moved on a refused call: %v -> %v", before, lastUsed)
+		}
+	})
 
 	t.Run("REST still admits a bound grant", func(t *testing.T) {
 		identity, err := apiKeys{f.q}.AuthenticateAPIKey(context.Background(), oauth2server.HashToken(account))

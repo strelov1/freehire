@@ -123,7 +123,7 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Fatal("grant.ID is zero")
 		}
 
-		got, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1")
+		got, err := q.AuthenticateOAuthGrant(ctx, AuthenticateOAuthGrantParams{AccessTokenHash: "token-hash-1"})
 		if err != nil {
 			t.Fatalf("AuthenticateOAuthGrant (before bump): %v", err)
 		}
@@ -135,7 +135,7 @@ func TestOAuthClientAndGrantQueries(t *testing.T) {
 			t.Fatalf("BumpUserTokenVersion: %v", err)
 		}
 
-		if _, err := q.AuthenticateOAuthGrant(ctx, "token-hash-1"); !errors.Is(err, pgx.ErrNoRows) {
+		if _, err := q.AuthenticateOAuthGrant(ctx, AuthenticateOAuthGrantParams{AccessTokenHash: "token-hash-1"}); !errors.Is(err, pgx.ErrNoRows) {
 			t.Errorf("after bump, err = %v, want pgx.ErrNoRows", err)
 		}
 	})

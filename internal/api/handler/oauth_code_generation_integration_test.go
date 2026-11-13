@@ -227,7 +227,7 @@ func TestOAuthToken_RaceRevocationBetweenConsumeAndGrant(t *testing.T) {
 	// The grant the handler just created carries the DEAD generation, so it can
 	// never authenticate — exactly what a revocation that lost the race must
 	// guarantee.
-	if _, err := queries.AuthenticateOAuthGrant(context.Background(), oauth2server.HashToken(out.AccessToken)); err == nil {
+	if _, err := queries.AuthenticateOAuthGrant(context.Background(), db.AuthenticateOAuthGrantParams{AccessTokenHash: oauth2server.HashToken(out.AccessToken)}); err == nil {
 		t.Fatal("grant minted after an interleaved revocation authenticates; the consumed code's generation was upgraded")
 	}
 	var issued int32
@@ -380,7 +380,7 @@ func TestOAuthToken_AcceptsCodeApprovedAfterRevocation(t *testing.T) {
 	if issued != current {
 		t.Errorf("grant issued_token_version = %d, want the current %d", issued, current)
 	}
-	if _, err := queries.AuthenticateOAuthGrant(context.Background(), oauth2server.HashToken(out.AccessToken)); err != nil {
+	if _, err := queries.AuthenticateOAuthGrant(context.Background(), db.AuthenticateOAuthGrantParams{AccessTokenHash: oauth2server.HashToken(out.AccessToken)}); err != nil {
 		t.Fatalf("fresh grant does not authenticate: %v", err)
 	}
 }

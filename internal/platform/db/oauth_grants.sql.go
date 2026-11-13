@@ -20,6 +20,9 @@ WITH g AS (
       AND oauth_grants.user_id = users.id
       AND oauth_grants.expires_at > now()
       AND oauth_grants.issued_token_version = users.token_version
+      AND ($2::text IS NULL
+           OR oauth_grants.resource IS NULL
+           OR oauth_grants.resource = $2::text)
     RETURNING oauth_grants.user_id, oauth_grants.resource
 ), seen AS (
     UPDATE users AS su SET last_active_at = now()
@@ -28,6 +31,11 @@ WITH g AS (
 )
 SELECT g.user_id, g.resource FROM g
 `
+
+type AuthenticateOAuthGrantParams struct {
+	AccessTokenHash string      `json:"access_token_hash"`
+	Endpoint        pgtype.Text `json:"endpoint"`
+}
 
 type AuthenticateOAuthGrantRow struct {
 	UserID   int64       `json:"user_id"`
@@ -41,8 +49,14 @@ type AuthenticateOAuthGrantRow struct {
 // covers unknown, expired, and revoked-by-version-bump alike; the caller reads
 // that as 401, same as AuthenticateAPIKey's contract. It also keeps
 // users.last_active_at current, as AuthenticateAPIKey does.
-func (q *Queries) AuthenticateOAuthGrant(ctx context.Context, accessTokenHash string) (AuthenticateOAuthGrantRow, error) {
-	row := q.db.QueryRow(ctx, authenticateOAuthGrant, accessTokenHash)
+//
+// endpoint is the MCP resource PATH the caller serves, or NULL for a caller that
+// is not an MCP endpoint (REST). A grant bound to a different path does not
+// match, so a wrong-endpoint token is refused like an unknown one and never
+// touches last_used_at / last_active_at; an unbound grant (resource NULL) matches
+// every endpoint.
+func (q *Queries) AuthenticateOAuthGrant(ctx context.Context, arg AuthenticateOAuthGrantParams) (AuthenticateOAuthGrantRow, error) {
+	row := q.db.QueryRow(ctx, authenticateOAuthGrant, arg.AccessTokenHash, arg.Endpoint)
 	var i AuthenticateOAuthGrantRow
 	err := row.Scan(&i.UserID, &i.Resource)
 	return i, err

@@ -56,14 +56,23 @@ RETURNING id, created_at, expires_at;
 -- covers unknown, expired, and revoked-by-version-bump alike; the caller reads
 -- that as 401, same as AuthenticateAPIKey's contract. It also keeps
 -- users.last_active_at current, as AuthenticateAPIKey does.
+--
+-- endpoint is the MCP resource PATH the caller serves, or NULL for a caller that
+-- is not an MCP endpoint (REST). A grant bound to a different path does not
+-- match, so a wrong-endpoint token is refused like an unknown one and never
+-- touches last_used_at / last_active_at; an unbound grant (resource NULL) matches
+-- every endpoint.
 WITH g AS (
     UPDATE oauth_grants
     SET last_used_at = now()
     FROM users
-    WHERE oauth_grants.access_token_hash = $1
+    WHERE oauth_grants.access_token_hash = sqlc.arg('access_token_hash')
       AND oauth_grants.user_id = users.id
       AND oauth_grants.expires_at > now()
       AND oauth_grants.issued_token_version = users.token_version
+      AND (sqlc.narg('endpoint')::text IS NULL
+           OR oauth_grants.resource IS NULL
+           OR oauth_grants.resource = sqlc.narg('endpoint')::text)
     RETURNING oauth_grants.user_id, oauth_grants.resource
 ), seen AS (
     UPDATE users AS su SET last_active_at = now()

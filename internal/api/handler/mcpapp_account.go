@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -120,7 +121,6 @@ func mcpAuthenticate(
 	resourcePath string,
 	allowAnonymous bool,
 ) fiber.Handler {
-	endpoint := strings.TrimSuffix(frontendOrigin, "/") + resourcePath
 	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
@@ -137,15 +137,15 @@ func mcpAuthenticate(
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
-		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), oauth2server.HashToken(token))
+		// The grant lookup itself refuses a grant bound to another MCP endpoint (it
+		// matches on resourcePath), so a wrong-endpoint token reads as unknown here:
+		// no last_used_at touch, and the same invalid_token answer (RFC 6750) as any
+		// other refused token, after the API-key branch finds nothing either.
+		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), db.AuthenticateOAuthGrantParams{
+			AccessTokenHash: oauth2server.HashToken(token),
+			Endpoint:        pgconv.Text(resourcePath),
+		})
 		userID := grant.UserID
-		if err == nil && !oauth2server.ResourceAllows(pgconv.TextString(grant.Resource), endpoint) {
-			// RFC 8707 / MCP authorization: a token issued for another resource is
-			// not valid here. Same answer as an unknown token — sign in again.
-			c.Set(fiber.HeaderWWWAuthenticate, challenge+`, error="invalid_token"`)
-			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "token_resource_mismatch")
-			return fiber.NewError(fiber.StatusUnauthorized, "token was issued for a different resource")
-		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			key, keyErr := assistants.queries.AuthenticateAPIKey(c.Context(), auth.HashAPIKey(token))
 			switch {
