@@ -119,38 +119,46 @@ describe('arrivalAction', () => {
   });
 
   it('restores a fresh draft for a signed-out visitor — a sign-up left on the sign-in page', () => {
-    expect(arrivalAction(pending(), { authenticated: false, onboardedBefore: false, now })).toBe('restore');
+    expect(arrivalAction(pending(), { authenticated: false, accountCreatedAt: now, now })).toBe('restore');
   });
 
   it('discards a stale or unmarked draft even for a signed-out visitor', () => {
     const stale = pending({ pendingSignupAt: now - PENDING_SIGNUP_MS - 1 });
-    expect(arrivalAction(stale, { authenticated: false, onboardedBefore: false, now })).toBe('discard');
+    expect(arrivalAction(stale, { authenticated: false, accountCreatedAt: now, now })).toBe('discard');
     const unmarked = pending({ pendingSignupAt: undefined });
-    expect(arrivalAction(unmarked, { authenticated: false, onboardedBefore: false, now })).toBe('discard');
+    expect(arrivalAction(unmarked, { authenticated: false, accountCreatedAt: now, now })).toBe('discard');
   });
 
   it('carries a fresh sign-up into an account that had not onboarded', () => {
-    expect(arrivalAction(pending(), { authenticated: true, onboardedBefore: false, now })).toBe('carry');
+    expect(arrivalAction(pending(), { authenticated: true, accountCreatedAt: now, now })).toBe('carry');
+  });
+
+  // Migration 0207 cleared onboarding_completed_at for existing accounts, so an old account
+  // can still look un-onboarded: only the creation time says the sign-up made it.
+  it('treats an account created before the sign-up started as existing, onboarded or not', () => {
+    const old = { authenticated: true, accountCreatedAt: now - 10 * 60_000, now };
+    expect(arrivalAction(pending(), old)).toBe('offer-save');
+    expect(arrivalAction(pending(), { authenticated: true, accountCreatedAt: null, now })).toBe('offer-save');
   });
 
   it('only offers to save into an account that already existed', () => {
-    expect(arrivalAction(pending(), { authenticated: true, onboardedBefore: true, now })).toBe('offer-save');
+    expect(arrivalAction(pending(), { authenticated: true, accountCreatedAt: now - 365 * 86_400_000, now })).toBe('offer-save');
   });
 
   // A shared browser: somebody else's anonymous run must never reach this account.
   it('discards a draft no sign-up was started from', () => {
     expect(
-      arrivalAction(pending({ pendingSignupAt: undefined }), { authenticated: true, onboardedBefore: false, now }),
+      arrivalAction(pending({ pendingSignupAt: undefined }), { authenticated: true, accountCreatedAt: now, now }),
     ).toBe('discard');
   });
 
   it('discards a sign-up marker older than half an hour', () => {
     const stale = pending({ pendingSignupAt: now - PENDING_SIGNUP_MS - 1 });
-    expect(arrivalAction(stale, { authenticated: true, onboardedBefore: false, now })).toBe('discard');
+    expect(arrivalAction(stale, { authenticated: true, accountCreatedAt: now, now })).toBe('discard');
   });
 
   it('discards an unfinished draft for a signed-in visitor', () => {
     const unfinished = pending({ answers: { where: 'remote' } });
-    expect(arrivalAction(unfinished, { authenticated: true, onboardedBefore: false, now })).toBe('discard');
+    expect(arrivalAction(unfinished, { authenticated: true, accountCreatedAt: now, now })).toBe('discard');
   });
 });

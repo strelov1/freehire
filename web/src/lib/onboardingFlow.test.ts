@@ -25,7 +25,6 @@ function parse(over: Partial<OnboardingParse> = {}): OnboardingParse {
     structured_available: true,
     first_name: 'Ana',
     headline: 'Backend engineer',
-    location: 'São Paulo, Brazil',
     country: 'br',
     total_years: 9,
     companies: ['Nubank', 'Stone'],

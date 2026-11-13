@@ -27,13 +27,14 @@ const onboardingMaxCompanies = 4
 // onboardingCVResponse is what the CV-first onboarding reads from a CV. The structured
 // half comes from the model and is empty (StructuredAvailable false) when the model is
 // unconfigured, failed or ran out of time; the dictionary half and the ATS report are
-// always there. No contact field is part of the shape, and the name is cut to the first
-// name: the page greets the visitor, it does not identify them.
+// always there. No contact field is part of the shape, the name is cut to the first name
+// (the page greets the visitor, it does not identify them), and the residence goes out
+// only as the dictionary's country code — the address span it comes from can be a street
+// address in any shape, so no form of its text is sent.
 type onboardingCVResponse struct {
 	StructuredAvailable bool             `json:"structured_available"`
 	FirstName           string           `json:"first_name"`
 	Headline            string           `json:"headline"`
-	Location            string           `json:"location"`
 	Country             string           `json:"country"`
 	TotalYears          int              `json:"total_years"`
 	Companies           []string         `json:"companies"`
@@ -82,7 +83,6 @@ func (h *resumeHandlers) ParseOnboardingCV(c *fiber.Ctx) error {
 		out.StructuredAvailable = true
 		out.FirstName = firstName(st.FullName)
 		out.Headline = st.Headline
-		out.Location = coarseLocation(st.Location)
 		out.TotalYears = st.TotalYears
 		out.Companies = recentCompanies(st.Experience, onboardingMaxCompanies)
 		if countries, _, _ := resume.DeriveGeography(st.Location); len(countries) > 0 {
@@ -116,23 +116,6 @@ func (h *resumeHandlers) onboardingStructured(ctx context.Context, userID int64,
 		return resumeextract.Structured{}, false
 	}
 	return st, true
-}
-
-// coarseLocation keeps the last two comma-separated parts of a stated residence — the
-// city and country of "Rua X 123, Centro, Florianópolis, Brazil". The residence is the PII
-// detector's ADDRESS span, and a street address is more than the page needs to greet
-// the visitor.
-func coarseLocation(stated string) string {
-	var parts []string
-	for _, p := range strings.Split(stated, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			parts = append(parts, p)
-		}
-	}
-	if len(parts) > 2 {
-		parts = parts[len(parts)-2:]
-	}
-	return strings.Join(parts, ", ")
 }
 
 // firstName is the first word of a full name.

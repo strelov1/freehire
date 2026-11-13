@@ -24,7 +24,7 @@ import (
 const onboardingCV = `Jane Doe
 Senior Backend Engineer
 jane@example.com · +1 555 0100 · linkedin.com/in/janedoe
-Florianópolis, Brazil
+Rua Bocaiúva 2468, Florianópolis, Brazil
 
 Skills
 Go, PostgreSQL, Kubernetes, Docker
@@ -52,7 +52,7 @@ type contactDetector struct{}
 
 func (contactDetector) Detect(_ context.Context, text string) ([]pii.Span, error) {
 	var spans []pii.Span
-	for value, kind := range map[string]string{"Jane Doe": pii.KindName, "Florianópolis, Brazil": pii.KindAddress} {
+	for value, kind := range map[string]string{"Jane Doe": pii.KindName, "Rua Bocaiúva 2468, Florianópolis, Brazil": pii.KindAddress} {
 		if i := strings.Index(text, value); i >= 0 {
 			spans = append(spans, pii.Span{Start: i, End: i + len(value), Kind: kind})
 		}
@@ -85,7 +85,6 @@ type onboardingCVAnswer struct {
 		StructuredAvailable bool            `json:"structured_available"`
 		FirstName           string          `json:"first_name"`
 		Headline            string          `json:"headline"`
-		Location            string          `json:"location"`
 		Country             string          `json:"country"`
 		TotalYears          int             `json:"total_years"`
 		Companies           []string        `json:"companies"`
@@ -134,8 +133,8 @@ func TestParseOnboardingCV_ReadsTheCVForAGuest(t *testing.T) {
 	if d.FirstName != "Jane" {
 		t.Errorf("first_name = %q, want %q (the first name only)", d.FirstName, "Jane")
 	}
-	if d.Headline == "" || d.Location == "" || d.TotalYears != 11 {
-		t.Errorf("headline/location/years = %q/%q/%d, want the model's", d.Headline, d.Location, d.TotalYears)
+	if d.Headline == "" || d.TotalYears != 11 {
+		t.Errorf("headline/years = %q/%d, want the model's", d.Headline, d.TotalYears)
 	}
 	if d.Country != "br" {
 		t.Errorf("country = %q, want br (resolved from the stated location)", d.Country)
@@ -150,7 +149,9 @@ func TestParseOnboardingCV_ReadsTheCVForAGuest(t *testing.T) {
 	if len(d.Report) == 0 || string(d.Report) == "null" {
 		t.Errorf("report missing: %s", raw)
 	}
-	for _, leaked := range []string{"jane@example.com", "555 0100", "linkedin.com/in/janedoe", "Doe"} {
+	// The residence is never sent as text, only as the dictionary's country code: an
+	// address span can be a street address in any shape.
+	for _, leaked := range []string{"jane@example.com", "555 0100", "linkedin.com/in/janedoe", "Doe", "Bocaiúva", `"location"`} {
 		if strings.Contains(raw, leaked) {
 			t.Errorf("answer leaks %q: %s", leaked, raw)
 		}
@@ -243,21 +244,5 @@ func TestParseOnboardingCV_GuestEncodedBodyRefused(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnsupportedMediaType {
 		t.Fatalf("status = %d, want 415", resp.StatusCode)
-	}
-}
-
-// The residence comes from the PII detector's ADDRESS span, which can be a street
-// address. Only the place goes back to the browser.
-func TestCoarseLocation(t *testing.T) {
-	for in, want := range map[string]string{
-		"Rua Bocaiúva 123, Centro, Florianópolis, Brazil": "Florianópolis, Brazil",
-		"Florianópolis, Brazil":                           "Florianópolis, Brazil",
-		"Berlin":                                          "Berlin",
-		"  ":                                              "",
-		"Apt 4, ,  Lisbon , Portugal ":                    "Lisbon, Portugal",
-	} {
-		if got := coarseLocation(in); got != want {
-			t.Errorf("coarseLocation(%q) = %q, want %q", in, got, want)
-		}
 	}
 }

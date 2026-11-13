@@ -18,7 +18,7 @@ screen without signing in. It SHALL NOT redirect an anonymous visitor to `/signi
 ### Requirement: Anonymous CV parse
 
 The system SHALL accept a PDF CV (or the CV's text, the same two body forms `/cv/roast` takes) from an anonymous caller and answer with what it read:
-- the first name, headline, location, total years of experience, up to four most recent
+- the first name, headline, the country the residence resolves to (never the residence as text), total years of experience, up to four most recent
   employers and the key skills;
 - the dictionary-derived categories and seniority;
 - the CV's deterministic ATS report.
@@ -31,7 +31,7 @@ file that is not a readable PDF, or a CV with no text, SHALL be refused with a c
 
 #### Scenario: Readable CV
 - **WHEN** an anonymous visitor uploads a readable PDF CV
-- **THEN** the answer carries the first name, headline, employers, years, skills, categories, seniority and an ATS score
+- **THEN** the answer carries the first name, headline, country, employers, years, skills, categories, seniority and an ATS score
 - **AND** no CV bytes or fields are persisted
 
 #### Scenario: Model unavailable
@@ -179,7 +179,8 @@ with a NEW account, the flow SHALL, without asking again:
 - take the visitor to their feed.
 
 This SHALL also work when sign-up leaves for an OAuth provider. A visitor who signs in to
-an account that already existed SHALL instead get an explicit save action, so nothing
+an account that existed before the sign-in started (judged by the account's creation time,
+not by whether it was ever onboarded) SHALL instead get an explicit save action, so nothing
 lands in that account unasked. Only a browser that started the sign-in from the results
 screen, within the last 30 minutes, SHALL have its CV carried. If one of the steps fails,
 the account SHALL stay signed in, the other steps SHALL still run, and the visitor SHALL be

@@ -17,13 +17,14 @@
   //
   // A DRAFT REACHES AN ACCOUNT ONLY WHEN THIS BROWSER STARTED A SIGN-UP FROM IT. In a shared
   // browser the draft may be somebody else's anonymous run; see `arrivalAction`.
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ArrowRight, FileUp, MessageCircleQuestionMark, RotateCcw, Search, UserRound } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { filtersFromProfile, filtersToParams } from '#lib/facetModel.js';
+  import { countryLabel } from '#lib/facets.js';
   import { gotoPath } from '#lib/gotoPath.js';
   import { carryFailureMessage, carryInto, type CarryDeps, type CarryStep } from '#lib/onboardingCarry.js';
   import { arrivalAction, onboardingDraft } from '#lib/onboardingDraft.js';
@@ -86,6 +87,11 @@
 
   /** Where a signed-in visitor was headed when the layout sent them here. */
   const returnTo = $derived(safeRedirect(page.url.searchParams.get('returnTo')));
+  /** This page as the sign-in page should bring the visitor back to it — still carrying
+   *  where they were headed, so saving can end there. */
+  const here = $derived(
+    returnTo ? `${resolve('/onboarding')}?${new URLSearchParams({ returnTo })}` : resolve('/onboarding'),
+  );
 
   // ---- arrival ----
 
@@ -100,8 +106,7 @@
 
   async function arrive() {
     const authenticated = isAuthenticated();
-    // Read before marking: whether this account existed before the visit decides whether a
-    // draft may be carried into it unasked.
+    // Read before marking: the gate's mark is written on arrival.
     const onboardedBefore = currentUser()?.onboarding_completed_at != null;
     if (authenticated && !onboardedBefore) {
       // Shown means done. The raw call, not auth's invalidating one: re-reading the session
@@ -114,7 +119,9 @@
     // Single use: read back once and gone, whatever happens next. A sign-up left on the
     // sign-in page must not leave a marked draft for the next person at this browser.
     await onboardingDraft.clear();
-    const action = arrivalAction(draft, { authenticated, onboardedBefore, now: Date.now() });
+    const created = Date.parse(currentUser()?.created_at ?? '');
+    const accountCreatedAt = Number.isNaN(created) ? null : created;
+    const action = arrivalAction(draft, { authenticated, accountCreatedAt, now: Date.now() });
     if (action === 'discard' || phase !== 'drop') return;
     file = draft.file;
     fileName = draft.fileName;
@@ -192,7 +199,7 @@
   const cvLine = $derived.by(() => {
     if (!parse) return undefined;
     if (!parse.structured_available) return 'We read your skills and level; the rest of the CV did not come through.';
-    return [parse.headline, parse.location].filter(Boolean).join(' · ') || undefined;
+    return [parse.headline, parse.country ? countryLabel(parse.country) : ''].filter(Boolean).join(' · ') || undefined;
   });
 
   // ---- the questions ----
@@ -341,7 +348,8 @@
     // for "Try again"; a later visit must not run the whole carry a second time.
     await onboardingDraft.clear();
     carryFailed = failed;
-    if (failed.length === 0) await goToFeed();
+    // Saving outlives the page: a visitor who navigated away meanwhile stays where they went.
+    if (failed.length === 0 && !left) await goToFeed();
   }
 
   /** Where the visitor was headed when the layout sent them here, else the account's feed:
@@ -359,12 +367,15 @@
     void gotoPath(returnTo ?? resolve('/'));
   }
 
+  let left = false;
+  onDestroy(() => (left = true));
+
   /** Sign-up from the results goes through the sign-in page and comes back here. The draft
    *  is marked first: only a marked draft is carried on the way back, so a browser that
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    await gotoPath(signinUrl({ returnTo: resolve('/onboarding') }));
+    await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {
@@ -481,12 +492,7 @@
             <p class="text-destructive">{dropError}</p>
             {#if limited && !isAuthenticated()}
               <p class="text-muted-foreground">Signed in, there is no daily limit — sign in and drop it again.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                class="self-start"
-                href={signinUrl({ returnTo: resolve('/onboarding') })}
-              >
+              <Button variant="outline" size="sm" class="self-start" href={signinUrl({ returnTo: here })}>
                 Sign in or create an account
               </Button>
             {/if}

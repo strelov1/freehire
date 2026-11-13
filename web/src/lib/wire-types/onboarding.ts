@@ -6,15 +6,15 @@ import type { Job, Report as ATSReport } from '../generated/contracts';
 import type { ListMeta } from './companies';
 
 /** What `POST /api/v1/onboarding/cv` read from a CV. The model-read fields (name,
- *  headline, location, years, companies) are empty when `structured_available` is false;
+ *  headline, country, years, companies) are empty when `structured_available` is false;
  *  the dictionary fields (skills, categories, seniority) and the ATS report are always
  *  there. Contact fields are never part of it, and the name is cut to the first name. */
 export interface OnboardingParse {
   structured_available: boolean;
   first_name: string;
   headline: string;
-  location: string;
-  /** ISO 3166-1 alpha-2, lowercase; empty when the location resolved to no country. */
+  /** ISO 3166-1 alpha-2, lowercase; empty when the residence resolved to no country. The
+   *  residence itself is never sent as text. */
   country: string;
   total_years: number;
   /** At most four, most recent first. */

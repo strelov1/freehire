@@ -18,11 +18,17 @@ vi.mock('$app/paths', () => ({
   assets: '',
 }));
 vi.mock('$app/navigation', () => ({ afterNavigate() {}, goto: vi.fn(), invalidateAll: vi.fn() }));
-const auth = vi.hoisted(() => ({ completedAt: null as string | null }));
+const auth = vi.hoisted(() => ({ completedAt: null as string | null, createdAt: null as string | null }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.get('id') != null,
   currentUser: () =>
-    session.get('id') == null ? null : { id: session.get('id'), onboarding_completed_at: auth.completedAt },
+    session.get('id') == null
+      ? null
+      : {
+          id: session.get('id'),
+          onboarding_completed_at: auth.completedAt,
+          created_at: auth.createdAt ?? new Date().toISOString(),
+        },
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 
@@ -74,7 +80,6 @@ const parse: OnboardingParse = {
   structured_available: true,
   first_name: 'Ana',
   headline: 'Backend engineer',
-  location: 'São Paulo, Brazil',
   country: 'br',
   total_years: 9,
   companies: ['Nubank', 'Stone'],
@@ -132,6 +137,7 @@ beforeEach(() => {
   session.set('id', null);
   vi.clearAllMocks();
   auth.completedAt = null;
+  auth.createdAt = null;
   pageState.url = new URL('http://localhost/onboarding');
   onboardingGate.reset();
   h.api.onboardingParseCv.mockResolvedValue(parse);
@@ -336,6 +342,18 @@ describe('/onboarding', () => {
     ...over,
   });
 
+  // Migration 0207 cleared onboarding_completed_at for accounts that existed then: such an
+  // account signing in from the results is not new and must be asked, not overwritten.
+  it('asks before saving into an old account that was never marked onboarded', async () => {
+    session.set('id', 7);
+    auth.createdAt = '2025-06-01T00:00:00Z';
+    h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
+    render(Page);
+    expect(await screen.findByRole('button', { name: /Save and go to my feed/ })).toBeTruthy();
+    expect(h.api.putResume).not.toHaveBeenCalled();
+    expect(h.profileStore.save).not.toHaveBeenCalled();
+  });
+
   it('carries a draft into the account a sign-up from it just created', async () => {
     session.set('id', 7);
     h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
@@ -372,6 +390,7 @@ describe('/onboarding', () => {
   it('only offers to save a fresh sign-up into an account that existed before', async () => {
     session.set('id', 7);
     auth.completedAt = '2026-01-01T00:00:00Z';
+    auth.createdAt = '2025-06-01T00:00:00Z';
     h.draft.load.mockResolvedValue(draftOf({ pendingSignupAt: Date.now() - 60_000 }));
     render(Page);
     expect(await screen.findByRole('button', { name: 'Save and go to my feed' })).toBeTruthy();
@@ -445,6 +464,33 @@ describe('/onboarding', () => {
     await answerAll();
     await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
     await waitFor(() => expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1'));
+  });
+
+  it('keeps where the visitor was headed through the sign-in page', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    await dropCv();
+    await answerAll();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
+    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
+    const signin = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    const back = new URL(signin.searchParams.get('returnTo') ?? '', 'http://x');
+    expect(back.pathname).toBe('/onboarding');
+    expect(back.searchParams.get('returnTo')).toBe('/jobs/job-1');
+  });
+
+  it('stays where the visitor went if they leave while saving', async () => {
+    session.set('id', 7);
+    let finish: (v: unknown) => void = () => {};
+    h.api.putResume.mockReturnValue(new Promise((r) => (finish = r)));
+    const { unmount } = render(Page);
+    await dropCv();
+    await answerAll();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save and go to my feed' }));
+    unmount();
+    finish({ enabled: true, present: true });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.gotoPath).not.toHaveBeenCalled();
   });
 
   it('shows no match figures for a CV with no recognised skills', async () => {

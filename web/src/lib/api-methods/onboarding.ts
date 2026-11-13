@@ -1,4 +1,5 @@
 import type { Http } from '../api-core';
+import type { components } from '../generated/api.js';
 import type { OnboardingMatches, OnboardingParse } from '../types';
 import { ApiError, jsonBody, RESUME_MAX_BYTES, RESUME_MAX_MB, resumeInit } from '../api-core';
 
@@ -28,7 +29,10 @@ export function onboardingApi({ request, requestData }: Http) {
   /** The top open jobs for a skill list under `query` — a jobs-search query string with
    *  the ordinary filter param names — ranked by skill match. Public. */
   function onboardingMatches(skills: string[], query: string): Promise<OnboardingMatches> {
-    return request<OnboardingMatches>('/api/v1/onboarding/matches', jsonBody('POST', { skills, query }));
+    return request<OnboardingMatches>(
+      '/api/v1/onboarding/matches',
+      jsonBody('POST', { skills, query } satisfies components['schemas']['OnboardingMatchesRequest']),
+    );
   }
 
   return { onboardingParseCv, onboardingMatches };

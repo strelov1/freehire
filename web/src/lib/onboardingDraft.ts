@@ -43,14 +43,21 @@ export type ArrivalAction = 'restore' | 'carry' | 'offer-save' | 'discard';
  *  a new account, merely offered (an explicit save) to one that existed before. */
 export function arrivalAction(
   draft: OnboardingDraft,
-  ctx: { authenticated: boolean; onboardedBefore: boolean; now: number },
+  ctx: { authenticated: boolean; accountCreatedAt: number | null; now: number },
 ): ArrivalAction {
-  const fresh = draft.pendingSignupAt != null && ctx.now - draft.pendingSignupAt <= PENDING_SIGNUP_MS;
-  if (!fresh) return 'discard';
+  const marked = draft.pendingSignupAt;
+  if (marked == null || ctx.now - marked > PENDING_SIGNUP_MS) return 'discard';
   if (!ctx.authenticated) return 'restore';
   if (currentQuestion(draft.answers) !== null) return 'discard';
-  return ctx.onboardedBefore ? 'offer-save' : 'carry';
+  // New means created by this sign-up — after the visitor left for /signin. Not "never
+  // onboarded": migration 0207 cleared that mark for existing accounts too.
+  const createdBySignup = ctx.accountCreatedAt != null && ctx.accountCreatedAt >= marked - CLOCK_SKEW_MS;
+  return createdBySignup ? 'carry' : 'offer-save';
 }
+
+/** How far the browser's clock may run ahead of the server's when comparing the sign-up
+ *  mark (browser time) with the account's creation (server time). */
+const CLOCK_SKEW_MS = 2 * 60 * 1000;
 
 /** The one-record store the draft lives in. */
 export interface DraftBackend {
