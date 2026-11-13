@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { Badge, Card, EmptyState } from '#lib/ui/index.js';
+  import { Badge, Card, EmptyState, onImageError } from '#lib/ui/index.js';
   import {
     companyLabel,
     emptyMentorFilters,
@@ -187,9 +187,7 @@
                       alt=""
                       loading="lazy"
                       class="border-border size-10 shrink-0 rounded-full border object-cover"
-                      onerror={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
+                      {@attach onImageError((img) => (img.style.display = 'none'))}
                     />
                   {/if}
                   <div>
