@@ -351,7 +351,9 @@ func TestMCPAuthorizationSpec_AuthorizeRefusesPlainPKCE(t *testing.T) {
 		"state": {"s"}, "code_challenge": {"abc"}, "code_challenge_method": {"plain"},
 	}
 	resp := get(origin + "/api/v1/oauth/authorize?" + query.Encode())
-	if resp.StatusCode < 400 || resp.StatusCode >= 500 {
-		t.Fatalf("code_challenge_method=plain: status %d, want a 4xx refusal: %s", resp.StatusCode, resp.Body)
+	// 400 naming the method — not any 4xx: a missing or misrouted /authorize answers 404, and an
+	// unknown client 400 for another reason; neither proves PKCE refused plain.
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(resp.Body), "code_challenge_method") {
+		t.Fatalf("code_challenge_method=plain: status %d %s, want 400 refusing the method", resp.StatusCode, resp.Body)
 	}
 }
