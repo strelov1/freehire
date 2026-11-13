@@ -436,9 +436,9 @@ WITH existing AS MATERIALIZED (
            (j.closed_at IS NOT NULL AND (j.application_deadline IS NULL
                                          OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
-    LEFT JOIN job_activity a ON a.job_id = j.id
+    JOIN job_activity a ON a.job_id = j.id
     WHERE j.source = $1 AND j.external_id = $2
-    FOR NO KEY UPDATE OF j
+    FOR NO KEY UPDATE OF j, a
 ), touched AS (
     UPDATE jobs
     SET closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
@@ -515,11 +515,16 @@ type TouchJobRow struct {
 // FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
 // search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
 // own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
-// lock does not, and it is all this statement needs. Only the jobs tuple is locked here, and the
-// activity row is taken after it (jobs first, the global lock order). last_seen_at, the previous
-// stamp the withheld-then-seen requeue compares, is job_activity's, read through a LEFT JOIN that
-// does not lock it. This is the FULL touch: the ordinary re-listing of an open, unexpired posting
-// takes TouchOpenJob and never reaches the jobs tuple at all.
+// lock does not, and it is all this statement needs. The jobs tuple is locked first and the
+// activity row second (the global lock order), and BOTH before any write of this statement: the
+// state trigger takes the activity row only when a fenced column flips, so an unchanged open
+// posting would otherwise queue its search_outbox entry (returned_queued) while holding no activity
+// lock, and a TouchOpenJob that holds the activity row and waits for that entry would deadlock with
+// the ObserveJobActivity this caller runs next. last_seen_at, the previous stamp the
+// withheld-then-seen requeue compares, is read from the locked activity row. A job with no
+// activity row matches nothing (the insert trigger gives every job one; ObserveJobActivity treats
+// its absence as an error as well). This is the FULL touch: the ordinary re-listing of an open,
+// unexpired posting takes TouchOpenJob and never reaches the jobs tuple at all.
 // A touch writes no content, so a posting closed under an older dictionary would reopen
 // carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
 // deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
