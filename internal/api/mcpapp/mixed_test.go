@@ -144,9 +144,15 @@ func (h headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(r)
 }
 
-func mixedInstructionsOver(t *testing.T, headers headerTransport) string {
+func mixedInstructionsOver(t *testing.T, headers headerTransport, names ...string) string {
 	t.Helper()
-	tools := []assistant.Tool{{Name: "get_profile", Schema: map[string]any{"type": "object"}}}
+	if len(names) == 0 {
+		names = []string{"get_profile"}
+	}
+	var tools []assistant.Tool
+	for _, name := range names {
+		tools = append(tools, assistant.Tool{Name: name, Schema: map[string]any{"type": "object"}})
+	}
 	srv := httptest.NewServer(MixedHandler(tools, testOrigin, readerThatFinds(t)))
 	defer srv.Close()
 	transport := &mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: headers}}
@@ -187,5 +193,15 @@ func TestMixedInstructions_OtherHostsDoNotHearOfTheCLI(t *testing.T) {
 				t.Fatalf("instructions mention the CLI: %q", got)
 			}
 		})
+	}
+}
+
+// The account paragraphs end in a full stop with no trailing space when report_problem is
+// served (every OAuth session), so the CLI sentence must bring its own separator.
+func TestMixedInstructions_TheCLISentenceIsASeparateSentence(t *testing.T) {
+	got := mixedInstructionsOver(t, headerTransport{"User-Agent": "freehire-cli/1.4.0", AccountUserIDHeader: "42"},
+		"get_profile", "report_problem")
+	if !strings.HasSuffix(got, ". "+cliSessionInstructions) {
+		t.Fatalf("CLI sentence is not separated from the one before it: %q", got[max(0, len(got)-len(cliSessionInstructions)-40):])
 	}
 }
