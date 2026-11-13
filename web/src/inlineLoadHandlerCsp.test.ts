@@ -17,11 +17,8 @@ describe('no SSR inline load/error handlers', () => {
     expect(SOURCES.length).toBeGreaterThan(100);
   });
 
-  it('uses onImageError instead of onload={…}/onerror={…} in markup', () => {
-    const offenders = SOURCES.filter((file) => {
-      const markup = readFileSync(join(ROOT, file), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
-      return /\son(?:load|error)=\{/.test(markup);
-    });
+  it('uses onImageError instead of onload={…}/onerror={…}', () => {
+    const offenders = SOURCES.filter((file) => /\son(?:load|error)=\{/.test(readFileSync(join(ROOT, file), 'utf8')));
     expect(offenders).toEqual([]);
   });
 });
