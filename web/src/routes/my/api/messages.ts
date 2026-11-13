@@ -20,6 +20,8 @@ export const messages = defineMessages(
     usageNote:
       'Requests made with your API keys or connected agents, by UTC day. Requests the rate limit turned away are not counted. Updated every minute.',
     usageError: 'Could not load usage.',
+    planError: 'Could not load your API plan.',
+    retry: 'Try again',
     docs: 'API reference',
   },
   {
@@ -42,6 +44,8 @@ export const messages = defineMessages(
       usageNote:
         'Запросы с ваших API-ключей и подключённых агентов по дням (UTC). Запросы, отклонённые лимитом, не считаются. Обновляется раз в минуту.',
       usageError: 'Не удалось загрузить статистику.',
+      planError: 'Не удалось загрузить ваш API-тариф.',
+      retry: 'Повторить',
       docs: 'Документация API',
     },
   },

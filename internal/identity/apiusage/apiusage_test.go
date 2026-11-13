@@ -84,3 +84,46 @@ func TestFailedFlushKeepsCountsForTheNext(t *testing.T) {
 		t.Fatalf("got %v, want [2 1]", got)
 	}
 }
+
+// blockingStore holds a flush until its context ends, then fails it, the way a write
+// cut off by shutdown does.
+type blockingStore struct {
+	started chan struct{}
+	fakeStore
+}
+
+func (b *blockingStore) AddAPIUsage(ctx context.Context, arg db.AddAPIUsageParams) error {
+	if b.started != nil {
+		close(b.started)
+		b.started = nil
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return b.fakeStore.AddAPIUsage(ctx, arg)
+}
+
+// A flush cut off when Run is stopped puts its counts back before Run returns, so the
+// final flush after Run has returned writes them.
+func TestStoppedRunLeavesInFlightCountsForTheFinalFlush(t *testing.T) {
+	started := make(chan struct{})
+	store := &blockingStore{started: started}
+	c := New(store)
+	c.Record(1, false, time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.Run(ctx, time.Millisecond)
+	}()
+	<-started
+	cancel()
+	<-done
+
+	if err := c.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := totals(store.calls)["2026-11-13/1"]; got != [2]int64{1, 0} {
+		t.Fatalf("got %v, want [1 0]", got)
+	}
+}

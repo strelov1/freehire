@@ -29,8 +29,9 @@
   const active = $derived(activeRouteTab(page.url.pathname, TABS, 'usage'));
   const tabs = $derived(TABS.map((tab) => ({ ...tab, label: s.tabs[tab.id], href: resolve(tab.href) })));
   const plan = new AsyncData<ApiPlan | null>(null);
+  const loadPlan = () => void plan.run(() => api.getApiPlan());
   $effect(() => {
-    if (isAuthenticated()) void plan.run(() => api.getApiPlan());
+    if (isAuthenticated()) loadPlan();
   });
 
   const untilLine = (p: ApiPlan) => {
@@ -54,6 +55,13 @@
       <span class="text-sm text-muted-foreground">{untilLine(plan.value)}</span>
       <a href={resolve('/my/plan')} class="ml-auto text-sm font-medium underline-offset-4 hover:underline"
         >{s.manageBilling}</a
+      >
+    </section>
+  {:else if plan.status === 'error'}
+    <section class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border p-4" role="alert">
+      <p class="text-sm text-destructive">{s.planError}</p>
+      <button type="button" class="text-sm font-medium underline-offset-4 hover:underline" onclick={loadPlan}
+        >{s.retry}</button
       >
     </section>
   {:else if plan.status === 'ready'}

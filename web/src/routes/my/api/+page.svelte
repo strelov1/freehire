@@ -14,11 +14,18 @@
   const usage = new AsyncData<ApiUsageDay[]>([]);
   // The server writes counts once a minute, so an open page re-reads on the same beat.
   let now = $state(new Date());
+  // Until one read succeeds the figures are unknown, not zero; a later failed refresh keeps
+  // the last good ones (AsyncData keeps its value on error).
+  let loaded = $state(false);
   $effect(() => {
     if (!isAuthenticated()) return;
     const load = () => {
       now = new Date();
-      void usage.run(() => api.getApiUsage());
+      void usage
+        .run(() => api.getApiUsage())
+        .then(() => {
+          if (usage.status === 'ready') loaded = true;
+        });
     };
     load();
     const timer = setInterval(load, 60_000);
@@ -38,15 +45,15 @@
     {#each [[s.today, today], [s.month, total], [s.errorCount, errors]] as const as [label, value] (label)}
       <div class="flex flex-col gap-1 rounded-xl border border-border p-4">
         <span class="text-sm text-muted-foreground">{label}</span>
-        <span class="text-2xl font-semibold tabular-nums">{value.toLocaleString(locale())}</span>
+        <span class="text-2xl font-semibold tabular-nums">{loaded ? value.toLocaleString(locale()) : '—'}</span>
       </div>
     {/each}
   </div>
 
   <section class="flex flex-col gap-3 rounded-xl border border-border p-4">
-    {#if usage.status === 'error'}
+    {#if usage.status === 'error' && !loaded}
       <p class="text-sm text-destructive" role="alert">{s.usageError}</p>
-    {:else if usage.status === 'ready' || usage.value.length > 0}
+    {:else if loaded}
       <SignupsBars points={total > 0 ? series : []} label={s.chartLabel} empty={s.chartEmpty} />
     {/if}
     <p class="text-xs text-muted-foreground">{s.usageNote}</p>

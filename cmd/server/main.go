@@ -365,10 +365,17 @@ func runServer(cfg config.Settings) error {
 		agentViews = agentViewWriter
 	}
 
-	// Per-account daily API request counts for the account's API page; flushed once more
-	// after app.Shutdown below.
+	// Per-account daily API request counts for the account's API page. The flush loop has
+	// its own context so shutdown can stop it, wait for an in-flight flush to settle, and
+	// only then flush the rest (below).
 	apiUsage := apiusage.New(db.New(pool))
-	go apiUsage.Run(ctx, apiUsageFlushInterval)
+	usageCtx, stopUsage := context.WithCancel(context.Background())
+	defer stopUsage()
+	usageDone := make(chan struct{})
+	go func() {
+		defer close(usageDone)
+		apiUsage.Run(usageCtx, apiUsageFlushInterval)
+	}()
 
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
@@ -467,16 +474,21 @@ func runServer(cfg config.Settings) error {
 	}
 	log.Println("shutting down...")
 
-	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
-		return fmt.Errorf("shutdown: %w", err)
-	}
-	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
-	agentViewWriter.Close()
+	shutdownErr := app.ShutdownWithTimeout(10 * time.Second)
+	// The usage counts are flushed whether or not shutdown finished in time: what is
+	// buffered is already counted. Run is stopped first so its flush cannot land after this one.
+	stopUsage()
+	<-usageDone
 	flushCtx, cancelFlush := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFlush()
 	if err := apiUsage.Flush(flushCtx); err != nil {
 		log.Printf("apiusage: final flush: %v", err)
 	}
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown: %w", shutdownErr)
+	}
+	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
+	agentViewWriter.Close()
 	return nil
 }
 
