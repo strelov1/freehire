@@ -87,3 +87,13 @@ func TestSourceTypesLeavesUnclassifiedSourcesBlank(t *testing.T) {
 		}
 	}
 }
+
+func TestEmployerURL(t *testing.T) {
+	publishes := map[string]bool{"greenhouse": true}
+	if got := EmployerURL(publishes, "adzuna", "https://adzuna.com/land/ad/1"); got != "" {
+		t.Errorf("aggregator URL = %q, want empty", got)
+	}
+	if got := EmployerURL(publishes, "greenhouse", "https://boards.greenhouse.io/x/jobs/1"); got == "" {
+		t.Error("ATS URL withheld")
+	}
+}

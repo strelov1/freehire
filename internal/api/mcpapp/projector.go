@@ -8,7 +8,6 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
-	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -68,27 +67,8 @@ func (p Projector) JobSummary(j jobview.Job) JobSummary {
 		Summary:         preview(j.Description),
 		Source:          j.Source,
 		URL:             p.pageURL("/jobs/", j.PublicSlug),
-		OfficialJobURL:  p.officialJobURL(j),
+		OfficialJobURL:  sources.EmployerURL(p.publishesEmployerURL, j.Source, j.URL),
 	}
-}
-
-// officialJobURL is the employer's own page for the posting, or nothing where we cannot
-// vouch that the stored URL is one.
-//
-// Two rules, and both were found by a test rather than by reading. The provider gate comes
-// first: an aggregator's stored URL points at the aggregator, so publishing it as the
-// employer's own is a claim we cannot make — and this channel renders it as a link a person
-// will click expecting the employer. The source name still travels either way, so
-// attribution survives; only the claim is withheld.
-//
-// Then the tracking parameter is stripped. jobview stamps utm_source on every URL it
-// serves, and this field is what a consumer deduplicates and domain-verifies against, so
-// the tag defeats both purposes. Our own `url` keeps it.
-func (p Projector) officialJobURL(j jobview.Job) string {
-	if !p.publishesEmployerURL[j.Source] {
-		return ""
-	}
-	return outboundurl.Untag(j.URL)
 }
 
 // JobDetail projects one posting in full. form is its captured application form, nil where

@@ -3,6 +3,7 @@ package mcpapp
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -35,13 +36,13 @@ const (
 	toolFilterValues = "list_filter_values"
 )
 
-// readOnly is every tool's annotation block, written once.
+// ReadOnly is every tool's annotation block, written once.
 //
 // All four read, none writes, and all reach a catalogue that changes outside the
 // conversation. Incorrect annotation of exactly these hints is a named rejection reason in
 // OpenAI's submission guidelines, so sharing one value is not merely tidy: it removes the
 // copy-paste from which a write tool would inherit a read-only claim.
-func readOnly() *mcp.ToolAnnotations {
+func ReadOnly() *mcp.ToolAnnotations {
 	destructive, openWorld := false, true
 	return &mcp.ToolAnnotations{
 		ReadOnlyHint:    true,
@@ -80,7 +81,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 			"few results come back, loosen one constraint at a time and say which. Present " +
 			"results as a table of title, company, location, posted date and link (the employer's " +
 			"posting and ours), naming the source.",
-		Annotations: readOnly(),
+		Annotations: ReadOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {
 		out, err := r.SearchJobs(ctx, in)
@@ -99,7 +100,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 			"applications, and whether the posting still looks live — when it was last seen " +
 			"open, a reality class, and any observed signs that it is not being filled. A closed " +
 			"posting carries closed_at.",
-		Annotations: readOnly(),
+		Annotations: ReadOnly(),
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in JobDetailInput) (*mcp.CallToolResult, JobResult, error) {
 		out, err := r.JobDetail(ctx, in.Slug)
@@ -115,7 +116,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 		Description: "Read what freehire holds about one employer by the slug a result " +
 			"carries: what they do, which industries they are in, where they are based, and how " +
 			"many postings they have open.",
-		Annotations: readOnly(),
+		Annotations: ReadOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CompanyDetailInput) (*mcp.CallToolResult, CompanyResult, error) {
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
@@ -196,4 +197,15 @@ func publicErrorCode(err error) string {
 		return "invalid_request"
 	}
 	return observability.ErrorCode(err)
+}
+
+// StatelessHandler serves a freshly built MCP server per request over the streamable
+// transport. Stateless because a stateful session derives its tool contexts from the
+// `initialize` request, whose fasthttp RequestCtx the Fiber adaptor recycles once that
+// request ends: a later call would read another request's user values, and agent view
+// counts would be attributed to the wrong request or lost. Every tool here is a request in,
+// an answer out, so statelessness costs nothing.
+func StatelessHandler(newServer func() *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return newServer() },
+		&mcp.StreamableHTTPOptions{Stateless: true})
 }

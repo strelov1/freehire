@@ -19,7 +19,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/agentview"
-	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -220,18 +219,12 @@ func (h *assistantHandlers) shortlistDiscoveryTools(sess assistant.Session, show
 			if err != nil {
 				return nil, err
 			}
-			if len(result.Hits) > 0 {
-				if h.search.descriptions == nil {
-					return nil, fmt.Errorf("full vacancy descriptions are not available")
-				}
-				if err := h.search.hydrateDescriptions(ctx, result.Hits); err != nil {
-					return nil, err
-				}
+			if len(result.Hits) > 0 && h.search.descriptions == nil {
+				return nil, fmt.Errorf("full vacancy descriptions are not available")
 			}
-			jobs := make([]jobview.Job, len(result.Hits))
-			for i, hit := range result.Hits {
-				hit.Description = formatDescription(hit.Description, "markdown")
-				jobs[i] = hit.Job
+			jobs, err := h.search.markdownJobs(ctx, result.Hits)
+			if err != nil {
+				return nil, err
 			}
 			payload := map[string]any{"total": result.Total, "offset": in.Offset, "limit": limit, "jobs": jobs}
 			encoded, err := json.Marshal(payload)

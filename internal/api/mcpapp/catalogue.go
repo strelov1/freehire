@@ -18,7 +18,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Description: "Find employers in freehire's catalogue by name or by where they hire, " +
 				"with how many postings each has open. Use when the question is about a company " +
 				"rather than about a role.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in CompanySearchInput) (*mcp.CallToolResult, SearchCompaniesResult, error) {
 			return toolResult(r.SearchCompanies(ctx, in))
@@ -34,7 +34,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Description: "Check whether postings are still open, by the slugs search results carry — " +
 				"up to 50 per call. Use before acting on a saved shortlist: each posting answers " +
 				"open, closed or not_found, with when it closed or was last seen live.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in CheckJobsOpenInput) (*mcp.CallToolResult, JobsOpenResult, error) {
 			check, unchecked := openCheckSlugs(in.Slugs)
@@ -51,7 +51,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Title: "Search jobs (research)",
 			Description: "Search freehire's IT job postings by free text. Returns matching postings " +
 				"as {id, title, url}.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchQuery) (*mcp.CallToolResult, ResearchResults, error) {
 			found, err := r.SearchJobs(ctx, SearchInput{Query: in.Query})
@@ -67,7 +67,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Title: "Read one job posting (research)",
 			Description: "Read one posting in full by an id search returned: its full text, " +
 				"the employer, the board it came from and whether it still looks live.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchID) (*mcp.CallToolResult, ResearchDocument, error) {
 			job, err := r.JobDetail(ctx, in.ID)
@@ -84,7 +84,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Description: "Postings most similar to one posting, by its slug, nearest first — for " +
 				"\"show me more like this\". Empty for the newest postings, whose neighbours are " +
 				"not computed yet.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in SimilarJobsInput) (*mcp.CallToolResult, SimilarJobsResult, error) {
 			return toolResult(r.SimilarJobs(ctx, in.Slug, similarLimit(in.Limit)))
@@ -100,7 +100,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Description: "Salary percentiles (25th, median, 75th) from open postings that state " +
 				"pay, scoped by role family, seniority and country, with the sample size behind " +
 				"each figure. Currencies and pay periods are reported separately, never converted.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in SalaryInput) (*mcp.CallToolResult, SalaryStatsResult, error) {
 			return toolResult(r.SalaryStats(ctx, in))
@@ -116,7 +116,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 			Description: "How many open postings match a set of filters, and their most common " +
 				"role families, seniorities, skills, work modes, countries and regions. Takes the " +
 				"same filters as a job search.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, MarketStatsResult, error) {
 			return toolResult(r.MarketStats(ctx, in))
@@ -133,7 +133,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 				"seniorities, sources, countries and the rest — each with how many open " +
 				"postings carry it, most common first. A value not listed matches no posting. " +
 				"Use it before filtering on a value you are not sure of.",
-			Annotations: readOnly(),
+			Annotations: ReadOnly(),
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in FilterValuesInput) (*mcp.CallToolResult, FilterValuesResult, error) {
 			counts, err := r.FacetCounts(ctx)

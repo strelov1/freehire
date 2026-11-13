@@ -16,7 +16,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/api/mcpapp"
-	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -330,25 +329,14 @@ func (h *assistantHandlers) searchJobs() assistant.Tool {
 			}
 
 			limit, offset := toolPage(in.Limit, in.Offset)
-
-			res, err := h.search.search.Search(ctx, search.SearchParams{
-				Query:  in.Query,
-				Filter: search.FilterFromValues(vals),
-				Sort:   defaultSort(in.Query),
-				Limit:  limit,
-				Offset: offset,
-			})
+			vals.Set("q", in.Query)
+			res, _, err := runAgentSearch(ctx, h.search.search, vals, limit, offset, false)
 			if err != nil {
 				return nil, searchToolError(err)
 			}
-			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
+			jobs, err := h.search.markdownJobs(ctx, res.Hits)
+			if err != nil {
 				return nil, err
-			}
-			agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
-			jobs := make([]jobview.Job, len(res.Hits))
-			for i, hit := range res.Hits {
-				hit.Description = formatDescription(hit.Description, "markdown")
-				jobs[i] = hit.Job
 			}
 			return map[string]any{"total": res.Total, "limit": limit, "offset": offset, "jobs": jobs}, nil
 		},
@@ -406,14 +394,11 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 			if in.Slug == "" {
 				return nil, assistant.BadArg("slug", fiber.NewError(fiber.StatusBadRequest, "slug is required"))
 			}
-			job, err := agentJobBySlug(ctx, h.queries, in.Slug)
+			_, view, err := loadAgentJob(ctx, func(ctx context.Context, slug string) (db.Job, error) {
+				return agentJobBySlug(ctx, h.queries, slug)
+			}, nil, in.Slug)
 			if err != nil {
 				return nil, lookupMiss(err, jobNotFound(in.Slug).Error())
-			}
-			agentview.Record(ctx, agentview.KindDetail, []int64{job.ID})
-			view, err := jobview.FromRow(job)
-			if err != nil {
-				return nil, err
 			}
 			view.Description = formatDescription(view.Description, "markdown")
 			return view, nil

@@ -163,9 +163,9 @@ func MixedHandler(tools []assistant.Tool, origin string, reader Reader) http.Han
 			userID = parsed
 		}
 		viaCLI := strings.HasPrefix(r.Header.Get("User-Agent"), "freehire-cli/")
-		mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		StatelessHandler(func() *mcp.Server {
 			return newMixedServer(tools, userID, origin, reader, viaCLI)
-		}, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
+		}).ServeHTTP(w, r)
 	})
 }
 
