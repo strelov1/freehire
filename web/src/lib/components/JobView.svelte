@@ -1391,14 +1391,10 @@
             class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
           >
             <span class="hidden lg:inline">Find people</span>
-            <!-- Opens LinkedIn in a new tab: the arrow badge on the logo says the reader leaves the site. -->
-            <span class="relative inline-flex shrink-0">
+            <!-- Opens LinkedIn in a new tab: the arrow beside the logo says the reader leaves the site. -->
+            <span class="inline-flex shrink-0 items-center gap-0.5">
               <ProviderIcon provider="linkedin" class="size-4 lg:size-3.5" />
-              <ExternalLink
-                class="absolute -top-1 -right-1 hidden size-2.5 rounded-sm bg-background lg:block"
-                stroke-width={3}
-                aria-hidden="true"
-              />
+              <ExternalLink class="hidden size-2 -translate-y-1 self-start lg:inline" aria-hidden="true" />
             </span>
           </a>
         </div>

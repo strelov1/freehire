@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
+  import { onImageError } from './image-error.js';
 
   let {
     name,
@@ -68,15 +69,6 @@
     void src;
     failed = false;
   });
-
-  // SSR sends the raw <img>, so the browser fetches it before hydration wires `onerror`. When
-  // the src 404s (a genuine miss), that error event fires before the handler exists and is
-  // lost — leaving an empty broken image until a reload. On mount, an already-complete image
-  // with no intrinsic width is that missed failure, so fall back to the initials render
-  // straight away.
-  function catchMissedError(node: HTMLImageElement) {
-    if (node.complete && node.naturalWidth === 0) failed = true;
-  }
 </script>
 
 {#if src && !failed}
@@ -88,8 +80,7 @@
     alt={shape === 'square' ? '' : (name ?? '')}
     loading="lazy"
     class={cn('shrink-0', shapeClass, 'object-cover', sizes[size], className)}
-    onerror={() => (failed = true)}
-    {@attach catchMissedError}
+    {@attach onImageError(() => (failed = true))}
   />
 {:else if !name && fallbackIcon}
   <div

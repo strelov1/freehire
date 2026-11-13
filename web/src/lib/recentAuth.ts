@@ -5,7 +5,7 @@ const returnKey = 'freehire.reauth.return';
 const draftKey = 'freehire.reauth.draft';
 const expiryKey = 'freehire.reauth.expires';
 
-export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/account';
+export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/api/keys' | '/my/account';
 
 // This module used to be reachable only from a click handler, so it could touch
 // `sessionStorage` bare. `recentAuthExpiry()` broke that: it is read at component INIT,
@@ -197,6 +197,7 @@ export async function completeProviderReauthentication(code: string): Promise<Re
   const storedTarget = readSession(returnKey);
   forgetSession(returnKey);
   // '/my/api-keys' is what a tab opened before API keys moved under Integrations stored.
+  if (storedTarget === '/my/api/keys') return storedTarget;
   if (storedTarget === '/my/integrations/api-keys' || storedTarget === '/my/api-keys') {
     return '/my/integrations/api-keys';
   }

@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -162,6 +163,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	meGroup.Post("/api-keys", mw.cookie, recent, contract)
 	meGroup.Get("/api-keys", mw.cookie, contract)
 	meGroup.Get("/api-plan", mw.cookie, contract)
+	meGroup.Get("/api-usage", mw.cookie, contract)
 	meGroup.Delete("/api-keys/:id", mw.cookie, recent, contract)
 	// MCP OAuth "Connected devices": list is a plain read (same gating as
 	// ListAPIKeys); revoke is recent-auth-gated, same reasoning as RevokeAPIKey.
@@ -346,6 +348,9 @@ type userResponse struct {
 	// UserHasAgentCredential. The site's "connect your agent" strip stops asking once it
 	// is true; riding along here lets the server leave the strip out of the first paint.
 	AgentConnected bool `json:"agent_connected"`
+	// APITier is the API product the account holds (billing.APITierOf), separate from
+	// Tier: the account area shows its API workspace only to a holder.
+	APITier billing.APITier `json:"api_tier"`
 }
 
 type credentials struct {
@@ -369,16 +374,16 @@ func toUserResponse(u accounts.User) userResponse {
 
 // toUserResponseWithTier is what every response handler calls: toUserResponse plus the
 // caller's resolved tier and agent connection, riding along on the same request that
-// already powers currentUser() on every page — see resolveTier.
+// already powers currentUser() on every page — see resolveTiers.
 func (h *authHandlers) toUserResponseWithTier(ctx context.Context, u accounts.User) userResponse {
 	resp := toUserResponse(u)
-	resp.Tier = h.resolveTier(ctx, u.ID)
+	resp.Tier, resp.APITier = h.resolveTiers(ctx, u.ID)
 	resp.AgentConnected = h.resolveAgentConnected(ctx, u.ID)
 	return resp
 }
 
 // resolveAgentConnected degrades to false on a read failure or unset queries, for the
-// reason resolveTier gives: the worst it costs is the strip asking once more.
+// reason resolveTiers gives: the worst it costs is the strip asking once more.
 func (h *authHandlers) resolveAgentConnected(ctx context.Context, userID int64) bool {
 	if h.queries == nil {
 		return false
@@ -391,22 +396,23 @@ func (h *authHandlers) resolveAgentConnected(ctx context.Context, userID int64) 
 	return connected
 }
 
-// resolveTier reads one indexed row (the same read plan.Store.Tier performs on every
-// metered action) and resolves it via plan.TierOf — never a second resolution path. A read
-// failure, or queries being unset (several handler unit tests build an authHandlers with
-// only the fields their own code path touches), degrades to plan.TierFree and is logged
-// rather than failing the response: nothing about signing in, registering, or reading one's
-// own account may depend on a badge rendering correctly.
-func (h *authHandlers) resolveTier(ctx context.Context, userID int64) plan.Tier {
+// resolveTiers reads one indexed row holding every entitlement and resolves the plan via
+// plan.TierOf and the API product via billing.APITierOf — never a second resolution path.
+// A read failure, or queries being unset (several handler unit tests build an
+// authHandlers with only the fields their own code path touches), degrades to free and
+// no API product and is logged rather than failing the response: nothing about signing
+// in, registering, or reading one's own account may depend on a badge rendering correctly.
+func (h *authHandlers) resolveTiers(ctx context.Context, userID int64) (plan.Tier, billing.APITier) {
 	if h.queries == nil {
-		return plan.TierFree
+		return plan.TierFree, billing.APITierNone
 	}
-	untils, err := h.queries.GetPlanUntils(ctx, userID)
+	row, err := h.queries.GetUserAPIEntitlement(ctx, userID)
 	if err != nil {
 		log.Printf("auth: resolving tier for user %d: %v", userID, err)
-		return plan.TierFree
+		return plan.TierFree, billing.APITierNone
 	}
-	return plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now().UTC())
+	now := time.Now().UTC()
+	return plan.TierOf(row.ProUntil.Time, row.UltraUntil.Time, now), apiPlanFrom(row, now).Tier
 }
 
 // UpdateTimezone sets the caller's IANA timezone name. Cookie-only.
@@ -442,7 +448,8 @@ func authUserOut(r userResponse) apigen.AuthUser {
 		EmailVerified: r.EmailVerified, HasPassword: r.HasPassword, CreatedAt: nilDateTime(r.CreatedAt),
 		Timezone: nilString(r.Timezone), Language: r.Language,
 		OnboardingCompletedAt: nilDateTime(r.OnboardingCompletedAt),
-		Tier:                  apigen.AuthUserTier(r.Tier), AgentConnected: r.AgentConnected}
+		Tier:                  apigen.AuthUserTier(r.Tier), AgentConnected: r.AgentConnected,
+		APITier: apigen.AuthUserAPITier(r.APITier)}
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving

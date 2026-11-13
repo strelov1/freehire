@@ -54,6 +54,9 @@ export type PlansMatrix = components['schemas']['Plans'];
 /** The caller's paid API product entitlement (`GET /api/v1/me/api-plan`). */
 export type ApiPlan = components['schemas']['ApiKeyPlan'];
 
+/** The account's API requests on one UTC day (`GET /api/v1/me/api-usage`). */
+export type ApiUsageDay = components['schemas']['ApiUsageDay'];
+
 /** What the caller is paying and what has been taken. Read through to the payment provider
  *  on every request rather than mirrored: a receipt list that has quietly missed a refund is
  *  worse than no receipt list.

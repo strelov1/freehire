@@ -5,7 +5,7 @@
   import { companyLabel } from '#lib/mentorship.js';
   import { errorMessage, formatDate } from '#lib/utils.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import { Badge, Button, Card } from '#lib/ui/index.js';
+  import { Badge, Button, Card, onImageError } from '#lib/ui/index.js';
   import type { PendingMentorProfile } from '#lib/types.js';
   import { SvelteSet } from 'svelte/reactivity';
   import States from './States.svelte';
@@ -121,7 +121,7 @@
                     src={`/api/v1/mentorship/profiles/${profile.id}/photo`}
                     alt=""
                     class="h-16 w-16 shrink-0 rounded-full object-cover"
-                    onerror={() => photoFailed.add(profile.id)}
+                    {@attach onImageError(() => photoFailed.add(profile.id))}
                   />
                 {/if}
                 <div class="flex flex-col gap-2">

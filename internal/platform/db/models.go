@@ -39,6 +39,13 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type ApiUsageDaily struct {
+	UserID   int64       `json:"user_id"`
+	Day      pgtype.Date `json:"day"`
+	Requests int64       `json:"requests"`
+	Errors   int64       `json:"errors"`
+}
+
 type AppleGrant struct {
 	ID                     pgtype.UUID        `json:"id"`
 	UserID                 int64              `json:"user_id"`

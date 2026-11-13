@@ -9,7 +9,13 @@
   // for signups, one bar per day instead of an added/removed pair. Hand-built SVG
   // scaled to its container width, no charting dependency, matching the site's
   // other bespoke charts. Geometry comes from the pure buildSignupsChart model.
-  let { points }: { points: UserGrowthPoint[] } = $props();
+  // `label` names the series (axis, tooltip, screen-reader list); `empty` is shown with no
+  // points. The defaults are the signups chart's own copy.
+  let {
+    points,
+    label = 'New members',
+    empty = 'No members yet.',
+  }: { points: Pick<UserGrowthPoint, 'date' | 'new'>[]; label?: string; empty?: string } = $props();
 
   const model = $derived(buildSignupsChart(points));
   const ticks = $derived(pickTickIndices(model.bars.length));
@@ -73,13 +79,13 @@
 </script>
 
 {#if model.bars.length === 0}
-  <p class="py-16 text-center text-sm text-muted-foreground">No members yet.</p>
+  <p class="py-16 text-center text-sm text-muted-foreground">{empty}</p>
 {:else}
   <figure class="flex flex-col gap-3">
     <div
       class="relative"
       role="img"
-      aria-label="New members per day"
+      aria-label={label}
       bind:this={chartEl}
       onpointermove={onMove}
       onpointerleave={() => (hovered = null)}
@@ -148,7 +154,7 @@
           <div class="mb-1 font-medium text-foreground">{fullDate(hoveredBar.date)}</div>
           <div class="flex items-center gap-1.5 text-muted-foreground">
             <span class="inline-block h-2 w-2 rounded-sm bg-primary"></span>
-            New members <span class="ml-auto font-medium text-foreground">{hoveredBar.new.toLocaleString()}</span>
+            {label} <span class="ml-auto font-medium text-foreground">{hoveredBar.new.toLocaleString()}</span>
           </div>
         </div>
       {/if}
@@ -162,7 +168,8 @@
             onfocus={() => showBar(i)}
             onkeydown={onValueKey}
           >
-            {fullDate(bar.date)}: {bar.new.toLocaleString()} new members
+            {fullDate(bar.date)}: {bar.new.toLocaleString()}
+            {label.toLowerCase()}
           </button>
         </li>
       {/each}

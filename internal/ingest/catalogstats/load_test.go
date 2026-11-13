@@ -45,13 +45,13 @@ func TestStoreRetainsTheSnapshotBeyondTheWorkerSchedule(t *testing.T) {
 		t.Fatalf("Store: %v", err)
 	}
 
-	// rollup-stats runs intra-day, every few hours. Anything under half a day would
-	// make a single missed run visible to users.
-	const workerSchedule = 12 * time.Hour
-	if rec.ttl <= workerSchedule {
-		t.Errorf("Store TTL = %s, want comfortably more than the %s worker schedule — "+
-			"a skipped run would otherwise drop every surface back to the estimate",
-			rec.ttl, workerSchedule)
+	// rollup-stats runs once a day and takes about an hour. The snapshot must outlive
+	// a couple of failed runs, or one bad night blanks the public figures (2026-11-11).
+	const minTTL = 3 * 24 * time.Hour
+	if rec.ttl < minTTL {
+		t.Errorf("Store TTL = %s, want at least %s — "+
+			"a failed daily run would otherwise drop every surface back to the estimate",
+			rec.ttl, minTTL)
 	}
 	if rec.key != snapshotKey {
 		t.Errorf("Store wrote %q, want %q — readers look under one shared key", rec.key, snapshotKey)
