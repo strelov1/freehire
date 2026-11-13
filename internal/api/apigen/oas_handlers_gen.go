@@ -127,7 +127,10 @@ func (s *Server) handleAcceptConversationRequest(args [1]string, argsEscaped boo
 
 // handleAddAtomRequest handles addAtom operation.
 //
-// The body is an achievement; its provenance is set by the route, whatever the body says.
+// The only route besides the assistant’s own tool that can add evidence outside a chat session,
+// which is why `provenance` is forced to `manual` regardless of what the body sends — an
+// authenticated POST with no chat transcript behind it can only honestly be the owner’s own words.
+// When the account has opted into requiring it, an empty `context` is a 400.
 //
 // POST /me/experience/atoms
 func (s *Server) handleAddAtomRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -165,7 +168,7 @@ func (s *Server) handleAddAtomRequest(args [0]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    AddAtomOperation,
-			OperationSummary: "",
+			OperationSummary: "Record a new achievement.",
 			OperationID:      "addAtom",
 			Body:             request,
 			RawBody:          rawBody,
@@ -315,7 +318,9 @@ func (s *Server) handleAddAvailabilityOverrideRequest(args [0]string, argsEscape
 
 // handleAddEmploymentRequest handles addEmployment operation.
 //
-// The body is a place; its shape is the bank's.
+// An employment carries no claim of its own (only the atoms attached to it do), so nothing about
+// provenance applies here. `kind` is `job` or `project`; a project’s name arrives as `name` on the
+// wire (legacy `company` accepted as a fallback), a job’s as `company`.
 //
 // POST /me/experience/employments
 func (s *Server) handleAddEmploymentRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -353,7 +358,7 @@ func (s *Server) handleAddEmploymentRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    AddEmploymentOperation,
-			OperationSummary: "",
+			OperationSummary: "Record a new place — a job or a project.",
 			OperationID:      "addEmployment",
 			Body:             request,
 			RawBody:          rawBody,
@@ -503,7 +508,11 @@ func (s *Server) handleAddToWatchlistRequest(args [1]string, argsEscaped bool, w
 
 // handleAgentSearchJobsRequest handles agentSearchJobs operation.
 //
-// The same query as `/jobs/search`, always with the full description in the chosen format.
+// Same text query and facet filters as `/jobs/search`, but each result carries the `description` in
+// full (verbatim from the database) instead of the truncated index preview. Use `description_format`
+// to choose how it is rendered.
+//
+// Plus every filter in the "Filtering jobs" section.
 //
 // GET /agent/jobs/search
 func (s *Server) handleAgentSearchJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -536,7 +545,7 @@ func (s *Server) handleAgentSearchJobsRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    AgentSearchJobsOperation,
-			OperationSummary: "",
+			OperationSummary: "Search with full descriptions, for programmatic/agent consumers.",
 			OperationID:      "agentSearchJobs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -849,7 +858,7 @@ func (s *Server) handleApproveSubmissionRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ApproveSubmissionOperation,
-			OperationSummary: "",
+			OperationSummary: "Approve a submission, minting a live job.",
 			OperationID:      "approveSubmission",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -3587,7 +3596,8 @@ func (s *Server) handleBuddyUnreactRequest(args [1]string, argsEscaped bool, w h
 
 // handleCancelAssistantTurnRequest handles cancelAssistantTurn operation.
 //
-// Stops the turn running in the session; a session with nothing running is not an error.
+// A no-op (still `204`) when nothing is running — you cannot see whether a turn is live before
+// asking.
 //
 // POST /assistant/sessions/{id}/cancel
 func (s *Server) handleCancelAssistantTurnRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -3620,7 +3630,7 @@ func (s *Server) handleCancelAssistantTurnRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CancelAssistantTurnOperation,
-			OperationSummary: "",
+			OperationSummary: "Stop the session’s running turn.",
 			OperationID:      "cancelAssistantTurn",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -3885,7 +3895,10 @@ func (s *Server) handleCancelSupportTurnRequest(args [1]string, argsEscaped bool
 
 // handleCatalogScaleRequest handles catalogScale operation.
 //
-// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.
+// The canonical numbers behind every "how big is this" figure on the site (the jobs list total, the
+// /about and /open pages). Backed by one snapshot `cmd/rollup-stats` republishes periodically, not a
+// live count. `exact: false` means the cache was cold and the figures fell back to a planner estimate
+// — treat them as approximate when it is false.
 //
 // GET /stats/catalog
 func (s *Server) handleCatalogScaleRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -3904,7 +3917,7 @@ func (s *Server) handleCatalogScaleRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CatalogScaleOperation,
-			OperationSummary: "",
+			OperationSummary: "The headline catalogue-scale figures (open jobs, companies, sources, …).",
 			OperationID:      "catalogScale",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4170,7 +4183,7 @@ func (s *Server) handleClaimMailboxRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ClaimMailboxOperation,
-			OperationSummary: "",
+			OperationSummary: "Claim your hosted address.",
 			OperationID:      "claimMailbox",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4322,6 +4335,8 @@ func (s *Server) handleClaimUsernameRequest(args [0]string, argsEscaped bool, w 
 
 // handleClearApplicationStageRequest handles clearApplicationStage operation.
 //
+// Clear the application stage, addressed by row id.
+//
 // DELETE /me/applications/{id}/stage
 func (s *Server) handleClearApplicationStageRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -4353,7 +4368,7 @@ func (s *Server) handleClearApplicationStageRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ClearApplicationStageOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear the application stage, addressed by row id.",
 			OperationID:      "clearApplicationStage",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4415,6 +4430,8 @@ func (s *Server) handleClearApplicationStageRequest(args [1]string, argsEscaped 
 
 // handleClearCompanyVoteRequest handles clearCompanyVote operation.
 //
+// Clear your vote on a company.
+//
 // DELETE /companies/{slug}/vote
 func (s *Server) handleClearCompanyVoteRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -4446,7 +4463,7 @@ func (s *Server) handleClearCompanyVoteRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ClearCompanyVoteOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear your vote on a company.",
 			OperationID:      "clearCompanyVote",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4508,6 +4525,8 @@ func (s *Server) handleClearCompanyVoteRequest(args [1]string, argsEscaped bool,
 
 // handleClearJobVoteRequest handles clearJobVote operation.
 //
+// Clear your vote on a job.
+//
 // DELETE /jobs/{slug}/vote
 func (s *Server) handleClearJobVoteRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -4539,7 +4558,7 @@ func (s *Server) handleClearJobVoteRequest(args [1]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ClearJobVoteOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear your vote on a job.",
 			OperationID:      "clearJobVote",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4634,7 +4653,7 @@ func (s *Server) handleClearStageRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ClearStageOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear the application stage.",
 			OperationID:      "clearStage",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4822,7 +4841,7 @@ func (s *Server) handleCloseThreadRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CloseThreadOperation,
-			OperationSummary: "",
+			OperationSummary: "Close a thread.",
 			OperationID:      "closeThread",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4884,7 +4903,8 @@ func (s *Server) handleCloseThreadRequest(args [1]string, argsEscaped bool, w ht
 
 // handleCompanySubindustriesRequest handles companySubindustries operation.
 //
-// The subindustry vocabulary with company counts, most common first.
+// Backs the searchable “Industry” facet’s option list, most common first. Counts are
+// unconditional (they do not reflect other active list filters).
 //
 // GET /companies/subindustries
 func (s *Server) handleCompanySubindustriesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -4903,7 +4923,7 @@ func (s *Server) handleCompanySubindustriesRequest(args [0]string, argsEscaped b
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CompanySubindustriesOperation,
-			OperationSummary: "",
+			OperationSummary: "Distinct company subindustry vocabulary with company counts.",
 			OperationID:      "companySubindustries",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -4960,6 +4980,10 @@ func (s *Server) handleCompanySubindustriesRequest(args [0]string, argsEscaped b
 
 // handleCompleteOnboardingRequest handles completeOnboarding operation.
 //
+// Sets `onboarding_completed_at` on your account, which is what stops the app routing you into the
+// wizard again. Idempotent: calling it a second time keeps the original timestamp and still answers
+// `200`.
+//
 // POST /me/onboarding/complete
 func (s *Server) handleCompleteOnboardingRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -4977,7 +5001,7 @@ func (s *Server) handleCompleteOnboardingRequest(args [0]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CompleteOnboardingOperation,
-			OperationSummary: "",
+			OperationSummary: "Record that you have been through the onboarding wizard.",
 			OperationID:      "completeOnboarding",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -5034,6 +5058,10 @@ func (s *Server) handleCompleteOnboardingRequest(args [0]string, argsEscaped boo
 
 // handleConfirmEmailLinkRequest handles confirmEmailLink operation.
 //
+// Only a deterministic match — the mail thread, or the company name in the sender or subject —
+// links itself. A model's pick lands here as a suggestion instead, and `?link=suggested` is the queue
+// of them.
+//
 // POST /me/emails/{id}/confirm
 func (s *Server) handleConfirmEmailLinkRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -5065,7 +5093,7 @@ func (s *Server) handleConfirmEmailLinkRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ConfirmEmailLinkOperation,
-			OperationSummary: "",
+			OperationSummary: "Accept a suggested link.",
 			OperationID:      "confirmEmailLink",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -5127,6 +5155,8 @@ func (s *Server) handleConfirmEmailLinkRequest(args [1]string, argsEscaped bool,
 
 // handleConfirmEmailVerificationRequest handles confirmEmailVerification operation.
 //
+// Confirm the address with the mailed code.
+//
 // POST /auth/verify/confirm
 func (s *Server) handleConfirmEmailVerificationRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -5163,7 +5193,7 @@ func (s *Server) handleConfirmEmailVerificationRequest(args [0]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ConfirmEmailVerificationOperation,
-			OperationSummary: "",
+			OperationSummary: "Confirm the address with the mailed code.",
 			OperationID:      "confirmEmailVerification",
 			Body:             request,
 			RawBody:          rawBody,
@@ -5348,7 +5378,7 @@ func (s *Server) handleCountThreadsRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CountThreadsOperation,
-			OperationSummary: "",
+			OperationSummary: "How many threads there are.",
 			OperationID:      "countThreads",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -5509,8 +5539,9 @@ func (s *Server) handleCreateApiKeyRequest(args [0]string, argsEscaped bool, w h
 
 // handleCreateApplicationFromEmailRequest handles createApplicationFromEmail operation.
 //
-// Records the application from the email and links it, dated by the email. 409 while a suggestion is
-// pending.
+// The way out of `?link=unlinked`: mail about a job you never tracked. The application is dated by the
+// mail's `received_at`, not by now — the application demonstrably existed by the time the employer
+// wrote.
 //
 // POST /me/emails/{id}/application
 func (s *Server) handleCreateApplicationFromEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -5558,7 +5589,7 @@ func (s *Server) handleCreateApplicationFromEmailRequest(args [1]string, argsEsc
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateApplicationFromEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Record an application from a message, and link the message to it.",
 			OperationID:      "createApplicationFromEmail",
 			Body:             request,
 			RawBody:          rawBody,
@@ -5620,9 +5651,14 @@ func (s *Server) handleCreateApplicationFromEmailRequest(args [1]string, argsEsc
 
 // handleCreateAssistantSessionRequest handles createAssistantSession operation.
 //
-// Starts a conversation. `preset` picks the kind; `job` names the application an interview, debrief or
-// apply session is held against. A session already held for the same application, or the same search
-// request, is handed back (200); a new one is a 201.
+// For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty
+// string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding.
+// Reusing the UUID with the same owner and canonical query returns the same session; changing its
+// query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be
+// enforced when a search runs (for example hide_seen without a readable history) fails that search
+// instead, and the assistant reports it rather than widening the search. Search-bound responses
+// include search_context: { query, brief }; the original query is immutable and the selection brief is
+// local to the conversation.
 //
 // POST /assistant/sessions
 func (s *Server) handleCreateAssistantSessionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -5670,7 +5706,7 @@ func (s *Server) handleCreateAssistantSessionRequest(args [0]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateAssistantSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "Start a new conversation.",
 			OperationID:      "createAssistantSession",
 			Body:             request,
 			RawBody:          rawBody,
@@ -5736,6 +5772,8 @@ func (s *Server) handleCreateAssistantSessionRequest(args [0]string, argsEscaped
 
 // handleCreateCVRequest handles createCV operation.
 //
+// Create a CV, optionally seeded from your stored history.
+//
 // POST /me/cvs
 func (s *Server) handleCreateCVRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -5772,7 +5810,7 @@ func (s *Server) handleCreateCVRequest(args [0]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Create a CV, optionally seeded from your stored history.",
 			OperationID:      "createCV",
 			Body:             request,
 			RawBody:          rawBody,
@@ -5924,8 +5962,8 @@ func (s *Server) handleCreateEmployerVacancyRequest(args [0]string, argsEscaped 
 
 // handleCreateGhostReportRequest handles createGhostReport operation.
 //
-// Reports that the job went silent after the caller applied. 403 until the caller's address is
-// confirmed, 409 for a closed job or a second report.
+// An unproven (unverified) address is a `403`; a closed job or a claim you already have on this job is
+// a `409`.
 //
 // POST /jobs/{slug}/ghost-report
 func (s *Server) handleCreateGhostReportRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -5973,7 +6011,7 @@ func (s *Server) handleCreateGhostReportRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateGhostReportOperation,
-			OperationSummary: "",
+			OperationSummary: "File a claim that you applied and got no response.",
 			OperationID:      "createGhostReport",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6073,7 +6111,7 @@ func (s *Server) handleCreateJobRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Create a curated job.",
 			OperationID:      "createJob",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6178,7 +6216,7 @@ func (s *Server) handleCreateJobReportRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateJobReportOperation,
-			OperationSummary: "",
+			OperationSummary: "Report a problem with a job.",
 			OperationID:      "createJobReport",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6240,7 +6278,8 @@ func (s *Server) handleCreateJobReportRequest(args [1]string, argsEscaped bool, 
 
 // handleCreateReferralRequestRequest handles createReferralRequest operation.
 //
-// 422 for a bad request, 409 for a duplicate or a company with no referral available.
+// Validation failures answer 422; a company with no approved referrer answers 409; too many open
+// requests answers 429.
 //
 // POST /me/referrals/requests
 func (s *Server) handleCreateReferralRequestRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -6278,7 +6317,7 @@ func (s *Server) handleCreateReferralRequestRequest(args [0]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateReferralRequestOperation,
-			OperationSummary: "",
+			OperationSummary: "Ask a company's approved referrers for an intro.",
 			OperationID:      "createReferralRequest",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6383,7 +6422,7 @@ func (s *Server) handleCreateReplyRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateReplyOperation,
-			OperationSummary: "",
+			OperationSummary: "Reply to a thread.",
 			OperationID:      "createReply",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6483,7 +6522,7 @@ func (s *Server) handleCreateSavedSearchRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateSavedSearchOperation,
-			OperationSummary: "",
+			OperationSummary: "Save a search.",
 			OperationID:      "createSavedSearch",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6540,7 +6579,10 @@ func (s *Server) handleCreateSavedSearchRequest(args [0]string, argsEscaped bool
 
 // handleCreateSubmissionRequest handles createSubmission operation.
 //
-// 409 for a duplicate pending URL or a vacancy already in the catalogue, 403 for a blocked domain.
+// A URL already awaiting review is a `409`, and so is a URL the catalogue already carries — matched
+// the way `/jobs/find` matches it, so a link differing only by scheme, `www.`, tracking query or
+// trailing slash counts as the same posting. That `409` names the existing job (`/jobs/<public_slug>`)
+// in its error.
 //
 // POST /submissions
 func (s *Server) handleCreateSubmissionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -6578,7 +6620,7 @@ func (s *Server) handleCreateSubmissionRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateSubmissionOperation,
-			OperationSummary: "",
+			OperationSummary: "Submit a vacancy for review.",
 			OperationID:      "createSubmission",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6635,7 +6677,8 @@ func (s *Server) handleCreateSubmissionRequest(args [0]string, argsEscaped bool,
 
 // handleCreateSubscriptionRequest handles createSubscription operation.
 //
-// A non-owned saved search is a 404, a duplicate a 409.
+// Channels: `telegram`, `email`, `push`, `webhook`. `push` needs a device the freehire mobile app has
+// registered (`GET /me/push-tokens`) — without one the request is refused with 409.
 //
 // POST /me/subscriptions
 func (s *Server) handleCreateSubscriptionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -6673,7 +6716,7 @@ func (s *Server) handleCreateSubscriptionRequest(args [0]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateSubscriptionOperation,
-			OperationSummary: "",
+			OperationSummary: "Subscribe a saved search to a digest channel.",
 			OperationID:      "createSubscription",
 			Body:             request,
 			RawBody:          rawBody,
@@ -6845,7 +6888,7 @@ func (s *Server) handleCreateThreadRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    CreateThreadOperation,
-			OperationSummary: "",
+			OperationSummary: "Start a thread.",
 			OperationID:      "createThread",
 			Body:             request,
 			RawBody:          rawBody,
@@ -7058,7 +7101,7 @@ func (s *Server) handleDecideReferralOfferRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DecideReferralOfferOperation,
-			OperationSummary: "",
+			OperationSummary: "Approve or reject an offer.",
 			OperationID:      "decideReferralOffer",
 			Body:             request,
 			RawBody:          rawBody,
@@ -7215,7 +7258,7 @@ func (s *Server) handleDeclineConversationRequest(args [1]string, argsEscaped bo
 
 // handleDeleteAssistantSessionRequest handles deleteAssistantSession operation.
 //
-// Removes an owned conversation and its transcript.
+// Returns `204 No Content`.
 //
 // DELETE /assistant/sessions/{id}
 func (s *Server) handleDeleteAssistantSessionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -7248,7 +7291,7 @@ func (s *Server) handleDeleteAssistantSessionRequest(args [1]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteAssistantSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete an owned conversation and its transcript.",
 			OperationID:      "deleteAssistantSession",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -7310,6 +7353,8 @@ func (s *Server) handleDeleteAssistantSessionRequest(args [1]string, argsEscaped
 
 // handleDeleteAtomRequest handles deleteAtom operation.
 //
+// Remove an evidence atom.
+//
 // DELETE /me/experience/atoms/{id}
 func (s *Server) handleDeleteAtomRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -7341,7 +7386,7 @@ func (s *Server) handleDeleteAtomRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteAtomOperation,
-			OperationSummary: "",
+			OperationSummary: "Remove an evidence atom.",
 			OperationID:      "deleteAtom",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -7591,6 +7636,8 @@ func (s *Server) handleDeleteBankedAnswerRequest(args [1]string, argsEscaped boo
 
 // handleDeleteCVRequest handles deleteCV operation.
 //
+// Delete a CV.
+//
 // DELETE /me/cvs/{id}
 func (s *Server) handleDeleteCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -7622,7 +7669,7 @@ func (s *Server) handleDeleteCVRequest(args [1]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete a CV.",
 			OperationID:      "deleteCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -7684,7 +7731,7 @@ func (s *Server) handleDeleteCVRequest(args [1]string, argsEscaped bool, w http.
 
 // handleDeleteCompanyFeedbackRequest handles deleteCompanyFeedback operation.
 //
-// Removes the caller's review in one category; a no-op when there is none.
+// Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.
 //
 // DELETE /companies/{slug}/feedback
 func (s *Server) handleDeleteCompanyFeedbackRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -7717,7 +7764,7 @@ func (s *Server) handleDeleteCompanyFeedbackRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete your feedback in one category (no-op if absent).",
 			OperationID:      "deleteCompanyFeedback",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -7783,6 +7830,8 @@ func (s *Server) handleDeleteCompanyFeedbackRequest(args [1]string, argsEscaped 
 
 // handleDeleteEmailRequest handles deleteEmail operation.
 //
+// A later re-sync will not resurrect it — deletion is reader state, not mail-server state.
+//
 // POST /me/emails/{id}/delete
 func (s *Server) handleDeleteEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -7814,7 +7863,7 @@ func (s *Server) handleDeleteEmailRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Soft-delete a message. Answers 204.",
 			OperationID:      "deleteEmail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -7909,7 +7958,7 @@ func (s *Server) handleDeleteEmploymentRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteEmploymentOperation,
-			OperationSummary: "",
+			OperationSummary: "Remove an employment and its atoms.",
 			OperationID:      "deleteEmployment",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8066,7 +8115,7 @@ func (s *Server) handleDeleteJobAutoApplyRequest(args [1]string, argsEscaped boo
 
 // handleDeleteProfileRequest handles deleteProfile operation.
 //
-// Clears the profile. Idempotent: deleting when none exists is still a 204.
+// Returns `204 No Content`.
 //
 // DELETE /me/profile
 func (s *Server) handleDeleteProfileRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -8085,7 +8134,7 @@ func (s *Server) handleDeleteProfileRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteProfileOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear your profile (idempotent).",
 			OperationID:      "deleteProfile",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8142,7 +8191,7 @@ func (s *Server) handleDeleteProfileRequest(args [0]string, argsEscaped bool, w 
 
 // handleDeleteResumeRequest handles deleteResume operation.
 //
-// Removes the stored CV. 501 when storage is off.
+// Returns `204 No Content`. `501` when object storage is unconfigured.
 //
 // DELETE /me/resume
 func (s *Server) handleDeleteResumeRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -8161,7 +8210,7 @@ func (s *Server) handleDeleteResumeRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteResumeOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete your stored résumé.",
 			OperationID:      "deleteResume",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8218,6 +8267,8 @@ func (s *Server) handleDeleteResumeRequest(args [0]string, argsEscaped bool, w h
 
 // handleDeleteSavedSearchRequest handles deleteSavedSearch operation.
 //
+// Delete a saved search.
+//
 // DELETE /me/searches/{id}
 func (s *Server) handleDeleteSavedSearchRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -8249,7 +8300,7 @@ func (s *Server) handleDeleteSavedSearchRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteSavedSearchOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete a saved search.",
 			OperationID:      "deleteSavedSearch",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8311,6 +8362,8 @@ func (s *Server) handleDeleteSavedSearchRequest(args [1]string, argsEscaped bool
 
 // handleDeleteSubscriptionRequest handles deleteSubscription operation.
 //
+// Delete a subscription.
+//
 // DELETE /me/subscriptions/{id}
 func (s *Server) handleDeleteSubscriptionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -8342,7 +8395,7 @@ func (s *Server) handleDeleteSubscriptionRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DeleteSubscriptionOperation,
-			OperationSummary: "",
+			OperationSummary: "Delete a subscription.",
 			OperationID:      "deleteSubscription",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8404,6 +8457,9 @@ func (s *Server) handleDeleteSubscriptionRequest(args [1]string, argsEscaped boo
 
 // handleDismissJobRequest handles dismissJob operation.
 //
+// Only keeps the job out of the swipe deck; it stays visible in the public `/jobs` list and search.
+// Idempotent.
+//
 // POST /jobs/{slug}/dismiss
 func (s *Server) handleDismissJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -8435,7 +8491,7 @@ func (s *Server) handleDismissJobRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DismissJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Dismiss (swipe away) the job.",
 			OperationID:      "dismissJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8545,7 +8601,7 @@ func (s *Server) handleDismissJobReportRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DismissJobReportOperation,
-			OperationSummary: "",
+			OperationSummary: "Dismiss a report with a reason, optionally telling the reporter.",
 			OperationID:      "dismissJobReport",
 			Body:             request,
 			RawBody:          rawBody,
@@ -8706,7 +8762,8 @@ func (s *Server) handleDraftCVCoverLetterRequest(args [1]string, argsEscaped boo
 
 // handleDuplicateCVRequest handles duplicateCV operation.
 //
-// Copies a base CV as " (copy)"; 409 for a tailored one.
+// Creates a new base CV with the same document, template and appearance, titled " (copy)". Only a base
+// can be duplicated: 409 for a tailored copy, 404 when the id is not yours.
 //
 // POST /me/cvs/{id}/duplicate
 func (s *Server) handleDuplicateCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -8739,7 +8796,7 @@ func (s *Server) handleDuplicateCVRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    DuplicateCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Copy a base CV.",
 			OperationID:      "duplicateCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8801,6 +8858,12 @@ func (s *Server) handleDuplicateCVRequest(args [1]string, argsEscaped bool, w ht
 
 // handleEngagementStatsRequest handles engagementStats operation.
 //
+// `viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by
+// every visitor, signed in or not, so it is orders of magnitude larger than the rest. It is also the
+// only one that is not all-time — `viewed_since` is the first day it covers (null before the first
+// rollup), because the bot-filtered counter shipped without a backfill of the days before it. Every
+// other field is all-time. Aggregate-only — no user identifier is exposed.
+//
 // GET /stats/engagement
 func (s *Server) handleEngagementStatsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -8818,7 +8881,7 @@ func (s *Server) handleEngagementStatsRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    EngagementStatsOperation,
-			OperationSummary: "",
+			OperationSummary: "Jobs saved, applied to and viewed across all users, plus CV and inbox usage.",
 			OperationID:      "engagementStats",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -8985,7 +9048,10 @@ func (s *Server) handleFileProcessReportRequest(args [1]string, argsEscaped bool
 
 // handleFindJobRequest handles findJob operation.
 //
-// Resolves the URL of a posting in the wild to a catalogue slug.
+// Answers `{"data": null}` when the posting cannot be identified, rather than 404 — "we do not carry
+// this" is a normal answer here. Used by the extension to tell whether the page you are on is a job we
+// already have. A miss also carries `meta.ats_board`: true when the URL sits on an ATS board freehire
+// knows how to crawl, so a client can tell a posting worth adding from an arbitrary page.
 //
 // GET /jobs/find
 func (s *Server) handleFindJobRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -9018,7 +9084,7 @@ func (s *Server) handleFindJobRequest(args [0]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    FindJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Resolve a posting URL to a catalogue slug.",
 			OperationID:      "findJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -9173,7 +9239,8 @@ func (s *Server) handleFindModeratedUserRequest(args [0]string, argsEscaped bool
 
 // handleForgotPasswordRequest handles forgotPassword operation.
 //
-// Always answers 202, whether or not the address has an account.
+// Always answers `202`, whether or not the address has an account — this is deliberately not an
+// email-enumeration oracle.
 //
 // POST /auth/password/forgot
 func (s *Server) handleForgotPasswordRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -9211,7 +9278,7 @@ func (s *Server) handleForgotPasswordRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ForgotPasswordOperation,
-			OperationSummary: "",
+			OperationSummary: "Request a password-reset code by email.",
 			OperationID:      "forgotPassword",
 			Body:             request,
 			RawBody:          rawBody,
@@ -9418,7 +9485,9 @@ func (s *Server) handleGetApiPlanRequest(args [0]string, argsEscaped bool, w htt
 
 // handleGetApplicationFollowUpRequest handles getApplicationFollowUp operation.
 //
-// 409 unless the application is waiting on a reply.
+// Offered only when the application is in the silent state the tracking board’s own badge uses — a
+// `409` otherwise. `recipient`/`recipient_name` are omitted when nobody at the company ever replied,
+// which is the common case: the draft is handed to you, nothing is sent.
 //
 // GET /me/tracking/{slug}/followup
 func (s *Server) handleGetApplicationFollowUpRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -9451,7 +9520,7 @@ func (s *Server) handleGetApplicationFollowUpRequest(args [1]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetApplicationFollowUpOperation,
-			OperationSummary: "",
+			OperationSummary: "Draft a chase for a silent application.",
 			OperationID:      "getApplicationFollowUp",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -9546,7 +9615,7 @@ func (s *Server) handleGetAssistantSessionRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetAssistantSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "One owned conversation with its full transcript.",
 			OperationID:      "getAssistantSession",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -9608,8 +9677,8 @@ func (s *Server) handleGetAssistantSessionRequest(args [1]string, argsEscaped bo
 
 // handleGetAtsReportRequest handles getAtsReport operation.
 //
-// The ATS-readiness report of the caller's stored CV, with any cached model review folded in. `has_cv`
-// is false, and `report` null, when no CV is stored.
+// Scores your stored CV’s structure and its keyword match against the selected role. `has_cv` is
+// false when no CV is stored; no profile is a `404`; `503` when search is unavailable.
 //
 // GET /me/profile/ats-report
 func (s *Server) handleGetAtsReportRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -9628,7 +9697,7 @@ func (s *Server) handleGetAtsReportRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetAtsReportOperation,
-			OperationSummary: "",
+			OperationSummary: "CV ATS-readiness report (deterministic + any cached LLM review).",
 			OperationID:      "getAtsReport",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -9704,7 +9773,7 @@ func (s *Server) handleGetAuthMeRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetAuthMeOperation,
-			OperationSummary: "",
+			OperationSummary: "The current user (cookie or API key).",
 			OperationID:      "getAuthMe",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -9761,8 +9830,8 @@ func (s *Server) handleGetAuthMeRequest(args [0]string, argsEscaped bool, w http
 
 // handleGetAutofillProfileRequest handles getAutofillProfile operation.
 //
-// The caller's canonical form fields, all empty bar the account email when no source states a contact.
-// Keys are the profile's own and the set grows with it.
+// Projected from your CV header, with the account email as a fallback — what the extension writes
+// into application forms.
 //
 // GET /me/autofill-profile
 func (s *Server) handleGetAutofillProfileRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -9781,7 +9850,7 @@ func (s *Server) handleGetAutofillProfileRequest(args [0]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetAutofillProfileOperation,
-			OperationSummary: "",
+			OperationSummary: "Your contact details in canonical autofill fields.",
 			OperationID:      "getAutofillProfile",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10118,7 +10187,7 @@ func (s *Server) handleGetCVRequest(args [1]string, argsEscaped bool, w http.Res
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetCVOperation,
-			OperationSummary: "",
+			OperationSummary: "One CV with its full document.",
 			OperationID:      "getCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10180,6 +10249,13 @@ func (s *Server) handleGetCVRequest(args [1]string, argsEscaped bool, w http.Res
 
 // handleGetCVATSDeltaRequest handles getCVATSDelta operation.
 //
+// The tailored copy scored against the base CV it came from, with template, page margins and
+// typography held identical so the difference reflects content alone — the base is a copy rendered
+// with the tailored copy’s formatting, never the stored base itself. Recomputed per request, never
+// stored. `available: false` (with `reason`, no `delta`) when rendering is unavailable rather than an
+// error. `409` when the CV is not a tailored copy, has no base CV to compare against, or its vacancy
+// no longer exists.
+//
 // GET /me/cvs/{id}/ats-delta
 func (s *Server) handleGetCVATSDeltaRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -10211,7 +10287,7 @@ func (s *Server) handleGetCVATSDeltaRequest(args [1]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetCVATSDeltaOperation,
-			OperationSummary: "",
+			OperationSummary: "How tailoring changed this CV's ATS-readiness score.",
 			OperationID:      "getCVATSDelta",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10442,6 +10518,12 @@ func (s *Server) handleGetCVCoverLetterRequest(args [1]string, argsEscaped bool,
 
 // handleGetCVJobMatchRequest handles getCVJobMatch operation.
 //
+// Deterministic and free — no model call, unlike the AI match analysis. Scored off the CV’s
+// rendered PDF text layer against the vacancy alone (no base-CV comparison, unlike the ATS delta), so
+// it is cheap enough to refresh after every saved edit. `available: false` when nothing about the
+// vacancy could be matched automatically, or rendering failed. `409` when the CV is not a tailored
+// copy or its vacancy no longer exists.
+//
 // GET /me/cvs/{id}/job-match
 func (s *Server) handleGetCVJobMatchRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -10473,7 +10555,7 @@ func (s *Server) handleGetCVJobMatchRequest(args [1]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetCVJobMatchOperation,
-			OperationSummary: "",
+			OperationSummary: "How well a tailored CV matches the vacancy it was written for.",
 			OperationID:      "getCVJobMatch",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10535,7 +10617,12 @@ func (s *Server) handleGetCVJobMatchRequest(args [1]string, argsEscaped bool, w 
 
 // handleGetCVTailorContextRequest handles getCVTailorContext operation.
 //
-// The cached fit analysis of a tailored CV, projected for the tailoring agent.
+// The split that keeps tailoring honest: `missing_have` are requirements your history already covers
+// but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent
+// must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a
+// tailored copy or has no analysis. `job.requirements` is what the posting itself asks for, in its own
+// words — a fuller list than the missing_* split, which is only what the analysis found the CV
+// lacks. Absent when the posting states none.
 //
 // GET /me/cvs/{id}/tailor-context
 func (s *Server) handleGetCVTailorContextRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -10568,7 +10655,7 @@ func (s *Server) handleGetCVTailorContextRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetCVTailorContextOperation,
-			OperationSummary: "",
+			OperationSummary: "The match analysis a tailored CV should reframe toward.",
 			OperationID:      "getCVTailorContext",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10630,8 +10717,12 @@ func (s *Server) handleGetCVTailorContextRequest(args [1]string, argsEscaped boo
 
 // handleGetDirectApplyFormRequest handles getDirectApplyForm operation.
 //
-// The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment
-// cannot deliver applications.
+// Only for a posting whose `direct_apply` is true — its employer published it here and receives
+// applications by email. Any other posting is a `404`. Signed in with the browser session, the
+// response also carries `applied`, a `prefill` of your earlier answers to the same questions, and
+// `cvs` — the CV you tailored for this vacancy and whether you uploaded one; an API key never sees
+// those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver
+// applications.
 //
 // GET /jobs/{slug}/direct-apply
 func (s *Server) handleGetDirectApplyFormRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -10664,7 +10755,7 @@ func (s *Server) handleGetDirectApplyFormRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetDirectApplyFormOperation,
-			OperationSummary: "",
+			OperationSummary: "The application form of a vacancy that takes applications on freehire.",
 			OperationID:      "getDirectApplyForm",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10726,7 +10817,8 @@ func (s *Server) handleGetDirectApplyFormRequest(args [1]string, argsEscaped boo
 
 // handleGetEmailRequest handles getEmail operation.
 //
-// Opening a message marks it read. 404 for another user's, or an id that is not a number.
+// Use `GET /me/inbox?body=1` instead when sweeping a backlog — `read_at` means "a human saw this",
+// and this endpoint sets it.
 //
 // GET /me/emails/{id}
 func (s *Server) handleGetEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -10759,7 +10851,7 @@ func (s *Server) handleGetEmailRequest(args [1]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "One message in full. Marks it read.",
 			OperationID:      "getEmail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -10914,8 +11006,13 @@ func (s *Server) handleGetEmailPrefsRequest(args [0]string, argsEscaped bool, w 
 
 // handleGetEmbeddingProgressRequest handles getEmbeddingProgress operation.
 //
-// The embedding backfill's current progress document. Figures not yet measured are null. The
-// `/stats/embeddings/stream` route is Server-Sent Events and stays hand-written.
+// Backs the public /semantic-search page. `eligible` and `snapshot_covered` come from a snapshot
+// `cmd/rollup-stats` measures every few hours (the count is too slow for a request); `queued` is the
+// embedding queue, sampled every 15 seconds, and `covered` is `snapshot_covered` plus how much the
+// queue has drained since that snapshot — not `eligible − queued`, since the queue also carries
+// closed postings waiting to be cleared. `rate_per_minute` counts only what left the queue over the
+// last 10 minutes, so a batch of new postings arriving at once does not read as negative progress. Any
+// figure not yet measured is `null`, never `0`.
 //
 // GET /stats/embeddings
 func (s *Server) handleGetEmbeddingProgressRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -10934,7 +11031,7 @@ func (s *Server) handleGetEmbeddingProgressRequest(args [0]string, argsEscaped b
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetEmbeddingProgressOperation,
-			OperationSummary: "",
+			OperationSummary: "How much of the catalogue carries a semantic embedding, and how fast the rest is going.",
 			OperationID:      "getEmbeddingProgress",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11067,9 +11164,10 @@ func (s *Server) handleGetEmployerCompanyRequest(args [0]string, argsEscaped boo
 
 // handleGetInboxRequest handles getInbox operation.
 //
-// The caller's mail, newest first, without deleted messages. Filters: `source`, `status`, `link`, `q`,
-// `unread`, `unclassified`, `include_other`; `body` adds each message's body (pages are then capped
-// lower). A page param that does not read falls back to its default.
+// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
+// read path, so sweeping a backlog never zeroes the owner's unread count (`GET /me/emails/{id}` does
+// mark read). Pages carrying bodies are capped at 50. An unknown `source`, `status` or `link` value is
+// a 400, never a silently empty page.
 //
 // GET /me/inbox
 func (s *Server) handleGetInboxRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11102,7 +11200,7 @@ func (s *Server) handleGetInboxRequest(args [0]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetInboxOperation,
-			OperationSummary: "",
+			OperationSummary: "List your mail, newest first, excluding deleted.",
 			OperationID:      "getInbox",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11200,7 +11298,10 @@ func (s *Server) handleGetInboxRequest(args [0]string, argsEscaped bool, w http.
 
 // handleGetInterviewsRequest handles getInterviews operation.
 //
-// The caller's arranged meetings whose start falls in the range.
+// The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be
+// cancelled, unlike a ledger event which happened and cannot change. `status` is `suggested`,
+// `confirmed`, or `cancelled` — a cancelled meeting is still served, not withheld. Both bounds are
+// required, RFC3339.
 //
 // GET /me/interviews
 func (s *Server) handleGetInterviewsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11233,7 +11334,7 @@ func (s *Server) handleGetInterviewsRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetInterviewsOperation,
-			OperationSummary: "",
+			OperationSummary: "Arranged meetings whose start falls in the date range.",
 			OperationID:      "getInterviews",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11409,7 +11510,7 @@ func (s *Server) handleGetJobRequest(args [1]string, argsEscaped bool, w http.Re
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetJobOperation,
-			OperationSummary: "",
+			OperationSummary: "A single job by its public slug (serves closed jobs too).",
 			OperationID:      "getJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11566,8 +11667,8 @@ func (s *Server) handleGetJobFitRequest(args [1]string, argsEscaped bool, w http
 
 // handleGetJobMatchRequest handles getJobMatch operation.
 //
-// How well the job's skills are covered by the caller's profile, plus the advisory hard-constraint
-// blockers. Deterministic, no model. A caller without a profile is a 404.
+// How well the job’s skills are covered by your profile skills — exact, adjacent, and missing,
+// plus a coverage percent. A caller without a saved profile is a 404.
 //
 // GET /jobs/{slug}/match
 func (s *Server) handleGetJobMatchRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11600,7 +11701,7 @@ func (s *Server) handleGetJobMatchRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetJobMatchOperation,
-			OperationSummary: "",
+			OperationSummary: "Deterministic skill match of the job against your profile (no LLM).",
 			OperationID:      "getJobMatch",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11662,6 +11763,9 @@ func (s *Server) handleGetJobMatchRequest(args [1]string, argsEscaped bool, w ht
 
 // handleGetMailboxRequest handles getMailbox operation.
 //
+// `address` is null until you claim one; `available` is false when the instance runs without a mailbox
+// domain.
+//
 // GET /me/mailbox
 func (s *Server) handleGetMailboxRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -11679,7 +11783,7 @@ func (s *Server) handleGetMailboxRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMailboxOperation,
-			OperationSummary: "",
+			OperationSummary: "Your hosted freehire address, and whether the feature is configured.",
 			OperationID:      "getMailbox",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11736,7 +11840,10 @@ func (s *Server) handleGetMailboxRequest(args [0]string, argsEscaped bool, w htt
 
 // handleGetMarketPulseRequest handles getMarketPulse operation.
 //
-// Demand for the caller's profile skills, week by week. Session cookie only.
+// One entry per profile skill seen in at least one open job; a skill never seen is omitted rather than
+// reported with a zero. `change_pct` is `null` with fewer than two snapshots, or when the earliest
+// snapshot’s count was zero. A profile with no skills yet answers an empty `data` array, not an
+// error.
 //
 // GET /me/market-pulse
 func (s *Server) handleGetMarketPulseRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11755,7 +11862,7 @@ func (s *Server) handleGetMarketPulseRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMarketPulseOperation,
-			OperationSummary: "",
+			OperationSummary: "Weekly demand trend for your profile skills.",
 			OperationID:      "getMarketPulse",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -11812,7 +11919,11 @@ func (s *Server) handleGetMarketPulseRequest(args [0]string, argsEscaped bool, w
 
 // handleGetMatchAnalysisRequest handles getMatchAnalysis operation.
 //
-// The cached fit analysis for a job; never calls the model.
+// Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed,
+// or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance`
+// reports how much of today you have used against what the day allows, and when it resets.
+// `tailor_allowance` reports the same for CV tailoring, which carries its own daily ceiling, so a
+// caller deciding between the two has both figures here.
 //
 // GET /jobs/{slug}/match-analysis
 func (s *Server) handleGetMatchAnalysisRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11845,7 +11956,7 @@ func (s *Server) handleGetMatchAnalysisRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMatchAnalysisOperation,
-			OperationSummary: "",
+			OperationSummary: "The cached AI match analysis for the job (never runs the LLM).",
 			OperationID:      "getMatchAnalysis",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12502,7 +12613,16 @@ func (s *Server) handleGetMyMentorProfileRequest(args [0]string, argsEscaped boo
 
 // handleGetMyPlanRequest handles getMyPlan operation.
 //
-// The caller's plan and today's usage, without consuming anything.
+// Which plan you are on and, for every metered AI feature, how much of today you have used against
+// what the day allows. Every plan offers every feature; what differs is the daily amount, and it
+// resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says
+// whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and
+// the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. A pro caller
+// also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on
+// the free plan and on a plan that has ended. `pro_source` is behavioural: a client offering an in-app
+// purchase must not offer one to a `stripe` subscriber, who would be charged twice for one plan, and a
+// `revenuecat` subscriber must be sent to their store to cancel rather than to a web page. A tie
+// resolves in the order `stripe`, `revenuecat`, `granted`.
 //
 // GET /me/plan
 func (s *Server) handleGetMyPlanRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -12521,7 +12641,7 @@ func (s *Server) handleGetMyPlanRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMyPlanOperation,
-			OperationSummary: "",
+			OperationSummary: "Your plan and what it allows today.",
 			OperationID:      "getMyPlan",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12578,7 +12698,9 @@ func (s *Server) handleGetMyPlanRequest(args [0]string, argsEscaped bool, w http
 
 // handleGetMyPlanHistoryRequest handles getMyPlanHistory operation.
 //
-// Recent usage entries, newest first.
+// Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV
+// editing session was opened for — rather than an opaque reference. A `release` entry is one that
+// was given back because the work produced nothing.
 //
 // GET /me/plan/history
 func (s *Server) handleGetMyPlanHistoryRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -12597,7 +12719,7 @@ func (s *Server) handleGetMyPlanHistoryRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMyPlanHistoryOperation,
-			OperationSummary: "",
+			OperationSummary: "What you spent your allowances on, newest first.",
 			OperationID:      "getMyPlanHistory",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12654,7 +12776,10 @@ func (s *Server) handleGetMyPlanHistoryRequest(args [0]string, argsEscaped bool,
 
 // handleGetMyUsageRequest handles getMyUsage operation.
 //
-// With a session or an API key. Zeroes when the gateway cannot be read.
+// Counts and token usage, not cost — the gateway’s dollar figure is a list price against a mixed
+// upstream pool, not what you pay; what you spend is a plan allowance, reported by `/me/plan` over
+// this same day. Never fails for a reason you could act on: no usage yet, or an unreachable gateway,
+// both answer 200 with zeroes.
 //
 // GET /me/usage
 func (s *Server) handleGetMyUsageRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -12673,7 +12798,7 @@ func (s *Server) handleGetMyUsageRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetMyUsageOperation,
-			OperationSummary: "",
+			OperationSummary: "Your AI request activity today.",
 			OperationID:      "getMyUsage",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12763,7 +12888,7 @@ func (s *Server) handleGetNotificationRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetNotificationOperation,
-			OperationSummary: "",
+			OperationSummary: "One of your notifications, including its jobs snapshot.",
 			OperationID:      "getNotification",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12844,7 +12969,7 @@ func (s *Server) handleGetNotificationSettingsRequest(args [0]string, argsEscape
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetNotificationSettingsOperation,
-			OperationSummary: "",
+			OperationSummary: "Your notification rule (gates saved-job reminders and both lifecycle nudges).",
 			OperationID:      "getNotificationSettings",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -12996,7 +13121,7 @@ func (s *Server) handleGetProfileRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetProfileOperation,
-			OperationSummary: "",
+			OperationSummary: "Your career profile, or null if you have not saved one.",
 			OperationID:      "getProfile",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13053,7 +13178,8 @@ func (s *Server) handleGetProfileRequest(args [0]string, argsEscaped bool, w htt
 
 // handleGetResumeRequest handles getResume operation.
 //
-// Whether storage is on, a CV is stored, when, and its structured view. Always 200.
+// Always `200`: unconfigured storage or no résumé is a normal state. `structured` carries the
+// read-only structured résumé, or null when none is current.
 //
 // GET /me/resume
 func (s *Server) handleGetResumeRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -13072,7 +13198,7 @@ func (s *Server) handleGetResumeRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetResumeOperation,
-			OperationSummary: "",
+			OperationSummary: "Your résumé status (enabled / present / uploaded_at).",
 			OperationID:      "getResume",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13129,8 +13255,9 @@ func (s *Server) handleGetResumeRequest(args [0]string, argsEscaped bool, w http
 
 // handleGetResumeVerdictRequest handles getResumeVerdict operation.
 //
-// The market-coverage verdict for the caller's profile, scored against the role the query's facet
-// params select. Cookie only; 404 without a profile; 503 when search is off.
+// How many of your selected role’s open vacancies your skills reach, and which missing skill unlocks
+// the most. The role is the request’s facet params (defaulting to your specializations). No profile
+// is a `404`; `503` when search is unavailable.
 //
 // GET /me/profile/verdict
 func (s *Server) handleGetResumeVerdictRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -13149,7 +13276,7 @@ func (s *Server) handleGetResumeVerdictRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetResumeVerdictOperation,
-			OperationSummary: "",
+			OperationSummary: "Market-coverage verdict for your profile skills.",
 			OperationID:      "getResumeVerdict",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13225,7 +13352,7 @@ func (s *Server) handleGetScreeningAnswersRequest(args [0]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetScreeningAnswersOperation,
-			OperationSummary: "",
+			OperationSummary: "Your stored screening answers, or `null` if you have stated none.",
 			OperationID:      "getScreeningAnswers",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13375,6 +13502,8 @@ func (s *Server) handleGetSessionRequest(args [1]string, argsEscaped bool, w htt
 
 // handleGetSurveyRequest handles getSurvey operation.
 //
+// Your stored survey answers. Every field is absent until you answer it.
+//
 // GET /me/survey
 func (s *Server) handleGetSurveyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -13392,7 +13521,7 @@ func (s *Server) handleGetSurveyRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetSurveyOperation,
-			OperationSummary: "",
+			OperationSummary: "Your stored survey answers. Every field is absent until you answer it.",
 			OperationID:      "getSurvey",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13449,6 +13578,18 @@ func (s *Server) handleGetSurveyRequest(args [0]string, argsEscaped bool, w http
 
 // handleGetTalentFacetsRequest handles getTalentFacets operation.
 //
+// Takes the same filters as the list and answers with the count of members behind every value of every
+// facet, plus the total behind the filter itself. Same shape as the job-search facet endpoint, so one
+// control renders either.
+//
+// Each facet is counted with its OWN selection removed, while every other filter still applies —
+// otherwise picking one skill makes every other skill read zero and the control silently becomes
+// single-select.
+//
+// A value nobody carries is absent rather than reported as zero. A value carried by fewer members than
+// the floor is offered with its number withheld: the option stays usable, and the number does not
+// become a way to name somebody. Counts describe the filter you sent and never the whole membership.
+//
 // GET /talent/facets
 func (s *Server) handleGetTalentFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -13480,7 +13621,7 @@ func (s *Server) handleGetTalentFacetsRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetTalentFacetsOperation,
-			OperationSummary: "",
+			OperationSummary: "How many members stand behind each filter value.",
 			OperationID:      "getTalentFacets",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13566,7 +13707,11 @@ func (s *Server) handleGetTalentFacetsRequest(args [0]string, argsEscaped bool, 
 
 // handleGetTalentMemberRequest handles getTalentMember operation.
 //
-// A card is a person: cached privately only, so leaving takes effect at once.
+// Four ways of being absent — a member who left, one whose CV extract has gone stale, a handle
+// nobody holds, and a string that could not be a handle — all answer the same 404, so the route
+// cannot be used to ask whether an account exists. An account’s `username` is not an address here.
+// Membership is re-read from the database on every request, so leaving takes effect immediately rather
+// than when a cache expires.
 //
 // GET /talent/{handle}
 func (s *Server) handleGetTalentMemberRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -13599,7 +13744,7 @@ func (s *Server) handleGetTalentMemberRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetTalentMemberOperation,
-			OperationSummary: "",
+			OperationSummary: "One member’s public card.",
 			OperationID:      "getTalentMember",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13661,7 +13806,9 @@ func (s *Server) handleGetTalentMemberRequest(args [1]string, argsEscaped bool, 
 
 // handleGetTalentNetworkMembershipRequest handles getTalentNetworkMembership operation.
 //
-// With a session or an API key.
+// A caller who has never touched the setting reads `"off"` — the column default, not a sentinel.
+// `talent_handle` is absent until the first time they join: it is minted then, and kept forever after,
+// so leaving and rejoining never changes the URL somebody already shared.
 //
 // GET /me/talent-network
 func (s *Server) handleGetTalentNetworkMembershipRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -13680,7 +13827,7 @@ func (s *Server) handleGetTalentNetworkMembershipRequest(args [0]string, argsEsc
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetTalentNetworkMembershipOperation,
-			OperationSummary: "",
+			OperationSummary: "Your current Talent Network visibility and shareable id.",
 			OperationID:      "getTalentNetworkMembership",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13866,7 +14013,7 @@ func (s *Server) handleGetThreadRequest(args [1]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetThreadOperation,
-			OperationSummary: "",
+			OperationSummary: "One thread with its replies.",
 			OperationID:      "getThread",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13932,7 +14079,13 @@ func (s *Server) handleGetThreadRequest(args [1]string, argsEscaped bool, w http
 
 // handleGetTimelineRequest handles getTimeline operation.
 //
-// The caller's events between `from` and `to` inclusive, oldest first.
+// The application-event ledger as a dated series, oldest first: applications sent, employer replies,
+// follow-ups and stage changes. `occurred_at` is an instant, not a day — which day it falls on
+// depends on your timezone, so group it client-side. `observed` says whether the date came from a
+// source other than you: mail-derived events carry a date the employer set, while a stage you set
+// yourself is dated from when you recorded it. `email_id` and `email_subject` are present only while
+// the message exists; deleting it hides the content and leaves the event standing. Both bounds are
+// required and may span at most 366 days.
 //
 // GET /me/timeline
 func (s *Server) handleGetTimelineRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -13965,7 +14118,7 @@ func (s *Server) handleGetTimelineRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetTimelineOperation,
-			OperationSummary: "",
+			OperationSummary: "What happened to your applications over a date range.",
 			OperationID:      "getTimeline",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14031,7 +14184,10 @@ func (s *Server) handleGetTimelineRequest(args [0]string, argsEscaped bool, w ht
 
 // handleGetTrackedApplicationRequest handles getTrackedApplication operation.
 //
-// The caller's application for a job slug with its linked mail. 404 when not tracked.
+// `events` is the application's ledger, newest first — the apply, employer replies, follow-ups,
+// stage changes, scheduled interviews — in the shape `GET /me/timeline` serves, bounded at 100 and
+// empty when nothing has happened yet. This read also carries the full job view; the listing carries
+// only a card. A slug you do not track is a 404.
 //
 // GET /me/tracking/{slug}
 func (s *Server) handleGetTrackedApplicationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14064,7 +14220,7 @@ func (s *Server) handleGetTrackedApplicationRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetTrackedApplicationOperation,
-			OperationSummary: "",
+			OperationSummary: "One tracked application, with the mail linked to it and its history.",
 			OperationID:      "getTrackedApplication",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14293,7 +14449,8 @@ func (s *Server) handleGetWatchingRequest(args [1]string, argsEscaped bool, w ht
 
 // handleGmailDisconnectRequest handles gmailDisconnect operation.
 //
-// Revokes the grant (best effort) and purges the token and the synced Gmail mail.
+// Best-effort revokes the grant at Google, deletes the stored token, and removes the Gmail-sourced
+// mail. Mail from the hosted address stays.
 //
 // DELETE /me/gmail
 func (s *Server) handleGmailDisconnectRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14312,7 +14469,7 @@ func (s *Server) handleGmailDisconnectRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GmailDisconnectOperation,
-			OperationSummary: "",
+			OperationSummary: "Disconnect Gmail and purge the mail it synced.",
 			OperationID:      "gmailDisconnect",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14369,6 +14526,10 @@ func (s *Server) handleGmailDisconnectRequest(args [0]string, argsEscaped bool, 
 
 // handleGmailStatusRequest handles gmailStatus operation.
 //
+// `available` reflects whether the instance has Gmail OAuth configured. `status` is `needs_reconsent`
+// when Google revoked the grant. Connecting itself is a browser redirect (`/me/gmail/connect`), so it
+// is session-only and not part of the key-driven surface.
+//
 // GET /me/gmail
 func (s *Server) handleGmailStatusRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -14386,7 +14547,7 @@ func (s *Server) handleGmailStatusRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GmailStatusOperation,
-			OperationSummary: "",
+			OperationSummary: "Gmail connection status.",
 			OperationID:      "gmailStatus",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14443,7 +14604,7 @@ func (s *Server) handleGmailStatusRequest(args [0]string, argsEscaped bool, w ht
 
 // handleHideCompanyFeedbackRequest handles hideCompanyFeedback operation.
 //
-// Moderators only: hides a review. Idempotent.
+// Idempotent. 404 for an unknown id.
 //
 // POST /company-feedback/{id}/hide
 func (s *Server) handleHideCompanyFeedbackRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14476,7 +14637,7 @@ func (s *Server) handleHideCompanyFeedbackRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    HideCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Hide a review, dropping it from the company's public list and average.",
 			OperationID:      "hideCompanyFeedback",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14633,9 +14794,12 @@ func (s *Server) handleImportWatchlistRequest(args [0]string, argsEscaped bool, 
 
 // handleIngestEmailsRequest handles ingestEmails operation.
 //
-// A batch of messages the caller's own mail client fetched, as `messages`: a list of objects with
-// `external_id`, `thread_id`, `from_addr`, `from_name`, `subject`, `body_text`, `body_html` and
-// `received_at`. The mail service validates the batch and refuses it whole with a 400.
+// Stored under source `external`. freehire provides no transport here and never classifies this mail
+// — that is the point of the tier. `external_id` (the Message-ID in practice) is the dedup key:
+// re-pushing the same id updates that message instead of storing a copy, so a nightly re-sync is safe.
+// Content columns are refreshed; your read, deleted and triage state is not, so a re-sync cannot
+// resurrect deleted mail or wipe a verdict. At most 100 messages per call, applied as one transaction
+// — an oversized batch is refused, never truncated.
 //
 // POST /me/emails
 func (s *Server) handleIngestEmailsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14673,7 +14837,7 @@ func (s *Server) handleIngestEmailsRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    IngestEmailsOperation,
-			OperationSummary: "",
+			OperationSummary: "Push a batch your own mail client fetched.",
 			OperationID:      "ingestEmails",
 			Body:             request,
 			RawBody:          rawBody,
@@ -14730,7 +14894,7 @@ func (s *Server) handleIngestEmailsRequest(args [0]string, argsEscaped bool, w h
 
 // handleIngestStatusRequest handles ingestStatus operation.
 //
-// The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
+// Sanitized: which boards are healthy, cooled or failing, without error text or internal identifiers.
 //
 // GET /status
 func (s *Server) handleIngestStatusRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -14749,7 +14913,7 @@ func (s *Server) handleIngestStatusRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    IngestStatusOperation,
-			OperationSummary: "",
+			OperationSummary: "Ingest-fleet health, per provider.",
 			OperationID:      "ingestStatus",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -14806,6 +14970,8 @@ func (s *Server) handleIngestStatusRequest(args [0]string, argsEscaped bool, w h
 
 // handleInsightsCompaniesRequest handles insightsCompanies operation.
 //
+// Companies ranked by hiring activity.
+//
 // GET /insights/companies
 func (s *Server) handleInsightsCompaniesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -14837,7 +15003,7 @@ func (s *Server) handleInsightsCompaniesRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    InsightsCompaniesOperation,
-			OperationSummary: "",
+			OperationSummary: "Companies ranked by hiring activity.",
 			OperationID:      "insightsCompanies",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15129,7 +15295,7 @@ func (s *Server) handleInsightsRolesRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    InsightsRolesOperation,
-			OperationSummary: "",
+			OperationSummary: "Roles (category × seniority) ranked by openings or growth.",
 			OperationID:      "insightsRoles",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15207,6 +15373,8 @@ func (s *Server) handleInsightsRolesRequest(args [0]string, argsEscaped bool, w 
 
 // handleInsightsSalaryRequest handles insightsSalary operation.
 //
+// Salary bands by category, seniority and country.
+//
 // GET /insights/salary
 func (s *Server) handleInsightsSalaryRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -15238,7 +15406,7 @@ func (s *Server) handleInsightsSalaryRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    InsightsSalaryOperation,
-			OperationSummary: "",
+			OperationSummary: "Salary bands by category, seniority and country.",
 			OperationID:      "insightsSalary",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15411,6 +15579,9 @@ func (s *Server) handleInsightsSalaryHistoryRequest(args [0]string, argsEscaped 
 
 // handleInsightsSkillsRequest handles insightsSkills operation.
 //
+// Scope by category or by country, but not both — the rollup behind it is single-dimensional, so
+// asking for both is a 400.
+//
 // GET /insights/skills
 func (s *Server) handleInsightsSkillsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -15442,7 +15613,7 @@ func (s *Server) handleInsightsSkillsRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    InsightsSkillsOperation,
-			OperationSummary: "",
+			OperationSummary: "Skills ranked by openings or growth.",
 			OperationID:      "insightsSkills",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15516,6 +15687,8 @@ func (s *Server) handleInsightsSkillsRequest(args [0]string, argsEscaped bool, w
 
 // handleInsightsVelocityRequest handles insightsVelocity operation.
 //
+// How fast a slice of the market is hiring, over time.
+//
 // GET /insights/velocity
 func (s *Server) handleInsightsVelocityRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -15547,7 +15720,7 @@ func (s *Server) handleInsightsVelocityRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    InsightsVelocityOperation,
-			OperationSummary: "",
+			OperationSummary: "How fast a slice of the market is hiring, over time.",
 			OperationID:      "insightsVelocity",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15725,7 +15898,10 @@ func (s *Server) handleInterpretSearchRequest(args [0]string, argsEscaped bool, 
 
 // handleJobApplyFormRequest handles jobApplyForm operation.
 //
-// The application form captured for the job. 404 when none was captured.
+// The questions a candidate will have to answer, shaped for reading. Only captured for a minority of
+// postings (roughly a sixth of technical ATS platforms are readable at all) — no captured form is a
+// `404`, distinguishable from an unknown slug (also `404`, but at the job lookup rather than the form
+// lookup).
 //
 // GET /jobs/{slug}/apply-form
 func (s *Server) handleJobApplyFormRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -15758,7 +15934,7 @@ func (s *Server) handleJobApplyFormRequest(args [1]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    JobApplyFormOperation,
-			OperationSummary: "",
+			OperationSummary: "The captured ATS application form for the posting.",
 			OperationID:      "jobApplyForm",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15820,7 +15996,9 @@ func (s *Server) handleJobApplyFormRequest(args [1]string, argsEscaped bool, w h
 
 // handleJobCopiesRequest handles jobCopies operation.
 //
-// The open postings a collapsed job stands for, one per city.
+// The per-city openings folded under one canonical card by content-dedup — each keeps its own
+// `location` and `apply_url` so a seeker picks their city. The anchor job itself is included.
+// `meta.total` is the whole cluster size, so it stays accurate when the list is a capped page.
 //
 // GET /jobs/{slug}/copies
 func (s *Server) handleJobCopiesRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -15853,7 +16031,7 @@ func (s *Server) handleJobCopiesRequest(args [1]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    JobCopiesOperation,
-			OperationSummary: "",
+			OperationSummary: "Other open postings in the same role cluster (per-city duplicates).",
 			OperationID:      "jobCopies",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -15923,7 +16101,10 @@ func (s *Server) handleJobCopiesRequest(args [1]string, argsEscaped bool, w http
 
 // handleJobFacetsRequest handles jobFacets operation.
 //
-// The count of postings per facet value under the same filters, keyed by public facet param.
+// Takes the same `q` and facet filter params as search, but returns the distribution of values instead
+// of a page of jobs — use it to build filter UIs or see how a filter narrows the set. Continuous
+// numeric facets are returned as `stats` (min/max), not per-value buckets. `former_employers` is
+// ignored even for signed-in callers.
 //
 // GET /jobs/facets
 func (s *Server) handleJobFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -15956,7 +16137,7 @@ func (s *Server) handleJobFacetsRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    JobFacetsOperation,
-			OperationSummary: "",
+			OperationSummary: "Count of matching jobs per facet value (and numeric stats).",
 			OperationID:      "jobFacets",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16026,8 +16207,9 @@ func (s *Server) handleJobFacetsRequest(args [0]string, argsEscaped bool, w http
 
 // handleJobsActivityRequest handles jobsActivity operation.
 //
-// Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
-// 400.
+// Aggregated to the requested granularity over a date range; the series is dense (missing periods are
+// 0). Defaults: `granularity=day`, `to`=today, `from` a per-granularity window before `to`. An unknown
+// granularity or a range over 4000 days is a `400`.
 //
 // GET /stats/jobs-activity
 func (s *Server) handleJobsActivityRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16060,7 +16242,7 @@ func (s *Server) handleJobsActivityRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    JobsActivityOperation,
-			OperationSummary: "",
+			OperationSummary: "Public time series of added vs. removed vacancies per period.",
 			OperationID:      "jobsActivity",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16130,6 +16312,8 @@ func (s *Server) handleJobsActivityRequest(args [0]string, argsEscaped bool, w h
 
 // handleLinkEmailRequest handles linkEmail operation.
 //
+// Attach a message to one of your applications.
+//
 // POST /me/emails/{id}/link
 func (s *Server) handleLinkEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -16176,7 +16360,7 @@ func (s *Server) handleLinkEmailRequest(args [1]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    LinkEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Attach a message to one of your applications.",
 			OperationID:      "linkEmail",
 			Body:             request,
 			RawBody:          rawBody,
@@ -16238,7 +16422,9 @@ func (s *Server) handleLinkEmailRequest(args [1]string, argsEscaped bool, w http
 
 // handleLinkRecalledMailRequest handles linkRecalledMail operation.
 //
-// Imports a message the sweep proposed and links it to the application.
+// Imports the message from your mailbox by `provider_id` (from a mail-recall response) and links it to
+// the application in one step — the same import-then-link path a Gmail sync uses, so the response is
+// the full message body, the same shape `POST /me/emails/{id}/link` returns.
 //
 // POST /me/tracking/{slug}/mail-recall/link
 func (s *Server) handleLinkRecalledMailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16286,7 +16472,7 @@ func (s *Server) handleLinkRecalledMailRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    LinkRecalledMailOperation,
-			OperationSummary: "",
+			OperationSummary: "Import and link one message a mail-recall sweep proposed.",
 			OperationID:      "linkRecalledMail",
 			Body:             request,
 			RawBody:          rawBody,
@@ -16422,7 +16608,11 @@ func (s *Server) handleListApiKeysRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListAppliedCompanySlugsRequest handles listAppliedCompanySlugs operation.
 //
-// The employers the caller has applied to.
+// Lets the SPA mark "you already applied to this company" on any posting of theirs without
+// authenticating the public job reads: compare a posting's `company_slug` against this set. Counts
+// applications actually made (not ones still being prepared), keyed by the posting's current company
+// slug and resolved through company merges. Newest first, drawn from your 1000 most recent
+// applications.
 //
 // GET /me/tracking/applied-companies
 func (s *Server) handleListAppliedCompanySlugsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16441,7 +16631,7 @@ func (s *Server) handleListAppliedCompanySlugsRequest(args [0]string, argsEscape
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListAppliedCompanySlugsOperation,
-			OperationSummary: "",
+			OperationSummary: "Company slugs of the employers you have applied to.",
 			OperationID:      "listAppliedCompanySlugs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16498,7 +16688,7 @@ func (s *Server) handleListAppliedCompanySlugsRequest(args [0]string, argsEscape
 
 // handleListAssistantSessionsRequest handles listAssistantSessions operation.
 //
-// The caller's chat conversations, newest activity first.
+// Tailoring conversations are not chats — each belongs to a CV — so they never appear here.
 //
 // GET /assistant/sessions
 func (s *Server) handleListAssistantSessionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16517,7 +16707,7 @@ func (s *Server) handleListAssistantSessionsRequest(args [0]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListAssistantSessionsOperation,
-			OperationSummary: "",
+			OperationSummary: "List your chat conversations, newest activity first.",
 			OperationID:      "listAssistantSessions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16648,7 +16838,10 @@ func (s *Server) handleListBankedAnswersRequest(args [0]string, argsEscaped bool
 
 // handleListBaseCVsRequest handles listBaseCVs operation.
 //
-// The base CVs, oldest first, with the default flagged. With a session or an API key.
+// The non-tailored CVs you can edit, duplicate and tailor from, oldest created first. `is_default`
+// marks the one used when a tailor request names no base; `hand_edited` marks a base you changed in
+// the editor, which a new CV upload will not overwrite. GET /me/cvs lists tailored copies and is
+// unchanged.
 //
 // GET /me/cvs/bases
 func (s *Server) handleListBaseCVsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16667,7 +16860,7 @@ func (s *Server) handleListBaseCVsRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListBaseCVsOperation,
-			OperationSummary: "",
+			OperationSummary: "List your base CVs, without their documents.",
 			OperationID:      "listBaseCVs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16724,7 +16917,9 @@ func (s *Server) handleListBaseCVsRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListCVFontsRequest handles listCVFonts operation.
 //
-// The registered typefaces a CV may choose.
+// Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on
+// save and the CV renders in the template's own face. `note` names the familiar face the entry
+// matches; `css` is a font stack for rendering a preview in a browser.
 //
 // GET /cv-fonts
 func (s *Server) handleListCVFontsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16743,7 +16938,7 @@ func (s *Server) handleListCVFontsRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCVFontsOperation,
-			OperationSummary: "",
+			OperationSummary: "The typefaces a CV may use.",
 			OperationID:      "listCVFonts",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16800,7 +16995,10 @@ func (s *Server) handleListCVFontsRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListCVRevisionsRequest handles listCVRevisions operation.
 //
-// What changed the CV, newest first.
+// Each entry names what changed and where (`paths`), not the edit itself — the operations carry your
+// own prior text and stay server-side. `undoable` is false for an entry with nothing to reverse (e.g.
+// the CV’s own creation); `reverted` marks an entry already undone rather than removing it from the
+// feed.
 //
 // GET /me/cvs/{id}/revisions
 func (s *Server) handleListCVRevisionsRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -16833,7 +17031,7 @@ func (s *Server) handleListCVRevisionsRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCVRevisionsOperation,
-			OperationSummary: "",
+			OperationSummary: "The edit history of this CV, newest first.",
 			OperationID:      "listCVRevisions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16914,7 +17112,7 @@ func (s *Server) handleListCVTemplatesRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCVTemplatesOperation,
-			OperationSummary: "",
+			OperationSummary: "The template gallery.",
 			OperationID:      "listCVTemplates",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -16971,6 +17169,11 @@ func (s *Server) handleListCVTemplatesRequest(args [0]string, argsEscaped bool, 
 
 // handleListCVTracerLinksRequest handles listCVTracerLinks operation.
 //
+// One entry per link the PDF carries (header links, project links). Clicks you made on your own CV are
+// excluded from the counts; `bot_clicks` is tallied separately rather than folded in.
+// `distinct_visitors` is omitted — not zero — on a deployment with no visitor salt, since there is
+// no honest count to report.
+//
 // GET /me/cvs/{id}/tracer-links
 func (s *Server) handleListCVTracerLinksRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -17002,7 +17205,7 @@ func (s *Server) handleListCVTracerLinksRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCVTracerLinksOperation,
-			OperationSummary: "",
+			OperationSummary: "What is known about this CV's traced links.",
 			OperationID:      "listCVTracerLinks",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17083,7 +17286,7 @@ func (s *Server) handleListCVsRequest(args [0]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCVsOperation,
-			OperationSummary: "",
+			OperationSummary: "List your CVs, without their documents.",
 			OperationID:      "listCVs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17140,10 +17343,8 @@ func (s *Server) handleListCVsRequest(args [0]string, argsEscaped bool, w http.R
 
 // handleListCompaniesRequest handles listCompanies operation.
 //
-// Ranked companies. `q` and the facet params (collections, regions, countries, domains, industries,
-// company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity,
-// subindustries) are read from the raw query, comma-joined or repeated; a param the listing does not
-// read is reported in `meta.ignored_params`.
+// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
+// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
 //
 // GET /companies
 func (s *Server) handleListCompaniesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -17176,7 +17377,7 @@ func (s *Server) handleListCompaniesRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCompaniesOperation,
-			OperationSummary: "",
+			OperationSummary: "List companies with job counts and denormalized facets; optional filters.",
 			OperationID:      "listCompanies",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17283,7 +17484,7 @@ func (s *Server) handleListCompanyFeedbackRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "List a company's feedback, newest first.",
 			OperationID:      "listCompanyFeedback",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17636,6 +17837,8 @@ func (s *Server) handleListConversationsRequest(args [0]string, argsEscaped bool
 
 // handleListDismissedSlugsRequest handles listDismissedSlugs operation.
 //
+// The slugs you dismissed, so a client can hide them.
+//
 // GET /me/tracking/dismissed
 func (s *Server) handleListDismissedSlugsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -17653,7 +17856,7 @@ func (s *Server) handleListDismissedSlugsRequest(args [0]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListDismissedSlugsOperation,
-			OperationSummary: "",
+			OperationSummary: "The slugs you dismissed, so a client can hide them.",
 			OperationID:      "listDismissedSlugs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17862,6 +18065,8 @@ func (s *Server) handleListEmployerVacanciesRequest(args [0]string, argsEscaped 
 
 // handleListExperienceRequest handles listExperience operation.
 //
+// Your employments and their evidence atoms.
+//
 // GET /me/experience
 func (s *Server) handleListExperienceRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -17879,7 +18084,7 @@ func (s *Server) handleListExperienceRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListExperienceOperation,
-			OperationSummary: "",
+			OperationSummary: "Your employments and their evidence atoms.",
 			OperationID:      "listExperience",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -17955,7 +18160,7 @@ func (s *Server) handleListIncomingReferralRequestsRequest(args [0]string, argsE
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListIncomingReferralRequestsOperation,
-			OperationSummary: "",
+			OperationSummary: "Requests waiting on you as an approved referrer.",
 			OperationID:      "listIncomingReferralRequests",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18012,8 +18217,10 @@ func (s *Server) handleListIncomingReferralRequestsRequest(args [0]string, argsE
 
 // handleListJobsRequest handles listJobs operation.
 //
-// The newest open jobs. It reads no filter: a param other than the page ones is reported in
-// `meta.ignored_params`.
+// Takes no filters at all — `limit` and `offset` are the whole vocabulary. Anything else is ignored
+// rather than refused, and listed in `meta.ignored_params`: a filter param sent here returns the
+// entire catalogue, which is indistinguishable from a narrow result unless you check. Use
+// `/jobs/search` to filter.
 //
 // GET /jobs
 func (s *Server) handleListJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -18046,7 +18253,7 @@ func (s *Server) handleListJobsRequest(args [0]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListJobsOperation,
-			OperationSummary: "",
+			OperationSummary: "List jobs, newest first, with limit/offset pagination.",
 			OperationID:      "listJobs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18326,7 +18533,9 @@ func (s *Server) handleListMentorsRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListMyAnalysesRequest handles listMyAnalyses operation.
 //
-// The jobs the caller has run the fit analysis on, newest first.
+// Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and
+// verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.allowance`
+// reports where you stand on the day’s analyses. Never runs the LLM.
 //
 // GET /me/tracking/analyses
 func (s *Server) handleListMyAnalysesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -18345,7 +18554,7 @@ func (s *Server) handleListMyAnalysesRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListMyAnalysesOperation,
-			OperationSummary: "",
+			OperationSummary: "Jobs you have run the AI match analysis on.",
 			OperationID:      "listMyAnalyses",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18402,6 +18611,8 @@ func (s *Server) handleListMyAnalysesRequest(args [0]string, argsEscaped bool, w
 
 // handleListMyContributionsRequest handles listMyContributions operation.
 //
+// The boards you contributed, and their onboarding state.
+//
 // GET /me/contributions
 func (s *Server) handleListMyContributionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -18419,7 +18630,7 @@ func (s *Server) handleListMyContributionsRequest(args [0]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListMyContributionsOperation,
-			OperationSummary: "",
+			OperationSummary: "The boards you contributed, and their onboarding state.",
 			OperationID:      "listMyContributions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18476,6 +18687,8 @@ func (s *Server) handleListMyContributionsRequest(args [0]string, argsEscaped bo
 
 // handleListMyReferralOffersRequest handles listMyReferralOffers operation.
 //
+// Your referral offers and their moderation state.
+//
 // GET /me/referrals/offers
 func (s *Server) handleListMyReferralOffersRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -18493,7 +18706,7 @@ func (s *Server) handleListMyReferralOffersRequest(args [0]string, argsEscaped b
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListMyReferralOffersOperation,
-			OperationSummary: "",
+			OperationSummary: "Your referral offers and their moderation state.",
 			OperationID:      "listMyReferralOffers",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18550,6 +18763,8 @@ func (s *Server) handleListMyReferralOffersRequest(args [0]string, argsEscaped b
 
 // handleListMyReferralRequestsRequest handles listMyReferralRequests operation.
 //
+// The intros you asked for, and where they stand.
+//
 // GET /me/referrals/requests
 func (s *Server) handleListMyReferralRequestsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -18567,7 +18782,7 @@ func (s *Server) handleListMyReferralRequestsRequest(args [0]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListMyReferralRequestsOperation,
-			OperationSummary: "",
+			OperationSummary: "The intros you asked for, and where they stand.",
 			OperationID:      "listMyReferralRequests",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18717,6 +18932,8 @@ func (s *Server) handleListMySessionsRequest(args [0]string, argsEscaped bool, w
 
 // handleListMySubmissionsRequest handles listMySubmissions operation.
 //
+// Your own submission queue.
+//
 // GET /me/submissions
 func (s *Server) handleListMySubmissionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -18734,7 +18951,7 @@ func (s *Server) handleListMySubmissionsRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListMySubmissionsOperation,
-			OperationSummary: "",
+			OperationSummary: "Your own submission queue.",
 			OperationID:      "listMySubmissions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18791,6 +19008,8 @@ func (s *Server) handleListMySubmissionsRequest(args [0]string, argsEscaped bool
 
 // handleListNotificationsRequest handles listNotifications operation.
 //
+// List your notification-center entries, newest first.
+//
 // GET /me/notifications
 func (s *Server) handleListNotificationsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -18822,7 +19041,7 @@ func (s *Server) handleListNotificationsRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListNotificationsOperation,
-			OperationSummary: "",
+			OperationSummary: "List your notification-center entries, newest first.",
 			OperationID:      "listNotifications",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18981,7 +19200,7 @@ func (s *Server) handleListOauthProvidersRequest(args [0]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListOauthProvidersOperation,
-			OperationSummary: "",
+			OperationSummary: "List the enabled OAuth providers.",
 			OperationID:      "listOauthProviders",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19133,7 +19352,7 @@ func (s *Server) handleListPendingJobReportsRequest(args [0]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListPendingJobReportsOperation,
-			OperationSummary: "",
+			OperationSummary: "The pending report queue (moderators).",
 			OperationID:      "listPendingJobReports",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19285,7 +19504,7 @@ func (s *Server) handleListPendingReferralOffersRequest(args [0]string, argsEsca
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListPendingReferralOffersOperation,
-			OperationSummary: "",
+			OperationSummary: "The offer-moderation queue.",
 			OperationID:      "listPendingReferralOffers",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19361,7 +19580,7 @@ func (s *Server) handleListPendingSubmissionsRequest(args [0]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListPendingSubmissionsOperation,
-			OperationSummary: "",
+			OperationSummary: "The pending submission queue (moderators).",
 			OperationID:      "listPendingSubmissions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19418,6 +19637,8 @@ func (s *Server) handleListPendingSubmissionsRequest(args [0]string, argsEscaped
 
 // handleListPushTokensRequest handles listPushTokens operation.
 //
+// List your own registered devices.
+//
 // GET /me/push-tokens
 func (s *Server) handleListPushTokensRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -19435,7 +19656,7 @@ func (s *Server) handleListPushTokensRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListPushTokensOperation,
-			OperationSummary: "",
+			OperationSummary: "List your own registered devices.",
 			OperationID:      "listPushTokens",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19587,7 +19808,8 @@ func (s *Server) handleListRecentThreadsRequest(args [0]string, argsEscaped bool
 
 // handleListReferralCVOptionsRequest handles listReferralCVOptions operation.
 //
-// The CVs tailored for the vacancy (or any at the company), and whether a CV file is stored.
+// The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the company, newest
+// first, and whether you have uploaded a CV file.
 //
 // GET /me/referrals/cv-options
 func (s *Server) handleListReferralCVOptionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -19620,7 +19842,7 @@ func (s *Server) handleListReferralCVOptionsRequest(args [0]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListReferralCVOptionsOperation,
-			OperationSummary: "",
+			OperationSummary: "The CVs you can attach to a request into a company.",
 			OperationID:      "listReferralCVOptions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19705,7 +19927,7 @@ func (s *Server) handleListReportedCompanyFeedbackRequest(args [0]string, argsEs
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListReportedCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Every review with at least one report, most-reported first.",
 			OperationID:      "listReportedCompanyFeedback",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19762,6 +19984,8 @@ func (s *Server) handleListReportedCompanyFeedbackRequest(args [0]string, argsEs
 
 // handleListSavedSearchesRequest handles listSavedSearches operation.
 //
+// List your saved searches.
+//
 // GET /me/searches
 func (s *Server) handleListSavedSearchesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -19779,7 +20003,7 @@ func (s *Server) handleListSavedSearchesRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListSavedSearchesOperation,
-			OperationSummary: "",
+			OperationSummary: "List your saved searches.",
 			OperationID:      "listSavedSearches",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19836,6 +20060,8 @@ func (s *Server) handleListSavedSearchesRequest(args [0]string, argsEscaped bool
 
 // handleListSavedSlugsRequest handles listSavedSlugs operation.
 //
+// Lets the SPA render the save toggle as filled without authenticating the public job reads.
+//
 // GET /me/tracking/saved
 func (s *Server) handleListSavedSlugsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -19853,7 +20079,7 @@ func (s *Server) handleListSavedSlugsRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListSavedSlugsOperation,
-			OperationSummary: "",
+			OperationSummary: "Slugs of jobs you have saved.",
 			OperationID:      "listSavedSlugs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -19986,6 +20212,8 @@ func (s *Server) handleListSourcesRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListSubscriptionsRequest handles listSubscriptions operation.
 //
+// List your subscriptions.
+//
 // GET /me/subscriptions
 func (s *Server) handleListSubscriptionsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -20003,7 +20231,7 @@ func (s *Server) handleListSubscriptionsRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListSubscriptionsOperation,
-			OperationSummary: "",
+			OperationSummary: "List your subscriptions.",
 			OperationID:      "listSubscriptions",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20060,6 +20288,12 @@ func (s *Server) handleListSubscriptionsRequest(args [0]string, argsEscaped bool
 
 // handleListTalentRequest handles listTalent operation.
 //
+// Every filter takes values from a closed vocabulary or a number; there is no free-text search,
+// because a card carries no free text to search. Values within one filter are OR, different filters
+// narrow together, and an absent filter is identical to an empty one. A parameter this endpoint does
+// not read — including one it recognises but cannot parse, like `min_years=lots` — is named in
+// `meta.ignored_params` rather than silently widening the answer.
+//
 // GET /talent
 func (s *Server) handleListTalentRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -20091,7 +20325,7 @@ func (s *Server) handleListTalentRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListTalentOperation,
-			OperationSummary: "",
+			OperationSummary: "The public catalogue of members, filtered and paged.",
 			OperationID:      "listTalent",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20218,7 +20452,7 @@ func (s *Server) handleListThreadsRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListThreadsOperation,
-			OperationSummary: "",
+			OperationSummary: "Public discussion threads.",
 			OperationID:      "listThreads",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20288,9 +20522,11 @@ func (s *Server) handleListThreadsRequest(args [0]string, argsEscaped bool, w ht
 
 // handleListTrackedJobsRequest handles listTrackedJobs operation.
 //
-// The caller's interactions joined with their jobs, most recently touched first. `filter` is all,
-// viewed, saved, applied or board (400 otherwise); `compact` drops each card's blurb, skills and ghost
-// signal. A page param that does not read falls back to its default.
+// Each item carries a card of the job with your interaction timestamps alongside it — what a list
+// row draws: slug, title, company, closed_at, the stated facets, skills, collections, posted_at, and a
+// `blurb` already cut to length. It does NOT carry the description; the full job view is on
+// `GET /me/tracking/:slug`. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay
+// listed so your history never shrinks.
 //
 // GET /me/tracking
 func (s *Server) handleListTrackedJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -20323,7 +20559,7 @@ func (s *Server) handleListTrackedJobsRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListTrackedJobsOperation,
-			OperationSummary: "",
+			OperationSummary: "Your tracked jobs joined with the job data.",
 			OperationID:      "listTrackedJobs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20416,7 +20652,7 @@ func (s *Server) handleListViewedSlugsRequest(args [0]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListViewedSlugsOperation,
-			OperationSummary: "",
+			OperationSummary: "Slugs of jobs you have viewed.",
 			OperationID:      "listViewedSlugs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20576,6 +20812,8 @@ func (s *Server) handleListWatchlistRequest(args [0]string, argsEscaped bool, w 
 
 // handleMarkAllNotificationsReadRequest handles markAllNotificationsRead operation.
 //
+// Mark every unread notification read.
+//
 // POST /me/notifications/read-all
 func (s *Server) handleMarkAllNotificationsReadRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -20593,7 +20831,7 @@ func (s *Server) handleMarkAllNotificationsReadRequest(args [0]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MarkAllNotificationsReadOperation,
-			OperationSummary: "",
+			OperationSummary: "Mark every unread notification read.",
 			OperationID:      "markAllNotificationsRead",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20650,7 +20888,9 @@ func (s *Server) handleMarkAllNotificationsReadRequest(args [0]string, argsEscap
 
 // handleMarkAllReadInboxRequest handles markAllReadInbox operation.
 //
-// Marks every unread message matching the same filters as the listing.
+// It takes the same filters as `GET /me/inbox` and marks exactly what that listing shows — including
+// the default that hides the `other` label, so an unfiltered call leaves that mail unread. There is no
+// undo.
 //
 // POST /me/inbox/read-all
 func (s *Server) handleMarkAllReadInboxRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -20683,7 +20923,7 @@ func (s *Server) handleMarkAllReadInboxRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MarkAllReadInboxOperation,
-			OperationSummary: "",
+			OperationSummary: "Mark every unread message matching the filters as read.",
 			OperationID:      "markAllReadInbox",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -20769,7 +21009,11 @@ func (s *Server) handleMarkAllReadInboxRequest(args [0]string, argsEscaped bool,
 
 // handleMarkAppliedRequest handles markApplied operation.
 //
-// The body is optional: without a date the application is stamped now. 400 for a date out of range.
+// Send `applied_on` to record an application on the day it was actually sent — importing a history,
+// or correcting a date already stored. A date you state overrides one we inferred. The day is stored
+// at noon UTC, because you are stating a day and midnight reads as the previous date west of
+// Greenwich. A date in the future, older than a year, or not a calendar date, is a 400. Without a body
+// the application is stamped now, as before.
 //
 // POST /jobs/{slug}/apply
 func (s *Server) handleMarkAppliedRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -20817,7 +21061,7 @@ func (s *Server) handleMarkAppliedRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MarkAppliedOperation,
-			OperationSummary: "",
+			OperationSummary: "Mark the job as applied to.",
 			OperationID:      "markApplied",
 			Body:             request,
 			RawBody:          rawBody,
@@ -20989,7 +21233,7 @@ func (s *Server) handleMarkConversationReadRequest(args [1]string, argsEscaped b
 
 // handleMarkNotificationReadRequest handles markNotificationRead operation.
 //
-// Idempotent; another user's id, or one that does not exist, is a 404.
+// Returns `204 No Content`.
 //
 // POST /me/notifications/{id}/read
 func (s *Server) handleMarkNotificationReadRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21022,7 +21266,7 @@ func (s *Server) handleMarkNotificationReadRequest(args [1]string, argsEscaped b
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MarkNotificationReadOperation,
-			OperationSummary: "",
+			OperationSummary: "Mark one notification read (idempotent).",
 			OperationID:      "markNotificationRead",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -21084,8 +21328,10 @@ func (s *Server) handleMarkNotificationReadRequest(args [1]string, argsEscaped b
 
 // handleMarketCoverageRequest handles marketCoverage operation.
 //
-// Scores a skill list against the market the query's facet params select. The `skills` facet params
-// are not read here and are reported in `meta.ignored_params`.
+// Stateless sibling of the CV verdict: skills come from the request body, the market from the facet
+// query params (same vocabulary as search; the `skills` facet is ignored as a filter). Reports how
+// many of the role’s vacancies your skills cover and which missing skill unlocks the most. `400` on
+// empty skills, `503` when search is unavailable.
 //
 // POST /market/coverage
 func (s *Server) handleMarketCoverageRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21123,7 +21369,7 @@ func (s *Server) handleMarketCoverageRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MarketCoverageOperation,
-			OperationSummary: "",
+			OperationSummary: "Score a supplied skill list against the filtered job market.",
 			OperationID:      "marketCoverage",
 			Body:             request,
 			RawBody:          rawBody,
@@ -21180,7 +21426,9 @@ func (s *Server) handleMarketCoverageRequest(args [0]string, argsEscaped bool, w
 
 // handleMatchTextRequest handles matchText operation.
 //
-// The same coverage for a posting that need not be in the catalogue.
+// The same deterministic skill coverage as `GET /jobs/{slug}/match`, but for a page that need not be
+// in the catalogue — this is what lets the extension show a match on any job page. A caller with no
+// profile is a 404. No LLM, and it draws on no allowance.
 //
 // POST /me/match-text
 func (s *Server) handleMatchTextRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21218,7 +21466,7 @@ func (s *Server) handleMatchTextRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MatchTextOperation,
-			OperationSummary: "",
+			OperationSummary: "Score any job text against your profile.",
 			OperationID:      "matchText",
 			Body:             request,
 			RawBody:          rawBody,
@@ -21275,7 +21523,10 @@ func (s *Server) handleMatchTextRequest(args [0]string, argsEscaped bool, w http
 
 // handleMergeAtomsRequest handles mergeAtoms operation.
 //
-// Folds two owned achievements into one. 409 when they conflict.
+// Session-only, unlike its sibling create/edit/delete routes — the merge folds the discarded
+// atom’s metrics and skills into the kept one while the kept one’s own provenance stands, letting
+// a `manual` atom absorb numbers a model had inferred, so it cannot be widened to a key the way the
+// others were.
 //
 // POST /me/experience/atoms/merge
 func (s *Server) handleMergeAtomsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21313,7 +21564,7 @@ func (s *Server) handleMergeAtomsRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MergeAtomsOperation,
-			OperationSummary: "",
+			OperationSummary: "Fold two of your atoms into one richer keep.",
 			OperationID:      "mergeAtoms",
 			Body:             request,
 			RawBody:          rawBody,
@@ -21403,7 +21654,7 @@ func (s *Server) handleMyCompanyFeedbackRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MyCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Your own feedback on this company, across every category (empty if none).",
 			OperationID:      "myCompanyFeedback",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -21655,8 +21906,12 @@ func (s *Server) handleOneClickUnsubscribeRequest(args [0]string, argsEscaped bo
 
 // handlePatchCVRequest handles patchCV operation.
 //
-// Applies a batch of path operations (`{"ops": [...], "note": ""}`), decoded strictly in Go: an
-// unknown field or bad addressing is a 422. With a session or an API key.
+// An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — `summary`,
+// `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. Indices are 0-based. The whole
+// batch applies or none of it does: an unknown path or an index past the end refuses the request
+// without touching the CV. An API key edits as the tailoring agent, so the candidate's own fields are
+// refused and a claim about them needs `evidence_id` from the experience bank. Every request lands in
+// the CV's history and can be undone on its own.
 //
 // PATCH /me/cvs/{id}
 func (s *Server) handlePatchCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21704,7 +21959,7 @@ func (s *Server) handlePatchCVRequest(args [1]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PatchCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Apply a batch of edits, addressed by path.",
 			OperationID:      "patchCV",
 			Body:             request,
 			RawBody:          rawBody,
@@ -21859,7 +22114,12 @@ func (s *Server) handlePauseMentorProfileRequest(args [0]string, argsEscaped boo
 
 // handlePostAssistantExtendRequest handles postAssistantExtend operation.
 //
-// Buys a tailoring session another ceiling's worth of turns. 204 when plan limits are not wired.
+// A CV editing session is bounded by a turn ceiling as well as by the daily session allowance, and a
+// turn past the ceiling is a `402` naming the session. This spends another of the day’s CV editing
+// sessions to raise it (no body), and is idempotent under a double click — two calls in flight buy
+// one ceiling, not two. `409` on any preset other than a CV editing session: a chat is bounded by the
+// daily assistant allowance, and a day cannot be topped up. `402` when there is no session left to
+// spend, with the same body every refusal carries.
 //
 // POST /assistant/sessions/{id}/extend
 func (s *Server) handlePostAssistantExtendRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21892,7 +22152,7 @@ func (s *Server) handlePostAssistantExtendRequest(args [1]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PostAssistantExtendOperation,
-			OperationSummary: "",
+			OperationSummary: "Buy a CV editing session another ceiling’s worth of turns.",
 			OperationID:      "postAssistantExtend",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -21954,7 +22214,9 @@ func (s *Server) handlePostAssistantExtendRequest(args [1]string, argsEscaped bo
 
 // handlePostAssistantVoiceTokenRequest handles postAssistantVoiceToken operation.
 //
-// Mints the short-lived credential for a voice call on an interview session.
+// Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take
+// the returned `value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com
+// directly) to negotiate the WebRTC call. `501` when voice mode is not configured.
 //
 // POST /assistant/sessions/{id}/voice-token
 func (s *Server) handlePostAssistantVoiceTokenRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21987,7 +22249,7 @@ func (s *Server) handlePostAssistantVoiceTokenRequest(args [1]string, argsEscape
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PostAssistantVoiceTokenOperation,
-			OperationSummary: "",
+			OperationSummary: "Mint a short-lived credential for a hands-free voice call.",
 			OperationID:      "postAssistantVoiceToken",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -22049,7 +22311,8 @@ func (s *Server) handlePostAssistantVoiceTokenRequest(args [1]string, argsEscape
 
 // handlePostAssistantVoiceTurnRequest handles postAssistantVoiceTurn operation.
 //
-// Appends one completed spoken turn to an interview session's transcript.
+// Only on an `interview` session. Lets a call continued by typing carry the spoken turns forward in
+// context. Returns `204 No Content`.
 //
 // POST /assistant/sessions/{id}/voice-turns
 func (s *Server) handlePostAssistantVoiceTurnRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22097,7 +22360,7 @@ func (s *Server) handlePostAssistantVoiceTurnRequest(args [1]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PostAssistantVoiceTurnOperation,
-			OperationSummary: "",
+			OperationSummary: "Append one completed spoken exchange to the transcript.",
 			OperationID:      "postAssistantVoiceTurn",
 			Body:             request,
 			RawBody:          rawBody,
@@ -22159,7 +22422,8 @@ func (s *Server) handlePostAssistantVoiceTurnRequest(args [1]string, argsEscaped
 
 // handlePostAtsReportRequest handles postAtsReport operation.
 //
-// Runs the model review (paid) over the stored CV, caches it and returns the report.
+// Runs the LLM review over your stored CV and folds it into the report (`reviewed: true`).
+// Best-effort: an unconfigured or failing LLM returns the deterministic report (200).
 //
 // POST /me/profile/ats-report
 func (s *Server) handlePostAtsReportRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22178,7 +22442,7 @@ func (s *Server) handlePostAtsReportRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PostAtsReportOperation,
-			OperationSummary: "",
+			OperationSummary: "Run the optional LLM qualitative ATS review and cache it.",
 			OperationID:      "postAtsReport",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -22535,7 +22799,10 @@ func (s *Server) handlePostJobAutoApplyRetryRequest(args [1]string, argsEscaped 
 
 // handlePrefillSubmissionRequest handles prefillSubmission operation.
 //
-// Writes nothing. An unrecognised URL answers 200 with every field empty.
+// Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no
+// submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. A
+// URL the catalogue already carries returns only `existing_job_slug`, and `POST /submissions` would
+// refuse it.
 //
 // POST /submissions/prefill
 func (s *Server) handlePrefillSubmissionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22573,7 +22840,7 @@ func (s *Server) handlePrefillSubmissionRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PrefillSubmissionOperation,
-			OperationSummary: "",
+			OperationSummary: "Parse a job URL into a draft submission for review before posting.",
 			OperationID:      "prefillSubmission",
 			Body:             request,
 			RawBody:          rawBody,
@@ -22835,7 +23102,8 @@ func (s *Server) handleProposeCompanyRelationRequest(args [1]string, argsEscaped
 
 // handlePutProfileRequest handles putProfile operation.
 //
-// Creates or replaces the profile.
+// The whole profile is replaced on each save. An unknown specialization (must be a job category),
+// empty skills, or an out-of-vocabulary location value is a `400`.
 //
 // PUT /me/profile
 func (s *Server) handlePutProfileRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22873,7 +23141,7 @@ func (s *Server) handlePutProfileRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PutProfileOperation,
-			OperationSummary: "",
+			OperationSummary: "Create or replace your profile.",
 			OperationID:      "putProfile",
 			Body:             request,
 			RawBody:          rawBody,
@@ -22930,7 +23198,9 @@ func (s *Server) handlePutProfileRequest(args [0]string, argsEscaped bool, w htt
 
 // handlePutResumeContactsRequest handles putResumeContacts operation.
 //
-// Replaces the owned overrides (contacts, headline, summary, languages, certifications).
+// Each body field is owned per field: a value you set here takes over that field from whatever the
+// structured résumé extract would otherwise contribute. Omit a field to leave it as-is; to clear
+// rather than override, use `POST /me/resume/contacts/replace-from-cv`.
 //
 // PUT /me/resume/contacts
 func (s *Server) handlePutResumeContactsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22968,7 +23238,7 @@ func (s *Server) handlePutResumeContactsRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    PutResumeContactsOperation,
-			OperationSummary: "",
+			OperationSummary: "Override one or more contact-block fields on your profile.",
 			OperationID:      "putResumeContacts",
 			Body:             request,
 			RawBody:          rawBody,
@@ -23209,7 +23479,10 @@ func (s *Server) handleReactivateMentorProfileRequest(args [0]string, argsEscape
 
 // handleRecallApplicationMailRequest handles recallApplicationMail operation.
 //
-// Sweeps the mailbox for mail belonging to the application and records suggestions. Paid AI.
+// For an application whose mail arrived before you connected an inbox, or that a sync missed. Runs an
+// LLM pass over your mailbox and returns matches as suggestions — it never links or writes the
+// ledger itself; confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. A `503` when no mail
+// gateway is configured, a `502` when the model call fails.
 //
 // POST /me/tracking/{slug}/mail-recall
 func (s *Server) handleRecallApplicationMailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -23242,7 +23515,7 @@ func (s *Server) handleRecallApplicationMailRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RecallApplicationMailOperation,
-			OperationSummary: "",
+			OperationSummary: "Sweep your connected mailbox for mail belonging to this application.",
 			OperationID:      "recallApplicationMail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -23304,6 +23577,10 @@ func (s *Server) handleRecallApplicationMailRequest(args [1]string, argsEscaped 
 
 // handleRecordApplicationFollowUpRequest handles recordApplicationFollowUp operation.
 //
+// Does not itself affect the silence calculation — that reads when the other side last moved, and a
+// chase is not a reply. Idempotent within the hour: a double click overwrites the timestamp rather
+// than logging a second event. Returns `204 No Content`.
+//
 // POST /me/tracking/{slug}/followup
 func (s *Server) handleRecordApplicationFollowUpRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -23335,7 +23612,7 @@ func (s *Server) handleRecordApplicationFollowUpRequest(args [1]string, argsEsca
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RecordApplicationFollowUpOperation,
-			OperationSummary: "",
+			OperationSummary: "Record that you sent a chase.",
 			OperationID:      "recordApplicationFollowUp",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -23492,6 +23769,8 @@ func (s *Server) handleRecordDictionaryGapRequest(args [0]string, argsEscaped bo
 
 // handleRecordViewRequest handles recordView operation.
 //
+// Record that you viewed the job.
+//
 // POST /jobs/{slug}/view
 func (s *Server) handleRecordViewRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -23523,7 +23802,7 @@ func (s *Server) handleRecordViewRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RecordViewOperation,
-			OperationSummary: "",
+			OperationSummary: "Record that you viewed the job.",
 			OperationID:      "recordView",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -23680,7 +23959,8 @@ func (s *Server) handleRedeemPromoCodeRequest(args [0]string, argsEscaped bool, 
 
 // handleRegisterPushTokenRequest handles registerPushToken operation.
 //
-// Registers or refreshes the device's push token; a token is reassigned to the caller.
+// Upserted by token value, not by user: if a different account signs in on the same device, this
+// reassigns the token to the new caller. Returns `204 No Content`.
 //
 // POST /me/push-tokens
 func (s *Server) handleRegisterPushTokenRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -23718,7 +23998,7 @@ func (s *Server) handleRegisterPushTokenRequest(args [0]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RegisterPushTokenOperation,
-			OperationSummary: "",
+			OperationSummary: "Register (or reassign) a mobile device’s Expo push token.",
 			OperationID:      "registerPushToken",
 			Body:             request,
 			RawBody:          rawBody,
@@ -23870,6 +24150,8 @@ func (s *Server) handleRejectCompanyRelationRequest(args [1]string, argsEscaped 
 
 // handleRejectEmailLinkRequest handles rejectEmailLink operation.
 //
+// Dismiss a suggested link without attaching it.
+//
 // POST /me/emails/{id}/reject
 func (s *Server) handleRejectEmailLinkRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -23901,7 +24183,7 @@ func (s *Server) handleRejectEmailLinkRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RejectEmailLinkOperation,
-			OperationSummary: "",
+			OperationSummary: "Dismiss a suggested link without attaching it.",
 			OperationID:      "rejectEmailLink",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -24106,7 +24388,7 @@ func (s *Server) handleRejectSubmissionRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RejectSubmissionOperation,
-			OperationSummary: "",
+			OperationSummary: "Reject a submission with a reason.",
 			OperationID:      "rejectSubmission",
 			Body:             request,
 			RawBody:          rawBody,
@@ -24187,7 +24469,7 @@ func (s *Server) handleReleaseMailboxRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ReleaseMailboxOperation,
-			OperationSummary: "",
+			OperationSummary: "Release the address; it stops receiving.",
 			OperationID:      "releaseMailbox",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -24432,7 +24714,8 @@ func (s *Server) handleReopenEmployerVacancyRequest(args [1]string, argsEscaped 
 
 // handleReplaceResumeContactsFromCvRequest handles replaceResumeContactsFromCv operation.
 //
-// Overwrites every owned override from the current structured CV. 409 without one.
+// A full reset, not just identity fields — every owned field is replaced from the current structured
+// extract. `409` when you have no structured résumé to copy from.
 //
 // POST /me/resume/contacts/replace-from-cv
 func (s *Server) handleReplaceResumeContactsFromCvRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -24451,7 +24734,7 @@ func (s *Server) handleReplaceResumeContactsFromCvRequest(args [0]string, argsEs
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ReplaceResumeContactsFromCvOperation,
-			OperationSummary: "",
+			OperationSummary: "Reset every contact override from your current structured résumé.",
 			OperationID:      "replaceResumeContactsFromCv",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -24601,8 +24884,7 @@ func (s *Server) handleReplaceWeeklyAvailabilityRequest(args [0]string, argsEsca
 
 // handleReportCompanyFeedbackRequest handles reportCompanyFeedback operation.
 //
-// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
-// person is a silent no-op.
+// A second report of the same review by you is a silent no-op.
 //
 // POST /company-feedback/{id}/report
 func (s *Server) handleReportCompanyFeedbackRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -24650,7 +24932,7 @@ func (s *Server) handleReportCompanyFeedbackRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ReportCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Report a specific review.",
 			OperationID:      "reportCompanyFeedback",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25012,7 +25294,8 @@ func (s *Server) handleRequestEmailChangeRequest(args [0]string, argsEscaped boo
 
 // handleRequestEmailVerificationRequest handles requestEmailVerification operation.
 //
-// Mails the caller a fresh verification code.
+// Mails a fresh code to the caller’s own address, never a body field. Returns `202 Accepted`. `409`
+// if the address is already confirmed.
 //
 // POST /auth/verify/request
 func (s *Server) handleRequestEmailVerificationRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25031,7 +25314,7 @@ func (s *Server) handleRequestEmailVerificationRequest(args [0]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RequestEmailVerificationOperation,
-			OperationSummary: "",
+			OperationSummary: "Send (or resend) a six-digit email verification code.",
 			OperationID:      "requestEmailVerification",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -25088,7 +25371,9 @@ func (s *Server) handleRequestEmailVerificationRequest(args [0]string, argsEscap
 
 // handleReseedBaseCVRequest handles reseedBaseCV operation.
 //
-// Rebuilds the default base CV from the current seed.
+// Replaces the base (non-tailored) document from the current seed (experience bank first, your
+// résumé's own extract for what the bank doesn't track). Preserves template and typography. Does not
+// rewrite tailored copies for specific jobs. 409 when there is no usable seed.
 //
 // POST /me/cvs/base/reseed
 func (s *Server) handleReseedBaseCVRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25107,7 +25392,7 @@ func (s *Server) handleReseedBaseCVRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ReseedBaseCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Rebuild your base CV from your current seed.",
 			OperationID:      "reseedBaseCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -25164,7 +25449,12 @@ func (s *Server) handleReseedBaseCVRequest(args [0]string, argsEscaped bool, w h
 
 // handleReseedCVRequest handles reseedCV operation.
 //
-// Rebuilds one CV from the current seed; destructive.
+// Replaces this CV's content from the current seed (experience bank first, your résumé's own extract
+// for what the bank doesn't track). Works on a tailored copy or on a base, and touches only that CV:
+// refreshing a tailored copy no longer rewrites any base, and refreshing a base — the editor's
+// "Update from my CV", which replaces hand edits — leaves its copies alone. Keeps the same id and
+// agent session; preserves template and typography. 409 when there is no usable seed. Upload alone
+// does not do this — this is the explicit apply.
 //
 // POST /me/cvs/{id}/reseed
 func (s *Server) handleReseedCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25197,7 +25487,7 @@ func (s *Server) handleReseedCVRequest(args [1]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ReseedCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Rebuild one CV from your current seed.",
 			OperationID:      "reseedCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -25335,7 +25625,8 @@ func (s *Server) handleResendEmployerClaimCodeRequest(args [0]string, argsEscape
 
 // handleResetPasswordRequest handles resetPassword operation.
 //
-// Public: the mailed code is the credential. Revokes every session.
+// Public — the code is the credential. Success revokes every existing session, so sign in fresh with
+// the new password afterward.
 //
 // POST /auth/password/reset
 func (s *Server) handleResetPasswordRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25373,7 +25664,7 @@ func (s *Server) handleResetPasswordRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ResetPasswordOperation,
-			OperationSummary: "",
+			OperationSummary: "Set a new password against a mailed code.",
 			OperationID:      "resetPassword",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25525,8 +25816,15 @@ func (s *Server) handleResolveConversationReportRequest(args [1]string, argsEsca
 
 // handleResolveJobRequest handles resolveJob operation.
 //
-// Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
-// request created it, 202 when it is queued for later. With a session or an API key.
+// Five outcomes in one shape, distinguished by status: 200 found — the catalogue already carries the
+// vacancy. Either the URL itself is stored (nothing is fetched or written), or the page turned out to
+// be a second copy of a posting we already carry under another source, in which case the answer names
+// the one we had; 201 tracked — we crawl that board already and the posting just had not landed, so
+// it was imported now; 201 imported — imported, and its board queued for onboarding; 201 review —
+// imported, but its careers site names no board we can crawl, so the link went to manual triage; 202
+// queued — nothing could read the page, so the link went to manual triage. `company_slug` is
+// returned whenever the catalogue already carries the employer, through any source — independent of
+// what became of the board. A URL that is not http(s) is a 422.
 //
 // POST /jobs/resolve
 func (s *Server) handleResolveJobRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25564,7 +25862,7 @@ func (s *Server) handleResolveJobRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ResolveJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Hand freehire a link: import the posting, and the board behind it.",
 			OperationID:      "resolveJob",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25621,8 +25919,11 @@ func (s *Server) handleResolveJobRequest(args [0]string, argsEscaped bool, w htt
 
 // handleResolveJobDescriptionRequest handles resolveJobDescription operation.
 //
-// Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace can open. 404
-// for an unknown slug, 422 for a URL with no readable vacancy. Session cookie only.
+// Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves through the same
+// ATS-aware registry `/jobs/resolve` uses (a network fetch); an unrecognized URL falls back to a
+// generic scrape; pasted text is stored as a private, unlisted job. Returns the slug the tailor
+// workspace should open — an existing job, or a freshly created private one. `404` for an unknown
+// `job_slug`, `422` for a URL nothing could read.
 //
 // POST /me/jd/resolve
 func (s *Server) handleResolveJobDescriptionRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -25660,7 +25961,7 @@ func (s *Server) handleResolveJobDescriptionRequest(args [0]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ResolveJobDescriptionOperation,
-			OperationSummary: "",
+			OperationSummary: "Turn a URL, pasted text, or an existing job into one usable by CV tailoring.",
 			OperationID:      "resolveJobDescription",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25765,7 +26066,7 @@ func (s *Server) handleResolveJobReportRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ResolveJobReportOperation,
-			OperationSummary: "",
+			OperationSummary: "Resolve a report, optionally closing the job and telling the reporter.",
 			OperationID:      "resolveJobReport",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25827,6 +26128,8 @@ func (s *Server) handleResolveJobReportRequest(args [1]string, argsEscaped bool,
 
 // handleResolveReferralRequestRequest handles resolveReferralRequest operation.
 //
+// Mark an incoming request contacted or declined.
+//
 // POST /me/referrals/incoming/{id}/resolve
 func (s *Server) handleResolveReferralRequestRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -25873,7 +26176,7 @@ func (s *Server) handleResolveReferralRequestRequest(args [1]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ResolveReferralRequestOperation,
-			OperationSummary: "",
+			OperationSummary: "Mark an incoming request contacted or declined.",
 			OperationID:      "resolveReferralRequest",
 			Body:             request,
 			RawBody:          rawBody,
@@ -25935,6 +26238,8 @@ func (s *Server) handleResolveReferralRequestRequest(args [1]string, argsEscaped
 
 // handleRestoreEmailRequest handles restoreEmail operation.
 //
+// Undo a soft-delete. Answers 204.
+//
 // POST /me/emails/{id}/restore
 func (s *Server) handleRestoreEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -25966,7 +26271,7 @@ func (s *Server) handleRestoreEmailRequest(args [1]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RestoreEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Undo a soft-delete. Answers 204.",
 			OperationID:      "restoreEmail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -26028,7 +26333,7 @@ func (s *Server) handleRestoreEmailRequest(args [1]string, argsEscaped bool, w h
 
 // handleRetractGhostReportRequest handles retractGhostReport operation.
 //
-// Withdraws the caller's report. 404 when there is none.
+// A claim that is absent or already withdrawn is a `404`.
 //
 // DELETE /jobs/{slug}/ghost-report
 func (s *Server) handleRetractGhostReportRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -26061,7 +26366,7 @@ func (s *Server) handleRetractGhostReportRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RetractGhostReportOperation,
-			OperationSummary: "",
+			OperationSummary: "Withdraw your claim about this job.",
 			OperationID:      "retractGhostReport",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -26689,9 +26994,10 @@ func (s *Server) handleRevokeOauthGrantRequest(args [1]string, argsEscaped bool,
 
 // handleRunAutofillRequest handles runAutofill operation.
 //
-// Fills the form in the caller's own browser through the browser-tool channel. Paid AI route
-// (unmetered). Only the extension's own Bearer session is admitted; anything else is a 403. The report
-// names what was filled, deferred and left unmapped.
+// Runs the autofill agent over the browser-tool wire — your extension on one end, the agent on the
+// other, routed strictly within your own channel. Requires the extension to be connected, and
+// authenticates only as the extension itself — a session cookie or an API key gets a 403, since this
+// call writes into whatever form your browser has open, not just reads it.
 //
 // POST /me/autofill/run
 func (s *Server) handleRunAutofillRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -26710,7 +27016,7 @@ func (s *Server) handleRunAutofillRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RunAutofillOperation,
-			OperationSummary: "",
+			OperationSummary: "Drive your own browser to fill an application form.",
 			OperationID:      "runAutofill",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -26862,7 +27168,10 @@ func (s *Server) handleRunJobFitRequest(args [1]string, argsEscaped bool, w http
 
 // handleRunMatchAnalysisRequest handles runMatchAnalysis operation.
 //
-// Runs the fit analysis and caches it. An unconfigured or failing model answers a null analysis.
+// Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh
+// (no `allowance` on this response). Analysing a new job draws on your daily analysis allowance; with
+// none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no
+// CV is stored; a failing or unconfigured LLM returns a null analysis (200).
 //
 // POST /jobs/{slug}/match-analysis
 func (s *Server) handleRunMatchAnalysisRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -26895,7 +27204,7 @@ func (s *Server) handleRunMatchAnalysisRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    RunMatchAnalysisOperation,
-			OperationSummary: "",
+			OperationSummary: "Run the three-stage AI match analysis and cache it.",
 			OperationID:      "runMatchAnalysis",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -27052,6 +27361,8 @@ func (s *Server) handleSaveBankedAnswerRequest(args [0]string, argsEscaped bool,
 
 // handleSaveJobRequest handles saveJob operation.
 //
+// Save (bookmark) the job.
+//
 // POST /jobs/{slug}/save
 func (s *Server) handleSaveJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -27083,7 +27394,7 @@ func (s *Server) handleSaveJobRequest(args [1]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SaveJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Save (bookmark) the job.",
 			OperationID:      "saveJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -27145,7 +27456,8 @@ func (s *Server) handleSaveJobRequest(args [1]string, argsEscaped bool, w http.R
 
 // handleSearchCitiesRequest handles searchCities operation.
 //
-// Up to 20 cities whose name matches, optionally within one country.
+// Population-ranked prefix search over the embedded city dictionary, optionally narrowed to one
+// country. A blank `q` returns an empty list.
 //
 // GET /geo/cities
 func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -27178,7 +27490,7 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SearchCitiesOperation,
-			OperationSummary: "",
+			OperationSummary: "Prefix-search city names for autocomplete.",
 			OperationID:      "searchCities",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -27244,10 +27556,13 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 
 // handleSearchJobsRequest handles searchJobs operation.
 //
-// Full-text and faceted search over open postings. Public; a signed-in caller can also use
-// `hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match` and
-// `sort=match`, which make the answer private. A filter the endpoint does not read is named in
-// `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.
+// Combine free-text `q` with any of the filter params below. Repeated facet params are ORed; add
+// `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude. Without `q`, results
+// default to newest first; with `q`, to relevance. A param no filter reads is ignored rather than
+// refused, and listed in `meta.ignored_params` — check it, since a dropped filter otherwise looks
+// like a broad result.
+//
+// Plus every filter in the "Filtering jobs" section.
 //
 // GET /jobs/search
 func (s *Server) handleSearchJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -27280,7 +27595,7 @@ func (s *Server) handleSearchJobsRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SearchJobsOperation,
-			OperationSummary: "",
+			OperationSummary: "Full-text + faceted search over open jobs.",
 			OperationID:      "searchJobs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -27484,7 +27799,10 @@ func (s *Server) handleSendConversationMessageRequest(args [1]string, argsEscape
 
 // handleSendDirectApplyRequest handles sendDirectApply operation.
 //
-// Sends the caller's application. Cookie session only.
+// Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the note and your
+// address as Reply-To. One application per vacancy: `409` once it was sent (or while it is being
+// sent), `400` naming the first unanswered or invalid question, `403` unverified, `410` closed, `429`
+// past the daily limit, `502` when delivery failed — applying again retries it.
 //
 // POST /jobs/{slug}/direct-apply
 func (s *Server) handleSendDirectApplyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -27532,7 +27850,7 @@ func (s *Server) handleSendDirectApplyRequest(args [1]string, argsEscaped bool, 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SendDirectApplyOperation,
-			OperationSummary: "",
+			OperationSummary: "Apply on freehire: the employer receives your CV and answers by email.",
 			OperationID:      "sendDirectApply",
 			Body:             request,
 			RawBody:          rawBody,
@@ -27782,6 +28100,8 @@ func (s *Server) handleSetCVAppearanceDefaultsRequest(args [0]string, argsEscape
 
 // handleSetCVSessionRequest handles setCVSession operation.
 //
+// Bind an agent session to a CV.
+//
 // PUT /me/cvs/{id}/session
 func (s *Server) handleSetCVSessionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -27828,7 +28148,7 @@ func (s *Server) handleSetCVSessionRequest(args [1]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SetCVSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "Bind an agent session to a CV.",
 			OperationID:      "setCVSession",
 			Body:             request,
 			RawBody:          rawBody,
@@ -27890,6 +28210,8 @@ func (s *Server) handleSetCVSessionRequest(args [1]string, argsEscaped bool, w h
 
 // handleSetCVTemplateRequest handles setCVTemplate operation.
 //
+// Switch the template only.
+//
 // PUT /me/cvs/{id}/template
 func (s *Server) handleSetCVTemplateRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -27936,7 +28258,7 @@ func (s *Server) handleSetCVTemplateRequest(args [1]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SetCVTemplateOperation,
-			OperationSummary: "",
+			OperationSummary: "Switch the template only.",
 			OperationID:      "setCVTemplate",
 			Body:             request,
 			RawBody:          rawBody,
@@ -27998,7 +28320,9 @@ func (s *Server) handleSetCVTemplateRequest(args [1]string, argsEscaped bool, w 
 
 // handleSetCVTracerLinksRequest handles setCVTracerLinks operation.
 //
-// 409 when enabling on a deployment with no visitor salt.
+// Off is the default for every CV. Turning it on is refused with a `409` on a deployment with no
+// visitor salt configured — there would be no honest way to count distinct visitors. Turning it off
+// is never refused.
 //
 // PUT /me/cvs/{id}/tracer-links
 func (s *Server) handleSetCVTracerLinksRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28046,7 +28370,7 @@ func (s *Server) handleSetCVTracerLinksRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SetCVTracerLinksOperation,
-			OperationSummary: "",
+			OperationSummary: "Turn link tracing on or off for this CV's PDF.",
 			OperationID:      "setCVTracerLinks",
 			Body:             request,
 			RawBody:          rawBody,
@@ -28156,7 +28480,7 @@ func (s *Server) handleSetSubscriptionActiveRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SetSubscriptionActiveOperation,
-			OperationSummary: "",
+			OperationSummary: "Pause or resume a subscription.",
 			OperationID:      "setSubscriptionActive",
 			Body:             request,
 			RawBody:          rawBody,
@@ -28218,7 +28542,8 @@ func (s *Server) handleSetSubscriptionActiveRequest(args [1]string, argsEscaped 
 
 // handleSetTalentNetworkVisibilityRequest handles setTalentNetworkVisibility operation.
 //
-// Joins or leaves the catalogue. Session cookie only.
+// Two states, not three: `public` was retired with the mode picker itself, and a request asking for it
+// is a 400. Joining for the first time mints the handle the public catalogue addresses you by.
 //
 // PUT /me/talent-network
 func (s *Server) handleSetTalentNetworkVisibilityRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28256,7 +28581,7 @@ func (s *Server) handleSetTalentNetworkVisibilityRequest(args [0]string, argsEsc
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SetTalentNetworkVisibilityOperation,
-			OperationSummary: "",
+			OperationSummary: "Join or leave the Talent Network.",
 			OperationID:      "setTalentNetworkVisibility",
 			Body:             request,
 			RawBody:          rawBody,
@@ -28313,7 +28638,9 @@ func (s *Server) handleSetTalentNetworkVisibilityRequest(args [0]string, argsEsc
 
 // handleSimilarJobsRequest handles similarJobs operation.
 //
-// Open postings in the same specialization and place as the job.
+// Searches the live Meilisearch index with the source job’s known location and specialization as
+// mandatory filters, ranked by keyword search on its title. Returns an empty list when location or
+// specialization is unknown or no visible matches remain.
 //
 // GET /jobs/{slug}/similar
 func (s *Server) handleSimilarJobsRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28346,7 +28673,7 @@ func (s *Server) handleSimilarJobsRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SimilarJobsOperation,
-			OperationSummary: "",
+			OperationSummary: "Similar jobs within the same location and specialization.",
 			OperationID:      "similarJobs",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -28507,7 +28834,11 @@ func (s *Server) handleSkillNeighboursRequest(args [1]string, argsEscaped bool, 
 
 // handleStartBaseSessionRequest handles startBaseSession operation.
 //
-// The assistant conversation for a base CV; not behind the paid gate.
+// Returns the assistant conversation bound to one of your base CVs, creating it on first use. It is
+// the tailoring workspace's agent without a vacancy: it edits this general CV through the same
+// evidence-gated tools. Opening it is free and needs no paid plan; each message still passes the
+// assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when the id is not
+// yours.
 //
 // POST /me/cvs/{id}/base-session
 func (s *Server) handleStartBaseSessionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28540,7 +28871,7 @@ func (s *Server) handleStartBaseSessionRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    StartBaseSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "Open the agent conversation for a base CV.",
 			OperationID:      "startBaseSession",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -28602,6 +28933,8 @@ func (s *Server) handleStartBaseSessionRequest(args [1]string, argsEscaped bool,
 
 // handleStartTailorSessionRequest handles startTailorSession operation.
 //
+// For a tailored CV whose session was lost or never bound. 409 when the CV is not a tailored copy.
+//
 // POST /me/cvs/{id}/tailor-session
 func (s *Server) handleStartTailorSessionRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -28633,7 +28966,7 @@ func (s *Server) handleStartTailorSessionRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    StartTailorSessionOperation,
-			OperationSummary: "",
+			OperationSummary: "Mint a fresh agent session for an existing tailored CV.",
 			OperationID:      "startTailorSession",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -28695,7 +29028,8 @@ func (s *Server) handleStartTailorSessionRequest(args [1]string, argsEscaped boo
 
 // handleStatsFacetsRequest handles statsFacets operation.
 //
-// The value-to-count distribution of each covered facet, from the daily snapshot.
+// Served from the facet rollup rather than a live Meilisearch facet count, so a page can show "what's
+// inside" without paying search for it.
 //
 // GET /stats/facets
 func (s *Server) handleStatsFacetsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28714,7 +29048,7 @@ func (s *Server) handleStatsFacetsRequest(args [0]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    StatsFacetsOperation,
-			OperationSummary: "",
+			OperationSummary: "Facet distribution snapshot: countries, skills, seniority, work mode.",
 			OperationID:      "statsFacets",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -28963,7 +29297,13 @@ func (s *Server) handleSuggestRequest(args [0]string, argsEscaped bool, w http.R
 
 // handleSyncBillingStoreRequest handles syncBillingStore operation.
 //
-// 503 when the store provider cannot be reached. Cookie session only.
+// For a mobile client that has just completed an App Store or Google Play purchase. The purchase
+// finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the
+// provider stops retrying after 80 minutes — so without this route a paid subscriber can be left
+// looking at a paywall. It names nobody: the account is the session’s, and a user id in the request
+// is ignored. Absent entirely where the store provider is unconfigured. `status` is `synced` when the
+// plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means
+// the provider could not be reached and the hourly reconciler will finish the job.
 //
 // POST /billing/revenuecat/sync
 func (s *Server) handleSyncBillingStoreRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -28982,7 +29322,7 @@ func (s *Server) handleSyncBillingStoreRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SyncBillingStoreOperation,
-			OperationSummary: "",
+			OperationSummary: "Re-read your own store subscription now.",
 			OperationID:      "syncBillingStore",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29039,7 +29379,8 @@ func (s *Server) handleSyncBillingStoreRequest(args [0]string, argsEscaped bool,
 
 // handleSyncGmailRequest handles syncGmail operation.
 //
-// Starts a background sync. Registered only where Gmail is configured.
+// Returns as soon as the sync is queued — a full backfill outlives the request — so poll the inbox
+// for results rather than reading counts here.
 //
 // POST /me/gmail/sync
 func (s *Server) handleSyncGmailRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29058,7 +29399,7 @@ func (s *Server) handleSyncGmailRequest(args [0]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SyncGmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Start an incremental sync.",
 			OperationID:      "syncGmail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29115,9 +29456,10 @@ func (s *Server) handleSyncGmailRequest(args [0]string, argsEscaped bool, w http
 
 // handleTailorCVRequest handles tailorCV operation.
 //
-// Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with the ids and
-// the cached analysis; 402 when the allowance is spent and the vacancy is new. With a session or an
-// API key.
+// Copies your base CV into a vacancy-bound tailored one and mints the short-lived credential its agent
+// session runs on. Requires a cached match analysis for the job (409 otherwise) and a base CV — one
+// is seeded from your stored history when you have none, and it is a 409 when there is nothing to seed
+// from. Calls no LLM itself.
 //
 // POST /me/cvs/tailor
 func (s *Server) handleTailorCVRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29155,7 +29497,7 @@ func (s *Server) handleTailorCVRequest(args [0]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TailorCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Start tailoring a CV toward one vacancy.",
 			OperationID:      "tailorCV",
 			Body:             request,
 			RawBody:          rawBody,
@@ -29212,7 +29554,8 @@ func (s *Server) handleTailorCVRequest(args [0]string, argsEscaped bool, w http.
 
 // handleTestPushTokenRequest handles testPushToken operation.
 //
-// Sends a test push to the caller's own registered tokens, never anyone else's.
+// Never targets another user or a caller-supplied destination — only your own registered tokens.
+// Each call fans out one outbound send per device.
 //
 // POST /me/push-tokens/test
 func (s *Server) handleTestPushTokenRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29231,7 +29574,7 @@ func (s *Server) handleTestPushTokenRequest(args [0]string, argsEscaped bool, w 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TestPushTokenOperation,
-			OperationSummary: "",
+			OperationSummary: "Send a test push to all of your own registered devices.",
 			OperationID:      "testPushToken",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29288,6 +29631,10 @@ func (s *Server) handleTestPushTokenRequest(args [0]string, argsEscaped bool, w 
 
 // handleTrackApplicationRequest handles trackApplication operation.
 //
+// Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead of the job
+// slug — needed when a tracked application’s posting was later pruned and has no slug left to
+// address it by. Same `stage` vocabulary and body shape.
+//
 // PATCH /me/applications/{id}
 func (s *Server) handleTrackApplicationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -29334,7 +29681,7 @@ func (s *Server) handleTrackApplicationRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TrackApplicationOperation,
-			OperationSummary: "",
+			OperationSummary: "Set the application stage and/or notes, addressed by row id.",
 			OperationID:      "trackApplication",
 			Body:             request,
 			RawBody:          rawBody,
@@ -29396,7 +29743,10 @@ func (s *Server) handleTrackApplicationRequest(args [1]string, argsEscaped bool,
 
 // handleTrackJobRequest handles trackJob operation.
 //
-// 400 for an unknown stage or an empty body.
+// A null field is left unchanged. `stage` is a controlled vocabulary: `preparing`, `applied`,
+// `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an
+// unknown value is a 400). `expired` is the outcome for an application nobody answered; nothing sets
+// it for you.
 //
 // PATCH /jobs/{slug}/track
 func (s *Server) handleTrackJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29444,7 +29794,7 @@ func (s *Server) handleTrackJobRequest(args [1]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TrackJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Set the application stage and/or notes.",
 			OperationID:      "trackJob",
 			Body:             request,
 			RawBody:          rawBody,
@@ -29506,6 +29856,14 @@ func (s *Server) handleTrackJobRequest(args [1]string, argsEscaped bool, w http.
 
 // handleTrackingPipelineRequest handles trackingPipeline operation.
 //
+// The total application count and the count at each stage, aggregated server-side over all of your
+// applications. Every stage of the vocabulary is present, zero included, and the counts always sum to
+// `applications`. An application with `applied_at` set but no explicit stage counts as `applied`.
+// `reply_rate` compares your own employer-reply rate against the rate across every candidate — both
+// sides counted only from applications whose owner has a connected mailbox, so a reply would have been
+// seen. It is present only once both your own count and the global count reach a minimum sample size;
+// absent otherwise, never a zero or an estimate.
+//
 // GET /me/tracking/pipeline
 func (s *Server) handleTrackingPipelineRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -29523,7 +29881,7 @@ func (s *Server) handleTrackingPipelineRequest(args [0]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TrackingPipelineOperation,
-			OperationSummary: "",
+			OperationSummary: "Your application-pipeline snapshot (counts per stage).",
 			OperationID:      "trackingPipeline",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29580,6 +29938,11 @@ func (s *Server) handleTrackingPipelineRequest(args [0]string, argsEscaped bool,
 
 // handleTriageEmailRequest handles triageEmail operation.
 //
+// The vocabulary is closed: `acknowledgement`, `screening`, `interview_invitation`, `assessment`,
+// `offer`, `rejection`, `info_request`, `incomplete_application`, `other`. Anything else is refused. A
+// confident verdict on a linked message advances the application's stage — strictly forward, never
+// out of a settled stage, and a rejection never advances anything by itself.
+//
 // POST /me/emails/{id}/triage
 func (s *Server) handleTriageEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -29626,7 +29989,7 @@ func (s *Server) handleTriageEmailRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    TriageEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Record what a message is, and optionally which application it belongs to.",
 			OperationID:      "triageEmail",
 			Body:             request,
 			RawBody:          rawBody,
@@ -29781,6 +30144,8 @@ func (s *Server) handleUnbanUserRequest(args [1]string, argsEscaped bool, w http
 
 // handleUndismissJobRequest handles undismissJob operation.
 //
+// Undismiss the job (no-op if not dismissed).
+//
 // DELETE /jobs/{slug}/dismiss
 func (s *Server) handleUndismissJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -29812,7 +30177,7 @@ func (s *Server) handleUndismissJobRequest(args [1]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UndismissJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Undismiss the job (no-op if not dismissed).",
 			OperationID:      "undismissJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29874,6 +30239,9 @@ func (s *Server) handleUndismissJobRequest(args [1]string, argsEscaped bool, w h
 
 // handleUndoCVRevisionRequest handles undoCVRevision operation.
 //
+// The undo is itself recorded as a new revision. A `409` when the entry has nothing to reverse or the
+// part of the document it changed is already gone.
+//
 // POST /me/cvs/{id}/revisions/{rid}/undo
 func (s *Server) handleUndoCVRevisionRequest(args [2]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -29905,7 +30273,7 @@ func (s *Server) handleUndoCVRevisionRequest(args [2]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UndoCVRevisionOperation,
-			OperationSummary: "",
+			OperationSummary: "Reverse one revision, leaving later edits in place.",
 			OperationID:      "undoCVRevision",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29971,6 +30339,10 @@ func (s *Server) handleUndoCVRevisionRequest(args [2]string, argsEscaped bool, w
 
 // handleUndoCVRevisionBatchRequest handles undoCVRevisionBatch operation.
 //
+// `bid` is a revision’s `batch_id` from the history feed, not a separate id — undoing one entry of
+// a batch and then the batch itself is well-defined, since an already-reverted entry is simply
+// skipped.
+//
 // POST /me/cvs/{id}/revisions/batch/{bid}/undo
 func (s *Server) handleUndoCVRevisionBatchRequest(args [2]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -30002,7 +30374,7 @@ func (s *Server) handleUndoCVRevisionBatchRequest(args [2]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UndoCVRevisionBatchOperation,
-			OperationSummary: "",
+			OperationSummary: "Reverse every standing edit of one agent turn, newest first.",
 			OperationID:      "undoCVRevisionBatch",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -30068,6 +30440,8 @@ func (s *Server) handleUndoCVRevisionBatchRequest(args [2]string, argsEscaped bo
 
 // handleUnlinkEmailRequest handles unlinkEmail operation.
 //
+// Clear a message's application link; its classification stays.
+//
 // POST /me/emails/{id}/unlink
 func (s *Server) handleUnlinkEmailRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -30099,7 +30473,7 @@ func (s *Server) handleUnlinkEmailRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UnlinkEmailOperation,
-			OperationSummary: "",
+			OperationSummary: "Clear a message's application link; its classification stays.",
 			OperationID:      "unlinkEmail",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -30161,7 +30535,7 @@ func (s *Server) handleUnlinkEmailRequest(args [1]string, argsEscaped bool, w ht
 
 // handleUnregisterPushTokenRequest handles unregisterPushToken operation.
 //
-// A token that is not the caller's is a 404.
+// Returns `204 No Content`. `404` if the token is not yours (or unknown).
 //
 // DELETE /me/push-tokens
 func (s *Server) handleUnregisterPushTokenRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -30199,7 +30573,7 @@ func (s *Server) handleUnregisterPushTokenRequest(args [0]string, argsEscaped bo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UnregisterPushTokenOperation,
-			OperationSummary: "",
+			OperationSummary: "Unregister one of your own device tokens.",
 			OperationID:      "unregisterPushToken",
 			Body:             request,
 			RawBody:          rawBody,
@@ -30289,7 +30663,7 @@ func (s *Server) handleUnsaveJobRequest(args [1]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UnsaveJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Unsave the job (no-op if not saved).",
 			OperationID:      "unsaveJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -30384,7 +30758,7 @@ func (s *Server) handleUntrackRequest(args [1]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UntrackOperation,
-			OperationSummary: "",
+			OperationSummary: "Remove the interaction record entirely.",
 			OperationID:      "untrack",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -30446,6 +30820,8 @@ func (s *Server) handleUntrackRequest(args [1]string, argsEscaped bool, w http.R
 
 // handleUntrackApplicationRequest handles untrackApplication operation.
 //
+// Remove the interaction record entirely, addressed by row id.
+//
 // DELETE /me/applications/{id}
 func (s *Server) handleUntrackApplicationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -30477,7 +30853,7 @@ func (s *Server) handleUntrackApplicationRequest(args [1]string, argsEscaped boo
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UntrackApplicationOperation,
-			OperationSummary: "",
+			OperationSummary: "Remove the interaction record entirely, addressed by row id.",
 			OperationID:      "untrackApplication",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -30587,7 +30963,7 @@ func (s *Server) handleUpdateAtomRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateAtomOperation,
-			OperationSummary: "",
+			OperationSummary: "Edit one evidence atom.",
 			OperationID:      "updateAtom",
 			Body:             request,
 			RawBody:          rawBody,
@@ -30649,6 +31025,8 @@ func (s *Server) handleUpdateAtomRequest(args [1]string, argsEscaped bool, w htt
 
 // handleUpdateCVRequest handles updateCV operation.
 //
+// Replace a CV — title, template and document.
+//
 // PUT /me/cvs/{id}
 func (s *Server) handleUpdateCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -30695,7 +31073,7 @@ func (s *Server) handleUpdateCVRequest(args [1]string, argsEscaped bool, w http.
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Replace a CV — title, template and document.",
 			OperationID:      "updateCV",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31099,7 +31477,7 @@ func (s *Server) handleUpdateEmploymentRequest(args [1]string, argsEscaped bool,
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateEmploymentOperation,
-			OperationSummary: "",
+			OperationSummary: "Edit one employment.",
 			OperationID:      "updateEmployment",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31209,7 +31587,7 @@ func (s *Server) handleUpdateJobRequest(args [1]string, argsEscaped bool, w http
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Edit a curated job.",
 			OperationID:      "updateJob",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31271,6 +31649,8 @@ func (s *Server) handleUpdateJobRequest(args [1]string, argsEscaped bool, w http
 
 // handleUpdateLanguageRequest handles updateLanguage operation.
 //
+// Set your preferred interface language.
+//
 // PATCH /me/language
 func (s *Server) handleUpdateLanguageRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -31307,7 +31687,7 @@ func (s *Server) handleUpdateLanguageRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateLanguageOperation,
-			OperationSummary: "",
+			OperationSummary: "Set your preferred interface language.",
 			OperationID:      "updateLanguage",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31588,7 +31968,7 @@ func (s *Server) handleUpdateNotificationSettingsRequest(args [0]string, argsEsc
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateNotificationSettingsOperation,
-			OperationSummary: "",
+			OperationSummary: "Change your notification rule.",
 			OperationID:      "updateNotificationSettings",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31645,6 +32025,8 @@ func (s *Server) handleUpdateNotificationSettingsRequest(args [0]string, argsEsc
 
 // handleUpdateSavedSearchRequest handles updateSavedSearch operation.
 //
+// Rename or re-query a saved search.
+//
 // PATCH /me/searches/{id}
 func (s *Server) handleUpdateSavedSearchRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -31691,7 +32073,7 @@ func (s *Server) handleUpdateSavedSearchRequest(args [1]string, argsEscaped bool
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateSavedSearchOperation,
-			OperationSummary: "",
+			OperationSummary: "Rename or re-query a saved search.",
 			OperationID:      "updateSavedSearch",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31753,6 +32135,11 @@ func (s *Server) handleUpdateSavedSearchRequest(args [1]string, argsEscaped bool
 
 // handleUpdateScreeningAnswersRequest handles updateScreeningAnswers operation.
 //
+// A field the body omits is left unchanged; to withdraw an answer, name it in `clear`. An unrecognized
+// country code, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary,
+// a non-positive salary, a negative notice period, an unknown name in `clear`, or a field both given
+// and cleared is a `400` naming it.
+//
 // PUT /me/screening-answers
 func (s *Server) handleUpdateScreeningAnswersRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -31789,7 +32176,7 @@ func (s *Server) handleUpdateScreeningAnswersRequest(args [0]string, argsEscaped
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateScreeningAnswersOperation,
-			OperationSummary: "",
+			OperationSummary: "Update one or more screening answers.",
 			OperationID:      "updateScreeningAnswers",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31846,6 +32233,11 @@ func (s *Server) handleUpdateScreeningAnswersRequest(args [0]string, argsEscaped
 
 // handleUpdateSurveyRequest handles updateSurvey operation.
 //
+// A field the body omits is left unchanged. A stage or challenge outside its vocabulary,
+// `just_starting` beside another challenge, a note when the challenges do not include `other`, a
+// currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a
+// non-positive income is a `400` naming the offending field.
+//
 // PUT /me/survey
 func (s *Server) handleUpdateSurveyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -31882,7 +32274,7 @@ func (s *Server) handleUpdateSurveyRequest(args [0]string, argsEscaped bool, w h
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateSurveyOperation,
-			OperationSummary: "",
+			OperationSummary: "Update one or more survey answers.",
 			OperationID:      "updateSurvey",
 			Body:             request,
 			RawBody:          rawBody,
@@ -31939,6 +32331,8 @@ func (s *Server) handleUpdateSurveyRequest(args [0]string, argsEscaped bool, w h
 
 // handleUpdateTimezoneRequest handles updateTimezone operation.
 //
+// Set your account’s IANA timezone.
+//
 // PATCH /me/timezone
 func (s *Server) handleUpdateTimezoneRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -31975,7 +32369,7 @@ func (s *Server) handleUpdateTimezoneRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpdateTimezoneOperation,
-			OperationSummary: "",
+			OperationSummary: "Set your account’s IANA timezone.",
 			OperationID:      "updateTimezone",
 			Body:             request,
 			RawBody:          rawBody,
@@ -32032,7 +32426,10 @@ func (s *Server) handleUpdateTimezoneRequest(args [0]string, argsEscaped bool, w
 
 // handleUpsertCompanyFeedbackRequest handles upsertCompanyFeedback operation.
 //
-// Creates or overwrites the caller's review in one category.
+// One entry per (user, category): posting again in the same `feedback_type` overwrites your existing
+// review rather than adding a second one. The response's nested `company` field is the freshly
+// recomputed rating count/average, so you can update your own view of the company without a second
+// fetch. `422` on an empty body.
 //
 // POST /companies/{slug}/feedback
 func (s *Server) handleUpsertCompanyFeedbackRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -32080,7 +32477,7 @@ func (s *Server) handleUpsertCompanyFeedbackRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UpsertCompanyFeedbackOperation,
-			OperationSummary: "",
+			OperationSummary: "Create or overwrite your feedback in one category on a company.",
 			OperationID:      "upsertCompanyFeedback",
 			Body:             request,
 			RawBody:          rawBody,
@@ -32142,7 +32539,7 @@ func (s *Server) handleUpsertCompanyFeedbackRequest(args [1]string, argsEscaped 
 
 // handleUserGrowthRequest handles userGrowth operation.
 //
-// Cumulative registrations per UTC day.
+// Aggregate-only — no user identifier is exposed.
 //
 // GET /stats/user-growth
 func (s *Server) handleUserGrowthRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -32161,7 +32558,7 @@ func (s *Server) handleUserGrowthRequest(args [0]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    UserGrowthOperation,
-			OperationSummary: "",
+			OperationSummary: "Cumulative member growth per UTC day, plus each day's own new-signup count.",
 			OperationID:      "userGrowth",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -32218,6 +32615,8 @@ func (s *Server) handleUserGrowthRequest(args [0]string, argsEscaped bool, w htt
 
 // handleVoteCompanyRequest handles voteCompany operation.
 //
+// Vote on a company.
+//
 // POST /companies/{slug}/vote
 func (s *Server) handleVoteCompanyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -32264,7 +32663,7 @@ func (s *Server) handleVoteCompanyRequest(args [1]string, argsEscaped bool, w ht
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    VoteCompanyOperation,
-			OperationSummary: "",
+			OperationSummary: "Vote on a company.",
 			OperationID:      "voteCompany",
 			Body:             request,
 			RawBody:          rawBody,
@@ -32326,6 +32725,8 @@ func (s *Server) handleVoteCompanyRequest(args [1]string, argsEscaped bool, w ht
 
 // handleVoteJobRequest handles voteJob operation.
 //
+// Vote on a job.
+//
 // POST /jobs/{slug}/vote
 func (s *Server) handleVoteJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
 	statusWriter := &codeRecorder{ResponseWriter: w}
@@ -32372,7 +32773,7 @@ func (s *Server) handleVoteJobRequest(args [1]string, argsEscaped bool, w http.R
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    VoteJobOperation,
-			OperationSummary: "",
+			OperationSummary: "Vote on a job.",
 			OperationID:      "voteJob",
 			Body:             request,
 			RawBody:          rawBody,
@@ -32541,7 +32942,7 @@ func (s *Server) handleWithdrawReferralOfferRequest(args [1]string, argsEscaped 
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    WithdrawReferralOfferOperation,
-			OperationSummary: "",
+			OperationSummary: "Withdraw an offer.",
 			OperationID:      "withdrawReferralOffer",
 			Body:             nil,
 			RawBody:          rawBody,

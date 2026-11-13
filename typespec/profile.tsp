@@ -42,11 +42,17 @@ model LocationPreferences {
 
 /** The profile as saved. */
 model ProfileUpdate {
+  /** One or more job categories (max 5). (e.g. `["backend"]`) */
   specializations?: string[] | null;
+  /** Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`) */
   skills?: string[] | null;
   seniorities?: string[] | null;
   excluded_skills?: string[] | null;
   excluded_sources?: string[] | null;
+  /**
+   * Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any
+   * language. (e.g. `["en","ru"]`)
+   */
   job_languages?: string[] | null;
   excluded_companies?: string[] | null;
   /** Shaped like LocationPreferences; null or absent keeps none. */
@@ -128,6 +134,8 @@ model Profile {
 }
 
 /** `data` is null before the first save. */
+@summary("Your career profile, or null if you have not saved one.")
+@useAuth(SessionOrKey)
 @tag("Account")
 @route("/me/profile")
 @get
@@ -135,13 +143,20 @@ op getProfile(): {
   data: Profile | null;
 } | Problem;
 
-/** Creates or replaces the profile. */
+// Creates or replaces the profile.
+/**
+ * The whole profile is replaced on each save. An unknown specialization (must be a job
+ * category), empty skills, or an out-of-vocabulary location value is a `400`.
+ */
+@summary("Create or replace your profile.")
 @tag("Account")
 @route("/me/profile")
 @put
 op putProfile(@body body: ProfileUpdate): Data<Profile> | Problem;
 
-/** Clears the profile. Idempotent: deleting when none exists is still a 204. */
+// Clears the profile. Idempotent: deleting when none exists is still a 204.
+/** Returns `204 No Content`. */
+@summary("Clear your profile (idempotent).")
 @tag("Account")
 @route("/me/profile")
 @delete

@@ -10233,7 +10233,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = AgentSearchJobsOperation
-							r.summary = ""
+							r.summary = "Search with full descriptions, for programmatic/agent consumers."
 							r.operationID = "agentSearchJobs"
 							r.operationGroup = ""
 							r.pathPattern = "/agent/jobs/search"
@@ -10257,7 +10257,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = ListAssistantSessionsOperation
-							r.summary = ""
+							r.summary = "List your chat conversations, newest activity first."
 							r.operationID = "listAssistantSessions"
 							r.operationGroup = ""
 							r.pathPattern = "/assistant/sessions"
@@ -10266,7 +10266,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							return r, true
 						case "POST":
 							r.name = CreateAssistantSessionOperation
-							r.summary = ""
+							r.summary = "Start a new conversation."
 							r.operationID = "createAssistantSession"
 							r.operationGroup = ""
 							r.pathPattern = "/assistant/sessions"
@@ -10299,7 +10299,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "DELETE":
 								r.name = DeleteAssistantSessionOperation
-								r.summary = ""
+								r.summary = "Delete an owned conversation and its transcript."
 								r.operationID = "deleteAssistantSession"
 								r.operationGroup = ""
 								r.pathPattern = "/assistant/sessions/{id}"
@@ -10308,7 +10308,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								return r, true
 							case "GET":
 								r.name = GetAssistantSessionOperation
-								r.summary = ""
+								r.summary = "One owned conversation with its full transcript."
 								r.operationID = "getAssistantSession"
 								r.operationGroup = ""
 								r.pathPattern = "/assistant/sessions/{id}"
@@ -10345,7 +10345,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = CancelAssistantTurnOperation
-										r.summary = ""
+										r.summary = "Stop the session’s running turn."
 										r.operationID = "cancelAssistantTurn"
 										r.operationGroup = ""
 										r.pathPattern = "/assistant/sessions/{id}/cancel"
@@ -10370,7 +10370,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = PostAssistantExtendOperation
-										r.summary = ""
+										r.summary = "Buy a CV editing session another ceiling’s worth of turns."
 										r.operationID = "postAssistantExtend"
 										r.operationGroup = ""
 										r.pathPattern = "/assistant/sessions/{id}/extend"
@@ -10407,7 +10407,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = PostAssistantVoiceTokenOperation
-											r.summary = ""
+											r.summary = "Mint a short-lived credential for a hands-free voice call."
 											r.operationID = "postAssistantVoiceToken"
 											r.operationGroup = ""
 											r.pathPattern = "/assistant/sessions/{id}/voice-token"
@@ -10432,7 +10432,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = PostAssistantVoiceTurnOperation
-											r.summary = ""
+											r.summary = "Append one completed spoken exchange to the transcript."
 											r.operationID = "postAssistantVoiceTurn"
 											r.operationGroup = ""
 											r.pathPattern = "/assistant/sessions/{id}/voice-turns"
@@ -10477,7 +10477,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = GetAuthMeOperation
-								r.summary = ""
+								r.summary = "The current user (cookie or API key)."
 								r.operationID = "getAuthMe"
 								r.operationGroup = ""
 								r.pathPattern = "/auth/me"
@@ -10502,7 +10502,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListOauthProvidersOperation
-								r.summary = ""
+								r.summary = "List the enabled OAuth providers."
 								r.operationID = "listOauthProviders"
 								r.operationGroup = ""
 								r.pathPattern = "/auth/oauth/providers"
@@ -10539,7 +10539,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = ForgotPasswordOperation
-									r.summary = ""
+									r.summary = "Request a password-reset code by email."
 									r.operationID = "forgotPassword"
 									r.operationGroup = ""
 									r.pathPattern = "/auth/password/forgot"
@@ -10564,7 +10564,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = ResetPasswordOperation
-									r.summary = ""
+									r.summary = "Set a new password against a mailed code."
 									r.operationID = "resetPassword"
 									r.operationGroup = ""
 									r.pathPattern = "/auth/password/reset"
@@ -10603,7 +10603,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = ConfirmEmailVerificationOperation
-									r.summary = ""
+									r.summary = "Confirm the address with the mailed code."
 									r.operationID = "confirmEmailVerification"
 									r.operationGroup = ""
 									r.pathPattern = "/auth/verify/confirm"
@@ -10628,7 +10628,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = RequestEmailVerificationOperation
-									r.summary = ""
+									r.summary = "Send (or resend) a six-digit email verification code."
 									r.operationID = "requestEmailVerification"
 									r.operationGroup = ""
 									r.pathPattern = "/auth/verify/request"
@@ -10721,7 +10721,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "POST":
 							r.name = SyncBillingStoreOperation
-							r.summary = ""
+							r.summary = "Re-read your own store subscription now."
 							r.operationID = "syncBillingStore"
 							r.operationGroup = ""
 							r.pathPattern = "/billing/revenuecat/sync"
@@ -10796,7 +10796,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListCompaniesOperation
-								r.summary = ""
+								r.summary = "List companies with job counts and denormalized facets; optional filters."
 								r.operationID = "listCompanies"
 								r.operationGroup = ""
 								r.pathPattern = "/companies"
@@ -10833,7 +10833,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = CompanySubindustriesOperation
-										r.summary = ""
+										r.summary = "Distinct company subindustry vocabulary with company counts."
 										r.operationID = "companySubindustries"
 										r.operationGroup = ""
 										r.pathPattern = "/companies/subindustries"
@@ -10884,7 +10884,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = DeleteCompanyFeedbackOperation
-											r.summary = ""
+											r.summary = "Delete your feedback in one category (no-op if absent)."
 											r.operationID = "deleteCompanyFeedback"
 											r.operationGroup = ""
 											r.pathPattern = "/companies/{slug}/feedback"
@@ -10893,7 +10893,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "GET":
 											r.name = ListCompanyFeedbackOperation
-											r.summary = ""
+											r.summary = "List a company's feedback, newest first."
 											r.operationID = "listCompanyFeedback"
 											r.operationGroup = ""
 											r.pathPattern = "/companies/{slug}/feedback"
@@ -10902,7 +10902,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "POST":
 											r.name = UpsertCompanyFeedbackOperation
-											r.summary = ""
+											r.summary = "Create or overwrite your feedback in one category on a company."
 											r.operationID = "upsertCompanyFeedback"
 											r.operationGroup = ""
 											r.pathPattern = "/companies/{slug}/feedback"
@@ -10927,7 +10927,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = MyCompanyFeedbackOperation
-												r.summary = ""
+												r.summary = "Your own feedback on this company, across every category (empty if none)."
 												r.operationID = "myCompanyFeedback"
 												r.operationGroup = ""
 												r.pathPattern = "/companies/{slug}/feedback/mine"
@@ -11039,7 +11039,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = ClearCompanyVoteOperation
-											r.summary = ""
+											r.summary = "Clear your vote on a company."
 											r.operationID = "clearCompanyVote"
 											r.operationGroup = ""
 											r.pathPattern = "/companies/{slug}/vote"
@@ -11048,7 +11048,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "POST":
 											r.name = VoteCompanyOperation
-											r.summary = ""
+											r.summary = "Vote on a company."
 											r.operationID = "voteCompany"
 											r.operationGroup = ""
 											r.pathPattern = "/companies/{slug}/vote"
@@ -11103,7 +11103,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = ListReportedCompanyFeedbackOperation
-										r.summary = ""
+										r.summary = "Every review with at least one report, most-reported first."
 										r.operationID = "listReportedCompanyFeedback"
 										r.operationGroup = ""
 										r.pathPattern = "/company-feedback/reported"
@@ -11155,7 +11155,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = HideCompanyFeedbackOperation
-											r.summary = ""
+											r.summary = "Hide a review, dropping it from the company's public list and average."
 											r.operationID = "hideCompanyFeedback"
 											r.operationGroup = ""
 											r.pathPattern = "/company-feedback/{id}/hide"
@@ -11180,7 +11180,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = ReportCompanyFeedbackOperation
-											r.summary = ""
+											r.summary = "Report a specific review."
 											r.operationID = "reportCompanyFeedback"
 											r.operationGroup = ""
 											r.pathPattern = "/company-feedback/{id}/report"
@@ -11338,7 +11338,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListCVFontsOperation
-								r.summary = ""
+								r.summary = "The typefaces a CV may use."
 								r.operationID = "listCVFonts"
 								r.operationGroup = ""
 								r.pathPattern = "/cv-fonts"
@@ -11363,7 +11363,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListCVTemplatesOperation
-								r.summary = ""
+								r.summary = "The template gallery."
 								r.operationID = "listCVTemplates"
 								r.operationGroup = ""
 								r.pathPattern = "/cv-templates"
@@ -11929,7 +11929,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					switch method {
 					case "GET":
 						r.name = SearchCitiesOperation
-						r.summary = ""
+						r.summary = "Prefix-search city names for autocomplete."
 						r.operationID = "searchCities"
 						r.operationGroup = ""
 						r.pathPattern = "/geo/cities"
@@ -11966,7 +11966,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = InsightsCompaniesOperation
-							r.summary = ""
+							r.summary = "Companies ranked by hiring activity."
 							r.operationID = "insightsCompanies"
 							r.operationGroup = ""
 							r.pathPattern = "/insights/companies"
@@ -12067,7 +12067,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = InsightsRolesOperation
-								r.summary = ""
+								r.summary = "Roles (category × seniority) ranked by openings or growth."
 								r.operationID = "insightsRoles"
 								r.operationGroup = ""
 								r.pathPattern = "/insights/roles"
@@ -12105,7 +12105,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = InsightsSalaryOperation
-								r.summary = ""
+								r.summary = "Salary bands by category, seniority and country."
 								r.operationID = "insightsSalary"
 								r.operationGroup = ""
 								r.pathPattern = "/insights/salary"
@@ -12157,7 +12157,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = InsightsSkillsOperation
-								r.summary = ""
+								r.summary = "Skills ranked by openings or growth."
 								r.operationID = "insightsSkills"
 								r.operationGroup = ""
 								r.pathPattern = "/insights/skills"
@@ -12184,7 +12184,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = InsightsVelocityOperation
-							r.summary = ""
+							r.summary = "How fast a slice of the market is hiring, over time."
 							r.operationID = "insightsVelocity"
 							r.operationGroup = ""
 							r.pathPattern = "/insights/velocity"
@@ -12210,7 +12210,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 					switch method {
 					case "GET":
 						r.name = ListJobsOperation
-						r.summary = ""
+						r.summary = "List jobs, newest first, with limit/offset pagination."
 						r.operationID = "listJobs"
 						r.operationGroup = ""
 						r.pathPattern = "/jobs"
@@ -12219,7 +12219,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						return r, true
 					case "POST":
 						r.name = CreateJobOperation
-						r.summary = ""
+						r.summary = "Create a curated job."
 						r.operationID = "createJob"
 						r.operationGroup = ""
 						r.pathPattern = "/jobs"
@@ -12268,7 +12268,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = JobFacetsOperation
-									r.summary = ""
+									r.summary = "Count of matching jobs per facet value (and numeric stats)."
 									r.operationID = "jobFacets"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/facets"
@@ -12293,7 +12293,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = FindJobOperation
-									r.summary = ""
+									r.summary = "Resolve a posting URL to a catalogue slug."
 									r.operationID = "findJob"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/find"
@@ -12321,7 +12321,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "POST":
 								r.name = ResolveJobOperation
-								r.summary = ""
+								r.summary = "Hand freehire a link: import the posting, and the board behind it."
 								r.operationID = "resolveJob"
 								r.operationGroup = ""
 								r.pathPattern = "/jobs/resolve"
@@ -12347,7 +12347,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = SearchJobsOperation
-								r.summary = ""
+								r.summary = "Full-text + faceted search over open jobs."
 								r.operationID = "searchJobs"
 								r.operationGroup = ""
 								r.pathPattern = "/jobs/search"
@@ -12374,7 +12374,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = GetJobOperation
-							r.summary = ""
+							r.summary = "A single job by its public slug (serves closed jobs too)."
 							r.operationID = "getJob"
 							r.operationGroup = ""
 							r.pathPattern = "/jobs/{slug}"
@@ -12383,7 +12383,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							return r, true
 						case "PATCH":
 							r.name = UpdateJobOperation
-							r.summary = ""
+							r.summary = "Edit a curated job."
 							r.operationID = "updateJob"
 							r.operationGroup = ""
 							r.pathPattern = "/jobs/{slug}"
@@ -12431,7 +12431,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = MarkAppliedOperation
-										r.summary = ""
+										r.summary = "Mark the job as applied to."
 										r.operationID = "markApplied"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/apply"
@@ -12456,7 +12456,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = JobApplyFormOperation
-											r.summary = ""
+											r.summary = "The captured ATS application form for the posting."
 											r.operationID = "jobApplyForm"
 											r.operationGroup = ""
 											r.pathPattern = "/jobs/{slug}/apply-form"
@@ -12545,7 +12545,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = JobCopiesOperation
-									r.summary = ""
+									r.summary = "Other open postings in the same role cluster (per-city duplicates)."
 									r.operationID = "jobCopies"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/copies"
@@ -12582,7 +12582,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetDirectApplyFormOperation
-										r.summary = ""
+										r.summary = "The application form of a vacancy that takes applications on freehire."
 										r.operationID = "getDirectApplyForm"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/direct-apply"
@@ -12591,7 +12591,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = SendDirectApplyOperation
-										r.summary = ""
+										r.summary = "Apply on freehire: the employer receives your CV and answers by email."
 										r.operationID = "sendDirectApply"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/direct-apply"
@@ -12616,7 +12616,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = UndismissJobOperation
-										r.summary = ""
+										r.summary = "Undismiss the job (no-op if not dismissed)."
 										r.operationID = "undismissJob"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/dismiss"
@@ -12625,7 +12625,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = DismissJobOperation
-										r.summary = ""
+										r.summary = "Dismiss (swipe away) the job."
 										r.operationID = "dismissJob"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/dismiss"
@@ -12686,7 +12686,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "DELETE":
 									r.name = RetractGhostReportOperation
-									r.summary = ""
+									r.summary = "Withdraw your claim about this job."
 									r.operationID = "retractGhostReport"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/ghost-report"
@@ -12695,7 +12695,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									return r, true
 								case "POST":
 									r.name = CreateGhostReportOperation
-									r.summary = ""
+									r.summary = "File a claim that you applied and got no response."
 									r.operationID = "createGhostReport"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/ghost-report"
@@ -12719,7 +12719,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = GetJobMatchOperation
-									r.summary = ""
+									r.summary = "Deterministic skill match of the job against your profile (no LLM)."
 									r.operationID = "getJobMatch"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/match"
@@ -12744,7 +12744,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetMatchAnalysisOperation
-										r.summary = ""
+										r.summary = "The cached AI match analysis for the job (never runs the LLM)."
 										r.operationID = "getMatchAnalysis"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/match-analysis"
@@ -12753,7 +12753,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = RunMatchAnalysisOperation
-										r.summary = ""
+										r.summary = "Run the three-stage AI match analysis and cache it."
 										r.operationID = "runMatchAnalysis"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/match-analysis"
@@ -12780,7 +12780,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = CreateJobReportOperation
-									r.summary = ""
+									r.summary = "Report a problem with a job."
 									r.operationID = "createJobReport"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/reports"
@@ -12817,7 +12817,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = UnsaveJobOperation
-										r.summary = ""
+										r.summary = "Unsave the job (no-op if not saved)."
 										r.operationID = "unsaveJob"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/save"
@@ -12826,7 +12826,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = SaveJobOperation
-										r.summary = ""
+										r.summary = "Save (bookmark) the job."
 										r.operationID = "saveJob"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/save"
@@ -12851,7 +12851,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = SimilarJobsOperation
-										r.summary = ""
+										r.summary = "Similar jobs within the same location and specialization."
 										r.operationID = "similarJobs"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/similar"
@@ -12876,7 +12876,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = ClearStageOperation
-										r.summary = ""
+										r.summary = "Clear the application stage."
 										r.operationID = "clearStage"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/stage"
@@ -12903,7 +12903,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "DELETE":
 									r.name = UntrackOperation
-									r.summary = ""
+									r.summary = "Remove the interaction record entirely."
 									r.operationID = "untrack"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/track"
@@ -12912,7 +12912,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									return r, true
 								case "PATCH":
 									r.name = TrackJobOperation
-									r.summary = ""
+									r.summary = "Set the application stage and/or notes."
 									r.operationID = "trackJob"
 									r.operationGroup = ""
 									r.pathPattern = "/jobs/{slug}/track"
@@ -12949,7 +12949,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = RecordViewOperation
-										r.summary = ""
+										r.summary = "Record that you viewed the job."
 										r.operationID = "recordView"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/view"
@@ -12974,7 +12974,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = ClearJobVoteOperation
-										r.summary = ""
+										r.summary = "Clear your vote on a job."
 										r.operationID = "clearJobVote"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/vote"
@@ -12983,7 +12983,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = VoteJobOperation
-										r.summary = ""
+										r.summary = "Vote on a job."
 										r.operationID = "voteJob"
 										r.operationGroup = ""
 										r.pathPattern = "/jobs/{slug}/vote"
@@ -13028,7 +13028,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "POST":
 							r.name = MarketCoverageOperation
-							r.summary = ""
+							r.summary = "Score a supplied skill list against the filtered job market."
 							r.operationID = "marketCoverage"
 							r.operationGroup = ""
 							r.pathPattern = "/market/coverage"
@@ -13320,7 +13320,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = UntrackApplicationOperation
-											r.summary = ""
+											r.summary = "Remove the interaction record entirely, addressed by row id."
 											r.operationID = "untrackApplication"
 											r.operationGroup = ""
 											r.pathPattern = "/me/applications/{id}"
@@ -13329,7 +13329,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "PATCH":
 											r.name = TrackApplicationOperation
-											r.summary = ""
+											r.summary = "Set the application stage and/or notes, addressed by row id."
 											r.operationID = "trackApplication"
 											r.operationGroup = ""
 											r.pathPattern = "/me/applications/{id}"
@@ -13354,7 +13354,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "DELETE":
 												r.name = ClearApplicationStageOperation
-												r.summary = ""
+												r.summary = "Clear the application stage, addressed by row id."
 												r.operationID = "clearApplicationStage"
 												r.operationGroup = ""
 												r.pathPattern = "/me/applications/{id}/stage"
@@ -13480,7 +13480,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = GetAutofillProfileOperation
-												r.summary = ""
+												r.summary = "Your contact details in canonical autofill fields."
 												r.operationID = "getAutofillProfile"
 												r.operationGroup = ""
 												r.pathPattern = "/me/autofill-profile"
@@ -13505,7 +13505,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "POST":
 												r.name = RunAutofillOperation
-												r.summary = ""
+												r.summary = "Drive your own browser to fill an application form."
 												r.operationID = "runAutofill"
 												r.operationGroup = ""
 												r.pathPattern = "/me/autofill/run"
@@ -14294,7 +14294,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListMyContributionsOperation
-											r.summary = ""
+											r.summary = "The boards you contributed, and their onboarding state."
 											r.operationID = "listMyContributions"
 											r.operationGroup = ""
 											r.pathPattern = "/me/contributions"
@@ -14602,7 +14602,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListCVsOperation
-											r.summary = ""
+											r.summary = "List your CVs, without their documents."
 											r.operationID = "listCVs"
 											r.operationGroup = ""
 											r.pathPattern = "/me/cvs"
@@ -14611,7 +14611,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "POST":
 											r.name = CreateCVOperation
-											r.summary = ""
+											r.summary = "Create a CV, optionally seeded from your stored history."
 											r.operationID = "createCV"
 											r.operationGroup = ""
 											r.pathPattern = "/me/cvs"
@@ -14660,7 +14660,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = ReseedBaseCVOperation
-														r.summary = ""
+														r.summary = "Rebuild your base CV from your current seed."
 														r.operationID = "reseedBaseCV"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/base/reseed"
@@ -14685,7 +14685,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "GET":
 														r.name = ListBaseCVsOperation
-														r.summary = ""
+														r.summary = "List your base CVs, without their documents."
 														r.operationID = "listBaseCVs"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/bases"
@@ -14713,7 +14713,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "POST":
 													r.name = TailorCVOperation
-													r.summary = ""
+													r.summary = "Start tailoring a CV toward one vacancy."
 													r.operationID = "tailorCV"
 													r.operationGroup = ""
 													r.pathPattern = "/me/cvs/tailor"
@@ -14740,7 +14740,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "DELETE":
 												r.name = DeleteCVOperation
-												r.summary = ""
+												r.summary = "Delete a CV."
 												r.operationID = "deleteCV"
 												r.operationGroup = ""
 												r.pathPattern = "/me/cvs/{id}"
@@ -14749,7 +14749,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												return r, true
 											case "GET":
 												r.name = GetCVOperation
-												r.summary = ""
+												r.summary = "One CV with its full document."
 												r.operationID = "getCV"
 												r.operationGroup = ""
 												r.pathPattern = "/me/cvs/{id}"
@@ -14758,7 +14758,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												return r, true
 											case "PATCH":
 												r.name = PatchCVOperation
-												r.summary = ""
+												r.summary = "Apply a batch of edits, addressed by path."
 												r.operationID = "patchCV"
 												r.operationGroup = ""
 												r.pathPattern = "/me/cvs/{id}"
@@ -14767,7 +14767,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												return r, true
 											case "PUT":
 												r.name = UpdateCVOperation
-												r.summary = ""
+												r.summary = "Replace a CV — title, template and document."
 												r.operationID = "updateCV"
 												r.operationGroup = ""
 												r.pathPattern = "/me/cvs/{id}"
@@ -14804,7 +14804,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "GET":
 														r.name = GetCVATSDeltaOperation
-														r.summary = ""
+														r.summary = "How tailoring changed this CV's ATS-readiness score."
 														r.operationID = "getCVATSDelta"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/{id}/ats-delta"
@@ -14829,7 +14829,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = StartBaseSessionOperation
-														r.summary = ""
+														r.summary = "Open the agent conversation for a base CV."
 														r.operationID = "startBaseSession"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/{id}/base-session"
@@ -14888,7 +14888,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = DuplicateCVOperation
-														r.summary = ""
+														r.summary = "Copy a base CV."
 														r.operationID = "duplicateCV"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/{id}/duplicate"
@@ -14913,7 +14913,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "GET":
 														r.name = GetCVJobMatchOperation
-														r.summary = ""
+														r.summary = "How well a tailored CV matches the vacancy it was written for."
 														r.operationID = "getCVJobMatch"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/{id}/job-match"
@@ -14950,7 +14950,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "POST":
 															r.name = ReseedCVOperation
-															r.summary = ""
+															r.summary = "Rebuild one CV from your current seed."
 															r.operationID = "reseedCV"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/reseed"
@@ -14974,7 +14974,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "GET":
 															r.name = ListCVRevisionsOperation
-															r.summary = ""
+															r.summary = "The edit history of this CV, newest first."
 															r.operationID = "listCVRevisions"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/revisions"
@@ -15032,7 +15032,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 																	switch method {
 																	case "POST":
 																		r.name = UndoCVRevisionBatchOperation
-																		r.summary = ""
+																		r.summary = "Reverse every standing edit of one agent turn, newest first."
 																		r.operationID = "undoCVRevisionBatch"
 																		r.operationGroup = ""
 																		r.pathPattern = "/me/cvs/{id}/revisions/batch/{bid}/undo"
@@ -15074,7 +15074,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 																switch method {
 																case "POST":
 																	r.name = UndoCVRevisionOperation
-																	r.summary = ""
+																	r.summary = "Reverse one revision, leaving later edits in place."
 																	r.operationID = "undoCVRevision"
 																	r.operationGroup = ""
 																	r.pathPattern = "/me/cvs/{id}/revisions/{rid}/undo"
@@ -15105,7 +15105,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "PUT":
 														r.name = SetCVSessionOperation
-														r.summary = ""
+														r.summary = "Bind an agent session to a CV."
 														r.operationID = "setCVSession"
 														r.operationGroup = ""
 														r.pathPattern = "/me/cvs/{id}/session"
@@ -15154,7 +15154,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 															switch method {
 															case "GET":
 																r.name = GetCVTailorContextOperation
-																r.summary = ""
+																r.summary = "The match analysis a tailored CV should reframe toward."
 																r.operationID = "getCVTailorContext"
 																r.operationGroup = ""
 																r.pathPattern = "/me/cvs/{id}/tailor-context"
@@ -15179,7 +15179,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 															switch method {
 															case "POST":
 																r.name = StartTailorSessionOperation
-																r.summary = ""
+																r.summary = "Mint a fresh agent session for an existing tailored CV."
 																r.operationID = "startTailorSession"
 																r.operationGroup = ""
 																r.pathPattern = "/me/cvs/{id}/tailor-session"
@@ -15206,7 +15206,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "PUT":
 															r.name = SetCVTemplateOperation
-															r.summary = ""
+															r.summary = "Switch the template only."
 															r.operationID = "setCVTemplate"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/template"
@@ -15231,7 +15231,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "GET":
 															r.name = ListCVTracerLinksOperation
-															r.summary = ""
+															r.summary = "What is known about this CV's traced links."
 															r.operationID = "listCVTracerLinks"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/tracer-links"
@@ -15240,7 +15240,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 															return r, true
 														case "PUT":
 															r.name = SetCVTracerLinksOperation
-															r.summary = ""
+															r.summary = "Turn link tracing on or off for this CV's PDF."
 															r.operationID = "setCVTracerLinks"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/tracer-links"
@@ -15346,7 +15346,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = IngestEmailsOperation
-											r.summary = ""
+											r.summary = "Push a batch your own mail client fetched."
 											r.operationID = "ingestEmails"
 											r.operationGroup = ""
 											r.pathPattern = "/me/emails"
@@ -15379,7 +15379,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = GetEmailOperation
-												r.summary = ""
+												r.summary = "One message in full. Marks it read."
 												r.operationID = "getEmail"
 												r.operationGroup = ""
 												r.pathPattern = "/me/emails/{id}"
@@ -15416,7 +15416,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = CreateApplicationFromEmailOperation
-														r.summary = ""
+														r.summary = "Record an application from a message, and link the message to it."
 														r.operationID = "createApplicationFromEmail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/application"
@@ -15441,7 +15441,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = ConfirmEmailLinkOperation
-														r.summary = ""
+														r.summary = "Accept a suggested link."
 														r.operationID = "confirmEmailLink"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/confirm"
@@ -15466,7 +15466,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = DeleteEmailOperation
-														r.summary = ""
+														r.summary = "Soft-delete a message. Answers 204."
 														r.operationID = "deleteEmail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/delete"
@@ -15491,7 +15491,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = LinkEmailOperation
-														r.summary = ""
+														r.summary = "Attach a message to one of your applications."
 														r.operationID = "linkEmail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/link"
@@ -15528,7 +15528,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "POST":
 															r.name = RejectEmailLinkOperation
-															r.summary = ""
+															r.summary = "Dismiss a suggested link without attaching it."
 															r.operationID = "rejectEmailLink"
 															r.operationGroup = ""
 															r.pathPattern = "/me/emails/{id}/reject"
@@ -15553,7 +15553,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "POST":
 															r.name = RestoreEmailOperation
-															r.summary = ""
+															r.summary = "Undo a soft-delete. Answers 204."
 															r.operationID = "restoreEmail"
 															r.operationGroup = ""
 															r.pathPattern = "/me/emails/{id}/restore"
@@ -15580,7 +15580,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = TriageEmailOperation
-														r.summary = ""
+														r.summary = "Record what a message is, and optionally which application it belongs to."
 														r.operationID = "triageEmail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/triage"
@@ -15605,7 +15605,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = UnlinkEmailOperation
-														r.summary = ""
+														r.summary = "Clear a message's application link; its classification stays."
 														r.operationID = "unlinkEmail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/emails/{id}/unlink"
@@ -15637,7 +15637,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = ListExperienceOperation
-										r.summary = ""
+										r.summary = "Your employments and their evidence atoms."
 										r.operationID = "listExperience"
 										r.operationGroup = ""
 										r.pathPattern = "/me/experience"
@@ -15673,7 +15673,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "POST":
 												r.name = AddAtomOperation
-												r.summary = ""
+												r.summary = "Record a new achievement."
 												r.operationID = "addAtom"
 												r.operationGroup = ""
 												r.pathPattern = "/me/experience/atoms"
@@ -15710,7 +15710,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = MergeAtomsOperation
-														r.summary = ""
+														r.summary = "Fold two of your atoms into one richer keep."
 														r.operationID = "mergeAtoms"
 														r.operationGroup = ""
 														r.pathPattern = "/me/experience/atoms/merge"
@@ -15738,7 +15738,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "DELETE":
 													r.name = DeleteAtomOperation
-													r.summary = ""
+													r.summary = "Remove an evidence atom."
 													r.operationID = "deleteAtom"
 													r.operationGroup = ""
 													r.pathPattern = "/me/experience/atoms/{id}"
@@ -15747,7 +15747,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													return r, true
 												case "PUT":
 													r.name = UpdateAtomOperation
-													r.summary = ""
+													r.summary = "Edit one evidence atom."
 													r.operationID = "updateAtom"
 													r.operationGroup = ""
 													r.pathPattern = "/me/experience/atoms/{id}"
@@ -15773,7 +15773,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "POST":
 												r.name = AddEmploymentOperation
-												r.summary = ""
+												r.summary = "Record a new place — a job or a project."
 												r.operationID = "addEmployment"
 												r.operationGroup = ""
 												r.pathPattern = "/me/experience/employments"
@@ -15807,7 +15807,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "DELETE":
 													r.name = DeleteEmploymentOperation
-													r.summary = ""
+													r.summary = "Remove an employment and its atoms."
 													r.operationID = "deleteEmployment"
 													r.operationGroup = ""
 													r.pathPattern = "/me/experience/employments/{id}"
@@ -15816,7 +15816,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													return r, true
 												case "PUT":
 													r.name = UpdateEmploymentOperation
-													r.summary = ""
+													r.summary = "Edit one employment."
 													r.operationID = "updateEmployment"
 													r.operationGroup = ""
 													r.pathPattern = "/me/experience/employments/{id}"
@@ -15848,7 +15848,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "DELETE":
 									r.name = GmailDisconnectOperation
-									r.summary = ""
+									r.summary = "Disconnect Gmail and purge the mail it synced."
 									r.operationID = "gmailDisconnect"
 									r.operationGroup = ""
 									r.pathPattern = "/me/gmail"
@@ -15857,7 +15857,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									return r, true
 								case "GET":
 									r.name = GmailStatusOperation
-									r.summary = ""
+									r.summary = "Gmail connection status."
 									r.operationID = "gmailStatus"
 									r.operationGroup = ""
 									r.pathPattern = "/me/gmail"
@@ -15882,7 +15882,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = SyncGmailOperation
-										r.summary = ""
+										r.summary = "Start an incremental sync."
 										r.operationID = "syncGmail"
 										r.operationGroup = ""
 										r.pathPattern = "/me/gmail/sync"
@@ -15920,7 +15920,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetInboxOperation
-										r.summary = ""
+										r.summary = "List your mail, newest first, excluding deleted."
 										r.operationID = "getInbox"
 										r.operationGroup = ""
 										r.pathPattern = "/me/inbox"
@@ -15945,7 +15945,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = MarkAllReadInboxOperation
-											r.summary = ""
+											r.summary = "Mark every unread message matching the filters as read."
 											r.operationID = "markAllReadInbox"
 											r.operationGroup = ""
 											r.pathPattern = "/me/inbox/read-all"
@@ -15972,7 +15972,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetInterviewsOperation
-										r.summary = ""
+										r.summary = "Arranged meetings whose start falls in the date range."
 										r.operationID = "getInterviews"
 										r.operationGroup = ""
 										r.pathPattern = "/me/interviews"
@@ -16024,7 +16024,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = ResolveJobDescriptionOperation
-									r.summary = ""
+									r.summary = "Turn a URL, pasted text, or an existing job into one usable by CV tailoring."
 									r.operationID = "resolveJobDescription"
 									r.operationGroup = ""
 									r.pathPattern = "/me/jd/resolve"
@@ -16049,7 +16049,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "PATCH":
 									r.name = UpdateLanguageOperation
-									r.summary = ""
+									r.summary = "Set your preferred interface language."
 									r.operationID = "updateLanguage"
 									r.operationGroup = ""
 									r.pathPattern = "/me/language"
@@ -16098,7 +16098,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = ReleaseMailboxOperation
-											r.summary = ""
+											r.summary = "Release the address; it stops receiving."
 											r.operationID = "releaseMailbox"
 											r.operationGroup = ""
 											r.pathPattern = "/me/mailbox"
@@ -16107,7 +16107,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "GET":
 											r.name = GetMailboxOperation
-											r.summary = ""
+											r.summary = "Your hosted freehire address, and whether the feature is configured."
 											r.operationID = "getMailbox"
 											r.operationGroup = ""
 											r.pathPattern = "/me/mailbox"
@@ -16116,7 +16116,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "POST":
 											r.name = ClaimMailboxOperation
-											r.summary = ""
+											r.summary = "Claim your hosted address."
 											r.operationID = "claimMailbox"
 											r.operationGroup = ""
 											r.pathPattern = "/me/mailbox"
@@ -16141,7 +16141,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetMarketPulseOperation
-											r.summary = ""
+											r.summary = "Weekly demand trend for your profile skills."
 											r.operationID = "getMarketPulse"
 											r.operationGroup = ""
 											r.pathPattern = "/me/market-pulse"
@@ -16166,7 +16166,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = MatchTextOperation
-											r.summary = ""
+											r.summary = "Score any job text against your profile."
 											r.operationID = "matchText"
 											r.operationGroup = ""
 											r.pathPattern = "/me/match-text"
@@ -16656,7 +16656,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetNotificationSettingsOperation
-										r.summary = ""
+										r.summary = "Your notification rule (gates saved-job reminders and both lifecycle nudges)."
 										r.operationID = "getNotificationSettings"
 										r.operationGroup = ""
 										r.pathPattern = "/me/notification-settings"
@@ -16665,7 +16665,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "PUT":
 										r.name = UpdateNotificationSettingsOperation
-										r.summary = ""
+										r.summary = "Change your notification rule."
 										r.operationID = "updateNotificationSettings"
 										r.operationGroup = ""
 										r.pathPattern = "/me/notification-settings"
@@ -16689,7 +16689,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = ListNotificationsOperation
-										r.summary = ""
+										r.summary = "List your notification-center entries, newest first."
 										r.operationID = "listNotifications"
 										r.operationGroup = ""
 										r.pathPattern = "/me/notifications"
@@ -16726,7 +16726,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "POST":
 												r.name = MarkAllNotificationsReadOperation
-												r.summary = ""
+												r.summary = "Mark every unread notification read."
 												r.operationID = "markAllNotificationsRead"
 												r.operationGroup = ""
 												r.pathPattern = "/me/notifications/read-all"
@@ -16753,7 +16753,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetNotificationOperation
-											r.summary = ""
+											r.summary = "One of your notifications, including its jobs snapshot."
 											r.operationID = "getNotification"
 											r.operationGroup = ""
 											r.pathPattern = "/me/notifications/{id}"
@@ -16778,7 +16778,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "POST":
 												r.name = MarkNotificationReadOperation
-												r.summary = ""
+												r.summary = "Mark one notification read (idempotent)."
 												r.operationID = "markNotificationRead"
 												r.operationGroup = ""
 												r.pathPattern = "/me/notifications/{id}/read"
@@ -16881,7 +16881,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = CompleteOnboardingOperation
-										r.summary = ""
+										r.summary = "Record that you have been through the onboarding wizard."
 										r.operationID = "completeOnboarding"
 										r.operationGroup = ""
 										r.pathPattern = "/me/onboarding/complete"
@@ -16919,7 +16919,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetMyPlanOperation
-										r.summary = ""
+										r.summary = "Your plan and what it allows today."
 										r.operationID = "getMyPlan"
 										r.operationGroup = ""
 										r.pathPattern = "/me/plan"
@@ -16944,7 +16944,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetMyPlanHistoryOperation
-											r.summary = ""
+											r.summary = "What you spent your allowances on, newest first."
 											r.operationID = "getMyPlanHistory"
 											r.operationGroup = ""
 											r.pathPattern = "/me/plan/history"
@@ -16982,7 +16982,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = DeleteProfileOperation
-											r.summary = ""
+											r.summary = "Clear your profile (idempotent)."
 											r.operationID = "deleteProfile"
 											r.operationGroup = ""
 											r.pathPattern = "/me/profile"
@@ -16991,7 +16991,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "GET":
 											r.name = GetProfileOperation
-											r.summary = ""
+											r.summary = "Your career profile, or null if you have not saved one."
 											r.operationID = "getProfile"
 											r.operationGroup = ""
 											r.pathPattern = "/me/profile"
@@ -17000,7 +17000,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "PUT":
 											r.name = PutProfileOperation
-											r.summary = ""
+											r.summary = "Create or replace your profile."
 											r.operationID = "putProfile"
 											r.operationGroup = ""
 											r.pathPattern = "/me/profile"
@@ -17037,7 +17037,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "GET":
 													r.name = GetAtsReportOperation
-													r.summary = ""
+													r.summary = "CV ATS-readiness report (deterministic + any cached LLM review)."
 													r.operationID = "getAtsReport"
 													r.operationGroup = ""
 													r.pathPattern = "/me/profile/ats-report"
@@ -17046,7 +17046,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													return r, true
 												case "POST":
 													r.name = PostAtsReportOperation
-													r.summary = ""
+													r.summary = "Run the optional LLM qualitative ATS review and cache it."
 													r.operationID = "postAtsReport"
 													r.operationGroup = ""
 													r.pathPattern = "/me/profile/ats-report"
@@ -17071,7 +17071,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "GET":
 													r.name = GetResumeVerdictOperation
-													r.summary = ""
+													r.summary = "Market-coverage verdict for your profile skills."
 													r.operationID = "getResumeVerdict"
 													r.operationGroup = ""
 													r.pathPattern = "/me/profile/verdict"
@@ -17165,7 +17165,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = UnregisterPushTokenOperation
-										r.summary = ""
+										r.summary = "Unregister one of your own device tokens."
 										r.operationID = "unregisterPushToken"
 										r.operationGroup = ""
 										r.pathPattern = "/me/push-tokens"
@@ -17174,7 +17174,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "GET":
 										r.name = ListPushTokensOperation
-										r.summary = ""
+										r.summary = "List your own registered devices."
 										r.operationID = "listPushTokens"
 										r.operationGroup = ""
 										r.pathPattern = "/me/push-tokens"
@@ -17183,7 +17183,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = RegisterPushTokenOperation
-										r.summary = ""
+										r.summary = "Register (or reassign) a mobile device’s Expo push token."
 										r.operationID = "registerPushToken"
 										r.operationGroup = ""
 										r.pathPattern = "/me/push-tokens"
@@ -17208,7 +17208,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = TestPushTokenOperation
-											r.summary = ""
+											r.summary = "Send a test push to all of your own registered devices."
 											r.operationID = "testPushToken"
 											r.operationGroup = ""
 											r.pathPattern = "/me/push-tokens/test"
@@ -17261,7 +17261,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListReferralCVOptionsOperation
-											r.summary = ""
+											r.summary = "The CVs you can attach to a request into a company."
 											r.operationID = "listReferralCVOptions"
 											r.operationGroup = ""
 											r.pathPattern = "/me/referrals/cv-options"
@@ -17285,7 +17285,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListIncomingReferralRequestsOperation
-											r.summary = ""
+											r.summary = "Requests waiting on you as an approved referrer."
 											r.operationID = "listIncomingReferralRequests"
 											r.operationGroup = ""
 											r.pathPattern = "/me/referrals/incoming"
@@ -17331,7 +17331,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "POST":
 													r.name = ResolveReferralRequestOperation
-													r.summary = ""
+													r.summary = "Mark an incoming request contacted or declined."
 													r.operationID = "resolveReferralRequest"
 													r.operationGroup = ""
 													r.pathPattern = "/me/referrals/incoming/{id}/resolve"
@@ -17359,7 +17359,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListMyReferralOffersOperation
-											r.summary = ""
+											r.summary = "Your referral offers and their moderation state."
 											r.operationID = "listMyReferralOffers"
 											r.operationGroup = ""
 											r.pathPattern = "/me/referrals/offers"
@@ -17393,7 +17393,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "DELETE":
 												r.name = WithdrawReferralOfferOperation
-												r.summary = ""
+												r.summary = "Withdraw an offer."
 												r.operationID = "withdrawReferralOffer"
 												r.operationGroup = ""
 												r.pathPattern = "/me/referrals/offers/{id}"
@@ -17420,7 +17420,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = ListMyReferralRequestsOperation
-											r.summary = ""
+											r.summary = "The intros you asked for, and where they stand."
 											r.operationID = "listMyReferralRequests"
 											r.operationGroup = ""
 											r.pathPattern = "/me/referrals/requests"
@@ -17429,7 +17429,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "POST":
 											r.name = CreateReferralRequestOperation
-											r.summary = ""
+											r.summary = "Ask a company's approved referrers for an intro."
 											r.operationID = "createReferralRequest"
 											r.operationGroup = ""
 											r.pathPattern = "/me/referrals/requests"
@@ -17455,7 +17455,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "DELETE":
 										r.name = DeleteResumeOperation
-										r.summary = ""
+										r.summary = "Delete your stored résumé."
 										r.operationID = "deleteResume"
 										r.operationGroup = ""
 										r.pathPattern = "/me/resume"
@@ -17464,7 +17464,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "GET":
 										r.name = GetResumeOperation
-										r.summary = ""
+										r.summary = "Your résumé status (enabled / present / uploaded_at)."
 										r.operationID = "getResume"
 										r.operationGroup = ""
 										r.pathPattern = "/me/resume"
@@ -17500,7 +17500,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "PUT":
 												r.name = PutResumeContactsOperation
-												r.summary = ""
+												r.summary = "Override one or more contact-block fields on your profile."
 												r.operationID = "putResumeContacts"
 												r.operationGroup = ""
 												r.pathPattern = "/me/resume/contacts"
@@ -17525,7 +17525,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "POST":
 													r.name = ReplaceResumeContactsFromCvOperation
-													r.summary = ""
+													r.summary = "Reset every contact override from your current structured résumé."
 													r.operationID = "replaceResumeContactsFromCv"
 													r.operationGroup = ""
 													r.pathPattern = "/me/resume/contacts/replace-from-cv"
@@ -17595,7 +17595,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetScreeningAnswersOperation
-										r.summary = ""
+										r.summary = "Your stored screening answers, or `null` if you have stated none."
 										r.operationID = "getScreeningAnswers"
 										r.operationGroup = ""
 										r.pathPattern = "/me/screening-answers"
@@ -17604,7 +17604,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "PUT":
 										r.name = UpdateScreeningAnswersOperation
-										r.summary = ""
+										r.summary = "Update one or more screening answers."
 										r.operationID = "updateScreeningAnswers"
 										r.operationGroup = ""
 										r.pathPattern = "/me/screening-answers"
@@ -17628,7 +17628,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = ListSavedSearchesOperation
-										r.summary = ""
+										r.summary = "List your saved searches."
 										r.operationID = "listSavedSearches"
 										r.operationGroup = ""
 										r.pathPattern = "/me/searches"
@@ -17637,7 +17637,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "POST":
 										r.name = CreateSavedSearchOperation
-										r.summary = ""
+										r.summary = "Save a search."
 										r.operationID = "createSavedSearch"
 										r.operationGroup = ""
 										r.pathPattern = "/me/searches"
@@ -17671,7 +17671,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "DELETE":
 											r.name = DeleteSavedSearchOperation
-											r.summary = ""
+											r.summary = "Delete a saved search."
 											r.operationID = "deleteSavedSearch"
 											r.operationGroup = ""
 											r.pathPattern = "/me/searches/{id}"
@@ -17680,7 +17680,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "PATCH":
 											r.name = UpdateSavedSearchOperation
-											r.summary = ""
+											r.summary = "Rename or re-query a saved search."
 											r.operationID = "updateSavedSearch"
 											r.operationGroup = ""
 											r.pathPattern = "/me/searches/{id}"
@@ -17731,7 +17731,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = ListMySubmissionsOperation
-												r.summary = ""
+												r.summary = "Your own submission queue."
 												r.operationID = "listMySubmissions"
 												r.operationGroup = ""
 												r.pathPattern = "/me/submissions"
@@ -17755,7 +17755,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = ListSubscriptionsOperation
-												r.summary = ""
+												r.summary = "List your subscriptions."
 												r.operationID = "listSubscriptions"
 												r.operationGroup = ""
 												r.pathPattern = "/me/subscriptions"
@@ -17764,7 +17764,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												return r, true
 											case "POST":
 												r.name = CreateSubscriptionOperation
-												r.summary = ""
+												r.summary = "Subscribe a saved search to a digest channel."
 												r.operationID = "createSubscription"
 												r.operationGroup = ""
 												r.pathPattern = "/me/subscriptions"
@@ -17798,7 +17798,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "DELETE":
 													r.name = DeleteSubscriptionOperation
-													r.summary = ""
+													r.summary = "Delete a subscription."
 													r.operationID = "deleteSubscription"
 													r.operationGroup = ""
 													r.pathPattern = "/me/subscriptions/{id}"
@@ -17807,7 +17807,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													return r, true
 												case "PATCH":
 													r.name = SetSubscriptionActiveOperation
-													r.summary = ""
+													r.summary = "Pause or resume a subscription."
 													r.operationID = "setSubscriptionActive"
 													r.operationGroup = ""
 													r.pathPattern = "/me/subscriptions/{id}"
@@ -17836,7 +17836,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetSurveyOperation
-											r.summary = ""
+											r.summary = "Your stored survey answers. Every field is absent until you answer it."
 											r.operationID = "getSurvey"
 											r.operationGroup = ""
 											r.pathPattern = "/me/survey"
@@ -17845,7 +17845,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											return r, true
 										case "PUT":
 											r.name = UpdateSurveyOperation
-											r.summary = ""
+											r.summary = "Update one or more survey answers."
 											r.operationID = "updateSurvey"
 											r.operationGroup = ""
 											r.pathPattern = "/me/survey"
@@ -17886,7 +17886,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetTalentNetworkMembershipOperation
-										r.summary = ""
+										r.summary = "Your current Talent Network visibility and shareable id."
 										r.operationID = "getTalentNetworkMembership"
 										r.operationGroup = ""
 										r.pathPattern = "/me/talent-network"
@@ -17895,7 +17895,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										return r, true
 									case "PUT":
 										r.name = SetTalentNetworkVisibilityOperation
-										r.summary = ""
+										r.summary = "Join or leave the Talent Network."
 										r.operationID = "setTalentNetworkVisibility"
 										r.operationGroup = ""
 										r.pathPattern = "/me/talent-network"
@@ -17932,7 +17932,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetTimelineOperation
-											r.summary = ""
+											r.summary = "What happened to your applications over a date range."
 											r.operationID = "getTimeline"
 											r.operationGroup = ""
 											r.pathPattern = "/me/timeline"
@@ -17957,7 +17957,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "PATCH":
 											r.name = UpdateTimezoneOperation
-											r.summary = ""
+											r.summary = "Set your account’s IANA timezone."
 											r.operationID = "updateTimezone"
 											r.operationGroup = ""
 											r.pathPattern = "/me/timezone"
@@ -17983,7 +17983,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = ListTrackedJobsOperation
-										r.summary = ""
+										r.summary = "Your tracked jobs joined with the job data."
 										r.operationID = "listTrackedJobs"
 										r.operationGroup = ""
 										r.pathPattern = "/me/tracking"
@@ -18032,7 +18032,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "GET":
 													r.name = ListMyAnalysesOperation
-													r.summary = ""
+													r.summary = "Jobs you have run the AI match analysis on."
 													r.operationID = "listMyAnalyses"
 													r.operationGroup = ""
 													r.pathPattern = "/me/tracking/analyses"
@@ -18057,7 +18057,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "GET":
 													r.name = ListAppliedCompanySlugsOperation
-													r.summary = ""
+													r.summary = "Company slugs of the employers you have applied to."
 													r.operationID = "listAppliedCompanySlugs"
 													r.operationGroup = ""
 													r.pathPattern = "/me/tracking/applied-companies"
@@ -18085,7 +18085,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = ListDismissedSlugsOperation
-												r.summary = ""
+												r.summary = "The slugs you dismissed, so a client can hide them."
 												r.operationID = "listDismissedSlugs"
 												r.operationGroup = ""
 												r.pathPattern = "/me/tracking/dismissed"
@@ -18111,7 +18111,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = TrackingPipelineOperation
-												r.summary = ""
+												r.summary = "Your application-pipeline snapshot (counts per stage)."
 												r.operationID = "trackingPipeline"
 												r.operationGroup = ""
 												r.pathPattern = "/me/tracking/pipeline"
@@ -18137,7 +18137,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = ListSavedSlugsOperation
-												r.summary = ""
+												r.summary = "Slugs of jobs you have saved."
 												r.operationID = "listSavedSlugs"
 												r.operationGroup = ""
 												r.pathPattern = "/me/tracking/saved"
@@ -18163,7 +18163,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 											switch method {
 											case "GET":
 												r.name = ListViewedSlugsOperation
-												r.summary = ""
+												r.summary = "Slugs of jobs you have viewed."
 												r.operationID = "listViewedSlugs"
 												r.operationGroup = ""
 												r.pathPattern = "/me/tracking/viewed"
@@ -18190,7 +18190,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetTrackedApplicationOperation
-											r.summary = ""
+											r.summary = "One tracked application, with the mail linked to it and its history."
 											r.operationID = "getTrackedApplication"
 											r.operationGroup = ""
 											r.pathPattern = "/me/tracking/{slug}"
@@ -18227,7 +18227,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "GET":
 													r.name = GetApplicationFollowUpOperation
-													r.summary = ""
+													r.summary = "Draft a chase for a silent application."
 													r.operationID = "getApplicationFollowUp"
 													r.operationGroup = ""
 													r.pathPattern = "/me/tracking/{slug}/followup"
@@ -18236,7 +18236,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													return r, true
 												case "POST":
 													r.name = RecordApplicationFollowUpOperation
-													r.summary = ""
+													r.summary = "Record that you sent a chase."
 													r.operationID = "recordApplicationFollowUp"
 													r.operationGroup = ""
 													r.pathPattern = "/me/tracking/{slug}/followup"
@@ -18260,7 +18260,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 												switch method {
 												case "POST":
 													r.name = RecallApplicationMailOperation
-													r.summary = ""
+													r.summary = "Sweep your connected mailbox for mail belonging to this application."
 													r.operationID = "recallApplicationMail"
 													r.operationGroup = ""
 													r.pathPattern = "/me/tracking/{slug}/mail-recall"
@@ -18285,7 +18285,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 													switch method {
 													case "POST":
 														r.name = LinkRecalledMailOperation
-														r.summary = ""
+														r.summary = "Import and link one message a mail-recall sweep proposed."
 														r.operationID = "linkRecalledMail"
 														r.operationGroup = ""
 														r.pathPattern = "/me/tracking/{slug}/mail-recall/link"
@@ -18332,7 +18332,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetMyUsageOperation
-										r.summary = ""
+										r.summary = "Your AI request activity today."
 										r.operationID = "getMyUsage"
 										r.operationGroup = ""
 										r.pathPattern = "/me/usage"
@@ -18944,7 +18944,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = ListPendingReferralOffersOperation
-							r.summary = ""
+							r.summary = "The offer-moderation queue."
 							r.operationID = "listPendingReferralOffers"
 							r.operationGroup = ""
 							r.pathPattern = "/referrals/offers"
@@ -18990,7 +18990,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "POST":
 									r.name = DecideReferralOfferOperation
-									r.summary = ""
+									r.summary = "Approve or reject an offer."
 									r.operationID = "decideReferralOffer"
 									r.operationGroup = ""
 									r.pathPattern = "/referrals/offers/{id}/decide"
@@ -19018,7 +19018,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = ListPendingJobReportsOperation
-							r.summary = ""
+							r.summary = "The pending report queue (moderators)."
 							r.operationID = "listPendingJobReports"
 							r.operationGroup = ""
 							r.pathPattern = "/reports"
@@ -19076,7 +19076,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = DismissJobReportOperation
-										r.summary = ""
+										r.summary = "Dismiss a report with a reason, optionally telling the reporter."
 										r.operationID = "dismissJobReport"
 										r.operationGroup = ""
 										r.pathPattern = "/reports/{id}/dismiss"
@@ -19101,7 +19101,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = ResolveJobReportOperation
-										r.summary = ""
+										r.summary = "Resolve a report, optionally closing the job and telling the reporter."
 										r.operationID = "resolveJobReport"
 										r.operationGroup = ""
 										r.pathPattern = "/reports/{id}/resolve"
@@ -19220,7 +19220,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = CatalogScaleOperation
-									r.summary = ""
+									r.summary = "The headline catalogue-scale figures (open jobs, companies, sources, …)."
 									r.operationID = "catalogScale"
 									r.operationGroup = ""
 									r.pathPattern = "/stats/catalog"
@@ -19257,7 +19257,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = GetEmbeddingProgressOperation
-										r.summary = ""
+										r.summary = "How much of the catalogue carries a semantic embedding, and how fast the rest is going."
 										r.operationID = "getEmbeddingProgress"
 										r.operationGroup = ""
 										r.pathPattern = "/stats/embeddings"
@@ -19282,7 +19282,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "GET":
 										r.name = EngagementStatsOperation
-										r.summary = ""
+										r.summary = "Jobs saved, applied to and viewed across all users, plus CV and inbox usage."
 										r.operationID = "engagementStats"
 										r.operationGroup = ""
 										r.pathPattern = "/stats/engagement"
@@ -19309,7 +19309,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = StatsFacetsOperation
-									r.summary = ""
+									r.summary = "Facet distribution snapshot: countries, skills, seniority, work mode."
 									r.operationID = "statsFacets"
 									r.operationGroup = ""
 									r.pathPattern = "/stats/facets"
@@ -19334,7 +19334,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = JobsActivityOperation
-									r.summary = ""
+									r.summary = "Public time series of added vs. removed vacancies per period."
 									r.operationID = "jobsActivity"
 									r.operationGroup = ""
 									r.pathPattern = "/stats/jobs-activity"
@@ -19407,7 +19407,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = UserGrowthOperation
-									r.summary = ""
+									r.summary = "Cumulative member growth per UTC day, plus each day's own new-signup count."
 									r.operationID = "userGrowth"
 									r.operationGroup = ""
 									r.pathPattern = "/stats/user-growth"
@@ -19434,7 +19434,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = IngestStatusOperation
-								r.summary = ""
+								r.summary = "Ingest-fleet health, per provider."
 								r.operationID = "ingestStatus"
 								r.operationGroup = ""
 								r.pathPattern = "/status"
@@ -19472,7 +19472,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListPendingSubmissionsOperation
-								r.summary = ""
+								r.summary = "The pending submission queue (moderators)."
 								r.operationID = "listPendingSubmissions"
 								r.operationGroup = ""
 								r.pathPattern = "/submissions"
@@ -19481,7 +19481,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								return r, true
 							case "POST":
 								r.name = CreateSubmissionOperation
-								r.summary = ""
+								r.summary = "Submit a vacancy for review."
 								r.operationID = "createSubmission"
 								r.operationGroup = ""
 								r.pathPattern = "/submissions"
@@ -19518,7 +19518,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = PrefillSubmissionOperation
-										r.summary = ""
+										r.summary = "Parse a job URL into a draft submission for review before posting."
 										r.operationID = "prefillSubmission"
 										r.operationGroup = ""
 										r.pathPattern = "/submissions/prefill"
@@ -19570,7 +19570,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = ApproveSubmissionOperation
-											r.summary = ""
+											r.summary = "Approve a submission, minting a live job."
 											r.operationID = "approveSubmission"
 											r.operationGroup = ""
 											r.pathPattern = "/submissions/{id}/approve"
@@ -19595,7 +19595,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = RejectSubmissionOperation
-											r.summary = ""
+											r.summary = "Reject a submission with a reason."
 											r.operationID = "rejectSubmission"
 											r.operationGroup = ""
 											r.pathPattern = "/submissions/{id}/reject"
@@ -19779,7 +19779,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = ListTalentOperation
-							r.summary = ""
+							r.summary = "The public catalogue of members, filtered and paged."
 							r.operationID = "listTalent"
 							r.operationGroup = ""
 							r.pathPattern = "/talent"
@@ -19816,7 +19816,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = GetTalentFacetsOperation
-									r.summary = ""
+									r.summary = "How many members stand behind each filter value."
 									r.operationID = "getTalentFacets"
 									r.operationGroup = ""
 									r.pathPattern = "/talent/facets"
@@ -19843,7 +19843,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = GetTalentMemberOperation
-								r.summary = ""
+								r.summary = "One member’s public card."
 								r.operationID = "getTalentMember"
 								r.operationGroup = ""
 								r.pathPattern = "/talent/{handle}"
@@ -19896,7 +19896,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = ListThreadsOperation
-							r.summary = ""
+							r.summary = "Public discussion threads."
 							r.operationID = "listThreads"
 							r.operationGroup = ""
 							r.pathPattern = "/threads"
@@ -19905,7 +19905,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							return r, true
 						case "POST":
 							r.name = CreateThreadOperation
-							r.summary = ""
+							r.summary = "Start a thread."
 							r.operationID = "createThread"
 							r.operationGroup = ""
 							r.pathPattern = "/threads"
@@ -19942,7 +19942,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 								switch method {
 								case "GET":
 									r.name = CountThreadsOperation
-									r.summary = ""
+									r.summary = "How many threads there are."
 									r.operationID = "countThreads"
 									r.operationGroup = ""
 									r.pathPattern = "/threads/count"
@@ -19995,7 +19995,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = GetThreadOperation
-								r.summary = ""
+								r.summary = "One thread with its replies."
 								r.operationID = "getThread"
 								r.operationGroup = ""
 								r.pathPattern = "/threads/{id}"
@@ -20032,7 +20032,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = CloseThreadOperation
-										r.summary = ""
+										r.summary = "Close a thread."
 										r.operationID = "closeThread"
 										r.operationGroup = ""
 										r.pathPattern = "/threads/{id}/close"
@@ -20057,7 +20057,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 									switch method {
 									case "POST":
 										r.name = CreateReplyOperation
-										r.summary = ""
+										r.summary = "Reply to a thread."
 										r.operationID = "createReply"
 										r.operationGroup = ""
 										r.pathPattern = "/threads/{id}/replies"

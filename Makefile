@@ -50,9 +50,11 @@ api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate in
 	@# Generated into a scratch dir and synced by content, so an unchanged contract touches no
 	@# file: the pre-commit hooks run in parallel, and go vet/govulncheck compiling apigen
 	@# while ogen --clean rewrote it in place saw a half-written package.
-	@tmp=$$(mktemp -d) && \
-		go tool ogen --config ogen.yml --target $$tmp --package apigen --clean openapi/api.openapi.json && \
-		rsync -rc --delete $$tmp/ internal/api/apigen/; status=$$?; rm -rf $$tmp; exit $$status
+	@# ogen reads the contract without its security requirements (scripts/openapi-ogen-input.mjs).
+	@tmp=$$(mktemp -d) && in=$$(mktemp) && \
+		node scripts/openapi-ogen-input.mjs openapi/api.openapi.json $$in && \
+		go tool ogen --config ogen.yml --target $$tmp --package apigen --clean $$in && \
+		rsync -rc --delete $$tmp/ internal/api/apigen/; status=$$?; rm -rf $$tmp; rm -f $$in; exit $$status
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts

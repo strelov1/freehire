@@ -31,7 +31,9 @@ model ApplyJob {
 
 /** At least one of the two is required. A field left out or null keeps the stored value. */
 model TrackJob {
+  /** Application stage from the vocabulary above. (e.g. `interview`) */
   stage?: string | null;
+  /** Free-text notes. */
   notes?: string | null;
 }
 
@@ -175,7 +177,12 @@ model NotificationSettings {
 
 /** Every field is read as its zero value when left out. Times are `HH:MM`. */
 model NotificationSettingsUpdate {
+  /** Turn notifications on or off. */
   enabled?: boolean | null;
+  /**
+   * Delivery channels: `email`, `telegram`, `push`. Adding `push` needs a device the
+   * mobile app has registered (409 otherwise).
+   */
   channels?: string[] | null;
   digest_frequency?: string | null;
   digest_time?: string | null;
@@ -186,123 +193,266 @@ model NotificationSettingsUpdate {
 
 // Jobs are addressed by their public slug; every write is an idempotent upsert.
 
+@summary("Record that you viewed the job.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/view")
 @post
-op recordView(@path slug: string): Data<Interaction> | Problem;
+op recordView(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
-/** The body is optional: without a date the application is stamped now. 400 for a date out of range. */
+// The body is optional: without a date the application is stamped now. 400 for a date
+// out of range.
+/**
+ * Send `applied_on` to record an application on the day it was actually sent — importing
+ * a history, or correcting a date already stored. A date you state overrides one we
+ * inferred. The day is stored at noon UTC, because you are stating a day and midnight
+ * reads as the previous date west of Greenwich. A date in the future, older than a year,
+ * or not a calendar date, is a 400. Without a body the application is stamped now, as
+ * before.
+ */
+@summary("Mark the job as applied to.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/apply")
 @post
-op markApplied(@path slug: string, @body body?: ApplyJob): Data<Interaction> | Problem;
+op markApplied(/** The job `public_slug`. */ @path slug: string, @body body?: ApplyJob): Data<Interaction> | Problem;
 
+@summary("Save (bookmark) the job.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/save")
 @post
-op saveJob(@path slug: string): Data<Interaction> | Problem;
+op saveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
 /** Unsaving a job that was never saved answers with the empty interaction. */
+@summary("Unsave the job (no-op if not saved).")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/save")
 @delete
-op unsaveJob(@path slug: string): Data<Interaction> | Problem;
+op unsaveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
+/**
+ * Only keeps the job out of the swipe deck; it stays visible in the public `/jobs` list
+ * and search. Idempotent.
+ */
+@summary("Dismiss (swipe away) the job.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/dismiss")
 @post
-op dismissJob(@path slug: string): Data<Interaction> | Problem;
+op dismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
+@summary("Undismiss the job (no-op if not dismissed).")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/dismiss")
 @delete
-op undismissJob(@path slug: string): Data<Interaction> | Problem;
+op undismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
-/** 400 for an unknown stage or an empty body. */
+// 400 for an unknown stage or an empty body.
+/**
+ * A null field is left unchanged. `stage` is a controlled vocabulary: `preparing`,
+ * `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`,
+ * `withdrawn`, `expired` (an unknown value is a 400). `expired` is the outcome for an
+ * application nobody answered; nothing sets it for you.
+ */
+@summary("Set the application stage and/or notes.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/track")
 @patch
-op trackJob(@path slug: string, @body body: TrackJob): Data<Interaction> | Problem;
+op trackJob(/** The job `public_slug`. */ @path slug: string, @body body: TrackJob): Data<Interaction> | Problem;
 
 /** Drops the stage and the apply date; the saved mark, views and notes stay. */
+@summary("Clear the application stage.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/stage")
 @delete
-op clearStage(@path slug: string): Data<Interaction> | Problem;
+op clearStage(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
 /** Takes the job off the board; the view history stays. */
+@summary("Remove the interaction record entirely.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/jobs/{slug}/track")
 @delete
-op untrack(@path slug: string): Data<Interaction> | Problem;
+op untrack(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
 
 // The same three writes addressed by the row id the listing served: a posting's slug, or
 // `a<id>` for an application whose posting was deleted.
 
+/**
+ * Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead
+ * of the job slug — needed when a tracked application’s posting was later pruned and has
+ * no slug left to address it by. Same `stage` vocabulary and body shape.
+ */
+@summary("Set the application stage and/or notes, addressed by row id.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/me/applications/{id}")
 @patch
-op trackApplication(@path id: string, @body body: TrackJob): Data<Interaction> | Problem;
+op trackApplication(/** The tracking row id (from `/me/tracking`). (e.g. `42`) */ @path id: string, @body body: TrackJob): Data<Interaction> | Problem;
 
+@summary("Remove the interaction record entirely, addressed by row id.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/me/applications/{id}")
 @delete
-op untrackApplication(@path id: string): Data<Interaction> | Problem;
+op untrackApplication(/** The tracking row id. (e.g. `42`) */ @path id: string): Data<Interaction> | Problem;
 
+@summary("Clear the application stage, addressed by row id.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/me/applications/{id}/stage")
 @delete
-op clearApplicationStage(@path id: string): Data<Interaction> | Problem;
+op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: string): Data<Interaction> | Problem;
 
+// The caller's interactions joined with their jobs, most recently touched first.
+// `filter` is all, viewed, saved, applied or board (400 otherwise); `compact` drops
+// each card's blurb, skills and ghost signal. A page param that does not read falls
+// back to its default.
 /**
- * The caller's interactions joined with their jobs, most recently touched first. `filter` is
- * all, viewed, saved, applied or board (400 otherwise); `compact` drops each card's blurb,
- * skills and ghost signal. A page param that does not read falls back to its default.
+ * Each item carries a card of the job with your interaction timestamps alongside it —
+ * what a list row draws: slug, title, company, closed_at, the stated facets, skills,
+ * collections, posted_at, and a `blurb` already cut to length. It does NOT carry the
+ * description; the full job view is on `GET /me/tracking/:slug`. `meta.counts` gives the
+ * per-filter totals for tab badges. Closed jobs stay listed so your history never
+ * shrinks.
  */
+@summary("Your tracked jobs joined with the job data.")
+@useAuth(SessionOrKey)
 @tag("Tracking")
 @route("/me/tracking")
 @get
 op listTrackedJobs(
+  /**
+   * Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an
+   * unknown value is a 400). (e.g. `applied`)
+   */
   @query filter?: string,
   @query compact?: string,
+  /** Page size, 1–100. (e.g. `20`) */
   @query limit?: string,
+  /** Rows to skip. (e.g. `0`) */
   @query offset?: string,
 ): TrackedJobPage | Problem;
 
 /** Every posting the caller has interacted with. */
+@summary("Slugs of jobs you have viewed.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #["senior-go-engineer-acme-1a2b", "..."],
+  },
+})
 @tag("Tracking")
 @route("/me/tracking/viewed")
 @get
 op listViewedSlugs(): Data<string[]> | Problem;
 
+/**
+ * Lets the SPA render the save toggle as filled without authenticating the public job
+ * reads.
+ */
+@summary("Slugs of jobs you have saved.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #["senior-go-engineer-acme-1a2b", "..."],
+  },
+})
 @tag("Tracking")
 @route("/me/tracking/saved")
 @get
 op listSavedSlugs(): Data<string[]> | Problem;
 
+@summary("The slugs you dismissed, so a client can hide them.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #["junior-php-developer-acme-9z8y"],
+  },
+})
 @tag("Tracking")
 @route("/me/tracking/dismissed")
 @get
 op listDismissedSlugs(): Data<string[]> | Problem;
 
-/** The employers the caller has applied to. */
+// The employers the caller has applied to.
+/**
+ * Lets the SPA mark "you already applied to this company" on any posting of theirs
+ * without authenticating the public job reads: compare a posting's `company_slug` against
+ * this set. Counts applications actually made (not ones still being prepared), keyed by
+ * the posting's current company slug and resolved through company merges. Newest first,
+ * drawn from your 1000 most recent applications.
+ */
+@summary("Company slugs of the employers you have applied to.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #["acme", "globex"],
+  },
+})
 @tag("Tracking")
 @route("/me/tracking/applied-companies")
 @get
 op listAppliedCompanySlugs(): Data<string[]> | Problem;
 
+/**
+ * The total application count and the count at each stage, aggregated server-side over
+ * all of your applications. Every stage of the vocabulary is present, zero included, and
+ * the counts always sum to `applications`. An application with `applied_at` set but no
+ * explicit stage counts as `applied`. `reply_rate` compares your own employer-reply rate
+ * against the rate across every candidate — both sides counted only from applications
+ * whose owner has a connected mailbox, so a reply would have been seen. It is present
+ * only once both your own count and the global count reach a minimum sample size; absent
+ * otherwise, never a zero or an estimate.
+ */
+@summary("Your application-pipeline snapshot (counts per stage).")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #{
+      applications: 12,
+      stages: #{
+        applied: 4,
+        screening: 2,
+        responded: 1,
+        interview: 2,
+        offer: 1,
+        accepted: 1,
+        rejected: 1,
+        withdrawn: 0,
+      },
+      reply_rate: #{
+        you: #{
+          applications: 12,
+          answered: 4,
+        },
+        global: #{
+          applications: 287,
+          answered: 97,
+        },
+      },
+    },
+  },
+})
 @tag("Tracking")
 @route("/me/tracking/pipeline")
 @get
 op trackingPipeline(): Data<TrackingPipeline> | Problem;
 
 /** Session cookie only. */
+@summary("Your notification rule (gates saved-job reminders and both lifecycle nudges).")
 @tag("Tracking")
 @route("/me/notification-settings")
 @get
 op getNotificationSettings(): Data<NotificationSettings> | Problem;
 
 /** An enabled rule needs a valid channel. Session cookie only. */
+@summary("Change your notification rule.")
 @tag("Tracking")
 @route("/me/notification-settings")
 @put

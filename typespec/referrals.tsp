@@ -1,6 +1,8 @@
 import "@typespec/http";
+import "@typespec/openapi";
 
 using Http;
+using TypeSpec.OpenAPI;
 
 namespace Freehire;
 
@@ -64,17 +66,28 @@ model ReferralIncomingRequest {
 }
 
 model ReferralRequestCreate {
+  /** The company to ask. */
   company_slug?: string;
 
   /** Names the vacancy; an unknown slug is a 404. Wins over `job_id`. */
   job_slug?: string;
 
   job_id?: int64 | null;
+  /** Which CV to attach: `original` (your uploaded one) or `built`. */
   cv_kind?: string;
+  /**
+   * The built CV, when `cv_kind` is `built`: one you tailored for that opening, or — with
+   * no opening — for any opening at the company (see `cv-options`). Any other CV answers
+   * 422.
+   */
   cv_id?: string | null;
+  /** Your LinkedIn profile URL. */
   linkedin_url?: string;
+  /** How the referrer reaches you. */
   contact_telegram?: string;
+  /** How the referrer reaches you. */
   contact_email?: string;
+  /** A short message to the referrer. */
   note?: string;
 }
 
@@ -90,25 +103,37 @@ model ReferralCVOptions {
 
 /** `status` is "contacted" or "declined". */
 model ReferralResolve {
+  /** `contacted` or `declined`. (e.g. `contacted`) */
   status?: string;
 }
 
 model ReferralDecision {
+  /** True approves the referrer; false rejects the offer. */
   approve?: boolean;
 }
 
+@summary("Your referral offers and their moderation state.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/offers")
 @get
 op listMyReferralOffers(): Data<ReferralOffer[]> | Problem;
 
 /** 404 when the offer is absent or not the caller's. */
+@summary("Withdraw an offer.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/offers/{id}")
 @delete
-op withdrawReferralOffer(@path id: string): NoContentResponse | Problem;
+op withdrawReferralOffer(/** The offer id. */ @path id: string): NoContentResponse | Problem;
 
-/** 422 for a bad request, 409 for a duplicate or a company with no referral available. */
+// 422 for a bad request, 409 for a duplicate or a company with no referral available.
+/**
+ * Validation failures answer 422; a company with no approved referrer answers 409; too
+ * many open requests answers 429.
+ */
+@summary("Ask a company's approved referrers for an intro.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/requests")
 @post
@@ -117,36 +142,68 @@ op createReferralRequest(@body body: ReferralRequestCreate): {
   @body body: Data<ReferralSeekerRequest>;
 } | Problem;
 
-/** The CVs tailored for the vacancy (or any at the company), and whether a CV file is stored. */
+// The CVs tailored for the vacancy (or any at the company), and whether a CV file is
+// stored.
+/**
+ * The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the
+ * company, newest first, and whether you have uploaded a CV file.
+ */
+@summary("The CVs you can attach to a request into a company.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  returnType: #{
+    data: #{
+      tailored: #[
+        #{
+          id: "6f1c…",
+          title: "Tailored — Backend Engineer",
+        },
+      ],
+      has_resume: true,
+    },
+  },
+})
 @tag("Referrals")
 @route("/me/referrals/cv-options")
 @get
-op listReferralCVOptions(@query company_slug?: string, @query job_slug?: string): Data<ReferralCVOptions> | Problem;
+op listReferralCVOptions(/** The company to ask. */ @query company_slug?: string, /** The opening the request is made from. */ @query job_slug?: string): Data<ReferralCVOptions> | Problem;
 
+@summary("The intros you asked for, and where they stand.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/requests")
 @get
 op listMyReferralRequests(): Data<ReferralSeekerRequest[]> | Problem;
 
 /** The open requests for every company the caller is an approved referrer of. */
+@summary("Requests waiting on you as an approved referrer.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/incoming")
 @get
 op listIncomingReferralRequests(): Data<ReferralIncomingRequest[]> | Problem;
 
+@summary("Mark an incoming request contacted or declined.")
+@useAuth(SessionOrKey)
 @tag("Referrals")
 @route("/me/referrals/incoming/{id}/resolve")
 @post
-op resolveReferralRequest(@path id: string, @body body: ReferralResolve): Data<ReferralIncomingRequest> | Problem;
+op resolveReferralRequest(/** The request id. */ @path id: string, @body body: ReferralResolve): Data<ReferralIncomingRequest> | Problem;
 
 /** Moderators only: the offers awaiting a decision. */
+@summary("The offer-moderation queue.")
+@useAuth(SessionOrKey)
+@extension("x-audience", "moderator")
 @tag("Referrals")
 @route("/referrals/offers")
 @get
 op listPendingReferralOffers(): Data<ReferralOffer[]> | Problem;
 
 /** Moderators only. */
+@summary("Approve or reject an offer.")
+@useAuth(SessionOrKey)
+@extension("x-audience", "moderator")
 @tag("Referrals")
 @route("/referrals/offers/{id}/decide")
 @post
-op decideReferralOffer(@path id: string, @body body: ReferralDecision): Data<ReferralOffer> | Problem;
+op decideReferralOffer(/** The offer id. */ @path id: string, @body body: ReferralDecision): Data<ReferralOffer> | Problem;

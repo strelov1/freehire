@@ -19,7 +19,10 @@ type Handler interface {
 	AcceptConversation(ctx context.Context, params AcceptConversationParams) (*AcceptConversationOK, error)
 	// AddAtom implements addAtom operation.
 	//
-	// The body is an achievement; its provenance is set by the route, whatever the body says.
+	// The only route besides the assistant’s own tool that can add evidence outside a chat session,
+	// which is why `provenance` is forced to `manual` regardless of what the body sends — an
+	// authenticated POST with no chat transcript behind it can only honestly be the owner’s own words.
+	// When the account has opted into requiring it, an empty `context` is a 400.
 	//
 	// POST /me/experience/atoms
 	AddAtom(ctx context.Context, req jx.Raw) (*AddAtomCreated, error)
@@ -29,7 +32,9 @@ type Handler interface {
 	AddAvailabilityOverride(ctx context.Context, req *BuddyMockRule) (*AddAvailabilityOverrideCreated, error)
 	// AddEmployment implements addEmployment operation.
 	//
-	// The body is a place; its shape is the bank's.
+	// An employment carries no claim of its own (only the atoms attached to it do), so nothing about
+	// provenance applies here. `kind` is `job` or `project`; a project’s name arrives as `name` on the
+	// wire (legacy `company` accepted as a fallback), a job’s as `company`.
 	//
 	// POST /me/experience/employments
 	AddEmployment(ctx context.Context, req jx.Raw) (*AddEmploymentCreated, error)
@@ -39,7 +44,11 @@ type Handler interface {
 	AddToWatchlist(ctx context.Context, params AddToWatchlistParams) (*AddToWatchlistOK, error)
 	// AgentSearchJobs implements agentSearchJobs operation.
 	//
-	// The same query as `/jobs/search`, always with the full description in the chosen format.
+	// Same text query and facet filters as `/jobs/search`, but each result carries the `description` in
+	// full (verbatim from the database) instead of the truncated index preview. Use `description_format`
+	// to choose how it is rendered.
+	//
+	// Plus every filter in the "Filtering jobs" section.
 	//
 	// GET /agent/jobs/search
 	AgentSearchJobs(ctx context.Context, params AgentSearchJobsParams) (*AgentJobSearchPageHeaders, error)
@@ -184,7 +193,8 @@ type Handler interface {
 	BuddyUnreact(ctx context.Context, params BuddyUnreactParams) (*BuddyUnreactOK, error)
 	// CancelAssistantTurn implements cancelAssistantTurn operation.
 	//
-	// Stops the turn running in the session; a session with nothing running is not an error.
+	// A no-op (still `204`) when nothing is running — you cannot see whether a turn is live before
+	// asking.
 	//
 	// POST /assistant/sessions/{id}/cancel
 	CancelAssistantTurn(ctx context.Context, params CancelAssistantTurnParams) error
@@ -200,7 +210,10 @@ type Handler interface {
 	CancelSupportTurn(ctx context.Context, params CancelSupportTurnParams) error
 	// CatalogScale implements catalogScale operation.
 	//
-	// The catalogue size. Never fails: a cold cache degrades to an estimate and `exact` says so.
+	// The canonical numbers behind every "how big is this" figure on the site (the jobs list total, the
+	// /about and /open pages). Backed by one snapshot `cmd/rollup-stats` republishes periodically, not a
+	// live count. `exact: false` means the cache was cold and the figures fell back to a planner estimate
+	// — treat them as approximate when it is false.
 	//
 	// GET /stats/catalog
 	CatalogScale(ctx context.Context) (*CatalogScaleOK, error)
@@ -230,13 +243,19 @@ type Handler interface {
 	ClaimUsername(ctx context.Context, req *AccountUsernameClaim) (*ClaimUsernameOK, error)
 	// ClearApplicationStage implements clearApplicationStage operation.
 	//
+	// Clear the application stage, addressed by row id.
+	//
 	// DELETE /me/applications/{id}/stage
 	ClearApplicationStage(ctx context.Context, params ClearApplicationStageParams) (*ClearApplicationStageOK, error)
 	// ClearCompanyVote implements clearCompanyVote operation.
 	//
+	// Clear your vote on a company.
+	//
 	// DELETE /companies/{slug}/vote
 	ClearCompanyVote(ctx context.Context, params ClearCompanyVoteParams) (*ClearCompanyVoteOK, error)
 	// ClearJobVote implements clearJobVote operation.
+	//
+	// Clear your vote on a job.
 	//
 	// DELETE /jobs/{slug}/vote
 	ClearJobVote(ctx context.Context, params ClearJobVoteParams) (*ClearJobVoteOK, error)
@@ -258,19 +277,30 @@ type Handler interface {
 	CloseThread(ctx context.Context, params CloseThreadParams) (*CloseThreadOK, error)
 	// CompanySubindustries implements companySubindustries operation.
 	//
-	// The subindustry vocabulary with company counts, most common first.
+	// Backs the searchable “Industry” facet’s option list, most common first. Counts are
+	// unconditional (they do not reflect other active list filters).
 	//
 	// GET /companies/subindustries
 	CompanySubindustries(ctx context.Context) (*CompanySubindustriesOK, error)
 	// CompleteOnboarding implements completeOnboarding operation.
 	//
+	// Sets `onboarding_completed_at` on your account, which is what stops the app routing you into the
+	// wizard again. Idempotent: calling it a second time keeps the original timestamp and still answers
+	// `200`.
+	//
 	// POST /me/onboarding/complete
 	CompleteOnboarding(ctx context.Context) (*CompleteOnboardingOK, error)
 	// ConfirmEmailLink implements confirmEmailLink operation.
 	//
+	// Only a deterministic match — the mail thread, or the company name in the sender or subject —
+	// links itself. A model's pick lands here as a suggestion instead, and `?link=suggested` is the queue
+	// of them.
+	//
 	// POST /me/emails/{id}/confirm
 	ConfirmEmailLink(ctx context.Context, params ConfirmEmailLinkParams) (*ConfirmEmailLinkOK, error)
 	// ConfirmEmailVerification implements confirmEmailVerification operation.
+	//
+	// Confirm the address with the mailed code.
 	//
 	// POST /auth/verify/confirm
 	ConfirmEmailVerification(ctx context.Context, req *AuthCode) (*ConfirmEmailVerificationOK, error)
@@ -294,20 +324,28 @@ type Handler interface {
 	CreateApiKey(ctx context.Context, req *ApiKeyCreate) (*CreateApiKeyCreated, error)
 	// CreateApplicationFromEmail implements createApplicationFromEmail operation.
 	//
-	// Records the application from the email and links it, dated by the email. 409 while a suggestion is
-	// pending.
+	// The way out of `?link=unlinked`: mail about a job you never tracked. The application is dated by the
+	// mail's `received_at`, not by now — the application demonstrably existed by the time the employer
+	// wrote.
 	//
 	// POST /me/emails/{id}/application
 	CreateApplicationFromEmail(ctx context.Context, req OptInboxLinkTarget, params CreateApplicationFromEmailParams) (*CreateApplicationFromEmailOK, error)
 	// CreateAssistantSession implements createAssistantSession operation.
 	//
-	// Starts a conversation. `preset` picks the kind; `job` names the application an interview, debrief or
-	// apply session is held against. A session already held for the same application, or the same search
-	// request, is handed back (200); a new one is a 201.
+	// For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty
+	// string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding.
+	// Reusing the UUID with the same owner and canonical query returns the same session; changing its
+	// query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be
+	// enforced when a search runs (for example hide_seen without a readable history) fails that search
+	// instead, and the assistant reports it rather than widening the search. Search-bound responses
+	// include search_context: { query, brief }; the original query is immutable and the selection brief is
+	// local to the conversation.
 	//
 	// POST /assistant/sessions
 	CreateAssistantSession(ctx context.Context, req OptAssistantSessionRequest, params CreateAssistantSessionParams) (CreateAssistantSessionRes, error)
 	// CreateCV implements createCV operation.
+	//
+	// Create a CV, optionally seeded from your stored history.
 	//
 	// POST /me/cvs
 	CreateCV(ctx context.Context, req *CvCreate) (*CreateCVCreated, error)
@@ -319,8 +357,8 @@ type Handler interface {
 	CreateEmployerVacancy(ctx context.Context, req *EmployerVacancyCreate) (*CreateEmployerVacancyCreated, error)
 	// CreateGhostReport implements createGhostReport operation.
 	//
-	// Reports that the job went silent after the caller applied. 403 until the caller's address is
-	// confirmed, 409 for a closed job or a second report.
+	// An unproven (unverified) address is a `403`; a closed job or a claim you already have on this job is
+	// a `409`.
 	//
 	// POST /jobs/{slug}/ghost-report
 	CreateGhostReport(ctx context.Context, req *GhostReportRequest, params CreateGhostReportParams) (*CreateGhostReportCreated, error)
@@ -338,7 +376,8 @@ type Handler interface {
 	CreateJobReport(ctx context.Context, req *JobReportRequest, params CreateJobReportParams) (*CreateJobReportCreated, error)
 	// CreateReferralRequest implements createReferralRequest operation.
 	//
-	// 422 for a bad request, 409 for a duplicate or a company with no referral available.
+	// Validation failures answer 422; a company with no approved referrer answers 409; too many open
+	// requests answers 429.
 	//
 	// POST /me/referrals/requests
 	CreateReferralRequest(ctx context.Context, req *ReferralRequestCreate) (*CreateReferralRequestCreated, error)
@@ -356,13 +395,17 @@ type Handler interface {
 	CreateSavedSearch(ctx context.Context, req *SavedSearchCreate) (*CreateSavedSearchCreated, error)
 	// CreateSubmission implements createSubmission operation.
 	//
-	// 409 for a duplicate pending URL or a vacancy already in the catalogue, 403 for a blocked domain.
+	// A URL already awaiting review is a `409`, and so is a URL the catalogue already carries — matched
+	// the way `/jobs/find` matches it, so a link differing only by scheme, `www.`, tracking query or
+	// trailing slash counts as the same posting. That `409` names the existing job (`/jobs/<public_slug>`)
+	// in its error.
 	//
 	// POST /submissions
 	CreateSubmission(ctx context.Context, req *SubmissionRequest) (*CreateSubmissionCreated, error)
 	// CreateSubscription implements createSubscription operation.
 	//
-	// A non-owned saved search is a 404, a duplicate a 409.
+	// Channels: `telegram`, `email`, `push`, `webhook`. `push` needs a device the freehire mobile app has
+	// registered (`GET /me/push-tokens`) — without one the request is refused with 409.
 	//
 	// POST /me/subscriptions
 	CreateSubscription(ctx context.Context, req *SubscriptionCreate) (*CreateSubscriptionCreated, error)
@@ -397,11 +440,13 @@ type Handler interface {
 	DeclineConversation(ctx context.Context, params DeclineConversationParams) (*DeclineConversationOK, error)
 	// DeleteAssistantSession implements deleteAssistantSession operation.
 	//
-	// Removes an owned conversation and its transcript.
+	// Returns `204 No Content`.
 	//
 	// DELETE /assistant/sessions/{id}
 	DeleteAssistantSession(ctx context.Context, params DeleteAssistantSessionParams) error
 	// DeleteAtom implements deleteAtom operation.
+	//
+	// Remove an evidence atom.
 	//
 	// DELETE /me/experience/atoms/{id}
 	DeleteAtom(ctx context.Context, params DeleteAtomParams) error
@@ -417,15 +462,19 @@ type Handler interface {
 	DeleteBankedAnswer(ctx context.Context, params DeleteBankedAnswerParams) (*DeleteBankedAnswerOK, error)
 	// DeleteCV implements deleteCV operation.
 	//
+	// Delete a CV.
+	//
 	// DELETE /me/cvs/{id}
 	DeleteCV(ctx context.Context, params DeleteCVParams) error
 	// DeleteCompanyFeedback implements deleteCompanyFeedback operation.
 	//
-	// Removes the caller's review in one category; a no-op when there is none.
+	// Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.
 	//
 	// DELETE /companies/{slug}/feedback
 	DeleteCompanyFeedback(ctx context.Context, params DeleteCompanyFeedbackParams) (*DeleteCompanyFeedbackOK, error)
 	// DeleteEmail implements deleteEmail operation.
+	//
+	// A later re-sync will not resurrect it — deletion is reader state, not mail-server state.
 	//
 	// POST /me/emails/{id}/delete
 	DeleteEmail(ctx context.Context, params DeleteEmailParams) error
@@ -443,25 +492,32 @@ type Handler interface {
 	DeleteJobAutoApply(ctx context.Context, params DeleteJobAutoApplyParams) (*DeleteJobAutoApplyOK, error)
 	// DeleteProfile implements deleteProfile operation.
 	//
-	// Clears the profile. Idempotent: deleting when none exists is still a 204.
+	// Returns `204 No Content`.
 	//
 	// DELETE /me/profile
 	DeleteProfile(ctx context.Context) error
 	// DeleteResume implements deleteResume operation.
 	//
-	// Removes the stored CV. 501 when storage is off.
+	// Returns `204 No Content`. `501` when object storage is unconfigured.
 	//
 	// DELETE /me/resume
 	DeleteResume(ctx context.Context) error
 	// DeleteSavedSearch implements deleteSavedSearch operation.
 	//
+	// Delete a saved search.
+	//
 	// DELETE /me/searches/{id}
 	DeleteSavedSearch(ctx context.Context, params DeleteSavedSearchParams) error
 	// DeleteSubscription implements deleteSubscription operation.
 	//
+	// Delete a subscription.
+	//
 	// DELETE /me/subscriptions/{id}
 	DeleteSubscription(ctx context.Context, params DeleteSubscriptionParams) error
 	// DismissJob implements dismissJob operation.
+	//
+	// Only keeps the job out of the swipe deck; it stays visible in the public `/jobs` list and search.
+	// Idempotent.
 	//
 	// POST /jobs/{slug}/dismiss
 	DismissJob(ctx context.Context, params DismissJobParams) (*DismissJobOK, error)
@@ -479,11 +535,18 @@ type Handler interface {
 	DraftCVCoverLetter(ctx context.Context, params DraftCVCoverLetterParams) (DraftCVCoverLetterRes, error)
 	// DuplicateCV implements duplicateCV operation.
 	//
-	// Copies a base CV as " (copy)"; 409 for a tailored one.
+	// Creates a new base CV with the same document, template and appearance, titled " (copy)". Only a base
+	// can be duplicated: 409 for a tailored copy, 404 when the id is not yours.
 	//
 	// POST /me/cvs/{id}/duplicate
 	DuplicateCV(ctx context.Context, params DuplicateCVParams) (*DuplicateCVCreated, error)
 	// EngagementStats implements engagementStats operation.
+	//
+	// `viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by
+	// every visitor, signed in or not, so it is orders of magnitude larger than the rest. It is also the
+	// only one that is not all-time — `viewed_since` is the first day it covers (null before the first
+	// rollup), because the bot-filtered counter shipped without a backfill of the days before it. Every
+	// other field is all-time. Aggregate-only — no user identifier is exposed.
 	//
 	// GET /stats/engagement
 	EngagementStats(ctx context.Context) (*EngagementStatsOK, error)
@@ -495,7 +558,10 @@ type Handler interface {
 	FileProcessReport(ctx context.Context, req *ProcessReportRequest, params FileProcessReportParams) (*FileProcessReportCreated, error)
 	// FindJob implements findJob operation.
 	//
-	// Resolves the URL of a posting in the wild to a catalogue slug.
+	// Answers `{"data": null}` when the posting cannot be identified, rather than 404 — "we do not carry
+	// this" is a normal answer here. Used by the extension to tell whether the page you are on is a job we
+	// already have. A miss also carries `meta.ats_board`: true when the URL sits on an ATS board freehire
+	// knows how to crawl, so a client can tell a posting worth adding from an arbitrary page.
 	//
 	// GET /jobs/find
 	FindJob(ctx context.Context, params FindJobParams) (*JobFindResult, error)
@@ -505,7 +571,8 @@ type Handler interface {
 	FindModeratedUser(ctx context.Context, params FindModeratedUserParams) (*FindModeratedUserOK, error)
 	// ForgotPassword implements forgotPassword operation.
 	//
-	// Always answers 202, whether or not the address has an account.
+	// Always answers `202`, whether or not the address has an account — this is deliberately not an
+	// email-enumeration oracle.
 	//
 	// POST /auth/password/forgot
 	ForgotPassword(ctx context.Context, req *AuthPasswordForgot) error
@@ -521,7 +588,9 @@ type Handler interface {
 	GetApiPlan(ctx context.Context) (*GetApiPlanOK, error)
 	// GetApplicationFollowUp implements getApplicationFollowUp operation.
 	//
-	// 409 unless the application is waiting on a reply.
+	// Offered only when the application is in the silent state the tracking board’s own badge uses — a
+	// `409` otherwise. `recipient`/`recipient_name` are omitted when nobody at the company ever replied,
+	// which is the common case: the draft is handed to you, nothing is sent.
 	//
 	// GET /me/tracking/{slug}/followup
 	GetApplicationFollowUp(ctx context.Context, params GetApplicationFollowUpParams) (*GetApplicationFollowUpOK, error)
@@ -533,8 +602,8 @@ type Handler interface {
 	GetAssistantSession(ctx context.Context, params GetAssistantSessionParams) (*GetAssistantSessionOK, error)
 	// GetAtsReport implements getAtsReport operation.
 	//
-	// The ATS-readiness report of the caller's stored CV, with any cached model review folded in. `has_cv`
-	// is false, and `report` null, when no CV is stored.
+	// Scores your stored CV’s structure and its keyword match against the selected role. `has_cv` is
+	// false when no CV is stored; no profile is a `404`; `503` when search is unavailable.
 	//
 	// GET /me/profile/ats-report
 	GetAtsReport(ctx context.Context) (*GetAtsReportOK, error)
@@ -546,8 +615,8 @@ type Handler interface {
 	GetAuthMe(ctx context.Context) (*GetAuthMeOK, error)
 	// GetAutofillProfile implements getAutofillProfile operation.
 	//
-	// The caller's canonical form fields, all empty bar the account email when no source states a contact.
-	// Keys are the profile's own and the set grows with it.
+	// Projected from your CV header, with the account email as a fallback — what the extension writes
+	// into application forms.
 	//
 	// GET /me/autofill-profile
 	GetAutofillProfile(ctx context.Context) (*GetAutofillProfileOK, error)
@@ -577,6 +646,13 @@ type Handler interface {
 	GetCV(ctx context.Context, params GetCVParams) (*GetCVOK, error)
 	// GetCVATSDelta implements getCVATSDelta operation.
 	//
+	// The tailored copy scored against the base CV it came from, with template, page margins and
+	// typography held identical so the difference reflects content alone — the base is a copy rendered
+	// with the tailored copy’s formatting, never the stored base itself. Recomputed per request, never
+	// stored. `available: false` (with `reason`, no `delta`) when rendering is unavailable rather than an
+	// error. `409` when the CV is not a tailored copy, has no base CV to compare against, or its vacancy
+	// no longer exists.
+	//
 	// GET /me/cvs/{id}/ats-delta
 	GetCVATSDelta(ctx context.Context, params GetCVATSDeltaParams) (*GetCVATSDeltaOK, error)
 	// GetCVAppearanceDefaults implements getCVAppearanceDefaults operation.
@@ -591,24 +667,40 @@ type Handler interface {
 	GetCVCoverLetter(ctx context.Context, params GetCVCoverLetterParams) (*GetCVCoverLetterOK, error)
 	// GetCVJobMatch implements getCVJobMatch operation.
 	//
+	// Deterministic and free — no model call, unlike the AI match analysis. Scored off the CV’s
+	// rendered PDF text layer against the vacancy alone (no base-CV comparison, unlike the ATS delta), so
+	// it is cheap enough to refresh after every saved edit. `available: false` when nothing about the
+	// vacancy could be matched automatically, or rendering failed. `409` when the CV is not a tailored
+	// copy or its vacancy no longer exists.
+	//
 	// GET /me/cvs/{id}/job-match
 	GetCVJobMatch(ctx context.Context, params GetCVJobMatchParams) (*GetCVJobMatchOK, error)
 	// GetCVTailorContext implements getCVTailorContext operation.
 	//
-	// The cached fit analysis of a tailored CV, projected for the tailoring agent.
+	// The split that keeps tailoring honest: `missing_have` are requirements your history already covers
+	// but the CV buries — reframe those — and `missing_gap` are the ones it does not, which an agent
+	// must ask about rather than invent. Served from cache; calls no LLM. 409 when the CV is not a
+	// tailored copy or has no analysis. `job.requirements` is what the posting itself asks for, in its own
+	// words — a fuller list than the missing_* split, which is only what the analysis found the CV
+	// lacks. Absent when the posting states none.
 	//
 	// GET /me/cvs/{id}/tailor-context
 	GetCVTailorContext(ctx context.Context, params GetCVTailorContextParams) (*GetCVTailorContextOK, error)
 	// GetDirectApplyForm implements getDirectApplyForm operation.
 	//
-	// The vacancy's questions and, for a signed-in candidate, their prefill. 501 when the deployment
-	// cannot deliver applications.
+	// Only for a posting whose `direct_apply` is true — its employer published it here and receives
+	// applications by email. Any other posting is a `404`. Signed in with the browser session, the
+	// response also carries `applied`, a `prefill` of your earlier answers to the same questions, and
+	// `cvs` — the CV you tailored for this vacancy and whether you uploaded one; an API key never sees
+	// those. `open` is false once the vacancy closed. `501` when this deployment cannot deliver
+	// applications.
 	//
 	// GET /jobs/{slug}/direct-apply
 	GetDirectApplyForm(ctx context.Context, params GetDirectApplyFormParams) (*GetDirectApplyFormOK, error)
 	// GetEmail implements getEmail operation.
 	//
-	// Opening a message marks it read. 404 for another user's, or an id that is not a number.
+	// Use `GET /me/inbox?body=1` instead when sweeping a backlog — `read_at` means "a human saw this",
+	// and this endpoint sets it.
 	//
 	// GET /me/emails/{id}
 	GetEmail(ctx context.Context, params GetEmailParams) (*GetEmailOK, error)
@@ -618,8 +710,13 @@ type Handler interface {
 	GetEmailPrefs(ctx context.Context, params GetEmailPrefsParams) (*GetEmailPrefsOK, error)
 	// GetEmbeddingProgress implements getEmbeddingProgress operation.
 	//
-	// The embedding backfill's current progress document. Figures not yet measured are null. The
-	// `/stats/embeddings/stream` route is Server-Sent Events and stays hand-written.
+	// Backs the public /semantic-search page. `eligible` and `snapshot_covered` come from a snapshot
+	// `cmd/rollup-stats` measures every few hours (the count is too slow for a request); `queued` is the
+	// embedding queue, sampled every 15 seconds, and `covered` is `snapshot_covered` plus how much the
+	// queue has drained since that snapshot — not `eligible − queued`, since the queue also carries
+	// closed postings waiting to be cleared. `rate_per_minute` counts only what left the queue over the
+	// last 10 minutes, so a batch of new postings arriving at once does not read as negative progress. Any
+	// figure not yet measured is `null`, never `0`.
 	//
 	// GET /stats/embeddings
 	GetEmbeddingProgress(ctx context.Context) (*GetEmbeddingProgressOK, error)
@@ -631,15 +728,19 @@ type Handler interface {
 	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
 	// GetInbox implements getInbox operation.
 	//
-	// The caller's mail, newest first, without deleted messages. Filters: `source`, `status`, `link`, `q`,
-	// `unread`, `unclassified`, `include_other`; `body` adds each message's body (pages are then capped
-	// lower). A page param that does not read falls back to its default.
+	// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
+	// read path, so sweeping a backlog never zeroes the owner's unread count (`GET /me/emails/{id}` does
+	// mark read). Pages carrying bodies are capped at 50. An unknown `source`, `status` or `link` value is
+	// a 400, never a silently empty page.
 	//
 	// GET /me/inbox
 	GetInbox(ctx context.Context, params GetInboxParams) (*InboxPage, error)
 	// GetInterviews implements getInterviews operation.
 	//
-	// The caller's arranged meetings whose start falls in the range.
+	// The calendar’s second layer beside `/me/timeline`: a meeting is arranged and can move or be
+	// cancelled, unlike a ledger event which happened and cannot change. `status` is `suggested`,
+	// `confirmed`, or `cancelled` — a cancelled meeting is still served, not withheld. Both bounds are
+	// required, RFC3339.
 	//
 	// GET /me/interviews
 	GetInterviews(ctx context.Context, params GetInterviewsParams) (*GetInterviewsOK, error)
@@ -664,24 +765,34 @@ type Handler interface {
 	GetJobFit(ctx context.Context, params GetJobFitParams) (*FitAnalysisResponse, error)
 	// GetJobMatch implements getJobMatch operation.
 	//
-	// How well the job's skills are covered by the caller's profile, plus the advisory hard-constraint
-	// blockers. Deterministic, no model. A caller without a profile is a 404.
+	// How well the job’s skills are covered by your profile skills — exact, adjacent, and missing,
+	// plus a coverage percent. A caller without a saved profile is a 404.
 	//
 	// GET /jobs/{slug}/match
 	GetJobMatch(ctx context.Context, params GetJobMatchParams) (*GetJobMatchOK, error)
 	// GetMailbox implements getMailbox operation.
 	//
+	// `address` is null until you claim one; `available` is false when the instance runs without a mailbox
+	// domain.
+	//
 	// GET /me/mailbox
 	GetMailbox(ctx context.Context) (*GetMailboxOK, error)
 	// GetMarketPulse implements getMarketPulse operation.
 	//
-	// Demand for the caller's profile skills, week by week. Session cookie only.
+	// One entry per profile skill seen in at least one open job; a skill never seen is omitted rather than
+	// reported with a zero. `change_pct` is `null` with fewer than two snapshots, or when the earliest
+	// snapshot’s count was zero. A profile with no skills yet answers an empty `data` array, not an
+	// error.
 	//
 	// GET /me/market-pulse
 	GetMarketPulse(ctx context.Context) (*GetMarketPulseOK, error)
 	// GetMatchAnalysis implements getMatchAnalysis operation.
 	//
-	// The cached fit analysis for a job; never calls the model.
+	// Returns the cached analysis, flagged `stale` when your CV or the job changed since it was computed,
+	// or a null analysis when none is cached. `has_cv` is false when you have no stored CV. `allowance`
+	// reports how much of today you have used against what the day allows, and when it resets.
+	// `tailor_allowance` reports the same for CV tailoring, which carries its own daily ceiling, so a
+	// caller deciding between the two has both figures here.
 	//
 	// GET /jobs/{slug}/match-analysis
 	GetMatchAnalysis(ctx context.Context, params GetMatchAnalysisParams) (*FitAnalysisResponse, error)
@@ -723,19 +834,33 @@ type Handler interface {
 	GetMyMentorProfile(ctx context.Context) (*GetMyMentorProfileOK, error)
 	// GetMyPlan implements getMyPlan operation.
 	//
-	// The caller's plan and today's usage, without consuming anything.
+	// Which plan you are on and, for every metered AI feature, how much of today you have used against
+	// what the day allows. Every plan offers every feature; what differs is the daily amount, and it
+	// resets at `resets_at`. A pro caller reads as `unlimited` rather than as a number. `enforced` says
+	// whether that ceiling turns anybody away yet — while it is `false` a spent allowance is counted and
+	// the action still runs, so do not refuse on `used >= limit` alone. Never runs the LLM. A pro caller
+	// also carries `pro_until` and `pro_source` — `stripe`, `revenuecat` or `granted` — both absent on
+	// the free plan and on a plan that has ended. `pro_source` is behavioural: a client offering an in-app
+	// purchase must not offer one to a `stripe` subscriber, who would be charged twice for one plan, and a
+	// `revenuecat` subscriber must be sent to their store to cancel rather than to a web page. A tie
+	// resolves in the order `stripe`, `revenuecat`, `granted`.
 	//
 	// GET /me/plan
 	GetMyPlan(ctx context.Context) (*GetMyPlanOK, error)
 	// GetMyPlanHistory implements getMyPlanHistory operation.
 	//
-	// Recent usage entries, newest first.
+	// Each entry is labelled with what it bought — the job an analysis was run on, the vacancy a CV
+	// editing session was opened for — rather than an opaque reference. A `release` entry is one that
+	// was given back because the work produced nothing.
 	//
 	// GET /me/plan/history
 	GetMyPlanHistory(ctx context.Context) (*GetMyPlanHistoryOK, error)
 	// GetMyUsage implements getMyUsage operation.
 	//
-	// With a session or an API key. Zeroes when the gateway cannot be read.
+	// Counts and token usage, not cost — the gateway’s dollar figure is a list price against a mixed
+	// upstream pool, not what you pay; what you spend is a plan allowance, reported by `/me/plan` over
+	// this same day. Never fails for a reason you could act on: no usage yet, or an unreachable gateway,
+	// both answer 200 with zeroes.
 	//
 	// GET /me/usage
 	GetMyUsage(ctx context.Context) (*GetMyUsageOK, error)
@@ -765,14 +890,16 @@ type Handler interface {
 	GetProfile(ctx context.Context) (*GetProfileOK, error)
 	// GetResume implements getResume operation.
 	//
-	// Whether storage is on, a CV is stored, when, and its structured view. Always 200.
+	// Always `200`: unconfigured storage or no résumé is a normal state. `structured` carries the
+	// read-only structured résumé, or null when none is current.
 	//
 	// GET /me/resume
 	GetResume(ctx context.Context) (*GetResumeOK, error)
 	// GetResumeVerdict implements getResumeVerdict operation.
 	//
-	// The market-coverage verdict for the caller's profile, scored against the role the query's facet
-	// params select. Cookie only; 404 without a profile; 503 when search is off.
+	// How many of your selected role’s open vacancies your skills reach, and which missing skill unlocks
+	// the most. The role is the request’s facet params (defaulting to your specializations). No profile
+	// is a `404`; `503` when search is unavailable.
 	//
 	// GET /me/profile/verdict
 	GetResumeVerdict(ctx context.Context) (*GetResumeVerdictOK, error)
@@ -788,21 +915,41 @@ type Handler interface {
 	GetSession(ctx context.Context, params GetSessionParams) (*GetSessionOK, error)
 	// GetSurvey implements getSurvey operation.
 	//
+	// Your stored survey answers. Every field is absent until you answer it.
+	//
 	// GET /me/survey
 	GetSurvey(ctx context.Context) (*GetSurveyOK, error)
 	// GetTalentFacets implements getTalentFacets operation.
+	//
+	// Takes the same filters as the list and answers with the count of members behind every value of every
+	// facet, plus the total behind the filter itself. Same shape as the job-search facet endpoint, so one
+	// control renders either.
+	//
+	// Each facet is counted with its OWN selection removed, while every other filter still applies —
+	// otherwise picking one skill makes every other skill read zero and the control silently becomes
+	// single-select.
+	//
+	// A value nobody carries is absent rather than reported as zero. A value carried by fewer members than
+	// the floor is offered with its number withheld: the option stays usable, and the number does not
+	// become a way to name somebody. Counts describe the filter you sent and never the whole membership.
 	//
 	// GET /talent/facets
 	GetTalentFacets(ctx context.Context, params GetTalentFacetsParams) (*GetTalentFacetsOK, error)
 	// GetTalentMember implements getTalentMember operation.
 	//
-	// A card is a person: cached privately only, so leaving takes effect at once.
+	// Four ways of being absent — a member who left, one whose CV extract has gone stale, a handle
+	// nobody holds, and a string that could not be a handle — all answer the same 404, so the route
+	// cannot be used to ask whether an account exists. An account’s `username` is not an address here.
+	// Membership is re-read from the database on every request, so leaving takes effect immediately rather
+	// than when a cache expires.
 	//
 	// GET /talent/{handle}
 	GetTalentMember(ctx context.Context, params GetTalentMemberParams) (*GetTalentMemberOKHeaders, error)
 	// GetTalentNetworkMembership implements getTalentNetworkMembership operation.
 	//
-	// With a session or an API key.
+	// A caller who has never touched the setting reads `"off"` — the column default, not a sentinel.
+	// `talent_handle` is absent until the first time they join: it is minted then, and kept forever after,
+	// so leaving and rejoining never changes the URL somebody already shared.
 	//
 	// GET /me/talent-network
 	GetTalentNetworkMembership(ctx context.Context) (*GetTalentNetworkMembershipOK, error)
@@ -821,13 +968,22 @@ type Handler interface {
 	GetThread(ctx context.Context, params GetThreadParams) (*ThreadDetailPage, error)
 	// GetTimeline implements getTimeline operation.
 	//
-	// The caller's events between `from` and `to` inclusive, oldest first.
+	// The application-event ledger as a dated series, oldest first: applications sent, employer replies,
+	// follow-ups and stage changes. `occurred_at` is an instant, not a day — which day it falls on
+	// depends on your timezone, so group it client-side. `observed` says whether the date came from a
+	// source other than you: mail-derived events carry a date the employer set, while a stage you set
+	// yourself is dated from when you recorded it. `email_id` and `email_subject` are present only while
+	// the message exists; deleting it hides the content and leaves the event standing. Both bounds are
+	// required and may span at most 366 days.
 	//
 	// GET /me/timeline
 	GetTimeline(ctx context.Context, params GetTimelineParams) (*GetTimelineOK, error)
 	// GetTrackedApplication implements getTrackedApplication operation.
 	//
-	// The caller's application for a job slug with its linked mail. 404 when not tracked.
+	// `events` is the application's ledger, newest first — the apply, employer replies, follow-ups,
+	// stage changes, scheduled interviews — in the shape `GET /me/timeline` serves, bounded at 100 and
+	// empty when nothing has happened yet. This read also carries the full job view; the listing carries
+	// only a card. A slug you do not track is a 404.
 	//
 	// GET /me/tracking/{slug}
 	GetTrackedApplication(ctx context.Context, params GetTrackedApplicationParams) (*GetTrackedApplicationOK, error)
@@ -841,17 +997,22 @@ type Handler interface {
 	GetWatching(ctx context.Context, params GetWatchingParams) (*GetWatchingOKHeaders, error)
 	// GmailDisconnect implements gmailDisconnect operation.
 	//
-	// Revokes the grant (best effort) and purges the token and the synced Gmail mail.
+	// Best-effort revokes the grant at Google, deletes the stored token, and removes the Gmail-sourced
+	// mail. Mail from the hosted address stays.
 	//
 	// DELETE /me/gmail
 	GmailDisconnect(ctx context.Context) (*GmailDisconnectOK, error)
 	// GmailStatus implements gmailStatus operation.
 	//
+	// `available` reflects whether the instance has Gmail OAuth configured. `status` is `needs_reconsent`
+	// when Google revoked the grant. Connecting itself is a browser redirect (`/me/gmail/connect`), so it
+	// is session-only and not part of the key-driven surface.
+	//
 	// GET /me/gmail
 	GmailStatus(ctx context.Context) (*GmailStatusOK, error)
 	// HideCompanyFeedback implements hideCompanyFeedback operation.
 	//
-	// Moderators only: hides a review. Idempotent.
+	// Idempotent. 404 for an unknown id.
 	//
 	// POST /company-feedback/{id}/hide
 	HideCompanyFeedback(ctx context.Context, params HideCompanyFeedbackParams) error
@@ -863,19 +1024,24 @@ type Handler interface {
 	ImportWatchlist(ctx context.Context, req *WatchlistImport) (*ImportWatchlistOK, error)
 	// IngestEmails implements ingestEmails operation.
 	//
-	// A batch of messages the caller's own mail client fetched, as `messages`: a list of objects with
-	// `external_id`, `thread_id`, `from_addr`, `from_name`, `subject`, `body_text`, `body_html` and
-	// `received_at`. The mail service validates the batch and refuses it whole with a 400.
+	// Stored under source `external`. freehire provides no transport here and never classifies this mail
+	// — that is the point of the tier. `external_id` (the Message-ID in practice) is the dedup key:
+	// re-pushing the same id updates that message instead of storing a copy, so a nightly re-sync is safe.
+	// Content columns are refreshed; your read, deleted and triage state is not, so a re-sync cannot
+	// resurrect deleted mail or wipe a verdict. At most 100 messages per call, applied as one transaction
+	// — an oversized batch is refused, never truncated.
 	//
 	// POST /me/emails
 	IngestEmails(ctx context.Context, req jx.Raw) (*IngestEmailsOK, error)
 	// IngestStatus implements ingestStatus operation.
 	//
-	// The site's own live status plus a sanitized per-provider rollup of the ingest fleet.
+	// Sanitized: which boards are healthy, cooled or failing, without error text or internal identifiers.
 	//
 	// GET /status
 	IngestStatus(ctx context.Context) (*IngestStatusOK, error)
 	// InsightsCompanies implements insightsCompanies operation.
+	//
+	// Companies ranked by hiring activity.
 	//
 	// GET /insights/companies
 	InsightsCompanies(ctx context.Context, params InsightsCompaniesParams) (*CompaniesAnswer, error)
@@ -898,6 +1064,8 @@ type Handler interface {
 	InsightsRoles(ctx context.Context, params InsightsRolesParams) (*RolesAnswerHeaders, error)
 	// InsightsSalary implements insightsSalary operation.
 	//
+	// Salary bands by category, seniority and country.
+	//
 	// GET /insights/salary
 	InsightsSalary(ctx context.Context, params InsightsSalaryParams) (*SalaryAnswer, error)
 	// InsightsSalaryHistory implements insightsSalaryHistory operation.
@@ -908,9 +1076,14 @@ type Handler interface {
 	InsightsSalaryHistory(ctx context.Context, params InsightsSalaryHistoryParams) (*SalaryHistoryAnswer, error)
 	// InsightsSkills implements insightsSkills operation.
 	//
+	// Scope by category or by country, but not both — the rollup behind it is single-dimensional, so
+	// asking for both is a 400.
+	//
 	// GET /insights/skills
 	InsightsSkills(ctx context.Context, params InsightsSkillsParams) (*SkillsAnswer, error)
 	// InsightsVelocity implements insightsVelocity operation.
+	//
+	// How fast a slice of the market is hiring, over time.
 	//
 	// GET /insights/velocity
 	InsightsVelocity(ctx context.Context, params InsightsVelocityParams) (*VelocityAnswer, error)
@@ -923,36 +1096,49 @@ type Handler interface {
 	InterpretSearch(ctx context.Context, req *SearchIntentRequest) (*InterpretSearchOK, error)
 	// JobApplyForm implements jobApplyForm operation.
 	//
-	// The application form captured for the job. 404 when none was captured.
+	// The questions a candidate will have to answer, shaped for reading. Only captured for a minority of
+	// postings (roughly a sixth of technical ATS platforms are readable at all) — no captured form is a
+	// `404`, distinguishable from an unknown slug (also `404`, but at the job lookup rather than the form
+	// lookup).
 	//
 	// GET /jobs/{slug}/apply-form
 	JobApplyForm(ctx context.Context, params JobApplyFormParams) (*JobApplyFormOK, error)
 	// JobCopies implements jobCopies operation.
 	//
-	// The open postings a collapsed job stands for, one per city.
+	// The per-city openings folded under one canonical card by content-dedup — each keeps its own
+	// `location` and `apply_url` so a seeker picks their city. The anchor job itself is included.
+	// `meta.total` is the whole cluster size, so it stays accurate when the list is a capped page.
 	//
 	// GET /jobs/{slug}/copies
 	JobCopies(ctx context.Context, params JobCopiesParams) (*JobCopiesPage, error)
 	// JobFacets implements jobFacets operation.
 	//
-	// The count of postings per facet value under the same filters, keyed by public facet param.
+	// Takes the same `q` and facet filter params as search, but returns the distribution of values instead
+	// of a page of jobs — use it to build filter UIs or see how a filter narrows the set. Continuous
+	// numeric facets are returned as `stats` (min/max), not per-value buckets. `former_employers` is
+	// ignored even for signed-in callers.
 	//
 	// GET /jobs/facets
 	JobFacets(ctx context.Context, params JobFacetsParams) (*JobFacetsOK, error)
 	// JobsActivity implements jobsActivity operation.
 	//
-	// Added and removed vacancies per period. A bad granularity or date, or a range over 4000 days, is a
-	// 400.
+	// Aggregated to the requested granularity over a date range; the series is dense (missing periods are
+	// 0). Defaults: `granularity=day`, `to`=today, `from` a per-granularity window before `to`. An unknown
+	// granularity or a range over 4000 days is a `400`.
 	//
 	// GET /stats/jobs-activity
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
 	// LinkEmail implements linkEmail operation.
 	//
+	// Attach a message to one of your applications.
+	//
 	// POST /me/emails/{id}/link
 	LinkEmail(ctx context.Context, req OptInboxLinkTarget, params LinkEmailParams) (*LinkEmailOK, error)
 	// LinkRecalledMail implements linkRecalledMail operation.
 	//
-	// Imports a message the sweep proposed and links it to the application.
+	// Imports the message from your mailbox by `provider_id` (from a mail-recall response) and links it to
+	// the application in one step — the same import-then-link path a Gmail sync uses, so the response is
+	// the full message body, the same shape `POST /me/emails/{id}/link` returns.
 	//
 	// POST /me/tracking/{slug}/mail-recall/link
 	LinkRecalledMail(ctx context.Context, req OptMailRecalledPick, params LinkRecalledMailParams) (*LinkRecalledMailOK, error)
@@ -962,13 +1148,17 @@ type Handler interface {
 	ListApiKeys(ctx context.Context) (*ListApiKeysOK, error)
 	// ListAppliedCompanySlugs implements listAppliedCompanySlugs operation.
 	//
-	// The employers the caller has applied to.
+	// Lets the SPA mark "you already applied to this company" on any posting of theirs without
+	// authenticating the public job reads: compare a posting's `company_slug` against this set. Counts
+	// applications actually made (not ones still being prepared), keyed by the posting's current company
+	// slug and resolved through company merges. Newest first, drawn from your 1000 most recent
+	// applications.
 	//
 	// GET /me/tracking/applied-companies
 	ListAppliedCompanySlugs(ctx context.Context) (*ListAppliedCompanySlugsOK, error)
 	// ListAssistantSessions implements listAssistantSessions operation.
 	//
-	// The caller's chat conversations, newest activity first.
+	// Tailoring conversations are not chats — each belongs to a CV — so they never appear here.
 	//
 	// GET /assistant/sessions
 	ListAssistantSessions(ctx context.Context) (*AssistantSessionList, error)
@@ -978,19 +1168,27 @@ type Handler interface {
 	ListBankedAnswers(ctx context.Context) (*ListBankedAnswersOK, error)
 	// ListBaseCVs implements listBaseCVs operation.
 	//
-	// The base CVs, oldest first, with the default flagged. With a session or an API key.
+	// The non-tailored CVs you can edit, duplicate and tailor from, oldest created first. `is_default`
+	// marks the one used when a tailor request names no base; `hand_edited` marks a base you changed in
+	// the editor, which a new CV upload will not overwrite. GET /me/cvs lists tailored copies and is
+	// unchanged.
 	//
 	// GET /me/cvs/bases
 	ListBaseCVs(ctx context.Context) (*ListBaseCVsOK, error)
 	// ListCVFonts implements listCVFonts operation.
 	//
-	// The registered typefaces a CV may choose.
+	// Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on
+	// save and the CV renders in the template's own face. `note` names the familiar face the entry
+	// matches; `css` is a font stack for rendering a preview in a browser.
 	//
 	// GET /cv-fonts
 	ListCVFonts(ctx context.Context) (*ListCVFontsOK, error)
 	// ListCVRevisions implements listCVRevisions operation.
 	//
-	// What changed the CV, newest first.
+	// Each entry names what changed and where (`paths`), not the edit itself — the operations carry your
+	// own prior text and stay server-side. `undoable` is false for an entry with nothing to reverse (e.g.
+	// the CV’s own creation); `reverted` marks an entry already undone rather than removing it from the
+	// feed.
 	//
 	// GET /me/cvs/{id}/revisions
 	ListCVRevisions(ctx context.Context, params ListCVRevisionsParams) (*ListCVRevisionsOK, error)
@@ -1002,6 +1200,11 @@ type Handler interface {
 	ListCVTemplates(ctx context.Context) (*ListCVTemplatesOK, error)
 	// ListCVTracerLinks implements listCVTracerLinks operation.
 	//
+	// One entry per link the PDF carries (header links, project links). Clicks you made on your own CV are
+	// excluded from the counts; `bot_clicks` is tallied separately rather than folded in.
+	// `distinct_visitors` is omitted — not zero — on a deployment with no visitor salt, since there is
+	// no honest count to report.
+	//
 	// GET /me/cvs/{id}/tracer-links
 	ListCVTracerLinks(ctx context.Context, params ListCVTracerLinksParams) (*ListCVTracerLinksOK, error)
 	// ListCVs implements listCVs operation.
@@ -1012,10 +1215,8 @@ type Handler interface {
 	ListCVs(ctx context.Context) (*ListCVsOK, error)
 	// ListCompanies implements listCompanies operation.
 	//
-	// Ranked companies. `q` and the facet params (collections, regions, countries, domains, industries,
-	// company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage, yc_flags, maturity,
-	// subindustries) are read from the raw query, comma-joined or repeated; a param the listing does not
-	// read is reported in `meta.ignored_params`.
+	// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
+	// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
 	//
 	// GET /companies
 	ListCompanies(ctx context.Context, params ListCompaniesParams) (*ListCompaniesOK, error)
@@ -1046,6 +1247,8 @@ type Handler interface {
 	ListConversations(ctx context.Context) (*ListConversationsOK, error)
 	// ListDismissedSlugs implements listDismissedSlugs operation.
 	//
+	// The slugs you dismissed, so a client can hide them.
+	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
 	// ListEmployerPendingClaims implements listEmployerPendingClaims operation.
@@ -1062,6 +1265,8 @@ type Handler interface {
 	ListEmployerVacancies(ctx context.Context) (*ListEmployerVacanciesOK, error)
 	// ListExperience implements listExperience operation.
 	//
+	// Your employments and their evidence atoms.
+	//
 	// GET /me/experience
 	ListExperience(ctx context.Context) (*ListExperienceOK, error)
 	// ListIncomingReferralRequests implements listIncomingReferralRequests operation.
@@ -1072,8 +1277,10 @@ type Handler interface {
 	ListIncomingReferralRequests(ctx context.Context) (*ListIncomingReferralRequestsOK, error)
 	// ListJobs implements listJobs operation.
 	//
-	// The newest open jobs. It reads no filter: a param other than the page ones is reported in
-	// `meta.ignored_params`.
+	// Takes no filters at all — `limit` and `offset` are the whole vocabulary. Anything else is ignored
+	// rather than refused, and listed in `meta.ignored_params`: a filter param sent here returns the
+	// entire catalogue, which is indistinguishable from a narrow result unless you check. Use
+	// `/jobs/search` to filter.
 	//
 	// GET /jobs
 	ListJobs(ctx context.Context, params ListJobsParams) (*ListJobsOK, error)
@@ -1091,19 +1298,27 @@ type Handler interface {
 	ListMentors(ctx context.Context, params ListMentorsParams) (*MentorshipDirectoryPage, error)
 	// ListMyAnalyses implements listMyAnalyses operation.
 	//
-	// The jobs the caller has run the fit analysis on, newest first.
+	// Newest first, closed jobs included (with `closed: true`). Each item carries the overall score and
+	// verdict; `stale` marks an analysis whose CV, job, or model has changed since. `meta.allowance`
+	// reports where you stand on the day’s analyses. Never runs the LLM.
 	//
 	// GET /me/tracking/analyses
 	ListMyAnalyses(ctx context.Context) (*FitAnalysedJobs, error)
 	// ListMyContributions implements listMyContributions operation.
 	//
+	// The boards you contributed, and their onboarding state.
+	//
 	// GET /me/contributions
 	ListMyContributions(ctx context.Context) (*ListMyContributionsOK, error)
 	// ListMyReferralOffers implements listMyReferralOffers operation.
 	//
+	// Your referral offers and their moderation state.
+	//
 	// GET /me/referrals/offers
 	ListMyReferralOffers(ctx context.Context) (*ListMyReferralOffersOK, error)
 	// ListMyReferralRequests implements listMyReferralRequests operation.
+	//
+	// The intros you asked for, and where they stand.
 	//
 	// GET /me/referrals/requests
 	ListMyReferralRequests(ctx context.Context) (*ListMyReferralRequestsOK, error)
@@ -1113,9 +1328,13 @@ type Handler interface {
 	ListMySessions(ctx context.Context, params ListMySessionsParams) (*MentorshipSessionsPage, error)
 	// ListMySubmissions implements listMySubmissions operation.
 	//
+	// Your own submission queue.
+	//
 	// GET /me/submissions
 	ListMySubmissions(ctx context.Context) (*ListMySubmissionsOK, error)
 	// ListNotifications implements listNotifications operation.
+	//
+	// List your notification-center entries, newest first.
 	//
 	// GET /me/notifications
 	ListNotifications(ctx context.Context, params ListNotificationsParams) (*NotificationPage, error)
@@ -1161,6 +1380,8 @@ type Handler interface {
 	ListPendingSubmissions(ctx context.Context) (*ListPendingSubmissionsOK, error)
 	// ListPushTokens implements listPushTokens operation.
 	//
+	// List your own registered devices.
+	//
 	// GET /me/push-tokens
 	ListPushTokens(ctx context.Context) (*ListPushTokensOK, error)
 	// ListRecentThreads implements listRecentThreads operation.
@@ -1171,7 +1392,8 @@ type Handler interface {
 	ListRecentThreads(ctx context.Context, params ListRecentThreadsParams) (*RecentThreadPage, error)
 	// ListReferralCVOptions implements listReferralCVOptions operation.
 	//
-	// The CVs tailored for the vacancy (or any at the company), and whether a CV file is stored.
+	// The CVs you tailored for `job_slug`, or with no `job_slug` for any opening at the company, newest
+	// first, and whether you have uploaded a CV file.
 	//
 	// GET /me/referrals/cv-options
 	ListReferralCVOptions(ctx context.Context, params ListReferralCVOptionsParams) (*ListReferralCVOptionsOK, error)
@@ -1183,9 +1405,13 @@ type Handler interface {
 	ListReportedCompanyFeedback(ctx context.Context) (*ListReportedCompanyFeedbackOK, error)
 	// ListSavedSearches implements listSavedSearches operation.
 	//
+	// List your saved searches.
+	//
 	// GET /me/searches
 	ListSavedSearches(ctx context.Context) (*SavedSearchList, error)
 	// ListSavedSlugs implements listSavedSlugs operation.
+	//
+	// Lets the SPA render the save toggle as filled without authenticating the public job reads.
 	//
 	// GET /me/tracking/saved
 	ListSavedSlugs(ctx context.Context) (*ListSavedSlugsOK, error)
@@ -1197,9 +1423,17 @@ type Handler interface {
 	ListSources(ctx context.Context) (*ListSourcesOK, error)
 	// ListSubscriptions implements listSubscriptions operation.
 	//
+	// List your subscriptions.
+	//
 	// GET /me/subscriptions
 	ListSubscriptions(ctx context.Context) (*SubscriptionList, error)
 	// ListTalent implements listTalent operation.
+	//
+	// Every filter takes values from a closed vocabulary or a number; there is no free-text search,
+	// because a card carries no free text to search. Values within one filter are OR, different filters
+	// narrow together, and an absent filter is identical to an empty one. A parameter this endpoint does
+	// not read — including one it recognises but cannot parse, like `min_years=lots` — is named in
+	// `meta.ignored_params` rather than silently widening the answer.
 	//
 	// GET /talent
 	ListTalent(ctx context.Context, params ListTalentParams) (*ListTalentOK, error)
@@ -1211,9 +1445,11 @@ type Handler interface {
 	ListThreads(ctx context.Context, params ListThreadsParams) (*ThreadPage, error)
 	// ListTrackedJobs implements listTrackedJobs operation.
 	//
-	// The caller's interactions joined with their jobs, most recently touched first. `filter` is all,
-	// viewed, saved, applied or board (400 otherwise); `compact` drops each card's blurb, skills and ghost
-	// signal. A page param that does not read falls back to its default.
+	// Each item carries a card of the job with your interaction timestamps alongside it — what a list
+	// row draws: slug, title, company, closed_at, the stated facets, skills, collections, posted_at, and a
+	// `blurb` already cut to length. It does NOT carry the description; the full job view is on
+	// `GET /me/tracking/:slug`. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay
+	// listed so your history never shrinks.
 	//
 	// GET /me/tracking
 	ListTrackedJobs(ctx context.Context, params ListTrackedJobsParams) (*TrackedJobPage, error)
@@ -1231,17 +1467,25 @@ type Handler interface {
 	ListWatchlist(ctx context.Context, params ListWatchlistParams) (*WatchlistPageHeaders, error)
 	// MarkAllNotificationsRead implements markAllNotificationsRead operation.
 	//
+	// Mark every unread notification read.
+	//
 	// POST /me/notifications/read-all
 	MarkAllNotificationsRead(ctx context.Context) (*MarkAllNotificationsReadOK, error)
 	// MarkAllReadInbox implements markAllReadInbox operation.
 	//
-	// Marks every unread message matching the same filters as the listing.
+	// It takes the same filters as `GET /me/inbox` and marks exactly what that listing shows — including
+	// the default that hides the `other` label, so an unfiltered call leaves that mail unread. There is no
+	// undo.
 	//
 	// POST /me/inbox/read-all
 	MarkAllReadInbox(ctx context.Context, params MarkAllReadInboxParams) (*MarkAllReadInboxOK, error)
 	// MarkApplied implements markApplied operation.
 	//
-	// The body is optional: without a date the application is stamped now. 400 for a date out of range.
+	// Send `applied_on` to record an application on the day it was actually sent — importing a history,
+	// or correcting a date already stored. A date you state overrides one we inferred. The day is stored
+	// at noon UTC, because you are stating a day and midnight reads as the previous date west of
+	// Greenwich. A date in the future, older than a year, or not a calendar date, is a 400. Without a body
+	// the application is stamped now, as before.
 	//
 	// POST /jobs/{slug}/apply
 	MarkApplied(ctx context.Context, req OptApplyJob, params MarkAppliedParams) (*MarkAppliedOK, error)
@@ -1253,26 +1497,33 @@ type Handler interface {
 	MarkConversationRead(ctx context.Context, req *ConversationReadRequest, params MarkConversationReadParams) error
 	// MarkNotificationRead implements markNotificationRead operation.
 	//
-	// Idempotent; another user's id, or one that does not exist, is a 404.
+	// Returns `204 No Content`.
 	//
 	// POST /me/notifications/{id}/read
 	MarkNotificationRead(ctx context.Context, params MarkNotificationReadParams) error
 	// MarketCoverage implements marketCoverage operation.
 	//
-	// Scores a skill list against the market the query's facet params select. The `skills` facet params
-	// are not read here and are reported in `meta.ignored_params`.
+	// Stateless sibling of the CV verdict: skills come from the request body, the market from the facet
+	// query params (same vocabulary as search; the `skills` facet is ignored as a filter). Reports how
+	// many of the role’s vacancies your skills cover and which missing skill unlocks the most. `400` on
+	// empty skills, `503` when search is unavailable.
 	//
 	// POST /market/coverage
 	MarketCoverage(ctx context.Context, req *ResumeCoverageRequest) (*MarketCoverageOK, error)
 	// MatchText implements matchText operation.
 	//
-	// The same coverage for a posting that need not be in the catalogue.
+	// The same deterministic skill coverage as `GET /jobs/{slug}/match`, but for a page that need not be
+	// in the catalogue — this is what lets the extension show a match on any job page. A caller with no
+	// profile is a 404. No LLM, and it draws on no allowance.
 	//
 	// POST /me/match-text
 	MatchText(ctx context.Context, req *FitMatchTextRequest) (*MatchTextOK, error)
 	// MergeAtoms implements mergeAtoms operation.
 	//
-	// Folds two owned achievements into one. 409 when they conflict.
+	// Session-only, unlike its sibling create/edit/delete routes — the merge folds the discarded
+	// atom’s metrics and skills into the kept one while the kept one’s own provenance stands, letting
+	// a `manual` atom absorb numbers a model had inferred, so it cannot be widened to a key the way the
+	// others were.
 	//
 	// POST /me/experience/atoms/merge
 	MergeAtoms(ctx context.Context, req *MergeAtoms) (*MergeAtomsOK, error)
@@ -1296,8 +1547,12 @@ type Handler interface {
 	OneClickUnsubscribe(ctx context.Context, params OneClickUnsubscribeParams) (*OneClickUnsubscribeOK, error)
 	// PatchCV implements patchCV operation.
 	//
-	// Applies a batch of path operations (`{"ops": [...], "note": ""}`), decoded strictly in Go: an
-	// unknown field or bad addressing is a 422. With a session or an API key.
+	// An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — `summary`,
+	// `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. Indices are 0-based. The whole
+	// batch applies or none of it does: an unknown path or an index past the end refuses the request
+	// without touching the CV. An API key edits as the tailoring agent, so the candidate's own fields are
+	// refused and a claim about them needs `evidence_id` from the experience bank. Every request lands in
+	// the CV's history and can be undone on its own.
 	//
 	// PATCH /me/cvs/{id}
 	PatchCV(ctx context.Context, req jx.Raw, params PatchCVParams) (*PatchCVOK, error)
@@ -1307,25 +1562,34 @@ type Handler interface {
 	PauseMentorProfile(ctx context.Context, req *MentorshipPauseBody) (*PauseMentorProfileOK, error)
 	// PostAssistantExtend implements postAssistantExtend operation.
 	//
-	// Buys a tailoring session another ceiling's worth of turns. 204 when plan limits are not wired.
+	// A CV editing session is bounded by a turn ceiling as well as by the daily session allowance, and a
+	// turn past the ceiling is a `402` naming the session. This spends another of the day’s CV editing
+	// sessions to raise it (no body), and is idempotent under a double click — two calls in flight buy
+	// one ceiling, not two. `409` on any preset other than a CV editing session: a chat is bounded by the
+	// daily assistant allowance, and a day cannot be topped up. `402` when there is no session left to
+	// spend, with the same body every refusal carries.
 	//
 	// POST /assistant/sessions/{id}/extend
 	PostAssistantExtend(ctx context.Context, params PostAssistantExtendParams) (PostAssistantExtendRes, error)
 	// PostAssistantVoiceToken implements postAssistantVoiceToken operation.
 	//
-	// Mints the short-lived credential for a voice call on an interview session.
+	// Only on an `interview` session; `409` otherwise. The audio itself never reaches this server: take
+	// the returned `value` to `calls_url` (this deployment’s own realtime gateway, not api.openai.com
+	// directly) to negotiate the WebRTC call. `501` when voice mode is not configured.
 	//
 	// POST /assistant/sessions/{id}/voice-token
 	PostAssistantVoiceToken(ctx context.Context, params PostAssistantVoiceTokenParams) (*PostAssistantVoiceTokenOK, error)
 	// PostAssistantVoiceTurn implements postAssistantVoiceTurn operation.
 	//
-	// Appends one completed spoken turn to an interview session's transcript.
+	// Only on an `interview` session. Lets a call continued by typing carry the spoken turns forward in
+	// context. Returns `204 No Content`.
 	//
 	// POST /assistant/sessions/{id}/voice-turns
 	PostAssistantVoiceTurn(ctx context.Context, req *AssistantVoiceTurn, params PostAssistantVoiceTurnParams) error
 	// PostAtsReport implements postAtsReport operation.
 	//
-	// Runs the model review (paid) over the stored CV, caches it and returns the report.
+	// Runs the LLM review over your stored CV and folds it into the report (`reviewed: true`).
+	// Best-effort: an unconfigured or failing LLM returns the deterministic report (200).
 	//
 	// POST /me/profile/ats-report
 	PostAtsReport(ctx context.Context) (*PostAtsReportOK, error)
@@ -1349,7 +1613,10 @@ type Handler interface {
 	PostJobAutoApplyRetry(ctx context.Context, params PostJobAutoApplyRetryParams) (*PostJobAutoApplyRetryOK, error)
 	// PrefillSubmission implements prefillSubmission operation.
 	//
-	// Writes nothing. An unrecognised URL answers 200 with every field empty.
+	// Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no
+	// submission, no allowance spent. An unrecognized URL returns an empty object rather than an error. A
+	// URL the catalogue already carries returns only `existing_job_slug`, and `POST /submissions` would
+	// refuse it.
 	//
 	// POST /submissions/prefill
 	PrefillSubmission(ctx context.Context, req *PrefillRequest) (*PrefillSubmissionOK, error)
@@ -1367,13 +1634,16 @@ type Handler interface {
 	ProposeCompanyRelation(ctx context.Context, req *CompanyRelationRequest, params ProposeCompanyRelationParams) (*ProposeCompanyRelationCreated, error)
 	// PutProfile implements putProfile operation.
 	//
-	// Creates or replaces the profile.
+	// The whole profile is replaced on each save. An unknown specialization (must be a job category),
+	// empty skills, or an out-of-vocabulary location value is a `400`.
 	//
 	// PUT /me/profile
 	PutProfile(ctx context.Context, req *ProfileUpdate) (*PutProfileOK, error)
 	// PutResumeContacts implements putResumeContacts operation.
 	//
-	// Replaces the owned overrides (contacts, headline, summary, languages, certifications).
+	// Each body field is owned per field: a value you set here takes over that field from whatever the
+	// structured résumé extract would otherwise contribute. Omit a field to leave it as-is; to clear
+	// rather than override, use `POST /me/resume/contacts/replace-from-cv`.
 	//
 	// PUT /me/resume/contacts
 	PutResumeContacts(ctx context.Context, req jx.Raw) (*PutResumeContactsOK, error)
@@ -1389,11 +1659,18 @@ type Handler interface {
 	ReactivateMentorProfile(ctx context.Context) (*ReactivateMentorProfileOK, error)
 	// RecallApplicationMail implements recallApplicationMail operation.
 	//
-	// Sweeps the mailbox for mail belonging to the application and records suggestions. Paid AI.
+	// For an application whose mail arrived before you connected an inbox, or that a sync missed. Runs an
+	// LLM pass over your mailbox and returns matches as suggestions — it never links or writes the
+	// ledger itself; confirm a pick with `POST /me/tracking/{slug}/mail-recall/link`. A `503` when no mail
+	// gateway is configured, a `502` when the model call fails.
 	//
 	// POST /me/tracking/{slug}/mail-recall
 	RecallApplicationMail(ctx context.Context, params RecallApplicationMailParams) (*RecallApplicationMailOK, error)
 	// RecordApplicationFollowUp implements recordApplicationFollowUp operation.
+	//
+	// Does not itself affect the silence calculation — that reads when the other side last moved, and a
+	// chase is not a reply. Idempotent within the hour: a double click overwrites the timestamp rather
+	// than logging a second event. Returns `204 No Content`.
 	//
 	// POST /me/tracking/{slug}/followup
 	RecordApplicationFollowUp(ctx context.Context, params RecordApplicationFollowUpParams) error
@@ -1405,6 +1682,8 @@ type Handler interface {
 	RecordDictionaryGap(ctx context.Context, req *DictionaryGap) (*RecordDictionaryGapOK, error)
 	// RecordView implements recordView operation.
 	//
+	// Record that you viewed the job.
+	//
 	// POST /jobs/{slug}/view
 	RecordView(ctx context.Context, params RecordViewParams) (*RecordViewOK, error)
 	// RedeemPromoCode implements redeemPromoCode operation.
@@ -1415,7 +1694,8 @@ type Handler interface {
 	RedeemPromoCode(ctx context.Context, req *PromoCode) (*RedeemPromoCodeOK, error)
 	// RegisterPushToken implements registerPushToken operation.
 	//
-	// Registers or refreshes the device's push token; a token is reassigned to the caller.
+	// Upserted by token value, not by user: if a different account signs in on the same device, this
+	// reassigns the token to the new caller. Returns `204 No Content`.
 	//
 	// POST /me/push-tokens
 	RegisterPushToken(ctx context.Context, req *PushTokenRegister) error
@@ -1426,6 +1706,8 @@ type Handler interface {
 	// POST /company-relations/{id}/reject
 	RejectCompanyRelation(ctx context.Context, params RejectCompanyRelationParams) (*RejectCompanyRelationOK, error)
 	// RejectEmailLink implements rejectEmailLink operation.
+	//
+	// Dismiss a suggested link without attaching it.
 	//
 	// POST /me/emails/{id}/reject
 	RejectEmailLink(ctx context.Context, params RejectEmailLinkParams) (*RejectEmailLinkOK, error)
@@ -1459,7 +1741,8 @@ type Handler interface {
 	ReopenEmployerVacancy(ctx context.Context, params ReopenEmployerVacancyParams) (*ReopenEmployerVacancyOK, error)
 	// ReplaceResumeContactsFromCv implements replaceResumeContactsFromCv operation.
 	//
-	// Overwrites every owned override from the current structured CV. 409 without one.
+	// A full reset, not just identity fields — every owned field is replaced from the current structured
+	// extract. `409` when you have no structured résumé to copy from.
 	//
 	// POST /me/resume/contacts/replace-from-cv
 	ReplaceResumeContactsFromCv(ctx context.Context) (*ReplaceResumeContactsFromCvOK, error)
@@ -1469,8 +1752,7 @@ type Handler interface {
 	ReplaceWeeklyAvailability(ctx context.Context, req *BuddyMockWeekly) error
 	// ReportCompanyFeedback implements reportCompanyFeedback operation.
 	//
-	// The id is declared a string and parsed in Go, which keeps the 400 text. A second report by the same
-	// person is a silent no-op.
+	// A second report of the same review by you is a silent no-op.
 	//
 	// POST /company-feedback/{id}/report
 	ReportCompanyFeedback(ctx context.Context, req *CompanyFeedbackReportRequest, params ReportCompanyFeedbackParams) error
@@ -1494,19 +1776,27 @@ type Handler interface {
 	RequestEmailChange(ctx context.Context, req *AuthEmailChange) error
 	// RequestEmailVerification implements requestEmailVerification operation.
 	//
-	// Mails the caller a fresh verification code.
+	// Mails a fresh code to the caller’s own address, never a body field. Returns `202 Accepted`. `409`
+	// if the address is already confirmed.
 	//
 	// POST /auth/verify/request
 	RequestEmailVerification(ctx context.Context) error
 	// ReseedBaseCV implements reseedBaseCV operation.
 	//
-	// Rebuilds the default base CV from the current seed.
+	// Replaces the base (non-tailored) document from the current seed (experience bank first, your
+	// résumé's own extract for what the bank doesn't track). Preserves template and typography. Does not
+	// rewrite tailored copies for specific jobs. 409 when there is no usable seed.
 	//
 	// POST /me/cvs/base/reseed
 	ReseedBaseCV(ctx context.Context) (*ReseedBaseCVOK, error)
 	// ReseedCV implements reseedCV operation.
 	//
-	// Rebuilds one CV from the current seed; destructive.
+	// Replaces this CV's content from the current seed (experience bank first, your résumé's own extract
+	// for what the bank doesn't track). Works on a tailored copy or on a base, and touches only that CV:
+	// refreshing a tailored copy no longer rewrites any base, and refreshing a base — the editor's
+	// "Update from my CV", which replaces hand edits — leaves its copies alone. Keeps the same id and
+	// agent session; preserves template and typography. 409 when there is no usable seed. Upload alone
+	// does not do this — this is the explicit apply.
 	//
 	// POST /me/cvs/{id}/reseed
 	ReseedCV(ctx context.Context, params ReseedCVParams) (*ReseedCVOK, error)
@@ -1518,7 +1808,8 @@ type Handler interface {
 	ResendEmployerClaimCode(ctx context.Context) (*ResendEmployerClaimCodeOK, error)
 	// ResetPassword implements resetPassword operation.
 	//
-	// Public: the mailed code is the credential. Revokes every session.
+	// Public — the code is the credential. Success revokes every existing session, so sign in fresh with
+	// the new password afterward.
 	//
 	// POST /auth/password/reset
 	ResetPassword(ctx context.Context, req *AuthPasswordReset) (*ResetPasswordOK, error)
@@ -1530,15 +1821,25 @@ type Handler interface {
 	ResolveConversationReport(ctx context.Context, params ResolveConversationReportParams) error
 	// ResolveJob implements resolveJob operation.
 	//
-	// Finds the catalogue job behind a page, or imports it. 200 when it was already there, 201 when this
-	// request created it, 202 when it is queued for later. With a session or an API key.
+	// Five outcomes in one shape, distinguished by status: 200 found — the catalogue already carries the
+	// vacancy. Either the URL itself is stored (nothing is fetched or written), or the page turned out to
+	// be a second copy of a posting we already carry under another source, in which case the answer names
+	// the one we had; 201 tracked — we crawl that board already and the posting just had not landed, so
+	// it was imported now; 201 imported — imported, and its board queued for onboarding; 201 review —
+	// imported, but its careers site names no board we can crawl, so the link went to manual triage; 202
+	// queued — nothing could read the page, so the link went to manual triage. `company_slug` is
+	// returned whenever the catalogue already carries the employer, through any source — independent of
+	// what became of the board. A URL that is not http(s) is a 422.
 	//
 	// POST /jobs/resolve
 	ResolveJob(ctx context.Context, req *ResolveJobRequest) (ResolveJobRes, error)
 	// ResolveJobDescription implements resolveJobDescription operation.
 	//
-	// Turns a catalogue job, a vacancy URL or pasted text into a job the tailoring workspace can open. 404
-	// for an unknown slug, 422 for a URL with no readable vacancy. Session cookie only.
+	// Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves through the same
+	// ATS-aware registry `/jobs/resolve` uses (a network fetch); an unrecognized URL falls back to a
+	// generic scrape; pasted text is stored as a private, unlisted job. Returns the slug the tailor
+	// workspace should open — an existing job, or a freshly created private one. `404` for an unknown
+	// `job_slug`, `422` for a URL nothing could read.
 	//
 	// POST /me/jd/resolve
 	ResolveJobDescription(ctx context.Context, req *JobDescriptionSource) (*ResolveJobDescriptionOK, error)
@@ -1550,15 +1851,19 @@ type Handler interface {
 	ResolveJobReport(ctx context.Context, req OptResolveJobReportRequest, params ResolveJobReportParams) (*ResolveJobReportOK, error)
 	// ResolveReferralRequest implements resolveReferralRequest operation.
 	//
+	// Mark an incoming request contacted or declined.
+	//
 	// POST /me/referrals/incoming/{id}/resolve
 	ResolveReferralRequest(ctx context.Context, req *ReferralResolve, params ResolveReferralRequestParams) (*ResolveReferralRequestOK, error)
 	// RestoreEmail implements restoreEmail operation.
+	//
+	// Undo a soft-delete. Answers 204.
 	//
 	// POST /me/emails/{id}/restore
 	RestoreEmail(ctx context.Context, params RestoreEmailParams) error
 	// RetractGhostReport implements retractGhostReport operation.
 	//
-	// Withdraws the caller's report. 404 when there is none.
+	// A claim that is absent or already withdrawn is a `404`.
 	//
 	// DELETE /jobs/{slug}/ghost-report
 	RetractGhostReport(ctx context.Context, params RetractGhostReportParams) error
@@ -1596,9 +1901,10 @@ type Handler interface {
 	RevokeOauthGrant(ctx context.Context, params RevokeOauthGrantParams) error
 	// RunAutofill implements runAutofill operation.
 	//
-	// Fills the form in the caller's own browser through the browser-tool channel. Paid AI route
-	// (unmetered). Only the extension's own Bearer session is admitted; anything else is a 403. The report
-	// names what was filled, deferred and left unmapped.
+	// Runs the autofill agent over the browser-tool wire — your extension on one end, the agent on the
+	// other, routed strictly within your own channel. Requires the extension to be connected, and
+	// authenticates only as the extension itself — a session cookie or an API key gets a 403, since this
+	// call writes into whatever form your browser has open, not just reads it.
 	//
 	// POST /me/autofill/run
 	RunAutofill(ctx context.Context) (*RunAutofillOK, error)
@@ -1610,7 +1916,10 @@ type Handler interface {
 	RunJobFit(ctx context.Context, params RunJobFitParams) (RunJobFitRes, error)
 	// RunMatchAnalysis implements runMatchAnalysis operation.
 	//
-	// Runs the fit analysis and caches it. An unconfigured or failing model answers a null analysis.
+	// Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh
+	// (no `allowance` on this response). Analysing a new job draws on your daily analysis allowance; with
+	// none left it is a `402`, and recomputing an already-analyzed job is free. `has_cv` is false when no
+	// CV is stored; a failing or unconfigured LLM returns a null analysis (200).
 	//
 	// POST /jobs/{slug}/match-analysis
 	RunMatchAnalysis(ctx context.Context, params RunMatchAnalysisParams) (RunMatchAnalysisRes, error)
@@ -1622,20 +1931,26 @@ type Handler interface {
 	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
 	// SaveJob implements saveJob operation.
 	//
+	// Save (bookmark) the job.
+	//
 	// POST /jobs/{slug}/save
 	SaveJob(ctx context.Context, params SaveJobParams) (*SaveJobOK, error)
 	// SearchCities implements searchCities operation.
 	//
-	// Up to 20 cities whose name matches, optionally within one country.
+	// Population-ranked prefix search over the embedded city dictionary, optionally narrowed to one
+	// country. A blank `q` returns an empty list.
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
 	// SearchJobs implements searchJobs operation.
 	//
-	// Full-text and faceted search over open postings. Public; a signed-in caller can also use
-	// `hide_seen`, `hide_applied_companies`, `former_employers`, `watchlist`, `min_skill_match` and
-	// `sort=match`, which make the answer private. A filter the endpoint does not read is named in
-	// `meta.ignored_params`, a value outside a closed vocabulary in `meta.ignored_values`.
+	// Combine free-text `q` with any of the filter params below. Repeated facet params are ORed; add
+	// `<param>_mode=and` to require all, or `<param>_exclude=<value>` to exclude. Without `q`, results
+	// default to newest first; with `q`, to relevance. A param no filter reads is ignored rather than
+	// refused, and listed in `meta.ignored_params` — check it, since a dropped filter otherwise looks
+	// like a broad result.
+	//
+	// Plus every filter in the "Filtering jobs" section.
 	//
 	// GET /jobs/search
 	SearchJobs(ctx context.Context, params SearchJobsParams) (*JobSearchPageHeaders, error)
@@ -1647,7 +1962,10 @@ type Handler interface {
 	SendConversationMessage(ctx context.Context, req *ConversationSendRequest, params SendConversationMessageParams) (*SendConversationMessageCreated, error)
 	// SendDirectApply implements sendDirectApply operation.
 	//
-	// Sends the caller's application. Cookie session only.
+	// Needs a verified email. The employer gets the chosen CV as a PDF, the answers, the note and your
+	// address as Reply-To. One application per vacancy: `409` once it was sent (or while it is being
+	// sent), `400` naming the first unanswered or invalid question, `403` unverified, `410` closed, `429`
+	// past the daily limit, `502` when delivery failed — applying again retries it.
 	//
 	// POST /jobs/{slug}/direct-apply
 	SendDirectApply(ctx context.Context, req *DirectApplyRequest, params SendDirectApplyParams) (*SendDirectApplyCreated, error)
@@ -1663,15 +1981,21 @@ type Handler interface {
 	SetCVAppearanceDefaults(ctx context.Context, req *CvAppearanceDefaults) (*SetCVAppearanceDefaultsOK, error)
 	// SetCVSession implements setCVSession operation.
 	//
+	// Bind an agent session to a CV.
+	//
 	// PUT /me/cvs/{id}/session
 	SetCVSession(ctx context.Context, req *CvSessionBinding, params SetCVSessionParams) error
 	// SetCVTemplate implements setCVTemplate operation.
+	//
+	// Switch the template only.
 	//
 	// PUT /me/cvs/{id}/template
 	SetCVTemplate(ctx context.Context, req *CvTemplateChoice, params SetCVTemplateParams) error
 	// SetCVTracerLinks implements setCVTracerLinks operation.
 	//
-	// 409 when enabling on a deployment with no visitor salt.
+	// Off is the default for every CV. Turning it on is refused with a `409` on a deployment with no
+	// visitor salt configured — there would be no honest way to count distinct visitors. Turning it off
+	// is never refused.
 	//
 	// PUT /me/cvs/{id}/tracer-links
 	SetCVTracerLinks(ctx context.Context, req *CvTracerLinksSetting, params SetCVTracerLinksParams) (*SetCVTracerLinksOK, error)
@@ -1683,13 +2007,16 @@ type Handler interface {
 	SetSubscriptionActive(ctx context.Context, req *SubscriptionActive, params SetSubscriptionActiveParams) (*SetSubscriptionActiveOK, error)
 	// SetTalentNetworkVisibility implements setTalentNetworkVisibility operation.
 	//
-	// Joins or leaves the catalogue. Session cookie only.
+	// Two states, not three: `public` was retired with the mode picker itself, and a request asking for it
+	// is a 400. Joining for the first time mints the handle the public catalogue addresses you by.
 	//
 	// PUT /me/talent-network
 	SetTalentNetworkVisibility(ctx context.Context, req *TalentNetworkVisibilityUpdate) (*SetTalentNetworkVisibilityOK, error)
 	// SimilarJobs implements similarJobs operation.
 	//
-	// Open postings in the same specialization and place as the job.
+	// Searches the live Meilisearch index with the source job’s known location and specialization as
+	// mandatory filters, ranked by keyword search on its title. Returns an empty list when location or
+	// specialization is unknown or no visible matches remain.
 	//
 	// GET /jobs/{slug}/similar
 	SimilarJobs(ctx context.Context, params SimilarJobsParams) (*SimilarJobsOK, error)
@@ -1701,17 +2028,24 @@ type Handler interface {
 	SkillNeighbours(ctx context.Context, params SkillNeighboursParams) (*SkillNeighbours, error)
 	// StartBaseSession implements startBaseSession operation.
 	//
-	// The assistant conversation for a base CV; not behind the paid gate.
+	// Returns the assistant conversation bound to one of your base CVs, creating it on first use. It is
+	// the tailoring workspace's agent without a vacancy: it edits this general CV through the same
+	// evidence-gated tools. Opening it is free and needs no paid plan; each message still passes the
+	// assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when the id is not
+	// yours.
 	//
 	// POST /me/cvs/{id}/base-session
 	StartBaseSession(ctx context.Context, params StartBaseSessionParams) (*StartBaseSessionOK, error)
 	// StartTailorSession implements startTailorSession operation.
 	//
+	// For a tailored CV whose session was lost or never bound. 409 when the CV is not a tailored copy.
+	//
 	// POST /me/cvs/{id}/tailor-session
 	StartTailorSession(ctx context.Context, params StartTailorSessionParams) (*StartTailorSessionCreated, error)
 	// StatsFacets implements statsFacets operation.
 	//
-	// The value-to-count distribution of each covered facet, from the daily snapshot.
+	// Served from the facet rollup rather than a live Meilisearch facet count, so a page can show "what's
+	// inside" without paying search for it.
 	//
 	// GET /stats/facets
 	StatsFacets(ctx context.Context) (*StatsFacetsOK, error)
@@ -1727,45 +2061,74 @@ type Handler interface {
 	Suggest(ctx context.Context, params SuggestParams) (*SuggestOK, error)
 	// SyncBillingStore implements syncBillingStore operation.
 	//
-	// 503 when the store provider cannot be reached. Cookie session only.
+	// For a mobile client that has just completed an App Store or Google Play purchase. The purchase
+	// finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the
+	// provider stops retrying after 80 minutes — so without this route a paid subscriber can be left
+	// looking at a paywall. It names nobody: the account is the session’s, and a user id in the request
+	// is ignored. Absent entirely where the store provider is unconfigured. `status` is `synced` when the
+	// plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means
+	// the provider could not be reached and the hourly reconciler will finish the job.
 	//
 	// POST /billing/revenuecat/sync
 	SyncBillingStore(ctx context.Context) (*SyncBillingStoreOK, error)
 	// SyncGmail implements syncGmail operation.
 	//
-	// Starts a background sync. Registered only where Gmail is configured.
+	// Returns as soon as the sync is queued — a full backfill outlives the request — so poll the inbox
+	// for results rather than reading counts here.
 	//
 	// POST /me/gmail/sync
 	SyncGmail(ctx context.Context) (*SyncGmailOK, error)
 	// TailorCV implements tailorCV operation.
 	//
-	// Starts the tailoring session for a vacancy (the paid gate runs before this). 201 with the ids and
-	// the cached analysis; 402 when the allowance is spent and the vacancy is new. With a session or an
-	// API key.
+	// Copies your base CV into a vacancy-bound tailored one and mints the short-lived credential its agent
+	// session runs on. Requires a cached match analysis for the job (409 otherwise) and a base CV — one
+	// is seeded from your stored history when you have none, and it is a 409 when there is nothing to seed
+	// from. Calls no LLM itself.
 	//
 	// POST /me/cvs/tailor
 	TailorCV(ctx context.Context, req *CvTailorRequest) (TailorCVRes, error)
 	// TestPushToken implements testPushToken operation.
 	//
-	// Sends a test push to the caller's own registered tokens, never anyone else's.
+	// Never targets another user or a caller-supplied destination — only your own registered tokens.
+	// Each call fans out one outbound send per device.
 	//
 	// POST /me/push-tokens/test
 	TestPushToken(ctx context.Context) (*TestPushTokenOK, error)
 	// TrackApplication implements trackApplication operation.
 	//
+	// Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead of the job
+	// slug — needed when a tracked application’s posting was later pruned and has no slug left to
+	// address it by. Same `stage` vocabulary and body shape.
+	//
 	// PATCH /me/applications/{id}
 	TrackApplication(ctx context.Context, req *TrackJob, params TrackApplicationParams) (*TrackApplicationOK, error)
 	// TrackJob implements trackJob operation.
 	//
-	// 400 for an unknown stage or an empty body.
+	// A null field is left unchanged. `stage` is a controlled vocabulary: `preparing`, `applied`,
+	// `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an
+	// unknown value is a 400). `expired` is the outcome for an application nobody answered; nothing sets
+	// it for you.
 	//
 	// PATCH /jobs/{slug}/track
 	TrackJob(ctx context.Context, req *TrackJob, params TrackJobParams) (*TrackJobOK, error)
 	// TrackingPipeline implements trackingPipeline operation.
 	//
+	// The total application count and the count at each stage, aggregated server-side over all of your
+	// applications. Every stage of the vocabulary is present, zero included, and the counts always sum to
+	// `applications`. An application with `applied_at` set but no explicit stage counts as `applied`.
+	// `reply_rate` compares your own employer-reply rate against the rate across every candidate — both
+	// sides counted only from applications whose owner has a connected mailbox, so a reply would have been
+	// seen. It is present only once both your own count and the global count reach a minimum sample size;
+	// absent otherwise, never a zero or an estimate.
+	//
 	// GET /me/tracking/pipeline
 	TrackingPipeline(ctx context.Context) (*TrackingPipelineOK, error)
 	// TriageEmail implements triageEmail operation.
+	//
+	// The vocabulary is closed: `acknowledgement`, `screening`, `interview_invitation`, `assessment`,
+	// `offer`, `rejection`, `info_request`, `incomplete_application`, `other`. Anything else is refused. A
+	// confident verdict on a linked message advances the application's stage — strictly forward, never
+	// out of a settled stage, and a rejection never advances anything by itself.
 	//
 	// POST /me/emails/{id}/triage
 	TriageEmail(ctx context.Context, req *InboxTriage, params TriageEmailParams) (*TriageEmailOK, error)
@@ -1775,23 +2138,34 @@ type Handler interface {
 	UnbanUser(ctx context.Context, params UnbanUserParams) (*UnbanUserOK, error)
 	// UndismissJob implements undismissJob operation.
 	//
+	// Undismiss the job (no-op if not dismissed).
+	//
 	// DELETE /jobs/{slug}/dismiss
 	UndismissJob(ctx context.Context, params UndismissJobParams) (*UndismissJobOK, error)
 	// UndoCVRevision implements undoCVRevision operation.
+	//
+	// The undo is itself recorded as a new revision. A `409` when the entry has nothing to reverse or the
+	// part of the document it changed is already gone.
 	//
 	// POST /me/cvs/{id}/revisions/{rid}/undo
 	UndoCVRevision(ctx context.Context, params UndoCVRevisionParams) (*UndoCVRevisionOK, error)
 	// UndoCVRevisionBatch implements undoCVRevisionBatch operation.
 	//
+	// `bid` is a revision’s `batch_id` from the history feed, not a separate id — undoing one entry of
+	// a batch and then the batch itself is well-defined, since an already-reverted entry is simply
+	// skipped.
+	//
 	// POST /me/cvs/{id}/revisions/batch/{bid}/undo
 	UndoCVRevisionBatch(ctx context.Context, params UndoCVRevisionBatchParams) (*UndoCVRevisionBatchOK, error)
 	// UnlinkEmail implements unlinkEmail operation.
+	//
+	// Clear a message's application link; its classification stays.
 	//
 	// POST /me/emails/{id}/unlink
 	UnlinkEmail(ctx context.Context, params UnlinkEmailParams) (*UnlinkEmailOK, error)
 	// UnregisterPushToken implements unregisterPushToken operation.
 	//
-	// A token that is not the caller's is a 404.
+	// Returns `204 No Content`. `404` if the token is not yours (or unknown).
 	//
 	// DELETE /me/push-tokens
 	UnregisterPushToken(ctx context.Context, req *PushTokenRemove) error
@@ -1809,6 +2183,8 @@ type Handler interface {
 	Untrack(ctx context.Context, params UntrackParams) (*UntrackOK, error)
 	// UntrackApplication implements untrackApplication operation.
 	//
+	// Remove the interaction record entirely, addressed by row id.
+	//
 	// DELETE /me/applications/{id}
 	UntrackApplication(ctx context.Context, params UntrackApplicationParams) (*UntrackApplicationOK, error)
 	// UpdateAtom implements updateAtom operation.
@@ -1818,6 +2194,8 @@ type Handler interface {
 	// PUT /me/experience/atoms/{id}
 	UpdateAtom(ctx context.Context, req jx.Raw, params UpdateAtomParams) (*UpdateAtomOK, error)
 	// UpdateCV implements updateCV operation.
+	//
+	// Replace a CV — title, template and document.
 	//
 	// PUT /me/cvs/{id}
 	UpdateCV(ctx context.Context, req *CvUpdate, params UpdateCVParams) (*UpdateCVOK, error)
@@ -1847,6 +2225,8 @@ type Handler interface {
 	UpdateJob(ctx context.Context, req *JobUpdate, params UpdateJobParams) (*UpdateJobOK, error)
 	// UpdateLanguage implements updateLanguage operation.
 	//
+	// Set your preferred interface language.
+	//
 	// PATCH /me/language
 	UpdateLanguage(ctx context.Context, req *AccountLanguageUpdate) (*UpdateLanguageOK, error)
 	// UpdateMentorProfile implements updateMentorProfile operation.
@@ -1865,37 +2245,58 @@ type Handler interface {
 	UpdateNotificationSettings(ctx context.Context, req *NotificationSettingsUpdate) (*UpdateNotificationSettingsOK, error)
 	// UpdateSavedSearch implements updateSavedSearch operation.
 	//
+	// Rename or re-query a saved search.
+	//
 	// PATCH /me/searches/{id}
 	UpdateSavedSearch(ctx context.Context, req *SavedSearchUpdate, params UpdateSavedSearchParams) (*UpdateSavedSearchOK, error)
 	// UpdateScreeningAnswers implements updateScreeningAnswers operation.
+	//
+	// A field the body omits is left unchanged; to withdraw an answer, name it in `clear`. An unrecognized
+	// country code, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary,
+	// a non-positive salary, a negative notice period, an unknown name in `clear`, or a field both given
+	// and cleared is a `400` naming it.
 	//
 	// PUT /me/screening-answers
 	UpdateScreeningAnswers(ctx context.Context, req *ScreeningAnswersUpdate) (*UpdateScreeningAnswersOK, error)
 	// UpdateSurvey implements updateSurvey operation.
 	//
+	// A field the body omits is left unchanged. A stage or challenge outside its vocabulary,
+	// `just_starting` beside another challenge, a note when the challenges do not include `other`, a
+	// currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a
+	// non-positive income is a `400` naming the offending field.
+	//
 	// PUT /me/survey
 	UpdateSurvey(ctx context.Context, req *SurveyResponses) (*UpdateSurveyOK, error)
 	// UpdateTimezone implements updateTimezone operation.
+	//
+	// Set your account’s IANA timezone.
 	//
 	// PATCH /me/timezone
 	UpdateTimezone(ctx context.Context, req *AccountTimezoneUpdate) (*UpdateTimezoneOK, error)
 	// UpsertCompanyFeedback implements upsertCompanyFeedback operation.
 	//
-	// Creates or overwrites the caller's review in one category.
+	// One entry per (user, category): posting again in the same `feedback_type` overwrites your existing
+	// review rather than adding a second one. The response's nested `company` field is the freshly
+	// recomputed rating count/average, so you can update your own view of the company without a second
+	// fetch. `422` on an empty body.
 	//
 	// POST /companies/{slug}/feedback
 	UpsertCompanyFeedback(ctx context.Context, req *CompanyFeedbackRequest, params UpsertCompanyFeedbackParams) (*UpsertCompanyFeedbackCreated, error)
 	// UserGrowth implements userGrowth operation.
 	//
-	// Cumulative registrations per UTC day.
+	// Aggregate-only — no user identifier is exposed.
 	//
 	// GET /stats/user-growth
 	UserGrowth(ctx context.Context) (*UserGrowthOK, error)
 	// VoteCompany implements voteCompany operation.
 	//
+	// Vote on a company.
+	//
 	// POST /companies/{slug}/vote
 	VoteCompany(ctx context.Context, req *VoteRequest, params VoteCompanyParams) (*VoteCompanyOK, error)
 	// VoteJob implements voteJob operation.
+	//
+	// Vote on a job.
 	//
 	// POST /jobs/{slug}/vote
 	VoteJob(ctx context.Context, req *VoteRequest, params VoteJobParams) (*VoteJobOK, error)

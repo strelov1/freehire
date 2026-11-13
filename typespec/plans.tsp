@@ -57,6 +57,7 @@ model Plans {
 }
 
 /** What each plan allows and what it costs, read from the configuration metering uses. */
+@useAuth(NoAuth)
 @tag("Plans")
 @route("/plans")
 @get

@@ -34,23 +34,52 @@ model CompanySubindustry {
   count: int64;
 }
 
+// Ranked companies. `q` and the facet params (collections, regions, countries, domains,
+// industries, company_type, company_size, remote_regions, yc_batch, yc_status,
+// yc_stage, yc_flags, maturity, subindustries) are read from the raw query,
+// comma-joined or repeated; a param the listing does not read is reported in
+// `meta.ignored_params`.
 /**
- * Ranked companies. `q` and the facet params (collections, regions, countries, domains,
- * industries, company_type, company_size, remote_regions, yc_batch, yc_status, yc_stage,
- * yc_flags, maturity, subindustries) are read from the raw query, comma-joined or repeated;
- * a param the listing does not read is reported in `meta.ignored_params`.
+ * Most active first. Facet params are repeatable and filter by array overlap (OR within a
+ * facet, AND across facets), composably with `q`. `meta.total` reports the count matching
+ * the full filter.
  */
+@summary("List companies with job counts and denormalized facets; optional filters.")
+@useAuth(NoAuth)
 @tag("Companies")
 @route("/companies")
 @get
 op listCompanies(
+  /** Case-insensitive name substring filter. (e.g. `acme`) */
   @query q?: string,
   @query sort?: string,
+  /** Page size, 1–100. (e.g. `20`) */
   @query limit?: string,
+  /** Rows to skip. (e.g. `0`) */
   @query offset?: string,
 ): List<CompanyListItem> | Problem;
 
-/** The subindustry vocabulary with company counts, most common first. */
+// The subindustry vocabulary with company counts, most common first.
+/**
+ * Backs the searchable “Industry” facet’s option list, most common first. Counts are
+ * unconditional (they do not reflect other active list filters).
+ */
+@summary("Distinct company subindustry vocabulary with company counts.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        value: "payments",
+        count: 42,
+      },
+      #{
+        value: "developer-tools",
+        count: 31,
+      },
+    ],
+  },
+})
 @tag("Companies")
 @route("/companies/subindustries")
 @get

@@ -20,6 +20,7 @@ model SavedSearch {
 
 /** An empty name is refused with a 400, like an out-of-range one. */
 model SavedSearchCreate {
+  /** Display name. (e.g. `Senior Go remote`) */
   name?: string;
 
   /** Empty is the valid "show all" snapshot. */
@@ -30,7 +31,9 @@ model SavedSearchCreate {
 
 /** A partial update: an absent or null field is kept; an empty query is a real "show all". */
 model SavedSearchUpdate {
+  /** New name (optional). */
   name?: string | null;
+  /** New query (optional). */
   query?: string | null;
 }
 
@@ -55,6 +58,7 @@ model Subscription {
 }
 
 model SubscriptionCreate {
+  /** The saved search to subscribe. (e.g. `2`) */
   saved_search_id?: int64;
 
   /** Defaults to telegram when empty. */
@@ -62,6 +66,7 @@ model SubscriptionCreate {
 }
 
 model SubscriptionActive {
+  /** Whether the subscription is active. (e.g. `false`) */
   active?: boolean;
 }
 
@@ -70,12 +75,14 @@ model SubscriptionList {
   meta: AlertListMeta;
 }
 
+@summary("List your saved searches.")
 @tag("Alerts")
 @route("/me/searches")
 @get
 op listSavedSearches(): SavedSearchList | Problem;
 
 /** 400 for a bad name, 409 for a duplicate name or the per-user cap. */
+@summary("Save a search.")
 @tag("Alerts")
 @route("/me/searches")
 @post
@@ -84,22 +91,31 @@ op createSavedSearch(@body body: SavedSearchCreate): {
   @body body: Data<SavedSearch>;
 } | Problem;
 
+@summary("Rename or re-query a saved search.")
 @tag("Alerts")
 @route("/me/searches/{id}")
 @patch
-op updateSavedSearch(@path id: string, @body body: SavedSearchUpdate): Data<SavedSearch> | Problem;
+op updateSavedSearch(/** The saved-search id. (e.g. `2`) */ @path id: string, @body body: SavedSearchUpdate): Data<SavedSearch> | Problem;
 
+@summary("Delete a saved search.")
 @tag("Alerts")
 @route("/me/searches/{id}")
 @delete
-op deleteSavedSearch(@path id: string): NoContentResponse | Problem;
+op deleteSavedSearch(/** The saved-search id. (e.g. `2`) */ @path id: string): NoContentResponse | Problem;
 
+@summary("List your subscriptions.")
 @tag("Alerts")
 @route("/me/subscriptions")
 @get
 op listSubscriptions(): SubscriptionList | Problem;
 
-/** A non-owned saved search is a 404, a duplicate a 409. */
+// A non-owned saved search is a 404, a duplicate a 409.
+/**
+ * Channels: `telegram`, `email`, `push`, `webhook`. `push` needs a device the freehire
+ * mobile app has registered (`GET /me/push-tokens`) — without one the request is refused
+ * with 409.
+ */
+@summary("Subscribe a saved search to a digest channel.")
 @tag("Alerts")
 @route("/me/subscriptions")
 @post
@@ -109,12 +125,14 @@ op createSubscription(@body body: SubscriptionCreate): {
 } | Problem;
 
 /** Pauses or resumes. */
+@summary("Pause or resume a subscription.")
 @tag("Alerts")
 @route("/me/subscriptions/{id}")
 @patch
-op setSubscriptionActive(@path id: string, @body body: SubscriptionActive): Data<Subscription> | Problem;
+op setSubscriptionActive(/** The subscription id. (e.g. `1`) */ @path id: string, @body body: SubscriptionActive): Data<Subscription> | Problem;
 
+@summary("Delete a subscription.")
 @tag("Alerts")
 @route("/me/subscriptions/{id}")
 @delete
-op deleteSubscription(@path id: string): NoContentResponse | Problem;
+op deleteSubscription(/** The subscription id. (e.g. `1`) */ @path id: string): NoContentResponse | Problem;

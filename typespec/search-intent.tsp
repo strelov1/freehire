@@ -17,6 +17,7 @@ model SearchIntentRequest {
  * callers too, and a free AI route for every account. A description that resolved nothing
  * is a 200 with `empty: true`.
  */
+@useAuth(NoAuth)
 @tag("Search")
 @route("/search/interpret")
 @post

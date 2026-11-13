@@ -73,7 +73,25 @@ op getBillingManage(): Data<BillingUrl> | Problem;
 @get
 op getBillingSubscription(): Data<BillingOverview> | Problem;
 
-/** 503 when the store provider cannot be reached. Cookie session only. */
+// 503 when the store provider cannot be reached. Cookie session only.
+/**
+ * For a mobile client that has just completed an App Store or Google Play purchase. The
+ * purchase finishes on the device before the provider’s webhook reaches us, and if that
+ * delivery is lost the provider stops retrying after 80 minutes — so without this route a
+ * paid subscriber can be left looking at a paywall. It names nobody: the account is the
+ * session’s, and a user id in the request is ignored. Absent entirely where the store
+ * provider is unconfigured. `status` is `synced` when the plan was written, or
+ * `no_subscription` when RevenueCat holds nothing for this account; a 503 means the
+ * provider could not be reached and the hourly reconciler will finish the job.
+ */
+@summary("Re-read your own store subscription now.")
+@opExample(#{
+  returnType: #{
+    data: #{
+      status: "synced",
+    },
+  },
+})
 @tag("Billing")
 @route("/billing/revenuecat/sync")
 @post

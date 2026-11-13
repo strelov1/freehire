@@ -100,6 +100,13 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   is checked with `satisfies components['schemas'][...]`. Hand-written shapes remain
   for routes that stay on Fiber (streams, uploads) and for client-side shapes the UI
   maps from; move the rest over when you touch them.
+- **The API reference is generated from the contract**: `pnpm run gen:api-docs` renders
+  the `/docs/api` and `/docs/api/internal` OpenAPI documents (`src/lib/docs/generated/`)
+  and `docs/API*.md` from `openapi/api.openapi.json`, plus the filter table from
+  `src/lib/docs/filters.ts`. Endpoint text is written in `typespec/` (see
+  `internal/api/AGENTS.md`). `src/lib/docs/api-supplement.openapi.json` describes only the
+  routes still outside the contract (auth, streams, PDF and photo reads); when one moves
+  into the contract the generator fails until its supplement entry is deleted.
 - **Job-fit analysis**: the standalone `/match/[slug]/` page is gone — its
   `+page.server.ts` is only a 308 redirect to `/tailor/[slug]`, and the Tailor workspace
   is the sole surface for viewing and triggering the analysis. The analysis UI is

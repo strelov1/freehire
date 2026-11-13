@@ -34,40 +34,73 @@ model GhostReport {
   created_at?: utcDateTime;
 }
 
+@summary("Vote on a job.")
+@useAuth(SessionOrKey)
 @tag("Feedback")
 @route("/jobs/{slug}/vote")
 @post
-op voteJob(@path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
+op voteJob(/** The job `public_slug`. */ @path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
 
+@summary("Clear your vote on a job.")
+@useAuth(SessionOrKey)
 @tag("Feedback")
 @route("/jobs/{slug}/vote")
 @delete
-op clearJobVote(@path slug: string): Data<VoteResult> | Problem;
+op clearJobVote(/** The job `public_slug`. */ @path slug: string): Data<VoteResult> | Problem;
 
+@summary("Vote on a company.")
+@useAuth(SessionOrKey)
 @tag("Feedback")
 @route("/companies/{slug}/vote")
 @post
-op voteCompany(@path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
+op voteCompany(/** The company slug. */ @path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
 
+@summary("Clear your vote on a company.")
+@useAuth(SessionOrKey)
 @tag("Feedback")
 @route("/companies/{slug}/vote")
 @delete
-op clearCompanyVote(@path slug: string): Data<VoteResult> | Problem;
+op clearCompanyVote(/** The company slug. */ @path slug: string): Data<VoteResult> | Problem;
 
+// Reports that the job went silent after the caller applied. 403 until the caller's
+// address is confirmed, 409 for a closed job or a second report.
 /**
- * Reports that the job went silent after the caller applied. 403 until the caller's
- * address is confirmed, 409 for a closed job or a second report.
+ * An unproven (unverified) address is a `403`; a closed job or a claim you already have
+ * on this job is a `409`.
  */
+@summary("File a claim that you applied and got no response.")
+@useAuth(SessionOrKey)
+@opExample(#{
+  parameters: #{
+    slug: "<slug>",
+    body: #{
+      applied_on: "2026-07-29",
+    },
+  },
+  returnType: #{
+    _: 201,
+    body: #{
+      data: #{
+        job_id: 42,
+        applied_on: "2026-07-29",
+        created_at: utcDateTime.fromISO("2026-07-29T10:00:00Z"),
+      },
+    },
+  },
+})
 @tag("Feedback")
 @route("/jobs/{slug}/ghost-report")
 @post
-op createGhostReport(@path slug: string, @body body: GhostReportRequest): {
+op createGhostReport(/** The job `public_slug`. */ @path slug: string, @body body: GhostReportRequest): {
   @statusCode _: 201;
   @body body: Data<GhostReport>;
 } | Problem;
 
-/** Withdraws the caller's report. 404 when there is none. */
+// Withdraws the caller's report. 404 when there is none.
+/** A claim that is absent or already withdrawn is a `404`. */
+@summary("Withdraw your claim about this job.")
+@useAuth(SessionOrKey)
 @tag("Feedback")
 @route("/jobs/{slug}/ghost-report")
 @delete
-op retractGhostReport(@path slug: string): NoContentResponse | Problem;
+op retractGhostReport(/** The job `public_slug`. */ @path slug: string): NoContentResponse | Problem;

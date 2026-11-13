@@ -43,13 +43,30 @@ model SuggestMeta {
 
 // Public reads behind the search box and the location filter. No sign-in.
 
-/** Up to 20 cities whose name matches, optionally within one country. */
+// Up to 20 cities whose name matches, optionally within one country.
+/**
+ * Population-ranked prefix search over the embedded city dictionary, optionally narrowed
+ * to one country. A blank `q` returns an empty list.
+ */
+@summary("Prefix-search city names for autocomplete.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        value: "Berlin",
+        country: "DE",
+      },
+    ],
+  },
+})
 @tag("Search")
 @route("/geo/cities")
 @get
-op searchCities(@query q?: string, @query country?: string): Data<CityMatch[]> | Problem;
+op searchCities(/** Prefix to match. (e.g. `berl`) */ @query q?: string, /** ISO 3166-1 alpha-2 code to narrow to. (e.g. `DE`) */ @query country?: string): Data<CityMatch[]> | Problem;
 
 /** Search-box suggestions. 503 when search is not configured. */
+@useAuth(NoAuth)
 @tag("Search")
 @route("/suggest")
 @get
