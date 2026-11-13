@@ -99,6 +99,16 @@ func (h *authHandlers) resolveAuthorizeResource(c *fiber.Ctx, params *authorizeP
 	return false, nil
 }
 
+// isURLEncodedForm reports whether the body is application/x-www-form-urlencoded.
+// The OAuth endpoints read `resource` from the urlencoded args, but every other
+// field through FormValue, which also accepts multipart: a multipart body would
+// therefore bind nothing and still succeed. RFC 6749 4.1.3 requires urlencoded
+// at /token, and the consent form posts it, so anything else is refused.
+func isURLEncodedForm(c *fiber.Ctx) bool {
+	mediaType, _, _ := strings.Cut(c.Get(fiber.HeaderContentType), ";")
+	return strings.EqualFold(strings.TrimSpace(mediaType), fiber.MIMEApplicationForm)
+}
+
 func bytesToStrings(values [][]byte) []string {
 	out := make([]string, len(values))
 	for i, v := range values {
@@ -156,6 +166,9 @@ func (h *authHandlers) OAuthAuthorize(c *fiber.Ctx) error {
 // instead of a 401. A leaked API key still cannot approve a grant — a key
 // alone never satisfies requireUserID's cookie check.
 func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
+	if !isURLEncodedForm(c) {
+		return fiber.NewError(fiber.StatusBadRequest, "the consent decision must be application/x-www-form-urlencoded")
+	}
 	params, err := parseAuthorizeParams(
 		"code", c.FormValue("client_id"), c.FormValue("redirect_uri"),
 		c.FormValue("state"), c.FormValue("code_challenge"), c.FormValue("code_challenge_method"),

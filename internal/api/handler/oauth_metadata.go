@@ -1,6 +1,12 @@
 package handler
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
+)
 
 // authorizationServerMetadata is RFC 8414's document: where the three OAuth
 // endpoints live and what this server supports. An MCP client fetches this
@@ -55,7 +61,7 @@ type protectedResourceMetadata struct {
 func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
 	origin := h.frontendOrigin
 	return c.JSON(protectedResourceMetadata{
-		Resource:             origin + "/api/v1/mcp/account",
+		Resource:             strings.TrimSuffix(origin, "/") + oauth2server.MCPAccountResourcePath,
 		AuthorizationServers: []string{origin},
 	})
 }
@@ -63,7 +69,7 @@ func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
 // OAuthMixedResourceMetadata describes the canonical mixed-auth MCP endpoint.
 func (h *authHandlers) OAuthMixedResourceMetadata(c *fiber.Ctx) error {
 	return c.JSON(protectedResourceMetadata{
-		Resource:             h.frontendOrigin + "/api/v1/mcp",
+		Resource:             strings.TrimSuffix(h.frontendOrigin, "/") + oauth2server.MCPResourcePath,
 		AuthorizationServers: []string{h.frontendOrigin},
 	})
 }

@@ -28,6 +28,11 @@ type tokenResponse struct {
 // the caller authenticates with the code and PKCE verifier, not a session; this is
 // the one step a public, non-browser client makes directly, no cookie involved.
 func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
+	if !isURLEncodedForm(c) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid_request", "error_description": "the token request must be application/x-www-form-urlencoded",
+		})
+	}
 	if c.FormValue("grant_type") != "authorization_code" {
 		return fiber.NewError(fiber.StatusBadRequest, "unsupported grant_type")
 	}

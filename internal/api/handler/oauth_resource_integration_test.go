@@ -7,8 +7,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -272,4 +274,105 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 			t.Errorf("at /mcp/account: status %d, want 200", got)
 		}
 	})
+}
+
+func multipartBody(t *testing.T, fields url.Values) (string, *bytes.Buffer) {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, vs := range fields {
+		for _, v := range vs {
+			if err := w.WriteField(k, v); err != nil {
+				t.Fatalf("WriteField: %v", err)
+			}
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("multipart close: %v", err)
+	}
+	return w.FormDataContentType(), &buf
+}
+
+// `resource` is read from the urlencoded args only, so a multipart body would
+// bind nothing and still succeed. Both endpoints refuse it instead.
+func TestOAuthResource_MultipartBodiesAreRefused(t *testing.T) {
+	f := newResourceFixture(t, "res-multipart-1")
+	count := func(table string) int {
+		var n int
+		if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM `+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+
+	t.Run("consent POST", func(t *testing.T) {
+		cookie, _ := f.iss.Issue(f.userID, testTokenVersion)
+		ct, body := multipartBody(t, url.Values{
+			"decision": {"allow"}, "client_id": {f.client}, "redirect_uri": {resourceCB}, "state": {"xyz"},
+			"code_challenge": {challengeForVerifier(resourceVerif)}, "code_challenge_method": {"S256"}, "resource": {resourceAccount},
+		})
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/authorize", body)
+		req.Header.Set("Content-Type", ct)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		resp, err := oauthAuthorizeApp(f.h, f.iss).Test(req)
+		if err != nil {
+			t.Fatalf("Test: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", resp.StatusCode)
+		}
+		if n := count("oauth_authorization_codes"); n != 0 {
+			t.Errorf("%d authorization code(s) issued, want none", n)
+		}
+	})
+
+	t.Run("token request", func(t *testing.T) {
+		code := f.authorize(t, resourceAccount).Query().Get("code")
+		ct, body := multipartBody(t, url.Values{
+			"grant_type": {"authorization_code"}, "code": {code}, "client_id": {f.client},
+			"redirect_uri": {resourceCB}, "code_verifier": {resourceVerif},
+		})
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/token", body)
+		req.Header.Set("Content-Type", ct)
+		resp, err := f.tokens.Test(req)
+		if err != nil {
+			t.Fatalf("Test: %v", err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		if resp.StatusCode != fiber.StatusBadRequest || out["error"] != "invalid_request" {
+			t.Fatalf("status %d body %v, want 400 invalid_request", resp.StatusCode, out)
+		}
+		if n := count("oauth_grants"); n != 0 {
+			t.Errorf("%d grant(s) created, want none", n)
+		}
+	})
+}
+
+// With a trailing-slash FRONTEND_ORIGIN the advertised resources must still be
+// ones a client can bind and use.
+func TestOAuthResource_AdvertisedResourceBindsUnderTrailingSlashOrigin(t *testing.T) {
+	f := newResourceFixture(t, "res-slash-1")
+	f.h.frontendOrigin = testMCPOrigin + "/"
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/account", f.h.OAuthProtectedResourceMetadata)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/account", nil))
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var doc protectedResourceMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	token := f.grantToken(t, doc.Resource, "")
+	if got, _ := f.callMCP(t, "/api/v1/mcp/account", token); got != 200 {
+		t.Errorf("at /mcp/account: status %d, want 200", got)
+	}
+	if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 401 {
+		t.Errorf("at /mcp: status %d, want 401", got)
+	}
 }
