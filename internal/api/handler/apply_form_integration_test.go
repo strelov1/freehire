@@ -30,7 +30,7 @@ func seedApplyFormJob(t *testing.T, q *db.Queries, extID, slug string) int64 {
 	if err != nil {
 		t.Fatalf("seed %s: %v", extID, err)
 	}
-	return saved.Job.ID
+	return saved.ID
 }
 
 func seedApplyForm(t *testing.T, q *db.Queries, jobID int64, form applyform.Form) {

@@ -187,11 +187,19 @@ func TestFindOpenJobByURL_PrefersTheMostRecentlySeenPosting(t *testing.T) {
 	// Two open canonical rows can legitimately link to the same page (an aggregator and
 	// an ATS row that the dedup passes have not collapsed). The card shows the row we
 	// confirmed most recently.
-	mustUpsert(t, q, urlJob("himalayas:stale", himalayasPosting))
+	// The stale row is inserted SECOND, so it has the higher id: the id tiebreak favours it and only
+	// last_seen_at (job_activity's) can put the fresh row first.
 	mustUpsert(t, q, urlJob("himalayas:fresh", himalayasPosting))
-	if _, err := pool.Exec(ctx,
-		"UPDATE jobs SET last_seen_at = now() - interval '10 days' WHERE external_id = $1", "himalayas:stale"); err != nil {
-		t.Fatalf("age the stale row: %v", err)
+	mustUpsert(t, q, urlJob("himalayas:stale", himalayasPosting))
+	// Legacy column first, then job_activity: the bridge only ever moves job_activity forward.
+	for _, stmt := range []string{
+		"UPDATE jobs SET last_seen_at = now() - interval '10 days' WHERE external_id = $1",
+		`UPDATE job_activity a SET last_seen_at = now() - interval '10 days'
+		 FROM jobs j WHERE j.id = a.job_id AND j.external_id = $1`,
+	} {
+		if _, err := pool.Exec(ctx, stmt, "himalayas:stale"); err != nil {
+			t.Fatalf("age the stale row: %v", err)
+		}
 	}
 
 	slug, err := findByURL(t, q, himalayasPosting)
@@ -210,11 +218,18 @@ func TestFindOpenJobByURL_UsesTheExpressionIndex(t *testing.T) {
 	truncate(t, pool)
 
 	mustUpsert(t, q, urlJob("himalayas:mindera", himalayasPosting))
-	// The planner picks a sequential scan on a table this small no matter what, so ask it
-	// to cost the index path: what this asserts is that the query's expression matches the
-	// index's, which is the property that silently breaks if the two definitions drift.
-	if _, err := pool.Exec(ctx, "SET enable_seqscan = off"); err != nil {
-		t.Fatalf("disable seqscan: %v", err)
+	// With one posting, scanning another open-row index and filtering its only
+	// tuple costs the same as a URL lookup. Give the planner a selective URL in
+	// an analysed catalogue, so this checks the actual lookup path without a GUC.
+	if _, err := pool.Exec(ctx, `INSERT INTO jobs
+		(source, external_id, url, title, public_slug)
+		SELECT 'test', 'url-index-' || n,
+		       'https://example.test/postings/' || n, 'Engineer', 'url-index-' || n
+		FROM generate_series(1, 2000) n`); err != nil {
+		t.Fatalf("seed nonmatching postings: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "ANALYZE jobs; ANALYZE job_activity"); err != nil {
+		t.Fatalf("analyse lookup relations: %v", err)
 	}
 
 	// EXPLAIN the generated query itself, not a copy of it — a copy would keep passing

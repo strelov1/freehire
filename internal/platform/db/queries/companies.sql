@@ -525,9 +525,11 @@ oj AS MATERIALIZED (
     SELECT j.company_slug, j.regions, j.countries, j.enrichment, j.work_mode, j.source
     FROM jobs j
     LEFT JOIN unseen_window uw ON uw.source = j.source
+    LEFT JOIN job_activity a ON a.job_id = j.id
     WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
-      -- search.UnseenWindows.Unseen: the source has stopped showing the posting.
-      AND (uw.source IS NULL OR j.last_seen_at >= now() - make_interval(secs => uw.seconds))
+      -- search.UnseenWindows.Unseen: the source has stopped showing the posting. last_seen_at is
+      -- job_activity's; a job without an activity row reads as unseen, only for a windowed source.
+      AND (uw.source IS NULL OR a.last_seen_at >= now() - make_interval(secs => uw.seconds))
       -- Visible only to its creator (the jd-tailor-intake path).
       AND NOT j.is_private
       -- search.DescriptionMissing strips the body to plain text first, which SQL

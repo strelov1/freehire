@@ -12,9 +12,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -44,10 +46,15 @@ func sweepTestPosting(source, externalID, title string) job.Job {
 
 func ageJobForSweepTest(t *testing.T, pool *pgxpool.Pool, id int64, seenAgo time.Duration) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(),
+	// The sweep reads job_activity. Backdate the legacy column first: the one-way bridge only ever
+	// moves job_activity forward, so a legacy write made after ageing it would undo the ageing.
+	for _, stmt := range []string{
 		"UPDATE jobs SET last_seen_at = now() - $2::interval WHERE id = $1",
-		id, seenAgo.String()); err != nil {
-		t.Fatalf("backdate last_seen_at for %d: %v", id, err)
+		"UPDATE job_activity SET last_seen_at = now() - $2::interval WHERE job_id = $1",
+	} {
+		if _, err := pool.Exec(context.Background(), stmt, id, seenAgo.String()); err != nil {
+			t.Fatalf("backdate last_seen_at for %d: %v", id, err)
+		}
 	}
 }
 
@@ -129,5 +136,72 @@ func TestSweepRowByRow_SkipsOneUnclosableRowWithoutBlockingTheRest(t *testing.T)
 	}
 	if blockedAfter.ClosedAt.Valid {
 		t.Error("the blocked job must stay open, not silently marked closed")
+	}
+}
+
+// refreshBeforeClose runs a crawl's observation of one job the instant before the individual close
+// statement reaches the database: the window between the fallback's candidate list and its
+// per-row closes, where a refresh used to be lost.
+type refreshBeforeClose struct {
+	db.DBTX
+	t    *testing.T
+	pool *pgxpool.Pool
+	id   int64
+}
+
+func (r refreshBeforeClose) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if strings.Contains(sql, "-- name: CloseUnseenJobByID") {
+		// The legacy update reaches activity through the same bridge as a release A writer.
+		if _, err := r.pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() WHERE id = $1`, r.id); err != nil {
+			r.t.Fatalf("refresh selected row: %v", err)
+		}
+	}
+	return r.DBTX.QueryRow(ctx, sql, args...)
+}
+
+// The fallback lists its candidates, then closes them one by one. A crawl that lists a candidate
+// again in between has proved it live, so its close must write nothing and queue no removal.
+func TestSweepRowByRow_DoesNotCloseARowRefreshedAfterSelection(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
+
+	if err := store.Save(ctx, sweepTestPosting("greenhouse", "acme:refreshed", "Refreshed Role")); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, sweepTestPosting("greenhouse", "acme:gone", "Gone Role")); err != nil {
+		t.Fatal(err)
+	}
+	refreshed, err := q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: "greenhouse", ExternalID: "acme:refreshed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, err := q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: "greenhouse", ExternalID: "acme:gone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ageJobForSweepTest(t, pool, refreshed.ID, 72*time.Hour)
+	ageJobForSweepTest(t, pool, gone.ID, 72*time.Hour)
+
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
+	closed, skipped, err := sweepRowByRow(ctx, db.New(refreshBeforeClose{DBTX: pool, t: t, pool: pool, id: refreshed.ID}),
+		"greenhouse", cutoff, []string{refreshed.CompanySlug}, nil, false)
+	if err != nil || skipped != 0 {
+		t.Fatalf("sweepRowByRow = %d closed, %d skipped, %v", closed, skipped, err)
+	}
+	if closed != 1 {
+		t.Errorf("closed = %d, want 1 (only the row nobody listed again)", closed)
+	}
+	after, err := q.GetJob(ctx, refreshed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ClosedAt.Valid {
+		t.Error("the row a crawl refreshed after selection was closed anyway")
+	}
+	var queued int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox WHERE job_id = $1`, refreshed.ID).Scan(&queued); err != nil || queued != 0 {
+		t.Errorf("removals queued for the refreshed row = %d, %v; want 0", queued, err)
 	}
 }

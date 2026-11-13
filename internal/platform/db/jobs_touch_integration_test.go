@@ -33,6 +33,14 @@ func TestTouchJobRefreshesLivenessAndPreservesContent(t *testing.T) {
 	); err != nil {
 		t.Fatalf("stale/close setup: %v", err)
 	}
+	// job_activity is what the touch compares and the readers see; the bridge never lowers it, so
+	// age it directly, after the legacy write.
+	if _, err := pool.Exec(ctx,
+		`UPDATE job_activity SET last_seen_at = now() - interval '10 days'
+		 WHERE job_id = (SELECT id FROM jobs WHERE source='justjoin' AND external_id='justjoin:1')`,
+	); err != nil {
+		t.Fatalf("age activity: %v", err)
+	}
 
 	touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1", AllowReopen: true})
 	if err != nil {
@@ -93,6 +101,12 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 			 WHERE source = 'justjoin' AND external_id = $1`, externalID,
 		); err != nil {
 			t.Fatalf("seed stamps: %v", err)
+		}
+		if _, err := pool.Exec(ctx,
+			`UPDATE job_activity SET last_seen_at = now() - interval '10 days'
+			 WHERE job_id = (SELECT id FROM jobs WHERE source = 'justjoin' AND external_id = $1)`, externalID,
+		); err != nil {
+			t.Fatalf("age activity: %v", err)
 		}
 		got, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: externalID})
 		if err != nil {

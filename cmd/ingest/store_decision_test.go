@@ -25,7 +25,7 @@ func cheap() written {
 
 func TestExpiredPostingDoesNotReachSearchOrRecentFeed(t *testing.T) {
 	w := fullWrite(db.UpsertJobRow{
-		Job:      db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}},
+		ClosedAt: pgtype.Timestamptz{Valid: true},
 		Inserted: pgtype.Bool{Bool: true, Valid: true},
 		Changed:  true,
 	})
@@ -37,7 +37,7 @@ func TestExpiredPostingDoesNotReachSearchOrRecentFeed(t *testing.T) {
 // closed gates enrichment and the apply-form capture as well as the index: a write that left
 // the row closed (a deadline already past) must not pay for an LLM call or a form request.
 func TestClosedReportsOnlyARowTheWriteLeftClosed(t *testing.T) {
-	expired := fullWrite(db.UpsertJobRow{Job: db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}}})
+	expired := fullWrite(db.UpsertJobRow{ClosedAt: pgtype.Timestamptz{Valid: true}})
 	if !expired.closed() {
 		t.Error("closed() = false for a row the write left closed")
 	}
@@ -70,15 +70,18 @@ func TestNeedsIndex(t *testing.T) {
 	}
 }
 
-// The cheap branch must never claim a row the index push would then dereference: needsIndex is
-// what gates the only read of written.row, so false there is what makes the nil safe.
-func TestCheapWriteCarriesNoRowAndNeedsNoIndex(t *testing.T) {
+// The cheap branch reports itself exactly: tookCheapWrite is how save tells the two writes
+// apart, and the cheap one never reports a close because it never changes closed_at.
+func TestCheapWriteIsReportedAsCheapAndNeedsNoIndex(t *testing.T) {
 	w := cheap()
-	if w.row != nil {
-		t.Error("cheap write carries a row, want nil — the narrow RETURNING has no row to carry")
+	if !w.tookCheapWrite() {
+		t.Error("tookCheapWrite() = false for the cheap write")
+	}
+	if full(true, true).tookCheapWrite() {
+		t.Error("tookCheapWrite() = true for the full write")
 	}
 	if needsIndex(w) {
-		t.Error("needsIndex(cheap) = true; the index push would dereference a nil row")
+		t.Error("needsIndex(cheap) = true; a liveness-only refresh must not reach search")
 	}
 }
 

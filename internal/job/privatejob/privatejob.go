@@ -45,7 +45,9 @@ type Input struct {
 // Queries is the persistence Writer depends on — the slice of *db.Queries it actually
 // calls, kept as an interface so tests can fake it without a database.
 type Queries interface {
-	InsertPrivateJob(ctx context.Context, arg db.InsertPrivateJobParams) (db.Job, error)
+	InsertPrivateJob(ctx context.Context, arg db.InsertPrivateJobParams) (int64, error)
+	// GetJob reads the complete row (jobs plus its liveness stamps) of the id just inserted.
+	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
 // Writer creates private jobs rows.
@@ -83,9 +85,13 @@ func (w *Writer) Create(ctx context.Context, userID int64, source string, in Inp
 	if err != nil {
 		return job.Job{}, fmt.Errorf("privatejob: derive: %w", err)
 	}
-	row, err := w.q.InsertPrivateJob(ctx, j.Fields().InsertPrivateParams(userID))
+	id, err := w.q.InsertPrivateJob(ctx, j.Fields().InsertPrivateParams(userID))
 	if err != nil {
 		return job.Job{}, fmt.Errorf("privatejob: insert: %w", err)
+	}
+	row, err := w.q.GetJob(ctx, id)
+	if err != nil {
+		return job.Job{}, fmt.Errorf("privatejob: read back: %w", err)
 	}
 	persisted, _, err := job.FromRow(row)
 	if err != nil {

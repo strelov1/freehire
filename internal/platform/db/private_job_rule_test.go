@@ -172,6 +172,25 @@ func TestScopesToOpenPostings(t *testing.T) {
 	}
 }
 
+// TestReadsJobsRecognisesTheCompleteRowView pins that a statement reading jobs_read counts as
+// reading jobs: the view carries is_private and closed_at through unchanged.
+func TestReadsJobsRecognisesTheCompleteRowView(t *testing.T) {
+	for _, tc := range []struct {
+		sql  string
+		want bool
+	}{
+		{"select * from jobs_read where id = $1", true},
+		{"select j.id from application_nudges n join jobs_read j on j.id = n.job_id", true},
+		{"select * from jobs where id = $1", true},
+		{"select * from jobs_readers where id = $1", false},
+		{"select * from job_activity where job_id = $1", false},
+	} {
+		if got := reReadsJobs.MatchString(tc.sql); got != tc.want {
+			t.Errorf("reReadsJobs.MatchString(%q) = %v, want %v", tc.sql, got, tc.want)
+		}
+	}
+}
+
 type jobsQuery struct {
 	file                string
 	name                string
@@ -180,10 +199,11 @@ type jobsQuery struct {
 }
 
 var (
-	// jobs_effective_salary (migration 0216) is a view over jobs that passes is_private
-	// and closed_at through, so reading it IS reading jobs; without it in the pattern
-	// every statement that reads the view would fall outside this rule unseen.
-	reReadsJobs   = regexp.MustCompile(`\b(from|join)\s+(jobs|jobs_effective_salary)\b`)
+	// jobs_effective_salary (migration 0216) and jobs_read (the complete-row view that adds
+	// job_activity's liveness stamps to jobs) are views over jobs that pass is_private and
+	// closed_at through, so reading them IS reading jobs; without them in the pattern every
+	// statement that reads a view would fall outside this rule unseen.
+	reReadsJobs   = regexp.MustCompile(`\b(from|join)\s+(jobs|jobs_effective_salary|jobs_read)\b`)
 	reOpenScope   = regexp.MustCompile(`\bclosed_at\s+is\s+null\b`)
 	rePrivatePred = regexp.MustCompile(`\bnot\s+(\w+\.)?is_private\b`)
 )

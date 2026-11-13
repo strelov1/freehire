@@ -57,7 +57,7 @@ func upsertBoardGoneJob(t *testing.T, q *db.Queries, board, id string) int64 {
 	if err != nil {
 		t.Fatalf("upsert %s/%s job: %v", board, id, err)
 	}
-	return job.Job.ID
+	return job.ID
 }
 
 // TestCloseBoardGoneWorkerDryRunAndApply exercises the worker's independently armed path

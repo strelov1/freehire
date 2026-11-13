@@ -42,6 +42,10 @@ func TestSave_BodyFromCatalogueLeavesHydratedAt(t *testing.T) {
 			WHERE source = 'lever' AND external_id = $1`, id); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := pool.Exec(ctx, `UPDATE job_activity a SET hydrated_at = j.hydrated_at
+			FROM jobs j WHERE a.job_id=j.id AND j.source='lever' AND j.external_id=$1`, id); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	for _, tc := range []struct{ name, title string }{

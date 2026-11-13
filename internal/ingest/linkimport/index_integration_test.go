@@ -67,11 +67,10 @@ func TestIndex_ClosureReadFailureKeepsIndexedGeography(t *testing.T) {
 	defer srv.Close()
 	store := &closureFailureDB{DBTX: pool}
 	im := &Importer{q: db.New(store), idx: search.NewClient(srv.URL, "test-key")}
-	saved := db.UpsertJobRow{Job: row}
 
 	// The ordinary push must preserve the duplicate's country, establishing that this
 	// row is indexable and that a narrow replacement would lose real indexed coverage.
-	im.index(ctx, saved)
+	im.index(ctx, row)
 	if len(pushes) != 1 {
 		t.Fatalf("initial pushes = %d, want 1", len(pushes))
 	}
@@ -81,7 +80,7 @@ func TestIndex_ClosureReadFailureKeepsIndexedGeography(t *testing.T) {
 	}
 
 	store.fail = true
-	im.index(ctx, saved)
+	im.index(ctx, row)
 	if !store.failed {
 		t.Fatal("did not reach the failing closure query")
 	}
@@ -90,7 +89,7 @@ func TestIndex_ClosureReadFailureKeepsIndexedGeography(t *testing.T) {
 	}
 
 	store.fail = false
-	im.index(ctx, saved)
+	im.index(ctx, row)
 	if len(pushes) != 1 {
 		t.Fatalf("recovered pushes = %d, want 1", len(pushes))
 	}

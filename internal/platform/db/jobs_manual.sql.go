@@ -69,7 +69,7 @@ INSERT INTO jobs (
     COALESCE($33::jsonb, '[]'::jsonb),
     $34::bigint, true
 )
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
+RETURNING jobs.id
 `
 
 type InsertPrivateJobParams struct {
@@ -127,7 +127,7 @@ type InsertPrivateJobParams struct {
 // caller supplies content_hash/role_fingerprint precomputed the same way every other
 // write path does (job.Fields.UpsertParams), so a private job's fingerprints are
 // comparable if it were ever to matter, even though it is never indexed or clustered.
-func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobParams) (Job, error) {
+func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobParams) (int64, error) {
 	row := q.db.QueryRow(ctx, insertPrivateJob,
 		arg.Source,
 		arg.ExternalID,
@@ -164,87 +164,14 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 		arg.RequirementsDerived,
 		arg.CreatedBy,
 	)
-	var i Job
-	err := row.Scan(
-		&i.ID,
-		&i.Source,
-		&i.ExternalID,
-		&i.URL,
-		&i.Title,
-		&i.Company,
-		&i.Location,
-		&i.Remote,
-		&i.Description,
-		&i.PostedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CompanySlug,
-		&i.Enrichment,
-		&i.EnrichedAt,
-		&i.EnrichmentVersion,
-		&i.PublicSlug,
-		&i.LastSeenAt,
-		&i.ClosedAt,
-		&i.Countries,
-		&i.Regions,
-		&i.WorkMode,
-		&i.LivenessStrikes,
-		&i.Skills,
-		&i.Seniority,
-		&i.Category,
-		&i.CreatedBy,
-		&i.UpdatedBy,
-		&i.PostingLanguage,
-		&i.EmploymentType,
-		&i.EducationLevel,
-		&i.ExperienceYearsMin,
-		&i.Collections,
-		&i.ContentHash,
-		&i.EnglishLevel,
-		&i.Cities,
-		&i.ViewCount,
-		&i.AppliedCount,
-		&i.RoleFingerprint,
-		&i.SemanticEmbeddedModel,
-		&i.SemanticEmbeddedHash,
-		&i.DuplicateOf,
-		&i.IsTech,
-		&i.SalaryMinManual,
-		&i.SalaryMaxManual,
-		&i.SalaryCurrencyManual,
-		&i.SalaryPeriodManual,
-		&i.UpvoteCount,
-		&i.DownvoteCount,
-		&i.AtsAbsentAt,
-		&i.ClosedReason,
-		&i.IsPrivate,
-		&i.SalaryMinSource,
-		&i.SalaryMaxSource,
-		&i.SalaryCurrencySource,
-		&i.SalaryPeriodSource,
-		&i.CompanySlugFolded,
-		&i.DuplicateOfAggregator,
-		&i.DuplicateOfRole,
-		&i.DuplicateOfFuzzy,
-		&i.RequiresClearance,
-		&i.RequirementsDerived,
-		&i.HydratedAt,
-		&i.AiInterviewReports,
-		&i.Metros,
-		&i.SemanticEmbeddedInputHash,
-		&i.ViaRecruiter,
-		&i.ClearanceLevels,
-		&i.Equity,
-		&i.Perks,
-		&i.ApplicationDeadline,
-		&i.Engagement,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listEmployerJobs = `-- name: ListEmployerJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
-FROM jobs
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes
+FROM jobs_read
 WHERE created_by = $1::bigint
   AND source = 'employer'
 ORDER BY created_at DESC
@@ -283,12 +210,10 @@ func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, e
 			&i.EnrichedAt,
 			&i.EnrichmentVersion,
 			&i.PublicSlug,
-			&i.LastSeenAt,
 			&i.ClosedAt,
 			&i.Countries,
 			&i.Regions,
 			&i.WorkMode,
-			&i.LivenessStrikes,
 			&i.Skills,
 			&i.Seniority,
 			&i.Category,
@@ -328,7 +253,6 @@ func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, e
 			&i.DuplicateOfFuzzy,
 			&i.RequiresClearance,
 			&i.RequirementsDerived,
-			&i.HydratedAt,
 			&i.AiInterviewReports,
 			&i.Metros,
 			&i.SemanticEmbeddedInputHash,
@@ -338,6 +262,9 @@ func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, e
 			&i.Perks,
 			&i.ApplicationDeadline,
 			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
 		); err != nil {
 			return nil, err
 		}
@@ -439,7 +366,7 @@ WHERE public_slug = $32
   AND created_by = $33::bigint
   AND source = 'employer'
   AND NOT is_private
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
+RETURNING jobs.id
 `
 
 type UpdateEmployerJobParams struct {
@@ -487,7 +414,7 @@ type UpdateEmployerJobParams struct {
 // identity (internal/ingest/employer never lets them vary per edit), so company_upsert here
 // only ever re-affirms the same row UpdateManualJob's would. closed_at is deliberately NOT
 // touched, matching UpdateManualJob: an edit is a content fix, not a lifecycle change.
-func (q *Queries) UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobParams) (Job, error) {
+func (q *Queries) UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobParams) (int64, error) {
 	row := q.db.QueryRow(ctx, updateEmployerJob,
 		arg.Title,
 		arg.Company,
@@ -523,82 +450,9 @@ func (q *Queries) UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobPa
 		arg.PublicSlug,
 		arg.ActorID,
 	)
-	var i Job
-	err := row.Scan(
-		&i.ID,
-		&i.Source,
-		&i.ExternalID,
-		&i.URL,
-		&i.Title,
-		&i.Company,
-		&i.Location,
-		&i.Remote,
-		&i.Description,
-		&i.PostedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CompanySlug,
-		&i.Enrichment,
-		&i.EnrichedAt,
-		&i.EnrichmentVersion,
-		&i.PublicSlug,
-		&i.LastSeenAt,
-		&i.ClosedAt,
-		&i.Countries,
-		&i.Regions,
-		&i.WorkMode,
-		&i.LivenessStrikes,
-		&i.Skills,
-		&i.Seniority,
-		&i.Category,
-		&i.CreatedBy,
-		&i.UpdatedBy,
-		&i.PostingLanguage,
-		&i.EmploymentType,
-		&i.EducationLevel,
-		&i.ExperienceYearsMin,
-		&i.Collections,
-		&i.ContentHash,
-		&i.EnglishLevel,
-		&i.Cities,
-		&i.ViewCount,
-		&i.AppliedCount,
-		&i.RoleFingerprint,
-		&i.SemanticEmbeddedModel,
-		&i.SemanticEmbeddedHash,
-		&i.DuplicateOf,
-		&i.IsTech,
-		&i.SalaryMinManual,
-		&i.SalaryMaxManual,
-		&i.SalaryCurrencyManual,
-		&i.SalaryPeriodManual,
-		&i.UpvoteCount,
-		&i.DownvoteCount,
-		&i.AtsAbsentAt,
-		&i.ClosedReason,
-		&i.IsPrivate,
-		&i.SalaryMinSource,
-		&i.SalaryMaxSource,
-		&i.SalaryCurrencySource,
-		&i.SalaryPeriodSource,
-		&i.CompanySlugFolded,
-		&i.DuplicateOfAggregator,
-		&i.DuplicateOfRole,
-		&i.DuplicateOfFuzzy,
-		&i.RequiresClearance,
-		&i.RequirementsDerived,
-		&i.HydratedAt,
-		&i.AiInterviewReports,
-		&i.Metros,
-		&i.SemanticEmbeddedInputHash,
-		&i.ViaRecruiter,
-		&i.ClearanceLevels,
-		&i.Equity,
-		&i.Perks,
-		&i.ApplicationDeadline,
-		&i.Engagement,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const updateManualJob = `-- name: UpdateManualJob :one
@@ -653,7 +507,7 @@ SET title        = $1,
     updated_by   = $31::bigint,
     updated_at   = now()
 WHERE public_slug = $32 AND created_by IS NOT NULL AND NOT is_private
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
+RETURNING jobs.id
 `
 
 type UpdateManualJobParams struct {
@@ -711,7 +565,7 @@ type UpdateManualJobParams struct {
 // closed_at is deliberately NOT touched: an edit is a content fix, not a lifecycle change.
 // Reopening a closed posting is the re-create (same-URL UpsertManualJob) path's job, so a
 // content edit never resurrects a job the sweep/liveness worker closed.
-func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams) (Job, error) {
+func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams) (int64, error) {
 	row := q.db.QueryRow(ctx, updateManualJob,
 		arg.Title,
 		arg.Company,
@@ -746,82 +600,9 @@ func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams
 		arg.UpdatedBy,
 		arg.PublicSlug,
 	)
-	var i Job
-	err := row.Scan(
-		&i.ID,
-		&i.Source,
-		&i.ExternalID,
-		&i.URL,
-		&i.Title,
-		&i.Company,
-		&i.Location,
-		&i.Remote,
-		&i.Description,
-		&i.PostedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CompanySlug,
-		&i.Enrichment,
-		&i.EnrichedAt,
-		&i.EnrichmentVersion,
-		&i.PublicSlug,
-		&i.LastSeenAt,
-		&i.ClosedAt,
-		&i.Countries,
-		&i.Regions,
-		&i.WorkMode,
-		&i.LivenessStrikes,
-		&i.Skills,
-		&i.Seniority,
-		&i.Category,
-		&i.CreatedBy,
-		&i.UpdatedBy,
-		&i.PostingLanguage,
-		&i.EmploymentType,
-		&i.EducationLevel,
-		&i.ExperienceYearsMin,
-		&i.Collections,
-		&i.ContentHash,
-		&i.EnglishLevel,
-		&i.Cities,
-		&i.ViewCount,
-		&i.AppliedCount,
-		&i.RoleFingerprint,
-		&i.SemanticEmbeddedModel,
-		&i.SemanticEmbeddedHash,
-		&i.DuplicateOf,
-		&i.IsTech,
-		&i.SalaryMinManual,
-		&i.SalaryMaxManual,
-		&i.SalaryCurrencyManual,
-		&i.SalaryPeriodManual,
-		&i.UpvoteCount,
-		&i.DownvoteCount,
-		&i.AtsAbsentAt,
-		&i.ClosedReason,
-		&i.IsPrivate,
-		&i.SalaryMinSource,
-		&i.SalaryMaxSource,
-		&i.SalaryCurrencySource,
-		&i.SalaryPeriodSource,
-		&i.CompanySlugFolded,
-		&i.DuplicateOfAggregator,
-		&i.DuplicateOfRole,
-		&i.DuplicateOfFuzzy,
-		&i.RequiresClearance,
-		&i.RequirementsDerived,
-		&i.HydratedAt,
-		&i.AiInterviewReports,
-		&i.Metros,
-		&i.SemanticEmbeddedInputHash,
-		&i.ViaRecruiter,
-		&i.ClearanceLevels,
-		&i.Equity,
-		&i.Perks,
-		&i.ApplicationDeadline,
-		&i.Engagement,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const upsertManualJob = `-- name: UpsertManualJob :one
@@ -937,7 +718,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
+RETURNING jobs.id
 `
 
 type UpsertManualJobParams struct {
@@ -996,7 +777,7 @@ type UpsertManualJobParams struct {
 // shows its salary immediately, before any enrichment pass runs (the pass then preserves
 // it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 // (closed_at = NULL) since the moderator is re-asserting it.
-func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error) {
+func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (int64, error) {
 	row := q.db.QueryRow(ctx, upsertManualJob,
 		arg.Source,
 		arg.ExternalID,
@@ -1039,80 +820,7 @@ func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams
 		arg.CreatedBy,
 		arg.UpdatedBy,
 	)
-	var i Job
-	err := row.Scan(
-		&i.ID,
-		&i.Source,
-		&i.ExternalID,
-		&i.URL,
-		&i.Title,
-		&i.Company,
-		&i.Location,
-		&i.Remote,
-		&i.Description,
-		&i.PostedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CompanySlug,
-		&i.Enrichment,
-		&i.EnrichedAt,
-		&i.EnrichmentVersion,
-		&i.PublicSlug,
-		&i.LastSeenAt,
-		&i.ClosedAt,
-		&i.Countries,
-		&i.Regions,
-		&i.WorkMode,
-		&i.LivenessStrikes,
-		&i.Skills,
-		&i.Seniority,
-		&i.Category,
-		&i.CreatedBy,
-		&i.UpdatedBy,
-		&i.PostingLanguage,
-		&i.EmploymentType,
-		&i.EducationLevel,
-		&i.ExperienceYearsMin,
-		&i.Collections,
-		&i.ContentHash,
-		&i.EnglishLevel,
-		&i.Cities,
-		&i.ViewCount,
-		&i.AppliedCount,
-		&i.RoleFingerprint,
-		&i.SemanticEmbeddedModel,
-		&i.SemanticEmbeddedHash,
-		&i.DuplicateOf,
-		&i.IsTech,
-		&i.SalaryMinManual,
-		&i.SalaryMaxManual,
-		&i.SalaryCurrencyManual,
-		&i.SalaryPeriodManual,
-		&i.UpvoteCount,
-		&i.DownvoteCount,
-		&i.AtsAbsentAt,
-		&i.ClosedReason,
-		&i.IsPrivate,
-		&i.SalaryMinSource,
-		&i.SalaryMaxSource,
-		&i.SalaryCurrencySource,
-		&i.SalaryPeriodSource,
-		&i.CompanySlugFolded,
-		&i.DuplicateOfAggregator,
-		&i.DuplicateOfRole,
-		&i.DuplicateOfFuzzy,
-		&i.RequiresClearance,
-		&i.RequirementsDerived,
-		&i.HydratedAt,
-		&i.AiInterviewReports,
-		&i.Metros,
-		&i.SemanticEmbeddedInputHash,
-		&i.ViaRecruiter,
-		&i.ClearanceLevels,
-		&i.Equity,
-		&i.Perks,
-		&i.ApplicationDeadline,
-		&i.Engagement,
-	)
-	return i, err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }

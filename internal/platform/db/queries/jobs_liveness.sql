@@ -64,16 +64,26 @@ SELECT count(*) FROM closed;
 --
 -- Both predicates fail CLOSED on an empty list and on a NULL cutoff, exactly as the
 -- statement above does.
-WITH closed AS (
+--
+-- last_seen_at is job_activity's; locking and freshness recheck: see CloseUnseenJobs.
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.closed_at IS NULL AND NOT j.is_private
+      AND j.source = ANY(sqlc.arg(sources)::text[])
+      AND COALESCE(j.posted_at, j.created_at) < sqlc.arg(cutoff)
+      AND a.last_seen_at < sqlc.arg(seen_cutoff)
+    ORDER BY j.id
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'expired',
         updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = ANY(sqlc.arg(sources)::text[])
-      AND COALESCE(posted_at, created_at) < sqlc.arg(cutoff)
-      AND last_seen_at < sqlc.arg(seen_cutoff)
-    RETURNING id
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
+    RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT id FROM closed
@@ -89,11 +99,12 @@ SELECT count(*) FROM closed;
 -- never silently becomes a probe target. Closed jobs are skipped (already not open), and
 -- so is a posting with no outside page (an employer vacancy taking applications on
 -- freehire): there is nothing to request, and its employer closes it.
-SELECT id, source, url, public_slug, liveness_strikes
-FROM jobs
-WHERE closed_at IS NULL
-  AND url <> ''
-  AND source <> ALL(sqlc.arg(ats_providers)::text[]);
+SELECT j.id, j.source, j.url, j.public_slug, COALESCE(a.liveness_strikes, 0)::integer AS liveness_strikes
+FROM jobs j
+LEFT JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.url <> ''
+  AND j.source <> ALL(sqlc.arg(ats_providers)::text[]);
 
 -- name: SelectStaleRegisteredCandidates :many
 -- Liveness backstop for a registered provider whose ingest sweep cannot reach every open
@@ -106,11 +117,12 @@ WHERE closed_at IS NULL
 -- evidence the sweep is structurally unable to reach them, not a race with it.
 -- external_id rides along for sources verified by a per-posting API keyed on it rather
 -- than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
-SELECT id, source, url, external_id, public_slug, liveness_strikes
-FROM jobs
-WHERE closed_at IS NULL
-  AND source = ANY(sqlc.arg(sources)::text[])
-  AND last_seen_at < sqlc.arg(cutoff);
+SELECT j.id, j.source, j.url, j.external_id, j.public_slug, a.liveness_strikes
+FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND j.source = ANY(sqlc.arg(sources)::text[])
+  AND a.last_seen_at < sqlc.arg(cutoff);
 
 -- name: SelectScraplingLivenessCandidates :many
 -- cmd/adzuna-liveness's candidates: open postings of one source the crawl has stopped listing.
@@ -122,12 +134,13 @@ WHERE closed_at IS NULL
 -- ORDER BY random() rather than by age because most adzuna probes end on a challenge page and
 -- leave the row untouched: a fixed order would hand the same unanswered rows to every
 -- bounded run and never reach the rest. Sampling reaches every row with nothing to store.
-SELECT id, external_id, url, public_slug, liveness_strikes
-FROM jobs
-WHERE closed_at IS NULL
-  AND NOT is_private
-  AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff)
+SELECT j.id, j.external_id, j.url, j.public_slug, a.liveness_strikes
+FROM jobs j
+JOIN job_activity a ON a.job_id = j.id
+WHERE j.closed_at IS NULL
+  AND NOT j.is_private
+  AND j.source = sqlc.arg(source)
+  AND a.last_seen_at < sqlc.arg(cutoff)
 ORDER BY random()
 LIMIT sqlc.arg(max_rows);
 
@@ -138,54 +151,81 @@ LIMIT sqlc.arg(max_rows);
 -- count and closed_at so the worker can log the outcome.
 --
 -- The removal enqueue rides this statement like every other close (see CloseUnseenJobs),
--- and it is gated on the close actually happening: most calls only advance a strike and
--- must queue nothing. The gate reads the PRE-update row — every CTE and the statement
--- itself see one snapshot — and repeats the CASE's own close condition, because
--- RETURNING cannot answer the question: it reports the new value, and a closed_at this
--- statement left alone looks exactly like one it just wrote.
---
--- The two can disagree only if another transaction closes this row between the snapshot
--- and the UPDATE's row lock, in which case the enqueue happens and the close does not.
--- That is the harmless direction: whoever closed it queued the same removal, and the
--- queue is ON CONFLICT DO NOTHING on job_id.
+-- gated on the close actually happening: most calls only advance a strike and must queue
+-- nothing. The gate reads the rows AS LOCKED below, so it is exact.
 --
 -- seen_before, when set, is the staleness cutoff the caller selected its candidates by. A
 -- probe answers minutes after that read, and a crawl that listed the posting again in between
--- (UpsertJob/RefreshUnchangedJob stamp last_seen_at = now()) has just proved it live; the
--- verdict was reached on a stale read and must write nothing — no strike, no close, no
--- queued removal — so the statement matches no row (pgx.ErrNoRows). NULL keeps the old
--- behaviour for a caller whose candidates no crawl re-lists.
-WITH queued AS (
-    INSERT INTO search_delete_outbox (job_id)
-    SELECT j.id FROM jobs j
+-- has just proved it live; the verdict was reached on a stale read and must write nothing — no
+-- strike, no close, no queued removal — so the statement matches no row (pgx.ErrNoRows). NULL
+-- keeps the old behaviour for a caller whose candidates no crawl re-lists.
+--
+-- Locking and the compare-and-set: see CloseUnseenJobs. `locked` reads the strike count from the
+-- LOCKED activity row, the one value every writer keeps current.
+--
+-- Release A writes the count to BOTH places: job_activity explicitly, and the legacy jobs column
+-- for readers older than release A. The one-way bridge fires only when the legacy value CHANGES,
+-- and while writers move to job_activity the legacy value goes stale, so a computed count that
+-- happens to equal the stale legacy one would never reach job_activity through it. Both writes
+-- carry the same value, so the bridge firing as well is idempotent.
+WITH locked AS MATERIALIZED (
+    SELECT j.id, j.closed_at, a.liveness_strikes
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
     WHERE j.id = sqlc.arg(id)
-      AND j.closed_at IS NULL
-      AND (sqlc.narg(seen_before)::timestamptz IS NULL OR j.last_seen_at < sqlc.narg(seen_before))
-      AND j.liveness_strikes + 1 >= sqlc.arg(threshold)
+      AND (sqlc.narg(seen_before)::timestamptz IS NULL OR a.last_seen_at < sqlc.narg(seen_before))
+    FOR NO KEY UPDATE OF j, a
+), bumped AS (
+    UPDATE job_activity a
+    SET liveness_strikes = l.liveness_strikes + 1
+    FROM locked l
+    WHERE a.job_id = l.id
+    RETURNING a.job_id, a.liveness_strikes AS strikes,
+              (l.closed_at IS NULL AND a.liveness_strikes >= sqlc.arg(threshold)) AS closing
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT b.job_id FROM bumped b WHERE b.closing
     ON CONFLICT (job_id) DO NOTHING
 )
+-- FROM bumped, not FROM locked: the data dependency makes the activity write happen before the jobs
+-- write (and before the triggers that jobs write fires), instead of relying on the order Postgres
+-- happens to run independent data-modifying CTEs in.
 UPDATE jobs
-SET liveness_strikes = jobs.liveness_strikes + 1,
-    -- AND closed_at IS NULL on both branches below: if another mechanism closed this row
-    -- between candidate selection and this write, its closed_at/closed_reason are the true
-    -- record of when and why, and this probe must not overwrite either.
-    closed_at = CASE
-        WHEN jobs.liveness_strikes + 1 >= sqlc.arg(threshold) AND jobs.closed_at IS NULL THEN now()
-        ELSE jobs.closed_at
-    END,
-    closed_reason = CASE
-        WHEN jobs.liveness_strikes + 1 >= sqlc.arg(threshold) AND jobs.closed_at IS NULL THEN 'probe_expired'
-        ELSE jobs.closed_reason
-    END,
+SET liveness_strikes = b.strikes,
+    -- A close only when `locked` saw the row open: if another mechanism closed it between candidate
+    -- selection and this write, its closed_at/closed_reason are the true record of when and why, and
+    -- this probe must not overwrite either.
+    closed_at = CASE WHEN b.closing THEN now() ELSE jobs.closed_at END,
+    closed_reason = CASE WHEN b.closing THEN 'probe_expired' ELSE jobs.closed_reason END,
     updated_at = now()
-WHERE jobs.id = sqlc.arg(id)
-  AND (sqlc.narg(seen_before)::timestamptz IS NULL OR jobs.last_seen_at < sqlc.narg(seen_before))
+FROM bumped b
+WHERE jobs.id = b.job_id
 RETURNING jobs.id, jobs.liveness_strikes, jobs.closed_at;
 
 -- name: ResetLivenessStrikes :exec
 -- A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 -- expired probes can close a job. Guarded to the non-zero case so probing an
--- already-clean job does not churn the row.
+-- already-clean job does not churn the row or lock it.
+--
+-- The guard reads job_activity, the current count, and both places are written (see
+-- MarkLivenessExpired for why): a legacy column that is already 0 while job_activity holds 4 must
+-- still reset job_activity, and the bridge would not fire for a legacy 0 -> 0. The legacy column is
+-- written only when it is not already 0, so the wide jobs tuple is untouched in that case. Locking:
+-- see CloseUnseenJobs.
+WITH locked AS MATERIALIZED (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.id = sqlc.arg(id) AND a.liveness_strikes <> 0
+    FOR NO KEY UPDATE OF j, a
+), cleared AS (
+    UPDATE job_activity a
+    SET liveness_strikes = 0
+    FROM locked l
+    WHERE a.job_id = l.id
+    RETURNING a.job_id
+)
 UPDATE jobs
 SET liveness_strikes = 0
-WHERE id = sqlc.arg(id) AND liveness_strikes <> 0;
+FROM cleared c
+WHERE jobs.id = c.job_id AND jobs.liveness_strikes <> 0;

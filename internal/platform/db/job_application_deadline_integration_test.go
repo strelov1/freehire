@@ -185,7 +185,7 @@ func TestApplicationDeadlineUpsertQueuesExpiredExistingPosting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reopened.Job.ClosedAt.Valid || !reopened.Changed {
+	if reopened.ClosedAt.Valid || !reopened.Changed {
 		t.Error("deadline extension must reopen and signal a search update even with identical content")
 	}
 	if countDeletionQueue(t, pool) != 0 {
@@ -237,11 +237,16 @@ func TestApplicationDeadlineChangesSignalSearchUpdate(t *testing.T) {
 			if row.Changed != tc.changed {
 				t.Errorf("Changed = %v, want %v", row.Changed, tc.changed)
 			}
-			if row.Job.ClosedAt.Valid {
+			if row.ClosedAt.Valid {
 				t.Error("posting with a future deadline must stay open")
 			}
-			if !row.Job.ApplicationDeadline.Valid || row.Job.ApplicationDeadline.Time.Format("2006-01-02") != tc.stored.Time.Format("2006-01-02") {
-				t.Errorf("stored deadline = %v, want %v", row.Job.ApplicationDeadline, tc.stored)
+			// The upsert returns narrow columns; the stored deadline is read back as the view shows it.
+			stored, err := q.GetJob(ctx, row.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !stored.ApplicationDeadline.Valid || stored.ApplicationDeadline.Time.Format("2006-01-02") != tc.stored.Time.Format("2006-01-02") {
+				t.Errorf("stored deadline = %v, want %v", stored.ApplicationDeadline, tc.stored)
 			}
 		})
 	}

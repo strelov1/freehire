@@ -9,6 +9,13 @@ The `internal/platform/db` package — generated sqlc code, hand-written SQL que
 - Handlers use `*db.Queries`, built once in `handler.Register`. Never construct `*db.Queries` inside a handler.
 - `migrations/` is the single source of truth for schema — the same dir feeds both sqlc and Postgres initdb.
 - `jobs.UNIQUE (source, external_id)` is the dedup key; `UpsertJob` is `ON CONFLICT` on it.
+- Complete posting reads use `jobs_read` (`db.Job`), which joins observation state from
+  `job_activity`. The physical `jobs` model is `db.JobRow`. Return explicit columns from
+  base-table writes; `RETURNING *` or `sqlc.embed(jobs)` would expand legacy columns and
+  prevent their later removal. A new `jobs` column also needs a replacement `jobs_read`
+  projection; `TestJobsReadCoversEveryJobsColumn` checks it. Read observation predicates
+  from activity, including inside writers, so compatible workers can overlap a writer
+  cutover. Freshness-dependent closers lock jobs then activity with `FOR NO KEY UPDATE`.
 - Fresh volumes get the whole `migrations/` dir via Postgres initdb (mounted into `/docker-entrypoint-initdb.d`, applied once on first init, in filename order). Every existing database (prod included) is migrated by `cmd/migrate` (`go run ./cmd/migrate`), which applies only files not yet recorded in `schema_migrations` (version = filename) — one transaction per file, under a session advisory lock. Changing an already-applied migration does NOT re-apply it; add a new file instead.
 - **An EXPANSIVE migration is applied before the deploy that reads it, not with it.** Adding
   a nullable column is safe to run ahead of time and unreadable by the previous binary, but

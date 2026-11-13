@@ -10,7 +10,7 @@
 -- WHERE clause, applying the is_private filter on the (small) scanned window rather than
 -- the whole table, so this stays index-served rather than degrading to a full scan.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $1 OFFSET $2;
@@ -20,7 +20,7 @@ LIMIT $1 OFFSET $2;
 -- concurrent inserts/updates (which shift posted_at ordering) cannot make the
 -- scan skip or repeat rows the way OFFSET pagination would.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
@@ -31,7 +31,7 @@ LIMIT sqlc.arg(batch_size);
 -- (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
 -- closed rows too — a one-time backfill of a missing description fills open and closed alike.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE source = sqlc.arg(source) AND id > sqlc.arg(after_id)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
@@ -57,7 +57,7 @@ WHERE id = sqlc.arg(id);
 -- index current without re-pushing the whole table. Returns closed rows too, so
 -- the caller deletes a freshly-closed job from the index.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)
 ORDER BY id
 LIMIT sqlc.arg(batch_size);
@@ -95,7 +95,7 @@ LIMIT sqlc.arg(batch_size);
 -- picks the cutoff; the pass degrades to the full table when it passes the zero time,
 -- which keeps the unfiltered behaviour one env var away.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id > sqlc.arg(after_id)
   AND (closed_at IS NULL OR closed_at >= sqlc.arg(closed_since))
 ORDER BY id
@@ -127,7 +127,7 @@ LIMIT sqlc.arg(batch_size);
 -- predicate is jobs_sitemap_idx's own, so the scan walks that partial index (~6.2M
 -- entries) instead of the primary key.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id > sqlc.arg(after_id)
   AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY id
@@ -146,12 +146,12 @@ LIMIT sqlc.arg(batch_size);
 
 -- name: GetJob :one
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE id = $1;
 
 -- name: GetJobBySlug :one
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE public_slug = $1;
 
 -- name: ListJobsBySlugCode :many
@@ -161,7 +161,7 @@ WHERE public_slug = $1;
 -- jobs_public_slug_code_idx. The caller distinguishes full-hash collision recovery
 -- URLs before refusing ambiguous ordinary shortcodes.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE right(public_slug, 8) = sqlc.arg(code)::text;
 
 -- name: ListJobLivenessBySlugs :many
@@ -170,7 +170,7 @@ WHERE right(public_slug, 8) = sqlc.arg(code)::text;
 -- nothing else. One round trip for the whole list; an unknown slug is simply absent, which the
 -- caller reports as not found.
 SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
-FROM jobs
+FROM jobs_read
 WHERE public_slug = ANY(sqlc.arg('slugs')::text[]);
 
 -- name: StoredJobDescription :one
@@ -182,7 +182,7 @@ SELECT description FROM jobs WHERE source = sqlc.arg(source) AND external_id = s
 -- Load a job by its dedup identity (source, external_id) — the key the Job
 -- aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE source = $1 AND external_id = $2;
 
 -- name: FindOpenJobByURL :one
@@ -212,10 +212,11 @@ WHERE source = $1 AND external_id = $2;
 SELECT COALESCE(canonical.public_slug, j.public_slug)
 FROM jobs j
 LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of AND canonical.closed_at IS NULL
+LEFT JOIN job_activity a ON a.job_id = j.id
 WHERE normalize_job_url(j.url) = normalize_job_url(@url)
   AND normalize_job_url(@url) <> ''
   AND j.closed_at IS NULL
-ORDER BY (j.duplicate_of IS NULL) DESC, j.last_seen_at DESC, j.id DESC
+ORDER BY (j.duplicate_of IS NULL) DESC, a.last_seen_at DESC, j.id DESC
 LIMIT 1;
 
 -- name: GetJobIDBySlug :one
@@ -290,7 +291,7 @@ SELECT estimate_open_jobs()::bigint;
 -- RefreshCompanyFacets already excludes private rows from companies.job_count, so before
 -- this clause the page contradicted its own counter.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $2 OFFSET $3;
@@ -307,7 +308,7 @@ LIMIT $2 OFFSET $3;
 -- exactly: a large employer holds hundreds of thousands of closed rows, and any other order
 -- is a sort over all of them. That is also why nothing counts this set — see the handler.
 SELECT *
-FROM jobs
+FROM jobs_read
 WHERE company_slug = $1 AND closed_at IS NOT NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY closed_at DESC, id DESC
 LIMIT $2 OFFSET $3;

@@ -14,11 +14,18 @@ sql:
         rename:
           # Go initialism: column "url" -> field URL (not Url). JSON tag stays "url".
           url: "URL"
+          # The base table's row is JobRow; db.Job is the jobs_read view, the complete job
+          # (jobs plus job_activity's liveness stamps) every reader and the wire consume.
+          # No column or table is named "job", so the key renames only the jobs model.
+          job: "JobRow"
+          jobs_read: "Job"
         overrides:
           # Read jobs.enrichment as json.RawMessage, not []byte. RawMessage keeps
           # the JSONB blob as raw bytes that marshal straight through to the API
           # response (an empty payload stays {}); a plain []byte would base64-encode.
           - column: "jobs.enrichment"
+            go_type: "encoding/json.RawMessage"
+          - column: "jobs_read.enrichment"
             go_type: "encoding/json.RawMessage"
           # Same reasoning for the company-info extras JSONB: raw bytes marshal
           # straight through to the company-detail response ({} stays {}), not base64.

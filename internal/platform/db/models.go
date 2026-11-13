@@ -1013,6 +1013,134 @@ type InviteReward struct {
 }
 
 type Job struct {
+	ID                        int64              `json:"id"`
+	Source                    string             `json:"source"`
+	ExternalID                string             `json:"external_id"`
+	URL                       string             `json:"url"`
+	Title                     string             `json:"title"`
+	Company                   string             `json:"company"`
+	Location                  string             `json:"location"`
+	Remote                    bool               `json:"remote"`
+	Description               string             `json:"description"`
+	PostedAt                  pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+	CompanySlug               string             `json:"company_slug"`
+	Enrichment                json.RawMessage    `json:"enrichment"`
+	EnrichedAt                pgtype.Timestamptz `json:"enriched_at"`
+	EnrichmentVersion         int32              `json:"enrichment_version"`
+	PublicSlug                string             `json:"public_slug"`
+	ClosedAt                  pgtype.Timestamptz `json:"closed_at"`
+	Countries                 []string           `json:"countries"`
+	Regions                   []string           `json:"regions"`
+	WorkMode                  string             `json:"work_mode"`
+	Skills                    []string           `json:"skills"`
+	Seniority                 string             `json:"seniority"`
+	Category                  string             `json:"category"`
+	CreatedBy                 pgtype.Int8        `json:"created_by"`
+	UpdatedBy                 pgtype.Int8        `json:"updated_by"`
+	PostingLanguage           string             `json:"posting_language"`
+	EmploymentType            string             `json:"employment_type"`
+	EducationLevel            string             `json:"education_level"`
+	ExperienceYearsMin        pgtype.Int4        `json:"experience_years_min"`
+	Collections               []string           `json:"collections"`
+	ContentHash               pgtype.Text        `json:"content_hash"`
+	EnglishLevel              string             `json:"english_level"`
+	Cities                    []string           `json:"cities"`
+	ViewCount                 int32              `json:"view_count"`
+	AppliedCount              int32              `json:"applied_count"`
+	RoleFingerprint           pgtype.Text        `json:"role_fingerprint"`
+	SemanticEmbeddedModel     pgtype.Text        `json:"semantic_embedded_model"`
+	SemanticEmbeddedHash      pgtype.Text        `json:"semantic_embedded_hash"`
+	DuplicateOf               pgtype.Int8        `json:"duplicate_of"`
+	IsTech                    pgtype.Bool        `json:"is_tech"`
+	SalaryMinManual           pgtype.Int4        `json:"salary_min_manual"`
+	SalaryMaxManual           pgtype.Int4        `json:"salary_max_manual"`
+	SalaryCurrencyManual      string             `json:"salary_currency_manual"`
+	SalaryPeriodManual        string             `json:"salary_period_manual"`
+	UpvoteCount               int32              `json:"upvote_count"`
+	DownvoteCount             int32              `json:"downvote_count"`
+	AtsAbsentAt               pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedReason              string             `json:"closed_reason"`
+	IsPrivate                 bool               `json:"is_private"`
+	SalaryMinSource           pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource           pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource      string             `json:"salary_currency_source"`
+	SalaryPeriodSource        string             `json:"salary_period_source"`
+	CompanySlugFolded         pgtype.Text        `json:"company_slug_folded"`
+	DuplicateOfAggregator     pgtype.Int8        `json:"duplicate_of_aggregator"`
+	DuplicateOfRole           pgtype.Int8        `json:"duplicate_of_role"`
+	DuplicateOfFuzzy          pgtype.Int8        `json:"duplicate_of_fuzzy"`
+	RequiresClearance         pgtype.Bool        `json:"requires_clearance"`
+	RequirementsDerived       []byte             `json:"requirements_derived"`
+	AiInterviewReports        int32              `json:"ai_interview_reports"`
+	Metros                    []string           `json:"metros"`
+	SemanticEmbeddedInputHash pgtype.Text        `json:"semantic_embedded_input_hash"`
+	ViaRecruiter              pgtype.Bool        `json:"via_recruiter"`
+	ClearanceLevels           []string           `json:"clearance_levels"`
+	Equity                    pgtype.Text        `json:"equity"`
+	Perks                     []string           `json:"perks"`
+	ApplicationDeadline       pgtype.Date        `json:"application_deadline"`
+	Engagement                []string           `json:"engagement"`
+	LastSeenAt                pgtype.Timestamptz `json:"last_seen_at"`
+	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
+	LivenessStrikes           int32              `json:"liveness_strikes"`
+}
+
+type JobActivity struct {
+	JobID           int64              `json:"job_id"`
+	LastSeenAt      pgtype.Timestamptz `json:"last_seen_at"`
+	HydratedAt      pgtype.Timestamptz `json:"hydrated_at"`
+	LivenessStrikes int32              `json:"liveness_strikes"`
+	StateVersion    int64              `json:"state_version"`
+}
+
+type JobDailyStat struct {
+	Day        pgtype.Date        `json:"day"`
+	Added      int32              `json:"added"`
+	Removed    int32              `json:"removed"`
+	ComputedAt pgtype.Timestamptz `json:"computed_at"`
+}
+
+type JobDailyView struct {
+	Day     pgtype.Date `json:"day"`
+	JobID   int64       `json:"job_id"`
+	Uniques int32       `json:"uniques"`
+	// Unique daily visitors counted from PAGE opens only, which are bot-filtered. The `uniques` column beside it fuses page opens with API reads, and API reads carry no bot filtering — so page_uniques is the only one of the two that describes people, and the only one safe to rank a public post on. Zero for every row written before migration 0138; deliberately not backfilled.
+	PageUniques  int32 `json:"page_uniques"`
+	AgentUniques int32 `json:"agent_uniques"`
+}
+
+type JobReminder struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	FireAt      pgtype.Timestamptz `json:"fire_at"`
+	Channels    []string           `json:"channels"`
+	Status      string             `json:"status"`
+	ClaimedAt   pgtype.Timestamptz `json:"claimed_at"`
+	Attempts    int32              `json:"attempts"`
+	FailedAt    pgtype.Timestamptz `json:"failed_at"`
+	LastError   string             `json:"last_error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
+}
+
+type JobReport struct {
+	ID              int64              `json:"id"`
+	ReportedBy      int64              `json:"reported_by"`
+	JobID           int64              `json:"job_id"`
+	Reason          string             `json:"reason"`
+	Details         string             `json:"details"`
+	ContactTelegram string             `json:"contact_telegram"`
+	Status          string             `json:"status"`
+	ReviewReason    string             `json:"review_reason"`
+	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type JobRow struct {
 	ID                    int64              `json:"id"`
 	Source                string             `json:"source"`
 	ExternalID            string             `json:"external_id"`
@@ -1087,51 +1215,6 @@ type Job struct {
 	// Source-stated last application day, inclusive; NULL when unstated.
 	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 	Engagement          []string    `json:"engagement"`
-}
-
-type JobDailyStat struct {
-	Day        pgtype.Date        `json:"day"`
-	Added      int32              `json:"added"`
-	Removed    int32              `json:"removed"`
-	ComputedAt pgtype.Timestamptz `json:"computed_at"`
-}
-
-type JobDailyView struct {
-	Day     pgtype.Date `json:"day"`
-	JobID   int64       `json:"job_id"`
-	Uniques int32       `json:"uniques"`
-	// Unique daily visitors counted from PAGE opens only, which are bot-filtered. The `uniques` column beside it fuses page opens with API reads, and API reads carry no bot filtering — so page_uniques is the only one of the two that describes people, and the only one safe to rank a public post on. Zero for every row written before migration 0138; deliberately not backfilled.
-	PageUniques  int32 `json:"page_uniques"`
-	AgentUniques int32 `json:"agent_uniques"`
-}
-
-type JobReminder struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	JobID       int64              `json:"job_id"`
-	FireAt      pgtype.Timestamptz `json:"fire_at"`
-	Channels    []string           `json:"channels"`
-	Status      string             `json:"status"`
-	ClaimedAt   pgtype.Timestamptz `json:"claimed_at"`
-	Attempts    int32              `json:"attempts"`
-	FailedAt    pgtype.Timestamptz `json:"failed_at"`
-	LastError   string             `json:"last_error"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
-}
-
-type JobReport struct {
-	ID              int64              `json:"id"`
-	ReportedBy      int64              `json:"reported_by"`
-	JobID           int64              `json:"job_id"`
-	Reason          string             `json:"reason"`
-	Details         string             `json:"details"`
-	ContactTelegram string             `json:"contact_telegram"`
-	Status          string             `json:"status"`
-	ReviewReason    string             `json:"review_reason"`
-	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
-	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type JobSearchPing struct {
