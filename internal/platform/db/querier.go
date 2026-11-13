@@ -960,7 +960,14 @@ type Querier interface {
 	// Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
 	// as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 	// entry) can be caught and skipped by the caller without losing the rest of the batch.
-	CloseUnseenJobByID(ctx context.Context, id int64) (int64, error)
+	//
+	// cutoff is the crawl cutoff the candidates were listed by. The listing and this close are
+	// separate statements, so a crawl can list the posting again between them: the close re-checks
+	// the activity row's freshness under the same locks as the bulk sweep (CloseUnseenJobs, in
+	// jobs_close_unseen.sql: jobs then job_activity, FOR NO KEY UPDATE, recheck after waiting) and
+	// writes nothing, queues no removal, for a row that is fresh now. Private postings are excluded
+	// from this catalogue close.
+	CloseUnseenJobByID(ctx context.Context, arg CloseUnseenJobByIDParams) (int64, error)
 	// skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
 	// or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
 	// last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a

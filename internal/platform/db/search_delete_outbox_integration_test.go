@@ -241,7 +241,7 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 			return err
 		}, nil},
 		{"CloseUnseenJobByID", func(ctx context.Context, q *Queries, jobID int64) error {
-			_, err := q.CloseUnseenJobByID(ctx, jobID)
+			_, err := q.CloseUnseenJobByID(ctx, CloseUnseenJobByIDParams{ID: jobID, Cutoff: pgTimestamptz(time.Now().Add(time.Hour))})
 			return err
 		}, nil},
 		{"CloseJobByID", func(ctx context.Context, q *Queries, jobID int64) error {

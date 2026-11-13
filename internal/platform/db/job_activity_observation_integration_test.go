@@ -984,3 +984,75 @@ func TestRealWritersKeepActivityStrikesOnOpenRowsAndClearThemOnReopen(t *testing
 		})
 	}
 }
+
+// The row-by-row sweep fallback closes one id at a time after listing its candidates. The close
+// takes the crawl cutoff and re-checks the activity row's freshness under its locks: a posting a
+// crawl listed again since the listing is not closed and queues no removal, whether the refresh
+// committed before the close started or is still in flight when it does.
+func TestCloseUnseenJobByIDRechecksFreshnessUnderItsLocks(t *testing.T) {
+	cutoff := func() pgtype.Timestamptz {
+		return pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
+	}
+	t.Run("stale row closes", func(t *testing.T) {
+		pool := startPostgres(t)
+		id := obsSeedStaleHashed(t, pool)
+		n, err := New(pool).CloseUnseenJobByID(context.Background(), CloseUnseenJobByIDParams{ID: id, Cutoff: cutoff()})
+		if err != nil || n != 1 {
+			t.Fatalf("closed %d, %v; want 1", n, err)
+		}
+	})
+	t.Run("refresh committed since the listing", func(t *testing.T) {
+		pool := startPostgres(t)
+		id := obsSeedStaleHashed(t, pool)
+		if _, err := New(pool).RefreshUnchangedJob(context.Background(), obsRefreshParams()); err != nil {
+			t.Fatal(err)
+		}
+		n, err := New(pool).CloseUnseenJobByID(context.Background(), CloseUnseenJobByIDParams{ID: id, Cutoff: cutoff()})
+		if err != nil || n != 0 {
+			t.Fatalf("closed %d, %v; want 0 for a fresh row", n, err)
+		}
+		if got := obsClosedExternalIDs(t, pool); len(got) != 0 {
+			t.Fatalf("closed = %v, want nothing closed", got)
+		}
+		var queued int
+		if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM search_delete_outbox`).Scan(&queued); err != nil || queued != 0 {
+			t.Fatalf("removals queued = %d, %v; want 0", queued, err)
+		}
+	})
+	t.Run("refresh still in flight waits then writes nothing", func(t *testing.T) {
+		pool := startPostgres(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		id := obsSeedStaleHashed(t, pool)
+		crawl, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = crawl.Rollback(context.Background()) }()
+		if _, err := New(crawl).RefreshUnchangedJob(ctx, obsRefreshParams()); err != nil {
+			t.Fatal(err)
+		}
+		closer, err := pool.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer closer.Release()
+		done := make(chan error, 1)
+		var n int64
+		go func() {
+			var err error
+			n, err = New(closer).CloseUnseenJobByID(ctx, CloseUnseenJobByIDParams{ID: id, Cutoff: cutoff()})
+			done <- err
+		}()
+		obsWaitBlocked(t, ctx, pool, closer.Conn().PgConn().PID(), done)
+		if err := crawl.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-done; err != nil || n != 0 {
+			t.Fatalf("close = %d, %v; want 0 after the fresh observation committed", n, err)
+		}
+		if got := obsClosedExternalIDs(t, pool); len(got) != 0 {
+			t.Fatalf("closed = %v, want nothing closed", got)
+		}
+	})
+}

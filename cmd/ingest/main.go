@@ -688,7 +688,7 @@ func sweepRowByRow(ctx context.Context, queries *db.Queries, provider string, cu
 		return 0, 0, fmt.Errorf("list candidates: %w", err)
 	}
 	for _, id := range ids {
-		n, err := queries.CloseUnseenJobByID(ctx, id)
+		n, err := queries.CloseUnseenJobByID(ctx, db.CloseUnseenJobByIDParams{ID: id, Cutoff: cutoff})
 		if err != nil {
 			skipped++
 			log.Printf("close stale jobs (%s): skipping id=%d, still unclosable: %v", provider, id, err)

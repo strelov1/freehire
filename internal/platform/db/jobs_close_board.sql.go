@@ -336,12 +336,20 @@ func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBy
 }
 
 const closeUnseenJobByID = `-- name: CloseUnseenJobByID :one
-WITH closed AS (
+WITH cand AS (
+    SELECT j.id
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.id = $1 AND j.closed_at IS NULL AND NOT j.is_private
+      AND a.last_seen_at < $2
+    FOR NO KEY UPDATE OF j, a
+), closed AS (
     UPDATE jobs
     SET closed_at     = now(),
         closed_reason = 'unseen',
         updated_at    = now()
-    WHERE jobs.id = $1 AND jobs.closed_at IS NULL
+    FROM cand
+    WHERE jobs.id = cand.id AND jobs.closed_at IS NULL
     RETURNING jobs.id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -350,6 +358,11 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed
 `
+
+type CloseUnseenJobByIDParams struct {
+	ID     int64              `json:"id"`
+	Cutoff pgtype.Timestamptz `json:"cutoff"`
+}
 
 // The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
 // search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
@@ -360,8 +373,15 @@ SELECT count(*) FROM closed
 // Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
 // as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 // entry) can be caught and skipped by the caller without losing the rest of the batch.
-func (q *Queries) CloseUnseenJobByID(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRow(ctx, closeUnseenJobByID, id)
+//
+// cutoff is the crawl cutoff the candidates were listed by. The listing and this close are
+// separate statements, so a crawl can list the posting again between them: the close re-checks
+// the activity row's freshness under the same locks as the bulk sweep (CloseUnseenJobs, in
+// jobs_close_unseen.sql: jobs then job_activity, FOR NO KEY UPDATE, recheck after waiting) and
+// writes nothing, queues no removal, for a row that is fresh now. Private postings are excluded
+// from this catalogue close.
+func (q *Queries) CloseUnseenJobByID(ctx context.Context, arg CloseUnseenJobByIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeUnseenJobByID, arg.ID, arg.Cutoff)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
