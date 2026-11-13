@@ -67,7 +67,8 @@ func newMixedServer(tools []assistant.Tool, userID int64, origin string, reader 
 	account := accountInstructions(described)
 	instructions += strings.TrimPrefix(account, accountServerInstructions)
 	if viaCLI {
-		instructions += cliSessionInstructions
+		// The account paragraphs do not all end in a space (report_problem's does not).
+		instructions = strings.TrimRight(instructions, " ") + " " + cliSessionInstructions
 	}
 	if userID == 0 {
 		reader = forAnonymous(reader)
