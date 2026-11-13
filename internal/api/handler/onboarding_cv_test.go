@@ -240,6 +240,7 @@ func TestParseOnboardingCV_GuestEncodedBodyRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnsupportedMediaType {
 		t.Fatalf("status = %d, want 415", resp.StatusCode)
 	}
