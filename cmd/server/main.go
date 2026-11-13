@@ -36,6 +36,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/engage/discordlink"
+	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
@@ -364,9 +365,22 @@ func runServer(cfg config.Settings) error {
 		agentViews = agentViewWriter
 	}
 
+	// Per-account daily API request counts for the account's API page. The flush loop has
+	// its own context so shutdown can stop it, wait for an in-flight flush to settle, and
+	// only then flush the rest (below).
+	apiUsage := apiusage.New(db.New(pool))
+	usageCtx, stopUsage := context.WithCancel(context.Background())
+	defer stopUsage()
+	usageDone := make(chan struct{})
+	go func() {
+		defer close(usageDone)
+		apiUsage.Run(usageCtx, apiUsageFlushInterval)
+	}()
+
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
 		AgentViews:                  agentViews,
+		APIUsage:                    apiUsage,
 		Cache:                       cache.NewRedisCache(redisClient),
 		FrontendOrigin:              cfg.FrontendOrigin,
 		AuthIntrospectionSecret:     cfg.AuthIntrospectionSecret,
@@ -460,8 +474,18 @@ func runServer(cfg config.Settings) error {
 	}
 	log.Println("shutting down...")
 
-	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
-		return fmt.Errorf("shutdown: %w", err)
+	shutdownErr := app.ShutdownWithTimeout(10 * time.Second)
+	// The usage counts are flushed whether or not shutdown finished in time: what is
+	// buffered is already counted. Run is stopped first so its flush cannot land after this one.
+	stopUsage()
+	<-usageDone
+	flushCtx, cancelFlush := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFlush()
+	if err := apiUsage.Flush(flushCtx); err != nil {
+		log.Printf("apiusage: final flush: %v", err)
+	}
+	if shutdownErr != nil {
+		return fmt.Errorf("shutdown: %w", shutdownErr)
 	}
 	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
 	agentViewWriter.Close()
@@ -546,6 +570,10 @@ const siteStatusSampleInterval = 5 * time.Minute
 // where the index completes it. That is the whole reason a ticker is enough and a
 // build notification is not worth its plumbing.
 const suggestRefreshInterval = time.Hour
+
+// apiUsageFlushInterval is how often buffered API request counts are written, and so how
+// many a crash can lose.
+const apiUsageFlushInterval = time.Minute
 
 // startSuggestRefresh keeps the recognition set current in the background.
 //

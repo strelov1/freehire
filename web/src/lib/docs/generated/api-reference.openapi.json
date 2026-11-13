@@ -13365,7 +13365,8 @@
           "language",
           "onboarding_completed_at",
           "tier",
-          "agent_connected"
+          "agent_connected",
+          "api_tier"
         ],
         "properties": {
           "id": {
@@ -13435,6 +13436,15 @@
           "agent_connected": {
             "type": "boolean",
             "description": "Whether the account holds a live API key or MCP grant."
+          },
+          "api_tier": {
+            "type": "string",
+            "enum": [
+              "",
+              "api",
+              "api_data"
+            ],
+            "description": "The API product tier the account holds (see ApiKeyPlan); empty for none."
           }
         },
         "description": "The account as the SPA and the CLI read it."

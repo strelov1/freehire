@@ -29,7 +29,7 @@ export const messages = defineMessages(
     apiStrip: {
       tiers: { api: 'API plan', api_data: 'Data plan' },
       separate: 'Billed separately from Pro',
-      keys: 'API keys',
+      keys: 'Open API workspace',
       loadError: "Couldn't check your API plan. Reload the page to try again.",
     },
     subscription: {
@@ -110,7 +110,7 @@ export const messages = defineMessages(
       apiStrip: {
         tiers: { api: 'API-тариф', api_data: 'Тариф Data' },
         separate: 'Оплачивается отдельно от Pro',
-        keys: 'API-ключи',
+        keys: 'Открыть раздел API',
         loadError: 'Не удалось проверить API-тариф. Обновите страницу, чтобы попробовать ещё раз.',
       },
       subscription: {

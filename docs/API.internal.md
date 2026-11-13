@@ -1146,6 +1146,16 @@ curl -X PUT "https://freehire.me/api/v1/me/agent-permissions" -b cookies.txt
 curl "https://freehire.me/api/v1/me/api-plan" -b cookies.txt
 ```
 
+### `GET /me/api-usage`
+
+**Auth:** Session only
+
+The last 30 UTC days, oldest first; a day without requests is absent.
+
+```bash
+curl "https://freehire.me/api/v1/me/api-usage" -b cookies.txt
+```
+
 ### `POST /me/attribution`
 
 **Auth:** Session only

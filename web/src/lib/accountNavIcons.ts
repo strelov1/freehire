@@ -30,6 +30,7 @@ import {
   UserPlus,
   Briefcase,
   Eye,
+  Braces,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem, WorkspaceId } from './accountNav';
@@ -58,6 +59,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/activity': Activity,
   '/my/inbox': Inbox,
   '/my/market-pulse': TrendingUp,
+  '/my/api': Braces,
   '/my/notifications': BellRing,
   '/my/integrations': Plug,
   '/my/contributions': Link2,
@@ -75,4 +77,5 @@ export const workspaceIcons: Record<WorkspaceId, LucideIcon> = {
   mentor: GraduationCap,
   referrer: Handshake,
   employer: Building2,
+  api: Braces,
 };

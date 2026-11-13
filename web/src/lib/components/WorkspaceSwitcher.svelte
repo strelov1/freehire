@@ -20,7 +20,7 @@
   const items = $derived(visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false));
   const current = $derived(activeSection(page.url.pathname, items));
   const currentGroup = $derived(current ? (current.workspace ?? 'settings') : undefined);
-  const workspaceList = $derived(visibleWorkspaces(currentUser()?.beta_tester ?? false));
+  const workspaceList = $derived(visibleWorkspaces(currentUser()?.beta_tester ?? false, !!currentUser()?.api_tier));
   // undefined follows the current route; null is an explicit collapse.
   let expanded = $state<string | null | undefined>(undefined);
   const openGroup = $derived(expanded === undefined ? (currentGroup ?? null) : expanded);

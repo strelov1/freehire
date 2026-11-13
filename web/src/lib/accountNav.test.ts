@@ -10,8 +10,8 @@ import {
 } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-four account sections', () => {
-    expect(accountNav).toHaveLength(24);
+  it('lists the twenty-five account sections', () => {
+    expect(accountNav).toHaveLength(25);
   });
 
   // Submissions and the invite link are tabs of Contributions and Plan now; their old
@@ -276,8 +276,18 @@ describe('visibleWorkspaces', () => {
     expect(visibleWorkspaces(true).map((w) => w.id)).toEqual(['seeker', 'buddies', 'mentor', 'referrer', 'employer']);
   });
 
+  it('offers API only to an account holding an API plan', () => {
+    expect(visibleWorkspaces(false, true).map((w) => w.id)).toEqual([
+      'seeker',
+      'buddies',
+      'referrer',
+      'employer',
+      'api',
+    ]);
+  });
+
   it('opens each workspace on one of its own sections', () => {
-    for (const w of visibleWorkspaces(true)) expect(workspaceFor(w.home)).toBe(w.id);
+    for (const w of visibleWorkspaces(true, true)) expect(workspaceFor(w.home)).toBe(w.id);
   });
 });
 

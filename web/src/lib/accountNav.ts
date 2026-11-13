@@ -11,7 +11,7 @@
 // "me", which was an anonymous face, and which was a separate role. `workspace: null`
 // marks the shared Settings group every workspace ends with. Workspace names and hints
 // live in the i18n catalog (`i18n/shell.ts`), keyed by id.
-export type WorkspaceId = 'seeker' | 'buddies' | 'mentor' | 'referrer' | 'employer';
+export type WorkspaceId = 'seeker' | 'buddies' | 'mentor' | 'referrer' | 'employer' | 'api';
 type NavGroupId = 'main' | 'network' | 'settings';
 
 const workspaces = [
@@ -26,7 +26,10 @@ const workspaces = [
   { id: 'referrer', home: '/my/referrals/offers' },
   // Open to everyone: the company page starts with the claim, so it IS the way in.
   { id: 'employer', home: '/my/employer' },
-] as const satisfies readonly { id: WorkspaceId; home: string; betaOnly?: boolean }[];
+  // Only for an account holding an API plan (`api_tier` on the account): it is where a
+  // customer of the data reads their plan, usage, keys and webhook.
+  { id: 'api', home: '/my/api', apiOnly: true },
+] as const satisfies readonly { id: WorkspaceId; home: string; betaOnly?: boolean; apiOnly?: boolean }[];
 
 // Order = the order shown within each group. The four everyday sections
 // lead in the order they're used — Profile (identity), Activity, Tracking, Inbox —
@@ -89,6 +92,10 @@ export const accountNav = [
   { href: '/my/mentorship/profile', label: 'Mentor profile', workspace: 'mentor', group: 'main', betaOnly: true },
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
+  // The API customer's workspace: one section whose tabs are usage, keys and the webhook
+  // (routed tabs like Integrations; three nav entries would push the href union past what
+  // `resolve()` can relate, see toPath).
+  { href: '/my/api', label: 'API', workspace: 'api', group: 'main' },
   { href: '/my/notifications', label: 'Notifications', workspace: null, group: 'settings' },
   // Everything that connects the account to something outside it, as three tabs:
   // third-party accounts — Google (Gmail + Calendar) and Telegram (the alert bot,
@@ -183,6 +190,10 @@ export function workspaceNav(
 
 type Workspace = (typeof workspaces)[number];
 
-export function visibleWorkspaces(isBetaTester: boolean): readonly Workspace[] {
-  return workspaces.filter((w) => !('betaOnly' in w && w.betaOnly) || isBetaTester);
+export function visibleWorkspaces(isBetaTester: boolean, hasApiPlan = false): readonly Workspace[] {
+  return workspaces.filter((w) => {
+    if ('betaOnly' in w && w.betaOnly) return isBetaTester;
+    if ('apiOnly' in w && w.apiOnly) return hasApiPlan;
+    return true;
+  });
 }

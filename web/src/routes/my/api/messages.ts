@@ -1,0 +1,52 @@
+import { defineMessages } from '#lib/i18n/t.js';
+
+export const messages = defineMessages(
+  {
+    title: 'API',
+    headTitle: 'API · freehire',
+    tabsLabel: 'API sections',
+    tabs: { usage: 'Usage', keys: 'API keys', webhooks: 'Webhooks' },
+    tiers: { api: 'API', api_data: 'Data API' },
+    planActive: 'Active until {date}',
+    planActiveNoDate: 'Active',
+    noPlan: 'You have no API plan. A plan licenses the data for use in your product.',
+    seePlans: 'See API plans',
+    manageBilling: 'Billing',
+    today: 'Requests today',
+    month: 'Requests, 30 days',
+    errorCount: 'Errors, 30 days',
+    chartLabel: 'Requests',
+    chartEmpty: 'No requests in the last 30 days.',
+    usageNote:
+      'Requests made with your API keys or connected agents, by UTC day. Requests the rate limit turned away are not counted. Updated every minute.',
+    usageError: 'Could not load usage.',
+    planError: 'Could not load your API plan.',
+    retry: 'Try again',
+    docs: 'API reference',
+  },
+  {
+    ru: {
+      title: 'API',
+      headTitle: 'API · freehire',
+      tabsLabel: 'Разделы API',
+      tabs: { usage: 'Статистика', keys: 'API-ключи', webhooks: 'Вебхуки' },
+      tiers: { api: 'API', api_data: 'Data API' },
+      planActive: 'Действует до {date}',
+      planActiveNoDate: 'Активен',
+      noPlan: 'У вас нет API-тарифа. Тариф даёт лицензию на использование данных в вашем продукте.',
+      seePlans: 'Тарифы API',
+      manageBilling: 'Оплата',
+      today: 'Запросов сегодня',
+      month: 'Запросов за 30 дней',
+      errorCount: 'Ошибок за 30 дней',
+      chartLabel: 'Запросы',
+      chartEmpty: 'За последние 30 дней запросов не было.',
+      usageNote:
+        'Запросы с ваших API-ключей и подключённых агентов по дням (UTC). Запросы, отклонённые лимитом, не считаются. Обновляется раз в минуту.',
+      usageError: 'Не удалось загрузить статистику.',
+      planError: 'Не удалось загрузить ваш API-тариф.',
+      retry: 'Повторить',
+      docs: 'Документация API',
+    },
+  },
+);

@@ -273,9 +273,8 @@
               {/if}{s.apiStrip.separate}
             </span>
           </div>
-          <a
-            class="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
-            href={resolve('/my/integrations/api-keys')}>{s.apiStrip.keys}</a
+          <a class="rounded-md border border-border px-3 py-1.5 text-sm font-medium" href={resolve('/my/api')}
+            >{s.apiStrip.keys}</a
           >
         </div>
       {/if}
