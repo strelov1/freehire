@@ -184,12 +184,17 @@ func TestAnAgentSearchIsRecorded(t *testing.T) {
 func TestAnAccountRequestIsKeyedByTheVerifiedAccount(t *testing.T) {
 	sink := &recordingSink{}
 	app := fiber.New()
-	app.Get("/x", agentViews(sink, agentview.SurfaceMCPAccount), func(c *fiber.Ctx) error {
+	app.Get("/x", func(c *fiber.Ctx) error {
+		// What mcpAuthenticate leaves behind for a verified credential.
+		c.Locals(localsMCPUserID, int64(42))
+		return c.Next()
+	}, agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
 		agentview.Record(c.Context(), agentview.KindDetail, []int64{1})
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
-	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
+	// A caller-sent identity header is not what decides the viewer.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "7")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)

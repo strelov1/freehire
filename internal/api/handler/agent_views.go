@@ -1,11 +1,8 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -26,11 +23,6 @@ func agentViews(sink agentview.Sink, surface string) fiber.Handler {
 			return c.Next()
 		}
 		userID, _ := c.Locals(localsMCPUserID).(int64)
-		// The header is trusted only where mcpAccountAuthenticate has just rewritten it;
-		// on the public surfaces a client could send any value.
-		if userID == 0 && surface == agentview.SurfaceMCPAccount {
-			userID, _ = strconv.ParseInt(c.Get(mcpapp.AccountUserIDHeader), 10, 64)
-		}
 		if userID == 0 {
 			userID, _ = auth.UserID(c)
 		}

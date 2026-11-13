@@ -8,7 +8,7 @@
   import { glyphColorFor } from '#lib/markColor.js';
   import { EntityLogo } from '#lib/ui/index.js';
 
-  // One hosted connection for public search and optional OAuth account access.
+  // One hosted connection, signed in with OAuth when it is added.
   let { compact = false, iconsOnly = false }: { compact?: boolean; iconsOnly?: boolean } = $props();
   const url = $derived(`${page.url.origin}${MCP_PATH}`);
 
@@ -55,17 +55,17 @@
       label: 'ChatGPT',
       domain: 'chatgpt.com',
       mono: true,
-      // Public search and personal access use the same original app.
+      // Search and personal access use the same original app.
       directory: {
         url: CHATGPT_APP_URL,
         brand: OPENAI_MARK,
-        note: 'One click, search with no sign-in',
+        note: 'One click, then sign in to freehire',
       },
       steps: [
         'The directory listing above and a custom connection are separate install options. Custom connections require your ChatGPT workspace to allow adding MCP servers and using the tools you need.',
         'Open Plugins and choose Add, then Add custom MCP server.',
         'Name it freehire and paste the address.',
-        'Choose OAuth or no authentication, then connect with or without an account.',
+        'Choose OAuth, then sign in to freehire and approve the connection.',
         'In a new chat, pick freehire from the + menu and ask a job question.',
       ],
     },
@@ -270,8 +270,8 @@
 
         <div class="max-w-2xl">
           <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
-            One connection for public search and your account. Search jobs, employers and market data without signing
-            in. Sign in with OAuth to use your profile, saved jobs, tracking and alerts.
+            One connection for search and your account: jobs, employers and market data, plus your profile, saved jobs,
+            tracking and alerts. Your assistant asks you to sign in to freehire when you add it.
           </p>
 
           <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
@@ -308,13 +308,13 @@
             {/if}
             <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
               {#if h.id === 'codex'}
-                For personal tools, run <code>codex mcp login freehire</code> and approve the connection in your browser.
+                Then run <code>codex mcp login freehire</code> and approve the connection in your browser.
               {:else if h.id === 'claude-code'}
-                For personal tools, run <code>claude mcp login freehire</code>, or use <code>/mcp</code> inside Claude Code
-                and choose Authenticate for freehire. Public search works before you sign in.
+                Then use <code>/mcp</code> inside Claude Code and choose Authenticate for freehire, and approve the connection
+                in your browser.
               {:else}
-                For personal tools, use your assistant's sign-in or authentication control and approve the freehire
-                connection in your browser. Keep the same server address.
+                If your assistant does not open sign-in on its own, use its sign-in or authentication control and
+                approve the freehire connection in your browser.
               {/if}
             </p>
           </div>
@@ -323,7 +323,7 @@
     {/each}
 
     {#if !compact}
-      {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport). Public search works without an account. For personal tools, start OAuth sign-in and let me approve access in my browser. Keep this same server address. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
+      {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport) and it requires OAuth sign-in: start it and let me approve access in my browser. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
       <div class="mt-8 max-w-2xl">
         <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
         <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">

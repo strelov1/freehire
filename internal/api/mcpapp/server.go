@@ -85,8 +85,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 		Meta:        rendersInWidget(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchJobsResult, error) {
 		out, err := r.SearchJobs(ctx, in)
-		// The anonymous cap notice already says to connect an account; say it once.
-		if err == nil && out.Notice == "" {
+		if err == nil {
 			out.Next = next.search
 		}
 		return toolResult(out, err)

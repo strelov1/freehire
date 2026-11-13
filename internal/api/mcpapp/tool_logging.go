@@ -152,7 +152,7 @@ func AddObservedTool[In, Out any](
 		if tool.Meta == nil {
 			tool.Meta = mcp.Meta{}
 		}
-		tool.Meta["securitySchemes"] = []map[string]any{{"type": "noauth"}}
+		tool.Meta["securitySchemes"] = oauthOnly
 	}
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name

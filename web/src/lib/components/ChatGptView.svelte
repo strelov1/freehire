@@ -135,15 +135,15 @@
       </li>
     </ol>
 
-    <!-- Personal tools use OAuth on the same MCP connection as public search. -->
+    <!-- Every tool uses OAuth on the one MCP connection. -->
     <h2 class="mt-10 text-sm font-semibold text-muted-foreground">Save and track</h2>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Use the same freehire connection to save jobs and update your
       <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline"
         >Tracking</a
       >
-      board. When ChatGPT asks for access, sign in with freehire and approve the connection. Public search works without an
-      account. Personal tools use OAuth and do not need an API key. The
+      board. When ChatGPT asks for access, sign in with freehire and approve the connection. The connection uses OAuth and
+      needs no API key. The
       <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">setup guide</a>
       also covers custom connections to the same MCP address.
     </p>

@@ -175,6 +175,8 @@ func TestTheMountedRouteSpeaksMCPOverHTTP(t *testing.T) {
 	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	// What mcpAuthenticate stamps for a verified credential.
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
 
 	resp, err := app.Test(req)
 	if err != nil {

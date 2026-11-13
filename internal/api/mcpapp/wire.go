@@ -76,8 +76,6 @@ type SearchJobsResult struct {
 	Semantic string `json:"semantic,omitempty" jsonschema:"unavailable: a semantic request was answered by keywords only"`
 	// TotalIsLowerBound: the total is "this many and maybe more", not a count.
 	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty" jsonschema:"true: total is a minimum, not a count — say 'at least', never 'of N'"`
-	// Notice is set when an anonymous caller's page was shortened (see anonymousReader).
-	Notice string `json:"notice,omitempty" jsonschema:"set when fewer results were returned than asked because the caller is anonymous; tell the user and that connecting a freehire account lifts it"`
 	// Next is one sentence naming what else freehire can do with these results (nextHints).
 	Next string `json:"next,omitempty" jsonschema:"what else freehire can do with these results"`
 }
@@ -231,8 +229,7 @@ type ResearchMetadata struct {
 // SimilarJobsResult is what similar_jobs answers: the posting's nearest neighbours, nearest
 // first. Empty where none have been computed yet, which is true of the newest postings.
 type SimilarJobsResult struct {
-	Jobs   []JobSummary `json:"jobs"`
-	Notice string       `json:"notice,omitempty" jsonschema:"set when fewer results were returned than asked because the caller is anonymous; tell the user and that connecting a freehire account lifts it"`
+	Jobs []JobSummary `json:"jobs"`
 }
 
 // SalaryStatsResult is what salary_stats answers. Currencies and pay periods are never

@@ -80,7 +80,7 @@ func TestSimilarJobsIsCappedAndDefaulted(t *testing.T) {
 		t.Errorf("no limit asked for %d, want the default %d", asked, defaultSimilar)
 	}
 	callJSON(t, session, toolSimilarJobs, map[string]any{"slug": "x", "limit": 500}, &got)
-	if asked != anonymousMaxResults { // the public server is anonymous
-		t.Errorf("limit 500 asked for %d, want the anonymous cap %d", asked, anonymousMaxResults)
+	if asked != maxSimilar {
+		t.Errorf("limit 500 asked for %d, want the cap %d", asked, maxSimilar)
 	}
 }

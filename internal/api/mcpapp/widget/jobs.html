@@ -52,15 +52,6 @@
   .action-status:empty { display: none; }
   .action-recovery { flex-basis: 100%; font-size: 12px; }
   .action-recovery[hidden] { display: none; }
-  .connect { margin: 0 0 8px; padding: 14px; border: 1px solid var(--fh-border); border-radius: 14px; }
-  .connect-head { display: flex; align-items: center; gap: 12px; }
-  .connect-mark { flex: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: var(--fh-muted); color: var(--fh-fg); }
-  .connect-mark svg { width: 24px; height: 24px; fill: currentColor; }
-  .connect-name { margin: 0; font-size: 15px; font-weight: 600; }
-  .connect-pitch { margin: 0; color: var(--fh-muted-fg); font-size: 13px; }
-  .connect-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--fh-border); }
-  .connect-state { color: var(--fh-muted-fg); font-size: 13px; }
-  .connect-note { margin: 8px 0 0; color: var(--fh-muted-fg); font-size: 12px; }
   .action-recovery label { display: block; margin-bottom: 8px; }
   .account-actions[data-state="confirmed"] .action-status { color: var(--fh-good); }
   .account-actions[data-state="failed"] .action-status, .account-actions[data-state="unknown"] .action-status { color: var(--fh-bad); }
@@ -97,10 +88,6 @@
   let hostCapabilities = {};
   let nextId = 1;
   let lastToolResult;
-  // Whether this connection is signed in, as the server stamps it on the result (mixed.go).
-  // Unknown (a host that drops _meta, the window.openai path) keeps the per-card buttons.
-  let signedIn;
-  let connect = { phase: "idle", message: "" };
   const actionStates = new Map();
   const STAGES = ["preparing", "applied", "screening", "responded", "interview", "offer", "accepted", "rejected", "withdrawn", "expired"];
 
@@ -256,8 +243,6 @@
     const result = toolResult.structuredContent;
     if (!result || (!Array.isArray(result.jobs) && typeof result.description !== "string")) return;
     lastToolResult = toolResult;
-    const account = toolResult._meta && toolResult._meta["freehire.me/account"];
-    if (account && typeof account.signed_in === "boolean") signedIn = account.signed_in;
     draw();
   }
 
@@ -266,62 +251,8 @@
     if (!result) return;
     for (const state of actionStates.values()) state.views = [];
     root.replaceChildren();
-    if (hostCapabilities.serverTools && signedIn === false) root.append(connectPanel());
     if (Array.isArray(result.jobs)) renderList(result);
     else if (typeof result.description === "string") renderDetail(result);
-  }
-
-  // connectPanel offers sign-in once, above the results, instead of a failing button per card.
-  // Connect asks for the profile: an anonymous personal call is what makes the host open its
-  // own sign-in (HTTP 401 for most hosts, the in-band challenge for ChatGPT).
-  function connectPanel() {
-    const panel = el("section", "connect");
-    panel.setAttribute("aria-label", "Connect your freehire account");
-    const head = el("div", "connect-head");
-    const mark = el("div", "connect-mark");
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "56 56 400 400");
-    svg.setAttribute("aria-hidden", "true");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("fill-rule", "evenodd");
-    path.setAttribute("d", "M256 56C366.457 56 456 145.543 456 256C456 366.457 366.457 456 256 456C145.543 456 56 366.457 56 256C56 145.543 145.543 56 256 56ZM256 166L346 256L256 346L166 256L256 166Z");
-    svg.append(path);
-    mark.append(svg);
-    const text = el("div");
-    text.append(el("p", "connect-name", "freehire"), el("p", "connect-pitch", "Save jobs and track your applications"));
-    head.append(mark, text);
-    const row = el("div", "connect-row");
-    const busy = connect.phase === "connecting";
-    const button = el("button", "btn primary", { connecting: "Connecting...", waiting: "Try again" }[connect.phase] || "Connect");
-    button.type = "button";
-    button.disabled = busy;
-    button.addEventListener("click", startConnect);
-    row.append(el("span", "connect-state", "Not connected yet"), button);
-    const note = el("p", "connect-note", connect.message || "freehire changes your board only when you ask. Disconnect any time in Connected devices.");
-    note.setAttribute("role", "status");
-    panel.append(head, row, note);
-    return panel;
-  }
-
-  function startConnect() {
-    if (connect.phase === "connecting") return;
-    connect = { phase: "connecting", message: "" };
-    draw();
-    const waiting = function () {
-      connect = { phase: "waiting", message: "Finish signing in where your assistant asks, then try again. If nothing opened, connect freehire in your assistant's connector settings." };
-      draw();
-    };
-    request("tools/call", { name: "get_profile", arguments: {} }, 30000).then(function (reply) {
-      if (!reply || reply.isError || authChallenged(reply)) { waiting(); return; }
-      signedIn = true;
-      connect = { phase: "idle", message: "" };
-      draw();
-    }, waiting);
-  }
-
-  function authChallenged(reply) {
-    const challenges = reply._meta && reply._meta["mcp/www_authenticate"];
-    return Array.isArray(challenges) && challenges.some(function (value) { return typeof value === "string" && value.startsWith("Bearer "); });
   }
 
   function renderList(result) {
@@ -412,7 +343,7 @@
     if (page) actions.append(link("Open on freehire", page, true));
     const employer = safeURL(job.official_job_url);
     if (employer) actions.append(link("Employer's posting", employer, false));
-    if (hostCapabilities.serverTools && signedIn !== false && typeof job.slug === "string" && job.slug.trim()) {
+    if (hostCapabilities.serverTools && typeof job.slug === "string" && job.slug.trim()) {
       actions.append(accountActions(job));
     }
     if (job.source) actions.append(el("span", "source", "via " + job.source));
@@ -498,14 +429,6 @@
       refresh();
       request("tools/call", { name: name, arguments: args }, 30000).then(function (reply) {
         if (!reply || typeof reply !== "object" || !Array.isArray(reply.content)) { unknown(); return; }
-        if (authChallenged(reply)) {
-          // Not signed in after all: swap every card's buttons for one Connect panel.
-          state.phase = "idle";
-          state.message = "";
-          signedIn = false;
-          draw();
-          return;
-        }
         if (reply.isError) {
           const text = (reply.content || []).find(function (item) { return item && item.type === "text" && typeof item.text === "string"; });
           state.phase = "failed";

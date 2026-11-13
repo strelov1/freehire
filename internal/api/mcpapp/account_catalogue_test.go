@@ -102,7 +102,7 @@ func TestAccountCatalogueDoesNotExportPayloadsToAnalytics(t *testing.T) {
 }
 
 // The catalogue owns search_jobs, get_job and get_company on the one server: the assistant's
-// copies of those names are never registered, so /mcp and /mcp/account publish the same schemas.
+// copies of those names are never registered, so /mcp publishes the catalogue schemas.
 func TestSignedInCatalogueOwnsItsNamesAndKeepsPersonalHandlers(t *testing.T) {
 	tools := []assistant.Tool{}
 	for _, name := range []string{"search_jobs", "get_job", "get_company", "my_jobs"} {

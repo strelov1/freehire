@@ -16,14 +16,6 @@ import (
 // per job, and never grows with the result.
 type nextHints struct{ search, job string }
 
-// signedOutNext points a connection that cannot call personal tools at signing in, rather
-// than naming tools it would be refused.
-func signedOutNext(origin string) nextHints {
-	hint := "Sign in to your freehire account in this connector to save jobs, get alerts for new " +
-		"matches and prepare applications (setup: " + strings.TrimSuffix(origin, "/") + "/mcp)."
-	return nextHints{search: hint, job: hint}
-}
-
 // signedInNext names only the follow-ups among the tools this session is actually served:
 // an API key has no auto-apply, so its hint does not offer it.
 func signedInNext(tools []assistant.Tool) nextHints {

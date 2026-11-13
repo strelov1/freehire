@@ -22,10 +22,9 @@ const (
 
 // The surfaces an event can come from.
 const (
-	SurfaceMCP        = "mcp"
-	SurfaceMCPAccount = "mcp_account"
-	SurfaceOJCP       = "ojcp"
-	SurfaceAgentAPI   = "agent_api"
+	SurfaceMCP      = "mcp"
+	SurfaceOJCP     = "ojcp"
+	SurfaceAgentAPI = "agent_api"
 )
 
 // Event is one served response: the postings one agent call returned.

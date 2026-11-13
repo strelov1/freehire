@@ -54,22 +54,15 @@ type protectedResourceMetadata struct {
 	AuthorizationServers []string `json:"authorization_servers"`
 }
 
-// OAuthProtectedResourceMetadata renders RFC 9728's document, naming the
-// signed-in MCP server as the protected resource and this deployment as its
-// authorization server. Public. Mounted internally and proxied, same reasoning
-// as OAuthAuthorizationServerMetadata above.
+// OAuthProtectedResourceMetadata renders RFC 9728's document, naming the MCP server at
+// /api/v1/mcp as the protected resource and this deployment as its authorization server.
+// Public. Both the root well-known path and the path-inserted one (mcpapp.ResourceMetadataPath)
+// proxy here, since they describe the one resource. Mounted internally and proxied, same
+// reasoning as OAuthAuthorizationServerMetadata above.
 func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
 	origin := h.frontendOrigin
 	return c.JSON(protectedResourceMetadata{
-		Resource:             strings.TrimSuffix(origin, "/") + oauth2server.MCPAccountResourcePath,
+		Resource:             strings.TrimSuffix(origin, "/") + oauth2server.MCPResourcePath,
 		AuthorizationServers: []string{origin},
-	})
-}
-
-// OAuthMixedResourceMetadata describes the canonical mixed-auth MCP endpoint.
-func (h *authHandlers) OAuthMixedResourceMetadata(c *fiber.Ctx) error {
-	return c.JSON(protectedResourceMetadata{
-		Resource:             strings.TrimSuffix(h.frontendOrigin, "/") + oauth2server.MCPResourcePath,
-		AuthorizationServers: []string{h.frontendOrigin},
 	})
 }

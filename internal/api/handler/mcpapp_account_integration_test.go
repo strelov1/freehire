@@ -36,14 +36,11 @@ func (rt bearerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func TestMCPAuthenticatedEndpoints(t *testing.T) {
-	for _, endpoint := range []string{"/api/v1/mcp", "/api/v1/mcp/account"} {
-		t.Run(endpoint, func(t *testing.T) {
-			t.Run("oauth", func(t *testing.T) { testMCPEndToEnd(t, endpoint) })
-			t.Run("database failure", func(t *testing.T) { testMCPInfraFailure(t, endpoint) })
-			t.Run("api keys", func(t *testing.T) { testMCPByAPIKey(t, endpoint) })
-		})
-	}
+func TestMCPAuthenticatedEndpoint(t *testing.T) {
+	const endpoint = "/api/v1/mcp"
+	t.Run("oauth", func(t *testing.T) { testMCPEndToEnd(t, endpoint) })
+	t.Run("database failure", func(t *testing.T) { testMCPInfraFailure(t, endpoint) })
+	t.Run("api keys", func(t *testing.T) { testMCPByAPIKey(t, endpoint) })
 }
 
 func testMCPEndToEnd(t *testing.T, endpoint string) {
@@ -77,13 +74,7 @@ func testMCPEndToEnd(t *testing.T, endpoint string) {
 	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCP(api, middleware{}, assistants, catalogue)
-	mountMCPAccount(
-		api,
-		middleware{},
-		assistants,
-		catalogue,
-	)
+	mountMCP(api, assistants, catalogue)
 
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
@@ -203,13 +194,7 @@ func testMCPInfraFailure(t *testing.T, endpoint string) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCP(api, middleware{}, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
-	mountMCPAccount(
-		api,
-		middleware{},
-		assistants,
-		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
-	)
+	mountMCP(api, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
 
 	pool.Close() // simulate the database going away, not an unknown token
 
@@ -253,13 +238,7 @@ func testMCPByAPIKey(t *testing.T, endpoint string) {
 	catalogue.agentViews = sink
 	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCP(app.Group("/api/v1"), middleware{}, assistants, catalogue)
-	mountMCPAccount(
-		app.Group("/api/v1"),
-		middleware{},
-		assistants,
-		catalogue,
-	)
+	mountMCP(app.Group("/api/v1"), assistants, catalogue)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 
@@ -331,7 +310,7 @@ func assertAccountCatalogue(t *testing.T, session *mcp.ClientSession) {
 	for _, tool := range listed.Tools {
 		served[tool.Name] = true
 	}
-	// /mcp/account serves the catalogue's own search_jobs, not the assistant's `filters` object.
+	// /mcp serves the catalogue's own search_jobs, not the assistant's `filters` object.
 	for _, tool := range listed.Tools {
 		if schema, _ := json.Marshal(tool.InputSchema); tool.Name == "search_jobs" && !strings.Contains(string(schema), `"work_mode"`) {
 			t.Errorf("search_jobs is not the catalogue's schema: %s", schema)

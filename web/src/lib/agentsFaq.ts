@@ -15,7 +15,7 @@ export const AGENTS_FAQ: FaqItem[] = [
   {
     question: 'How do I connect my account?',
     answer:
-      'For MCP, use the same server address for public search and personal tools. Approve OAuth in your browser when you connect your account. Codex uses codex mcp login freehire; Claude Code uses claude mcp login freehire or its /mcp authentication control. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
+      'For MCP, add the server address and approve OAuth in your browser when your assistant asks; the hosted MCP needs a freehire account. Codex uses codex mcp login freehire; Claude Code uses its /mcp authentication control. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
   },
   {
     question: 'Can my assistant submit applications for me?',

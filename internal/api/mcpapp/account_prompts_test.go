@@ -51,11 +51,6 @@ func TestAccountPrompts_AreListedAndRenderTheirToolOrder(t *testing.T) {
 	if got := promptNames(t, mixed); !slices.Contains(got, "jobs_for_my_profile") || !slices.Contains(got, promptJobsForStack) {
 		t.Errorf("signed-in canonical prompts = %v", got)
 	}
-	// An anonymous connection is offered only the catalogue ones.
-	anon := connectServer(t, newMixedServer(granted, 0, testOrigin, readerThatFinds(t), false))
-	if got := promptNames(t, anon); slices.Contains(got, "jobs_for_my_profile") {
-		t.Errorf("anonymous prompts offer a personal workflow: %v", got)
-	}
 }
 
 // With the setup tools served, setting up starts from what is missing — a CV first — and

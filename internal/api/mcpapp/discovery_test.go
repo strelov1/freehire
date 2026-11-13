@@ -42,6 +42,7 @@ func post(t *testing.T, body string, headers map[string]string) *httptest.Respon
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/mcp", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set(AccountUserIDHeader, "42")
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

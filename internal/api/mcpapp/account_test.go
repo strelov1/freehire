@@ -13,7 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// connectSignedIn serves tools to user 42 over the one server both /mcp and /mcp/account mount.
+// connectSignedIn serves tools to user 42 over the server /mcp mounts.
 func connectSignedIn(t *testing.T, tools []assistant.Tool) *mcp.ClientSession {
 	t.Helper()
 	server := newMixedServer(tools, 42, "", nil, false)

@@ -38,8 +38,8 @@
       Search jobs right inside your AI assistant.
     </h1>
     <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant. Start without an account, then
-      connect with OAuth to save your shortlist, track applications and manage alerts.
+      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant. Connect your freehire account
+      with OAuth to search, save your shortlist, track applications and manage alerts.
     </p>
     <AgentSetupButton />
   </div>

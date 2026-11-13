@@ -56,13 +56,13 @@ func TestHTTPToolErrorCorrelatesWithResponseAndResolvedIdentity(t *testing.T) {
 	}}
 	app := fiber.New()
 	app.Use(observability.RequestIDs())
-	app.All("/mcp/account", func(c *fiber.Ctx) error {
+	app.All("/mcp", func(c *fiber.Ctx) error {
 		// Stand in for resolved auth, keeping the real Fiber -> HTTP -> SDK path.
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "api_key", UserID: 42, KeyID: 73, Scope: "full"})
 		c.Request().Header.Set(AccountUserIDHeader, "42")
 		return c.Next()
 	}, adaptor.HTTPHandler(MixedHandler([]assistant.Tool{tool}, "", nil)))
-	req := httptest.NewRequestWithContext(t.Context(), "POST", "/mcp/account", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"probe","arguments":{}}}`))
+	req := httptest.NewRequestWithContext(t.Context(), "POST", "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"probe","arguments":{}}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("MCP-Protocol-Version", "2025-11-25")
