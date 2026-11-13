@@ -23,7 +23,7 @@
   </div>
   <div class="min-w-0 flex-1">
     <p class="text-sm font-semibold tracking-tight">Make this your feed</p>
-    <p class="truncate text-xs text-muted-foreground">Answer 2 quick questions — see only jobs that fit you.</p>
+    <p class="truncate text-xs text-muted-foreground">Drop your CV — see only jobs that fit you.</p>
   </div>
   <button
     type="button"

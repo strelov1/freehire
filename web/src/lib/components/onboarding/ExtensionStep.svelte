@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The tour's browser-extension step. The extension is free to install; filling in
+  // Getting started: the browser extension. It is free to install; filling in
   // application forms is Pro. The claims follow /features/extension.
   import { resolve } from '$app/paths';
   import { ArrowRight, Keyboard, ListChecks, MousePointerClick, ScanText } from '@lucide/svelte';

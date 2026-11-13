@@ -31,6 +31,7 @@ import { cvApi } from './api-methods/cv';
 import { threadsApi } from './api-methods/threads';
 import { feedbackApi } from './api-methods/feedback';
 import { emailPrefsApi } from './api-methods/email-prefs';
+import { onboardingApi } from './api-methods/onboarding';
 
 export type {
   Slice,
@@ -164,6 +165,7 @@ export function createApi(
     ...threadsApi(http),
     ...feedbackApi(http),
     ...emailPrefsApi(http),
+    ...onboardingApi(http),
     openCoverLetterStream,
   };
 }

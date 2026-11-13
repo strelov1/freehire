@@ -1,5 +1,5 @@
 // Turning on the "jobs matching my profile" alert on one channel — shared by the
-// Search alerts tab's toggle (ProfileAlertToggle) and the onboarding tour, so the rules
+// Search alerts tab's toggle (ProfileAlertToggle) and the onboarding flow's sign-up, so the rules
 // below live once.
 //
 // The alert is a saved search marked derived_from_profile (the server's partial unique

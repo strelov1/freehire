@@ -147,6 +147,9 @@ func (h *searchHandlers) register(api fiber.Router, mw middleware, contract fibe
 		agentViews(h.agentViews, agentview.SurfaceAgentAPI), contract)
 	api.Get("/jobs/facets", contract)
 	api.Get("/jobs/:slug/similar", contract)
+	// The CV-first onboarding's match search: ranked by a posted skill list, so a visitor
+	// with no account (and no stored profile) still gets the match sort. Public.
+	api.Post("/onboarding/matches", contract)
 }
 
 // searcher is the search backend the handler depends on. *search.Client

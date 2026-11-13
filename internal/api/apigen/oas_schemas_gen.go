@@ -17713,6 +17713,91 @@ func (s *OnboardingCompleted) SetOnboardingComplete(val bool) {
 	s.OnboardingComplete = val
 }
 
+// One matching posting with how well its skills match the given ones.
+// Ref: #/components/schemas/OnboardingMatch
+type OnboardingMatch struct {
+	// The jobview wire shape `/jobs/search` answers with.
+	Job jx.Raw `json:"job"`
+	// The share of the posting's skills the given skills cover, 0-100.
+	MatchPercent int32 `json:"match_percent"`
+}
+
+// GetJob returns the value of Job.
+func (s *OnboardingMatch) GetJob() jx.Raw {
+	return s.Job
+}
+
+// GetMatchPercent returns the value of MatchPercent.
+func (s *OnboardingMatch) GetMatchPercent() int32 {
+	return s.MatchPercent
+}
+
+// SetJob sets the value of Job.
+func (s *OnboardingMatch) SetJob(val jx.Raw) {
+	s.Job = val
+}
+
+// SetMatchPercent sets the value of MatchPercent.
+func (s *OnboardingMatch) SetMatchPercent(val int32) {
+	s.MatchPercent = val
+}
+
+// A list: `{"data": [...], "meta": {...}}`.
+type OnboardingMatchesOK struct {
+	Data []OnboardingMatch `json:"data"`
+	Meta ListMeta          `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *OnboardingMatchesOK) GetData() []OnboardingMatch {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *OnboardingMatchesOK) GetMeta() ListMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *OnboardingMatchesOK) SetData(val []OnboardingMatch) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *OnboardingMatchesOK) SetMeta(val ListMeta) {
+	s.Meta = val
+}
+
+// What the onboarding searches with: the CV's skills and the answers as a jobs-search query.
+// Ref: #/components/schemas/OnboardingMatchesRequest
+type OnboardingMatchesRequest struct {
+	// Canonical skill tags, at most 50. They rank the answer; they do not filter it.
+	Skills []string `json:"skills"`
+	// A `/jobs/search` query string (`work_mode=remote&posted_within_days=7`, ...). An unknown param is
+	// named in `meta.ignored_params`.
+	Query OptString `json:"query"`
+}
+
+// GetSkills returns the value of Skills.
+func (s *OnboardingMatchesRequest) GetSkills() []string {
+	return s.Skills
+}
+
+// GetQuery returns the value of Query.
+func (s *OnboardingMatchesRequest) GetQuery() OptString {
+	return s.Query
+}
+
+// SetSkills sets the value of Skills.
+func (s *OnboardingMatchesRequest) SetSkills(val []string) {
+	s.Skills = val
+}
+
+// SetQuery sets the value of Query.
+func (s *OnboardingMatchesRequest) SetQuery(val OptString) {
+	s.Query = val
+}
+
 // Ref: #/components/schemas/OneClickResult
 type OneClickResult struct {
 	UnsubscribedFrom string `json:"unsubscribed_from"`

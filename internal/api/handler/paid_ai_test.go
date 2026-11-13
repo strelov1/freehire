@@ -109,8 +109,9 @@ var gatedRoutes = []gatedRoute{
 }
 
 // openRoutes read a cached AI result, compute something deterministic, or make one of the
-// model calls every account gets (plan.WithFreeAI) — the CV parse and the search
-// interpretation. They must stay reachable to free, so the gate must never even be asked.
+// model calls every account gets (plan.WithFreeAI) — the CV parse, the onboarding CV read
+// (signed in or not) and the search interpretation. They must stay reachable to free, so
+// the gate must never even be asked.
 var openRoutes = []gatedRoute{
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/fit"},
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/match-analysis"},
@@ -123,6 +124,7 @@ var openRoutes = []gatedRoute{
 	{method: fiber.MethodGet, path: "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/cover-letter"},
 	{method: fiber.MethodGet, path: "/api/v1/me/cvs/00000000-0000-0000-0000-000000000001/tailor-context"},
 	{method: fiber.MethodPost, path: "/api/v1/cv/roast"},
+	{method: fiber.MethodPost, path: "/api/v1/onboarding/cv"},
 	{method: fiber.MethodPost, path: "/api/v1/search/interpret"},
 }
 

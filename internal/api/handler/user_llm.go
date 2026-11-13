@@ -26,6 +26,7 @@ const (
 	tagCoverLetter     = "cover-letter"
 	tagReferralMessage = "referral-message"
 	tagSupport         = "support"
+	tagCVOnboard       = "cv-onboard"
 )
 
 // llmBinding is what a per-user surface needs to spend as its caller: the client the
@@ -49,8 +50,8 @@ var errUnpaidModelCall = errors.New("handler: model call without a verified paid
 
 // requirePaidCall is the binding's own check, and the one model calls that never come
 // through the binding (dictation, the voice token) make for themselves. A call the product
-// deliberately gives every account (plan.WithFreeAI: the CV parse, the search intent and the
-// support agent) passes it too.
+// deliberately gives every account (plan.WithFreeAI: the CV parse, the onboarding CV read, the
+// search intent and the support agent) passes it too.
 func requirePaidCall(ctx context.Context) error {
 	if !plan.PaidAI(ctx) && !plan.FreeAI(ctx) {
 		return errUnpaidModelCall

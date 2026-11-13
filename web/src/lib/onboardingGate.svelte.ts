@@ -31,10 +31,10 @@ export const onboardingGate = {
   },
 };
 
-/** The URL for /onboarding carrying `returnTo` — where the wizard sends the visitor
- *  back once they finish or skip it. Every entry point (a signed-out gate's "Sign up",
- *  the layout's no-CV auto-redirect) builds this the same way, so they share one place
- *  to change the query param name or add validation. */
+/** The URL for /onboarding carrying `returnTo` — where the flow sends a signed-in
+ *  visitor who skips it or finishes it. Every entry point (the layout's once-per-account
+ *  redirect, the feed's onboarding nudge) builds this the same way, so they share one
+ *  place to change the query param name or add validation. */
 export function onboardingUrl(returnTo: string): string {
   return `${resolve('/onboarding')}?returnTo=${encodeURIComponent(returnTo)}`;
 }

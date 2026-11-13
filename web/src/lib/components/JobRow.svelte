@@ -10,8 +10,7 @@
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
-  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptSignIn, signinUrl } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
   import { cardTags, cardTagsFromCard, formatSalary, regionLabel, workArrangement } from '#lib/enrichment.js';
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
@@ -372,8 +371,10 @@
 
   function signUpFromApplyGate() {
     showApplyGate = false;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() resolves the route and adds the return location
-    void goto(onboardingUrl(page.url.pathname + page.url.search));
+    // Register, then come back to this list; the layout routes a new account through
+    // /onboarding once, and that page can skip straight back here.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
+    void goto(signinUrl({ returnTo: page.url.pathname + page.url.search }));
   }
 
   function signInFromApplyGate() {

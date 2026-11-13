@@ -41,10 +41,31 @@ describe('root layout footer state', () => {
 // that navigation and lost, so the tour opened for an instant — long enough to record
 // itself as shown — and the visitor never saw it (2026-10-27, 18 accounts). The sign-in
 // page lands the visitor first; the gate runs on the page it lands on.
+//
+// The flow on /onboarding is open to everyone (cv-first-onboarding): an account that has
+// not seen it is routed there once, and nothing routes anybody AWAY from it — neither a
+// signed-out visitor (who can run it to the results) nor an account that completed it.
 describe('root layout onboarding gate', () => {
+  const gateAt = SOURCE.indexOf('const needsOnboarding');
+  const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
+
   it('leaves /signin to finish its own navigation', () => {
-    const gateAt = SOURCE.indexOf('const needsOnboarding');
-    const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
     expect(gate).toContain("path !== '/signin'");
+  });
+
+  it('routes only a signed-in account that has not been through the flow, once per visit', () => {
+    expect(SOURCE).toContain('const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null)');
+    expect(gate).toContain('isAuthenticated() &&');
+    expect(gate).toContain('needsOnboarding &&');
+    expect(gate).toContain('!onboardingGate.dismissed');
+    expect(gate).toContain("path !== '/onboarding'");
+  });
+
+  it('never bounces anybody away from /onboarding', () => {
+    // The reverse bounce read the completion marker while ON the page; any read of the
+    // pathname as `=== '/onboarding'` outside the footer rule would be one again.
+    const outsideFooter = SOURCE.replace("page.url.pathname === '/onboarding' ||", '');
+    expect(outsideFooter).not.toContain("=== '/onboarding'");
+    expect(SOURCE).not.toContain('onboarding_completed_at != null');
   });
 });

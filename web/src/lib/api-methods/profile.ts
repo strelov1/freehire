@@ -130,14 +130,12 @@ export function profileApi({ call, request, requestData }: Http) {
     return requestData<Answers>('/api/v1/me/screening-answers', jsonBody('PUT', patch));
   }
 
-  // The onboarding survey — what the candidate told us about their SEARCH (how far along it
-  // is, what is blocking it, what they earn today). Distinct from the screening answers
-  // above, which are what an employer sees; and from the profile, which is a search filter.
-  // What they WANT to be paid is a screening answer, not one of these.
+  // The onboarding survey — what the candidate told us about their SEARCH (what is in its
+  // way). Distinct from the screening answers above, which are what an employer sees; and
+  // from the profile, which is a search filter.
 
   /** The current user's survey answers. Never null and never a 404: an account that has
-   *  answered nothing reads an object with every field absent, which is what lets the
-   *  wizard decide field by field whether it still has something to ask. */
+   *  answered nothing reads an object with every field absent. */
   async function getSurvey(): Promise<SurveyAnswers> {
     return requestData<SurveyAnswers>('/api/v1/me/survey');
   }
@@ -150,7 +148,7 @@ export function profileApi({ call, request, requestData }: Http) {
     return requestData<SurveyAnswers>('/api/v1/me/survey', jsonBody('PUT', patch));
   }
 
-  /** Record that this account has been through the onboarding wizard, so the layout stops
+  /** Record that this account has been through the onboarding flow, so the layout stops
    *  routing it there. Idempotent — a second call keeps the original timestamp. */
   async function completeOnboarding(): Promise<void> {
     await requestData<{ onboarding_complete: boolean }>('/api/v1/me/onboarding/complete', jsonBody('POST', {}));
@@ -225,6 +223,19 @@ export function profileApi({ call, request, requestData }: Http) {
       );
     }
     return requestData<ResumeProfile>('/api/v1/me/resume/extract', resumeInit('POST', input));
+  }
+
+  /** Store (or replace) the caller's CV, which also starts its free background parse. Fails
+   *  loudly where `extractResumeProfile` would not: 501 means storage is unconfigured and
+   *  nothing was stored. Cookie-only. */
+  async function putResume(file: File): Promise<ResumeMeta> {
+    if (file.size > RESUME_MAX_BYTES) {
+      throw new ApiError(
+        413,
+        `This PDF is larger than ${RESUME_MAX_MB} MB. Compress it or export a lighter PDF and try again.`,
+      );
+    }
+    return requestData<ResumeMeta>('/api/v1/me/resume', resumeInit('PUT', file));
   }
 
   /** The caller's résumé status, including the read-only structured résumé parsed from
@@ -318,6 +329,7 @@ export function profileApi({ call, request, requestData }: Http) {
     getTalentCard,
     deleteAccount,
     extractResumeProfile,
+    putResume,
     getResume,
     deleteResume,
     retryResumeExtract,

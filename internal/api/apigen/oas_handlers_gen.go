@@ -21810,6 +21810,103 @@ func (s *Server) handleMyProcessReportsRequest(args [1]string, argsEscaped bool,
 	}
 }
 
+// handleOnboardingMatchesRequest handles onboardingMatches operation.
+//
+// Open postings ranked by how well their skills match a caller-supplied skill list, under the
+// jobs-search filters in `query`. Public: it is what the CV-first onboarding shows a visitor who has
+// no account and so no stored profile. Answers the top ten.
+//
+// POST /onboarding/matches
+func (s *Server) handleOnboardingMatchesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: OnboardingMatchesOperation,
+			ID:   "onboardingMatches",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeOnboardingMatchesRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *OnboardingMatchesOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    OnboardingMatchesOperation,
+			OperationSummary: "",
+			OperationID:      "onboardingMatches",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *OnboardingMatchesRequest
+			Params   = struct{}
+			Response = *OnboardingMatchesOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.OnboardingMatches(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.OnboardingMatches(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeOnboardingMatchesResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleOneClickUnsubscribeRequest handles oneClickUnsubscribe operation.
 //
 // RFC 8058 one-click unsubscribe: turns off only the group the token names.

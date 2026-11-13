@@ -1,425 +1,619 @@
 <script lang="ts">
-  // The onboarding tour: up to seven steps, all skippable — the CV, the feed, alerts, the
-  // AI assistant, what is in the way, and the two paid features.
+  // The CV-first onboarding flow, open to anybody: drop a CV, see what was read from it,
+  // answer three one-tap questions, and get the matching open jobs and the CV's ATS score —
+  // all before any account exists. Signing up from the results carries the CV, the search
+  // profile, an email alert and the "in your way" answers into the new account (openspec
+  // cv-first-onboarding).
   //
-  // GATING (whether to be on this route at all) lives in the root layout and reads one
-  // fact: `users.onboarding_completed_at`. Null routes the account here. This page marks it
-  // the moment the tour is SHOWN, not when it ends, so the redirect fires at most once — a
-  // visitor who leaves on the first step is never pulled back.
+  // One card, one step revealed under another as the flow advances, so the visitor watches
+  // their own search being built. The phase machine and every mapping are pure and live in
+  // #lib/onboardingFlow; carrying into the account is #lib/onboardingCarry; the browser-side
+  // draft that survives an OAuth round trip is #lib/onboardingDraft.
   //
-  // Every account comes through here once, new or existing (migration 0207 re-asked the
-  // accounts the old wizard had marked), so the plan skips what an account already has and
-  // every shown step opens with what is stored. An account that lacks nothing is marked
-  // complete and sent on without a screen.
+  // GATING lives in the root layout: an account that has not been through here is routed
+  // here once (carrying `returnTo`, where "Skip for now" and the finished flow go), and
+  // this page marks it complete the moment it is shown, so leaving on the first step never
+  // brings it back. Nothing routes anybody away from here.
   //
-  // An anonymous visitor has no steps to run: the effect below bounces them to /signin
-  // (carrying this page's own URL, returnTo and all, as ITS returnTo) before any markup
-  // renders, and /signin sends them right back once they have an account.
+  // A DRAFT REACHES AN ACCOUNT ONLY WHEN THIS BROWSER STARTED A SIGN-UP FROM IT. In a shared
+  // browser the draft may be somebody else's anonymous run; see `arrivalAction`.
   import { onDestroy, untrack } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { gotoPath } from '#lib/gotoPath.js';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ArrowLeft, ArrowRight, LoaderCircle, X } from '@lucide/svelte';
-  import { api, ApiError } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { filtersFromProfile, filtersToParams } from '#lib/filters.js';
-  import { notifications } from '#lib/notifications.svelte.js';
+  import { ArrowRight, FileUp, MessageCircleQuestionMark, RotateCcw, Search, UserRound } from '@lucide/svelte';
+  import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { filtersFromProfile, filtersToParams } from '#lib/facetModel.js';
+  import { countryLabel } from '#lib/facets.js';
+  import { gotoPath } from '#lib/gotoPath.js';
+  import { carryFailureMessage, carryInto, type CarryDeps, type CarryStep } from '#lib/onboardingCarry.js';
+  import { arrivalAction, onboardingDraft } from '#lib/onboardingDraft.js';
+  import {
+    answerChips,
+    companiesLine,
+    asProfile,
+    currentQuestion,
+    FIRST_WINDOW_DAYS,
+    matchQuery,
+    matchSkills,
+    nextPhase,
+    profileFromAnswers,
+    roleFacetQuery,
+    widenedWindow,
+    type Answers,
+    type FlowEvent,
+    type Phase,
+    type QuestionKey,
+  } from '#lib/onboardingFlow.js';
   import { onboardingGate } from '#lib/onboardingGate.svelte.js';
-  import { nextResumePollDelayMs } from '#lib/onboardingResumeWait.js';
-  import { persistStep, type SaveDeps, type TourAnswers } from '#lib/onboardingSave.js';
-  import { plannedSteps, TOUR_STEPS, type StepKind } from '#lib/onboardingSteps.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { profileAlertSearch } from '#lib/profileAlert.js';
+  import { enableProfileAlert } from '#lib/profileAlert.js';
   import { syncProfileAlert } from '#lib/profileAlertSync.js';
+  import { resumeStore } from '#lib/resume.svelte.js';
   import { safeRedirect } from '#lib/safeRedirect.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { signinUrl } from '#lib/signin.js';
-  import { focusTrap } from '#lib/actions/focusTrap.js';
-  import { Button } from '#lib/ui/index.js';
-  import type { LocationPreferences } from '#lib/types.js';
-  import type { MergedFacets } from '#lib/onboardingImport.js';
-  import AgentStep from '#lib/components/onboarding/AgentStep.svelte';
-  import AlertChannelsStep from '#lib/components/onboarding/AlertChannelsStep.svelte';
-  import ChallengeStep from '#lib/components/onboarding/ChallengeStep.svelte';
-  import CvStep from '#lib/components/onboarding/CvStep.svelte';
-  import ExtensionStep from '#lib/components/onboarding/ExtensionStep.svelte';
-  import FeedStep from '#lib/components/onboarding/FeedStep.svelte';
-  import TailorStep from '#lib/components/onboarding/TailorStep.svelte';
+  import type { CatalogScale, OnboardingMatch, OnboardingParse } from '#lib/types.js';
+  import { Button, Card, Chip } from '#lib/ui/index.js';
+  import FlowStep from '#lib/components/onboarding/FlowStep.svelte';
+  import OnboardingQuestions from '#lib/components/onboarding/OnboardingQuestions.svelte';
+  import OnboardingResults from '#lib/components/onboarding/OnboardingResults.svelte';
+  import CompanyLogoStack from '#lib/components/CompanyLogoStack.svelte';
 
-  // Where finishing or skipping sends the visitor — the page they were on when they landed
-  // here, not always home. Validated like every other returnTo (same-origin path only).
-  const returnTo = $derived(safeRedirect(page.url.searchParams.get('returnTo')) ?? '/');
+  let phase = $state<Phase>('drop');
+  function step(event: FlowEvent) {
+    phase = nextPhase(phase, event);
+  }
 
+  // ---- what the flow holds ----
+
+  let file = $state.raw<Blob | null>(null);
+  let fileName = $state('cv.pdf');
+  let parse = $state.raw<OnboardingParse | null>(null);
+  let answers = $state.raw<Answers>({});
+  // An answered question the visitor tapped to change; otherwise the next unanswered one.
+  let reopened = $state<QuestionKey | null>(null);
+  const question = $derived(reopened ?? currentQuestion(answers));
+
+  /** Keep the draft for the hop to the sign-in page, so signing up — through an OAuth
+   *  provider too — carries it. Written only then; the page deletes it on reading it back. */
+  function persist(pendingSignupAt: number): Promise<void> {
+    if (isAuthenticated() || !file || !parse) return Promise.resolve();
+    // IndexedDB stores by structured clone, which refuses a Svelte proxy outright — and the
+    // draft store swallows the failure, losing the save (and its sign-up mark) silently.
+    const plainAnswers = $state.snapshot(answers);
+    return onboardingDraft.save({ file, fileName, parse, answers: plainAnswers, savedAt: Date.now(), pendingSignupAt });
+  }
+
+  /** Where a signed-in visitor was headed when the layout sent them here. */
+  const returnTo = $derived(safeRedirect(page.url.searchParams.get('returnTo')));
+  /** This page as the sign-in page should bring the visitor back to it — still carrying
+   *  where they were headed, so saving can end there. */
+  const here = $derived(
+    returnTo ? `${resolve('/onboarding')}?${new URLSearchParams({ returnTo })}` : resolve('/onboarding'),
+  );
+
+  // ---- arrival ----
+
+  // Once, on the first client render. Untracked: the reads below must not re-run arrival
+  // when the session or a store changes later (a sign-up mid-flow carries by itself).
+  let arrived = false;
   $effect(() => {
-    if (isAuthenticated()) return;
-    // `returnTo` for /signin is THIS page's own URL, so a successful sign-in lands back
-    // here. `cancelTo` is where this page's own returnTo points, so /signin's close button
-    // skips both the credential form and the tour instead of looping back to /signin.
-    const here = page.url.pathname + page.url.search;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo: here, cancelTo: returnTo }));
+    if (arrived) return;
+    arrived = true;
+    untrack(() => void arrive());
   });
 
-  // ---- what the tour is holding ----
-
-  let specializations = $state.raw<string[]>([]);
-  let seniorities = $state.raw<string[]>([]);
-  let skills = $state.raw<string[]>([]);
-  let location = $state<LocationPreferences | null>(null);
-  let challenges = $state.raw<string[]>([]);
-  let challengeNote = $state('');
-  // The feed step's values came from a CV parsed on this run.
-  let fromCv = $state(false);
-
-  let steps = $state.raw<StepKind[]>(TOUR_STEPS);
-  let loaded = $state(false);
-  let index = $state(0);
-  const currentKind = $derived<StepKind | undefined>(steps[index]);
-  const isLast = $derived(index >= steps.length - 1);
-
-  // One load of everything the plan depends on. Every read must succeed before the plan is
-  // made: a failed one would read as "nothing stored", and since showing the tour marks it
-  // complete, an outage would spend the account's one tour on the wrong steps. A failure
-  // shows a retry instead and records nothing.
-  //
-  // Run once, untracked: the stores' own `loaded` flags flip while this reads them, and a
-  // tracked read would start a second load that lands after the first and overwrites
-  // whatever the candidate picked in between.
-  let started = false;
-  $effect(() => {
-    if (!isAuthenticated() || started) return;
-    started = true;
-    untrack(() => void load());
-  });
-
-  let loadFailed = $state(false);
-
-  async function load() {
-    loadFailed = false;
-    let failed = false;
-    const failure = () => {
-      failed = true;
-      return null;
-    };
-    // The stores swallow their own errors and stay not-loaded, so their flags are the
-    // success signal; the two direct reads report through `failure`.
-    const [resume, survey] = await Promise.all([
-      api.getResume().catch(failure),
-      api.getSurvey().catch(failure),
-      profileStore.ensureLoaded(),
-      savedSearches.ensureLoaded(),
-      notifications.ensureLoaded(),
-    ]);
-    if (failed || !profileStore.loaded || !savedSearches.loaded || !notifications.loaded) {
-      loadFailed = true;
+  async function arrive() {
+    const authenticated = isAuthenticated();
+    // Read before marking: the gate's mark is written on arrival.
+    const onboardedBefore = currentUser()?.onboarding_completed_at != null;
+    if (authenticated && !onboardedBefore) {
+      // Shown means done. The raw call, not auth's invalidating one: re-reading the session
+      // here buys nothing, and the gate's dismissal covers the rest of this visit.
+      onboardingGate.dismiss();
+      void api.completeOnboarding().catch(() => {});
+    }
+    const draft = await onboardingDraft.load();
+    if (!draft) return;
+    // Single use: read back once and gone, whatever happens next. A sign-up left on the
+    // sign-in page must not leave a marked draft for the next person at this browser.
+    await onboardingDraft.clear();
+    const created = Date.parse(currentUser()?.created_at ?? '');
+    const accountCreatedAt = Number.isNaN(created) ? null : created;
+    const action = arrivalAction(draft, { authenticated, accountCreatedAt, now: Date.now() });
+    if (action === 'discard' || phase !== 'drop') return;
+    file = draft.file;
+    fileName = draft.fileName;
+    parse = draft.parse;
+    answers = draft.answers;
+    loadCatalog();
+    if (action === 'carry') {
+      // Back from a sign-up this browser started, into the account it created.
+      phase = 'carrying';
+      void carry();
       return;
     }
-    const profile = profileStore.profile;
-    specializations = profile ? [...profile.specializations] : [];
-    seniorities = profile ? [...profile.seniorities] : [];
-    skills = profile ? [...profile.skills] : [];
-    location = profile?.location_preferences ?? null;
-    challenges = survey?.biggest_challenges ?? [];
-    challengeNote = survey?.biggest_challenge_note ?? '';
-
-    const alert = profileAlertSearch();
-    steps = plannedSteps({
-      hasResume: resume?.present === true,
-      hasFeed: profile !== null && profile.specializations.length > 0 && profile.skills.length > 0,
-      hasAlert: alert !== null && notifications.subscriptions.some((s) => s.saved_search_id === alert.id),
-      hasChallenge: challenges.length > 0,
-    });
-    index = 0;
-    loaded = true;
-
-    // Shown means done: mark it now, so leaving on any step never brings the tour back.
-    // Best-effort — a failed write only means being offered the tour once more.
-    //
-    // The raw call, not auth's invalidating one: re-reading the session here would hand the
-    // layout a completed account while it is ON /onboarding, and its arrival check would
-    // send the candidate away from the tour they were just shown. For the rest of this
-    // visit the gate's dismissal keeps them from being routed back; the next load reads
-    // the marker fresh.
-    onboardingGate.dismiss();
-    void api.completeOnboarding().catch(() => {});
-    // Nothing to ask — go straight on.
-    if (steps.length === 0) leave();
-  }
-
-  // ---- the feed step's answer, live ----
-
-  // How many open jobs the feed step's picks match. One debounced read, cancelled by the
-  // next change; a failure hides the figure rather than leaving a stale one.
-  let matchCount = $state<number | null>(null);
-  $effect(() => {
-    if (currentKind !== 'feed') return;
-    // The picks over whatever the stored profile carries besides them (its exclusions), so
-    // the figure is the feed the save is about to produce.
-    const params = filtersToParams(
-      filtersFromProfile({
-        excluded_skills: [],
-        excluded_sources: [],
-        excluded_companies: [],
-        job_languages: [],
-        derived_location: null,
-        cv: null,
-        created_at: null,
-        updated_at: null,
-        ...untrack(() => profileStore.profile),
-        specializations,
-        seniorities,
-        skills,
-        location_preferences: location,
-      }),
-    );
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => {
-      api
-        .searchJobs(params, 1, 0, ctrl.signal)
-        .then((s) => (matchCount = s.total ?? null))
-        .catch(() => {
-          if (!ctrl.signal.aborted) matchCount = null;
-        });
-    }, 300);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  });
-
-  // ---- saving ----
-
-  let saving = $state(false);
-  let saveError = $state<string | null>(null);
-
-  const answers = $derived<TourAnswers>({
-    specializations,
-    skills,
-    seniorities,
-    excludedSkills: profileStore.profile?.excluded_skills ?? [],
-    excludedSources: profileStore.profile?.excluded_sources ?? [],
-    excludedCompanies: profileStore.profile?.excluded_companies ?? [],
-    location,
-    challenges,
-    challengeNote,
-  });
-
-  const saveDeps: SaveDeps = {
-    saveProfile: async (spec, sk, sen, excl, exclSources, exclCompanies, loc) => {
-      const result = await profileStore.save(spec, sk, sen, excl, exclSources, exclCompanies, loc);
-      void syncProfileAlert();
-      return result;
-    },
-    updateSurvey: (p) => api.updateSurvey(p),
-  };
-
-  /** Save the current step and move on. On the last one, finish. */
-  async function advance() {
-    if (saving || !loaded || currentKind === undefined) return;
-    saving = true;
-    saveError = null;
-    try {
-      await persistStep(currentKind, answers, saveDeps);
-    } catch (err) {
-      // The server's own message when there is one: a rejection names the field it
-      // refused, which is something the candidate can act on.
-      saveError =
-        err instanceof ApiError
-          ? `${err.message}. Fix it above, or skip this step.`
-          : "Couldn't save that just now. Try again, or skip this step.";
-      saving = false;
-      return;
-    }
-    saving = false;
-    next();
-  }
-
-  /** Move on WITHOUT saving. Guarded on `saving` so Continue-then-Skip cannot advance twice
-   *  and pass a step unseen. */
-  function skip() {
-    if (saving || !loaded) return;
-    next();
-  }
-
-  function next() {
-    if (isLast) leave();
-    else index += 1;
-  }
-
-  function back() {
-    if (index > 0) index -= 1;
-  }
-
-  /** Go where the visitor was headed. Completion was recorded when the tour was shown. */
-  function leave() {
-    onboardingGate.dismiss();
-    void gotoPath(returnTo);
+    phase = 'questions';
+    // Everything answered: show the results again — with the explicit save for an account
+    // that existed before ('offer-save').
+    if (currentQuestion(answers) === null) void search();
   }
 
   // ---- the CV ----
 
-  function onExtracted(merged: MergedFacets) {
-    specializations = merged.specializations;
-    seniorities = merged.seniorities;
-    skills = merged.skills;
-    fromCv = merged.resolved;
-  }
+  let fileInput = $state<HTMLInputElement>();
+  let dragActive = $state(false);
+  let dropError = $state<string | null>(null);
+  let limited = $state(false);
+  let readGen = 0;
 
-  // A stored CV starts a background parse; once it lands the server can derive where the
-  // candidate is, which reaches the feed step's location field only through the profile
-  // store — read on arrival, before this CV existed. Poll until the parse settles, then
-  // refresh it. Best-effort and bounded by the backoff table.
-  let waitToken = 0;
-  async function waitForResumeStructure() {
-    const token = ++waitToken;
-    for (let attempt = 0; ; attempt++) {
-      const resume = await api.getResume().catch(() => null);
-      if (token !== waitToken) return;
-      if (resume && (!resume.enabled || !resume.present)) return;
-      if (resume && resume.parse_status !== 'pending') {
-        if (resume.parse_status !== 'failed') void profileStore.refresh();
-        return;
-      }
-      const delay = nextResumePollDelayMs(attempt);
-      if (delay === null) return;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (token !== waitToken) return;
+  const isPdf = (f: File) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+
+  async function read(f: File) {
+    if (!isPdf(f)) {
+      dropError = 'Please choose a PDF file.';
+      return;
+    }
+    const gen = ++readGen;
+    dropError = null;
+    limited = false;
+    file = f;
+    fileName = f.name;
+    step('file');
+    try {
+      const result = await api.onboardingParseCv(f);
+      if (gen !== readGen) return;
+      parse = result;
+      answers = {};
+      reopened = null;
+      step('parsed');
+      loadCatalog();
+    } catch (e) {
+      if (gen !== readGen) return;
+      file = null;
+      limited = e instanceof ApiError && e.status === 429;
+      dropError =
+        e instanceof ApiError && (e.status === 429 || e.status === 413)
+          ? e.message
+          : "We couldn't read that file. Try a PDF with selectable text.";
+      step('failed');
     }
   }
 
-  // Stop polling when the tour goes away — and, after a sign-out, for an account that is no
-  // longer the caller.
-  onDestroy(() => {
-    waitToken++;
+  function onPick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = ''; // the same file can be picked again after an error
+    if (f) void read(f);
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    dragActive = false;
+    const f = e.dataTransfer?.files?.[0];
+    if (f && phase === 'drop') void read(f);
+  }
+
+  const cvTitle = $derived(parse?.first_name ? `Read ${parse.first_name}'s CV` : 'Read your CV');
+  const cvLine = $derived.by(() => {
+    if (!parse) return undefined;
+    if (!parse.structured_available) return 'We read your skills and level; the rest of the CV did not come through.';
+    return [parse.headline, parse.country ? countryLabel(parse.country) : ''].filter(Boolean).join(' · ') || undefined;
   });
+
+  // ---- the questions ----
+
+  function answer(patch: Partial<Answers>) {
+    answers = { ...answers, ...patch };
+    reopened = null;
+    if (currentQuestion(answers) === null) void search();
+  }
+
+  function reopen(key: QuestionKey) {
+    reopened = key;
+    if (phase === 'results') step('edit');
+  }
+
+  // The role question offers what the catalogue holds for the CV's skills under the
+  // answers given so far, so it is counted when it comes up. A failed count leaves the
+  // CV's own roles, which need no catalogue.
+  let roleCounts = $state.raw<Record<string, number> | undefined>(undefined);
+  let roleGen = 0;
+  $effect(() => {
+    if (question !== 'role' || !parse) return;
+    const gen = ++roleGen;
+    const params = roleFacetQuery(parse, answers);
+    untrack(() => {
+      roleCounts = undefined;
+      api
+        .facetCounts(params, { facets: ['category'] })
+        .then((res) => {
+          if (gen === roleGen) roleCounts = res.facets.category ?? {};
+        })
+        .catch(() => {});
+    });
+  });
+
+  // ---- the search ----
+
+  // The published catalogue snapshot, read once: the searching step names what it
+  // searches. Figures that are not measured are left out, never shown as zero.
+  let catalog: Promise<unknown> | null = null;
+  let scale = $state.raw<CatalogScale | null>(null);
+  let scaleRead = $state(false);
+  function loadCatalog() {
+    catalog ??= api
+      .catalogScale()
+      .then((s) => {
+        scale = s;
+      })
+      .catch(() => {})
+      .finally(() => (scaleRead = true));
+  }
+  const catalogLine = $derived.by(() => {
+    if (!scale?.exact || !(scale.unique_open_jobs > 0)) return 'Searching every open job we hold';
+    const parts = [`Searching ${scale.unique_open_jobs.toLocaleString('en')} open jobs`];
+    if (scale.sources > 0) parts.push(`from ${scale.sources.toLocaleString('en')} sources`);
+    if (scale.ats_platforms > 0) parts.push(`across ${scale.ats_platforms.toLocaleString('en')} ATS platforms`);
+    return parts.join(' ');
+  });
+
+  let matches = $state.raw<OnboardingMatch[]>([]);
+  let total = $state(0);
+  let days = $state(FIRST_WINDOW_DAYS);
+  let widened = $state(false);
+  let searching = $state(false);
+  let searchError = $state<string | null>(null);
+  // A carry straight after an OAuth return ran no search, so it has no results to show.
+  let searched = $state(false);
+  let searchGen = 0;
+
+  async function search() {
+    if (!parse) return;
+    const gen = ++searchGen;
+    step('answered');
+    searching = true;
+    searchError = null;
+    widened = false;
+    days = FIRST_WINDOW_DAYS;
+    loadCatalog();
+    const skills = matchSkills(parse);
+    try {
+      let res = await api.onboardingMatches(skills, matchQuery(parse, answers, days));
+      const wider = widenedWindow(days, res.meta.total);
+      if (wider !== null && gen === searchGen) {
+        widened = true;
+        days = wider;
+        res = await api.onboardingMatches(skills, matchQuery(parse, answers, days));
+      }
+      if (gen !== searchGen) return;
+      matches = res.data;
+      total = res.meta.total;
+      searched = true;
+      step('found');
+    } catch {
+      if (gen !== searchGen) return;
+      searchError = "The search didn't go through. Change an answer or try again.";
+      step('failed');
+    } finally {
+      if (gen === searchGen) searching = false;
+    }
+  }
+
+  // ---- into the account ----
+
+  let carryFailed = $state.raw<CarryStep[]>([]);
+
+  const carryDeps: CarryDeps = {
+    async uploadCv(f) {
+      // The plain store, which fails when the file was not stored (a 501 when storage is
+      // off) — unlike the extract route, which would answer 200 either way.
+      await api.putResume(f);
+      resumeStore.noteUpload();
+    },
+    async saveProfile(d) {
+      // Whatever the account already excludes stays excluded.
+      await profileStore.ensureLoaded();
+      const current = profileStore.profile;
+      const saved = await profileStore.save(
+        d.specializations,
+        d.skills,
+        d.seniorities,
+        current?.excluded_skills ?? [],
+        current?.excluded_sources ?? [],
+        current?.excluded_companies ?? [],
+        d.location,
+      );
+      await syncProfileAlert();
+      return saved;
+    },
+    async enableAlert(profile) {
+      // The existing profile search, if any, must be known before one is created.
+      await savedSearches.ensureLoaded();
+      await enableProfileAlert(profile, 'email');
+    },
+    completeOnboarding: () => api.completeOnboarding(),
+    saveSurvey: (patch) => api.updateSurvey(patch),
+  };
+
+  async function carry(steps?: CarryStep[]) {
+    if (!file || !parse) return;
+    step('carry');
+    // Leaving now (the header is still there) must not land back here.
+    onboardingGate.dismiss();
+    carryFailed = [];
+    const failed = await carryInto({ file, fileName, parse, answers }, carryDeps, steps);
+    // Every step has been tried: the draft has done its job. What failed stays in memory
+    // for "Try again"; a later visit must not run the whole carry a second time.
+    await onboardingDraft.clear();
+    carryFailed = failed;
+    // Saving outlives the page: a visitor who navigated away meanwhile stays where they went.
+    if (failed.length === 0 && !left) await goToFeed();
+  }
+
+  /** Where the visitor was headed when the layout sent them here, else the account's feed:
+   *  the jobs search under the saved profile's own filters. */
+  async function goToFeed() {
+    if (returnTo) return gotoPath(returnTo);
+    const profile = profileStore.profile ?? (parse ? asProfile(profileFromAnswers(parse, answers)) : null);
+    const query = profile ? filtersToParams(filtersFromProfile(profile)).toString() : '';
+    await gotoPath(`${resolve('/jobs')}${query ? `?${query}` : ''}`);
+  }
+
+  /** A signed-in visitor who has nothing to drop goes where they were headed. */
+  function skip() {
+    onboardingGate.dismiss();
+    void gotoPath(returnTo ?? resolve('/'));
+  }
+
+  let left = false;
+  onDestroy(() => (left = true));
+
+  /** Sign-up from the results goes through the sign-in page and comes back here. The draft
+   *  is marked first: only a marked draft is carried on the way back, so a browser that
+   *  never started a sign-up from here never carries one (see `arrivalAction`). */
+  async function signUp() {
+    await persist(Date.now());
+    await gotoPath(signinUrl({ returnTo: here }));
+  }
+
+  async function startOver() {
+    ++readGen;
+    ++searchGen;
+    await onboardingDraft.clear();
+    file = null;
+    parse = null;
+    answers = {};
+    reopened = null;
+    matches = [];
+    searched = false;
+    carryFailed = [];
+    dropError = null;
+    limited = false;
+    step('restart');
+  }
+
+  const showQuestions = $derived(parse !== null && phase !== 'drop' && phase !== 'parsing');
+  const showSearch = $derived(phase === 'searching' || phase === 'results' || phase === 'carrying');
+  const showResults = $derived((phase === 'results' || phase === 'carrying') && parse !== null && searched);
+  const skillCount = $derived(parse ? matchSkills(parse).length : 0);
+  const chips = $derived(parse ? answerChips(parse, answers) : []);
 </script>
 
-{#if !isAuthenticated()}
-  <!-- Redirecting to /signin — see the effect above. -->
-{:else}
-  <div class="fixed inset-0 z-50 flex flex-col bg-background">
-    <div
-      class="flex h-full w-full flex-col overflow-hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Get to know freehire"
-      {@attach focusTrap()}
-    >
-      <!-- header: progress + skip + close -->
-      <div class="flex items-center gap-3 border-b border-border px-5 py-3">
-        <div class="flex flex-1 items-center gap-1.5" aria-hidden="true">
-          {#each steps as _, i (i)}
-            <span class={['h-1 w-7 rounded-full transition-colors', i <= index ? 'bg-brand' : 'bg-border']}></span>
-          {/each}
-        </div>
-        <button
-          type="button"
-          onclick={skip}
-          disabled={saving || !loaded}
-          class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-        >
-          Skip
-        </button>
-        <button
-          type="button"
-          onclick={leave}
-          aria-label="Close"
-          class="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <X class="size-4" />
-        </button>
-      </div>
-
-      <!-- body -->
-      <div class="no-scrollbar mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto px-5 py-6">
-        <h1 class="sr-only">Get to know freehire</h1>
-        {#if loadFailed}
-          <div class="py-10 text-sm" role="alert">
-            <p class="font-medium">We couldn't load your details.</p>
-            <p class="mt-1 text-muted-foreground">Check your connection and try again.</p>
-            <Button variant="outline" size="sm" class="mt-4" onclick={() => void load()}>Try again</Button>
-          </div>
-        {:else if !loaded}
-          <div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-            <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Getting your details…
-          </div>
-        {:else}
-          <p class="mb-1 text-xs font-semibold tabular-nums text-brand-strong">{index + 1} / {steps.length}</p>
-          {#if currentKind === 'cv'}
-            <CvStep
-              staged={{ specializations, seniorities, skills }}
-              {onExtracted}
-              onCvUploaded={() => void waitForResumeStructure()}
-              onAdvance={() => void advance()}
-              onSkip={skip}
-            />
-          {:else if currentKind === 'feed'}
-            <FeedStep
-              {specializations}
-              {seniorities}
-              {skills}
-              {location}
-              derivedLocation={profileStore.profile?.derived_location}
-              {fromCv}
-              onSpecializationsChange={(v) => (specializations = v)}
-              onSenioritiesChange={(v) => (seniorities = v)}
-              onSkillsChange={(v) => (skills = v)}
-              onLocationChange={(v) => (location = v)}
-            />
-          {:else if currentKind === 'alerts'}
-            <AlertChannelsStep profile={profileStore.profile} />
-          {:else if currentKind === 'agent'}
-            <AgentStep />
-          {:else if currentKind === 'challenge'}
-            <ChallengeStep
-              value={challenges}
-              note={challengeNote}
-              onChange={(v) => (challenges = v)}
-              onNoteChange={(n) => (challengeNote = n)}
-            />
-          {:else if currentKind === 'tailor'}
-            <TailorStep />
-          {:else if currentKind === 'extension'}
-            <ExtensionStep />
-          {/if}
-        {/if}
-      </div>
-
-      <!-- footer: back · match count · continue/finish -->
-      <div class="mx-auto w-full max-w-2xl border-t border-border px-5 py-3">
-        {#if saveError}
-          <p class="mb-2 text-xs text-destructive">{saveError}</p>
-        {:else if currentKind === 'feed' && (specializations.length === 0 || skills.length === 0)}
-          <p class="mb-2 text-xs text-muted-foreground">
-            Pick at least one specialization and one skill to save your feed.
-          </p>
-        {/if}
-        <div class="flex items-center gap-3">
-          {#if index > 0}
-            <button
-              type="button"
-              onclick={back}
-              class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft class="size-4" /> Back
-            </button>
-          {/if}
-          <div class="flex-1"></div>
-          {#if currentKind === 'feed' && matchCount !== null}
-            <p class="text-right text-sm leading-tight text-muted-foreground tabular-nums" aria-live="polite">
-              <span class="font-semibold text-foreground">{matchCount.toLocaleString()}</span>
-              <br class="sm:hidden" /> jobs match
-            </p>
-          {/if}
-          <Button variant="cta" size="lg" onclick={() => void advance()} disabled={saving || !loaded}>
-            {#if saving}
-              <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Saving…
-            {:else}
-              {isLast ? 'Go to my feed' : 'Continue'} <ArrowRight class="size-4" />
-            {/if}
-          </Button>
-        </div>
+{#snippet account()}
+  {#if phase === 'carrying' && carryFailed.length > 0}
+    <div class="flex w-full flex-col gap-3 rounded-xl border border-border bg-background p-4" role="alert">
+      <p class="text-sm">{carryFailureMessage(carryFailed)}</p>
+      <div class="flex flex-wrap justify-end gap-2">
+        <Button variant="primary" onclick={() => void carry(carryFailed)}>Try again</Button>
+        <Button variant="outline" onclick={() => void goToFeed()}>Go to my feed</Button>
       </div>
     </div>
-  </div>
-{/if}
+  {:else if phase === 'carrying'}
+    <p class="text-sm text-muted-foreground" aria-live="polite">Saving your CV, profile and alert…</p>
+  {:else if isAuthenticated()}
+    <Button variant="cta" class="gap-1.5" onclick={() => void carry()}>
+      Save and go to my feed
+      <ArrowRight class="size-4" aria-hidden="true" />
+    </Button>
+  {:else}
+    <Button variant="cta" class="gap-1.5" onclick={() => void signUp()}>
+      Save my matches
+      <ArrowRight class="size-4" aria-hidden="true" />
+    </Button>
+  {/if}
+{/snippet}
+
+<svelte:head>
+  <title>Find jobs that fit your CV · freehire</title>
+</svelte:head>
+
+<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:py-14">
+  <header class="flex flex-col gap-2 text-center">
+    <h1 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">Find the jobs your CV fits</h1>
+    <p class="text-sm text-muted-foreground text-balance sm:text-base">
+      Drop your CV, answer three quick questions, and see matching open jobs. No account needed.
+    </p>
+  </header>
+
+  <Card class="p-5 sm:p-6">
+    {#if phase === 'drop'}
+      <FlowStep
+        icon={FileUp}
+        title="Start with your CV"
+        subtitle="We read it and show you what we found. Nothing is stored until you save it."
+      >
+        <input type="file" accept="application/pdf,.pdf" class="hidden" bind:this={fileInput} onchange={onPick} />
+        <!-- A drop target over the button inside, which is fully keyboard-accessible alone. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          data-testid="onboarding-dropzone"
+          ondragover={(e) => {
+            e.preventDefault();
+            dragActive = true;
+          }}
+          ondragleave={(e) => {
+            e.preventDefault();
+            dragActive = false;
+          }}
+          ondrop={onDrop}
+          class={[
+            'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+            dragActive ? 'border-brand bg-brand-muted' : 'border-border',
+          ]}
+        >
+          <p class="text-sm font-medium">Drop your CV here, or</p>
+          <Button variant="primary" onclick={() => fileInput?.click()}>Choose a PDF</Button>
+          <p class="text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
+        </div>
+        {#if isAuthenticated()}
+          <button
+            type="button"
+            onclick={skip}
+            class="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Skip for now
+          </button>
+        {:else}
+          <!-- Someone who already has an account came to sign in, not to be onboarded: their
+               profile and CV are already stored, so the flow has nothing to add for them. -->
+          <p class="text-sm text-muted-foreground">
+            Already have an account?
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query -->
+            <a
+              href={signinUrl({ returnTo: returnTo ?? resolve('/'), mode: 'login' })}
+              class="font-medium text-foreground underline-offset-4 hover:underline">Sign in</a
+            ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+          </p>
+        {/if}
+        {#if dropError}
+          <div class="flex flex-col gap-2 text-sm" role="alert">
+            <p class="text-destructive">{dropError}</p>
+            {#if limited && !isAuthenticated()}
+              <p class="text-muted-foreground">Signed in, there is no daily limit — sign in and drop it again.</p>
+              <Button variant="outline" size="sm" class="self-start" href={signinUrl({ returnTo: here })}>
+                Sign in or create an account
+              </Button>
+            {/if}
+          </div>
+        {/if}
+      </FlowStep>
+    {:else}
+      <FlowStep icon={UserRound} title={cvTitle} subtitle={cvLine} state={parse ? 'done' : 'working'}>
+        {#if !parse}
+          <p class="text-sm text-muted-foreground">Reading {fileName}… this takes up to half a minute.</p>
+        {:else}
+          <!-- The work history on one line (who, and for how long), the skills apart below. -->
+          {#if parse.companies.length > 0 || parse.total_years > 0}
+            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
+              {#if parse.companies.length > 0}
+                <CompanyLogoStack names={parse.companies} />
+                <span>{companiesLine(parse.companies)}</span>
+              {/if}
+              {#if parse.total_years > 0}
+                {#if parse.companies.length > 0}<span aria-hidden="true">·</span>{/if}
+                <span class="font-medium text-foreground"
+                  >{parse.total_years} {parse.total_years === 1 ? 'year' : 'years'} of experience</span
+                >
+              {/if}
+            </div>
+          {/if}
+          {#if parse.skills.length > 0}
+            <div class="flex flex-wrap gap-1.5" aria-label="Skills">
+              {#each parse.skills.slice(0, 8) as skill (skill)}
+                <Chip>{skill}</Chip>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      </FlowStep>
+
+      {#if showQuestions && parse}
+        {#if phase === 'questions' && question}
+          <FlowStep
+            icon={MessageCircleQuestionMark}
+            title="What are you looking for?"
+            subtitle="Tap an answer, then we search."
+          >
+            <OnboardingQuestions {parse} {answers} current={question} {roleCounts} onAnswer={answer} onOpen={reopen} />
+          </FlowStep>
+        {:else}
+          <FlowStep
+            icon={MessageCircleQuestionMark}
+            title="What you're looking for"
+            subtitle={chips.join(' · ') || 'No preferences — the whole catalogue.'}
+            state="done"
+          >
+            {#if searchError && phase === 'questions'}
+              <p class="text-sm text-destructive" role="alert">{searchError}</p>
+              <div class="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" size="sm" onclick={() => void search()}>Try again</Button>
+                <Button variant="ghost" size="sm" onclick={() => reopen('where')}>Change answers</Button>
+              </div>
+            {/if}
+          </FlowStep>
+        {/if}
+      {/if}
+
+      {#if showSearch && parse}
+        <FlowStep icon={Search} title="Searching" state={searching ? 'working' : 'done'}>
+          <ul class="flex flex-col gap-1.5 text-sm" aria-live="polite">
+            <li class={scaleRead ? 'text-foreground' : 'text-muted-foreground'}>{catalogLine}</li>
+            <li class={searching && !widened ? 'text-muted-foreground' : 'text-foreground'}>
+              {#if skillCount > 0}
+                Matching your {skillCount} skills against jobs posted in the last {FIRST_WINDOW_DAYS} days
+              {:else}
+                Matching jobs to your answers, posted in the last {FIRST_WINDOW_DAYS} days
+              {/if}
+            </li>
+            {#if widened}
+              <li class={searching ? 'text-muted-foreground' : 'text-foreground'}>
+                Nothing there yet — widening to the last {days} days
+              </li>
+            {/if}
+          </ul>
+        </FlowStep>
+      {/if}
+
+      {#if showResults && parse}
+        <OnboardingResults
+          {matches}
+          {total}
+          {days}
+          {widened}
+          ranked={skillCount > 0}
+          {chips}
+          report={parse.report}
+          query={matchQuery(parse, answers, days)}
+          onEditAnswers={phase === 'carrying' ? undefined : () => reopen('where')}
+        />
+      {:else if phase === 'carrying'}
+        <FlowStep icon={UserRound} title="Saving to your account" state={carryFailed.length ? 'active' : 'working'}>
+          {@render account()}
+        </FlowStep>
+      {/if}
+
+      <!-- One closing row under one rule: the actions on the right, starting over beside saving. -->
+      {#if phase !== 'carrying' || showResults}
+        <div class="flex flex-wrap items-center justify-end gap-3 border-t border-dashed border-border pt-4">
+          {#if showResults && phase === 'results'}
+            <p class="mr-auto text-xs text-muted-foreground text-pretty">
+              {isAuthenticated()
+                ? 'Saving replaces your stored CV and search profile.'
+                : 'Free — your CV and answers come with you.'}
+            </p>
+          {/if}
+          {#if phase !== 'carrying'}
+            <Button variant="ghost" size="sm" onclick={() => void startOver()}>
+              <RotateCcw class="size-3.5" aria-hidden="true" /> Start over
+            </Button>
+          {/if}
+          {#if showResults}
+            {@render account()}
+          {/if}
+        </div>
+      {/if}
+    {/if}
+  </Card>
+</div>

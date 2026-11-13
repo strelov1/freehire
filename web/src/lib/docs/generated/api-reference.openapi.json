@@ -19,6 +19,9 @@
   ],
   "tags": [
     {
+      "name": "Onboarding"
+    },
+    {
       "name": "Jobs",
       "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from lists and search and served only by the detail endpoint."
     },
@@ -10156,6 +10159,75 @@
         ]
       }
     },
+    "/onboarding/matches": {
+      "post": {
+        "operationId": "onboardingMatches",
+        "description": "Open postings ranked by how well their skills match a caller-supplied skill list, under\nthe jobs-search filters in `query`. Public: it is what the CV-first onboarding shows a\nvisitor who has no account and so no stored profile. Answers the top ten.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OnboardingMatch"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ListMeta"
+                    }
+                  },
+                  "description": "A list: `{\"data\": [...], \"meta\": {...}}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingMatchesRequest"
+              },
+              "example": {
+                "skills": [
+                  "go",
+                  "kubernetes",
+                  "postgresql"
+                ],
+                "query": "work_mode=remote&category=backend&posted_within_days=7"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/plans": {
       "get": {
         "operationId": "getPlans",
@@ -16349,6 +16421,45 @@
             "format": "int64"
           }
         }
+      },
+      "OnboardingMatch": {
+        "type": "object",
+        "required": [
+          "job",
+          "match_percent"
+        ],
+        "properties": {
+          "job": {
+            "description": "The jobview wire shape `/jobs/search` answers with."
+          },
+          "match_percent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The share of the posting's skills the given skills cover, 0-100."
+          }
+        },
+        "description": "One matching posting with how well its skills match the given ones."
+      },
+      "OnboardingMatchesRequest": {
+        "type": "object",
+        "required": [
+          "skills"
+        ],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "description": "Canonical skill tags, at most 50. They rank the answer; they do not filter it."
+          },
+          "query": {
+            "type": "string",
+            "description": "A `/jobs/search` query string (`work_mode=remote&posted_within_days=7`, ...). An unknown param is named in `meta.ignored_params`."
+          }
+        },
+        "description": "What the onboarding searches with: the CV's skills and the answers as a jobs-search query."
       },
       "OneClickResult": {
         "type": "object",
