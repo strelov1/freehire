@@ -69,7 +69,7 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 				}
 				return SearchJobsResult{Query: in.Query}, nil
 			}
-			server := newMixedServer(nil, 0, "", reader, false)
+			server := newServer(nil, 0, "", reader, false)
 			clientTransport, serverTransport := mcp.NewInMemoryTransports()
 			serverSession, err := server.Connect(t.Context(), serverTransport, nil)
 			if err != nil {
@@ -236,7 +236,7 @@ func TestToolLogNamesTheArgumentAHandlerRefused(t *testing.T) {
 			var in struct{}
 			return nil, assistant.DecodeArgs(raw, &in)
 		}}
-	server := newMixedServer([]assistant.Tool{tool}, 1, "", nil, false)
+	server := newServer([]assistant.Tool{tool}, 1, "", nil, false)
 	clientT, serverT := mcp.NewInMemoryTransports()
 	go func() { _ = server.Run(t.Context(), serverT) }()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(), clientT, nil)

@@ -53,7 +53,7 @@
           height="53"
           class="-my-1 h-8 w-auto shrink-0"
         />
-        <span class="hidden md:inline">Connect over MCP — free, no account needed to search.</span>
+        <span class="hidden md:inline">Connect over MCP — free with a freehire account.</span>
       </div>
 
       <a

@@ -28,7 +28,7 @@ func (s stampUser) RoundTrip(req *http.Request) (*http.Response, error) {
 // connectMCPTools serves tools to userID over the MCP server /mcp mounts.
 func connectMCPTools(t *testing.T, tools []assistant.Tool, userID string) *mcp.ClientSession {
 	t.Helper()
-	server := httptest.NewServer(mcpapp.MixedHandler(tools, testMCPOrigin, nil))
+	server := httptest.NewServer(mcpapp.Handler(tools, testMCPOrigin, nil))
 	t.Cleanup(server.Close)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(t.Context(),
 		&mcp.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: stampUser{userID}}}, nil)

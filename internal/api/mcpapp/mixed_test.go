@@ -22,7 +22,7 @@ func TestMixedServesEveryToolToTheSignedInUser(t *testing.T) {
 		}
 		return map[string]any{"jobs": []string{}}, nil
 	}}}
-	session := connectServer(t, newMixedServer(tools, 42, testOrigin, readerThatFinds(t), false))
+	session := connectServer(t, newServer(tools, 42, testOrigin, readerThatFinds(t), false))
 	ctx := t.Context()
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestMixedServesEveryToolToTheSignedInUser(t *testing.T) {
 // handler; one that still arrives without an identity is a wiring error, not an anonymous
 // session.
 func TestMixedHandlerRefusesARequestWithNoIdentity(t *testing.T) {
-	handler := MixedHandler(nil, testOrigin, readerThatFinds(t))
+	handler := Handler(nil, testOrigin, readerThatFinds(t))
 	for name, header := range map[string]string{"missing": "", "malformed": "abc", "zero": "0"} {
 		t.Run(name, func(t *testing.T) {
 			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"Go"}}}`
@@ -93,7 +93,7 @@ func mixedInstructionsOver(t *testing.T, headers headerTransport, names ...strin
 	for _, name := range names {
 		tools = append(tools, assistant.Tool{Name: name, Schema: map[string]any{"type": "object"}})
 	}
-	srv := httptest.NewServer(MixedHandler(tools, testOrigin, readerThatFinds(t)))
+	srv := httptest.NewServer(Handler(tools, testOrigin, readerThatFinds(t)))
 	defer srv.Close()
 	transport := &mcp.StreamableClientTransport{Endpoint: srv.URL, HTTPClient: &http.Client{Transport: headers}}
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(), transport, nil)

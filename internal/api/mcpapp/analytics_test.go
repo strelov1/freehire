@@ -25,7 +25,7 @@ func TestFailedAccountCallLogsOnlySafeMetadata(t *testing.T) {
 			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	server := httptest.NewServer(MixedHandler([]assistant.Tool{tool}, "", readerThatFinds(t)))
+	server := httptest.NewServer(Handler([]assistant.Tool{tool}, "", readerThatFinds(t)))
 	t.Cleanup(server.Close)
 
 	header := http.Header{}

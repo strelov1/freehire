@@ -51,7 +51,7 @@ func ReadOnly() *mcp.ToolAnnotations {
 	}
 }
 
-func newCatalogueServer(r Reader, origin, instructions, surface string, next nextHints) *mcp.Server {
+func newCatalogueServer(r Reader, origin, instructions string, next nextHints) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
 		&mcp.ServerOptions{
 			Instructions:      instructions,
@@ -65,12 +65,12 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 				Resources: &mcp.ResourceCapabilities{},
 			},
 		})
-	ObserveServer(server, surface)
+	ObserveServer(server, surfaceMCP)
 
 	addPrompts(server)
 	addWidget(server)
 
-	AddObservedTool(server, surface, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolSearchJobs,
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
@@ -91,7 +91,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 		return toolResult(out, err)
 	})
 
-	AddObservedTool(server, surface, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolGetJob,
 		Title: "Read one job posting",
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
@@ -109,7 +109,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 		return toolResult(out, err)
 	})
 
-	AddObservedTool(server, surface, &mcp.Tool{
+	addCatalogueTool(server, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +
@@ -120,7 +120,7 @@ func newCatalogueServer(r Reader, origin, instructions, surface string, next nex
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
 
-	registerCatalogueTools(server, r, surface)
+	registerCatalogueTools(server, r)
 
 	return server
 }

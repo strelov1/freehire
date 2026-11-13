@@ -71,9 +71,9 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
 
-// localsMCPAccountViaKey marks a request mcpAuthenticate resolved through an
+// localsMCPViaKey marks a request mcpAuthenticate resolved through an
 // API key rather than an OAuth grant, so the mount serves it mcpKeyTools.
-const localsMCPAccountViaKey = "mcpAccount.viaKey"
+const localsMCPViaKey = "mcpAccount.viaKey"
 
 // localsMCPUserID carries the validated identity to Fiber consumers such as agentViews.
 const localsMCPUserID = "mcp.userID"
@@ -136,13 +136,13 @@ func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
 			userID, err = key.UserID, nil
-			c.Locals(localsMCPAccountViaKey, true)
+			c.Locals(localsMCPViaKey, true)
 		}
 		if err != nil {
 			observability.LogAuthFailure(c, fiber.StatusInternalServerError, "credential_lookup_failed")
 			return fmt.Errorf("authenticate oauth grant for mcp: %w", err)
 		}
-		if c.Locals(localsMCPAccountViaKey) == nil {
+		if c.Locals(localsMCPViaKey) == nil {
 			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "oauth_grant", UserID: userID})
 		}
 

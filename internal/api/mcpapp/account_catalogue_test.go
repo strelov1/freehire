@@ -13,7 +13,7 @@ import (
 
 func connectAccountCatalogue(t *testing.T, tools []assistant.Tool, reader Reader) *mcp.ClientSession {
 	t.Helper()
-	server := newMixedServer(tools, 42, "", reader, false)
+	server := newServer(tools, 42, "", reader, false)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(t.Context(), serverTransport, nil)
 	if err != nil {

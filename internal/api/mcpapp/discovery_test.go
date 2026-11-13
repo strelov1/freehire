@@ -48,7 +48,7 @@ func post(t *testing.T, body string, headers map[string]string) *httptest.Respon
 	}
 
 	rec := httptest.NewRecorder()
-	MixedHandler(nil, "", readerThatFinds(t)).ServeHTTP(rec, req)
+	Handler(nil, "", readerThatFinds(t)).ServeHTTP(rec, req)
 	return rec
 }
 

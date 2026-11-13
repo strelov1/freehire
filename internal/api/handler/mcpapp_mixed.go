@@ -16,11 +16,11 @@ func mountMCP(
 	assistants *assistantHandlers,
 	catalogue *mcpappHandlers,
 ) {
-	granted := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue))
-	keyed := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue))
+	granted := adaptor.HTTPHandler(mcpapp.Handler(mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue))
+	keyed := adaptor.HTTPHandler(mcpapp.Handler(mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue))
 	api.All("/mcp", mcpAuthenticate(assistants, catalogue.origin),
 		agentViews(catalogue.agentViews, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
-			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
+			if viaKey, _ := c.Locals(localsMCPViaKey).(bool); viaKey {
 				return keyed(c)
 			}
 			return granted(c)

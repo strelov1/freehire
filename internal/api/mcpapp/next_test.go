@@ -59,7 +59,7 @@ func namedTools(names ...string) []assistant.Tool {
 func TestNextHint_OnTheCatalogueTools(t *testing.T) {
 	signedIn := namedTools("get_profile", "save_job", "track_job", "subscribe", "auto_apply_start")
 
-	user := connectServer(t, newMixedServer(signedIn, 42, testOrigin, readerThatFinds(t), false))
+	user := connectServer(t, newServer(signedIn, 42, testOrigin, readerThatFinds(t), false))
 	for tool, args := range map[string]map[string]any{
 		"search_jobs": {"query": "Go"},
 		"get_job":     {"slug": "senior-go-engineer-acme-abc123"},

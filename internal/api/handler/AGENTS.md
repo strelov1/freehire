@@ -118,7 +118,7 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 - `CreateApplicationFromEmail` records an application from mail and links it in one call. It **borrows `jobtracking`** rather than writing its own apply, so the `applied_count`-increments-once rule stays in one place; the application is dated by the email's `received_at`, never `now()`. Mail carrying a pending suggestion is a **409** — the matcher already proposed an answer, and overwriting it silently would make `link_source = 'manual'` a lie about a decision the caller never saw.
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
-`mountMCP` (`mcpapp_mixed.go`) mounts `mcpapp.MixedHandler` at `/mcp` behind
+`mountMCP` (`mcpapp_mixed.go`) mounts `mcpapp.Handler` at `/mcp` behind
 `mcpAuthenticate`, which requires a bearer credential (no anonymous session; see
 [mcpapp](../mcpapp/AGENTS.md)). `mcpKeyTools` / `mcpAccountTools` pick the set;
 `search_jobs`, `get_job` and `get_company` in it are never served, the catalogue answers

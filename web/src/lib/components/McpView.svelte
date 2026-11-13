@@ -69,7 +69,9 @@
   <h2 class="text-2xl font-semibold tracking-tight">What the connector can reach</h2>
   <ul class="mt-6 max-w-2xl list-disc space-y-2 pl-5 leading-relaxed text-muted-foreground">
     <li>Public job postings, employer profiles and market figures — the same catalogue the site shows.</li>
-    <li>Without sign-in it cannot see or change anything of yours.</li>
+    <li>
+      It connects only after you sign in to freehire and approve access, and you can revoke it from Connected devices.
+    </li>
     <li>
       With your account it reads your profile and tracked jobs, and saves, marks applied or moves jobs on your board —
       never another person's. It can also manage alerts, suggest missing dictionary terms and report problems. Automatic

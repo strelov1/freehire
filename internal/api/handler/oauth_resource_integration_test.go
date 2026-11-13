@@ -125,6 +125,17 @@ func (f *resourceFixture) callMCP(t *testing.T, path, token string) (int, http.H
 	return resp.StatusCode, resp.Header
 }
 
+// grantRow reads the stored resource binding and last_used_at of token's grant.
+func (f *resourceFixture) grantRow(t *testing.T, token string) (resource *string, lastUsed *time.Time) {
+	t.Helper()
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT resource, last_used_at FROM oauth_grants WHERE access_token_hash = $1`,
+		oauth2server.HashToken(token)).Scan(&resource, &lastUsed); err != nil {
+		t.Fatalf("read grant: %v", err)
+	}
+	return resource, lastUsed
+}
+
 // grantToken runs authorize + token and returns the access token.
 func (f *resourceFixture) grantToken(t *testing.T, authorizeResource string, tokenResource string) string {
 	t.Helper()
@@ -195,27 +206,18 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforced(t *testing.T) {
 		})
 	}
 
-	hash := oauth2server.HashToken(mixed)
-	read := func() (stored string, lastUsed *time.Time) {
-		t.Helper()
-		if err := f.pool.QueryRow(context.Background(),
-			`SELECT resource, last_used_at FROM oauth_grants WHERE access_token_hash = $1`, hash).Scan(&stored, &lastUsed); err != nil {
-			t.Fatalf("read grant: %v", err)
-		}
-		return stored, lastUsed
-	}
 	t.Run("the binding is stored as the path", func(t *testing.T) {
-		if stored, _ := read(); stored != oauth2server.MCPResourcePath {
-			t.Errorf("stored resource = %q, want the path %q", stored, oauth2server.MCPResourcePath)
+		if stored, _ := f.grantRow(t, mixed); stored == nil || *stored != oauth2server.MCPResourcePath {
+			t.Errorf("stored resource = %v, want the path %q", stored, oauth2server.MCPResourcePath)
 		}
 	})
 
 	t.Run("a grant bound to the removed account resource is refused and leaves no trace", func(t *testing.T) {
 		if _, err := f.pool.Exec(context.Background(),
-			`UPDATE oauth_grants SET resource = '/api/v1/mcp/account' WHERE access_token_hash = $1`, hash); err != nil {
+			`UPDATE oauth_grants SET resource = '/api/v1/mcp/account' WHERE access_token_hash = $1`, oauth2server.HashToken(mixed)); err != nil {
 			t.Fatalf("rebind grant: %v", err)
 		}
-		_, before := read()
+		_, before := f.grantRow(t, mixed)
 		status, header := f.callMCP(t, "/api/v1/mcp", mixed)
 		if status != 401 {
 			t.Fatalf("status = %d, want 401", status)
@@ -223,7 +225,7 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforced(t *testing.T) {
 		if got := header.Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) || !strings.Contains(got, "resource_metadata=") {
 			t.Errorf("WWW-Authenticate = %q, want invalid_token + resource_metadata", got)
 		}
-		if _, after := read(); (before == nil) != (after == nil) || (before != nil && !before.Equal(*after)) {
+		if _, after := f.grantRow(t, mixed); (before == nil) != (after == nil) || (before != nil && !before.Equal(*after)) {
 			t.Errorf("last_used_at moved on a refused call: %v -> %v", before, after)
 		}
 	})
@@ -267,12 +269,7 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 
 	t.Run("a resource sent only at /token binds the grant", func(t *testing.T) {
 		token := f.grantToken(t, "", resourceMixed)
-		var stored *string
-		if err := f.pool.QueryRow(context.Background(),
-			`SELECT resource FROM oauth_grants WHERE access_token_hash = $1`, oauth2server.HashToken(token)).Scan(&stored); err != nil {
-			t.Fatalf("read grant: %v", err)
-		}
-		if stored == nil || *stored != oauth2server.MCPResourcePath {
+		if stored, _ := f.grantRow(t, token); stored == nil || *stored != oauth2server.MCPResourcePath {
 			t.Errorf("stored resource = %v, want %q", stored, oauth2server.MCPResourcePath)
 		}
 		if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 200 {

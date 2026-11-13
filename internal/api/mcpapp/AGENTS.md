@@ -3,7 +3,7 @@
 The MCP at `/api/v1/mcp` (`mixed.go`) serves the catalogue and account tools to a
 signed-in caller only. There is no anonymous session: a request without a credential is a
 401 with `WWW-Authenticate` before it reaches this package (`mcpAuthenticate` in
-`internal/api/handler/mcpapp_account.go`), and `MixedHandler` refuses with a 500 a request
+`internal/api/handler/mcpapp_account.go`), and `mcpapp.Handler` refuses with a 500 a request
 that arrives with no stamped identity, because that is a wiring error.
 
 **Why no anonymous part (2026-11-13).** The 401 on the FIRST request is the MCP
@@ -115,7 +115,7 @@ turn. It is a plain struct field of the typed catalogue tools.
 
 `freehire mcp` (in the `freehire-cli` repository) runs the canonical endpoint over stdio
 for local hosts, and the CLI's client sends `User-Agent: freehire-cli/<version>`. For that
-User-Agent alone `MixedHandler` appends `cliSessionInstructions`: the CLI is on the agent's
+User-Agent alone `mcpapp.Handler` appends `cliSessionInstructions`: the CLI is on the agent's
 shell, so whole result sets (`freehire search … --json`, which reads `/agent/jobs/search`
 with full descriptions) and the CV PDF go to disk rather than into context. That is why
 the MCP results here can stay bounded. It lives in the instructions, not in `next`: having
@@ -333,7 +333,7 @@ that ignores `_meta.ui` sees exactly what it saw before.
 
 Anthropic's directory policy rules out tool descriptions that instruct the model about other
 tools ("call get_job for the full text" was in three places). A tool or field description
-states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newMixedServer`).
+states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newServer`).
 `TestNoToolDescriptionDirectsTheModelToAnotherTool` walks the registered tools and both
 schemas to hold the line.
 
