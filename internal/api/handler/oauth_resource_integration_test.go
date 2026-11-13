@@ -113,7 +113,7 @@ func (f *resourceFixture) exchange(t *testing.T, code string, resources ...strin
 	return resp.StatusCode, out
 }
 
-func (f *resourceFixture) callMCP(t *testing.T, path, token string) *http.Response {
+func (f *resourceFixture) callMCP(t *testing.T, path, token string) (int, http.Header) {
 	t.Helper()
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -121,8 +121,8 @@ func (f *resourceFixture) callMCP(t *testing.T, path, token string) *http.Respon
 	if err != nil {
 		t.Fatalf("mcp call: %v", err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
-	return resp
+	resp.Body.Close()
+	return resp.StatusCode, resp.Header
 }
 
 // grantToken runs authorize + token and returns the access token.
@@ -192,12 +192,12 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforcedPerEndpoint(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp := f.callMCP(t, tc.path, tc.token)
-			if resp.StatusCode != tc.want {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.want)
+			status, header := f.callMCP(t, tc.path, tc.token)
+			if status != tc.want {
+				t.Fatalf("status = %d, want %d", status, tc.want)
 			}
 			if tc.want == 401 {
-				if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) || !strings.Contains(got, "resource_metadata=") {
+				if got := header.Get("WWW-Authenticate"); !strings.Contains(got, `error="invalid_token"`) || !strings.Contains(got, "resource_metadata=") {
 					t.Errorf("WWW-Authenticate = %q, want invalid_token + resource_metadata", got)
 				}
 			}
@@ -219,7 +219,7 @@ func TestOAuthResource_BindingRoundTripsAndIsEnforcedPerEndpoint(t *testing.T) {
 			t.Errorf("stored resource = %q, want the path %q", stored, oauth2server.MCPAccountResourcePath)
 		}
 		before := lastUsed
-		f.callMCP(t, "/api/v1/mcp", account) // wrong endpoint
+		_, _ = f.callMCP(t, "/api/v1/mcp", account) // wrong endpoint
 		read()
 		if (before == nil) != (lastUsed == nil) || (before != nil && !before.Equal(*lastUsed)) {
 			t.Errorf("last_used_at moved on a refused call: %v -> %v", before, lastUsed)
@@ -265,10 +265,10 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 
 	t.Run("a resource sent only at /token binds the grant", func(t *testing.T) {
 		token := f.grantToken(t, "", resourceAccount)
-		if got := f.callMCP(t, "/api/v1/mcp", token).StatusCode; got != 401 {
+		if got, _ := f.callMCP(t, "/api/v1/mcp", token); got != 401 {
 			t.Errorf("at /mcp: status %d, want 401", got)
 		}
-		if got := f.callMCP(t, "/api/v1/mcp/account", token).StatusCode; got != 200 {
+		if got, _ := f.callMCP(t, "/api/v1/mcp/account", token); got != 200 {
 			t.Errorf("at /mcp/account: status %d, want 200", got)
 		}
 	})
