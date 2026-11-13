@@ -16,12 +16,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -29,7 +31,8 @@ import (
 // specServer serves the real route tree (auth metadata routes and both MCP
 // mounts) on a loopback port, with that port as the deployment origin. The
 // SvelteKit app proxies /.well-known/* to the API in production; the shim below
-// replays that mapping, read from the SvelteKit route files themselves.
+// does the same (it fetches the internal path and relays the answer, status and
+// content type included), with the mapping read from the SvelteKit route files.
 func specServer(t *testing.T) (origin string, get func(url string) specResponse, post func(endpoint, userAgent, body string) specResponse) {
 	t.Helper()
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
@@ -47,16 +50,36 @@ func specServer(t *testing.T) (origin string, get func(url string) specResponse,
 	catalogue := &mcpappHandlers{origin: origin}
 	mountMCP(api, middleware{}, assistants, catalogue)
 	mountMCPAccount(api, middleware{}, assistants, catalogue)
+	client := &http.Client{Timeout: 10 * time.Second}
 	for wellKnown, internal := range wellKnownProxies(t) {
 		app.Get(wellKnown, func(c *fiber.Ctx) error {
-			return c.Redirect(internal, fiber.StatusTemporaryRedirect)
+			req, err := http.NewRequestWithContext(c.Context(), http.MethodGet, origin+internal, nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			c.Status(resp.StatusCode).Set(fiber.HeaderContentType, resp.Header.Get(fiber.HeaderContentType))
+			return c.Send(body)
 		})
 	}
 
-	go func() { _ = app.Listener(ln) }()
-	t.Cleanup(func() { _ = app.Shutdown() })
+	served := make(chan error, 1)
+	go func() { served <- app.Listener(ln) }()
+	t.Cleanup(func() {
+		_ = app.Shutdown()
+		if err := <-served; err != nil {
+			t.Errorf("app.Listener: %v", err)
+		}
+	})
 
-	client := &http.Client{} // follows the shim's redirect to the internal path
 	get = func(url string) specResponse {
 		t.Helper()
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
@@ -124,6 +147,16 @@ func wellKnownProxies(t *testing.T) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, want := range []string{
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-protected-resource/api/v1/mcp",
+		"/.well-known/oauth-authorization-server",
+	} {
+		if out[want] == "" {
+			t.Fatalf("no proxyWellKnownJSON route found for %s under web/src/routes (found %v); "+
+				"the route is missing or its +server.ts no longer matches %s", want, out, proxyCall)
+		}
+	}
 	return out
 }
 
@@ -167,11 +200,21 @@ func decodeSpecJSON(t *testing.T, resp specResponse, into any) {
 // has what the "Authorization Flow Steps" need (PKCE S256, dynamic registration).
 func TestMCPAuthorizationSpec_ChallengeLeadsToWorkingDiscovery(t *testing.T) {
 	origin, get, post := specServer(t)
-	cases := []struct{ endpoint, wantMetadata string }{
+	cases := []struct {
+		endpoint, wantMetadata string
+		insufficientScope      bool
+	}{
 		// RFC 9728 §3.1: the canonical endpoint has a path-specific document.
-		{"/api/v1/mcp", origin + "/.well-known/oauth-protected-resource/api/v1/mcp"},
-		// The account alias keeps the root document for the clients already connected to it.
-		{"/api/v1/mcp/account", origin + "/.well-known/oauth-protected-resource"},
+		// A no-credential 401 carries error="insufficient_scope" here. RFC 6750 §3.1 says
+		// a server SHOULD NOT include an error code when the request lacks authentication;
+		// mixedChallenge (mcpapp/mixed.go) does so deliberately, for host compatibility
+		// (ChatGPT's in-band challenge shares it). Asserted so a change is a conscious one.
+		{"/api/v1/mcp", origin + "/.well-known/oauth-protected-resource/api/v1/mcp", true},
+		// LEGACY DEVIATION from RFC 9728 §3.1/§3.3: the account alias is served from the
+		// ROOT document, whose resource is .../api/v1/mcp/account rather than the root URL.
+		// That works only because the client follows resource_metadata from the challenge
+		// (RFC 9728 §5.1) instead of deriving the URL from the resource.
+		{"/api/v1/mcp/account", origin + "/.well-known/oauth-protected-resource", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.endpoint, func(t *testing.T) {
@@ -183,6 +226,18 @@ func TestMCPAuthorizationSpec_ChallengeLeadsToWorkingDiscovery(t *testing.T) {
 			if !strings.HasPrefix(challenge, "Bearer ") {
 				t.Fatalf("WWW-Authenticate = %q, want the Bearer scheme", challenge)
 			}
+			// RFC 6750 §3.1: no credentials, so no invalid_token; see the case comments
+			// for the one endpoint that adds insufficient_scope on purpose.
+			if strings.Contains(challenge, "invalid_token") {
+				t.Fatalf("WWW-Authenticate = %q: no token was presented", challenge)
+			}
+			if tc.insufficientScope {
+				if !strings.Contains(challenge, `error="insufficient_scope"`) {
+					t.Fatalf("WWW-Authenticate = %q, want the documented insufficient_scope", challenge)
+				}
+			} else if strings.Contains(challenge, "error=") {
+				t.Fatalf("WWW-Authenticate = %q, want no error= on a request without credentials", challenge)
+			}
 			m := resourceMetadataParam.FindStringSubmatch(challenge)
 			if m == nil || m[1] != tc.wantMetadata {
 				t.Fatalf("WWW-Authenticate = %q, want resource_metadata=%q", challenge, tc.wantMetadata)
@@ -190,8 +245,10 @@ func TestMCPAuthorizationSpec_ChallengeLeadsToWorkingDiscovery(t *testing.T) {
 
 			var resource resourceMetadata
 			decodeSpecJSON(t, get(m[1]), &resource)
-			// RFC 9728 §3.3 and the spec's resource-indicator rule: the document's
-			// resource is the URL the client is connecting to.
+			// RFC 9728 §3.3 (the resource must match the URL the metadata was derived
+			// from) is not what holds for the account alias, see above. What the MCP
+			// spec asks of a client is that the resource identify the server it is
+			// connecting to, so that is what is asserted.
 			if resource.Resource != origin+tc.endpoint {
 				t.Errorf("resource = %q, want %q", resource.Resource, origin+tc.endpoint)
 			}
@@ -216,17 +273,21 @@ func TestMCPAuthorizationSpec_ChallengeLeadsToWorkingDiscovery(t *testing.T) {
 				}
 			}
 			// Authorization spec, "Authorization Code Protection": clients MUST use
-			// PKCE S256 and MUST refuse a server that does not advertise it.
+			// PKCE S256 and MUST refuse a server that does not advertise it. The rest
+			// of the assertions below are this server's POLICY, not RFC 8414 requirements.
 			if !slices.Contains(as.CodeChallengeMethodsSupported, "S256") {
 				t.Errorf("code_challenge_methods_supported = %v, want S256", as.CodeChallengeMethodsSupported)
 			}
 			if slices.Contains(as.CodeChallengeMethodsSupported, "plain") {
-				t.Errorf("code_challenge_methods_supported = %v: plain gives PKCE no protection", as.CodeChallengeMethodsSupported)
+				t.Errorf("code_challenge_methods_supported = %v: policy is S256 only, plain gives PKCE no protection", as.CodeChallengeMethodsSupported)
+			}
+			if slices.Contains(as.GrantTypesSupported, "implicit") || slices.Contains(as.ResponseTypesSupported, "token") {
+				t.Errorf("response_types %v / grant_types %v: policy forbids the implicit flow", as.ResponseTypesSupported, as.GrantTypesSupported)
 			}
 			if !slices.Contains(as.ResponseTypesSupported, "code") || !slices.Contains(as.GrantTypesSupported, "authorization_code") {
 				t.Errorf("response_types %v / grant_types %v, want code / authorization_code", as.ResponseTypesSupported, as.GrantTypesSupported)
 			}
-			// Public clients (no secret) are the only kind an MCP host is.
+			// Policy: public clients (no secret) are the only kind an MCP host is.
 			if !slices.Contains(as.TokenEndpointAuthMethodsSupported, "none") {
 				t.Errorf("token_endpoint_auth_methods_supported = %v, want none", as.TokenEndpointAuthMethodsSupported)
 			}
@@ -277,5 +338,20 @@ func TestMCPAuthorizationSpec_AnonymousAnswerByHost(t *testing.T) {
 				t.Errorf("WWW-Authenticate = %q, want %s", resp.Header.Get("WWW-Authenticate"), wantPointer)
 			}
 		})
+	}
+}
+
+// The advertisement above is only worth anything if /authorize refuses what it
+// does not advertise: PKCE downgrade protection (authorization spec, "Authorization
+// Code Protection"). Refused before any client lookup, so no database is involved.
+func TestMCPAuthorizationSpec_AuthorizeRefusesPlainPKCE(t *testing.T) {
+	origin, get, _ := specServer(t)
+	query := url.Values{
+		"response_type": {"code"}, "client_id": {"c"}, "redirect_uri": {"http://127.0.0.1:9999/callback"},
+		"state": {"s"}, "code_challenge": {"abc"}, "code_challenge_method": {"plain"},
+	}
+	resp := get(origin + "/api/v1/oauth/authorize?" + query.Encode())
+	if resp.StatusCode < 400 || resp.StatusCode >= 500 {
+		t.Fatalf("code_challenge_method=plain: status %d, want a 4xx refusal: %s", resp.StatusCode, resp.Body)
 	}
 }
