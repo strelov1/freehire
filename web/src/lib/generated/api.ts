@@ -7282,8 +7282,10 @@ export interface components {
         /**
          * @description Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value
          *     outside its vocabulary — keyed by the parameter as sent, each listing the unknown values.
-         *     The value is still applied and matches no posting: alone it empties the answer, beside
-         *     other values it adds nothing to their OR, and in `_exclude` it excludes nothing.
+         *     On a facet the value is still applied and matches no posting: alone it empties the
+         *     answer, beside other values it adds nothing to their OR, in `_exclude` it excludes
+         *     nothing. A boolean or modifier param reads it its own way (`requires_clearance=flase`
+         *     reads as true, `visa_sponsorship=yes` filters nothing), so the answer may be wider.
          */
         IgnoredValues: {
             [key: string]: string[];

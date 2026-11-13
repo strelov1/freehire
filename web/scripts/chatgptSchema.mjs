@@ -77,8 +77,12 @@ const repeated = (options) => ({ style: 'form', explode: true, schema: { type: '
 // One filters.ts row as a query parameter: repeatable strings unless it names a scalar type.
 // A closed vocabulary goes in the enum, so the description keeps only what follows the list.
 function rowParameter(f) {
-  const list = f.options?.join(', ');
-  const values = list && f.values.startsWith(list) ? f.values.slice(list.length).replace(/^[.\s—-]+/, '') : f.values;
+  // The listed values are the enum's leading run (a retired value may follow, unlisted).
+  const options = f.options ?? [];
+  let listed = options.length;
+  while (listed && !f.values.startsWith(options.slice(0, listed).join(', '))) listed--;
+  const list = options.slice(0, listed).join(', ');
+  const values = list ? f.values.slice(list.length).replace(/^[.\s—-]+/, '') : f.values;
   const description = values ? `${f.label}: ${values}.` : `${f.label}.`;
   return f.type
     ? { name: f.param, in: 'query', description, schema: { type: f.type } }

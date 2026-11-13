@@ -2495,7 +2495,8 @@
               "legal",
               "operations",
               "customer_success",
-              "other"
+              "other",
+              "management"
             ]
           }
         }
@@ -2563,7 +2564,8 @@
               "legal",
               "operations",
               "customer_success",
-              "other"
+              "other",
+              "management"
             ]
           }
         }
@@ -4529,7 +4531,7 @@
             "type": "string"
           }
         },
-        "description": "Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value\noutside its vocabulary — keyed by the parameter as sent, each listing the unknown values.\nThe value is still applied and matches no posting: alone it empties the answer, beside\nother values it adds nothing to their OR, and in `_exclude` it excludes nothing."
+        "description": "Present only when a closed-vocabulary facet (or its `_exclude` form) carried a value\noutside its vocabulary — keyed by the parameter as sent, each listing the unknown values.\nOn a facet the value is still applied and matches no posting: alone it empties the\nanswer, beside other values it adds nothing to their OR, in `_exclude` it excludes\nnothing. A boolean or modifier param reads it its own way (`requires_clearance=flase`\nreads as true, `visa_sponsorship=yes` filters nothing), so the answer may be wider."
       },
       "Job": {
         "type": "object",

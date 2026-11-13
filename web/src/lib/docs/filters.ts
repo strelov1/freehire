@@ -82,13 +82,19 @@ const VALUES_NOTE: Record<string, string> = {
     " — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type",
 };
 
+// Values the API still accepts but the SPA no longer offers (see VALUES_NOTE).
+const RETIRED_VALUES: Record<string, string[]> = { category: ['management'] };
+
 /** Every string facet: the SPA-derived rows plus the API-only ones. */
 export const FILTER_FACETS: FilterRow[] = [
   ...FACETS.map((f) => ({
     param: f.param,
     label: f.label,
     values: (VALUES_OVERRIDE[f.param] ?? valuesOf(f.options)) + (VALUES_NOTE[f.param] ?? ''),
-    options: f.options?.length && !OPEN_WITH_OPTIONS.has(f.param) ? f.options.map((o) => o.value) : undefined,
+    options:
+      f.options?.length && !OPEN_WITH_OPTIONS.has(f.param)
+        ? [...f.options.map((o) => o.value), ...(RETIRED_VALUES[f.param] ?? [])]
+        : undefined,
   })),
   ...API_ONLY_FACETS,
 ];
