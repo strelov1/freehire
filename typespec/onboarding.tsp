@@ -33,6 +33,7 @@ model OnboardingMatch {
  * visitor who has no account and so no stored profile. Answers the top ten.
  */
 @tag("Onboarding")
+@useAuth(NoAuth)
 @route("/onboarding/matches")
 @post
 op onboardingMatches(@body body: OnboardingMatchesRequest): List<OnboardingMatch> | Problem;

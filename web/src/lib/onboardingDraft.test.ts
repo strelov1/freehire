@@ -142,7 +142,9 @@ describe('arrivalAction', () => {
   });
 
   it('only offers to save into an account that already existed', () => {
-    expect(arrivalAction(pending(), { authenticated: true, accountCreatedAt: now - 365 * 86_400_000, now })).toBe('offer-save');
+    expect(arrivalAction(pending(), { authenticated: true, accountCreatedAt: now - 365 * 86_400_000, now })).toBe(
+      'offer-save',
+    );
   });
 
   // A shared browser: somebody else's anonymous run must never reach this account.
