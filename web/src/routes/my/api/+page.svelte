@@ -12,11 +12,20 @@
 
   const s = $derived(t(messages, locale()));
   const usage = new AsyncData<ApiUsageDay[]>([]);
+  // The server writes counts once a minute, so an open page re-reads on the same beat.
+  let now = $state(new Date());
   $effect(() => {
-    if (isAuthenticated()) void usage.run(() => api.getApiUsage());
+    if (!isAuthenticated()) return;
+    const load = () => {
+      now = new Date();
+      void usage.run(() => api.getApiUsage());
+    };
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
   });
 
-  const series = $derived(dailyUsage(usage.value, new Date()));
+  const series = $derived(dailyUsage(usage.value, now));
   const total = $derived(series.reduce((n, d) => n + d.new, 0));
   const errors = $derived(usage.value.reduce((n, d) => n + d.errors, 0));
   const today = $derived(series.at(-1)?.new ?? 0);
@@ -37,7 +46,7 @@
   <section class="flex flex-col gap-3 rounded-xl border border-border p-4">
     {#if usage.status === 'error'}
       <p class="text-sm text-destructive" role="alert">{s.usageError}</p>
-    {:else if usage.status === 'ready'}
+    {:else if usage.status === 'ready' || usage.value.length > 0}
       <SignupsBars points={total > 0 ? series : []} label={s.chartLabel} empty={s.chartEmpty} />
     {/if}
     <p class="text-xs text-muted-foreground">{s.usageNote}</p>

@@ -111,7 +111,7 @@
           </ul>
           {#if held === card.price.tier}
             <a href={resolve('/my/api')} class={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'mt-auto')}
-              >Your current plan · API keys</a
+              >Your current plan · Open API workspace</a
             >
           {:else if isAuthenticated()}
             <button
