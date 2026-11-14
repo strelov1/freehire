@@ -12586,6 +12586,188 @@ func (s *JobApplyFormOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
+// One transition of a posting, as the change feed reports it.
+// Ref: #/components/schemas/JobChange
+type JobChange struct {
+	PublicSlug string `json:"public_slug"`
+	// `opened`: the posting entered the catalogue. `closed`: it was taken down. `reopened`: a closed
+	// posting came back (its source listed it again, or a moderator reopened it).
+	Kind JobChangeKind `json:"kind"`
+	// When the change was recorded.
+	At time.Time `json:"at"`
+	// Why a `closed` change happened (e.g. `unseen`, `expired`); absent on the other kinds.
+	ClosedReason OptString `json:"closed_reason"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *JobChange) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetKind returns the value of Kind.
+func (s *JobChange) GetKind() JobChangeKind {
+	return s.Kind
+}
+
+// GetAt returns the value of At.
+func (s *JobChange) GetAt() time.Time {
+	return s.At
+}
+
+// GetClosedReason returns the value of ClosedReason.
+func (s *JobChange) GetClosedReason() OptString {
+	return s.ClosedReason
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *JobChange) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetKind sets the value of Kind.
+func (s *JobChange) SetKind(val JobChangeKind) {
+	s.Kind = val
+}
+
+// SetAt sets the value of At.
+func (s *JobChange) SetAt(val time.Time) {
+	s.At = val
+}
+
+// SetClosedReason sets the value of ClosedReason.
+func (s *JobChange) SetClosedReason(val OptString) {
+	s.ClosedReason = val
+}
+
+// `opened`: the posting entered the catalogue. `closed`: it was taken down. `reopened`: a closed
+// posting came back (its source listed it again, or a moderator reopened it).
+type JobChangeKind string
+
+const (
+	JobChangeKindOpened   JobChangeKind = "opened"
+	JobChangeKindClosed   JobChangeKind = "closed"
+	JobChangeKindReopened JobChangeKind = "reopened"
+)
+
+// AllValues returns all JobChangeKind values.
+func (JobChangeKind) AllValues() []JobChangeKind {
+	return []JobChangeKind{
+		JobChangeKindOpened,
+		JobChangeKindClosed,
+		JobChangeKindReopened,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s JobChangeKind) MarshalText() ([]byte, error) {
+	switch s {
+	case JobChangeKindOpened:
+		return []byte(s), nil
+	case JobChangeKindClosed:
+		return []byte(s), nil
+	case JobChangeKindReopened:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *JobChangeKind) UnmarshalText(data []byte) error {
+	switch JobChangeKind(data) {
+	case JobChangeKindOpened:
+		*s = JobChangeKindOpened
+		return nil
+	case JobChangeKindClosed:
+		*s = JobChangeKindClosed
+		return nil
+	case JobChangeKindReopened:
+		*s = JobChangeKindReopened
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/JobChangesMeta
+type JobChangesMeta struct {
+	Limit int64 `json:"limit"`
+	// True when more changes are waiting; fetch again with `next_cursor`.
+	HasMore bool `json:"has_more"`
+	// Pass back as `cursor` for the next page. Present whenever the call read a change or was given a
+	// cursor; keep the last one to resume later, when `has_more` is false and new changes have arrived.
+	NextCursor OptString `json:"next_cursor"`
+	// The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before
+	// it.
+	AvailableSince OptDateTime `json:"available_since"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *JobChangesMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetHasMore returns the value of HasMore.
+func (s *JobChangesMeta) GetHasMore() bool {
+	return s.HasMore
+}
+
+// GetNextCursor returns the value of NextCursor.
+func (s *JobChangesMeta) GetNextCursor() OptString {
+	return s.NextCursor
+}
+
+// GetAvailableSince returns the value of AvailableSince.
+func (s *JobChangesMeta) GetAvailableSince() OptDateTime {
+	return s.AvailableSince
+}
+
+// SetLimit sets the value of Limit.
+func (s *JobChangesMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetHasMore sets the value of HasMore.
+func (s *JobChangesMeta) SetHasMore(val bool) {
+	s.HasMore = val
+}
+
+// SetNextCursor sets the value of NextCursor.
+func (s *JobChangesMeta) SetNextCursor(val OptString) {
+	s.NextCursor = val
+}
+
+// SetAvailableSince sets the value of AvailableSince.
+func (s *JobChangesMeta) SetAvailableSince(val OptDateTime) {
+	s.AvailableSince = val
+}
+
+// Ref: #/components/schemas/JobChangesPage
+type JobChangesPage struct {
+	Data []JobChange    `json:"data"`
+	Meta JobChangesMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobChangesPage) GetData() []JobChange {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobChangesPage) GetMeta() JobChangesMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobChangesPage) SetData(val []JobChange) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobChangesPage) SetMeta(val JobChangesMeta) {
+	s.Meta = val
+}
+
 // Ref: #/components/schemas/JobCopiesMeta
 type JobCopiesMeta struct {
 	// The whole closure's open size, even when the list is a capped page.

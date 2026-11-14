@@ -1102,6 +1102,15 @@ type JobActivity struct {
 	StateVersion    int64              `json:"state_version"`
 }
 
+type JobChange struct {
+	ID     int64              `json:"id"`
+	JobID  int64              `json:"job_id"`
+	Kind   string             `json:"kind"`
+	Reason string             `json:"reason"`
+	At     pgtype.Timestamptz `json:"at"`
+	Xid    int64              `json:"xid"`
+}
+
 type JobDailyStat struct {
 	Day        pgtype.Date        `json:"day"`
 	Added      int32              `json:"added"`

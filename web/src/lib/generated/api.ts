@@ -1139,6 +1139,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change feed: postings that opened, closed or reopened.
+         * @description Every opening, closing and reopening of a public, canonical posting, oldest first, so a
+         *     mirror of the catalogue can stay in sync and delist what closed. Start with `since`
+         *     (an RFC 3339 time, at most 30 days back), then follow `meta.next_cursor` as `cursor`:
+         *     the cursor is a keyset position, so a walk never skips or repeats a change while new
+         *     ones arrive. A change is served only once its transaction has committed and every older
+         *     one has finished, so it appears a moment after it happens. A change about a posting that
+         *     has since become private or a duplicate is not served. For one posting, apply changes in
+         *     the order served; `at` is the recorded time, not a sort key. `since` only picks the
+         *     starting point of the first call: from then on, resume from the cursor, not from a time.
+         */
+        get: operations["listJobChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/facets": {
         parameters: {
             query?: never;
@@ -7630,6 +7658,45 @@ export interface components {
             upvote_count?: number;
             downvote_count?: number;
         };
+        /** @description One transition of a posting, as the change feed reports it. */
+        JobChange: {
+            public_slug: string;
+            /**
+             * @description `opened`: the posting entered the catalogue. `closed`: it was taken down.
+             *     `reopened`: a closed posting came back (its source listed it again, or a moderator
+             *     reopened it).
+             * @enum {string}
+             */
+            kind: "opened" | "closed" | "reopened";
+            /**
+             * Format: date-time
+             * @description When the change was recorded.
+             */
+            at: string;
+            /** @description Why a `closed` change happened (e.g. `unseen`, `expired`); absent on the other kinds. */
+            closed_reason?: string;
+        };
+        JobChangesMeta: {
+            /** Format: int64 */
+            limit: number;
+            /** @description True when more changes are waiting; fetch again with `next_cursor`. */
+            has_more: boolean;
+            /**
+             * @description Pass back as `cursor` for the next page. Present whenever the call read a change or was
+             *     given a cursor; keep the last one to resume later, when `has_more` is false and new
+             *     changes have arrived.
+             */
+            next_cursor?: string;
+            /**
+             * Format: date-time
+             * @description The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before it.
+             */
+            available_since?: string;
+        };
+        JobChangesPage: {
+            data: components["schemas"]["JobChange"][];
+            meta: components["schemas"]["JobChangesMeta"];
+        };
         JobCopiesMeta: {
             /**
              * Format: int64
@@ -12251,6 +12318,60 @@ export interface operations {
                     "application/json": {
                         data: unknown;
                     };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listJobChanges: {
+        parameters: {
+            query?: {
+                /** @description Where to start, RFC 3339, at most 30 days back. Required without `cursor`. (e.g. `2026-06-19T00:00:00Z`) */
+                since?: string;
+                /** @description The `meta.next_cursor` of the previous page; wins over `since`. */
+                cursor?: string;
+                /** @description Page size, 1–100 (default 100). (e.g. `100`) */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "kind": "closed",
+                     *           "at": "2026-06-20T04:10:00Z",
+                     *           "closed_reason": "unseen"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "limit": 100,
+                     *         "has_more": false,
+                     *         "next_cursor": "djE6MTIzNDU6OTg3",
+                     *         "available_since": "2026-06-01T00:00:00Z"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobChangesPage"];
                 };
             };
             /** @description An unexpected error response. */

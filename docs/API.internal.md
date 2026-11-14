@@ -11,6 +11,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Pagination](#pagination)
 - [Errors](#errors)
 - [API plans](#api-plans)
+- [Data freshness and closed jobs](#data-freshness-and-closed-jobs)
 - [Authentication model](#authentication-model)
 - [What is not here](#what-is-not-here)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
@@ -92,6 +93,34 @@ The limit counts HTTP requests, not returned listings or unique vacancies. A pag
 Pagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.
 
 The gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.
+
+## Data freshness and closed jobs
+
+A posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:
+
+- The crawl no longer lists the posting: `unseen`. A crawl that ran incompletely, or whose board failed, closes nothing.
+- A source that streams removals reports the posting taken down: `feed_removed`.
+- Two consecutive liveness reads find the page expired, or the source answers that it is gone: `probe_expired`.
+- A source with no close signal at all is closed by age (`expired`), and so is a posting whose application deadline has passed. The age rule is a guess, which is why the reason says so.
+- A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).
+- An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).
+- A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).
+
+Postings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.
+
+How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. A posting its source has not shown for 14 days is hidden from search but stays open.
+
+Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
+
+### Keeping a mirror in sync
+
+`GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:
+
+1. Load the postings you want through the list and search endpoints, and note the time you started.
+2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.
+3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.
+
+The cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`), so a mirror older than that rebuilds from search. A change shows up in the feed shortly after it happens, not at the same instant.
 
 ## Authentication model
 
