@@ -24,16 +24,24 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 Observation state (`last_seen_at`, `hydrated_at`, `liveness_strikes`) is read from
 `job_activity`, keyed by `jobs.id`. `jobs_read` combines it with posting content for
 the existing `db.Job` shape. An insert trigger creates activity even for raw SQL
-inserts. During the compatible rollout, legacy writers still update `jobs`; a
-one-way bridge mirrors them into activity without regressing timestamps. This
-reader release alone does not reduce observation writes.
+inserts. Ordinary unchanged refreshes, open touches and covered refreshes update
+only activity. Full posting writes use `job.Upsert`: write content first, then
+observe activity with a second command in the same transaction. This preserves
+the insert trigger's visibility and the lock order. Body hydration advances only
+when a body was read; a substituted catalogue body preserves its previous stamp.
+Older compatible writers still update `jobs`; a one-way bridge mirrors them into
+activity without regressing timestamps until the contract release removes it.
 
 Closers that depend on freshness lock `jobs` then `job_activity` with
 `FOR NO KEY UPDATE` and recheck the observation after waiting. A plain join in an
 `UPDATE jobs` does not recheck a concurrently refreshed activity tuple. The
 activity `state_version` changes on lifecycle or cheap-match-key changes; reopening
-resets strikes. The later activity-only writer release must wait for every legacy
-reader process to exit, including crawler and liveness workers.
+resets strikes. A cheap write rejected by that version fence rolls back before
+retrying in a fresh transaction. Covered refresh commits its bulk `SKIP LOCKED`
+pass before retrying unwritten rows individually; an exhausted retry or timeout
+fails coverage instead of silently permitting a sweep. The writer release must
+wait for every pre-reader-release process to exit, including crawler and liveness
+workers, and for external SQL readers to use activity.
 
 Seven independent mechanisms write `closed_at`, each covering a gap the others can't reach. Six close on evidence; the age rule (4) guesses, which is why every close records its mechanism. The safety nets (5) and (6) read a board's history, not a posting: (5) nothing could reach the board for weeks, (6) everything reached it and found nothing.
 

@@ -301,14 +301,80 @@ func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingEx
 	return items, nil
 }
 
+const refreshCoveredJob = `-- name: RefreshCoveredJob :one
+WITH hit AS MATERIALIZED (
+    SELECT j.id, j.external_id, j.company_slug, a.state_version AS ver
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.source = $1 AND j.external_id = $2
+      AND j.closed_at IS NULL AND NOT j.is_private
+), locked AS MATERIALIZED (
+    SELECT a.job_id, a.state_version AS cur
+    FROM job_activity a
+    WHERE a.job_id IN (SELECT id FROM hit)
+    FOR NO KEY UPDATE OF a
+), refreshed AS (
+    UPDATE job_activity a
+    SET last_seen_at = GREATEST(now(), a.last_seen_at)
+    FROM hit h JOIN locked l ON l.job_id = h.id
+    WHERE a.job_id = h.id AND l.cur = h.ver
+    RETURNING h.id
+)
+SELECT h.external_id::text AS external_id, h.company_slug::text AS company_slug,
+       (r.id IS NOT NULL)::boolean AS refreshed
+FROM hit h LEFT JOIN refreshed r ON r.id = h.id
+`
+
+type RefreshCoveredJobParams struct {
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+}
+
+type RefreshCoveredJobRow struct {
+	ExternalID  string `json:"external_id"`
+	CompanySlug string `json:"company_slug"`
+	Refreshed   bool   `json:"refreshed"`
+}
+
+// RefreshCoveredJobs for ONE posting, the retry of a row the bulk statement could not write. It
+// is an autocommit statement WITHOUT SKIP LOCKED: it waits for the writer that held the row,
+// under the caller's deadline, holding nothing else while it waits. No row = the posting is
+// closed, private or absent (pgx.ErrNoRows, a no-op as for the bulk statement). refreshed = true:
+// stamped. refreshed = false: the state fence moved while it waited; the statement has ended, so
+// the lock is gone, and the caller runs one fresh statement, a few times at most, and reports an
+// error if it keeps losing rather than recording the company as seen.
+func (q *Queries) RefreshCoveredJob(ctx context.Context, arg RefreshCoveredJobParams) (RefreshCoveredJobRow, error) {
+	row := q.db.QueryRow(ctx, refreshCoveredJob, arg.Source, arg.ExternalID)
+	var i RefreshCoveredJobRow
+	err := row.Scan(&i.ExternalID, &i.CompanySlug, &i.Refreshed)
+	return i, err
+}
+
 const refreshCoveredJobs = `-- name: RefreshCoveredJobs :many
-UPDATE jobs
-SET last_seen_at = now()
-WHERE source = $1
-  AND external_id = ANY($2::text[])
-  AND closed_at IS NULL
-  AND NOT is_private
-RETURNING company_slug
+WITH hit AS MATERIALIZED (
+    SELECT j.id, j.external_id, j.company_slug, a.state_version AS ver
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.source = $1
+      AND j.external_id = ANY($2::text[])
+      AND j.closed_at IS NULL AND NOT j.is_private
+), locked AS MATERIALIZED (
+    SELECT a.job_id, a.state_version AS cur
+    FROM job_activity a
+    WHERE a.job_id IN (SELECT id FROM hit)
+    ORDER BY a.job_id
+    FOR NO KEY UPDATE OF a SKIP LOCKED
+), refreshed AS (
+    UPDATE job_activity a
+    SET last_seen_at = GREATEST(now(), a.last_seen_at)
+    FROM hit h JOIN locked l ON l.job_id = h.id
+    WHERE a.job_id = h.id AND l.cur = h.ver
+    RETURNING h.id
+)
+SELECT h.external_id::text AS external_id, h.company_slug::text AS company_slug,
+       (r.id IS NOT NULL)::boolean AS refreshed
+FROM hit h LEFT JOIN refreshed r ON r.id = h.id
+ORDER BY h.id
 `
 
 type RefreshCoveredJobsParams struct {
@@ -316,28 +382,46 @@ type RefreshCoveredJobsParams struct {
 	ExternalIds []string `json:"external_ids"`
 }
 
+type RefreshCoveredJobsRow struct {
+	ExternalID  string `json:"external_id"`
+	CompanySlug string `json:"company_slug"`
+	Refreshed   bool   `json:"refreshed"`
+}
+
 // Liveness refresh for the postings an aggregator board listed but the coverage gate kept out
 // of the write path (pipeline.CoveredRefresher): the employer is already crawled first-hand, so
 // nothing is written — but a row stored before that began must not be left with the
 // last_seen_at of its last write, or it stays open whether or not the aggregator still lists it
 // (4dayweek, 2026-10-30: 17,306 of 23,046 open rows unseen for a week, 98% of them covered).
-// last_seen_at is the ONLY column written, for RefreshUnchangedJob's reason: it is in no index,
-// so the update is heap-only. Open rows only, and never a reopen: reopening is a write the gate
-// has already declined. An id the catalogue does not hold matches nothing. RETURNING
-// company_slug so the caller puts the company in the sweep's crawled scope, as TouchJob does.
-func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]string, error) {
+// last_seen_at is job_activity's, and it is the ONLY thing written: no jobs tuple is touched or
+// locked. Open, public rows only, and never a reopen: reopening is a write the gate has already
+// declined. An id the catalogue does not hold, or holds closed or private, comes back as no row.
+//
+// One row per listed posting with its outcome: refreshed = false is a row this chunk could not
+// write, and the caller retries just those with RefreshCoveredJob.
+//   - SKIP LOCKED: a bulk statement waiting for activity rows, in plan order, can close a cycle
+//     with an unsorted multi-row writer of jobs (the dedup and close passes lock the activity row
+//     through the state trigger in plan order). A refresher that never waits is never a victim
+//     and never makes the writer one.
+//   - Fenced like every activity-only write: the snapshot version in `hit`, the latest version
+//     in the sorted locking `locked`, compared in the UPDATE. A locking select INSIDE `hit` would
+//     return the post-wait version and defeat the fence.
+//
+// company_slug rides along so the caller puts the company in the sweep's crawled scope, as
+// TouchJob does, but only for the rows that were refreshed.
+func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]RefreshCoveredJobsRow, error) {
 	rows, err := q.db.Query(ctx, refreshCoveredJobs, arg.Source, arg.ExternalIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []RefreshCoveredJobsRow{}
 	for rows.Next() {
-		var company_slug string
-		if err := rows.Scan(&company_slug); err != nil {
+		var i RefreshCoveredJobsRow
+		if err := rows.Scan(&i.ExternalID, &i.CompanySlug, &i.Refreshed); err != nil {
 			return nil, err
 		}
-		items = append(items, company_slug)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -358,13 +442,11 @@ WITH existing AS MATERIALIZED (
     FOR NO KEY UPDATE OF j, a
 ), touched AS (
     UPDATE jobs
-    SET last_seen_at = now(),
-        application_deadline = e.deadline,
+    SET application_deadline = e.deadline,
         closed_at = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                          THEN COALESCE(jobs.closed_at, now()) ELSE NULL END,
         closed_reason = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                              THEN 'expired' ELSE '' END,
-        liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
         -- Stamp a lifecycle transition, not another observation of an expired posting.
         updated_at = CASE
             WHEN (jobs.closed_at IS NULL) IS DISTINCT FROM
@@ -395,7 +477,8 @@ WITH existing AS MATERIALIZED (
 )
 SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
        (t.id IS NULL)::boolean AS deferred,
-       (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
+       (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened,
+       (t.id IS NOT NULL AND e.closed_at IS NOT NULL)::boolean AS reset_strikes
 FROM existing e LEFT JOIN touched t ON t.id = e.id
 `
 
@@ -408,10 +491,11 @@ type TouchJobParams struct {
 }
 
 type TouchJobRow struct {
-	ID          int64  `json:"id"`
-	CompanySlug string `json:"company_slug"`
-	Deferred    bool   `json:"deferred"`
-	Reopened    bool   `json:"reopened"`
+	ID           int64  `json:"id"`
+	CompanySlug  string `json:"company_slug"`
+	Deferred     bool   `json:"deferred"`
+	Reopened     bool   `json:"reopened"`
+	ResetStrikes bool   `json:"reset_strikes"`
 }
 
 // Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
@@ -431,17 +515,27 @@ type TouchJobRow struct {
 // FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
 // search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
 // own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
-// lock does not, and it is all this statement needs. The jobs tuple AND the activity row are locked
-// here, in that order, before anything is queued: release A still writes the legacy columns and its
-// one-way bridge would take the activity row only at the end of the statement, AFTER the
-// search_outbox writes below, while a writer that locks the activity row first and then queues
-// (release B) deadlocks with that. last_seen_at, the previous stamp the withheld-then-seen requeue
-// compares, is the locked activity row's.
+// lock does not, and it is all this statement needs. The jobs tuple is locked first and the
+// activity row second (the global lock order), and BOTH before any write of this statement: the
+// state trigger takes the activity row only when a fenced column flips, so an unchanged open
+// posting would otherwise queue its search_outbox entry (returned_queued) while holding no activity
+// lock, and a TouchOpenJob that holds the activity row and waits for that entry would deadlock with
+// the ObserveJobActivity this caller runs next. last_seen_at, the previous stamp the
+// withheld-then-seen requeue compares, is read from the locked activity row. A job with no
+// activity row matches nothing (the insert trigger gives every job one; ObserveJobActivity treats
+// its absence as an error as well). This is the FULL touch: the ordinary re-listing of an open,
+// unexpired posting takes TouchOpenJob and never reaches the jobs tuple at all.
 // A touch writes no content, so a posting closed under an older dictionary would reopen
 // carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
 // deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
 // the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
 // crawl to retry instead of open on stale facets. reopened is the transition this call made.
+//
+// This statement writes lifecycle only. The observation itself (last_seen_at) is job_activity's:
+// the caller stamps it with ObserveJobActivity in the same transaction, AFTER this statement, so
+// the lock order is jobs then activity, and not when the touch was deferred. reset_strikes says
+// whether that stamp must also clear the strike count: the old row was closed. A reopen is reset
+// by the state trigger already; this covers the posting an expired deadline leaves closed.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error) {
 	row := q.db.QueryRow(ctx, touchJob,
 		arg.ApplicationDeadline,
@@ -456,6 +550,76 @@ func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow
 		&i.CompanySlug,
 		&i.Deferred,
 		&i.Reopened,
+		&i.ResetStrikes,
 	)
+	return i, err
+}
+
+const touchOpenJob = `-- name: TouchOpenJob :one
+WITH hit AS MATERIALIZED (
+    SELECT j.id, j.company_slug, j.duplicate_of, j.is_private,
+           COALESCE(j.posted_at, j.created_at) AS eff_posted_at,
+           a.last_seen_at AS prev_seen_at, a.state_version AS ver
+    FROM jobs j
+    JOIN job_activity a ON a.job_id = j.id
+    WHERE j.source = $1 AND j.external_id = $2
+      AND j.closed_at IS NULL
+      AND j.application_deadline IS NOT DISTINCT FROM
+          COALESCE($3::date, j.application_deadline)
+      AND (j.application_deadline IS NULL
+           OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+), touched AS (
+    UPDATE job_activity a
+    SET last_seen_at = GREATEST(now(), a.last_seen_at)
+    FROM hit h
+    WHERE a.job_id = h.id AND a.state_version = h.ver
+    RETURNING h.id, h.company_slug, h.duplicate_of, h.is_private, h.prev_seen_at, h.eff_posted_at
+), returned_queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM touched
+    WHERE duplicate_of IS NULL AND NOT is_private
+      AND prev_seen_at < $4::timestamptz
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+)
+SELECT id, company_slug::text AS company_slug, false::boolean AS fenced FROM touched
+UNION ALL
+SELECT id, company_slug::text, true::boolean FROM hit
+WHERE NOT EXISTS (SELECT 1 FROM touched)
+`
+
+type TouchOpenJobParams struct {
+	Source               string             `json:"source"`
+	ExternalID           string             `json:"external_id"`
+	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
+	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
+}
+
+type TouchOpenJobRow struct {
+	ID          int64  `json:"id"`
+	CompanySlug string `json:"company_slug"`
+	Fenced      bool   `json:"fenced"`
+}
+
+// The ordinary touch of a hydrating source's re-listed posting: it is open and its deadline has
+// not passed, so the crawl's sighting changes no lifecycle state and the only write is
+// job_activity.last_seen_at. The jobs tuple is read, never written and never locked. Anything else
+// (closed, expired, absent, or a changed listing deadline) matches nothing and the caller runs
+// the full TouchJob. An unchanged stated deadline stays on this activity-only path.
+// A posting search had withheld for going unseen is queued back, as TouchJob does.
+//
+// Fenced exactly as RefreshUnchangedJob is (read its FENCE note): a lifecycle or content change
+// committed while this statement waited for the activity row makes it write nothing and return
+// fenced = true. It is an autocommit statement, so its lock is gone when it returns, and the
+// full TouchJob that follows holds nothing from it.
+func (q *Queries) TouchOpenJob(ctx context.Context, arg TouchOpenJobParams) (TouchOpenJobRow, error) {
+	row := q.db.QueryRow(ctx, touchOpenJob,
+		arg.Source,
+		arg.ExternalID,
+		arg.ApplicationDeadline,
+		arg.WithheldIfSeenBefore,
+	)
+	var i TouchOpenJobRow
+	err := row.Scan(&i.ID, &i.CompanySlug, &i.Fenced)
 	return i, err
 }
