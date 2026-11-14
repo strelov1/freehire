@@ -28,3 +28,25 @@ Outgoing messages MUST NOT be classified as employer signals, count as employer 
 #### Scenario: Candidate confirms interview
 - **WHEN** the candidate sends an interview confirmation
 - **THEN** it is displayed as sent and does not enqueue classification or create an employer event
+
+### Requirement: Preserve application conversation context
+Application mail views SHALL include unattached outgoing Gmail replies when the same user's live incoming messages in the same source and nonempty thread identify one unambiguous job. Explicit attachments MUST take precedence. Display inference MUST NOT persist a link or employer activity.
+
+#### Scenario: Incoming link arrives after reply synchronization
+- **WHEN** an incoming hiring message is linked after its outgoing reply was stored
+- **THEN** the application mail view includes the reply without another synchronization pass
+
+#### Scenario: Ambiguous conversation
+- **WHEN** incoming messages in a conversation name different jobs or include an application-only link
+- **THEN** the view does not infer an unattached reply's job, while preserving explicit manual or agent attachments
+
+### Requirement: Keep recall and follow-up employer-only
+Recall candidate selection and suggestion writes MUST accept incoming messages only. Follow-up drafts MUST use the newest incoming sender, even when a later outgoing reply is visible.
+
+#### Scenario: Alias repaired during recall
+- **WHEN** recall selected a message before synchronization identifies it as outgoing
+- **THEN** the pending recall cannot write an employer-message suggestion for that row
+
+#### Scenario: Candidate sends the newest reply
+- **WHEN** an application has a newer candidate reply after the recruiter's last message
+- **THEN** the follow-up draft retains the recruiter's address as its recipient

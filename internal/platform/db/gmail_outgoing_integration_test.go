@@ -139,3 +139,129 @@ func TestReimportRepairsOutgoingAlias(t *testing.T) {
 		t.Fatal("candidate reply retained classification work")
 	}
 }
+
+func TestOutgoingThreadMailAppearsAfterIncomingLink(t *testing.T) {
+	pool := startPostgres(t)
+	q, ctx := New(pool), context.Background()
+	user := insertUser(t, pool, "thread-view@example.test")
+	job := insertJob(t, pool, "thread-view-job")
+	otherJob := insertJob(t, pool, "thread-other-job")
+	applyToJob(t, pool, user, job, "applied")
+	for _, direction := range []string{"incoming", "outgoing"} {
+		if err := q.UpsertEmail(ctx, UpsertEmailParams{UserID: user, ExternalID: direction, ThreadID: "thread", Direction: direction, ReceivedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	incoming, err := q.GetEmailIDByExternalID(ctx, GetEmailIDByExternalIDParams{UserID: user, ExternalID: "incoming"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outgoing, err := q.GetEmailIDByExternalID(ctx, GetEmailIDByExternalIDParams{UserID: user, ExternalID: "outgoing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSent := func(jobID int64, want bool) {
+		t.Helper()
+		rows, err := q.ListJobEmails(ctx, ListJobEmailsParams{UserID: user, JobID: pgtype.Int8{Int64: jobID, Valid: true}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, row := range rows {
+			found = found || row.ID == outgoing
+		}
+		if found != want {
+			t.Fatalf("job %d sent message visible=%v, want %v", jobID, found, want)
+		}
+	}
+	assertSent(job, false)
+	// Classification may link the incoming message after both messages were synced.
+	linkEmail(t, pool, incoming, job, "manual")
+	assertSent(job, true)
+	state := readLinkState(t, pool, outgoing)
+	if state.jobID.Valid || state.applicationID.Valid {
+		t.Fatal("display inference persisted an outgoing attachment")
+	}
+	other := insertLinkedEmail(t, pool, user, "other-anchor", otherJob)
+	if _, err := pool.Exec(ctx, "UPDATE emails SET thread_id='thread' WHERE id=$1", other); err != nil {
+		t.Fatal(err)
+	}
+	assertSent(job, false)
+	assertSent(otherJob, false)
+	// A linked application whose posting is gone is still a conflicting context.
+	var orphan int64
+	if err := pool.QueryRow(ctx, "INSERT INTO applications(user_id,company_slug,role_title) VALUES($1,'orphan','Role') RETURNING id", user).Scan(&orphan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE emails SET job_id=NULL,application_id=$2 WHERE id=$1", other, orphan); err != nil {
+		t.Fatal(err)
+	}
+	assertSent(job, false)
+	// Explicit manual and agent attachments win over ambiguous conversation context.
+	for _, source := range []string{"manual", "agent"} {
+		linkEmail(t, pool, outgoing, otherJob, source)
+		assertSent(otherJob, true)
+		assertSent(job, false)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE emails SET job_id=NULL,application_id=NULL,link_source=NULL WHERE id=$1", outgoing); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE emails SET deleted_at=now() WHERE id=$1", other); err != nil {
+		t.Fatal(err)
+	}
+	assertSent(job, true)
+	for _, mutation := range []string{"source='hosted'", "thread_id=''", "deleted_at=now()"} {
+		if _, err := pool.Exec(ctx, "UPDATE emails SET "+mutation+" WHERE id=$1", incoming); err != nil {
+			t.Fatal(err)
+		}
+		assertSent(job, false)
+		if _, err := pool.Exec(ctx, "UPDATE emails SET source='gmail',thread_id='thread',deleted_at=NULL WHERE id=$1", incoming); err != nil {
+			t.Fatal(err)
+		}
+	}
+	otherUser := insertUser(t, pool, "thread-other-user@example.test")
+	if _, err := pool.Exec(ctx, "UPDATE emails SET user_id=$2 WHERE id=$1", incoming, otherUser); err != nil {
+		t.Fatal(err)
+	}
+	assertSent(job, false)
+	if _, err := pool.Exec(ctx, "UPDATE emails SET user_id=$2 WHERE id=$1", incoming, user); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []string{"source='hosted'", "thread_id=''"} {
+		if _, err := pool.Exec(ctx, "UPDATE emails SET "+mutation+" WHERE id IN ($1,$2)", incoming, outgoing); err != nil {
+			t.Fatal(err)
+		}
+		assertSent(job, false)
+		if _, err := pool.Exec(ctx, "UPDATE emails SET source='gmail',thread_id='thread' WHERE id IN ($1,$2)", incoming, outgoing); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestRecallExcludesSentAndRepairedAliases(t *testing.T) {
+	pool := startPostgres(t)
+	q, ctx := New(pool), context.Background()
+	user := insertUser(t, pool, "recall-sent@example.test")
+	job := insertJob(t, pool, "recall-sent-job")
+	now := time.Now()
+	if err := q.UpsertEmail(ctx, UpsertEmailParams{UserID: user, ExternalID: "alias", ReceivedAt: pgtype.Timestamptz{Time: now, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	args := ListEmailsForRecallParams{UserID: user, Since: pgtype.Timestamptz{Time: now.Add(-time.Hour), Valid: true}, Until: pgtype.Timestamptz{Time: now.Add(time.Hour), Valid: true}, Lim: 10}
+	rows, err := q.ListEmailsForRecall(ctx, args)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("incoming recall rows=%d err=%v", len(rows), err)
+	}
+	id := rows[0].ID
+	if err := q.UpsertEmail(ctx, UpsertEmailParams{UserID: user, ExternalID: "alias", Direction: "outgoing", ReceivedAt: pgtype.Timestamptz{Time: now, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := q.SuggestJobForEmail(ctx, SuggestJobForEmailParams{ID: id, UserID: user, SuggestedJobID: job, Confidence: 1})
+	if err != nil || changed != 0 {
+		t.Errorf("in-flight recall suggested repaired sent alias: changed=%d err=%v", changed, err)
+	}
+	rows, err = q.ListEmailsForRecall(ctx, args)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("sent alias entered recall: rows=%d err=%v", len(rows), err)
+	}
+}

@@ -14,6 +14,8 @@ Add a separate sent synchronization cursor to gmail_connections. At its initial 
 
 Expose direction and recipients in inbox list/detail and display Sent with recipients in the web inbox. Preserve incoming defaults for all other sources. Outgoing messages do not receive employer-status actions.
 
+Application mail views derive an unattached outgoing reply's membership from its Gmail conversation at read time, so an incoming message linked after synchronization also reveals earlier replies. Infer only within the same user, source and nonempty thread, with one unambiguous linked incoming job. Conflicting jobs and application-only incoming links prevent inference; explicit manual and agent attachments take precedence. This projection persists no link or employer activity. Recall selection and suggestion writes accept incoming mail only, including when alias repair occurs during recall. Follow-up drafts choose the newest incoming sender rather than the candidate's own later reply.
+
 ## Risks / Trade-offs
 
 - First backfill traverses existing threads once; later passes read sent metadata and fetch only relevant content.

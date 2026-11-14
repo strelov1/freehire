@@ -88,10 +88,15 @@ func (h *inboxHandlers) newestSender(ctx context.Context, userID, jobID int64) (
 	rows, err := h.queries.ListJobEmails(ctx, db.ListJobEmailsParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
 	})
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return "", ""
 	}
-	return rows[0].FromAddr, rows[0].FromName
+	for _, row := range rows {
+		if row.Direction == "incoming" {
+			return row.FromAddr, row.FromName
+		}
+	}
+	return "", ""
 }
 
 // cachedStrength reads one concrete strength from the cached fit analysis — text the analysis
