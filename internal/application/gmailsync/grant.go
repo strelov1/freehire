@@ -1,9 +1,12 @@
 package gmailsync
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"golang.org/x/oauth2"
 )
@@ -22,9 +25,43 @@ type APIError struct {
 	Op         string
 	StatusCode int
 	Status     string
+	// Reason is Google's error reason from the body (rateLimitExceeded, insufficientPermissions…),
+	// empty when the body carried none.
+	Reason string
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("%s: %s", e.Op, e.Status) }
+func (e *APIError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("%s: %s (%s)", e.Op, e.Status, e.Reason)
+	}
+	return fmt.Sprintf("%s: %s", e.Op, e.Status)
+}
+
+// NewAPIError builds the error for a non-200 Google answer, reading the reason out of its
+// body: Gmail answers a per-user rate limit with 403, not 429, and only the reason tells
+// that apart from a refused grant.
+func NewAPIError(op string, resp *http.Response) *APIError {
+	var body struct {
+		Error struct {
+			Errors []struct {
+				Reason string `json:"reason"`
+			} `json:"errors"`
+		} `json:"error"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 16<<10)).Decode(&body)
+	e := &APIError{Op: op, StatusCode: resp.StatusCode, Status: resp.Status}
+	if len(body.Error.Errors) > 0 {
+		e.Reason = body.Error.Errors[0].Reason
+	}
+	return e
+}
+
+// limitReason reports a reason meaning a quota or rate limit (rateLimitExceeded,
+// userRateLimitExceeded, quotaExceeded, dailyLimitExceeded): the grant is fine, the pace is not.
+func limitReason(reason string) bool {
+	r := strings.ToLower(reason)
+	return strings.Contains(r, "limit") || strings.Contains(r, "quota")
+}
 
 // invalidGrant is RFC 6749's code for a refresh token the provider will not honour again:
 // revoked at Google, expired through disuse, or invalidated by a password change.
@@ -41,7 +78,9 @@ const invalidGrant = "invalid_grant"
 //
 // TWO carriers, because a revocation reaches these workers on either leg:
 //
-//   - the API refusing an access token with 401 or 403;
+//   - the API refusing an access token with 401 or 403 — except a 403 whose reason is a
+//     rate limit or quota, which Gmail sends for a burst of reads (it disconnected 4 of 18
+//     mailboxes on 2026-11-14, #4610);
 //   - the TOKEN endpoint refusing the refresh token, which is where a real revocation
 //     actually lands. The readers' client is built from a stored refresh token
 //     (Connector.HTTPClient), so oauth2 exchanges it before any API call is made: Google
@@ -55,7 +94,8 @@ const invalidGrant = "invalid_grant"
 func RevokedGrant(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden
+		return apiErr.StatusCode == http.StatusUnauthorized ||
+			(apiErr.StatusCode == http.StatusForbidden && !limitReason(apiErr.Reason))
 	}
 	var retrieve *oauth2.RetrieveError
 	if errors.As(err, &retrieve) {

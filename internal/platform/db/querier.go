@@ -4689,6 +4689,7 @@ type Querier interface {
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
 	// Known hiring conversations are the boundary for sent-message body retrieval.
+	// Newest conversation first: the first sent-mail scan expands only the head of this list.
 	ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)

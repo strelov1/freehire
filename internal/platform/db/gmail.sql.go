@@ -606,11 +606,14 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 }
 
 const listGmailThreadIDs = `-- name: ListGmailThreadIDs :many
-SELECT DISTINCT thread_id FROM emails
+SELECT thread_id FROM emails
 WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NULL
+GROUP BY thread_id
+ORDER BY max(received_at) DESC
 `
 
 // Known hiring conversations are the boundary for sent-message body retrieval.
+// Newest conversation first: the first sent-mail scan expands only the head of this list.
 func (q *Queries) ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error) {
 	rows, err := q.db.Query(ctx, listGmailThreadIDs, userID)
 	if err != nil {

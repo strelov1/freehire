@@ -132,6 +132,10 @@ func (w *Worker) markRevoked(ctx context.Context, userID int64) outcome {
 // result by watching their inbox fill.
 func (w *Worker) SyncUser(ctx context.Context, u Connection) { _ = w.syncUser(ctx, u) }
 
+// firstSentScanThreads caps how many stored conversations, newest first, the first
+// sent-mail scan of a mailbox expands.
+const firstSentScanThreads = 50
+
 func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	started := time.Now().Unix()
 	encToken, err := w.store.RefreshToken(ctx, u.UserID)
@@ -250,9 +254,14 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		return outcomeFailed
 	}
 	known := make(map[string]bool, len(knownThreads))
-	for _, tid := range knownThreads {
+	for i, tid := range knownThreads {
 		known[tid] = true
-		if u.SentCursor == 0 && !seenThread[tid] {
+		// The first scan (no sent cursor yet) re-reads stored conversations to pick up
+		// replies sent before this existed. Unbounded, it read every thread of every
+		// mailbox in one burst and Google rate-limited it (#4610).
+		// shortcut: older conversations never get their past replies, raise the cap or
+		// make the scan resumable if users ask for them.
+		if u.SentCursor == 0 && i < firstSentScanThreads && !seenThread[tid] {
 			seenThread[tid] = true
 			threadIDs = append(threadIDs, tid)
 		}

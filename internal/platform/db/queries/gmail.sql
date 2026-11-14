@@ -104,8 +104,11 @@ DELETE FROM emails WHERE user_id = $1 AND source = $2;
 
 -- name: ListGmailThreadIDs :many
 -- Known hiring conversations are the boundary for sent-message body retrieval.
-SELECT DISTINCT thread_id FROM emails
-WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NULL;
+-- Newest conversation first: the first sent-mail scan expands only the head of this list.
+SELECT thread_id FROM emails
+WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NULL
+GROUP BY thread_id
+ORDER BY max(received_at) DESC;
 
 -- name: UpsertEmail :exec
 -- Gmail is idempotent; sent messages are already read and never enter employer triage.

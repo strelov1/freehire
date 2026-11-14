@@ -189,11 +189,7 @@ func (r *APIReader) page(ctx context.Context, q url.Values) (eventsPage, error) 
 		// candidate's mailbox at once and each would have to redo a restricted-scope
 		// consent. gmailsync.RevokedGrant is the one place that rule is written, since a
 		// second copy of it here would be a second answer for one grant.
-		return eventsPage{}, &gmailsync.APIError{
-			Op:         "calendar: list events",
-			StatusCode: resp.StatusCode,
-			Status:     resp.Status,
-		}
+		return eventsPage{}, gmailsync.NewAPIError("calendar: list events", resp)
 	}
 	var body eventsPage
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {

@@ -3,6 +3,7 @@ package gmailsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -122,5 +123,28 @@ func TestOwnInboxDigestDoesNotEnterHiringMail(t *testing.T) {
 	}
 	if len(store.upserted) != 0 {
 		t.Fatal("generated digest entered the hiring inbox")
+	}
+}
+
+func TestFirstSentScanIsBounded(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh")
+	known := make([]string, firstSentScanThreads+10)
+	errs := map[string]error{}
+	for i := range known {
+		known[i] = fmt.Sprintf("t%d", i)
+		if i >= firstSentScanThreads {
+			errs[known[i]] = &APIError{StatusCode: 403, Status: "403 Forbidden"}
+		}
+	}
+	store := &fakeStore{conns: []Connection{{UserID: 7, Cursor: 100}}, encToken: enc, knownThreads: known}
+	reader := &fakeReader{threadErrIDs: errs}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Synced != 1 || len(store.reconsentUsers) != 0 {
+		t.Fatalf("first scan read past the newest %d threads: stats=%+v reconsent=%v", firstSentScanThreads, stats, store.reconsentUsers)
 	}
 }
