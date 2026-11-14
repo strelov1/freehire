@@ -88,10 +88,10 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 // cannot vouch for that: the board failed, the run's deadline interrupted it, the context ended,
 // a posting it listed could not be read (Unreadable) or saved (Skipped) — both are retried by
 // the next crawl, which a quiet pause would postpone — or the source is self-closing and emits
-// changes rather than its listing.
+// changes rather than its listing, or the source reads only a bounded search slice.
 func (r Runner) completeListingFingerprint(ctx context.Context, src sources.Source, listed []string, st Stats) string {
 	if ctx.Err() != nil || st.Failed > 0 || st.Interrupted > 0 || st.Unreadable > 0 || st.Skipped > 0 ||
-		src == nil || sources.SelfCloses(src) {
+		src == nil || sources.SelfCloses(src) || sources.ProbeCloses(src) {
 		return ""
 	}
 	return listingFingerprint(listed)

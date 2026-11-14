@@ -316,8 +316,12 @@ type unknownOrigin interface{ unknownOrigin() }
 // Removed set, emitted from its stream) and therefore must be excluded from the post-run
 // unseen sweep. Such a source re-reports only changed postings each run, so the sweep's
 // last_seen_at cutoff would wrongly close every still-open posting it did not touch; the
-// stream's removal events are the authoritative close signal instead. See SelfClosingProviders.
+// stream's removal events are the authoritative close signal instead. See UnseenSweepExemptProviders.
 type selfClosing interface{ selfClosing() }
+
+// probeClosing marks a bounded search whose missing postings can only be closed by
+// cmd/liveness, never by a company-, board-, or source-scoped unseen sweep.
+type probeClosing interface{ probeClosing() }
 
 // fullCatalog marks an aggregator whose every crawl lists the WHOLE catalogue in one run —
 // not a per-company board and not a subset. For such a source an open job the run did not

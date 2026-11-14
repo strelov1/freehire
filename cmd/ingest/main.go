@@ -337,9 +337,9 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
 	// unseen sweep must skip it: it re-reports only changed ads, and the cutoff would wrongly
 	// close every still-open ad it did not touch this run.
-	selfClosing := make(map[string]bool)
-	for _, p := range sources.SelfClosingProviders(registry) {
-		selfClosing[p] = true
+	sweepExempt := make(map[string]bool)
+	for _, p := range sources.UnseenSweepExemptProviders(registry) {
+		sweepExempt[p] = true
 	}
 	// A fullCatalog source (e.g. habr_career) lists its whole catalogue each run, so a clean run
 	// may close its unseen jobs by source alone — retiring a company that vanished from the feed,
@@ -362,7 +362,7 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	// failed fetch, so a finished board that listed nothing joins its board scope too.
 	emptyBoardListing := sources.EmptyBoardListingProviders(registry)
 	for _, provider := range sweeppolicy.SweepableProviders(runStats) {
-		if selfClosing[provider] {
+		if sweepExempt[provider] {
 			continue
 		}
 		_, hasGrace := grace[provider]
