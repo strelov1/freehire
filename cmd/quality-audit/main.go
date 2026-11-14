@@ -104,7 +104,7 @@ func run() int {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" && !*dryRun {
 		log.Printf("quality-audit: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
-		return 0
+		return worker.Skip(worker.PromTextfileDirEnv)
 	}
 	k, err := loadKnobs()
 	if err != nil {

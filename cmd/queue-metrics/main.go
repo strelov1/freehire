@@ -37,7 +37,7 @@ func run() int {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		log.Printf("queue-metrics: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
-		return 0
+		return worker.Skip(worker.PromTextfileDirEnv)
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())

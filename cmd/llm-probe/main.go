@@ -63,13 +63,13 @@ func run() int {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		log.Printf("llm-probe: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
-		return 0
+		return worker.Skip(worker.PromTextfileDirEnv)
 	}
 
 	cfg := config.LoadLLM()
 	if !cfg.Settings(cfg.Model).Enabled() {
 		log.Printf("llm-probe: LLM is unconfigured, nothing to probe")
-		return 0
+		return worker.Skip("LLM_SETTINGS")
 	}
 
 	// Every alias the deployment routes through, not just LLM_MODEL. cmd/server reads these

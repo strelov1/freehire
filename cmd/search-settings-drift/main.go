@@ -40,13 +40,13 @@ func run() int {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		log.Printf("search-settings-drift: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
-		return 0
+		return worker.Skip(worker.PromTextfileDirEnv)
 	}
 
 	cfg := config.Load()
 	if cfg.MeiliKey == "" {
 		log.Print("search-settings-drift: MEILI_MASTER_KEY is unset, nothing to check")
-		return 0
+		return worker.Skip("MEILI_MASTER_KEY")
 	}
 
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)

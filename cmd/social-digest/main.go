@@ -71,7 +71,7 @@ func run() int {
 		// has not turned this on, and it should look like nothing rather than like a
 		// broken worker every night.
 		log.Printf("social-digest: no channel configured, nothing to do")
-		return 0
+		return worker.Skip("SOCIAL_CHANNELS")
 	}
 
 	// FRONTEND_ORIGIN defaults to localhost so that a developer's checkout runs, and

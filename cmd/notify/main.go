@@ -49,7 +49,7 @@ func run() int {
 	// not an error, so an unprovisioned cron stays quiet.
 	if cfg.MeiliKey == "" {
 		log.Printf("notify: search not configured (MEILI_MASTER_KEY); nothing to do")
-		return 0
+		return worker.Skip("MEILI_MASTER_KEY")
 	}
 
 	queries := db.New(pool)
