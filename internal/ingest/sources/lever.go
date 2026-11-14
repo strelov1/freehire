@@ -58,6 +58,8 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		Categories struct {
 			Location   string `json:"location"`
 			Commitment string `json:"commitment"`
+			Team       string `json:"team"`
+			Department string `json:"department"`
 		} `json:"categories"`
 		SalaryRange *struct {
 			Min      float64 `json:"min"`
@@ -102,6 +104,8 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Countries:      countryFromCode(p.Country),
 			PostedAt:       parseEpochMillis(p.CreatedAt),
 			EmploymentType: leverEmploymentType(p.Categories.Commitment),
+			// team is the narrower label, nested under department on Lever.
+			Team: firstNonEmpty(strings.TrimSpace(p.Categories.Team), strings.TrimSpace(p.Categories.Department)),
 		}
 		if p.SalaryRange != nil {
 			if period := leverSalaryPeriod(p.SalaryRange.Interval); period != "" {

@@ -36,7 +36,8 @@ WHERE jobs.id = p.id
   AND jobs.english_level = $10
   AND jobs.is_tech IS NOT DISTINCT FROM $11
   AND jobs.engagement = COALESCE($12::text[], '{}')
-  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE($13::date, jobs.application_deadline)
+  AND jobs.team = $13
+  AND jobs.application_deadline IS NOT DISTINCT FROM COALESCE($14::date, jobs.application_deadline)
   AND (jobs.application_deadline IS NULL OR jobs.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND jobs.closed_at IS NULL
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private,
@@ -45,7 +46,7 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM refreshed
     WHERE duplicate_of IS NULL AND NOT is_private
-      AND prev_seen_at < $14::timestamptz
+      AND prev_seen_at < $15::timestamptz
     -- Re-stamped: a drain wave holding this entry may be removing the document right now.
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
@@ -66,6 +67,7 @@ type RefreshUnchangedJobParams struct {
 	EnglishLevel         string             `json:"english_level"`
 	IsTech               pgtype.Bool        `json:"is_tech"`
 	Engagement           []string           `json:"engagement"`
+	Team                 string             `json:"team"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
 	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
 }
@@ -169,6 +171,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.EnglishLevel,
 		arg.IsTech,
 		arg.Engagement,
+		arg.Team,
 		arg.ApplicationDeadline,
 		arg.WithheldIfSeenBefore,
 	)
@@ -184,7 +187,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 
 const upsertJob = `-- name: UpsertJob :one
 WITH existing AS (
-    SELECT id, closed_at, closed_reason, application_deadline, is_private,
+    SELECT id, closed_at, closed_reason, application_deadline, is_private, team,
            CASE WHEN closed_at IS NULL THEN content_hash END AS old_hash, true AS existed
     FROM jobs
     WHERE source = $1 AND external_id = $2
@@ -227,7 +230,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason
+    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason, team
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, replace($6, '-', ''), $7, $8,
@@ -247,7 +250,8 @@ INSERT INTO jobs (
     -- is reserved for the rows that predate the column (see 0144), which read as stale.
     now(), $39::date,
     CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
-    CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
+    CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END,
+    $40
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -268,6 +272,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
     application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
+    team         = EXCLUDED.team,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
     cities       = EXCLUDED.cities,
@@ -355,16 +360,18 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- the other half: a body that came back byte-identical takes that statement, and stamps
     -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
     -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
-    hydrated_at  = CASE WHEN $40::boolean THEN jobs.hydrated_at ELSE now() END,
+    hydrated_at  = CASE WHEN $41::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
-WHERE NOT $40::boolean OR jobs.description = EXCLUDED.description
+WHERE NOT $41::boolean OR jobs.description = EXCLUDED.description
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private, jobs.closed_at,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
     COALESCE(
         (SELECT old_hash FROM existing) IS DISTINCT FROM $36
-        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline,
+        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline
+        -- team is not in the content hash either: an edited department must still reach the index.
+        OR (SELECT team FROM existing) IS DISTINCT FROM jobs.team,
         false
     )::boolean AS changed
 `
@@ -409,6 +416,7 @@ type UpsertJobParams struct {
 	RoleFingerprint      pgtype.Text        `json:"role_fingerprint"`
 	RequirementsDerived  []byte             `json:"requirements_derived"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
+	Team                 string             `json:"team"`
 	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 }
 
@@ -495,6 +503,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		arg.RoleFingerprint,
 		arg.RequirementsDerived,
 		arg.ApplicationDeadline,
+		arg.Team,
 		arg.BodyFromCatalogue,
 	)
 	var i UpsertJobRow

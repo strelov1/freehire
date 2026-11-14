@@ -1092,6 +1092,7 @@ type Job struct {
 	LastSeenAt                pgtype.Timestamptz `json:"last_seen_at"`
 	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
 	LivenessStrikes           int32              `json:"liveness_strikes"`
+	Team                      string             `json:"team"`
 }
 
 type JobActivity struct {
@@ -1222,6 +1223,8 @@ type JobRow struct {
 	// Source-stated last application day, inclusive; NULL when unstated.
 	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 	Engagement          []string    `json:"engagement"`
+	// Department or team the source ATS files the posting under, verbatim and trimmed; empty when unstated.
+	Team string `json:"team"`
 }
 
 type JobSearchPing struct {

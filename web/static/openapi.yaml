@@ -4599,6 +4599,10 @@
             "format": "date",
             "description": "Source-stated last application day, inclusive. Absent when the source states no deadline."
           },
+          "team": {
+            "type": "string",
+            "description": "The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and\nAshby state one). Absent when the source states none; not a taxonomy, so values differ\nbetween employers."
+          },
           "manually_added": {
             "type": "boolean",
             "description": "True for a hand-curated posting rather than an automated crawl."

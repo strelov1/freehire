@@ -57,6 +57,10 @@ type Job struct {
 	// ApplicationDeadline is the source's inclusive last application date, in UTC.
 	// Nil means the source did not provide a deadline.
 	ApplicationDeadline *time.Time
+	// Team is the department or team the platform files the posting under, in a STRUCTURED
+	// field, verbatim (the adapter trims it; Greenhouse, Lever and Ashby set it). It is the
+	// ATS's own label, not a taxonomy; empty when the platform states none.
+	Team string
 	// WorkMode is the work arrangement when the platform states it in a STRUCTURED
 	// field (a workplace-type enum or an explicit remote flag) — "remote",
 	// "hybrid", or "onsite", else "". It is left empty for adapters that only
