@@ -155,7 +155,7 @@ func (q *Queries) GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow
 }
 
 const getNotificationSettings = `-- name: GetNotificationSettings :one
-SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled, digest_interval_hours FROM notification_settings WHERE user_id = $1
+SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled, digest_interval_hours, inbox_digest_enabled, inbox_digest_enabled_at FROM notification_settings WHERE user_id = $1
 `
 
 // The caller's notification rule, shared by saved-job reminders and both
@@ -177,6 +177,8 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 		&i.AlertsEmailEnabled,
 		&i.NewsEmailEnabled,
 		&i.DigestIntervalHours,
+		&i.InboxDigestEnabled,
+		&i.InboxDigestEnabledAt,
 	)
 	return i, err
 }
@@ -458,12 +460,13 @@ func (q *Queries) UpsertJobReminder(ctx context.Context, arg UpsertJobReminderPa
 const upsertNotificationSettings = `-- name: UpsertNotificationSettings :one
 INSERT INTO notification_settings (
     user_id, enabled, channels, digest_frequency, digest_time, digest_interval_hours,
-    quiet_hours_start, quiet_hours_end, updated_at
+    quiet_hours_start, quiet_hours_end, inbox_digest_enabled, inbox_digest_enabled_at, updated_at
 )
 VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
-    $8, now()
+    $8, $9,
+    CASE WHEN $9::bool THEN now() ELSE NULL END, now()
 )
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
@@ -473,8 +476,11 @@ ON CONFLICT (user_id) DO UPDATE
       digest_interval_hours = EXCLUDED.digest_interval_hours,
       quiet_hours_start  = EXCLUDED.quiet_hours_start,
       quiet_hours_end    = EXCLUDED.quiet_hours_end,
+      inbox_digest_enabled_at = CASE WHEN EXCLUDED.inbox_digest_enabled AND NOT notification_settings.inbox_digest_enabled
+                                     THEN now() ELSE notification_settings.inbox_digest_enabled_at END,
+      inbox_digest_enabled = EXCLUDED.inbox_digest_enabled,
       updated_at         = now()
-RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled, digest_interval_hours
+RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end, alerts_email_enabled, news_email_enabled, digest_interval_hours, inbox_digest_enabled, inbox_digest_enabled_at
 `
 
 type UpsertNotificationSettingsParams struct {
@@ -486,6 +492,7 @@ type UpsertNotificationSettingsParams struct {
 	DigestIntervalHours int16       `json:"digest_interval_hours"`
 	QuietHoursStart     pgtype.Time `json:"quiet_hours_start"`
 	QuietHoursEnd       pgtype.Time `json:"quiet_hours_end"`
+	InboxDigestEnabled  bool        `json:"inbox_digest_enabled"`
 }
 
 // Create or replace the caller's notification rule in one statement, including the
@@ -502,6 +509,7 @@ func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNoti
 		arg.DigestIntervalHours,
 		arg.QuietHoursStart,
 		arg.QuietHoursEnd,
+		arg.InboxDigestEnabled,
 	)
 	var i NotificationSetting
 	err := row.Scan(
@@ -516,6 +524,8 @@ func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNoti
 		&i.AlertsEmailEnabled,
 		&i.NewsEmailEnabled,
 		&i.DigestIntervalHours,
+		&i.InboxDigestEnabled,
+		&i.InboxDigestEnabledAt,
 	)
 	return i, err
 }

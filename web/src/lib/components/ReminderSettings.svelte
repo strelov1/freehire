@@ -34,6 +34,8 @@
   // The server's default is a daily digest at 09:00 (migration 0246).
   let digestFrequency = $state('daily');
   let digestTime = $state('09:00');
+  let inboxDigestEnabled = $state(false);
+  let inboxDigestPaid = $state(false);
   let digestIntervalHours = $state(1);
   // 1-23: a full day is the Daily option, which also picks the hour.
   const intervalHourOptions = Array.from({ length: 23 }, (_, i) => i + 1);
@@ -75,17 +77,20 @@
   async function load() {
     status = 'loading';
     try {
-      const [settings, tg, pushDevice] = await Promise.all([
+      const [settings, tg, pushDevice, plan] = await Promise.all([
         api.getNotificationSettings(),
         api.telegramStatus(),
         api.hasPushDevice(),
+        api.myPlan().catch(() => null),
       ]);
       enabled = settings.enabled;
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
+      inboxDigestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
       digestFrequency = settings.digest_frequency || 'daily';
       digestTime = settings.digest_time ?? '09:00';
+      inboxDigestEnabled = settings.inbox_digest_enabled ?? false;
       digestIntervalHours = settings.digest_interval_hours || 1;
       quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);
       quietHoursStart = settings.quiet_hours_start ?? '22:00';
@@ -111,7 +116,8 @@
         enabled,
         channels,
         digest_frequency: digestFrequency,
-        digest_time: digestFrequency === 'daily' ? digestTime : null,
+        digest_time: digestFrequency === 'daily' || inboxDigestEnabled ? digestTime : null,
+        inbox_digest_enabled: inboxDigestEnabled,
         digest_interval_hours: digestIntervalHours,
         quiet_hours_start: quietHoursOn ? quietHoursStart : null,
         quiet_hours_end: quietHoursOn ? quietHoursEnd : null,
@@ -296,6 +302,42 @@
      regardless of the toggle above, and use the same debounced-autosave PUT. -->
 {#if status === 'ready'}
   <section class="mt-4 rounded-xl border border-border bg-card p-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold">Daily inbox summary</h2>
+        <p class="mt-1 text-xs text-muted-foreground">
+          New recruiter messages, requests and application updates in one email, grouped by conversation. Empty days
+          send nothing.
+        </p>
+      </div>
+      <ToggleSwitch
+        on={inboxDigestEnabled}
+        label="Daily inbox summary"
+        disabled={!inboxDigestEnabled && (!inboxDigestPaid || !enabled || !channels.includes('email'))}
+        onToggle={() => {
+          inboxDigestEnabled = !inboxDigestEnabled;
+          persist();
+        }}
+      />
+    </div>
+    {#if !inboxDigestPaid}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
+          href={resolve('/pricing')}
+          class="font-medium text-brand-strong hover:underline">View plans</a
+        >
+      </p>
+    {/if}
+    <p class="mt-2 text-xs text-muted-foreground">
+      Uses the daily digest time below and your account timezone. Starts with messages received after you turn it on.
+    </p>
+    {#if !enabled || !channels.includes('email')}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Enable notifications and select Email above to receive the inbox summary.
+      </p>
+    {/if}
+  </section>
+  <section class="mt-4 rounded-xl border border-border bg-card p-4">
     <div class="flex flex-col gap-2">
       <span class={sectionLabel}>Search alert frequency</span>
       <div class="flex flex-wrap items-center gap-2">
@@ -338,7 +380,7 @@
           {#if digestFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Daily digest
         </button>
-        {#if digestFrequency === 'daily'}
+        {#if digestFrequency === 'daily' || inboxDigestEnabled}
           <input
             type="time"
             bind:value={digestTime}
@@ -350,8 +392,8 @@
       </div>
       <p class="text-xs text-muted-foreground">
         Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that
-        often. Applies only to saved-search alerts — reminders and application nudges above always deliver as they
-        happen.
+        often. Frequency applies only to saved-search alerts. The inbox summary always uses the daily time; reminders
+        and application nudges above deliver as they happen.
       </p>
       {#if digestFrequency === 'daily' && !hasTimezone}
         <p class="text-xs text-muted-foreground">

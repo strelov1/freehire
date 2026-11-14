@@ -20,7 +20,7 @@ SELECT a.job_id::bigint AS job_id,
                    FROM emails e
                   WHERE e.user_id = a.user_id
                     AND e.job_id = a.job_id
-                    AND e.deleted_at IS NULL))::timestamptz AS last_activity_at,
+                    AND e.deleted_at IS NULL AND e.direction = 'incoming'))::timestamptz AS last_activity_at,
        (EXISTS (SELECT 1
                   FROM emails e
                  WHERE e.user_id = a.user_id
@@ -29,7 +29,7 @@ SELECT a.job_id::bigint AS job_id,
                    -- what attaches the application — the same test the inbox's link
                    -- filter makes, so the two cannot disagree about one message.
                    AND e.application_id IS NULL
-                   AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+                   AND e.deleted_at IS NULL AND e.direction = 'incoming'))::boolean AS has_pending_suggestion
 FROM applications a
 WHERE a.job_id = ANY($1::bigint[])
   AND a.applied_at IS NOT NULL

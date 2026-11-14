@@ -43,6 +43,30 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 
 ## Always true
 
+- **A marked inbox digest is our own output.** The SES and SMTP paths carry
+  `Auto-Submitted: auto-generated` plus `mailmeta.NotificationHeader` with the inbox-digest
+  kind. Gmail and hosted readers skip this exact marker pair before persistence, so the
+  digest's hiring vocabulary cannot feed tomorrow's classification and summary. Other
+  automated employer mail is unaffected; this is no domain or keyword blocklist.
+
+- **Gmail keeps both directions inside hiring threads.** Incoming search excludes SENT and
+  DRAFT mail; thread expansion retains sent replies and discards drafts. Gmail's SENT label
+  identifies aliases; the connected primary address is a fallback. `emails.direction` is
+  `incoming` or `outgoing`, with To/Cc headers and thread ids exposed to inbox readers.
+  Sent messages start read and never enter employer classification, stage advancement,
+  employer-reply events, interview evidence or silence calculations. Hosted and external
+  messages retain their existing incoming defaults; this adds no sending transport.
+- **Sent discovery has its own cursor.** `gmail_connections.sent_sync_cursor` starts at zero:
+  the first successful pass expands stored Gmail threads to recover their sent history.
+  Later passes list SENT message/thread identifiers since the prior successful run (with a
+  60-second overlap), fetching content only for known hiring threads. This catches replies
+  to old conversations without a new incoming anchor. The cursor records run-start time;
+  a transient message or thread failure preserves both cursors, and idempotent inserts
+  make retries safe. Permanently missing provider messages/threads are skipped. Reimports
+  refresh direction and recipient metadata; an old alias reply newly recognized as SENT
+  loses its employer classification, pending work and employer-reply event. Existing
+  application stages are not automatically rolled back: that would overwrite later user
+  decisions. Apply migration 0265 before deploying the readers.
 - **The fetch is scoped to hiring-SHAPED mail, not to ATS senders, and the inbox filters at
   DISPLAY.** `gmailsync.BuildQueryFor` admits mail from a curated ATS domain OR carrying one
   of the recognised application/interview phrasings, minus anything the connected address

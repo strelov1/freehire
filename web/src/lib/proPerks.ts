@@ -3,6 +3,7 @@
 import { resolve } from '$app/paths';
 
 export const PRO_PERKS: { text: string; href: string }[] = [
+  { text: 'Daily hiring inbox summaries', href: resolve('/features/inbox') },
   { text: 'CV tailoring for each vacancy, with cover letters', href: resolve('/features/tailor') },
   { text: 'AI assistant', href: resolve('/features/tailor') },
   { text: 'Chrome and Firefox extension that fills applications for you', href: resolve('/features/extension') },
