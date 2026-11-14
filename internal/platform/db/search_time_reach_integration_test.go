@@ -231,7 +231,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		}
 	})
 
-	t.Run("a view-count rollup queues the job it counted", func(t *testing.T) {
+	t.Run("a view-count rollup moves view_count without queuing the job", func(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "viewed", "acme")
 		clearOutbox(t, pool)
@@ -242,19 +242,21 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 				t.Fatalf("apply view: %v", err)
 			}
 		})
-		if got := searchOutboxCount(t, pool, id); got != 1 {
-			t.Errorf("job queued %d after a view, want 1", got)
-		}
-
-		private := insertChunkTestJob(t, pool, "private", "acme")
-		exec(t, "UPDATE jobs SET is_private = true WHERE id = $1", private)
-		q.ApplyDailyAgentView(ctx, []ApplyDailyAgentViewParams{{Day: day, JobID: private, Delta: 1}}).Exec(func(_ int, err error) {
+		q.ApplyDailyAgentView(ctx, []ApplyDailyAgentViewParams{{Day: day, JobID: id, Delta: 3}}).Exec(func(_ int, err error) {
 			if err != nil {
 				t.Fatalf("apply agent view: %v", err)
 			}
 		})
-		if got := searchOutboxCount(t, pool, private); got != 0 {
-			t.Errorf("private job queued %d after a view, want 0", got)
+		// cmd/rollup-views writes view_count to the index itself; queuing it flooded the drain.
+		if got := searchOutboxCount(t, pool, id); got != 0 {
+			t.Errorf("job queued %d after views, want 0", got)
+		}
+		rows, err := q.GetJobViewCounts(ctx, []int64{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 || rows[0].ViewCount != 5 {
+			t.Errorf("view counts = %+v, want one row with 5", rows)
 		}
 	})
 }

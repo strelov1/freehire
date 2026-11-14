@@ -31,19 +31,13 @@ WITH ins AS (
     ON CONFLICT (day, job_id)
         DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
                       page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
-),
--- view_count is a sortable attribute of the search document, so the moved figure is
--- queued for the drain; without it the most-viewed sort waited for a full rebuild.
-upd AS (
-    UPDATE jobs SET view_count = view_count + sqlc.arg('total_delta')
-    WHERE id = sqlc.arg('job_id')
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
+-- view_count is a sortable attribute of the search document, but it is NOT queued for
+-- the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+-- the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+-- kept search_outbox from ever emptying (2026-11-14).
+UPDATE jobs SET view_count = view_count + sqlc.arg('total_delta')
+WHERE id = sqlc.arg('job_id');
 
 -- name: IsViewLogFileProcessed :one
 -- Cursor read: has this rotated file (by content signature) been applied? The
@@ -71,18 +65,10 @@ WITH ins AS (
     VALUES (sqlc.arg('day'), sqlc.arg('job_id'), 0, sqlc.arg('delta'))
     ON CONFLICT (day, job_id)
         DO UPDATE SET agent_uniques = job_daily_views.agent_uniques + EXCLUDED.agent_uniques
-),
--- Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
-upd AS (
-    UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
-    WHERE id = sqlc.arg('job_id')
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
+-- Not queued for the drain, for the same reason as ApplyDailyView.
+UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
+WHERE id = sqlc.arg('job_id');
 
 -- name: GetViewLogCursor :one
 -- The last (job_id, day) key applied from a part-applied file. No row: nothing applied.
@@ -98,3 +84,8 @@ VALUES (sqlc.arg('signature'), sqlc.arg('filename'), sqlc.arg('job_id'), sqlc.ar
 ON CONFLICT (signature) DO UPDATE
     SET job_id = EXCLUDED.job_id, day = EXCLUDED.day, updated_at = now()
     WHERE c.job_id = sqlc.narg('prev_job_id') AND c.day = sqlc.narg('prev_day');
+
+-- name: GetJobViewCounts :many
+-- The current view_count of the jobs a rollup run touched, for the index write that
+-- replaces the old per-view search_outbox enqueue.
+SELECT id, view_count FROM jobs WHERE id = ANY(sqlc.arg('ids')::bigint[]);
