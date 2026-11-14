@@ -4410,6 +4410,21 @@ func (s *CancelSessionOK) SetData(val MentorshipBooking) {
 // CancelSupportTurnNoContent is response for CancelSupportTurn operation.
 type CancelSupportTurnNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type CatalogHistoryOK struct {
+	Data []CatalogSizePoint `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CatalogHistoryOK) GetData() []CatalogSizePoint {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CatalogHistoryOK) SetData(val []CatalogSizePoint) {
+	s.Data = val
+}
+
 // The size of the catalogue, from one published snapshot.
 // Ref: #/components/schemas/CatalogScale
 type CatalogScale struct {
@@ -4518,6 +4533,47 @@ func (s *CatalogScaleOK) GetData() CatalogScale {
 // SetData sets the value of Data.
 func (s *CatalogScaleOK) SetData(val CatalogScale) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/CatalogSizePoint
+type CatalogSizePoint struct {
+	// YYYY-MM-DD (UTC).
+	Date string `json:"date"`
+	// Open postings the public listings could page through at the end of that day.
+	OpenJobs int64 `json:"open_jobs"`
+	// True for a day estimated after the fact from today's records rather than measured that day. Such a
+	// day applies today's duplicate verdicts to the past.
+	Reconstructed bool `json:"reconstructed"`
+}
+
+// GetDate returns the value of Date.
+func (s *CatalogSizePoint) GetDate() string {
+	return s.Date
+}
+
+// GetOpenJobs returns the value of OpenJobs.
+func (s *CatalogSizePoint) GetOpenJobs() int64 {
+	return s.OpenJobs
+}
+
+// GetReconstructed returns the value of Reconstructed.
+func (s *CatalogSizePoint) GetReconstructed() bool {
+	return s.Reconstructed
+}
+
+// SetDate sets the value of Date.
+func (s *CatalogSizePoint) SetDate(val string) {
+	s.Date = val
+}
+
+// SetOpenJobs sets the value of OpenJobs.
+func (s *CatalogSizePoint) SetOpenJobs(val int64) {
+	s.OpenJobs = val
+}
+
+// SetReconstructed sets the value of Reconstructed.
+func (s *CatalogSizePoint) SetReconstructed(val bool) {
+	s.Reconstructed = val
 }
 
 // One finished bulk snapshot of the catalogue.
@@ -12683,6 +12739,206 @@ func (s *JobApplyFormOK) GetData() jx.Raw {
 // SetData sets the value of Data.
 func (s *JobApplyFormOK) SetData(val jx.Raw) {
 	s.Data = val
+}
+
+// One transition of a posting, as the change feed reports it.
+// Ref: #/components/schemas/JobChange
+type JobChange struct {
+	PublicSlug string `json:"public_slug"`
+	// The change's order for this posting. Changes to different postings are not ordered by it, and the
+	// feed can serve one posting's changes out of order: apply a change only when its `seq` is greater
+	// than the last one you applied for that `public_slug`, and skip it otherwise (which also makes a
+	// repeated change harmless).
+	Seq int64 `json:"seq"`
+	// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+	// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+	// moderator reopened it, or it is no longer a duplicate).
+	Kind JobChangeKind `json:"kind"`
+	// When the change was recorded.
+	At time.Time `json:"at"`
+	// Why a `closed` change happened (e.g. `unseen`, `expired`, `duplicate`, `private`); absent on the
+	// other kinds.
+	ClosedReason OptString `json:"closed_reason"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *JobChange) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetSeq returns the value of Seq.
+func (s *JobChange) GetSeq() int64 {
+	return s.Seq
+}
+
+// GetKind returns the value of Kind.
+func (s *JobChange) GetKind() JobChangeKind {
+	return s.Kind
+}
+
+// GetAt returns the value of At.
+func (s *JobChange) GetAt() time.Time {
+	return s.At
+}
+
+// GetClosedReason returns the value of ClosedReason.
+func (s *JobChange) GetClosedReason() OptString {
+	return s.ClosedReason
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *JobChange) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetSeq sets the value of Seq.
+func (s *JobChange) SetSeq(val int64) {
+	s.Seq = val
+}
+
+// SetKind sets the value of Kind.
+func (s *JobChange) SetKind(val JobChangeKind) {
+	s.Kind = val
+}
+
+// SetAt sets the value of At.
+func (s *JobChange) SetAt(val time.Time) {
+	s.At = val
+}
+
+// SetClosedReason sets the value of ClosedReason.
+func (s *JobChange) SetClosedReason(val OptString) {
+	s.ClosedReason = val
+}
+
+// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+// moderator reopened it, or it is no longer a duplicate).
+type JobChangeKind string
+
+const (
+	JobChangeKindOpened   JobChangeKind = "opened"
+	JobChangeKindClosed   JobChangeKind = "closed"
+	JobChangeKindReopened JobChangeKind = "reopened"
+)
+
+// AllValues returns all JobChangeKind values.
+func (JobChangeKind) AllValues() []JobChangeKind {
+	return []JobChangeKind{
+		JobChangeKindOpened,
+		JobChangeKindClosed,
+		JobChangeKindReopened,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s JobChangeKind) MarshalText() ([]byte, error) {
+	switch s {
+	case JobChangeKindOpened:
+		return []byte(s), nil
+	case JobChangeKindClosed:
+		return []byte(s), nil
+	case JobChangeKindReopened:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *JobChangeKind) UnmarshalText(data []byte) error {
+	switch JobChangeKind(data) {
+	case JobChangeKindOpened:
+		*s = JobChangeKindOpened
+		return nil
+	case JobChangeKindClosed:
+		*s = JobChangeKindClosed
+		return nil
+	case JobChangeKindReopened:
+		*s = JobChangeKindReopened
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/JobChangesMeta
+type JobChangesMeta struct {
+	Limit int64 `json:"limit"`
+	// True when more changes are waiting; fetch again with `next_cursor`.
+	HasMore bool `json:"has_more"`
+	// Pass back as `cursor` for the next page. Always present, even on an empty page: store it and resume
+	// from it later, however long the feed stays quiet.
+	NextCursor string `json:"next_cursor"`
+	// The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before
+	// it.
+	AvailableSince OptDateTime `json:"available_since"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *JobChangesMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetHasMore returns the value of HasMore.
+func (s *JobChangesMeta) GetHasMore() bool {
+	return s.HasMore
+}
+
+// GetNextCursor returns the value of NextCursor.
+func (s *JobChangesMeta) GetNextCursor() string {
+	return s.NextCursor
+}
+
+// GetAvailableSince returns the value of AvailableSince.
+func (s *JobChangesMeta) GetAvailableSince() OptDateTime {
+	return s.AvailableSince
+}
+
+// SetLimit sets the value of Limit.
+func (s *JobChangesMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetHasMore sets the value of HasMore.
+func (s *JobChangesMeta) SetHasMore(val bool) {
+	s.HasMore = val
+}
+
+// SetNextCursor sets the value of NextCursor.
+func (s *JobChangesMeta) SetNextCursor(val string) {
+	s.NextCursor = val
+}
+
+// SetAvailableSince sets the value of AvailableSince.
+func (s *JobChangesMeta) SetAvailableSince(val OptDateTime) {
+	s.AvailableSince = val
+}
+
+// Ref: #/components/schemas/JobChangesPage
+type JobChangesPage struct {
+	Data []JobChange    `json:"data"`
+	Meta JobChangesMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobChangesPage) GetData() []JobChange {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobChangesPage) GetMeta() JobChangesMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobChangesPage) SetData(val []JobChange) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobChangesPage) SetMeta(val JobChangesMeta) {
+	s.Meta = val
 }
 
 // Ref: #/components/schemas/JobCopiesMeta

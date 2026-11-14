@@ -69,3 +69,16 @@ const CRAWLER = /bot|crawl|spider|slurp/i;
 export function isCrawler(userAgent: string | null | undefined): boolean {
   return !!userAgent && CRAWLER.test(userAgent);
 }
+
+/** The visitor's region from the edge, or null for anyone the edge cannot place —
+ *  a crawler, a missing header, a country outside the grouping. A failed request
+ *  is the same answer: this is an opening convenience, never a thing to retry. */
+export async function fetchRegion(): Promise<string | null> {
+  try {
+    const res = await fetch('/geo/region');
+    if (!res.ok) return null;
+    return ((await res.json()) as { region: string | null }).region;
+  } catch {
+    return null;
+  }
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
@@ -181,7 +182,7 @@ func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, sl
 		return err
 	}
 	if !autoApplyEnqueueSources[job.Source] {
-		return fiber.NewError(fiber.StatusBadRequest, "auto-apply cannot queue an attempt against this posting's ATS")
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusBadRequest, "auto-apply cannot queue an attempt against this posting's ATS"), "ats not supported for auto-apply")
 	}
 
 	if h.cv == nil || h.cv.cvStore == nil {
@@ -197,7 +198,7 @@ func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, sl
 		if _, hasResume, err := h.cv.seedSource().Structured(ctx, userID); err != nil {
 			return err
 		} else if !hasResume {
-			return fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply")
+			return assistant.WithLogReason(fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply"), "no resume for auto-apply")
 		}
 	}
 
@@ -210,7 +211,7 @@ func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, sl
 	}); err != nil {
 		return err
 	} else if applied {
-		return fiber.NewError(fiber.StatusConflict, "already applied to this job")
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusConflict, "already applied to this job"), "already applied")
 	}
 
 	// Eligibility gate (openspec/changes/add-auto-apply-eligibility-gate): refuse — or, in

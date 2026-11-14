@@ -140,12 +140,16 @@ describe('the job page call-to-action row', () => {
     expect(stickyBar()).toContain('@render tailorCta(');
   });
 
+  // The scroll offset lives in JobScrollPadding, which JobView renders with the phone's
+  // sign-in feedback element.
   it('adds the visible sign-in feedback height to the phone scroll offset', () => {
-    expect(JOB_VIEW).toContain("'--job-scroll-pad-feedback-height'");
-    expect(JOB_VIEW).toContain('feedback.getBoundingClientRect().height + gap');
-    expect(JOB_VIEW).toContain('observer.observe(feedback)');
-    expect(JOB_VIEW).toContain("root.style.removeProperty('--job-scroll-pad-feedback-height')");
-    expect(JOB_VIEW).toContain('var(--job-scroll-pad-feedback-height, 0px)');
+    const padding = readFileSync(join(import.meta.dirname, 'JobScrollPadding.svelte'), 'utf8');
+    expect(JOB_VIEW).toContain('feedbackEl={mobileSignInFeedback}');
+    expect(padding).toContain("'--job-scroll-pad-feedback-height'");
+    expect(padding).toContain('feedback.getBoundingClientRect().height + gap');
+    expect(padding).toContain('observer.observe(feedback)');
+    expect(padding).toContain("root.style.removeProperty('--job-scroll-pad-feedback-height')");
+    expect(padding).toContain('var(--job-scroll-pad-feedback-height, 0px)');
   });
 
   // The bar holds two buttons at `flex-1`. A third would either shrink all three past

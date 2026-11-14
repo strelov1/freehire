@@ -120,6 +120,13 @@ async function main() {
       (r) => gpt.components.schemas[r.split('/').pop()],
     ),
   );
+  // A 3.1 reference annotation must survive the 3.0 conversion as an allOf schema,
+  // rather than becoming an ignored sibling of $ref.
+  const kind = gpt.components.schemas.SuggestionPart.properties.kind;
+  assert(
+    'gpt: reference annotations survive the 3.0 downgrade',
+    kind.description && !kind.$ref && kind.allOf?.[0].$ref === '#/components/schemas/SuggestionKind',
+  );
   const long = structuredClone(doc);
   long.paths['/geo/cities'].get.description = 'x'.repeat(301);
   assert(

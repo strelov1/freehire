@@ -62,6 +62,23 @@ a new action goes in the same way or zizmor fails. `actions/checkout` takes
 `# zizmor: ignore[<audit>]` with the reason beside it. Nothing else reads a workflow until
 GitHub runs it, so a mistake in one that fires on a tag or a schedule surfaces late.
 
+### Automated code review
+
+`code-review.yml` runs OpenCodeReview on new non-draft PRs and pushes. A repository
+owner, member or collaborator can request another review with a standalone `@codereview`
+mention in a PR comment. Manual dispatch accepts an open PR number, including a draft.
+Unrelated comments never cancel a running review. Findings appear with file/line locations
+in a sticky PR summary; they do not approve or merge the PR.
+
+Actions secrets `OCR_LLM_URL` (the complete chat-completions endpoint) and
+`OCR_LLM_AUTH_TOKEN` supply the private gateway connection. The optional Actions variable
+`OCR_LLM_MODEL` defaults to `mid`. Never put the endpoint or credential in this repository.
+The CLI version is pinned. Checkout uses the trusted workflow commit; PR changes are read
+from git objects without executing PR code. The runner captures all provider output,
+redacts connection settings from findings, and publishes a generic message on failure.
+Incomplete reviews fail the check. No raw result/log artifacts are uploaded. Automatic
+and comment triggers only become active after the workflow is on the default branch.
+
 ## Instruction files and Markdown: agnix, rumdl, `pnpm check:links`
 
 - **agnix** `--strict` (the `docs` CI job) lints every AGENTS.md: an unclosed code fence
@@ -185,8 +202,9 @@ The `artifacts` CI job: `web/static/install.sh` is served at `freehire.me/instal
 piped into `sh`, so shellcheck covers every tracked `*.sh`; both Dockerfiles go through
 hadolint (`.hadolint.yaml` argues its two exclusions, and a finding wrong for one line
 carries `# hadolint ignore=` beside it); and `web/static/openapi.yaml` (generated from the
-contract, see above) is validated against the OpenAPI specification, since it is served as a
-static asset nothing else parses.
+contract, see above) is linted with Redocly’s `recommended-strict` preset: the recommended
+rules with warnings promoted to errors, including missing client-error responses and licence
+metadata. The broader API references retain the `minimal` parsing gate.
 
 ## Shared JS dependencies: `pnpm check:deps`
 

@@ -76,6 +76,11 @@ export interface CompanyHiring {
  *  monotonically non-decreasing. */
 export type UserGrowthPoint = components['schemas']['GrowthPoint'];
 
+/** One day of the catalogue-size series: the open postings the listings could page
+ *  through at the end of that UTC day. `reconstructed` marks a day estimated after the
+ *  fact rather than measured then. Days without a figure are absent, not zero. */
+export type CatalogSizePoint = components['schemas']['CatalogSizePoint'];
+
 /** Aggregate engagement counts across all users: jobs saved, applications marked,
  *  jobs viewed, and what people build on top — CVs uploaded and tailored, people with
  *  job alerts on, inboxes connected, searches saved. `inboxes_connected` sums live Gmail

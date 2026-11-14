@@ -5,7 +5,7 @@
   // A source key is a search-facet code, so it renders through the one label map every
   // other surface uses: a source must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
-  import { sourceLabel } from '#lib/facets.js';
+  import { sourceLabel } from '#lib/sourceLabels.js';
   import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
   import { EntityLogo } from '#lib/ui/index.js';
   import type { ProviderKind, SourceEntry } from '#lib/types.js';

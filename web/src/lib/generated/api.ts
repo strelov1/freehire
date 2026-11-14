@@ -1161,6 +1161,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change feed: postings that opened, closed or reopened.
+         * @description Every opening, closing and reopening of a public, canonical posting, oldest first, so a
+         *     mirror of the catalogue can stay in sync and delist what closed. Start with `since`
+         *     (an RFC 3339 time, at most 30 days back), then follow `meta.next_cursor` as `cursor`:
+         *     the cursor is a keyset position, so a walk never skips or repeats a change while new
+         *     ones arrive. A change is served only once its transaction has committed and every older
+         *     one has finished, so it appears a moment after it happens (see the data freshness section). Per
+         *     posting, apply a change only when its `seq` is greater than the last you applied. A cursor
+         *     never expires. `since` only picks the starting point of the first call, and
+         *     can include a few changes from just before it: from then on, resume from the cursor, not from a time.
+         */
+        get: operations["listJobChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/facets": {
         parameters: {
             query?: never;
@@ -5246,6 +5274,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/catalog-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The catalogue's size per UTC day, measured or reconstructed.
+         * @description The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.
+         */
+        get: operations["catalogHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/embeddings": {
         parameters: {
             query?: never;
@@ -6455,6 +6503,20 @@ export interface components {
             computed_at: string;
             /** @description False when the snapshot is unavailable and `open_jobs` is the approximate fallback. */
             exact: boolean;
+        };
+        CatalogSizePoint: {
+            /** @description YYYY-MM-DD (UTC). */
+            date: string;
+            /**
+             * Format: int64
+             * @description Open postings the public listings could page through at the end of that day.
+             */
+            open_jobs: number;
+            /**
+             * @description True for a day estimated after the fact from today's records rather than measured that
+             *     day. Such a day applies today's duplicate verdicts to the past.
+             */
+            reconstructed: boolean;
         };
         /** @description One finished bulk snapshot of the catalogue. */
         CatalogueSnapshot: {
@@ -7679,6 +7741,52 @@ export interface components {
             applied_count?: number;
             upvote_count?: number;
             downvote_count?: number;
+        };
+        /** @description One transition of a posting, as the change feed reports it. */
+        JobChange: {
+            public_slug: string;
+            /**
+             * Format: int64
+             * @description The change's order for this posting. Changes to different postings are not ordered by
+             *     it, and the feed can serve one posting's changes out of order: apply a change only when
+             *     its `seq` is greater than the last one you applied for that `public_slug`, and skip it
+             *     otherwise (which also makes a repeated change harmless).
+             */
+            seq: number;
+            /**
+             * @description `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken
+             *     down, or it became a duplicate or private). `reopened`: it is listed again (its source
+             *     listed it again, a moderator reopened it, or it is no longer a duplicate).
+             * @enum {string}
+             */
+            kind: "opened" | "closed" | "reopened";
+            /**
+             * Format: date-time
+             * @description When the change was recorded.
+             */
+            at: string;
+            /** @description Why a `closed` change happened (e.g. `unseen`, `expired`, `duplicate`, `private`); absent on the other kinds. */
+            closed_reason?: string;
+        };
+        JobChangesMeta: {
+            /** Format: int64 */
+            limit: number;
+            /** @description True when more changes are waiting; fetch again with `next_cursor`. */
+            has_more: boolean;
+            /**
+             * @description Pass back as `cursor` for the next page. Always present, even on an empty page: store it
+             *     and resume from it later, however long the feed stays quiet.
+             */
+            next_cursor: string;
+            /**
+             * Format: date-time
+             * @description The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before it.
+             */
+            available_since?: string;
+        };
+        JobChangesPage: {
+            data: components["schemas"]["JobChange"][];
+            meta: components["schemas"]["JobChangesMeta"];
         };
         JobCopiesMeta: {
             /**
@@ -12348,6 +12456,61 @@ export interface operations {
                     "application/json": {
                         data: unknown;
                     };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listJobChanges: {
+        parameters: {
+            query?: {
+                /** @description Where to start, RFC 3339, at most 30 days back. Required without `cursor`. (e.g. `2026-06-19T00:00:00Z`) */
+                since?: string;
+                /** @description The `meta.next_cursor` of the previous page; wins over `since`. */
+                cursor?: string;
+                /** @description Page size, 1–100 (default 100). (e.g. `100`) */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "seq": 98765,
+                     *           "kind": "closed",
+                     *           "at": "2026-06-20T04:10:00Z",
+                     *           "closed_reason": "unseen"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "limit": 100,
+                     *         "has_more": false,
+                     *         "next_cursor": "djE6MTIzNDU6OTg3",
+                     *         "available_since": "2026-06-01T00:00:00Z"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobChangesPage"];
                 };
             };
             /** @description An unexpected error response. */
@@ -22264,6 +22427,48 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["CatalogScale"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    catalogHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "date": "2026-07-04",
+                     *           "open_jobs": 2935357,
+                     *           "reconstructed": true
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["CatalogSizePoint"][];
                     };
                 };
             };

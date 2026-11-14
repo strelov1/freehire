@@ -377,6 +377,13 @@ type CandidateSurvey struct {
 	BiggestChallenges     []string           `json:"biggest_challenges"`
 }
 
+type CatalogSizeDaily struct {
+	Day           pgtype.Date        `json:"day"`
+	OpenJobs      int64              `json:"open_jobs"`
+	Reconstructed bool               `json:"reconstructed"`
+	ComputedAt    pgtype.Timestamptz `json:"computed_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
@@ -1100,6 +1107,15 @@ type JobActivity struct {
 	HydratedAt      pgtype.Timestamptz `json:"hydrated_at"`
 	LivenessStrikes int32              `json:"liveness_strikes"`
 	StateVersion    int64              `json:"state_version"`
+}
+
+type JobChange struct {
+	ID     int64              `json:"id"`
+	JobID  int64              `json:"job_id"`
+	Kind   string             `json:"kind"`
+	Reason string             `json:"reason"`
+	At     pgtype.Timestamptz `json:"at"`
+	Xid    int64              `json:"xid"`
 }
 
 type JobDailyStat struct {

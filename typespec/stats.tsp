@@ -39,6 +39,20 @@ model ActivityMeta {
   to: string;
 }
 
+model CatalogSizePoint {
+  /** YYYY-MM-DD (UTC). */
+  date: string;
+
+  /** Open postings the public listings could page through at the end of that day. */
+  open_jobs: int64;
+
+  /**
+   * True for a day estimated after the fact from today's records rather than measured that
+   * day. Such a day applies today's duplicate verdicts to the past.
+   */
+  reconstructed: boolean;
+}
+
 model JobsActivity {
   data: ActivityPoint[];
   meta: ActivityMeta;
@@ -447,6 +461,25 @@ op jobsActivity(
 @route("/stats/user-growth")
 @get
 op userGrowth(): Data<GrowthPoint[]> | Problem;
+
+/** The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day. */
+@summary("The catalogue's size per UTC day, measured or reconstructed.")
+@useAuth(NoAuth)
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        date: "2026-07-04",
+        open_jobs: 2935357,
+        reconstructed: true,
+      },
+    ],
+  },
+})
+@tag("Stats")
+@route("/stats/catalog-history")
+@get
+op catalogHistory(): Data<CatalogSizePoint[]> | Problem;
 
 /**
  * `viewed` is the only field here that is not a signed-in count: it is bot-filtered

@@ -250,3 +250,27 @@ func NoArgs(run func(ctx context.Context, userID int64) (any, error)) func(conte
 		return run(ctx, userID)
 	}
 }
+
+// LoggedError is an error whose cause a surface may write to its logs: Reason is a fixed
+// sentence authored at the call site, never built from the call's arguments or data. An
+// error without one logs only its code, because the text of the others can interpolate what
+// the caller sent.
+type LoggedError struct {
+	Err    error
+	Reason string
+}
+
+func (e *LoggedError) Error() string { return e.Err.Error() }
+func (e *LoggedError) Unwrap() error { return e.Err }
+
+// WithLogReason marks err as safe to explain in the logs by the constant reason.
+func WithLogReason(err error, reason string) error { return &LoggedError{Err: err, Reason: reason} }
+
+// LogReason returns the constant reason err carries, or "".
+func LogReason(err error) string {
+	var l *LoggedError
+	if errors.As(err, &l) {
+		return l.Reason
+	}
+	return ""
+}

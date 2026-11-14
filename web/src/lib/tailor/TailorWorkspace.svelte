@@ -17,7 +17,6 @@
   import {
     Check,
     Download,
-    Menu,
     PanelLeftClose,
     PanelLeftOpen,
     Terminal,
@@ -42,7 +41,9 @@
   import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
-  import { clampWidth, fitToWidthZoom, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/cvGeometry.js';
+  import { fitToWidthZoom } from '#lib/cvGeometry.js';
+  import PanelSplitter from './PanelSplitter.svelte';
+  import TailorMobileTabs from './TailorMobileTabs.svelte';
   import { undoRun, openingActions, baseOpeningActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
   import { tablist } from '#lib/actions/tablist.js';
@@ -142,7 +143,6 @@
   let leftCollapsed = $state(false);
   let cliDialogOpen = $state(false);
   let leftPanelEl = $state<HTMLElement>();
-  let leftResizing = false;
 
   // The right context panel's tab, lifted here so the mobile tab bar can drive it (on desktop the
   // panel's own tab bar sets it via the same binding).
@@ -656,31 +656,6 @@
     lastSnapshot = snapshot();
     pdfVersion += 1;
   }
-
-  // Left-panel splitter: width is the cursor's distance from the panel's own left edge.
-  function startLeftResize(e: PointerEvent) {
-    leftResizing = true;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function doLeftResize(e: PointerEvent) {
-    if (!leftResizing || !leftPanelEl) return;
-    const left = leftPanelEl.getBoundingClientRect().left;
-    leftWidth = clampWidth(e.clientX - left, PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
-  }
-  // Also the pointercancel handler: a touch the browser takes back must end the drag. A
-  // cancelled pointer has already lost its capture, hence the check.
-  function stopLeftResize(e: PointerEvent) {
-    leftResizing = false;
-    const el = e.currentTarget as HTMLElement;
-    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-  }
-  // The panel sits on the left, so moving the splitter right (ArrowRight) widens it.
-  function keyLeftResize(e: KeyboardEvent) {
-    const next = keyResizeWidth(leftWidth, e.key, 'ArrowRight');
-    if (next === null) return;
-    e.preventDefault();
-    leftWidth = next;
-  }
 </script>
 
 <svelte:head
@@ -712,38 +687,7 @@
     </div>
   {:else}
     <div class="flex min-w-0 flex-1 flex-col lg:flex-row">
-      <!-- MOBILE TAB BAR: below lg the three columns collapse to one full-screen view; this flat,
-           horizontally-scrollable bar switches between all of them. Hidden at lg (columns stack). -->
-      <nav
-        class="flex items-center gap-1 overflow-x-auto border-b border-border bg-background px-2 py-1.5 text-sm lg:hidden"
-      >
-        <!-- Burger opens the account nav drawer (the icon rail is hidden below lg). -->
-        <button
-          type="button"
-          onclick={() => (navOpen = true)}
-          aria-label="Open menu"
-          aria-expanded={navOpen}
-          class="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Menu class="size-5" />
-        </button>
-        <span class="mr-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
-        {#each mobileTabs as [id, label] (id)}
-          <button
-            type="button"
-            onclick={() => pickMobile(id)}
-            aria-current={mobileView === id ? 'page' : undefined}
-            class={[
-              'shrink-0 rounded px-2 py-1 transition-colors',
-              mobileView === id
-                ? 'bg-muted font-medium text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            ]}
-          >
-            {label}
-          </button>
-        {/each}
-      </nav>
+      <TailorMobileTabs tabs={mobileTabs} current={mobileView} bind:navOpen onPick={pickMobile} />
 
       <!-- LEFT: Editor / Chat tabs (chat stays mounted across tab switches). On mobile it shows only
            when its tab is picked; at lg it's a splitter-sized column always shown. The width rides a
@@ -915,27 +859,7 @@
         </div>
       </section>
 
-      <!-- LEFT SPLITTER: drag, or focus it and use the arrow keys. -->
-      <!-- A focusable separator is the ARIA window-splitter widget; the lint reads every separator as static. -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-      <div
-        class={[
-          'hidden w-1.5 shrink-0 cursor-col-resize touch-none bg-border/50 transition-colors hover:bg-border focus-visible:bg-ring focus-visible:outline-none',
-          leftCollapsed ? 'lg:hidden' : 'lg:block',
-        ]}
-        role="separator"
-        tabindex="0"
-        aria-orientation="vertical"
-        aria-label="Resize editor panel"
-        aria-valuenow={leftWidth}
-        aria-valuemin={PANEL_MIN_WIDTH}
-        aria-valuemax={PANEL_MAX_WIDTH}
-        onpointerdown={startLeftResize}
-        onpointermove={doLeftResize}
-        onpointerup={stopLeftResize}
-        onpointercancel={stopLeftResize}
-        onkeydown={keyLeftResize}
-      ></div>
+      <PanelSplitter bind:width={leftWidth} panel={leftPanelEl} collapsed={leftCollapsed} />
 
       <!-- CENTRE: live HTML preview + zoom + Download PDF. On mobile it shows only when the Preview
            tab is picked; at lg it's always shown as the middle column. -->

@@ -39,14 +39,14 @@ type aijobsHTTP interface {
 }
 
 // aijobsDefaultMaxNewPerRun is AIJOBS_MAX_NEW_PER_RUN's default when unset (see
-// registry.go's aijobsMaxNewPerRunFromEnv): the day-one backlog is aijobs.net's whole
+// aijobsMaxNewPerRunFromEnv below): the day-one backlog is aijobs.net's whole
 // ~47k-posting catalogue, and each unseen posting costs one detail-page GET, so a run
 // needs a bound well short of "all of it" (mirrors APPLY_FORM_MAX_PER_RUN's shape in
 // cmd/capture-apply-form for the same kind of backlog).
 const aijobsDefaultMaxNewPerRun = 500
 
 // NewAijobs builds the aijobs adapter over the given HTTP client (a cookie-jar-backed
-// client in production, see cookieSessionSource in registry.go). maxNewPerRun <= 0 is
+// client in production, see cookieSessionSource in registry_transport.go). maxNewPerRun <= 0 is
 // replaced with aijobsDefaultMaxNewPerRun.
 func NewAijobs(c aijobsHTTP, maxNewPerRun int) Source {
 	if maxNewPerRun <= 0 {

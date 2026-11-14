@@ -41,7 +41,7 @@ func TestTouch_ReopenReDerivesTheRow(t *testing.T) {
 	}
 
 	for _, id := range []string{"acme:touch-rederive-closed", "acme:touch-rederive-open"} {
-		if _, err := store.Touch(ctx, "lever", id); err != nil {
+		if _, err := store.Touch(ctx, "lever", id, nil); err != nil {
 			t.Fatalf("Touch %s: %v", id, err)
 		}
 	}

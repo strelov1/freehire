@@ -1,7 +1,7 @@
 # typos (https://github.com/crate-ci/typos), run by the `docs` CI job and by lefthook.
 # The catalogue is multilingual, so vocabulary sources are excluded rather than allow-listed
 # word by word; what remains below is the residue in code, docs and web strings.
-# CI and lefthook pin the version together with its digest (see ci.yml).
+# CI and lefthook pin the version together with its digest (see .github/workflows/lint.yml).
 
 [files]
 extend-exclude = [
