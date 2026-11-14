@@ -1895,6 +1895,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/auto-apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your automatic applications
+         * @description Lists the caller's live automatic applications and confirmed submissions from the last 30 days, newest activity first. Internal diagnostic errors are omitted.
+         */
+        get: operations["getAutoApplyList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/auto-apply/{queueId}/review": {
         parameters: {
             query?: never;
@@ -6102,6 +6122,27 @@ export interface components {
         AutoApplyDecision: {
             decision: string;
         };
+        AutoApplyList: {
+            attempts: components["schemas"]["AutoApplyListItem"][];
+        };
+        /** @description One of the caller's automatic applications. */
+        AutoApplyListItem: {
+            /** @description Public vacancy slug, also the posting-backed Tracking row identifier. */
+            job_slug: string;
+            title: string;
+            company: string;
+            status: components["schemas"]["AutoApplyListStatus"];
+            /**
+             * Format: date-time
+             * @description Most recent recorded transition, or enqueue time for older attempts.
+             */
+            last_activity_at: string;
+        };
+        /**
+         * @description A live attempt status, or a confirmed submission whose queue entry was retired.
+         * @enum {string}
+         */
+        AutoApplyListStatus: "tailoring" | "pending_review" | "approved" | "blocked" | "declined" | "failed" | "tailor_failed" | "submitted";
         /** @description One resolved question and answer in an auto-apply answer preview. */
         AutoApplyPreviewField: {
             label: string;
@@ -14427,6 +14468,44 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AccountAttributionResult"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAutoApplyList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "attempts": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["AutoApplyList"];
                     };
                 };
             };

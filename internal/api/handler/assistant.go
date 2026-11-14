@@ -252,6 +252,7 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware, contract f
 	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
 	// See auto_apply_tailor.go's own doc comment for why these are not variants of
 	// /autopilot above.
+	api.Get("/me/auto-apply", mw.key, contract)
 	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
 	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, contract)
 

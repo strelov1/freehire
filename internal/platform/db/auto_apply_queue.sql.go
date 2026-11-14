@@ -481,8 +481,13 @@ FROM auto_apply_queue q
 JOIN jobs j ON j.id = q.job_id
 WHERE q.user_id = $1
 ORDER BY q.id DESC
-LIMIT 200
+LIMIT $2::bigint
 `
+
+type ListAutoApplyEntriesParams struct {
+	UserID     int64       `json:"user_id"`
+	MaxEntries pgtype.Int8 `json:"max_entries"`
+}
 
 type ListAutoApplyEntriesRow struct {
 	ID              int64              `json:"id"`
@@ -502,9 +507,10 @@ type ListAutoApplyEntriesRow struct {
 
 // The caller's live attempts, newest first, with what a status derivation and a list row
 // need. last_event_at is when anything last happened to the pair, which is what an agent
-// polling for progress compares.
-func (q *Queries) ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error) {
-	rows, err := q.db.Query(ctx, listAutoApplyEntries, userID)
+// polling for progress compares. A NULL max_entries returns the complete browser list;
+// the assistant keeps its bounded response by supplying a limit.
+func (q *Queries) ListAutoApplyEntries(ctx context.Context, arg ListAutoApplyEntriesParams) ([]ListAutoApplyEntriesRow, error) {
+	rows, err := q.db.Query(ctx, listAutoApplyEntries, arg.UserID, arg.MaxEntries)
 	if err != nil {
 		return nil, err
 	}

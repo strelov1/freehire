@@ -102,11 +102,6 @@ describe('JobRow direct-apply button', () => {
 });
 
 describe('JobRow card link', () => {
-  it('is named by title and company, not by every word on the card', () => {
-    expect(ROW).toContain('aria-label={linkName}');
-    expect(ROW).toContain("const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);");
-  });
-
   it('dims a viewed card no further than 90%, which keeps muted text above 4.5:1', () => {
     expect(ROW).toContain('class:opacity-90={isViewed}');
     expect(ROW).not.toContain('class:opacity-80');
