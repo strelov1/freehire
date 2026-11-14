@@ -3750,6 +3750,16 @@ type Querier interface {
 	// alias of it counts: the person added the company under its old spelling. An alias slug a
 	// company row still holds is its own company, as in the reads above, and does not count.
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
+	// When the log begins (job_changes_at_idx). NULL while it is empty.
+	JobChangesAvailableSince(ctx context.Context) (pgtype.Timestamptz, error)
+	// Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+	// recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+	// flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+	// logged later has a lower xid), and neither is the committed minimum alone: a writer still
+	// open here may commit before the page query takes its snapshot. Computing both together means
+	// no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+	// repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
+	JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -4764,6 +4774,20 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
+	// One keyset page of the public change feed, oldest first, after the (xid, id) position
+	// the caller holds. The walk is job_changes_xid_id_idx; each entry is joined to its job by
+	// primary key, so the cost of a page is its limit, never the size of the log or of jobs.
+	//
+	// Only entries whose transaction is finished are served: xid below the oldest in-flight
+	// transaction (pg_snapshot_xmin). An entry can therefore never commit behind a cursor a
+	// client already holds. Ordering by id alone would not give that, because ids are taken
+	// inside the trigger, long before a bulk close commits.
+	//
+	// Visibility was judged when the change was logged (migration 0264: canonical, public, open
+	// all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+	// that is private NOW serves only `closed` entries. Those carry just a slug the client was
+	// already given while it was public, and withholding them would leave the copy listed.
+	ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error)
 	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
 	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
 	// the owner itself is included (it is one of the openings). Ordered by location.

@@ -84,6 +84,46 @@ model JobUpdate {
   posted_at?: utcDateTime | null;
 }
 
+/** One transition of a posting, as the change feed reports it. */
+model JobChange {
+  public_slug: string;
+  /**
+   * The change's order for this posting. Changes to different postings are not ordered by
+   * it, and the feed can serve one posting's changes out of order: apply a change only when
+   * its `seq` is greater than the last one you applied for that `public_slug`, and skip it
+   * otherwise (which also makes a repeated change harmless).
+   */
+  seq: int64;
+  /**
+   * `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken
+   * down, or it became a duplicate or private). `reopened`: it is listed again (its source
+   * listed it again, a moderator reopened it, or it is no longer a duplicate).
+   */
+  kind: "opened" | "closed" | "reopened";
+  /** When the change was recorded. */
+  at: utcDateTime;
+  /** Why a `closed` change happened (e.g. `unseen`, `expired`, `duplicate`, `private`); absent on the other kinds. */
+  closed_reason?: string;
+}
+
+model JobChangesMeta {
+  limit: int64;
+  /** True when more changes are waiting; fetch again with `next_cursor`. */
+  has_more: boolean;
+  /**
+   * Pass back as `cursor` for the next page. Always present, even on an empty page: store it
+   * and resume from it later, however long the feed stays quiet.
+   */
+  next_cursor: string;
+  /** The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before it. */
+  available_since?: utcDateTime;
+}
+
+model JobChangesPage {
+  data: JobChange[];
+  meta: JobChangesMeta;
+}
+
 // The newest open jobs. It reads no filter: a param other than the page ones is
 // reported in `meta.ignored_params`.
 /**
@@ -167,6 +207,55 @@ op listJobs(
   /** Rows to skip. (e.g. `0`) */
   @query offset?: string,
 ): List<unknown> | Problem;
+
+// The change feed of the catalogue: what opened, closed and reopened. Registered before
+// /jobs/{slug} so the literal is not read as a slug.
+/**
+ * Every opening, closing and reopening of a public, canonical posting, oldest first, so a
+ * mirror of the catalogue can stay in sync and delist what closed. Start with `since`
+ * (an RFC 3339 time, at most 30 days back), then follow `meta.next_cursor` as `cursor`:
+ * the cursor is a keyset position, so a walk never skips or repeats a change while new
+ * ones arrive. A change is served only once its transaction has committed and every older
+ * one has finished, so it appears a moment after it happens (see the data freshness section). Per
+ * posting, apply a change only when its `seq` is greater than the last you applied. A cursor
+ * never expires. `since` only picks the starting point of the first call, and
+ * can include a few changes from just before it: from then on, resume from the cursor, not from a time.
+ */
+@summary("Change feed: postings that opened, closed or reopened.")
+@useAuth(NoAuth)
+@opExample(#{
+  parameters: #{
+    since: "2026-06-19T00:00:00Z",
+  },
+  returnType: #{
+    data: #[
+      #{
+        public_slug: "senior-go-engineer-acme-1a2b",
+        seq: 98765,
+        kind: "closed",
+        at: utcDateTime.fromISO("2026-06-20T04:10:00Z"),
+        closed_reason: "unseen",
+      },
+    ],
+    meta: #{
+      limit: 100,
+      has_more: false,
+      next_cursor: "djE6MTIzNDU6OTg3",
+      available_since: utcDateTime.fromISO("2026-06-01T00:00:00Z"),
+    },
+  },
+})
+@tag("Jobs")
+@route("/jobs/changes")
+@get
+op listJobChanges(
+  /** Where to start, RFC 3339, at most 30 days back. Required without `cursor`. (e.g. `2026-06-19T00:00:00Z`) */
+  @query since?: string,
+  /** The `meta.next_cursor` of the previous page; wins over `since`. */
+  @query cursor?: string,
+  /** Page size, 1–100 (default 100). (e.g. `100`) */
+  @query limit?: string,
+): JobChangesPage | Problem;
 
 // Resolves the URL of a posting in the wild to a catalogue slug.
 /**

@@ -1287,6 +1287,20 @@ type Handler interface {
 	//
 	// GET /me/referrals/incoming
 	ListIncomingReferralRequests(ctx context.Context) (*ListIncomingReferralRequestsOK, error)
+	// ListJobChanges implements listJobChanges operation.
+	//
+	// Every opening, closing and reopening of a public, canonical posting, oldest first, so a mirror of
+	// the catalogue can stay in sync and delist what closed. Start with `since` (an RFC 3339 time, at most
+	// 30 days back), then follow `meta.next_cursor` as `cursor`: the cursor is a keyset position, so a
+	// walk never skips or repeats a change while new ones arrive. A change is served only once its
+	// transaction has committed and every older one has finished, so it appears a moment after it happens
+	// (see the data freshness section). Per posting, apply a change only when its `seq` is greater than
+	// the last you applied. A cursor never expires. `since` only picks the starting point of the first
+	// call, and can include a few changes from just before it: from then on, resume from the cursor, not
+	// from a time.
+	//
+	// GET /jobs/changes
+	ListJobChanges(ctx context.Context, params ListJobChangesParams) (*JobChangesPage, error)
 	// ListJobs implements listJobs operation.
 	//
 	// Takes no filters at all — `limit` and `offset` are the whole vocabulary. Anything else is ignored
