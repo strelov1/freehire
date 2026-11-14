@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Ban, RotateCcw } from '@lucide/svelte';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { sourceLabel } from '#lib/facets.js';
+  import { sourceFamily, sourceLabel } from '#lib/facets.js';
   import { filterHref } from '#lib/enrichment.js';
   import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
   import { profileStore } from '#lib/profile.svelte.js';
@@ -15,7 +15,14 @@
   // seeing that source at all. Lifted out of JobView — which is 1,100 lines — because it is
   // the one part of that sidebar with its own state and its own write, and because a
   // control that edits a profile deserves a test that does not have to mount a job page.
-  let { source, jobUrl, manuallyAdded = false }: { source: string; jobUrl: string; manuallyAdded?: boolean } = $props();
+  let {
+    source: posted,
+    jobUrl,
+    manuallyAdded = false,
+  }: { source: string; jobUrl: string; manuallyAdded?: boolean } = $props();
+
+  // A regional market (whatjobs-uk) is shown, linked and avoided as its brand.
+  const source = $derived(sourceFamily(posted));
 
   const label = $derived(sourceLabel(source));
 

@@ -198,3 +198,51 @@ func TestSourceEntryNeverNamesAFieldExclusive(t *testing.T) {
 		t.Errorf("the wire shape says \"exclusive\":\n%s", blob)
 	}
 }
+
+func TestBuildSourceEntriesFoldsASourceFamilyIntoOneEntry(t *testing.T) {
+	older := sourcesNow.Add(-time.Hour)
+	snap := []db.ListSourceStatsRow{
+		{Source: "whatjobs", OpenJobs: 100, AtsMatchedJobs: 10, BrowsableJobs: i8(90), MeasuredAt: ts(sourcesNow)},
+		{Source: "whatjobs-uk", OpenJobs: 50, AtsMatchedJobs: 5, BrowsableJobs: i8(40), MeasuredAt: ts(older)},
+	}
+	health := []db.ProviderHealthRollupRow{
+		{Provider: "whatjobs-uk", TotalBoards: 2, HealthyBoards: 2, IngestedTotal: 7, LastRunAt: ts(sourcesNow)},
+		{Provider: "whatjobs", TotalBoards: 3, HealthyBoards: 1, CooledBoards: 2, IngestedTotal: 3, LastRunAt: ts(older)},
+	}
+
+	entries := buildSourceEntries(sources.Taxonomy(), health, snap, sourcesNow)
+	got := entriesBySource(entries)
+
+	for _, e := range entries {
+		if strings.HasPrefix(e.Source, "whatjobs-") {
+			t.Fatalf("market %q is listed on its own, want it folded into whatjobs", e.Source)
+		}
+	}
+	jobs := got["whatjobs"].Jobs.Value
+	if jobs.Open != 150 || jobs.Browsable.Value != 130 || jobs.AtsMatched.Value != 15 {
+		t.Errorf("folded jobs = %+v, want open 150, browsable 130, matched 15", jobs)
+	}
+	if jobs.MeasuredAt != older.Format(time.RFC3339) {
+		t.Errorf("measured_at = %s, want the oldest member's %s", jobs.MeasuredAt, older.Format(time.RFC3339))
+	}
+	h := got["whatjobs"].Health.Value
+	if h.TotalBoards != 5 || h.HealthyBoards != 3 || h.CooledBoards != 2 || h.IngestedTotal != 10 {
+		t.Errorf("folded health = %+v, want 5 boards, 3 healthy, 2 cooled, 10 ingested", h)
+	}
+	if h.LastRun.Value != sourcesNow.Format(time.RFC3339) {
+		t.Errorf("last_run = %s, want the latest member's", h.LastRun.Value)
+	}
+}
+
+func TestBuildSourceEntriesLeavesAFamilyUnmeasuredWhenAMemberIs(t *testing.T) {
+	snap := []db.ListSourceStatsRow{
+		{Source: "whatjobs", OpenJobs: 100, BrowsableJobs: i8(90), MeasuredAt: ts(sourcesNow)},
+		{Source: "whatjobs-uk", OpenJobs: 50, MeasuredAt: ts(sourcesNow)}, // BrowsableJobs invalid
+	}
+
+	got := entriesBySource(buildSourceEntries(sources.Taxonomy(), nil, snap, sourcesNow))
+
+	if b := got["whatjobs"].Jobs.Value.Browsable; !b.Null {
+		t.Errorf("browsable = %+v, want null: a partial sum would read as a measurement", b)
+	}
+}

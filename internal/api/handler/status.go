@@ -288,6 +288,7 @@ func (h *statsHandlers) IngestStatus(ctx context.Context) (*apigen.IngestStatusO
 	if err != nil {
 		return nil, err
 	}
+	rows = foldHealthFamilies(rows)
 	lastJobAddedAt, err := h.queries.LatestOpenJobAddedAt(ctx)
 	if err != nil {
 		return nil, err
