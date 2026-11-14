@@ -191,15 +191,9 @@ func TestFindOpenJobByURL_PrefersTheMostRecentlySeenPosting(t *testing.T) {
 	// last_seen_at (job_activity's) can put the fresh row first.
 	mustUpsert(t, q, urlJob("himalayas:fresh", himalayasPosting))
 	mustUpsert(t, q, urlJob("himalayas:stale", himalayasPosting))
-	// Legacy column first, then job_activity: the bridge only ever moves job_activity forward.
-	for _, stmt := range []string{
-		"UPDATE jobs SET last_seen_at = now() - interval '10 days' WHERE external_id = $1",
-		`UPDATE job_activity a SET last_seen_at = now() - interval '10 days'
-		 FROM jobs j WHERE j.id = a.job_id AND j.external_id = $1`,
-	} {
-		if _, err := pool.Exec(ctx, stmt, "himalayas:stale"); err != nil {
-			t.Fatalf("age the stale row: %v", err)
-		}
+	if _, err := pool.Exec(ctx, `UPDATE job_activity a SET last_seen_at = now() - interval '10 days'
+		FROM jobs j WHERE j.id = a.job_id AND j.external_id = $1`, "himalayas:stale"); err != nil {
+		t.Fatalf("age the stale row: %v", err)
 	}
 
 	slug, err := findByURL(t, q, himalayasPosting)

@@ -30,12 +30,17 @@ func TestCoverageAdapterWiring(t *testing.T) {
 		t.Helper()
 		_, err := pool.Exec(ctx, `
 			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-			                  company_slug_folded, last_seen_at)
+			                  company_slug_folded)
 			VALUES ($1, $2, 'https://x.test/'||$2, 'Engineer', $2, 'Co', $3,
-			        replace($3, '-', ''), $4)`,
-			source, externalID, slug, lastSeen)
+			        replace($3, '-', ''))`,
+			source, externalID, slug)
 		if err != nil {
 			t.Fatalf("seed %s: %v", externalID, err)
+		}
+		// The observation lives in the posting's activity row, created with the job.
+		if _, err := pool.Exec(ctx, `UPDATE job_activity a SET last_seen_at = $3 FROM jobs j
+			WHERE a.job_id = j.id AND j.source = $1 AND j.external_id = $2`, source, externalID, lastSeen); err != nil {
+			t.Fatalf("stamp %s: %v", externalID, err)
 		}
 	}
 
@@ -81,9 +86,9 @@ func TestCoverageAdapterWiring(t *testing.T) {
 	// while freshco (no country stated) still does (issue #4412).
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-		                  company_slug_folded, last_seen_at, countries)
+		                  company_slug_folded, countries)
 		VALUES ('workday', 'gb:1', 'https://x.test/gb:1', 'Engineer', 'gb:1', 'Co', 'gbco', 'gbco',
-		        now(), '{gb}')`); err != nil {
+		        '{gb}')`); err != nil {
 		t.Fatalf("seed gb:1: %v", err)
 	}
 	scoped, err := c.NonAggregatorCompanies(ctx, []string{"gbco", "freshco"}, []string{"himalayas"}, []string{"si"})

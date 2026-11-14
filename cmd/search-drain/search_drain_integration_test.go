@@ -331,15 +331,15 @@ func TestIntegration_SearchDrainSkipsAPostingItsSourceStoppedShowing(t *testing.
 
 	freshID := seedJob(t, pool, "fresh", "Platform Engineer", "acme", "fp-fresh", []string{}, nil)
 	staleID := seedJob(t, pool, "stale", "Data Engineer", "acme", "fp-stale", []string{}, nil)
-	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET source = 'greenhouse',
-		        last_seen_at = CASE WHEN id = $2 THEN now() - interval '15 days' ELSE now() END
-		  WHERE id = ANY($1)`,
-		[]int64{freshID, staleID}, staleID); err != nil {
-		t.Fatalf("stamp last_seen_at: %v", err)
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET source = 'greenhouse' WHERE id = ANY($1)`,
+		[]int64{freshID, staleID}); err != nil {
+		t.Fatalf("set source: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE job_activity a SET last_seen_at=j.last_seen_at
-		FROM jobs j WHERE a.job_id=j.id AND j.id=ANY($1)`, []int64{freshID, staleID}); err != nil {
+	if _, err := pool.Exec(ctx,
+		`UPDATE job_activity
+		    SET last_seen_at = CASE WHEN job_id = $2 THEN now() - interval '15 days' ELSE now() END
+		  WHERE job_id = ANY($1)`,
+		[]int64{freshID, staleID}, staleID); err != nil {
 		t.Fatalf("stamp activity last_seen_at: %v", err)
 	}
 	enqueue(t, pool, freshID)

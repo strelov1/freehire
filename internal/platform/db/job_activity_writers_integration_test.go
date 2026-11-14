@@ -204,17 +204,6 @@ func TestFullWriteHydration(t *testing.T) {
 			t.Errorf("raw insert hydration = %v, want NULL", got.Hydrated)
 		}
 	})
-
-	t.Run("a release A insert that states its hydration is honoured by the trigger", func(t *testing.T) {
-		var id int64
-		if err := pool.QueryRow(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug, hydrated_at)
-			VALUES ('greenhouse','a:old','u','t','a-old', now() - interval '3 days') RETURNING id`).Scan(&id); err != nil {
-			t.Fatal(err)
-		}
-		if got := readActivity(t, pool, id); !got.Hydrated.Valid || time.Since(got.Hydrated.Time) < 2*24*time.Hour {
-			t.Errorf("hydration = %v, want the 3-day-old value the old binary wrote", got.Hydrated)
-		}
-	})
 }
 
 // The gates that decide which statement may touch a posting, and what each one writes.
