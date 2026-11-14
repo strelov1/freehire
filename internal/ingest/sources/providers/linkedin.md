@@ -8,8 +8,10 @@
 - Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
   sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Seen postings take the normal `SeenRefresh` path. Missing details emit
   `Unreadable`; a wholly unreadable board fails. A detail refusal stops the board.
+- The bounded listing never supplies a quiet-board fingerprint, including on partial
+  progress after later-page errors; an unchanged prefix must not delay its next crawl.
 - The listing is incomplete even for employers it names: `probeClosing` excludes ALL unseen
-  sweeps, and `livenessProbed` excludes search's unseen timeout. `cmd/liveness` checks stale
+  sweeps and the chronic/empty-feed/board-gone safety nets, and `livenessProbed` excludes search's unseen timeout. `cmd/liveness` checks stale
   postings at one request per two seconds, at most 300 per run, stopping on 403/429/999.
 - A primary closed notice is the only supported death signal; HTTP 200 alone is not live,
   and even 404/410 remain uncertain until a larger sample validates them. A complete page

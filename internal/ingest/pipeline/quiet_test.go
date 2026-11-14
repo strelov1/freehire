@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
@@ -292,4 +295,39 @@ func TestRunPassesNoFingerprintWhenASaveFailed(t *testing.T) {
 	if got := health.fingerprints["greenhouse/acme/"]; len(got) != 1 || got[0] != "" {
 		t.Errorf("fingerprints = %q, want neutral for a crawl whose save failed", got)
 	}
+}
+
+// A bounded search cannot vouch for its whole listing, including when it preserves
+// readable postings after a later page fails. Such a crawl must not pause the next one.
+func TestRunLinkedInPartialSearchDoesNotAdvanceQuietBackoff(t *testing.T) {
+	src := sources.NewLinkedIn(linkedInQuietHTTP{})
+	health := &fakeHealth{cooldowns: map[string]time.Time{}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store, BoardHealth: health}
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "Acme", Provider: "linkedin", Board: "engineer", Region: "United Kingdom"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stats.Total(); got.Ingested != 1 || got.Failed != 0 {
+		t.Fatalf("partial progress lost: %+v", got)
+	}
+	if got := health.fingerprints["linkedin/engineer/United Kingdom"]; len(got) != 1 || got[0] != "" {
+		t.Fatalf("partial search advanced quiet backoff: %q", got)
+	}
+}
+
+type linkedInQuietHTTP struct{}
+
+func (linkedInQuietHTTP) GetHTMLResolved(_ context.Context, raw string) (*html.Node, string, error) {
+	var body string
+	switch {
+	case strings.Contains(raw, "start=0"):
+		body = `<div data-entity-urn="urn:li:jobPosting:123"><h3 class="base-search-card__title">Software Engineer</h3><h4 class="base-search-card__subtitle">Acme</h4></div>`
+	case strings.Contains(raw, "/jobPosting/123"):
+		body = `<section class="top-card-layout"><h1 class="top-card-layout__title">Software Engineer</h1><a class="topcard__org-name-link">Acme</a><button data-modal="job-details-topcard-apply-modal">Apply</button></section><div class="show-more-less-html__markup">Build Go APIs.</div>`
+	default:
+		return nil, raw, errors.New("later listing refused")
+	}
+	root, err := html.Parse(strings.NewReader(body))
+	return root, raw, err
 }

@@ -11,9 +11,7 @@ import (
 func UnseenSweepExemptProviders(reg map[string]Source) []string {
 	var out []string
 	for name, src := range reg {
-		_, stream := src.(selfClosing)
-		_, probe := src.(probeClosing)
-		if stream || probe {
+		if SelfCloses(src) || ProbeCloses(src) {
 			out = append(out, name)
 		}
 	}
@@ -26,6 +24,13 @@ func UnseenSweepExemptProviders(reg map[string]Source) []string {
 // still lists.
 func SelfCloses(src Source) bool {
 	_, ok := src.(selfClosing)
+	return ok
+}
+
+// ProbeCloses reports a bounded search whose postings require individual liveness
+// evidence. Its crawl cannot vouch for a complete listing, even when it succeeds.
+func ProbeCloses(src Source) bool {
+	_, ok := src.(probeClosing)
 	return ok
 }
 

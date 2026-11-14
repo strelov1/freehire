@@ -34,7 +34,7 @@ func TestLinkedInProbeRequiresExplicitPostingEvidence(t *testing.T) {
 		{"refused", "", 403, liveness.Uncertain, true},
 		{"linkedin refusal", "", 999, liveness.Uncertain, true},
 		{"unavailable", "", 503, liveness.Uncertain, false},
-		{"wrong id", strings.ReplaceAll(page, "view/123/", "view/456/"), 200, liveness.Uncertain, false},
+		{"wrong id", strings.ReplaceAll(strings.Replace(page, "STATUS", `<figcaption class="closed-job__flavor--closed">No longer accepting applications</figcaption>`, 1), "view/123/", "view/456/"), 200, liveness.Uncertain, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {

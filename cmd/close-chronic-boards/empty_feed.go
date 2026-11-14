@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
@@ -35,9 +37,14 @@ func closeEmptyFeedBoards(ctx context.Context, q *db.Queries, closeWindowDays in
 		return closeReport{}, err
 	}
 
+	registry := sources.Taxonomy()
 	report := closeReport{boardsProcessed: len(rows)}
 	for _, r := range rows {
 		ref := boardRef{provider: r.Provider, board: r.Board}
+		if sources.ProbeCloses(registry[ref.provider]) {
+			log.Printf("close-chronic-boards: skipping board %s — requires individual posting evidence", ref)
+			continue
+		}
 		ambiguous, err := isRegionAmbiguous(ctx, q, ref)
 		if err != nil {
 			return report, err
