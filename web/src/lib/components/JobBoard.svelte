@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths';
   import { CircleAlert, Search, X as XIcon } from '@lucide/svelte';
   import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
-  import { api } from '#lib/api.js';
+  import { api, ApiError } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
@@ -154,8 +154,12 @@
       let rows = slice.items;
       const target = openItem;
       if (target?.job && !rows.some((row) => row.id === target.id)) {
-        const application = await api.getTrackedApplication(target.job.public_slug);
-        rows = [...rows, trackingItem(target.id, application)];
+        try {
+          const application = await api.getTrackedApplication(target.job.public_slug);
+          rows = [...rows, trackingItem(target.id, application)];
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }
       }
       build(rows);
       if (target && openItem?.id === target.id) {

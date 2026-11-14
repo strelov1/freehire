@@ -5,6 +5,7 @@ import type { MyJob } from '#lib/types.js';
 import JobBoard from './JobBoard.svelte';
 import { resetUserStores } from '#lib/userResource.svelte.js';
 import { hasAppliedToCompany, markAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
+import { ApiError } from '#lib/api.js';
 
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/my/tracking'), state: {} },
@@ -51,7 +52,8 @@ const {
   listAppliedCompanySlugs: vi.fn(),
 }));
 
-vi.mock('#lib/api.js', () => ({
+vi.mock('#lib/api.js', async () => ({
+  ApiError: (await import('#lib/api-core.js')).ApiError,
   api: {
     untrackApplication,
     listMyJobs,
@@ -205,6 +207,28 @@ describe('JobBoard — clearing application progress', () => {
 });
 
 describe('JobBoard — a failed stage change', () => {
+  it.each([404, 503])('handles an omitted target returning %s after a successful board read', async (code) => {
+    const target = {
+      ...application,
+      job: { public_slug: 'older-job', title: 'Backend Engineer', company: 'Acme' },
+    } as MyJob;
+    const other = { ...application, id: 'other', role_title: 'Other role' };
+    trackApplication.mockRejectedValue(new Error('refused'));
+    listMyJobs.mockResolvedValue({ items: [other] });
+    getTrackedApplication.mockRejectedValue(new ApiError(code, 'Unavailable'));
+    render(JobBoard, { initial: [target], initialId: target.id });
+    const picker = within(screen.getByRole('dialog')).getByRole('combobox');
+    await fireEvent.change(picker, { target: { value: 'interview' } });
+    if (code === 404) {
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByText('Other role')).toBeTruthy();
+      expect(screen.queryByText("Couldn't load your board.")).toBeNull();
+    } else {
+      expect(await screen.findByText("Couldn't load your board.")).toBeTruthy();
+      expect(screen.getByRole('dialog')).toBeTruthy();
+    }
+  });
+
   it.each([
     ['preloaded', 'applied'],
     ['preloaded', 'offer'],
