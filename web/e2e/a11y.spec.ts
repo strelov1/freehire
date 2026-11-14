@@ -18,19 +18,11 @@ const PAGES = [
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-// Known findings we are not fixing, each limited to one rule on one selector so every
-// other rule still runs over those elements. (AxeBuilder.exclude would drop the whole
-// subtree from every rule, and the card holds most of the page's text.)
-const WAIVERS = [
-  {
-    rule: 'label-content-name-mismatch',
-    selector: '[data-testid="job-card"] > a',
-    // JobRow.svelte names the card link "Title at Company" on purpose: left alone its name
-    // is every word on the card, read out in full before a screen-reader user learns which
-    // job it is. The name still contains the title, which is what a voice user says.
-    reason: 'job card link carries a deliberately short accessible name',
-  },
-];
+// Navigation assertions can finish while the destination still fetches its data.
+// Finish the stub handlers before Playwright disposes their response context.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' });
+});
 
 // nginx is not here, so the browser's own /api calls are handed to the stub.
 async function forwardApi(page: Page) {
@@ -53,24 +45,7 @@ for (const { name, path, content } of PAGES) {
     await expect(page.locator('main').first()).toContainText(content);
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
-    const blocking = [];
-    for (const v of results.violations) {
-      if (v.impact !== 'serious' && v.impact !== 'critical') continue;
-      const waiver = WAIVERS.find((w) => w.rule === v.id);
-      const nodes = [];
-      for (const node of v.nodes) {
-        const [target] = node.target;
-        const waived =
-          waiver !== undefined &&
-          node.target.length === 1 &&
-          (await page.evaluate(
-            ([t, sel]) => document.querySelector(t as string)?.matches(sel as string) ?? false,
-            [target, waiver.selector],
-          ));
-        if (!waived) nodes.push(node);
-      }
-      if (nodes.length > 0) blocking.push({ ...v, nodes });
-    }
+    const blocking = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
 
     const report = blocking
       .map(
@@ -114,3 +89,86 @@ for (const width of [320, 393]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   });
 }
+
+for (const path of ['/jobs', `/companies/${COMPANY_SLUG}`]) {
+  test(`job title link names only its visible title on ${path}`, async ({ page }) => {
+    await forwardApi(page);
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    const card = page.getByTestId('job-card').first();
+    const link = card.getByRole('heading', { name: 'Senior Backend Engineer' }).getByRole('link');
+    await expect(link).toHaveText('Senior Backend Engineer');
+    await expect(link).toHaveAccessibleName('Senior Backend Engineer at Acme');
+    await expect(link).toHaveAccessibleDescription(/Berlin/);
+    await link.focus();
+    await expect(link).toBeFocused();
+    const outline = await link.evaluate((el) => {
+      const style = getComputedStyle(el, '::after');
+      return { width: style.outlineWidth, offset: style.outlineOffset, style: style.outlineStyle };
+    });
+    expect(outline).toEqual({ width: '2px', offset: '-2px', style: 'solid' });
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+  });
+
+  test(`job metadata opens the posting on ${path}`, async ({ page }) => {
+    await forwardApi(page);
+    for (const width of [393, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      const card = page.getByTestId('job-card').first();
+      // Hit the chip's coordinates: the stretched link intentionally covers it.
+      await card.getByText('Go', { exact: true }).click({ force: true });
+      await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+    }
+  });
+}
+
+for (const action of ['Save to board', 'Hide this job']) {
+  test(`card ${action} stays independent of posting navigation`, async ({ page }) => {
+    await forwardApi(page);
+    await page.goto('/jobs');
+    await page.waitForLoadState('networkidle');
+    const card = page.getByTestId('job-card').first();
+    await card.hover();
+    await card.getByRole('button', { name: action, exact: true }).click();
+    await expect(page).toHaveURL(/\/signin\?returnTo=%2Fjobs&mode=login/);
+  });
+}
+
+test('card Apply opens its sign-in choice without opening the posting', async ({ page }) => {
+  await forwardApi(page);
+  await page.goto('/jobs');
+  await page.waitForLoadState('networkidle');
+  const card = page.getByTestId('job-card').first();
+  await card.hover();
+  await card.getByRole('button', { name: 'Choose how to apply to Senior Backend Engineer' }).click();
+  await expect(card.getByRole('button', { name: 'Continue without signing in' })).toBeVisible();
+  await expect(page).toHaveURL('/jobs');
+});
+
+test('card hover discloses complete metadata on the actual link target', async ({ page }) => {
+  await forwardApi(page);
+  await page.goto('/jobs');
+  await page.waitForLoadState('networkidle');
+  const card = page.getByTestId('job-card').first();
+  const link = card.locator('h3 a');
+  await expect(link).toHaveAttribute('title', /Berlin, Germany/);
+  await expect(link).toHaveAttribute('title', /Event Driven Architecture/);
+  await card.getByText('Event Driven Architecture', { exact: true }).hover({ force: true });
+  const targetTitle = await page.evaluate(() => {
+    const hovered = document.querySelector('a:hover[title]');
+    return hovered?.getAttribute('title');
+  });
+  expect(targetTitle).toContain('Event Driven Architecture');
+});
+
+test('overlapping country flags still open the job', async ({ page }) => {
+  await forwardApi(page);
+  await page.goto('/jobs');
+  await page.waitForLoadState('networkidle');
+  const card = page.getByTestId('job-card').first();
+  await card.getByRole('img', { name: 'United States', exact: true }).click({ force: true });
+  await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+});

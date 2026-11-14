@@ -19,7 +19,7 @@
   import type { Job, JobCard } from '#lib/types.js';
   import { Badge, Button, EntityLogo } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { supersedesReality } from '#lib/ghost.js';
+  import { ghostBadge, supersedesReality } from '#lib/ghost.js';
   import { realityBadge } from '#lib/reality.js';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -30,7 +30,8 @@
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
-  import { skillLabel } from '#lib/facets.js';
+  import { countryLabel, skillLabel } from '#lib/facets.js';
+  import { backerBadges } from '#lib/backers.js';
   import { formatCount, timeAgo } from '#lib/utils.js';
   import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
   import { cardFreshnessBadges } from '#lib/freshness.js';
@@ -333,12 +334,8 @@
     }
   }
 
-  // The card link's accessible name. The whole card is one <a>, so left to itself its name
-  // is every word on the card — the blurb, each chip, each skill — hundreds of characters
-  // read out before a screen-reader user learns which job it is. The name is "Title at
-  // Company" instead, and the few facts worth hearing before opening the posting go in its
-  // description — the full location line among them, since one employer's postings often
-  // share a title and differ only by city. Browse mode still reads the card's full visible text.
+  // Only the title is inside the link. Its name starts with the visible title;
+  // company disambiguates repeated roles, and the description carries key metadata.
   const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);
   const uid = $props.id();
   const summaryId = `${uid}-summary`;
@@ -355,6 +352,24 @@
     ]
       .filter(Boolean)
       .join(', '),
+  );
+
+  // The stretched link receives pointer hits instead of the metadata underneath.
+  // Keep full labels and badge evidence available in its native card-wide tooltip.
+  const linkTooltip = $derived(
+    [
+      linkName,
+      summary,
+      shownSkills.length ? `Skills: ${shownSkills.map(skillLabel).join(', ')}` : '',
+      ...(job.countries ?? []).slice(0, MAX_FLAGS).map(countryLabel),
+      ...freshness.map((badge) => badge.tooltip),
+      supersedesReality(ghost, locale()) ? ghostBadge(ghost, locale())?.tooltip : realityBadge(reality)?.tooltip,
+      ...(!hideCompany ? credentials.map((badge) => badge.tooltip) : []),
+      ...(!hideCompany ? backerBadges(job.collections).map((badge) => badge.alt) : []),
+      job.ai_interview_reports ? `AI interview reports: ${job.ai_interview_reports}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
@@ -388,10 +403,8 @@
   }
 </script>
 
-<!-- The card chrome (border, background, hover) lives on this wrapper, not the <a>,
-     so an optional footer row can sit inside the same bordered box as a sibling of
-     the link — interactive footer controls never nest inside the navigation <a>.
-     `group` lets the hover-revealed hide control fade in on card hover. -->
+<!-- The wrapper owns the card chrome and hover group. Navigation lives on the title;
+     actions stay outside the link and above its stretched hit area. -->
 <div
   data-testid="job-card"
   class={[
@@ -399,20 +412,14 @@
     !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
   ]}
 >
-  <a
-    href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-    target={newTab ? '_blank' : undefined}
-    rel={newTab ? 'noopener' : undefined}
-    aria-label={linkName}
-    aria-describedby={summary ? summaryId : undefined}
-    class={['block hover:opacity-100', compact ? 'p-3' : 'px-4 py-3.5']}
-    class:opacity-90={isViewed}
-  >
+  <!-- The title link stretches over this content area. Keeping the containing block
+       here leaves footer actions outside it; corner controls sit above it at z-10. -->
+  <div class={['relative isolate hover:opacity-100', compact ? 'p-3' : 'px-4 py-3.5']} class:opacity-90={isViewed}>
     <!-- Company + timestamp rail: a quiet eyebrow that yields the stage to the title.
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-    <!-- Reserves the top-right corner for the Save overlay outside this link, so the
+    <!-- Reserves the top-right corner for the Save overlay, so the
        timestamp never slides under it. Only a compact card keeps Save up here; a normal
        card has moved it into the action row at its foot, leaving the corner free. -->
     <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
@@ -439,7 +446,7 @@
           <!-- Who backed the employer, next to the employer. A fact about the company,
            so it reads with the company name rather than joining the signal row
            below, which carries role-level facts and already wraps on a phone. The
-           whole card is a link, so the mark is display-only here. -->
+           title link handles navigation, so the mark is display-only here. -->
           <BackerBadge collections={job.collections} class="shrink-0" />
         {/if}
       </div>
@@ -483,20 +490,34 @@
     <!-- The title is the card's hero — a size up from the body with tight leading, so
        the eye lands on the role first.
 
-       `lang` sits on the card rather than anywhere above it because one listing
-       can hold a Russian, a German and an English title in a row. -->
+       `lang` sits on the heading because adjacent postings may use different languages. -->
     <h3
       lang={foreignContentLang(job)}
       class={[
         'font-semibold leading-snug tracking-tight',
-        compact ? 'mt-2 line-clamp-1 text-base' : 'line-clamp-2 text-base sm:text-lg',
+        compact ? 'mt-2 text-base' : 'text-base sm:text-lg',
         !compact && !hideCompany && 'mt-1.5',
         // With the rail hidden the title is the top line, so it reserves the corner controls' room the rail would have.
         hideCompany && (!compact && onHide ? 'pr-20' : 'pr-11'),
         hideCompany && touchActions && 'pointer-coarse:pr-30',
       ]}
     >
-      {job.title}
+      <a
+        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+        target={newTab ? '_blank' : undefined}
+        rel={newTab ? 'noopener' : undefined}
+        aria-label={linkName}
+        aria-describedby={summary ? summaryId : undefined}
+        title={linkTooltip}
+        class={[
+          "block after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring",
+          !flat && 'after:rounded-xl',
+        ]}
+      >
+        <!-- Clamp only the text. The inset focus outline also stays visible when a feed
+             clips its rows to a rounded container. -->
+        <span class={compact ? 'line-clamp-1' : 'line-clamp-2'}>{job.title}</span>
+      </a>
     </h3>
 
     <!-- Signal row: reality chip + the region/employment facets, grouped under the
@@ -603,7 +624,7 @@
           <span>{tag}</span>
         {/each}
         <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
-           whole card is a link, so the flags carry no nested filter links. -->
+           stretched title link handles navigation, so the flags carry no filter links. -->
         {#if job.countries?.length}
           <CountryFlagStack
             codes={job.countries}
@@ -633,11 +654,8 @@
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and truncates with an ellipsis past max-w; the full skill is
            in `title` for anyone who needs it. -->
-        <!-- The label, not the slug: a card read "ci-cd" where the filter panel beside it
-           read "CI/CD". No definition here, unlike the chips on the posting itself —
-           these sit inside the card's navigation <a>, where a second activation target
-           is invalid markup and the hazard the comment at the top of this file is
-           about. The card is for scanning; the posting is where you read. -->
+        <!-- Use the same labels as the filters. Chips stay display-only under the
+             stretched title link; definitions live on the posting itself. -->
         {#each shownSkills as skill (skill)}
           <Badge variant={chipVariant(skill)} class="max-w-[9rem] gap-1">
             <SkillIcon slug={skill} />
@@ -654,10 +672,8 @@
        signed-in viewer with a skills profile. -->
     <JobMatchBar {match} />
     {#if teaser && compact}
-      <!-- The compact card has no action row, so its invitation stays a caption inside the
-         link. `aria-hidden`: the sr-only span below, outside the <a>, says it instead,
-         so it does not join the link's accessible name. -->
-      <div class="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
+      <!-- The compact card has no action row, so its invitation stays a caption. -->
+      <div class="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         {#if matchState === 'guest'}
           <Lock class="size-3.5 shrink-0" />
         {:else}
@@ -666,19 +682,13 @@
         {matchInvite}
       </div>
     {/if}
-  </a>
+  </div>
 
   <!-- The card link's description (see `summary`). `hidden` keeps it off the page and out
      of browse mode, where the same facts are read from the card itself; a description
      reference still reaches hidden content. -->
   {#if summary}
     <span id={summaryId} hidden>{summary}</span>
-  {/if}
-
-  {#if teaser && compact}
-    <!-- Stands in for the compact card's aria-hidden caption. Outside the card link on
-       purpose: `sr-only` is clip-based, so inside the <a> it would join the link's name. -->
-    <span class="sr-only">{matchInvite}</span>
   {/if}
 
   {#if footer && compact}
@@ -710,7 +720,7 @@
       aria-label={saved ? 'Remove from your board' : 'Save to your board'}
       title={saved ? 'On your board' : 'Save to board'}
       class={[
-        'absolute right-2.5 top-4 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+        'absolute right-2.5 top-4 z-10 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
         saved ? 'text-brand' : 'text-muted-foreground',
       ]}
     >
@@ -724,9 +734,9 @@
        only while the pointer is on the card). `pointer-coarse`
        keeps Hide visible on touch, which has no hover to reveal anything; there Apply shrinks
        to its icon and the date moves to the meta line, so the company name is not cut to
-       two letters. The rail inside the link reserves the corner (see its `pr-*`), so the
+       two letters. The company rail reserves the corner (see its `pr-*`), so the
        date never slides under it. -->
-    <div class="absolute right-3 top-3 flex items-center gap-1">
+    <div class="absolute right-3 top-3 z-10 flex items-center gap-1">
       <!-- Direct-apply shortcut (freehire#2755): a way out to the posting's own site
          without opening the job page first. Outline, never the brand-green primary —
          that loud slot is reserved for auto-apply on the job page itself, and a list
