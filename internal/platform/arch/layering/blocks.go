@@ -132,7 +132,7 @@ var blocks = map[string][]string{
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
-		"matchanalysis", "pii", "perioddate", "resume", "resumeextract",
+		"matchanalysis", "perioddate", "resume", "resumeextract",
 		// survey holds the candidate's self-reported segmentation answers (job-search
 		// stage, biggest challenge, current income). It sits here rather than in engage,
 		// whose digests are its most likely future reader, because it states what a

@@ -118,7 +118,7 @@ The CV workspace is built on a rule that shapes every part of it: **the agent ma
 
 **Rendering is sandboxed.** Templates are Typst source files embedded in the binary. The renderer shells out to the Typst CLI in a temporary root with system fonts disabled and bundled fonts staged in; candidate data reaches it through a JSON file, never through command arguments. The font set is deliberately small and metric-compatible with what résumé parsers expect.
 
-Deeper: [`internal/candidate/experience`](../internal/candidate/experience/AGENTS.md) · [`internal/candidate/cvedit`](../internal/candidate/cvedit/AGENTS.md) · [`internal/candidate/cv`](../internal/candidate/cv/AGENTS.md) · [`internal/candidate/resume`](../internal/candidate/resume/AGENTS.md) · [`internal/candidate/pii`](../internal/candidate/pii/AGENTS.md)
+Deeper: [`internal/candidate/experience`](../internal/candidate/experience/AGENTS.md) · [`internal/candidate/cvedit`](../internal/candidate/cvedit/AGENTS.md) · [`internal/candidate/cv`](../internal/candidate/cv/AGENTS.md) · [`internal/candidate/resume`](../internal/candidate/resume/AGENTS.md)
 
 ## Flow: asking the assistant
 

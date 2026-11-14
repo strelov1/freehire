@@ -343,9 +343,8 @@ block flagged as material rather than instructions. Three rules hold it up:
   `MaxAttachmentRunes` per document: extraction truncates and says so, and the turn
   refuses anything larger — a client posting text directly cannot raise either. Because
   the text is replayed every later turn, the per-document cap is a recurring cost bound.
-- **It is not masked, on purpose.** `internal/candidate/pii` guards the STORED CV on its
-  way into the structured parse; the assistant has never masked what a candidate types or
-  pastes, and an attachment is a paste with a file picker in front of it. Masking it would
+- **It is not masked, on purpose.** The assistant has never masked what a candidate types
+  or pastes, and an attachment is a paste with a file picker in front of it. Masking it would
   also strip the very contact details a candidate attached an offer letter to ask about.
 
 **History trimming.** `trim` keeps the most recent N messages and then drops any

@@ -11,12 +11,6 @@ import (
 // came from rather than like this package.
 const schemaName = "structured_cv"
 
-// contactFields are supplied by deterministic PII detection over text the model never
-// sees, so they are cut from what the model is asked for. Under strict mode every
-// property is required — left in, they would be an instruction to invent a name,
-// email, phone, residence or links for a CV that reaches the model with those redacted.
-var contactFields = []string{"full_name", "email", "phone", "location", "links"}
-
 var (
 	schemaOnce sync.Once
 	schema     llmschema.Schema
@@ -28,7 +22,6 @@ var (
 func requestSchema() (llmschema.Schema, error) {
 	schemaOnce.Do(func() {
 		schema, schemaErr = llmschema.Of[Structured](
-			llmschema.Omit(contactFields...),
 			// total_years is an int on the contract, but asking the model for an
 			// integer hands it the rounding: given "5.9 years" it returns 6, while
 			// truncInt returns 5. The difference is experience the candidate does
