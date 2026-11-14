@@ -28,10 +28,14 @@
 
   // Compared lowercased: the server normalises excluded_sources to lowercase on save
   // (userprofile.normalizeExcludedSet), and nothing guarantees a caller hands us the same
-  // casing the list was written in.
-  const avoided = $derived(
-    (profileStore.profile?.excluded_sources ?? []).some((s) => s.toLowerCase() === source.toLowerCase()),
+  // casing the list was written in. Compared by family too: this control once saved a
+  // regional key (whatjobs-uk), and undo has to clear that entry, not only the brand.
+  const avoidedEntries = $derived(
+    (profileStore.profile?.excluded_sources ?? []).filter(
+      (s) => sourceFamily(s.toLowerCase()) === source.toLowerCase(),
+    ),
   );
+  const avoided = $derived(avoidedEntries.length > 0);
 
   let pending = $state(false);
   let failed = $state(false);
@@ -50,7 +54,8 @@
     pending = true;
     failed = false;
     try {
-      await (avoid ? profileStore.avoidSource(source) : profileStore.unavoidSource(source));
+      if (avoid) await profileStore.avoidSource(source);
+      else for (const entry of avoidedEntries) await profileStore.unavoidSource(entry);
       void syncProfileAlert();
     } catch {
       failed = true;
