@@ -12621,7 +12621,7 @@
             "schema": {
               "type": "integer"
             },
-            "example": "20"
+            "example": 20
           },
           {
             "name": "offset",
@@ -12631,7 +12631,7 @@
             "schema": {
               "type": "integer"
             },
-            "example": "0"
+            "example": 0
           }
         ],
         "responses": {
@@ -12710,6 +12710,26 @@
                       "$ref": "#/components/schemas/CompanyPage"
                     }
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pagination parameters or pagination window exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Company not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }

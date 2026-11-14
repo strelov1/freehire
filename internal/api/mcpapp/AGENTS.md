@@ -26,7 +26,14 @@ Fiber authentication clears external `AccountUserIDHeader` values before resolvi
 credentials. Invalid credentials fail closed. Both the root
 `/.well-known/oauth-protected-resource` and the path-inserted
 `/.well-known/oauth-protected-resource/api/v1/mcp` (`ResourceMetadataPath`, the one the
-challenge names) describe `/api/v1/mcp`.
+challenge names) describe `/api/v1/mcp`. Connectors saved with `/api/v1/mcp/account` derive
+their metadata URL from that address (RFC 9728 §3.3: `resource` must equal it), so it has its
+own document, `resource` `<origin>/api/v1/mcp/account`, at the path-inserted
+`/.well-known/oauth-protected-resource/api/v1/mcp/account` (SvelteKit proxy to
+`/api/v1/oauth/metadata/protected-resource/account`) and at the path-appended form some clients
+try, `/api/v1/mcp/account/.well-known/oauth-protected-resource`. `/api/v1/mcp/.well-known/oauth-protected-resource`
+serves the `/api/v1/mcp` document the same way. Both appended forms are API routes (under `/api`),
+not SvelteKit ones.
 
 An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
 /authorize and /token, `oauth_grants.resource`): the URI must be on this deployment's origin
