@@ -18,7 +18,7 @@ func TestToolErrorLogsBoundedSingleLineReasonOnly(t *testing.T) {
 		result *mcp.CallToolResult
 		want   string
 	}{
-		{"collapsed", reasonResult("first line\n\tsecond​ line\x07"), "first line second line"},
+		{"collapsed", reasonResult("first line\n\tsecond\u200b line\x07"), "first line second line"},
 		{"truncated", reasonResult(strings.Repeat("x", 500)), strings.Repeat("x", maxLoggedReasonRunes) + "..."},
 		{"result text is never logged", &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "private-error-secret"}}}, ""},
 		{"success", &mcp.CallToolResult{}, ""},
