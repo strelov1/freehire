@@ -43,6 +43,28 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 
 ## Always true
 
+- **Gmail keeps both directions inside hiring threads.** Incoming search excludes SENT and
+  DRAFT mail; thread expansion retains sent replies and discards drafts. Gmail's SENT label
+  identifies aliases; the connected primary address is a fallback. `emails.direction` is
+  `incoming` or `outgoing`, with To/Cc headers and thread ids exposed to inbox readers.
+  Sent messages start read and never enter employer classification, stage advancement,
+  employer-reply events, interview evidence or silence calculations. Hosted and external
+  messages retain their existing incoming defaults; this adds no sending transport.
+  Application mail views also show unlinked sent replies when their Gmail conversation
+  has one unambiguous linked incoming job, including links classified after sync. Explicit
+  attachments win; this display inference writes no link or employer activity. Recall
+  candidates and suggestion writes remain incoming-only, including after alias repair.
+- **Sent discovery has its own cursor.** `gmail_connections.sent_sync_cursor` starts at zero:
+  the first successful pass expands stored Gmail threads to recover their sent history.
+  Later passes list SENT message/thread identifiers since the prior successful run (with a
+  60-second overlap), fetching content only for known hiring threads. This catches replies
+  to old conversations without a new incoming anchor. The cursor records run-start time;
+  a transient message or thread failure preserves both cursors, and idempotent inserts
+  make retries safe. Permanently missing provider messages/threads are skipped. Reimports
+  refresh direction and recipient metadata; an old alias reply newly recognized as SENT
+  loses its employer classification, pending work and employer-reply event. Existing
+  application stages are not automatically rolled back: that would overwrite later user
+  decisions. Apply migration 0267 before deploying the readers.
 - **The fetch is scoped to hiring-SHAPED mail, not to ATS senders, and the inbox filters at
   DISPLAY.** `gmailsync.BuildQueryFor` admits mail from a curated ATS domain OR carrying one
   of the recognised application/interview phrasings, minus anything the connected address
@@ -213,6 +235,8 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   failure as a revocation would disconnect every mailbox we hold during one Google incident,
   and the inbox's own Sync button would do it to one candidate on a bad afternoon. The rule
   reads TWO carriers, because a revocation arrives on either leg: **401/403 from the API**
+  (except a 403 whose Google reason is a rate limit or quota — `gmailsync.LimitHit`, which only
+  stops the run)
   (`gmailsync.APIError`, which both readers attach to a non-200 so the status survives the
   return), and **`invalid_grant` from the TOKEN endpoint**, which is where a real revocation
   actually lands — the readers' client is built from a stored refresh token, so oauth2

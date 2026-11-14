@@ -94,6 +94,22 @@ func TestMailLinkingUserIsolation(t *testing.T) {
 		}
 	})
 
+	t.Run("a deleted linked email leaves the job's list", func(t *testing.T) {
+		job := insertJob(t, pool, "job-deleted-mail")
+		applyToJob(t, pool, userA, job, "applied")
+		gone := insertLinkedEmail(t, pool, userA, "mail-deleted", job)
+		if _, err := pool.Exec(ctx, `UPDATE emails SET deleted_at = now() WHERE id = $1`, gone); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := q.ListJobEmails(ctx, ListJobEmailsParams{UserID: userA, JobID: pgtype.Int8{Int64: job, Valid: true}})
+		if err != nil {
+			t.Fatalf("list job emails: %v", err)
+		}
+		if len(rows) != 0 {
+			t.Fatalf("deleted email still listed: %v", rows)
+		}
+	})
+
 	t.Run("GetUserApplication 404s for a job the caller does not track", func(t *testing.T) {
 		if _, err := q.GetUserApplication(ctx, GetUserApplicationParams{UserID: userB, JobID: jobA}); err == nil {
 			t.Fatalf("B fetched A's application jobA(%d) — must be not-found", jobA)

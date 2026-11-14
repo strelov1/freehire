@@ -148,7 +148,7 @@ const listEmailsForRecall = `-- name: ListEmailsForRecall :many
 SELECT id, from_addr, from_name, subject, body_text, body_html, received_at, ical_uid
 FROM emails
 WHERE user_id = $1
-  AND deleted_at IS NULL
+  AND deleted_at IS NULL AND direction = 'incoming'
   AND job_id IS NULL
   AND application_id IS NULL
   AND received_at >= $2
@@ -241,11 +241,24 @@ func (q *Queries) ListEmailsForRecall(ctx context.Context, arg ListEmailsForReca
 }
 
 const listJobEmails = `-- name: ListJobEmails :many
-SELECT id, source, from_addr, from_name, subject, status_signal, link_source,
-    received_at, (read_at IS NOT NULL)::boolean AS read
-FROM emails
-WHERE user_id = $1 AND job_id = $2
-ORDER BY received_at DESC, id DESC
+SELECT e.id, e.source, e.direction, e.to_addrs, e.cc_addrs, e.from_addr, e.from_name, e.subject, e.status_signal, e.link_source,
+    e.received_at, (e.read_at IS NOT NULL)::boolean AS read
+FROM emails e
+WHERE e.user_id = $1 AND e.deleted_at IS NULL AND (e.job_id = $2 OR (
+    -- Infer display membership after incoming mail is linked, even if its reply arrived first.
+    -- Explicit attachments win; conversations naming multiple jobs stay unassigned.
+    e.job_id IS NULL AND e.application_id IS NULL AND e.deleted_at IS NULL
+    AND e.direction = 'outgoing' AND e.source = 'gmail' AND e.thread_id <> ''
+    AND $2 = (
+        SELECT min(incoming.job_id) FROM emails incoming
+        WHERE incoming.user_id = e.user_id AND incoming.source = e.source
+          AND incoming.thread_id = e.thread_id AND incoming.direction = 'incoming'
+          AND incoming.deleted_at IS NULL
+        HAVING count(DISTINCT incoming.job_id) = 1
+          AND count(*) FILTER (WHERE incoming.job_id IS NULL AND incoming.application_id IS NOT NULL) = 0
+    )
+))
+ORDER BY e.received_at DESC, e.id DESC
 `
 
 type ListJobEmailsParams struct {
@@ -256,6 +269,9 @@ type ListJobEmailsParams struct {
 type ListJobEmailsRow struct {
 	ID           int64              `json:"id"`
 	Source       string             `json:"source"`
+	Direction    string             `json:"direction"`
+	ToAddrs      string             `json:"to_addrs"`
+	CcAddrs      string             `json:"cc_addrs"`
 	FromAddr     string             `json:"from_addr"`
 	FromName     string             `json:"from_name"`
 	Subject      string             `json:"subject"`
@@ -279,6 +295,9 @@ func (q *Queries) ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.Source,
+			&i.Direction,
+			&i.ToAddrs,
+			&i.CcAddrs,
 			&i.FromAddr,
 			&i.FromName,
 			&i.Subject,
@@ -322,7 +341,7 @@ UPDATE emails
 SET suggested_job_id = $1::bigint,
     match_confidence = $2::real
 WHERE id = $3 AND user_id = $4
-  AND job_id IS NULL AND application_id IS NULL AND deleted_at IS NULL
+  AND job_id IS NULL AND application_id IS NULL AND deleted_at IS NULL AND direction = 'incoming'
 `
 
 type SuggestJobForEmailParams struct {
