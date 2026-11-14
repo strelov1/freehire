@@ -38,7 +38,7 @@ func TestLinkedInProbeRequiresExplicitPostingEvidence(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {
-				if r.URL.String() != "https://www.linkedin.com/jobs/view/123/" {
+				if r.URL.String() != "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/123" {
 					t.Errorf("unexpected request: %s", r.URL)
 				}
 				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(tc.body)), Header: make(http.Header), Request: r}, nil
@@ -57,7 +57,7 @@ func TestLinkedInProbeRequiresExplicitPostingEvidence(t *testing.T) {
 func TestLinkedInProbeCannotCloseAfterRedirectToAnotherJob(t *testing.T) {
 	client := &http.Client{Transport: linkedInTransport(func(r *http.Request) (*http.Response, error) {
 		resp := &http.Response{StatusCode: 200, Header: make(http.Header), Request: r}
-		if r.URL.Path == "/jobs/view/123/" {
+		if r.URL.Path == "/jobs-guest/jobs/api/jobPosting/123" {
 			resp.StatusCode = 302
 			resp.Header.Set("Location", "https://www.linkedin.com/jobs/view/456/")
 			resp.Body = io.NopCloser(strings.NewReader(""))

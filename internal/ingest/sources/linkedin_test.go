@@ -22,12 +22,17 @@ const linkedInOpenPage = `<html><head><meta property="og:url" content="https://w
 <button data-modal="job-details-topcard-apply-modal">Apply</button></section></body></html>`
 
 func TestLinkedInPostingEvidence(t *testing.T) {
+	guestOpen := strings.Replace(linkedInOpenPage, `<meta property="og:url" content="https://www.linkedin.com/jobs/view/123/">`, "", 1)
 	closed := strings.Replace(linkedInOpenPage, `<button data-modal="job-details-topcard-apply-modal">Apply</button>`, `<figcaption class="closed-job__flavor--closed">No longer accepting applications</figcaption>`, 1)
 	for _, tc := range []struct {
 		name, page, url  string
 		wantErr, removed bool
 	}{
 		{"open", linkedInOpenPage, "https://www.linkedin.com/jobs/view/engineer-123/", false, false},
+		{"guest open", guestOpen, "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/123", false, false},
+		{"guest closed", strings.Replace(closed, `<meta property="og:url" content="https://www.linkedin.com/jobs/view/123/">`, "", 1), "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/123", false, true},
+		{"guest wrong id", guestOpen, "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/456", true, false},
+		{"guest wrong host", linkedInOpenPage, "https://example.org/jobs-guest/jobs/api/jobPosting/123", true, false},
 		{"closed", closed, "https://www.linkedin.com/jobs/view/123/", false, true},
 		{"wrong canonical", strings.ReplaceAll(closed, "view/123/", "view/456/"), "https://www.linkedin.com/jobs/view/123/", true, false},
 		{"authwall", closed, "https://www.linkedin.com/authwall", true, false},
@@ -59,7 +64,7 @@ func TestLinkedInPostingEvidence(t *testing.T) {
 
 func TestLinkedInFetchHydratesAndRefreshes(t *testing.T) {
 	listing := `<li data-entity-urn="urn:li:jobPosting:123"><a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/engineer-123/"></a><h3 class="base-search-card__title">Go Engineer</h3><h4 class="base-search-card__subtitle">Acme</h4></li>`
-	fake := (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs/view/123/", linkedInOpenPage)
+	fake := (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs-guest/jobs/api/jobPosting/123", linkedInOpenPage)
 	s := NewLinkedIn(fake).(linkedIn)
 	s.pace = &recordingWaiter{}
 	entry := CompanyEntry{Board: "Go engineer", Region: "United Kingdom"}
@@ -117,9 +122,9 @@ func TestLinkedInDetailFailuresPreserveUncertainty(t *testing.T) {
 		{"refused", "", &StatusError{Code: 429}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fake := (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs/view/123/", tc.detail)
+			fake := (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs-guest/jobs/api/jobPosting/123", tc.detail)
 			if tc.err != nil {
-				fake.routeErr("/jobs/view/123/", tc.err)
+				fake.routeErr("/jobs-guest/jobs/api/jobPosting/123", tc.err)
 			}
 			s := NewLinkedIn(fake).(linkedIn)
 			s.pace = &recordingWaiter{}
@@ -189,9 +194,9 @@ func TestLinkedInPreservesProgressWhenLaterRequestsFail(t *testing.T) {
 			if refused {
 				listing += card("124")
 			}
-			fake := (&routedHTTP{}).route("start=0", listing).route("/jobs/view/123/", linkedInOpenPage)
+			fake := (&routedHTTP{}).route("start=0", listing).route("/jobs-guest/jobs/api/jobPosting/123", linkedInOpenPage)
 			if refused {
-				fake.routeErr("/jobs/view/124/", &StatusError{Code: 429})
+				fake.routeErr("/jobs-guest/jobs/api/jobPosting/124", &StatusError{Code: 429})
 			} else {
 				fake.routeErr("start=1", context.DeadlineExceeded)
 			}

@@ -58,7 +58,9 @@ func LinkedInPostingID(raw string) string {
 // primary liveness signal. Removed describes the page evidence; ingest does not emit it
 // as a removal event, because cmd/liveness must confirm closure twice across runs.
 func LinkedInPosting(root *html.Node, finalURL, id string) (Job, error) {
-	if id == "" || LinkedInPostingID(finalURL) != id {
+	u, err := url.Parse(finalURL)
+	guest := err == nil && u.Scheme == "https" && u.Host == "www.linkedin.com" && u.Path == "/jobs-guest/jobs/api/jobPosting/"+id
+	if id == "" || (!guest && LinkedInPostingID(finalURL) != id) {
 		return Job{}, fmt.Errorf("linkedin: posting identity mismatch")
 	}
 	if canonical := metaProperty(root, "og:url"); canonical != "" && LinkedInPostingID(canonical) != id {
@@ -183,7 +185,7 @@ func (s linkedIn) FetchNew(ctx context.Context, e CompanyEntry, seen func(string
 				read++
 				continue
 			}
-			root, final, err := s.get(ctx, card.URL)
+			root, final, err := s.get(ctx, "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/"+card.ExternalID)
 			var status *StatusError
 			if errors.As(err, &status) && (status.Code == 403 || status.Code == 429 || status.Code == 999) {
 				return stop(fmt.Errorf("linkedin: detail refused: %w", err))

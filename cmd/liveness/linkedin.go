@@ -29,7 +29,7 @@ func linkedInPass(client *http.Client) pacedPass {
 			}
 			ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 			defer cancel()
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.linkedin.com/jobs/view/"+id+"/", nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/"+id, nil)
 			if err != nil {
 				return unknown
 			}

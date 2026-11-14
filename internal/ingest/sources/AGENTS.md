@@ -140,8 +140,8 @@ client, not the `direct` parameter (see [providers/hhru.md](providers/hhru.md)).
   The adapter reads the guest listing, recent seven-day window, newest first, at most ten
   pages. One limiter across the adapter's boards and both request paths allows one request
   every two seconds. This is an initial conservative budget, not a measured sustained limit.
-- Listing URNs identify postings; the detail page supplies employer, title, location and
-  sanitized body. Seen postings take the normal `SeenRefresh` path. Missing details emit
+- Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
+  sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Seen postings take the normal `SeenRefresh` path. Missing details emit
   `Unreadable`; a wholly unreadable board fails. A detail refusal stops the board.
 - The listing is incomplete even for employers it names: `probeClosing` excludes ALL unseen
   sweeps, and `livenessProbed` excludes search's unseen timeout. `cmd/liveness` checks stale
