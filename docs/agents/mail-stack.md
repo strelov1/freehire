@@ -235,6 +235,8 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   failure as a revocation would disconnect every mailbox we hold during one Google incident,
   and the inbox's own Sync button would do it to one candidate on a bad afternoon. The rule
   reads TWO carriers, because a revocation arrives on either leg: **401/403 from the API**
+  (except a 403 whose Google reason is a rate limit or quota — `gmailsync.LimitHit`, which only
+  stops the run)
   (`gmailsync.APIError`, which both readers attach to a non-200 so the status survives the
   return), and **`invalid_grant` from the TOKEN endpoint**, which is where a real revocation
   actually lands — the readers' client is built from a stored refresh token, so oauth2

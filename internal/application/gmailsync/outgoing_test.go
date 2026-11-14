@@ -148,3 +148,22 @@ func TestFirstSentScanIsBounded(t *testing.T) {
 		t.Fatalf("first scan read past the newest %d threads: stats=%+v reconsent=%v", firstSentScanThreads, stats, store.reconsentUsers)
 	}
 }
+
+func TestRateLimitStopsTheWaveWithoutDisconnecting(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh")
+	store := &fakeStore{conns: []Connection{{UserID: 7, Cursor: 100, SentCursor: 100}}, encToken: enc}
+	reader := &fakeReader{
+		ids:       []string{"m1", "m2"},
+		byID:      map[string]Message{"m2": {ID: "m2", ThreadID: "t2", ReceivedAt: time.Unix(300, 0)}},
+		getErrIDs: map[string]error{"m1": &APIError{StatusCode: 403, Status: "403 Forbidden", Reason: "userRateLimitExceeded"}},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.reconsentUsers) != 0 || len(store.upserted) != 0 || store.syncedCursor != 100 || stats.Synced != 0 {
+		t.Fatalf("rate limit disconnected or kept reading: reconsent=%v stored=%d cursor=%d stats=%+v", store.reconsentUsers, len(store.upserted), store.syncedCursor, stats)
+	}
+}

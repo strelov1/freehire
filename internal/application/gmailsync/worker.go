@@ -176,6 +176,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	newest := u.Cursor
 	sawFailure := false
 	revoked := false
+	// throttled stops the wave on a rate-limit answer: every further call would be refused
+	// too, and keeps the quota window under pressure. The cursors stay put, so the next run retries.
+	throttled := false
 	seen := make(map[string]bool)
 	seenThread := make(map[string]bool)
 	var threadIDs []string
@@ -209,6 +212,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 				return
 			}
 			log.Printf("gmail-sync: user %d: get %s: %v", u.UserID, id, err)
+			throttled = throttled || LimitHit(err)
 			sawFailure = true
 			return
 		}
@@ -243,7 +247,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 
 	for _, id := range ids {
 		fetch(id)
-		if revoked {
+		if revoked || throttled {
 			break
 		}
 	}
@@ -266,19 +270,20 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			threadIDs = append(threadIDs, tid)
 		}
 	}
-	if u.SentCursor != 0 && !revoked {
+	if u.SentCursor != 0 && !revoked && !throttled {
 		refs, err := reader.ListSentMessages(ctx, u.SentCursor)
 		if err != nil {
 			if RevokedGrant(err) {
 				return w.markRevoked(ctx, u.UserID)
 			}
 			log.Printf("gmail-sync: user %d: sent messages: %v", u.UserID, err)
+			throttled = throttled || LimitHit(err)
 			sawFailure = true
 		} else {
 			for _, ref := range refs {
 				if known[ref.ThreadID] || seenThread[ref.ThreadID] {
 					fetch(ref.ID)
-					if revoked {
+					if revoked || throttled {
 						break
 					}
 				}
@@ -291,7 +296,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	// ingested behind the anchor the search already found. Skipped once the grant
 	// is known revoked — every further call would just 403 too.
 	for _, tid := range threadIDs {
-		if revoked {
+		if revoked || throttled {
 			break
 		}
 		siblings, err := reader.ListThreadMessageIDs(ctx, tid)
@@ -305,12 +310,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 				break
 			}
 			log.Printf("gmail-sync: user %d: thread %s: %v", u.UserID, tid, err)
+			throttled = throttled || LimitHit(err)
 			sawFailure = true
 			continue
 		}
 		for _, id := range siblings {
 			fetch(id)
-			if revoked {
+			if revoked || throttled {
 				break
 			}
 		}

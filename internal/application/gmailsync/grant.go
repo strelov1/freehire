@@ -56,6 +56,17 @@ func NewAPIError(op string, resp *http.Response) *APIError {
 	return e
 }
 
+// LimitHit reports whether err is Google refusing the pace rather than the grant: a 429, or
+// a 403 whose reason is a rate limit or quota.
+func LimitHit(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusTooManyRequests ||
+		(apiErr.StatusCode == http.StatusForbidden && limitReason(apiErr.Reason))
+}
+
 // limitReason reports a reason meaning a quota or rate limit (rateLimitExceeded,
 // userRateLimitExceeded, quotaExceeded, dailyLimitExceeded): the grant is fine, the pace is not.
 func limitReason(reason string) bool {

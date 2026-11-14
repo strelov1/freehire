@@ -108,3 +108,20 @@ func TestNewAPIErrorReadsReason(t *testing.T) {
 		t.Fatalf("bodyless 403: reason=%q revoked=%v, want empty and revoked", e.Reason, RevokedGrant(e))
 	}
 }
+
+func TestLimitHit(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{&APIError{StatusCode: 429}, true},
+		{&APIError{StatusCode: 403, Reason: "rateLimitExceeded"}, true},
+		{&APIError{StatusCode: 403, Reason: "insufficientPermissions"}, false},
+		{&APIError{StatusCode: 503}, false},
+		{errors.New("boom"), false},
+	} {
+		if got := LimitHit(tc.err); got != tc.want {
+			t.Errorf("LimitHit(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
