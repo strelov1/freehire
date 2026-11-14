@@ -6,6 +6,9 @@ import { defineMessages, plurals } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     loading: 'Loading…',
+    sent: 'Sent',
+    to: 'To',
+    cc: 'Cc',
     tabs: {
       inbox: 'Inbox',
       settings: 'Settings',
@@ -78,6 +81,9 @@ export const messages = defineMessages(
   {
     ru: {
       loading: 'Загрузка…',
+      sent: 'Отправлено',
+      to: 'Кому',
+      cc: 'Копия',
       tabs: {
         inbox: 'Входящие',
         settings: 'Настройки',
