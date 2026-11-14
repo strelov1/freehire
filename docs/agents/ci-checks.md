@@ -67,15 +67,17 @@ GitHub runs it, so a mistake in one that fires on a tag or a schedule surfaces l
 `code-review.yml` runs OpenCodeReview on new non-draft PRs and pushes. A repository
 owner, member or collaborator can request another review with a standalone `@codereview`
 mention in a PR comment. Manual dispatch accepts an open PR number, including a draft.
-Unrelated comments never cancel a running review. Findings appear inline and in a sticky
-PR summary; they do not approve or merge the PR.
+Unrelated comments never cancel a running review. Findings appear with file/line locations
+in a sticky PR summary; they do not approve or merge the PR.
 
 Actions secrets `OCR_LLM_URL` (the complete chat-completions endpoint) and
 `OCR_LLM_AUTH_TOKEN` supply the private gateway connection. The optional Actions variable
 `OCR_LLM_MODEL` defaults to `mid`. Never put the endpoint or credential in this repository.
-The official action is pinned to a commit, reads PR changes from git objects without
-executing PR code, and uploads no raw result/log artifacts. Automatic and comment triggers
-only become active after the workflow is on the default branch.
+The CLI version is pinned. Checkout uses the trusted workflow commit; PR changes are read
+from git objects without executing PR code. The runner captures all provider output,
+redacts connection settings from findings, and publishes a generic message on failure.
+Incomplete reviews fail the check. No raw result/log artifacts are uploaded. Automatic
+and comment triggers only become active after the workflow is on the default branch.
 
 ## Instruction files and Markdown: agnix, rumdl, `pnpm check:links`
 
