@@ -89,7 +89,12 @@ func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []
 		if !ok {
 			continue
 		}
-		fetched, err := r.fetchBoard(ctx, candidate, src)
+		// The same fetch window as the main loop's boards (ingestBoard), so a probe the deadline
+		// catches still writes what it read and is not read as a whole crawl.
+		fetchCtx, cancelFetch := r.fetchContext(ctx)
+		fetched, err := r.fetchBoard(fetchCtx, candidate, src)
+		fetched.cut = fetchCtx.Err() != nil
+		cancelFetch()
 		if err != nil {
 			continue
 		}
