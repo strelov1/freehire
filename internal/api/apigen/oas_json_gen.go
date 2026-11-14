@@ -38674,6 +38674,24 @@ func (s *InboxApplicationEmail) encodeFields(e *jx.Encoder) {
 		e.Str(s.Source)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -38707,16 +38725,19 @@ func (s *InboxApplicationEmail) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxApplicationEmail = [9]string{
-	0: "id",
-	1: "source",
-	2: "from_addr",
-	3: "from_name",
-	4: "subject",
-	5: "status_signal",
-	6: "link_source",
-	7: "received_at",
-	8: "read",
+var jsonFieldsNameOfInboxApplicationEmail = [12]string{
+	0:  "id",
+	1:  "source",
+	2:  "direction",
+	3:  "to_addrs",
+	4:  "cc_addrs",
+	5:  "from_addr",
+	6:  "from_name",
+	7:  "subject",
+	8:  "status_signal",
+	9:  "link_source",
+	10: "received_at",
+	11: "read",
 }
 
 // Decode decodes InboxApplicationEmail from json.
@@ -38752,8 +38773,38 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"source\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -38765,7 +38816,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -38777,7 +38828,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -38809,7 +38860,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"link_source\"")
 			}
 		case "received_at":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -38821,7 +38872,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -38842,8 +38893,8 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
-		0b10011111,
-		0b00000001,
+		0b11100011,
+		0b00001100,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -38911,6 +38962,30 @@ func (s *InboxEmail) encodeFields(e *jx.Encoder) {
 		e.Str(s.ExternalID)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
+		if s.ThreadID.Set {
+			e.FieldStart("thread_id")
+			s.ThreadID.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -38976,23 +39051,27 @@ func (s *InboxEmail) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxEmail = [16]string{
+var jsonFieldsNameOfInboxEmail = [20]string{
 	0:  "id",
 	1:  "source",
 	2:  "external_id",
-	3:  "from_addr",
-	4:  "from_name",
-	5:  "subject",
-	6:  "body_text",
-	7:  "body_html",
-	8:  "received_at",
-	9:  "read",
-	10: "status_signal",
-	11: "link_source",
-	12: "linked_slug",
-	13: "linked_company",
-	14: "suggested_slug",
-	15: "suggested_company",
+	3:  "direction",
+	4:  "to_addrs",
+	5:  "cc_addrs",
+	6:  "thread_id",
+	7:  "from_addr",
+	8:  "from_name",
+	9:  "subject",
+	10: "body_text",
+	11: "body_html",
+	12: "received_at",
+	13: "read",
+	14: "status_signal",
+	15: "link_source",
+	16: "linked_slug",
+	17: "linked_company",
+	18: "suggested_slug",
+	19: "suggested_company",
 }
 
 // Decode decodes InboxEmail from json.
@@ -39000,7 +39079,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode InboxEmail to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [3]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -39040,8 +39119,48 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"external_id\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
+		case "thread_id":
+			if err := func() error {
+				s.ThreadID.Reset()
+				if err := s.ThreadID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"thread_id\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -39053,7 +39172,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -39065,7 +39184,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -39077,7 +39196,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"subject\"")
 			}
 		case "body_text":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.BodyText = string(v)
@@ -39089,7 +39208,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_text\"")
 			}
 		case "body_html":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				v, err := d.Str()
 				s.BodyHTML = string(v)
@@ -39101,7 +39220,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_html\"")
 			}
 		case "received_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -39113,7 +39232,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 5
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -39193,9 +39312,10 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b11111111,
-		0b00000011,
+	for i, mask := range [3]uint8{
+		0b10000111,
+		0b00111111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -39535,6 +39655,30 @@ func (s *InboxMessage) encodeFields(e *jx.Encoder) {
 		e.Str(s.ExternalID)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
+		if s.ThreadID.Set {
+			e.FieldStart("thread_id")
+			s.ThreadID.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -39602,23 +39746,27 @@ func (s *InboxMessage) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxMessage = [16]string{
+var jsonFieldsNameOfInboxMessage = [20]string{
 	0:  "id",
 	1:  "source",
 	2:  "external_id",
-	3:  "from_addr",
-	4:  "from_name",
-	5:  "subject",
-	6:  "snippet",
-	7:  "body_text",
-	8:  "received_at",
-	9:  "read",
-	10: "status_signal",
-	11: "link_source",
-	12: "linked_slug",
-	13: "linked_company",
-	14: "suggested_slug",
-	15: "suggested_company",
+	3:  "direction",
+	4:  "to_addrs",
+	5:  "cc_addrs",
+	6:  "thread_id",
+	7:  "from_addr",
+	8:  "from_name",
+	9:  "subject",
+	10: "snippet",
+	11: "body_text",
+	12: "received_at",
+	13: "read",
+	14: "status_signal",
+	15: "link_source",
+	16: "linked_slug",
+	17: "linked_company",
+	18: "suggested_slug",
+	19: "suggested_company",
 }
 
 // Decode decodes InboxMessage from json.
@@ -39626,7 +39774,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode InboxMessage to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [3]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -39666,8 +39814,48 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"external_id\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
+		case "thread_id":
+			if err := func() error {
+				s.ThreadID.Reset()
+				if err := s.ThreadID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"thread_id\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -39679,7 +39867,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -39691,7 +39879,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -39703,7 +39891,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"subject\"")
 			}
 		case "snippet":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.Snippet = string(v)
@@ -39725,7 +39913,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_text\"")
 			}
 		case "received_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -39737,7 +39925,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 5
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -39817,9 +40005,10 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b01111111,
-		0b00000011,
+	for i, mask := range [3]uint8{
+		0b10000111,
+		0b00110111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

@@ -241,7 +241,7 @@ func (q *Queries) ListEmailsForRecall(ctx context.Context, arg ListEmailsForReca
 }
 
 const listJobEmails = `-- name: ListJobEmails :many
-SELECT id, source, from_addr, from_name, subject, status_signal, link_source,
+SELECT id, source, direction, to_addrs, cc_addrs, from_addr, from_name, subject, status_signal, link_source,
     received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1 AND job_id = $2
@@ -256,6 +256,9 @@ type ListJobEmailsParams struct {
 type ListJobEmailsRow struct {
 	ID           int64              `json:"id"`
 	Source       string             `json:"source"`
+	Direction    string             `json:"direction"`
+	ToAddrs      string             `json:"to_addrs"`
+	CcAddrs      string             `json:"cc_addrs"`
 	FromAddr     string             `json:"from_addr"`
 	FromName     string             `json:"from_name"`
 	Subject      string             `json:"subject"`
@@ -279,6 +282,9 @@ func (q *Queries) ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.Source,
+			&i.Direction,
+			&i.ToAddrs,
+			&i.CcAddrs,
 			&i.FromAddr,
 			&i.FromName,
 			&i.Subject,
