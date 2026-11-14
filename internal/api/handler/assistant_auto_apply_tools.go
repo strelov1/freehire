@@ -376,7 +376,7 @@ func projectAutoApplyList(live []db.ListAutoApplyEntriesRow, submitted []db.List
 	}
 	items := make([]autoApplyListItem, 0, len(live)+len(submitted))
 	for _, r := range live {
-		if _, submitted := submittedSlugs[r.PublicSlug]; submitted {
+		if _, wasSubmitted := submittedSlugs[r.PublicSlug]; wasSubmitted {
 			continue
 		}
 		status := autoapply.DeriveStatus(autoapply.DerivedFrom{

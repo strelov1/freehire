@@ -16,6 +16,9 @@ Reuse the existing auto-apply listing and status derivation behind the assistant
 `auto_apply_list` through an authenticated HTTP endpoint. The view is scoped to the caller;
 it is not an administrative list of all candidates. No migration is needed.
 
+If account volume calls for pagination, page the merged live and submitted projection
+end to end. A silent cap on only live attempts would hide applications again.
+
 ## View
 
 Show the vacancy, employer, readable status and last activity time, newest activity first.

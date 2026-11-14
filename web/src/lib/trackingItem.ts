@@ -6,14 +6,16 @@ export function trackingItem(id: string, application: TrackedApplication): MyJob
     id,
     job: application.job,
     added_to_board_at: null,
-    company_slug: application.job.company_slug ?? '',
+    company_slug: application.job.company_slug,
     role_title: application.job.title,
-    viewed_at: application.viewed_at ?? '',
+    viewed_at: application.viewed_at,
     saved_at: application.saved_at,
     applied_at: application.applied_at,
     stage: application.stage ?? null,
     notes: application.notes ?? null,
     email_count: application.emails.length,
+    // Listing-only aggregates are absent from the detail contract. Keep them unknown
+    // rather than reconstructing silence and activity from its bounded event history.
     last_activity_at: null,
     days_silent: null,
     silence_state: null,

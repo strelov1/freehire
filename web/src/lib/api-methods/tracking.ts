@@ -1,8 +1,8 @@
 import type { Http } from '../api-core';
 import type {
   AgentPermissions,
-  AutoApplyList,
   Allowance,
+  AutoApplyList,
   BankedAnswer,
   ListMeta,
   MyAnalysisItem,

@@ -1,9 +1,10 @@
 import { error, redirect } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
 import { signinUrl } from '#lib/signin.js';
 import { columnOf } from '#lib/board.js';
 import { ApiError } from '#lib/api.js';
 import { serverApi } from '#lib/server/api.js';
-import type { MyJob } from '#lib/types.js';
+import type { MyJob, TrackedApplication } from '#lib/types.js';
 import { loadBoard } from '#lib/server/tracking.js';
 import { trackingItem } from '#lib/trackingItem.js';
 import type { PageServerLoad } from './$types';
@@ -26,17 +27,19 @@ export const load: PageServerLoad = async ({ parent, params, url, fetch, request
   if (autoApply && !board?.some((row) => row.id === params.id)) {
     // A live attempt can outlast its board placement or fall outside the first page.
     // Read this application directly rather than silently opening the bare board.
-    let application;
+    let application: TrackedApplication;
     try {
       application = await serverApi(fetch, cookie).getTrackedApplication(params.id);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
-        redirect(302, `/jobs/${encodeURIComponent(params.id)}`);
+        redirect(302, resolve('/jobs/[slug]', { slug: params.id }));
       }
+      // The target is essential to this link. A bare board would hide its failed read;
+      // the shared 5xx error page offers Reload to retry the complete navigation.
       error(503, 'Could not load this application. Please try again.');
     }
     const item = trackingItem(params.id, application);
-    if (columnOf(item) === null) redirect(302, `/jobs/${encodeURIComponent(params.id)}`);
+    if (columnOf(item) === null) redirect(302, resolve('/jobs/[slug]', { slug: params.id }));
     if (board) board = [...board, item];
     else initialItem = item;
   }
