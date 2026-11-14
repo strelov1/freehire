@@ -78,7 +78,8 @@ func TestQueriesRepository(t *testing.T) {
 			t.Fatalf("seed cv: %v", err)
 		}
 		rec := directapply.Record{JobID: onSite, UserID: candidateID, CV: directapply.CVChoice{CVID: cvID}, Note: "hi",
-			Answers: []directapply.Answer{{ID: "q1", Label: "EU work permit?", Type: "boolean", Answer: "true"}}}
+			Answers: []directapply.Answer{{ID: "q1", Label: "EU work permit?", Type: "boolean", Answer: "true"}},
+			CVFile:  directapply.Attachment{Filename: "cv.pdf", ContentType: "application/pdf", Content: []byte("%PDF")}}
 		id, recorded, err := repo.Record(ctx, rec, 30)
 		if err != nil || !recorded {
 			t.Fatalf("Record = %d, %v, %v", id, recorded, err)

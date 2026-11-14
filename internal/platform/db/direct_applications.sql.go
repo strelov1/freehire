@@ -11,6 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countEmployerApplicationsByStage = `-- name: CountEmployerApplicationsByStage :many
+SELECT da.stage, count(*)::bigint AS applications
+FROM direct_applications da
+JOIN jobs j ON j.id = da.job_id
+WHERE j.created_by = $1::bigint
+  AND j.source = 'employer'
+  AND da.sent_at IS NOT NULL
+  AND ($2::text IS NULL OR j.public_slug = $2::text)
+GROUP BY da.stage
+`
+
+type CountEmployerApplicationsByStageParams struct {
+	EmployerID int64       `json:"employer_id"`
+	JobSlug    pgtype.Text `json:"job_slug"`
+}
+
+type CountEmployerApplicationsByStageRow struct {
+	Stage        string `json:"stage"`
+	Applications int64  `json:"applications"`
+}
+
+// How many delivered applications sit at each stage, under the same vacancy narrowing as
+// ListEmployerApplications but never its stage one: the inbox shows every stage's count
+// beside the stage it is filtered to. A stage with no application is absent.
+func (q *Queries) CountEmployerApplicationsByStage(ctx context.Context, arg CountEmployerApplicationsByStageParams) ([]CountEmployerApplicationsByStageRow, error) {
+	rows, err := q.db.Query(ctx, countEmployerApplicationsByStage, arg.EmployerID, arg.JobSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountEmployerApplicationsByStageRow{}
+	for rows.Next() {
+		var i CountEmployerApplicationsByStageRow
+		if err := rows.Scan(&i.Stage, &i.Applications); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDirectApplication = `-- name: GetDirectApplication :one
 SELECT id, sent_at,
        (sending_at IS NOT NULL AND sending_at >= now() - interval '2 minutes')::boolean AS sending
@@ -40,6 +84,127 @@ func (q *Queries) GetDirectApplication(ctx context.Context, arg GetDirectApplica
 	return i, err
 }
 
+const getEmployerApplicationCV = `-- name: GetEmployerApplicationCV :one
+SELECT c.filename, c.content_type, c.content
+FROM direct_application_cvs c
+JOIN direct_applications da ON da.id = c.application_id
+JOIN jobs j ON j.id = da.job_id
+WHERE c.application_id = $1
+  AND j.created_by = $2::bigint
+  AND j.source = 'employer'
+  AND da.sent_at IS NOT NULL
+`
+
+type GetEmployerApplicationCVParams struct {
+	ID         int64 `json:"id"`
+	EmployerID int64 `json:"employer_id"`
+}
+
+type GetEmployerApplicationCVRow struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Content     []byte `json:"content"`
+}
+
+// The CV file a delivered application sent, as the employer received it. No row for an
+// application that is not the employer's, and for one written before the copy was kept.
+func (q *Queries) GetEmployerApplicationCV(ctx context.Context, arg GetEmployerApplicationCVParams) (GetEmployerApplicationCVRow, error) {
+	row := q.db.QueryRow(ctx, getEmployerApplicationCV, arg.ID, arg.EmployerID)
+	var i GetEmployerApplicationCVRow
+	err := row.Scan(&i.Filename, &i.ContentType, &i.Content)
+	return i, err
+}
+
+const listEmployerApplications = `-- name: ListEmployerApplications :many
+
+SELECT da.id, j.public_slug AS job_slug, j.title AS job_title, u.email AS candidate_email,
+       da.cv_kind, da.note, da.answers, da.stage, da.stage_changed_at, da.sent_at,
+       EXISTS (SELECT 1 FROM direct_application_cvs c WHERE c.application_id = da.id) AS has_cv
+FROM direct_applications da
+JOIN jobs j ON j.id = da.job_id
+JOIN users u ON u.id = da.user_id
+WHERE j.created_by = $1::bigint
+  AND j.source = 'employer'
+  AND da.sent_at IS NOT NULL
+  AND ($2::text IS NULL OR j.public_slug = $2::text)
+  AND ($3::text IS NULL OR da.stage = $3::text)
+  AND ($4::bigint IS NULL OR da.id = $4::bigint)
+ORDER BY da.sent_at DESC, da.id DESC
+LIMIT $6::int OFFSET $5::int
+`
+
+type ListEmployerApplicationsParams struct {
+	EmployerID int64       `json:"employer_id"`
+	JobSlug    pgtype.Text `json:"job_slug"`
+	Stage      pgtype.Text `json:"stage"`
+	ID         pgtype.Int8 `json:"id"`
+	RowOffset  int32       `json:"row_offset"`
+	RowLimit   int32       `json:"row_limit"`
+}
+
+type ListEmployerApplicationsRow struct {
+	ID             int64              `json:"id"`
+	JobSlug        string             `json:"job_slug"`
+	JobTitle       string             `json:"job_title"`
+	CandidateEmail string             `json:"candidate_email"`
+	CvKind         string             `json:"cv_kind"`
+	Note           string             `json:"note"`
+	Answers        []byte             `json:"answers"`
+	Stage          string             `json:"stage"`
+	StageChangedAt pgtype.Timestamptz `json:"stage_changed_at"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	HasCv          bool               `json:"has_cv"`
+}
+
+// The employer's inbox. Every statement below reaches an application only through the
+// vacancy it was sent to, and only when that vacancy is the employer's own on-site posting
+// (created_by = employer AND source = 'employer') — the same ownership predicate the
+// employer's vacancy writes use (jobs_manual.sql). An application not yet delivered
+// (sent_at NULL) is not the employer's to see: they were never sent it, and it may still be
+// replaced by the candidate's retry. The vacancy is read from the base table, not jobs_read:
+// these are identity columns, not a posting read.
+// One page of the employer's delivered applications, newest first, optionally narrowed to
+// one vacancy and one stage — or to the one application `id` names, which is how a single
+// application is read. Reached through jobs_created_by_idx.
+func (q *Queries) ListEmployerApplications(ctx context.Context, arg ListEmployerApplicationsParams) ([]ListEmployerApplicationsRow, error) {
+	rows, err := q.db.Query(ctx, listEmployerApplications,
+		arg.EmployerID,
+		arg.JobSlug,
+		arg.Stage,
+		arg.ID,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmployerApplicationsRow{}
+	for rows.Next() {
+		var i ListEmployerApplicationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobSlug,
+			&i.JobTitle,
+			&i.CandidateEmail,
+			&i.CvKind,
+			&i.Note,
+			&i.Answers,
+			&i.Stage,
+			&i.StageChangedAt,
+			&i.SentAt,
+			&i.HasCv,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDirectApplicationSent = `-- name: MarkDirectApplicationSent :exec
 UPDATE direct_applications
 SET sent_at = now(), sending_at = NULL
@@ -65,7 +230,69 @@ func (q *Queries) ReleaseDirectApplication(ctx context.Context, id int64) error 
 	return err
 }
 
+const setDirectApplicationStage = `-- name: SetDirectApplicationStage :one
+WITH target AS (
+    SELECT da.id, da.user_id, da.job_id
+    FROM direct_applications da
+    JOIN jobs j ON j.id = da.job_id
+    WHERE da.id = $1
+      AND j.created_by = $2::bigint
+      AND j.source = 'employer'
+      AND da.sent_at IS NOT NULL
+    FOR UPDATE OF da
+), moved AS (
+    UPDATE direct_applications
+    SET stage = $3::text, stage_changed_at = now()
+    WHERE id = (SELECT target.id FROM target)
+      AND stage <> $3::text
+    RETURNING id
+)
+SELECT EXISTS (SELECT 1 FROM moved) AS changed,
+       t.user_id AS candidate_id, u.email AS candidate_email,
+       t.job_id, j.public_slug AS job_slug, j.title AS job_title, j.company
+FROM target t
+JOIN jobs j ON j.id = t.job_id
+JOIN users u ON u.id = t.user_id
+`
+
+type SetDirectApplicationStageParams struct {
+	ID         int64  `json:"id"`
+	EmployerID int64  `json:"employer_id"`
+	Stage      string `json:"stage"`
+}
+
+type SetDirectApplicationStageRow struct {
+	Changed        bool   `json:"changed"`
+	CandidateID    int64  `json:"candidate_id"`
+	CandidateEmail string `json:"candidate_email"`
+	JobID          int64  `json:"job_id"`
+	JobSlug        string `json:"job_slug"`
+	JobTitle       string `json:"job_title"`
+	Company        string `json:"company"`
+}
+
+// Moves a delivered application to a stage in the employer's pipeline and reports what the
+// move needs downstream: whether it changed anything (`changed` is false when it already
+// stood there, so a repeated click notifies nobody twice), and who the candidate is and
+// what they applied to. The row is locked first, so of two concurrent moves to the same
+// stage only one reports a change. No row: not the employer's.
+func (q *Queries) SetDirectApplicationStage(ctx context.Context, arg SetDirectApplicationStageParams) (SetDirectApplicationStageRow, error) {
+	row := q.db.QueryRow(ctx, setDirectApplicationStage, arg.ID, arg.EmployerID, arg.Stage)
+	var i SetDirectApplicationStageRow
+	err := row.Scan(
+		&i.Changed,
+		&i.CandidateID,
+		&i.CandidateEmail,
+		&i.JobID,
+		&i.JobSlug,
+		&i.JobTitle,
+		&i.Company,
+	)
+	return i, err
+}
+
 const upsertDirectApplication = `-- name: UpsertDirectApplication :one
+WITH app AS (
 INSERT INTO direct_applications (job_id, user_id, cv_id, cv_kind, note, answers, sending_at)
 SELECT $1, $2, $3, $4, $5, $6, now()
 WHERE EXISTS (
@@ -84,21 +311,33 @@ WHERE direct_applications.sent_at IS NULL
   AND (direct_applications.sending_at IS NULL
        OR direct_applications.sending_at < now() - interval '2 minutes')
 RETURNING id
+), cv AS (
+    INSERT INTO direct_application_cvs (application_id, filename, content_type, content)
+    SELECT app.id, $8, $9, $10 FROM app
+    ON CONFLICT (application_id) DO UPDATE
+    SET filename = EXCLUDED.filename, content_type = EXCLUDED.content_type, content = EXCLUDED.content
+)
+SELECT app.id FROM app
 `
 
 type UpsertDirectApplicationParams struct {
-	JobID      int64       `json:"job_id"`
-	UserID     int64       `json:"user_id"`
-	CvID       pgtype.UUID `json:"cv_id"`
-	CvKind     string      `json:"cv_kind"`
-	Note       string      `json:"note"`
-	Answers    []byte      `json:"answers"`
-	DailyLimit int64       `json:"daily_limit"`
+	JobID         int64       `json:"job_id"`
+	UserID        int64       `json:"user_id"`
+	CvID          pgtype.UUID `json:"cv_id"`
+	CvKind        string      `json:"cv_kind"`
+	Note          string      `json:"note"`
+	Answers       []byte      `json:"answers"`
+	DailyLimit    int64       `json:"daily_limit"`
+	CvFilename    string      `json:"cv_filename"`
+	CvContentType string      `json:"cv_content_type"`
+	CvContent     []byte      `json:"cv_content"`
 }
 
 // Records a candidate's application to an on-site vacancy and CLAIMS it for delivery
 // (sending_at), or replaces the content of one they recorded earlier that never reached the
-// employer — the retry after a failed delivery. See migration 0187.
+// employer — the retry after a failed delivery. See migration 0187. The CV file it sends is
+// copied into direct_application_cvs in the same statement (migration 0270), so the copy
+// the employer's inbox serves is always the one this attempt mails, never a stale one.
 //
 // Returns no row in exactly three cases, which GetDirectApplication tells apart afterwards:
 // the application was already SENT; another request holds a live claim on it (a delivery in
@@ -116,6 +355,9 @@ func (q *Queries) UpsertDirectApplication(ctx context.Context, arg UpsertDirectA
 		arg.Note,
 		arg.Answers,
 		arg.DailyLimit,
+		arg.CvFilename,
+		arg.CvContentType,
+		arg.CvContent,
 	)
 	var id int64
 	err := row.Scan(&id)

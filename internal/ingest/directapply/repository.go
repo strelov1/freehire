@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 var _ Repository = (*QueriesRepository)(nil)
@@ -81,13 +82,16 @@ func (r *QueriesRepository) Record(ctx context.Context, rec Record, dailyLimit i
 		answers = []byte(`[]`)
 	}
 	id, err := r.q.UpsertDirectApplication(ctx, db.UpsertDirectApplicationParams{
-		JobID:      rec.JobID,
-		UserID:     rec.UserID,
-		CvID:       pgtype.UUID{Bytes: rec.CV.CVID, Valid: !rec.CV.Resume},
-		CvKind:     rec.CV.kind(),
-		Note:       rec.Note,
-		Answers:    answers,
-		DailyLimit: dailyLimit,
+		JobID:         rec.JobID,
+		UserID:        rec.UserID,
+		CvID:          pgtype.UUID{Bytes: rec.CV.CVID, Valid: !rec.CV.Resume},
+		CvKind:        rec.CV.kind(),
+		Note:          rec.Note,
+		Answers:       answers,
+		DailyLimit:    dailyLimit,
+		CvFilename:    rec.CVFile.Filename,
+		CvContentType: rec.CVFile.ContentType,
+		CvContent:     rec.CVFile.Content,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -124,4 +128,116 @@ func (r *QueriesRepository) MarkSent(ctx context.Context, id int64) error {
 // Release drops a delivery claim after a failed send.
 func (r *QueriesRepository) Release(ctx context.Context, id int64) error {
 	return r.q.ReleaseDirectApplication(ctx, id)
+}
+
+var _ InboxRepository = (*QueriesRepository)(nil)
+
+// inboxApplication maps one ListEmployerApplications row.
+func inboxApplication(row db.ListEmployerApplicationsRow) (InboxApplication, error) {
+	var answers []Answer
+	if err := json.Unmarshal(row.Answers, &answers); err != nil {
+		return InboxApplication{}, fmt.Errorf("decode answers of application %d: %w", row.ID, err)
+	}
+	return InboxApplication{
+		ID:             row.ID,
+		JobSlug:        row.JobSlug,
+		JobTitle:       row.JobTitle,
+		CandidateEmail: row.CandidateEmail,
+		CVKind:         row.CvKind,
+		HasCV:          row.HasCv,
+		Note:           row.Note,
+		Answers:        answers,
+		Stage:          Stage(row.Stage),
+		StageChangedAt: pgconv.TimePtr(row.StageChangedAt),
+		SentAt:         row.SentAt.Time,
+	}, nil
+}
+
+// List reads one page of the employer's delivered applications.
+func (r *QueriesRepository) List(ctx context.Context, employerID int64, f InboxFilter) ([]InboxApplication, error) {
+	return r.list(ctx, db.ListEmployerApplicationsParams{
+		EmployerID: employerID,
+		JobSlug:    pgconv.Text(f.JobSlug),
+		Stage:      pgconv.Text(string(f.Stage)),
+		RowLimit:   f.Limit,
+		RowOffset:  f.Offset,
+	})
+}
+
+func (r *QueriesRepository) list(ctx context.Context, p db.ListEmployerApplicationsParams) ([]InboxApplication, error) {
+	rows, err := r.q.ListEmployerApplications(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]InboxApplication, len(rows))
+	for i, row := range rows {
+		if out[i], err = inboxApplication(row); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// Counts reads how many delivered applications sit at each stage.
+func (r *QueriesRepository) Counts(ctx context.Context, employerID int64, jobSlug string) (map[Stage]int64, error) {
+	rows, err := r.q.CountEmployerApplicationsByStage(ctx, db.CountEmployerApplicationsByStageParams{
+		EmployerID: employerID,
+		JobSlug:    pgconv.Text(jobSlug),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[Stage]int64, len(rows))
+	for _, row := range rows {
+		out[Stage(row.Stage)] = row.Applications
+	}
+	return out, nil
+}
+
+// Get reads one delivered application of the employer's.
+func (r *QueriesRepository) Get(ctx context.Context, employerID, id int64) (InboxApplication, error) {
+	apps, err := r.list(ctx, db.ListEmployerApplicationsParams{
+		EmployerID: employerID,
+		ID:         pgtype.Int8{Int64: id, Valid: true},
+		RowLimit:   1,
+	})
+	if err != nil {
+		return InboxApplication{}, err
+	}
+	if len(apps) == 0 {
+		return InboxApplication{}, ErrNotFound
+	}
+	return apps[0], nil
+}
+
+// CV reads the CV file a delivered application of the employer's sent.
+func (r *QueriesRepository) CV(ctx context.Context, employerID, id int64) (Attachment, error) {
+	row, err := r.q.GetEmployerApplicationCV(ctx, db.GetEmployerApplicationCVParams{ID: id, EmployerID: employerID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Attachment{}, ErrNotFound
+	}
+	if err != nil {
+		return Attachment{}, err
+	}
+	return Attachment{Filename: row.Filename, ContentType: row.ContentType, Content: row.Content}, nil
+}
+
+// SetStage moves a delivered application of the employer's to st.
+func (r *QueriesRepository) SetStage(ctx context.Context, employerID, id int64, st Stage) (StageMove, error) {
+	row, err := r.q.SetDirectApplicationStage(ctx, db.SetDirectApplicationStageParams{ID: id, EmployerID: employerID, Stage: string(st)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return StageMove{}, ErrNotFound
+	}
+	if err != nil {
+		return StageMove{}, err
+	}
+	return StageMove{
+		Changed:        row.Changed,
+		CandidateID:    row.CandidateID,
+		CandidateEmail: row.CandidateEmail,
+		JobID:          row.JobID,
+		JobSlug:        row.JobSlug,
+		JobTitle:       row.JobTitle,
+		Company:        row.Company,
+	}, nil
 }

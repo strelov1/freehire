@@ -708,16 +708,25 @@ type DictionaryGapDaily struct {
 }
 
 type DirectApplication struct {
-	ID        int64              `json:"id"`
-	JobID     int64              `json:"job_id"`
-	UserID    int64              `json:"user_id"`
-	CvID      pgtype.UUID        `json:"cv_id"`
-	Note      string             `json:"note"`
-	Answers   []byte             `json:"answers"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	SendingAt pgtype.Timestamptz `json:"sending_at"`
-	SentAt    pgtype.Timestamptz `json:"sent_at"`
-	CvKind    string             `json:"cv_kind"`
+	ID             int64              `json:"id"`
+	JobID          int64              `json:"job_id"`
+	UserID         int64              `json:"user_id"`
+	CvID           pgtype.UUID        `json:"cv_id"`
+	Note           string             `json:"note"`
+	Answers        []byte             `json:"answers"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	SendingAt      pgtype.Timestamptz `json:"sending_at"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	CvKind         string             `json:"cv_kind"`
+	Stage          string             `json:"stage"`
+	StageChangedAt pgtype.Timestamptz `json:"stage_changed_at"`
+}
+
+type DirectApplicationCv struct {
+	ApplicationID int64  `json:"application_id"`
+	Filename      string `json:"filename"`
+	ContentType   string `json:"content_type"`
+	Content       []byte `json:"content"`
 }
 
 // One freehire account bound to one Discord account, so cmd/discord-sync can keep the paid role in step with the subscription. Holds no token: the OAuth access token is used inside the callback request and never stored.

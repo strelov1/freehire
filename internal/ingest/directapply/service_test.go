@@ -229,6 +229,9 @@ func TestApply_DeliversToTheEmployerAndUpdatesTheCandidatesRecords(t *testing.T)
 	if len(h.repo.sent) != 1 {
 		t.Error("the delivered application is not stamped sent")
 	}
+	if rec := h.repo.records[1]; string(rec.CVFile.Content) != "%PDF" || rec.CVFile.Filename != "cv.pdf" {
+		t.Errorf("recorded CV file = %+v, want the file the employer was mailed", rec.CVFile)
+	}
 	if len(h.tracker.applied) != 1 || h.tracker.applied[0] != slug {
 		t.Errorf("tracking = %v, want the vacancy marked applied", h.tracker.applied)
 	}
