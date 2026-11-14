@@ -148,6 +148,9 @@ func (c *Client) meiliFacets(ctx context.Context, query string, filter any, face
 	if err != nil {
 		return rawFacets{}, err
 	}
+	for i := range alts {
+		alts[i].Text = wholeWords(alts[i].Text)
+	}
 	if len(alts) == 1 {
 		resp, err := c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
 			Filter:               filter,
@@ -203,6 +206,7 @@ func (c *Client) meiliDistinctCount(ctx context.Context, query string, filter an
 	if err != nil {
 		return 0, err
 	}
+	alts[0].Text = wholeWords(alts[0].Text)
 	if len(alts) != 1 {
 		return 0, fmt.Errorf("search: distinct count: %w: not available for an OR query", ErrBadQuery)
 	}

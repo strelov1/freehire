@@ -54,8 +54,8 @@ func TestSearchWithoutOperatorsSendsTodaysSingleRequest(t *testing.T) {
 	if _, err := c.Search(context.Background(), SearchParams{Query: "golang  rust", Limit: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if gotQuery != "golang  rust" {
-		t.Fatalf("query = %q, want q untouched", gotQuery)
+	if gotQuery != "golang  rust " {
+		t.Fatalf("query = %q, want q untouched but for its closing space", gotQuery)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestSearchSingleTitleAlternativeStaysSingleIndex(t *testing.T) {
 	if _, err := c.Search(context.Background(), SearchParams{Query: "title:\"product owner\"", Limit: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if gotQuery != "\"product owner\"" || !reflect.DeepEqual(got.AttributesToSearchOn, []string{"title"}) {
+	if gotQuery != "\"product owner\" " || !reflect.DeepEqual(got.AttributesToSearchOn, []string{"title"}) {
 		t.Fatalf("sent %q on %v, want \"product owner\" on [title]", gotQuery, got.AttributesToSearchOn)
 	}
 }
@@ -142,8 +142,8 @@ func TestFacetSearchWithoutOperatorsStaysSingleIndex(t *testing.T) {
 	if _, err := c.facetSearch(context.Background(), "golang", nil, []string{"source"}); err != nil {
 		t.Fatal(err)
 	}
-	if gotQuery != "golang" {
-		t.Fatalf("query = %q, want golang", gotQuery)
+	if gotQuery != "golang " {
+		t.Fatalf("query = %q, want \"golang \"", gotQuery)
 	}
 }
 
@@ -166,9 +166,44 @@ func TestSearchTreatsStoredTitlesAsLiteralText(t *testing.T) {
 			if got == nil || gotQuery == "" || len(got.AttributesToSearchOn) != 0 {
 				t.Fatalf("stored title became query syntax: %q %+v", gotQuery, got)
 			}
-			if title[0] == 't' && gotQuery != "title: Go Developer remote C# Full-stack" {
+			if title[0] == 't' && gotQuery != "title: Go Developer remote C# Full-stack " {
 				t.Fatalf("literal query=%q", gotQuery)
 			}
 		})
+	}
+}
+
+// A submitted query reads its last word as complete; a query still being typed asks for
+// the prefix match. See wholeWords for what the prefix cost.
+func TestSearchClosesTheLastWordUnlessAskedForAPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		prefix bool
+		want   string
+	}{{false, "data engineer "}, {true, "data engineer"}} {
+		var gotQuery string
+		c := &Client{facet: fakeSearchIndex{searchFn: func(_ context.Context, q string, _ *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+			gotQuery = q
+			return &meilisearch.SearchResponse{}, nil
+		}}}
+		if _, err := c.Search(t.Context(), SearchParams{Query: "data engineer", Prefix: tc.prefix, Limit: 10}); err != nil {
+			t.Fatal(err)
+		}
+		if gotQuery != tc.want {
+			t.Errorf("Prefix=%v sent %q, want %q", tc.prefix, gotQuery, tc.want)
+		}
+	}
+}
+
+func TestSearchClosesEveryOrAlternative(t *testing.T) {
+	var got *meilisearch.MultiSearchRequest
+	c := &Client{manager: fakeManager{multiFn: func(_ context.Context, r *meilisearch.MultiSearchRequest) (*meilisearch.MultiSearchResponse, error) {
+		got = r
+		return &meilisearch.MultiSearchResponse{}, nil
+	}}}
+	if _, err := c.Search(t.Context(), SearchParams{Query: "golang OR rust", Limit: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Queries) != 2 || got.Queries[0].Query != "golang " || got.Queries[1].Query != "rust " {
+		t.Fatalf("federated queries = %+v, want each closed", got.Queries)
 	}
 }

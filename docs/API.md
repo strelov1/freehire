@@ -1107,6 +1107,7 @@ Plus every filter in the "Filtering jobs" section.
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. The first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No exact-phrase matching. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
+| `q_prefix` | string | no | `true` lets the last word of `q` match as the start of a longer word (`data eng` finds `engineer`), for suggestions while someone is still typing. Off by default: the last word is read as complete, which is much faster on broad queries. (e.g. `true`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | string | no | Page size, 1–100. (e.g. `20`) |
@@ -1214,6 +1215,7 @@ dropped filter looks like a broad result.
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. The first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. `q_fields` narrows the other alternatives. No exact-phrase matching. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
+| `q_prefix` | string | no | `true` lets the last word of `q` match as the start of a longer word (`data eng` finds `engineer`), for suggestions while someone is still typing. Off by default: the last word is read as complete, which is much faster on broad queries. (e.g. `true`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | string | no | Page size, 1–100. (e.g. `20`) |

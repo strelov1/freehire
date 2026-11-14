@@ -9609,6 +9609,13 @@ export interface operations {
                  */
                 q_fields?: string;
                 /**
+                 * @description `true` lets the last word of `q` match as the start of a longer word (`data eng`
+                 *     finds `engineer`), for suggestions while someone is still typing. Off by default:
+                 *     the last word is read as complete, which is much faster on broad queries.
+                 *     (e.g. `true`)
+                 */
+                q_prefix?: string;
+                /**
                  * @description One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
                  *     relevance/newest. (e.g. `posted_at`)
                  */
@@ -12443,6 +12450,13 @@ export interface operations {
                  *     `meta.ignored_params`) rather than partially applying. (e.g. `title`)
                  */
                 q_fields?: string;
+                /**
+                 * @description `true` lets the last word of `q` match as the start of a longer word (`data eng`
+                 *     finds `engineer`), for suggestions while someone is still typing. Off by default:
+                 *     the last word is read as complete, which is much faster on broad queries.
+                 *     (e.g. `true`)
+                 */
+                q_prefix?: string;
                 /**
                  * @description One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
                  *     relevance/newest. (e.g. `posted_at`)
