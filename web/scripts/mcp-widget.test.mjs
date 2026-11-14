@@ -83,25 +83,83 @@ describe('MCP job-card actions over the host bridge', () => {
     expect(ui.status()).toBe('Saved to your freehire board.');
   });
 
-  it('changes the chosen stage only on explicit update and never overwrites notes', async () => {
+  it('keeps stage changes out of the widget', async () => {
     const ui = mount();
     await ui.tick();
-    const select = ui.window.document.querySelector('select');
-    expect(select).not.toBeNull();
-    expect(ui.button('Update stage')?.disabled).toBe(true);
-    select.value = 'interview';
-    select.dispatchEvent(new ui.window.Event('change'));
-    expect(ui.calls()).toHaveLength(0);
-    ui.button('Update stage').click();
-    expect(ui.calls()[0].params).toEqual({ name: 'track_job', arguments: { slug: job.slug, stage: 'interview' } });
-    expect(ui.button('Save job').disabled).toBe(true);
-    ui.answer(ui.calls()[0], {
-      structuredContent: { job_id: 42, stage: 'interview', notes: 'Existing private note' },
-      content: [],
+    expect(ui.window.document.querySelector('select')).toBeNull();
+    expect(ui.button('Update stage')).toBeUndefined();
+    expect(page).not.toContain('track_job');
+  });
+
+  it.each([false, true])('renders profile skill coverage from the host (text response: %s)', async (textOnly) => {
+    const ui = mount({ posting: { ...job, skills: ['go', 'sql', 'docker'] } });
+    await ui.tick();
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.calls()[0].params).toEqual({ name: 'get_profile', arguments: {} });
+    expect(ui.window.document.querySelector('.match')).toBeNull();
+    const profile = { skills: ['GO', 'sql'] };
+    ui.answer(
+      ui.calls()[0],
+      textOnly
+        ? { content: [{ type: 'text', text: JSON.stringify(profile) }] }
+        : { structuredContent: profile, content: [] },
+    );
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe('67% · 2/3 skills');
+    expect(ui.window.document.querySelector('.sr-only').textContent).toBe('Profile match: 67%, 2 of 3 skills');
+    expect(ui.window.document.querySelector('.match-fill').style.transform).toBe('translateX(-33%)');
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.button('Save job')).toBeDefined();
+  });
+
+  it('does not replace a newer tool error when an older profile read finishes', async () => {
+    const ui = mount({ posting: { ...job, skills: ['go'] } });
+    await ui.tick();
+    const profileCall = ui.calls()[0];
+    ui.receive({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: {
+        isError: true,
+        content: [{ type: 'text', text: 'Search failed' }],
+      },
+    });
+    ui.answer(profileCall, { structuredContent: { skills: ['go'] }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('#root').textContent).toBe('Search failed');
+    expect(ui.window.document.querySelector('.card')).toBeNull();
+  });
+
+  it.each([
+    [['rust'], '0% · 0/2 skills', '-100%'],
+    [['GO', 'sql'], '100% · 2/2 skills', '0%'],
+  ])('renders coverage endpoints for %j', async (skills, label, offset) => {
+    const ui = mount({ posting: { ...job, skills: ['go', 'sql'] } });
+    await ui.tick();
+    ui.answer(ui.calls()[0], { structuredContent: { skills }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe(label);
+    expect(ui.window.document.querySelector('.match-fill').style.transform).toBe('translateX(' + offset + ')');
+    ui.receive({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: { structuredContent: { jobs: [{ ...job, skills: ['go'] }] } },
     });
     await ui.tick();
-    expect(ui.status()).toBe('Stage updated to Interview.');
+    expect(ui.calls()).toHaveLength(1);
   });
+
+  it.each([{ isError: true }, { structuredContent: { skills: [] } }, { content: [] }])(
+    'omits match when a profile is unavailable: %j',
+    async (reply) => {
+      const ui = mount({ posting: { ...job, skills: ['go'] } });
+      await ui.tick();
+      ui.answer(ui.calls()[0], reply);
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match')).toBeNull();
+      expect(ui.window.document.body.textContent).toContain(job.title);
+    },
+  );
 
   it('shows a failed tool response as a failure and allows a deliberate retry', async () => {
     const ui = mount();
@@ -210,19 +268,6 @@ describe('MCP job-card actions over the host bridge', () => {
     expect(ui.calls()).toHaveLength(0);
   });
 
-  it('refuses a mismatched stage confirmation', async () => {
-    const ui = mount();
-    await ui.tick();
-    const select = ui.window.document.querySelector('select');
-    select.value = 'interview';
-    select.dispatchEvent(new ui.window.Event('change'));
-    ui.button('Update stage').click();
-    ui.answer(ui.calls()[0], { structuredContent: { job_id: 42, stage: 'preparing' }, content: [] });
-    await ui.tick();
-    expect(ui.status()).toContain('could not confirm');
-    expect(ui.button('Update stage').disabled).toBe(true);
-  });
-
   it('handles malformed content without losing pending-state control', async () => {
     const ui = mount();
     await ui.tick();
@@ -249,19 +294,6 @@ describe('MCP job-card actions over the host bridge', () => {
     ui.answer(ui.calls()[0], { structuredContent: { job_id: 42, saved_at: '2026-11-05T03:00:00Z' }, content: [] });
     await ui.tick();
     expect(ui.button('Saved')?.disabled).toBe(true);
-  });
-
-  it('uses the backend application-stage vocabulary', async () => {
-    const source = readFileSync(new URL('../../internal/application/userjob/stages.go', import.meta.url), 'utf8');
-    const body = source.match(/var Stages = \[\]string\{([^}]+)\}/s)?.[1];
-    expect(body).toBeDefined();
-    const expected = Array.from(body.matchAll(/"([^"]+)"/g), (match) => match[1]);
-    const ui = mount();
-    await ui.tick();
-    expect(Array.from(ui.window.document.querySelector('select').options, (option) => option.value)).toEqual([
-      '',
-      ...expected,
-    ]);
   });
 
   it('ignores responses from another frame', async () => {

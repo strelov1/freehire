@@ -304,7 +304,7 @@ that ignores `_meta.ui` sees exactly what it saw before.
 - **It is hand-written HTML, not a `web/` build, on purpose** — see
   `openspec/changes/archive/2026-10-20-chatgpt-app-widgets/design.md`. If it ever grows
   independent sign-in, complex forms or direct network requests, that is the point to
-  move it. Saving and stage controls use the host bridge and existing tools, not
+  move it. Saving and profile-match reads use the host bridge and existing tools, not
   another HTTP client or credential store.
 - **The URI is the page's hash.** Hosts cache by URI; editing the file changes it. Never
   hard-code the URI anywhere else.
@@ -315,16 +315,20 @@ that ignores `_meta.ui` sees exactly what it saw before.
 - **Safe text, no direct network requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
   `innerHTML` and friends and every network API; the CSP admits only
   `https://logo.freehire.me` images. A URL is used only when it is `https:`.
-- **Account actions are explicit host-mediated calls.** `Save job` calls `save_job`;
-  choosing a stage does nothing until `Update stage` calls `track_job`. Only the
-  selected slug and stage are sent, never notes. Controls require the host's
-  `serverTools` capability and never handle credentials. OAuth challenges point
-  back to the assistant's sign-in controls.
+- **Saving is an explicit host-mediated call.** `Save job` calls `save_job` with
+  only the selected slug, never notes. Controls require the host's `serverTools`
+  capability and never handle credentials. Stage editing stays in the tracking board
+  and assistant tools rather than the card.
+- **The match strip uses exact profile skill overlap**, like the website's
+  `JobMatchBar`: percentage and matched/total job skills, case-insensitive. One
+  host-mediated `get_profile` read serves the whole widget when a posting has skills.
+  No profile, no skills or an unavailable host read means no strip, never a fabricated
+  zero score. The profile response is not rendered; only the coverage is shown.
 - **Success needs a server confirmation.** The returned tracking record must have
-  a valid job id and saved timestamp or the exact requested stage. An unknown
+  a valid job id and saved timestamp. An unknown
   result or timeout locks writes until the person explicitly confirms their tracking
   board shows no change and chooses `I checked, allow retry`. Unlocking never sends
-  a request: Save or Update still needs its own click. Timed-out request ids are
+  a request: Save still needs its own click. Timed-out request ids are
   removed, so late replies cannot confirm a new operation. A confirmed refusal
   permits an explicit retry. Pending calls stay locked across
   result re-renders. `web/scripts/mcp-widget.test.mjs` drives the real embedded
