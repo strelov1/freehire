@@ -251,7 +251,7 @@ var blocks = map[string][]string{
 		// reaches into application (gmailsync) the way mentorship itself does for the
 		// calendar-write consent, so it is listed rather than left implicit.
 		"mentorship/busysync",
-		"notify", "nudge", "onboarding", "problemreport",
+		"inboxdigest", "notify", "nudge", "onboarding", "problemreport",
 		// ga4mp sends one sign-up event to Google Analytics from the server. It imports
 		// nothing but the standard library and is called by the auth handlers; it sits in
 		// engage because the event is a growth measurement, like prowelcome and referral.

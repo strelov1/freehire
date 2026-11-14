@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -44,6 +45,7 @@ func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Sett
 	}
 	return Settings{
 		Enabled:             row.Enabled,
+		InboxDigestEnabled:  row.InboxDigestEnabled,
 		Channels:            row.Channels,
 		DigestFrequency:     row.DigestFrequency,
 		DigestTime:          pgconv.DurationPtr(row.DigestTime),
@@ -72,6 +74,10 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 			digestTime = &t
 		}
 	}
+	if s.InboxDigestEnabled && digestTime == nil {
+		t := notify.DefaultDigestTime
+		digestTime = &t
+	}
 	hours := s.DigestIntervalHours
 	if hours == 0 {
 		hours = notify.DefaultIntervalHours
@@ -79,6 +85,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
 		UserID:              userID,
 		Enabled:             s.Enabled,
+		InboxDigestEnabled:  s.InboxDigestEnabled,
 		Channels:            s.Channels,
 		DigestFrequency:     freq,
 		DigestTime:          pgconv.Duration(digestTime),
@@ -91,6 +98,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 	}
 	return Settings{
 		Enabled:             row.Enabled,
+		InboxDigestEnabled:  row.InboxDigestEnabled,
 		Channels:            row.Channels,
 		DigestFrequency:     row.DigestFrequency,
 		DigestTime:          pgconv.DurationPtr(row.DigestTime),
@@ -133,4 +141,12 @@ func (r *QueriesRepository) UpsertReminder(ctx context.Context, userID, jobID in
 func (r *QueriesRepository) CancelReminder(ctx context.Context, userID, jobID int64) error {
 	_, err := r.q.CancelJobReminder(ctx, db.CancelJobReminderParams{UserID: userID, JobID: jobID})
 	return err
+}
+
+func (r *QueriesRepository) HasPaidPlan(ctx context.Context, userID int64) (bool, error) {
+	untils, err := r.q.GetPlanUntils(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now()).Paid(), nil
 }

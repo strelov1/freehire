@@ -578,6 +578,8 @@ type Querier interface {
 	// Claim a batch of live, unleased entries by stamping claimed_at; the lease predicate
 	// reclaims entries whose worker died. No jobs join: a missing job is a delete to send.
 	ClaimFacetdOutboxBatch(ctx context.Context, arg ClaimFacetdOutboxBatchParams) ([]ClaimFacetdOutboxBatchRow, error)
+	// Recheck live consent and recipient eligibility immediately before reserving the day.
+	ClaimInboxDigest(ctx context.Context, arg ClaimInboxDigestParams) (int64, error)
 	// The shared one-optional-letter-a-day claim (internal/engage/maildaily). Every sender of
 	// optional mail takes it before calling SES, so an account gets at most one such letter
 	// per UTC day whichever worker reaches it first. See migration 0248.
@@ -3026,6 +3028,9 @@ type Querier interface {
 	// grant actually covers what this caller wants to do with it. `status` is read too so a
 	// row already marked needs_reconsent can be treated as unusable without a second query.
 	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
+	// Retire the entire covered window on success, including overflow. Display only the newest
+	// message in each provider conversation; messages without a thread remain separate.
+	GetInboxDigestSnapshot(ctx context.Context, arg GetInboxDigestSnapshotParams) (GetInboxDigestSnapshotRow, error)
 	// One category's open count in the all-countries cell: every open canonical public
 	// posting of the category, whatever its seniority. No row means nothing open at either
 	// point; the caller serves zero.
@@ -4722,6 +4727,8 @@ type Querier interface {
 	// The LIGHT pool's half of ListInFlightHeavyRuns: identical query, opposite gate. See that
 	// query's header for why the fleet's claimed runs are counted apart by pool.
 	ListInFlightLightRuns(ctx context.Context, defaultTimeoutSec int32) ([]ListInFlightLightRunsRow, error)
+	// Filter due accounts before the limit; empty and non-due accounts cannot starve others.
+	ListInboxDigestCandidates(ctx context.Context, arg ListInboxDigestCandidatesParams) ([]ListInboxDigestCandidatesRow, error)
 	// The referrer inbox: open (sent) requests for every company the referrer has an approved
 	// offer for. Joins the request pool to the caller's approved offers on company_slug, and
 	// the catalogue for the company's display name (LEFT so a request survives an unknown
@@ -5885,6 +5892,7 @@ type Querier interface {
 	// Scoped to the company and to open rows, so a row the exact pass claimed in the meantime is
 	// left alone. The IS DISTINCT FROM guard makes a re-run free.
 	MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error)
+	MarkInboxDigestSent(ctx context.Context, arg MarkInboxDigestSentParams) (int64, error)
 	// Stamp a reward as placed on the referrer's balance. Guarded on the stamp being absent, so
 	// a repeat affects no rows. The credit itself carries an idempotency key on the provider's
 	// side, so the two guards fail in the same direction: never twice.
@@ -7067,6 +7075,8 @@ type Querier interface {
 	// usable destination on any configured channel) is retried promptly on a later
 	// pass instead of waiting out the lease.
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
+	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
+	ReleasePausedInboxDigest(ctx context.Context, arg ReleasePausedInboxDigestParams) error
 	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no
 	// usable destination on any configured channel) is retried promptly on a later pass
 	// instead of waiting out the lease.
