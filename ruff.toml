@@ -1,6 +1,6 @@
 # The one Ruff config for every tracked Python file: services/scrapling-fetch,
 # services/pii-filter, scripts/ and .github/scripts/. The version is pinned in .mise.toml
-# and in the python-lint job of .github/workflows/ci.yml.
+# and in the python-lint job of .github/workflows/lint.yml.
 #
 # Findings are fixed, not baselined: no per-file ignores and no broader rule set here.
 target-version = "py312"

@@ -83,7 +83,7 @@ func run() int {
 	// The catalogue-scale snapshot is a separate concern with its own failure mode, so
 	// it neither joins the rollups' transaction nor changes this run's exit code.
 	done := worker.Stage("catalogue snapshot")
-	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics))
+	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(analytics), db.New(pool))
 	done()
 
 	// So does the per-source snapshot behind the public /sources page, for the same
@@ -103,7 +103,7 @@ func run() int {
 
 // publish measures the catalogue and stores the snapshot every public surface reads.
 // Every failure here is logged and swallowed — see the call site.
-func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Queries) {
+func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q, writer *db.Queries) {
 	c, closeCache, err := snapshotCache(redisURL)
 	if err != nil {
 		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
@@ -142,7 +142,7 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q *db.Que
 		unique = resolveUniqueOpenJobs(previous, fresh, ferr)
 	}
 
-	if err := publishSnapshot(ctx, q, c, channels, unique); err != nil {
+	if err := publishSnapshot(ctx, q, c, writer, channels, unique); err != nil {
 		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
 		return
 	}

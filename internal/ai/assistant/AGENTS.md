@@ -95,7 +95,8 @@ POST /api/v1/assistant/sessions/:id/retry
 **Files.** `runner.go` is the loop and the event shapes; `tool.go` the tool
 contract, registry and strict argument decoding; `message.go` the stored-message
 encoding and its round trip to `[]llms.MessageContent`; `store.go` the
-owner-scoped persistence; `prompt.go` the per-preset system prompts.
+owner-scoped persistence; `prompt.go` the per-preset system prompts (the CV ones in
+`prompt_cv.go`, the interview ones in `prompt_interview.go`).
 
 **Unattended runs.** `POST /assistant/sessions/:id/autopilot` starts a tailoring pass
 that walks every requirement of the vacancy in ONE turn — searching the experience

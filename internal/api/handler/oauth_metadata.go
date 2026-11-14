@@ -60,9 +60,23 @@ type protectedResourceMetadata struct {
 // proxy here, since they describe the one resource. Mounted internally and proxied, same
 // reasoning as OAuthAuthorizationServerMetadata above.
 func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
+	return h.protectedResource(c, oauth2server.MCPResourcePath)
+}
+
+// OAuthAccountProtectedResourceMetadata is the same document for the saved
+// /api/v1/mcp/account URL. RFC 9728 §3.3 has the client compare `resource` with the URL it
+// derived the metadata URL from, so a client connected with that address is told that
+// address, not /api/v1/mcp. The path-inserted form proxies here from SvelteKit.
+func (h *authHandlers) OAuthAccountProtectedResourceMetadata(c *fiber.Ctx) error {
+	return h.protectedResource(c, oauth2server.MCPAccountResourcePath)
+}
+
+// protectedResource serves the document for one resource path. Each path used is one
+// CanonicalResource accepts, so the client can send the resource back on /authorize.
+func (h *authHandlers) protectedResource(c *fiber.Ctx, path string) error {
 	origin := h.frontendOrigin
 	return c.JSON(protectedResourceMetadata{
-		Resource:             strings.TrimSuffix(origin, "/") + oauth2server.MCPResourcePath,
+		Resource:             strings.TrimSuffix(origin, "/") + path,
 		AuthorizationServers: []string{origin},
 	})
 }

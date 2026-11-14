@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
-  import { Trash2, X, ExternalLink, Send, SquarePen, Check } from '@lucide/svelte';
+  import { Trash2, X, ExternalLink, Send, SquarePen } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { tailorHref } from '#lib/tailorHref.js';
   import { groupedStages, humanizeStage } from '#lib/stages.js';
@@ -21,13 +21,12 @@
   import NoteEditor from './NoteEditor.svelte';
   import { api } from '#lib/api.js';
   import JobDrawerMailRecall from './JobDrawerMailRecall.svelte';
-  import type { EmailBody } from '#lib/api.js';
+  import JobDrawerEmailList from './JobDrawerEmailList.svelte';
+  import AutoApplyProgress from './AutoApplyProgress.svelte';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { statusLabel, stageImplication } from '#lib/emailStatus.js';
+  import { statusLabel } from '#lib/emailStatus.js';
   import { eventLabel, eventTone } from '#lib/events.js';
-  import StatusChip from '#lib/components/StatusChip.svelte';
   import SkillChip from './SkillChip.svelte';
-  import { avatarInitials, avatarColor } from '#lib/avatar.js';
   import type {
     Job,
     MyJob,
@@ -39,7 +38,7 @@
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { autoApplyReviewBanner } from '#lib/autoApplyReview.js';
-  import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '#lib/autoApplyProgress.js';
+  import { autoApplyProgressSteps } from '#lib/autoApplyProgress.js';
   import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
   import { hasVisibleRows, pendingRows, type PendingAnswerRow } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
@@ -210,11 +209,6 @@
   // it calls MarkJobApplied. See openspec/changes/auto-apply-progress-tab/design.md.
   const autoApplied = $derived(events.some((e) => e.kind === 'applied' && e.source === 'auto_apply'));
   const progressSteps = $derived(autoApplyProgressSteps(autoApply?.status, autoApplied));
-  const PROGRESS_STEP_LABELS = $derived<Record<AutoApplyProgressStepId, string>>({
-    tailoring: s.progressSteps.tailoring,
-    review: s.progressSteps.review,
-    submitted: s.progressSteps.submitted,
-  });
 
   // The Pause/Continue marker (openspec/changes/auto-apply-progress-tab/design.md) is
   // purely a candidate-side reminder — it never reaches the server and has no effect on
@@ -338,9 +332,6 @@
   // panel is the one place that wants the posting, and it already makes this request for the
   // linked mail, so the description arrives on a call that was happening anyway.
   let posting = $state.raw<Job | null>(null);
-  let expandedId = $state<number | null>(null);
-  let expandedBody = $state.raw<EmailBody | null>(null);
-  let bodyLoading = $state(false);
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: s.tabs.application },
@@ -388,24 +379,6 @@
   $effect(() => {
     if (canSeeMail) untrack(() => void loadEmails());
   });
-
-  async function toggleEmail(id: number) {
-    if (expandedId === id) {
-      expandedId = null;
-      expandedBody = null;
-      return;
-    }
-    expandedId = id;
-    expandedBody = null;
-    bodyLoading = true;
-    try {
-      expandedBody = await api.getEmail(id);
-    } catch {
-      /* leave the row collapsed-open with no body; the list still shows */
-    } finally {
-      bodyLoading = false;
-    }
-  }
 
   // Meta pills (work arrangement, region, employment type, seniority) — only the
   // stated ones, reusing the list-card logic.
@@ -747,36 +720,7 @@
       {:else if tab === 'auto_apply'}
         <div class="flex flex-col gap-4">
           {#if progressSteps}
-            <ol class="flex items-center" aria-label={s.autoApplyProgressAria}>
-              {#each progressSteps as step, i (step.id)}
-                <li class="flex flex-1 items-center last:flex-none">
-                  <div class="flex flex-col items-center gap-1">
-                    <span
-                      class={cn(
-                        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium',
-                        step.state === 'done' && 'bg-brand text-brand-foreground',
-                        step.state === 'active' && 'bg-brand-muted text-brand-strong ring-2 ring-brand-ring',
-                        step.state === 'queued' && 'bg-muted text-muted-foreground ring-2 ring-border',
-                        step.state === 'error' && 'bg-destructive/15 text-destructive-strong',
-                        step.state === 'pending' && 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {#if step.state === 'done'}
-                        <Check class="size-3.5" />
-                      {:else if step.state === 'error'}
-                        <X class="size-3.5" />
-                      {:else}
-                        {i + 1}
-                      {/if}
-                    </span>
-                    <span class="text-xs font-medium whitespace-nowrap">{PROGRESS_STEP_LABELS[step.id]}</span>
-                  </div>
-                  {#if i < progressSteps.length - 1}
-                    <span class="mx-1 h-px flex-1 bg-border" aria-hidden="true"></span>
-                  {/if}
-                </li>
-              {/each}
-            </ol>
+            <AutoApplyProgress steps={progressSteps} />
           {/if}
 
           {#if canPauseAutoApply}
@@ -1034,67 +978,7 @@
           {:else if !emails || emails.length === 0}
             <p class="text-sm text-muted-foreground">{s.noEmailsLinked}</p>
           {:else}
-            {#each emails as e (e.id)}
-              <div class="overflow-hidden rounded-xl border border-border">
-                <button
-                  type="button"
-                  onclick={() => toggleEmail(e.id)}
-                  aria-expanded={expandedId === e.id}
-                  class="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent"
-                >
-                  <div
-                    class="mt-0.5 flex size-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
-                    style="background-color: {avatarColor(e.from_addr || e.from_name)}"
-                  >
-                    {avatarInitials(e.from_name, e.from_addr)}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-baseline gap-2">
-                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
-                      <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
-                    </div>
-                    <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
-                    {#if statusLabel(e.status_signal, locale())}
-                      <!-- The chip, and what its signal means for the stage. The chip alone left
-                           three different situations looking identical: the signal moved the
-                           stage, it named one only the candidate may apply, or it was never
-                           about progress.
-                           Both run at the chip's own size (text-xs) rather than at a 10px the
-                           wrapper used to impose: StatusChip renders a Badge, which carries its
-                           size, so pinning the wrapper smaller would leave the explanation off
-                           the chip's baseline — and this thread has the room the dense inbox
-                           list does not. -->
-                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-xs leading-4">
-                        <StatusChip signal={e.status_signal} />
-                        {#if stageImplication(e.status_signal, locale())}
-                          <span class="text-muted-foreground">{stageImplication(e.status_signal, locale())}</span>
-                        {/if}
-                      </span>
-                    {/if}
-                  </div>
-                </button>
-                {#if expandedId === e.id}
-                  <div class="border-t border-border p-3">
-                    {#if bodyLoading}
-                      <p class="text-sm text-muted-foreground">{s.loading}</p>
-                    {:else if expandedBody?.body_html}
-                      <!-- Untrusted sender HTML isolated in a sandboxed iframe (no scripts/forms/navigation). -->
-                      <iframe
-                        title={s.messageBodyTitle}
-                        sandbox=""
-                        srcdoc={expandedBody.body_html}
-                        class="h-96 w-full bg-white"
-                      ></iframe>
-                    {:else if expandedBody?.body_text}
-                      <pre
-                        class="max-h-96 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed">{expandedBody.body_text}</pre>
-                    {:else}
-                      <p class="text-sm text-muted-foreground">{s.noContent}</p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-            {/each}
+            <JobDrawerEmailList {emails} />
           {/if}
         </div>
       {:else}

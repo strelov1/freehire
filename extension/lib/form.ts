@@ -10,6 +10,7 @@
  */
 
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, RevealRequest, Upload } from './protocol';
+import type { AutofillProfile } from './freehire';
 import { countryLabel } from './labels';
 
 type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -882,4 +883,25 @@ function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: strin
 function dispatchNative(el: Fillable): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** The autofill profile as the label-keyed values `planLabelFills` fills from. */
+export function profileToValues(p: AutofillProfile): Record<string, string> {
+  return {
+    fullName: p.full_name,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    email: p.email,
+    phone: p.phone,
+    city: p.location,
+    linkedin: p.linkedin,
+    github: p.github,
+    portfolio: p.portfolio,
+    authorizedCountries: formatAuthorizedCountries(p.authorized_countries),
+    visaSponsorshipNeeded: p.visa_sponsorship_needed,
+    desiredSalary: p.desired_salary,
+    noticePeriod: p.notice_period,
+    willingToRelocate: p.willing_to_relocate,
+    age18OrOlder: p.age_18_or_older,
+  };
 }

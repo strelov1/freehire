@@ -2655,6 +2655,9 @@ type Querier interface {
 	// The moderator's lookup: one account by id, exact email (case-insensitive) or username,
 	// with its ban state. The query is matched against all three; an id only when numeric.
 	FindUserForModeration(ctx context.Context, arg FindUserForModerationParams) (FindUserForModerationRow, error)
+	// The smallest job id created on each UTC day. Ids are allocated in creation order, so this
+	// dates a row that no longer carries created_at (pruned_jobs) by the day its id falls in.
+	FirstJobIDPerDay(ctx context.Context) ([]FirstJobIDPerDayRow, error)
 	// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
 	// description. The caller groups these into buckets with the same normalized-title function the
 	// rest of the codebase uses (jobhash.RoleKey), then loads descriptions for the buckets that
@@ -3747,6 +3750,16 @@ type Querier interface {
 	// alias of it counts: the person added the company under its old spelling. An alias slug a
 	// company row still holds is its own company, as in the reads above, and does not count.
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
+	// When the log begins (job_changes_at_idx). NULL while it is empty.
+	JobChangesAvailableSince(ctx context.Context) (pgtype.Timestamptz, error)
+	// Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+	// recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+	// flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+	// logged later has a lower xid), and neither is the committed minimum alone: a writer still
+	// open here may commit before the page query takes its snapshot. Computing both together means
+	// no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+	// repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
+	JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -4239,6 +4252,9 @@ type Querier interface {
 	// Every slug already elected canonical. The merge worker holds these out of a new election,
 	// which is what "frozen" means in practice.
 	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
+	// The whole catalogue-size series, oldest first: one row a day, so it stays small. Days with
+	// no row are absent, not zero.
+	ListCatalogSize(ctx context.Context) ([]ListCatalogSizeRow, error)
 	// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
 	// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
 	// A board that has succeeded at least once is measured from last_success_at; one that never has
@@ -4758,6 +4774,20 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
+	// One keyset page of the public change feed, oldest first, after the (xid, id) position
+	// the caller holds. The walk is job_changes_xid_id_idx; each entry is joined to its job by
+	// primary key, so the cost of a page is its limit, never the size of the log or of jobs.
+	//
+	// Only entries whose transaction is finished are served: xid below the oldest in-flight
+	// transaction (pg_snapshot_xmin). An entry can therefore never commit behind a cursor a
+	// client already holds. Ordering by id alone would not give that, because ids are taken
+	// inside the trigger, long before a bulk close commits.
+	//
+	// Visibility was judged when the change was logged (migration 0264: canonical, public, open
+	// all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+	// that is private NOW serves only `closed` entries. Those carry just a slug the client was
+	// already given while it was public, and withholding them would leave the copy listed.
+	ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error)
 	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
 	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
 	// the owner itself is included (it is one of the openings). Ordered by location.
@@ -5662,6 +5692,10 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// Per UTC day, how many listed postings (catalogstats' predicate minus closed_at) were
+	// created and how many closed, for the one-off history reconstruction. A full scan: run it
+	// on the analytics replica, never on a request path.
+	ListedJobDailyFlow(ctx context.Context) ([]ListedJobDailyFlowRow, error)
 	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
 	LockAssistantSessionCreation(ctx context.Context, userID int64) error
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
@@ -5884,11 +5918,9 @@ type Querier interface {
 	// Locking and the compare-and-set: see CloseUnseenJobs. `locked` reads the strike count from the
 	// LOCKED activity row, the one value every writer keeps current.
 	//
-	// Release A writes the count to BOTH places: job_activity explicitly, and the legacy jobs column
-	// for readers older than release A. The one-way bridge fires only when the legacy value CHANGES,
-	// and while writers move to job_activity the legacy value goes stale, so a computed count that
-	// happens to equal the stale legacy one would never reach job_activity through it. Both writes
-	// carry the same value, so the bridge firing as well is idempotent.
+	// The strike count lives only in job_activity (release B); jobs carries none. The statement still
+	// stamps jobs.updated_at on every strike, as it always has, and closes the row once the threshold
+	// is reached.
 	// FROM bumped, not FROM locked: the data dependency makes the activity write happen before the jobs
 	// write (and before the triggers that jobs write fires), instead of relying on the order Postgres
 	// happens to run independent data-modifying CTEs in.
@@ -6088,10 +6120,38 @@ type Querier interface {
 	// since the point is to compare them with the mailed ones. A granted tier is deliberately
 	// not here: it is not a payment (see ObserveCVLifecycleEntitled).
 	ObserveCVLifecyclePaid(ctx context.Context, windowDays int32) (int64, error)
+	// The crawl's observation of one posting, written to job_activity: the SECOND command of every
+	// full write (job.Upsert) and of the full TouchJob, in the transaction that wrote the jobs row.
+	// jobs first, activity second is the global lock order, and a separate command (not a CTE of the
+	// write) is what makes the row visible: the insert trigger creates the activity row AFTER the
+	// insert statement's snapshot, so a same-statement CTE cannot see it.
+	//
+	// last_seen_at never moves backwards (GREATEST with the stored value: a release-A writer or a
+	// clock skew between hosts must not age a row that was just seen). hydrated_at advances only when
+	// the write READ a body (body_read); a NULL stays NULL otherwise, which is how a raw, manual or
+	// private row keeps "never checked". liveness_strikes is cleared only when the caller says so
+	// (reset_strikes): a reopen is reset by the state trigger, so this is for the one case the
+	// trigger cannot see, a full touch of an expired posting that stays closed. state_version is
+	// never touched: an observation must not fence another observation.
+	//
+	// :execrows because exactly one row is the invariant (the insert trigger gives every job its
+	// row); the caller treats any other count as an error instead of silently dropping the stamp.
+	ObserveJobActivity(ctx context.Context, arg ObserveJobActivityParams) (int64, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
 	ObserveLearnedDomain(ctx context.Context, domain string) (int32, error)
+	// Every open posting's title for a batch of folded company keys (normalize.CompanyKey) —
+	// cmd/catalog-coverage matches an outside sample against these by jobhash.RoleKey. Duplicates
+	// are kept on purpose: a posting we hold twice is still one we hold. Private postings (a
+	// user's pasted JD) are not catalogue. Served by
+	// jobs_open_company_slug_folded_col_idx, whose predicate the last two conditions repeat: drop
+	// one and the planner scans the whole table.
+	OpenJobTitlesByFoldedCompany(ctx context.Context, companyKeys []string) ([]OpenJobTitlesByFoldedCompanyRow, error)
+	// One board's open postings: the namespaced id (whose native part an apply link to the posting
+	// carries) and the title. board_pattern is externalid.BoardPattern of the stored board name, so
+	// the (source, external_id text_pattern_ops) index serves it as a range scan.
+	OpenJobsOnBoard(ctx context.Context, arg OpenJobsOnBoardParams) ([]OpenJobsOnBoardRow, error)
 	// Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
 	// turns into candidate ATS boards. A company qualifies when it has an open posting from one
 	// of the REQUESTED aggregators and no open posting from any source outside the FULL
@@ -6270,6 +6330,8 @@ type Querier interface {
 	// The `count = 1` condition is what makes this safe: a phrase two people have searched
 	// survives however old it is, so a seasonal query does not vanish between seasons.
 	PruneSearchQueries(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	// Every pruned posting's id and the day it was deleted, for the history reconstruction.
+	PrunedJobIDs(ctx context.Context) ([]PrunedJobIDsRow, error)
 	// Depth and age only: this queue carries neither attempts nor failed_at, because
 	// DeletePushTickets removes a ticket on every terminal receipt outcome and an
 	// unprocessed batch (Expo unreachable) simply stays queued for the next run. There is no
@@ -6423,6 +6485,9 @@ type Querier interface {
 	// Burns the step after a definite send failure: the row stays, with the error, and the
 	// step is never retried on its own — re-arming one is a deliberate DELETE.
 	RecordCVLifecycleSendError(ctx context.Context, arg RecordCVLifecycleSendErrorParams) error
+	// Store one day's measured catalogue size. Replaces whatever the day held, a reconstructed
+	// estimate included: a measurement always beats a reconstruction.
+	RecordCatalogSize(ctx context.Context, arg RecordCatalogSizeParams) error
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from
 	// spending a bounded budget twice.
@@ -6571,6 +6636,11 @@ type Querier interface {
 	// file for the distinction.
 	RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error
 	RecordProblemReport(ctx context.Context, arg RecordProblemReportParams) (RecordProblemReportRow, error)
+	// Fill the days before the catalogue was first measured. A day already holding a row keeps
+	// it, so a rerun does not move the past it already published. Days from the first measured
+	// one on are left alone even when a run was missed: reconstructed days stay one leading run,
+	// before every measurement, which is what lets a reader tell the estimate from the record.
+	RecordReconstructedCatalogSize(ctx context.Context, arg RecordReconstructedCatalogSizeParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
@@ -6799,16 +6869,35 @@ type Querier interface {
 	// {other} or a retired vocabulary value) simply produces no rows here and reads as
 	// '{}' below, with no special case.
 	RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error)
+	// RefreshCoveredJobs for ONE posting, the retry of a row the bulk statement could not write. It
+	// is an autocommit statement WITHOUT SKIP LOCKED: it waits for the writer that held the row,
+	// under the caller's deadline, holding nothing else while it waits. No row = the posting is
+	// closed, private or absent (pgx.ErrNoRows, a no-op as for the bulk statement). refreshed = true:
+	// stamped. refreshed = false: the state fence moved while it waited; the statement has ended, so
+	// the lock is gone, and the caller runs one fresh statement, a few times at most, and reports an
+	// error if it keeps losing rather than recording the company as seen.
+	RefreshCoveredJob(ctx context.Context, arg RefreshCoveredJobParams) (RefreshCoveredJobRow, error)
 	// Liveness refresh for the postings an aggregator board listed but the coverage gate kept out
 	// of the write path (pipeline.CoveredRefresher): the employer is already crawled first-hand, so
 	// nothing is written — but a row stored before that began must not be left with the
 	// last_seen_at of its last write, or it stays open whether or not the aggregator still lists it
 	// (4dayweek, 2026-10-30: 17,306 of 23,046 open rows unseen for a week, 98% of them covered).
-	// last_seen_at is the ONLY column written, for RefreshUnchangedJob's reason: it is in no index,
-	// so the update is heap-only. Open rows only, and never a reopen: reopening is a write the gate
-	// has already declined. An id the catalogue does not hold matches nothing. RETURNING
-	// company_slug so the caller puts the company in the sweep's crawled scope, as TouchJob does.
-	RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]string, error)
+	// last_seen_at is job_activity's, and it is the ONLY thing written: no jobs tuple is touched or
+	// locked. Open, public rows only, and never a reopen: reopening is a write the gate has already
+	// declined. An id the catalogue does not hold, or holds closed or private, comes back as no row.
+	//
+	// One row per listed posting with its outcome: refreshed = false is a row this chunk could not
+	// write, and the caller retries just those with RefreshCoveredJob.
+	//   * SKIP LOCKED: a bulk statement waiting for activity rows, in plan order, can close a cycle
+	//     with an unsorted multi-row writer of jobs (the dedup and close passes lock the activity row
+	//     through the state trigger in plan order). A refresher that never waits is never a victim
+	//     and never makes the writer one.
+	//   * Fenced like every activity-only write: the snapshot version in `hit`, the latest version
+	//     in the sorted locking `locked`, compared in the UPDATE. A locking select INSIDE `hit` would
+	//     return the post-wait version and defeat the fence.
+	// company_slug rides along so the caller puts the company in the sweep's crawled scope, as
+	// TouchJob does, but only for the rows that were refreshed.
+	RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]RefreshCoveredJobsRow, error)
 	// The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
 	// posting identical to the stored row refreshes its liveness and writes NOTHING else. Matching
 	// nothing (pgx.ErrNoRows) is the signal to run the full upsert — which is also what a brand-new
@@ -6818,8 +6907,10 @@ type Querier interface {
 	// tuple — re-TOASTing a ~2.5KB description and touching every index on the table — to move a
 	// timestamp.
 	//
-	// last_seen_at is the ONLY column written, and it is deliberately in no index, so the update is
-	// heap-only and maintains none of them.
+	// The ONLY write is to job_activity (last_seen_at and hydrated_at); the jobs tuple is read,
+	// never written and never locked, which is what the split is for. The match key is read from jobs
+	// in `hit`; the target of the UPDATE is the activity row, so a writer that changed the row while
+	// this statement waited for the activity lock is detected by state_version (see FENCE below).
 	//
 	// updated_at is deliberately NOT stamped, so the column comes to mean "content last changed"
 	// rather than "last crawled". Two live readers see that: the jobs sitemap serves it as <lastmod>
@@ -6875,18 +6966,23 @@ type Querier interface {
 	// that cannot fetch a posting's detail drops the posting rather than writing a body-less row
 	// (echojobs.FetchNew, workday.detail) — and that the body was identical to the stored one,
 	// which is precisely the case a staleness check over updated_at would misread as never-read.
-	// Like last_seen_at it is in no index, so the update stays heap-only.
+	//
+	// FENCE. A refresh that waits for the activity row (a closer, a content write, a metadata
+	// rekey holds it) is re-evaluated on the LATEST version of that row but against the SNAPSHOT of
+	// jobs, so a predicate on jobs cannot notice the change. job_activity.state_version is bumped by
+	// the state trigger (migration 0258) on every write to a column this match key reads, so
+	// comparing it with the version read in the same snapshot catches exactly that. A snapshot hit
+	// the fence rejected comes back with fenced = true and writes and enqueues nothing; no row at
+	// all means nothing matched (pgx.ErrNoRows, the signal for the full upsert). A fenced statement
+	// has ALREADY locked the activity row and keeps the lock to the end of its transaction, so the
+	// caller must roll back and retry from a fresh transaction; falling through to UpsertJob in the
+	// same one takes the jobs tuple after the activity row, the reverse of the global lock order.
 	//
 	// One thing IS queued: a canonical posting re-seen after search had withheld it for going
 	// unseen (search.Withheld). Its content is unchanged, but its document was removed, so the
 	// drain must bring it back; prev carries the last_seen_at the update replaces. The cutoff is
 	// search.UnseenWindow, the shortest window — a source with a longer one gets a harmless
 	// extra push.
-	// Lock order: `prev` locks the jobs row and then the activity row, FOR NO KEY UPDATE, and the UPDATE
-	// joins it, so both are held before the statement queues anything. Release A took the activity row
-	// last, through the legacy bridge trigger at the end of the statement, AFTER the search_outbox write
-	// below; a writer that takes the activity row first and then queues (release B) interleaved with it
-	// and the two deadlocked. A row without an activity row does not match this cheap path.
 	RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error)
 	// Dynamic client registration (RFC 7591). client_id is server-generated, random,
 	// and not a secret — it identifies the client, it does not authenticate it (PKCE
@@ -7045,13 +7141,8 @@ type Querier interface {
 	RequeueTelegramPost(ctx context.Context, arg RequeueTelegramPostParams) (int64, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
-	// already-clean job does not churn the row or lock it.
-	//
-	// The guard reads job_activity, the current count, and both places are written (see
-	// MarkLivenessExpired for why): a legacy column that is already 0 while job_activity holds 4 must
-	// still reset job_activity, and the bridge would not fire for a legacy 0 -> 0. The legacy column is
-	// written only when it is not already 0, so the wide jobs tuple is untouched in that case. Locking:
-	// see CloseUnseenJobs.
+	// already-clean job does not churn the row or lock it. The count is job_activity's, so this
+	// writes that row alone: the jobs tuple is neither written nor locked.
 	ResetLivenessStrikes(ctx context.Context, id int64) error
 	// Complete a reset-by-emailed-code: set the new hash, revoke every session, and mark
 	// the address verified — receiving the code IS proof of control, so a reset doubles as
@@ -7991,18 +8082,40 @@ type Querier interface {
 	// FOR NO KEY UPDATE, not FOR UPDATE: a foreign-key child insert (enrichment_outbox, apply_forms,
 	// search_outbox) holds KEY SHARE on this tuple while a toucher already holds other locks of its
 	// own, and FOR UPDATE conflicts with KEY SHARE (a deadlock waiting to happen); a plain UPDATE's
-	// lock does not, and it is all this statement needs. The jobs tuple AND the activity row are locked
-	// here, in that order, before anything is queued: release A still writes the legacy columns and its
-	// one-way bridge would take the activity row only at the end of the statement, AFTER the
-	// search_outbox writes below, while a writer that locks the activity row first and then queues
-	// (release B) deadlocks with that. last_seen_at, the previous stamp the withheld-then-seen requeue
-	// compares, is the locked activity row's.
+	// lock does not, and it is all this statement needs. The jobs tuple is locked first and the
+	// activity row second (the global lock order), and BOTH before any write of this statement: the
+	// state trigger takes the activity row only when a fenced column flips, so an unchanged open
+	// posting would otherwise queue its search_outbox entry (returned_queued) while holding no activity
+	// lock, and a TouchOpenJob that holds the activity row and waits for that entry would deadlock with
+	// the ObserveJobActivity this caller runs next. last_seen_at, the previous stamp the
+	// withheld-then-seen requeue compares, is read from the locked activity row. A job with no
+	// activity row matches nothing (the insert trigger gives every job one; ObserveJobActivity treats
+	// its absence as an error as well). This is the FULL touch: the ordinary re-listing of an open,
+	// unexpired posting takes TouchOpenJob and never reaches the jobs tuple at all.
 	// A touch writes no content, so a posting closed under an older dictionary would reopen
 	// carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
 	// deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
 	// the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
 	// crawl to retry instead of open on stale facets. reopened is the transition this call made.
+	//
+	// This statement writes lifecycle only. The observation itself (last_seen_at) is job_activity's:
+	// the caller stamps it with ObserveJobActivity in the same transaction, AFTER this statement, so
+	// the lock order is jobs then activity, and not when the touch was deferred. reset_strikes says
+	// whether that stamp must also clear the strike count: the old row was closed. A reopen is reset
+	// by the state trigger already; this covers the posting an expired deadline leaves closed.
 	TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error)
+	// The ordinary touch of a hydrating source's re-listed posting: it is open and its deadline has
+	// not passed, so the crawl's sighting changes no lifecycle state and the only write is
+	// job_activity.last_seen_at. The jobs tuple is read, never written and never locked. Anything else
+	// (closed, expired, absent, or a changed listing deadline) matches nothing and the caller runs
+	// the full TouchJob. An unchanged stated deadline stays on this activity-only path.
+	// A posting search had withheld for going unseen is queued back, as TouchJob does.
+	//
+	// Fenced exactly as RefreshUnchangedJob is (read its FENCE note): a lifecycle or content change
+	// committed while this statement waited for the activity row makes it write nothing and return
+	// fenced = true. It is an autocommit statement, so its lock is gone when it returns, and the
+	// full TouchJob that follows holds nothing from it.
+	TouchOpenJob(ctx context.Context, arg TouchOpenJobParams) (TouchOpenJobRow, error)
 	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
 	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be
 	// marked as the owner's own). Unauthenticated read — the token IS the credential, and it grants
@@ -8419,6 +8532,10 @@ type Querier interface {
 	// id, the identity the sweep scope and the index-push gate need, and whether the write left the
 	// row closed; one that needs the whole row (linkimport builds a search document) re-reads it
 	// through GetJob, which reads the jobs_read view.
+	// reset_strikes: the row was closed before this write (PostgreSQL 18 RETURNING old). The old statement
+	// cleared the strike count whenever it overwrote a closed row, including one an expired deadline
+	// leaves closed; the state trigger covers only the closed-to-open flip, so the caller passes this to
+	// ObserveJobActivity and the exception stays exact without another query.
 	UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error)
 	// Schedule a one-shot reminder for a saved job, or replace the pending one if the
 	// job is re-saved with a new choice. The arbiter is the partial unique index on

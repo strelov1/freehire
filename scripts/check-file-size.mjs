@@ -10,7 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 
-const MAX_TOKENS = 15000;
+const MAX_TOKENS = 12500;
 
 // Files nobody writes by hand: lockfiles, generated code, binary or data assets and frozen
 // history (archived specs, old plans and reviews).

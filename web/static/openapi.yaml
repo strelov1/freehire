@@ -3,7 +3,11 @@
   "info": {
     "title": "freehire public API",
     "version": "1.1.0",
-    "description": "Public, read-only freehire API: search IT jobs, read the live filter\nvocabulary, inspect job and company details, and find similar jobs. Every\noperation here answers without a key; an API plan's key only raises the rate\nlimit. Keyless use is for personal and non-commercial use — showing the\npostings in a product you offer to others needs an API plan (see the\n[data licence](https://freehire.me/terms#data-licence)). The authenticated tracking surface\n(saved jobs, application stages, CV tooling) is deliberately excluded — this\nschema is the integration contract for search, and is also what the freehire\ncustom GPT imports as an Action.\n\n## Filter grammar\n\nFacet parameters are **repeatable**, and the same grammar applies to all of\nthem:\n\n* `?skills=go&skills=kubernetes` — values of one facet are **ORed**: match\n  either.\n* `?skills=go&skills=kubernetes&skills_mode=and` — `<facet>_mode=and` flips\n  that facet to **AND**: match both. Not available for geography (see below).\n* `?source_exclude=adzuna` — `<facet>_exclude` removes matches. **Every**\n  string facet in this schema declares its `_exclude` twin.\n* Different facets **AND** together: `?work_mode=remote&seniority=senior` is\n  remote *and* senior.\n\n## Geography is one OR-group\n\n`regions`, `countries`, `cities` and `metros` name a single concept — *where* — so\ntheir values join into **one OR-group** instead of intersecting.\n`?countries=gb&cities=London` therefore returns *United Kingdom **or**\nLondon*, which is **wider** than `?countries=gb` alone — not narrower. To\nsearch one place, name only that place.\n\nPicking two places reading as \"either\" is what makes\n`?regions=eu&countries=br` (\"Europe or Brazil\") useful. There is no AND to\nswitch on: `<facet>_mode=and` does not apply to these three.\n\n`?regions=none` is a reserved value that selects postings with **no resolved\ngeography**, rather than a real region code.\n\n## Resolve values before filtering\n\n`skills`, `countries`, `cities`, `category`, `source`,\n`company_slug` and `collections` are open or large vocabularies. Call\n`getJobFacets` (or `searchCities` for a city) to discover canonical values\nwith live counts. The `cities` filter also accepts recognized dictionary\naliases such as `München` and resolves them to the canonical facet value;\n`searchCities` remains useful for discovering or disambiguating a city.\nUnknown values are not an error; they simply match nothing.\n\n## API plans\n\nThe read API is available without a key for personal and non-commercial use.\nAn API plan licenses the data for use in your product — see the\n[data licence](https://freehire.me/terms#data-licence).\nA full-access API key (`fhk_…`) or OAuth access token (`fhm_…`) identifies\nyour account when sent as `Authorization: Bearer <token>`.\n\n## Please say who you are\n\nNot required, not validated, and nothing behaves differently without it —\nevery caller gets the same answers. It is a request.\n\nSend a `User-Agent` naming your project:\n\n```\nacme/job-sync/1.4 (+https://github.com/acme/job-sync)\n```\n\n`owner/project` is the part that matters; the version and contact URL are\nuseful if you have them. What it buys you is a message before a limit or a\nfield changes, instead of a `429` as first notice — a default library\nuser-agent is indistinguishable from a thousand others, so there is nobody\nto warn.\n\nIf identification ever gates anything, it will be through a key we issue,\nnot a string you set yourself.\n\n## An unknown PARAMETER is dropped, and says so\n\nA parameter no filter reads is ignored rather than refused, so old saved\nsearches and shared links keep working. The cost is that `?country=it` —\nsingular, and not the facet's name — returns the entire catalogue, which\nlooks exactly like a search that legitimately matched everything.\n\nSo the response tells you. `meta.ignored_params` lists what was thrown away,\nwith `did_you_mean` when the miss was only grammatical number:\n\n```json\n\"meta\": {\n  \"total\": 1475149, \"limit\": 10, \"offset\": 0,\n  \"ignored_params\": [\n    { \"param\": \"country\", \"did_you_mean\": \"countries\" },\n    { \"param\": \"skil\" }\n  ]\n}\n```\n\n**Check it before trusting a filtered result.** The key is absent on a clean\nrequest, never `[]`, so its presence alone is the signal. `searchJobs`,\n`agentSearchJobs`, `searchCompanies` and `getJobFacets` all report — and\n`getJobFacets` grows a `meta` block it otherwise does not have. The report is\ncapped at ten entries.\n\n`searchCompanies` checks against its OWN vocabulary: a jobs facet sent there\n(`?seniority=senior`) is a real facet name, but not one company search reads,\nso it is ignored and reported.\n\n## An unknown VALUE of a closed facet narrows to nothing, and says so\n\nFacets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,\n`category`, `employment_type`, `education_level`, `company_type`,\n`company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,\n`source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `engagement`, `skills` and the boolean facets) still\napply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads\nexactly like an empty market. `meta.ignored_values` names such values per\nparameter (the `_exclude` form under its own name):\n\n```json\n\"meta\": { \"total\": 0, \"limit\": 10, \"offset\": 0,\n          \"ignored_values\": { \"work_mode\": [\"foo\"] } }\n```\n\nValues are compared case-insensitively. A `skills` value is checked against\nthe skill dictionary that tags postings, so an alias it knows (`golang`) is\nnot unknown — it is read as its canonical slug (`go`). Open facets\n(`countries`, `cities`, `company_slug`, `source`, `collections`,\n`salary_currency`, `posting_language`) are not checked: an unknown value there can be\nlegitimate. Absent on a clean request; capped at ten parameters of ten\nvalues each. Reported by `searchJobs`, `agentSearchJobs` and\n`getJobFacets`.\n"
+    "description": "Public, read-only freehire API: search IT jobs, read the live filter\nvocabulary, inspect job and company details, and find similar jobs. Every\noperation here answers without a key; an API plan's key only raises the rate\nlimit. Keyless use is for personal and non-commercial use — showing the\npostings in a product you offer to others needs an API plan (see the\n[data licence](https://freehire.me/terms#data-licence)). The authenticated tracking surface\n(saved jobs, application stages, CV tooling) is deliberately excluded — this\nschema is the integration contract for search, and is also what the freehire\ncustom GPT imports as an Action.\n\n## Filter grammar\n\nFacet parameters are **repeatable**, and the same grammar applies to all of\nthem:\n\n* `?skills=go&skills=kubernetes` — values of one facet are **ORed**: match\n  either.\n* `?skills=go&skills=kubernetes&skills_mode=and` — `<facet>_mode=and` flips\n  that facet to **AND**: match both. Not available for geography (see below).\n* `?source_exclude=adzuna` — `<facet>_exclude` removes matches. **Every**\n  string facet in this schema declares its `_exclude` twin.\n* Different facets **AND** together: `?work_mode=remote&seniority=senior` is\n  remote *and* senior.\n\n## Geography is one OR-group\n\n`regions`, `countries`, `cities` and `metros` name a single concept — *where* — so\ntheir values join into **one OR-group** instead of intersecting.\n`?countries=gb&cities=London` therefore returns *United Kingdom **or**\nLondon*, which is **wider** than `?countries=gb` alone — not narrower. To\nsearch one place, name only that place.\n\nPicking two places reading as \"either\" is what makes\n`?regions=eu&countries=br` (\"Europe or Brazil\") useful. There is no AND to\nswitch on: `<facet>_mode=and` does not apply to these three.\n\n`?regions=none` is a reserved value that selects postings with **no resolved\ngeography**, rather than a real region code.\n\n## Resolve values before filtering\n\n`skills`, `countries`, `cities`, `category`, `source`,\n`company_slug` and `collections` are open or large vocabularies. Call\n`getJobFacets` (or `searchCities` for a city) to discover canonical values\nwith live counts. The `cities` filter also accepts recognized dictionary\naliases such as `München` and resolves them to the canonical facet value;\n`searchCities` remains useful for discovering or disambiguating a city.\nUnknown values are not an error; they simply match nothing.\n\n## API plans\n\nThe read API is available without a key for personal and non-commercial use.\nAn API plan licenses the data for use in your product — see the\n[data licence](https://freehire.me/terms#data-licence).\nA full-access API key (`fhk_…`) or OAuth access token (`fhm_…`) identifies\nyour account when sent as `Authorization: Bearer <token>`.\n\n## Please say who you are\n\nNot required, not validated, and nothing behaves differently without it —\nevery caller gets the same answers. It is a request.\n\nSend a `User-Agent` naming your project:\n\n```\nacme/job-sync/1.4 (+https://github.com/acme/job-sync)\n```\n\n`owner/project` is the part that matters; the version and contact URL are\nuseful if you have them. What it buys you is a message before a limit or a\nfield changes, instead of a `429` as first notice — a default library\nuser-agent is indistinguishable from a thousand others, so there is nobody\nto warn.\n\nIf identification ever gates anything, it will be through a key we issue,\nnot a string you set yourself.\n\n## An unknown PARAMETER is dropped, and says so\n\nA parameter no filter reads is ignored rather than refused, so old saved\nsearches and shared links keep working. The cost is that `?country=it` —\nsingular, and not the facet's name — returns the entire catalogue, which\nlooks exactly like a search that legitimately matched everything.\n\nSo the response tells you. `meta.ignored_params` lists what was thrown away,\nwith `did_you_mean` when the miss was only grammatical number:\n\n```json\n\"meta\": {\n  \"total\": 1475149, \"limit\": 10, \"offset\": 0,\n  \"ignored_params\": [\n    { \"param\": \"country\", \"did_you_mean\": \"countries\" },\n    { \"param\": \"skil\" }\n  ]\n}\n```\n\n**Check it before trusting a filtered result.** The key is absent on a clean\nrequest, never `[]`, so its presence alone is the signal. `searchJobs`,\n`agentSearchJobs`, `searchCompanies` and `getJobFacets` all report — and\n`getJobFacets` grows a `meta` block it otherwise does not have. The report is\ncapped at ten entries.\n\n`searchCompanies` checks against its OWN vocabulary: a jobs facet sent there\n(`?seniority=senior`) is a real facet name, but not one company search reads,\nso it is ignored and reported.\n\n## An unknown VALUE of a closed facet narrows to nothing, and says so\n\nFacets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,\n`category`, `employment_type`, `education_level`, `company_type`,\n`company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,\n`source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `engagement`, `skills` and the boolean facets) still\napply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads\nexactly like an empty market. `meta.ignored_values` names such values per\nparameter (the `_exclude` form under its own name):\n\n```json\n\"meta\": { \"total\": 0, \"limit\": 10, \"offset\": 0,\n          \"ignored_values\": { \"work_mode\": [\"foo\"] } }\n```\n\nValues are compared case-insensitively. A `skills` value is checked against\nthe skill dictionary that tags postings, so an alias it knows (`golang`) is\nnot unknown — it is read as its canonical slug (`go`). Open facets\n(`countries`, `cities`, `company_slug`, `source`, `collections`,\n`salary_currency`, `posting_language`) are not checked: an unknown value there can be\nlegitimate. Absent on a clean request; capped at ten parameters of ten\nvalues each. Reported by `searchJobs`, `agentSearchJobs` and\n`getJobFacets`.\n",
+    "license": {
+      "name": "freehire API data licence",
+      "url": "https://freehire.me/terms#data-licence"
+    }
   },
   "servers": [
     {
@@ -487,6 +491,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid parameters or search query.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "description": "An unexpected error response.",
             "content": {
@@ -945,6 +959,16 @@
                       "$ref": "#/components/schemas/AgentJobSearchMeta"
                     }
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters or search query.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -1748,6 +1772,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid parameters, unknown facet, or incompatible facet options.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "description": "An unexpected error response.",
             "content": {
@@ -1818,6 +1852,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid parameters (including a NUL byte in the query).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "description": "An unexpected error response.",
             "content": {
@@ -1875,6 +1919,26 @@
                     "company": "Acme",
                     "closed_at": null
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or not publicly visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -1950,6 +2014,26 @@
                       "company": "Acme"
                     }
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or not publicly visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -2083,6 +2167,16 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid parameters or pagination window exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "description": "An unexpected error response.",
             "content": {
@@ -2123,7 +2217,7 @@
             "schema": {
               "type": "integer"
             },
-            "example": "20"
+            "example": 20
           },
           {
             "name": "offset",
@@ -2133,7 +2227,7 @@
             "schema": {
               "type": "integer"
             },
-            "example": "0"
+            "example": 0
           }
         ],
         "responses": {
@@ -2216,6 +2310,26 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid pagination parameters or pagination window exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Company not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "default": {
             "description": "An unexpected error response.",
             "content": {
@@ -2287,6 +2401,16 @@
                       "country": "DE"
                     }
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (including a NUL byte in the query).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -5098,8 +5222,12 @@
         ],
         "properties": {
           "kind": {
-            "$ref": "#/components/schemas/SuggestionKind",
-            "description": "Which vocabulary the part comes from, and so which parameter it applies to: `skill` →\n`skills`, `category` → `category`, `company` → `company_slug`. A `title` names no facet\nand is applied as `q`."
+            "description": "Which vocabulary the part comes from, and so which parameter it applies to: `skill` →\n`skills`, `category` → `category`, `company` → `company_slug`. A `title` names no facet\nand is applied as `q`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionKind"
+              }
+            ]
           },
           "slug": {
             "type": "string",
