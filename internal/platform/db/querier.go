@@ -2690,6 +2690,17 @@ type Querier interface {
 	// stage on an existing row and no row at all are both "not on the board" and both call for
 	// the same preparing default: the difference does not matter to the caller.
 	GetApplicationStage(ctx context.Context, arg GetApplicationStageParams) (pgtype.Text, error)
+	// The candidate's own record of an application, as an employer's pipeline move needs it:
+	// its stage, and who set that stage last — the source of the most recently WRITTEN live
+	// stage_set event, ordered by id, not occurred_at: mail events are dated by the message's
+	// received_at, so a stage mail set after the employer's can carry an earlier date. The event
+	// counts only while its signal still IS the live stage: re-applying after clearing progress
+	// seeds stage='applied' with no stage_set event, and an older employer event must not then
+	// pass for the author of the candidate's fresh record ('' — nobody known — when it does not
+	// match, or when there is no event). No row: the candidate has no record of this application, took it off their board,
+	// or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
+	// statement that they are not pursuing it, which an employer's move must not undo.
+	GetApplicationStageForMirror(ctx context.Context, arg GetApplicationStageForMirrorParams) (GetApplicationStageForMirrorRow, error)
 	// Read one job's captured form for display. The only read path over this store, and it
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.
@@ -3293,7 +3304,8 @@ type Querier interface {
 	// when none has been computed. Derived only — never the raw CV text.
 	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
 	// The caller's interaction row for one job (the application-detail header).
-	// last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+	// last_activity_at (apply date, linked mail, the employer's freehire pipeline moves) and
+	// has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
 	// must reach the same silence verdict as the badge on the board, and two derivations of one rule
 	// drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
 	GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error)
@@ -4637,6 +4649,8 @@ type Querier interface {
 	// backlog as nudges). Returns the raw ingredients for silence.StateFor —
 	// the silence verdict itself is a Go-side decision, not a SQL one, same as every
 	// other silence-state reader in this codebase.
+	// The employer's newest move in their freehire pipeline counts as activity, as in
+	// ListUserJobs; a stage the candidate typed does not.
 	ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]ListFollowUpCandidatesRow, error)
 	// Candidate applications for the ghost signal, for a page of jobs at a time.
 	//
@@ -6033,6 +6047,12 @@ type Querier interface {
 	// after normalisation, so a private title merges into a public one's count rather than
 	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
+	// Sets the candidate's stage to what the employer's pipeline says, but only if it still
+	// holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
+	// stage the candidate changed in between is never overwritten. Records the `stage_set`
+	// ledger event with source 'employer' in the same statement. Never creates a record: an
+	// application the candidate took off their board stays off it.
+	MirrorEmployerStage(ctx context.Context, arg MirrorEmployerStageParams) (bool, error)
 	// Record one non-job sighting (classified `other`) against the learned domain that covers
 	// this sender host: the domain itself or a parent, the way from:domain matches. Updates only
 	// — a host no learned domain covers is not inserted, so newsletters never enter the table.

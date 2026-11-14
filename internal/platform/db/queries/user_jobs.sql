@@ -305,13 +305,22 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
          WHERE cv.user_id = uj.user_id
            AND cv.job_id = jobs.id)::timestamptz AS cv_opened_at,
        -- last_activity_at is when this application last moved: its apply date, or the newest
-       -- message linked to it when that is later. GREATEST ignores a NULL aggregate, so an
+       -- message linked to it, or the employer's newest move in their freehire pipeline
+       -- (a stage_set event with source 'employer') — whichever is latest. An employer moving
+       -- the application IS a response, as their mail would be; a stage the candidate typed
+       -- is not, and stays out. GREATEST ignores a NULL aggregate, so an
        -- application with no mail falls back to applied_at rather than reporting nothing — a
        -- clock that only starts once mail arrives would never fire on the applications ignored
        -- outright, which are the ones worth reporting. NULL on a row that is not an
        -- application: a job merely viewed or saved is not waiting on anyone.
        (CASE WHEN a.applied_at IS NOT NULL
-             THEN GREATEST(a.applied_at, mail.newest_mail_at)
+             THEN GREATEST(a.applied_at, mail.newest_mail_at,
+                   (SELECT max(ev.occurred_at)
+                      FROM application_events ev
+                     WHERE ev.application_id = a.id
+                       AND ev.kind = 'stage_set'
+                       AND ev.source = 'employer'
+                       AND ev.retracted_at IS NULL))
         END)::timestamptz AS last_activity_at,
        -- The raw columns behind the card's auto-apply badge. aaq.id is the presence marker:
        -- a LEFT JOIN with no match leaves every column NULL, which is indistinguishable from
@@ -569,3 +578,45 @@ SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
   FROM app a
   JOIN user_jobs t ON t.user_id = a.user_id AND t.job_id = a.job_id;
+
+-- name: GetApplicationStageForMirror :one
+-- The candidate's own record of an application, as an employer's pipeline move needs it:
+-- its stage, and who set that stage last — the source of the most recently WRITTEN live
+-- stage_set event, ordered by id, not occurred_at: mail events are dated by the message's
+-- received_at, so a stage mail set after the employer's can carry an earlier date. The event
+-- counts only while its signal still IS the live stage: re-applying after clearing progress
+-- seeds stage='applied' with no stage_set event, and an older employer event must not then
+-- pass for the author of the candidate's fresh record ('' — nobody known — when it does not
+-- match, or when there is no event). No row: the candidate has no record of this application, took it off their board,
+-- or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
+-- statement that they are not pursuing it, which an employer's move must not undo.
+SELECT a.stage,
+       COALESCE((SELECT CASE WHEN e.signal = a.stage THEN e.source END
+         FROM application_events e
+         WHERE e.application_id = a.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
+         ORDER BY e.id DESC
+         LIMIT 1), '')::text AS stage_source
+FROM applications a
+WHERE a.user_id = sqlc.arg(user_id) AND a.job_id = sqlc.arg(job_id)::bigint
+  AND (a.stage IS NOT NULL OR a.applied_at IS NOT NULL);
+
+-- name: MirrorEmployerStage :one
+-- Sets the candidate's stage to what the employer's pipeline says, but only if it still
+-- holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
+-- stage the candidate changed in between is never overwritten. Records the `stage_set`
+-- ledger event with source 'employer' in the same statement. Never creates a record: an
+-- application the candidate took off their board stays off it.
+WITH moved AS (
+    UPDATE applications
+    SET stage = sqlc.arg(stage)::text
+    WHERE applications.user_id = sqlc.arg(user_id)
+      AND applications.job_id = sqlc.arg(job_id)::bigint
+      AND applications.stage IS NOT DISTINCT FROM sqlc.narg(expected)::text
+      AND (applications.stage IS NOT NULL OR applications.applied_at IS NOT NULL)
+    RETURNING applications.id, applications.company_slug
+), event AS (
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT sqlc.arg(user_id), m.id, sqlc.arg(job_id)::bigint, m.company_slug, 'stage_set', sqlc.arg(stage)::text, now(), 'employer'
+      FROM moved m
+)
+SELECT EXISTS (SELECT 1 FROM moved) AS moved;

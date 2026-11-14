@@ -49,6 +49,8 @@ export const SOURCE_IS_THE_CANDIDATE: Record<ApplicationEventSource, boolean> = 
   mail_external: false,
   calendar_google: false,
   system: false,
+  // The employer moving the application in their pipeline on freehire: their action.
+  employer: false,
 };
 
 /** Whether an event is work the CANDIDATE did, and so shades a square.
