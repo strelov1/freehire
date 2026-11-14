@@ -18,6 +18,8 @@ GENERATED = (
     "internal/platform/db/querier.go",
     "internal/api/apigen/*",
     "web/src/lib/generated/*",
+    "openapi/api.openapi.json",
+    "web/static/openapi.yaml",
     "go.sum",
     "*pnpm-lock.yaml",
     "*package-lock.json",

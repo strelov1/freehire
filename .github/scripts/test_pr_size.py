@@ -12,6 +12,8 @@ class PRSizeTest(unittest.TestCase):
                 "900\t0\tinternal/platform/db/models.go",
                 "3000\t3000\tweb/pnpm-lock.yaml",
                 "40\t0\tweb/src/lib/generated/api.ts",
+                "2000\t100\topenapi/api.openapi.json",
+                "700\t20\tweb/static/openapi.yaml",
                 "-\t-\tweb/static/logo.png",
                 "",
             ]
