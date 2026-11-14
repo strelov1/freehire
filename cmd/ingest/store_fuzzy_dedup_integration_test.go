@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/job/job"
@@ -84,5 +85,36 @@ func TestSave_MarksFuzzyDuplicateAtInsert(t *testing.T) {
 	}
 	if got := searchOutboxCount(t, pool, canon.ID); got != 1 {
 		t.Errorf("search_outbox entries for the canon = %d, want 1", got)
+	}
+}
+
+// A lookup that fails in SQL aborts the transaction; the savepoint must revive it so the posting
+// still commits, unmarked, instead of the whole save failing.
+func TestSave_FuzzyLookupSQLFailureStillWritesRow(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
+
+	orig := fuzzyCanonicalFn
+	t.Cleanup(func() { fuzzyCanonicalFn = orig })
+	fuzzyCanonicalFn = func(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (int64, bool, error) {
+		// A negative LIMIT is a real server-side error, which aborts the transaction.
+		_, err := q.FuzzyDedupCandidateTitlesForCompanyCapped(ctx, db.FuzzyDedupCandidateTitlesForCompanyCappedParams{Company: p.CompanySlug, MaxRows: -1})
+		if err == nil {
+			t.Error("expected the forced lookup to fail")
+		}
+		return 0, false, errors.Join(errors.New("forced"), err)
+	}
+
+	if err := store.Save(ctx, fuzzyPosting(t, "x", "Platform Engineer", fuzzyBody)); err != nil {
+		t.Fatalf("save must survive a failed fuzzy lookup: %v", err)
+	}
+	row, err := q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: "lever", ExternalID: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.DuplicateOf.Valid {
+		t.Errorf("row must be written unmarked, got duplicate_of = %d", row.DuplicateOf.Int64)
 	}
 }

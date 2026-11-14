@@ -2,7 +2,7 @@ package jobdedup
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sort"
 
 	"github.com/strelov1/freehire/internal/job/jobhash"
@@ -135,22 +135,22 @@ type fuzzyInsertQuerier interface {
 // from scratch over every open unclaimed row.
 //
 // Run inside the write transaction, after the upsert (the row must be visible to the lookup).
-// A failure, an empty company or title, an oversized bucket or an oversized company all report
-// no canon: the row is written unmarked and the batch decides, exactly as before.
-func CanonicalForFuzzy(ctx context.Context, q fuzzyInsertQuerier, p db.UpsertJobParams, id int64) (int64, bool) {
+// An empty company or title, an oversized bucket or an oversized company report no canon: the row
+// is written unmarked and the batch decides. A failed lookup returns an error, which aborts a
+// Postgres transaction: the caller must run this inside a savepoint and roll back to it.
+func CanonicalForFuzzy(ctx context.Context, q fuzzyInsertQuerier, p db.UpsertJobParams, id int64) (int64, bool, error) {
 	if p.CompanySlug == "" || jobhash.RoleKey("", p.Title) == "" {
-		return 0, false
+		return 0, false, nil
 	}
 	rows, err := q.FuzzyDedupCandidateTitlesForCompanyCapped(ctx, db.FuzzyDedupCandidateTitlesForCompanyCappedParams{
 		Company: p.CompanySlug,
 		MaxRows: FuzzySyncMaxCandidates + 1,
 	})
 	if err != nil {
-		log.Printf("jobdedup: fuzzy candidates for %s: %v", p.CompanySlug, err)
-		return 0, false
+		return 0, false, fmt.Errorf("fuzzy candidates for %s: %w", p.CompanySlug, err)
 	}
 	if len(rows) > FuzzySyncMaxCandidates {
-		return 0, false
+		return 0, false, nil
 	}
 	key := jobhash.RoleKey("", p.Title)
 	size, older := 0, []int64{}
@@ -165,17 +165,16 @@ func CanonicalForFuzzy(ctx context.Context, q fuzzyInsertQuerier, p db.UpsertJob
 	}
 	// size > FuzzyMaxBucket: not judged (BucketByRole's cap). len(older) < 2: nobody to join.
 	if size > FuzzyMaxBucket || len(older) < 2 {
-		return 0, false
+		return 0, false, nil
 	}
 	descriptions, err := q.GetJobDescriptionsByIDs(ctx, older)
 	if err != nil {
-		log.Printf("jobdedup: fuzzy descriptions for %s: %v", p.CompanySlug, err)
-		return 0, false
+		return 0, false, fmt.Errorf("fuzzy descriptions for %s: %w", p.CompanySlug, err)
 	}
 	postings := make([]FuzzyPosting, 0, len(descriptions))
 	for _, d := range descriptions {
 		postings = append(postings, FuzzyPosting{ID: d.ID, Signature: jobhash.DescriptionSignature(d.Description)})
 	}
 	canon, ok := ClusterBucket(postings, FuzzyThreshold)[id]
-	return canon, ok
+	return canon, ok, nil
 }

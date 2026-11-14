@@ -65,6 +65,7 @@ SELECT id, title
 FROM jobs
 WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
 ORDER BY id;
 
 -- name: FuzzyDedupCandidateTitlesForCompanyCapped :many
@@ -79,6 +80,7 @@ SELECT id, title
 FROM jobs
 WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
 ORDER BY id
 LIMIT sqlc.arg(max_rows)::int;
 

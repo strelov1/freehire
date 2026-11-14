@@ -298,6 +298,27 @@ func (s *dbStore) saveOrRetrySlug(ctx context.Context, j job.Job, form *applyfor
 	return s.saveOnce(ctx, j, form, true)
 }
 
+// fuzzyCanonicalFn is a seam so a test can force a real SQL failure inside the lookup.
+var fuzzyCanonicalFn = func(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (int64, bool, error) {
+	return jobdedup.CanonicalForFuzzy(ctx, q, p, id)
+}
+
+// fuzzyCanonical runs the fuzzy lookup inside a savepoint. A failed SELECT (a statement timeout,
+// say) aborts the transaction; rolling back to the savepoint revives it, so the row is still
+// written, unmarked, and the batch pass decides. Only a savepoint failure is returned.
+func (s *dbStore) fuzzyCanonical(ctx context.Context, tx pgx.Tx, params db.UpsertJobParams, id int64) (int64, bool, error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	canon, ok, lerr := fuzzyCanonicalFn(ctx, s.q.WithTx(sp), params, id)
+	if lerr != nil {
+		log.Printf("ingest: fuzzy dedup lookup failed, writing unmarked: %v", lerr)
+		return 0, false, sp.Rollback(ctx)
+	}
+	return canon, ok, sp.Commit(ctx)
+}
+
 func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form, fullSlugHash bool) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -346,7 +367,11 @@ func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form,
 	// pass's own rule, so the next reindex keeps this verdict. Only a row the role tier left
 	// alone is asked: a marked row is already invisible.
 	if !deduped && clustersByRole(saved) {
-		if canon, ok := jobdedup.CanonicalForFuzzy(ctx, qtx, params, saved.id); ok {
+		canon, ok, err := s.fuzzyCanonical(ctx, tx, params, saved.id)
+		if err != nil {
+			return err
+		}
+		if ok {
 			if _, err := qtx.MarkJobDuplicateOfFuzzy(ctx, db.MarkJobDuplicateOfFuzzyParams{
 				ID:               saved.id,
 				DuplicateOfFuzzy: pgtype.Int8{Int64: canon, Valid: true},

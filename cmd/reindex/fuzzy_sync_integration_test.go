@@ -55,13 +55,13 @@ func TestFuzzySync_AgreesWithTheBatchPass(t *testing.T) {
 	}
 
 	// The oldest row has no older sibling: nothing to join.
-	if _, ok := jobdedup.CanonicalForFuzzy(ctx, q, params[0], ids[0]); ok {
+	if _, ok, err := jobdedup.CanonicalForFuzzy(ctx, q, params[0], ids[0]); err != nil || ok {
 		t.Error("the oldest posting must not be marked")
 	}
 	// Later rows move onto the lowest id, as the batch picks.
 	for i := 1; i < len(ids); i++ {
-		canon, ok := jobdedup.CanonicalForFuzzy(ctx, q, params[i], ids[i])
-		if !ok || canon != ids[0] {
+		canon, ok, err := jobdedup.CanonicalForFuzzy(ctx, q, params[i], ids[i])
+		if err != nil || !ok || canon != ids[0] {
 			t.Fatalf("row %d: sync canon = %d (ok=%v), want %d", i, canon, ok, ids[0])
 		}
 		if _, err := q.MarkJobDuplicateOfFuzzy(ctx, db.MarkJobDuplicateOfFuzzyParams{
@@ -102,7 +102,7 @@ func TestFuzzySync_RefusesANewerCanon(t *testing.T) {
 	if _, err := q.UpsertJob(ctx, newer); err != nil {
 		t.Fatal(err)
 	}
-	if canon, ok := jobdedup.CanonicalForFuzzy(ctx, q, older, oldRow.ID); ok {
+	if canon, ok, err := jobdedup.CanonicalForFuzzy(ctx, q, older, oldRow.ID); err != nil || ok {
 		t.Errorf("older row got canon %d from a newer sibling, want none", canon)
 	}
 }
