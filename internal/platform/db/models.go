@@ -738,6 +738,9 @@ type Email struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	ApplicationID       pgtype.Int8        `json:"application_id"`
 	IcalUid             string             `json:"ical_uid"`
+	Direction           string             `json:"direction"`
+	ToAddrs             string             `json:"to_addrs"`
+	CcAddrs             string             `json:"cc_addrs"`
 }
 
 type EmailClassificationOutbox struct {
@@ -842,6 +845,7 @@ type GmailConnection struct {
 	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes                []string           `json:"scopes"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
+	SentSyncCursor        int64              `json:"sent_sync_cursor"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
