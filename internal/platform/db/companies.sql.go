@@ -944,6 +944,53 @@ func (q *Queries) ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListS
 	return items, nil
 }
 
+const listUncategorizedOpenJobTitles = `-- name: ListUncategorizedOpenJobTitles :many
+SELECT j.id, j.title
+FROM jobs j
+WHERE j.id > $1
+  AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND j.company_slug <> '' AND j.description <> ''
+  AND j.category = '' AND COALESCE(j.enrichment->>'category', '') IN ('', 'other')
+  AND j.is_tech IS NOT TRUE
+ORDER BY j.id
+LIMIT $2
+`
+
+type ListUncategorizedOpenJobTitlesParams struct {
+	AfterID   int64 `json:"after_id"`
+	BatchSize int32 `json:"batch_size"`
+}
+
+type ListUncategorizedOpenJobTitlesRow struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
+// category predicate would drop: no column category, no enrichment answer, not confirmed
+// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
+// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
+// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
+func (q *Queries) ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error) {
+	rows, err := q.db.Query(ctx, listUncategorizedOpenJobTitles, arg.AfterID, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUncategorizedOpenJobTitlesRow{}
+	for rows.Next() {
+		var i ListUncategorizedOpenJobTitlesRow
+		if err := rows.Scan(&i.ID, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markCompanyDescriptionChecked = `-- name: MarkCompanyDescriptionChecked :exec
 INSERT INTO companies (slug, name, is_reference, company_description_checked_at)
 VALUES ($1, $2, false, now())
@@ -1021,12 +1068,17 @@ oj AS MATERIALIZED (
       -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
       -- while those same jobs are live in search.
       --
-      -- The one branch this cannot mirror is the role_type one: search also keeps an
-      -- uncategorised posting whose TITLE roletype marks a people manager ("General
-      -- Manager"), and that dictionary is Go, not SQL. Such a posting is therefore
-      -- searchable but not counted here. The residual is the price of not storing a
-      -- derived column for one count; it under-counts a company, never invents one.
-      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE)
+      -- The title branch search also keeps (a roletype role or a manager title, "General
+      -- Manager", "Vodja oddelka") runs Go dictionaries SQL cannot: the caller resolves it over
+      -- ListUncategorizedOpenJobTitles and passes the kept ids in. Without it a company hiring
+      -- only for such roles counted 0 and fell out of the companies index while its jobs stayed
+      -- live (#4503).
+      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE
+           -- The two branches search.CategoryUnresolved keeps that SQL cannot derive: a title
+           -- the Go role dictionaries keep (resolved by the caller, search.TitleKeepsUncategorized)
+           -- and a vacancy a verified employer published. IN (SELECT unnest) rather than = ANY:
+           -- kept_ids runs to ~400k ids, which a hashed subplan probes in O(1) per row.
+           OR j.id IN (SELECT unnest($3::bigint[])) OR j.source = $4::text)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
@@ -1113,8 +1165,8 @@ derived_eligible AS (
 ),
 domain_industry_map AS (
     SELECT d.domain, i.industry
-    FROM unnest($3::text[]) WITH ORDINALITY AS d(domain, ord)
-    JOIN unnest($4::text[]) WITH ORDINALITY AS i(industry, ord)
+    FROM unnest($5::text[]) WITH ORDINALITY AS d(domain, ord)
+    JOIN unnest($6::text[]) WITH ORDINALITY AS i(industry, ord)
       ON i.ord = d.ord
 ),
 derived_ind AS (
@@ -1160,6 +1212,8 @@ WHERE c.slug = c2.slug
 type RefreshCompanyFacetsParams struct {
 	UnseenSources     []string `json:"unseen_sources"`
 	UnseenSeconds     []int64  `json:"unseen_seconds"`
+	KeptIds           []int64  `json:"kept_ids"`
+	EmployerSource    string   `json:"employer_source"`
 	MappingDomains    []string `json:"mapping_domains"`
 	MappingIndustries []string `json:"mapping_industries"`
 }
@@ -1234,6 +1288,8 @@ func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFa
 	result, err := q.db.Exec(ctx, refreshCompanyFacets,
 		arg.UnseenSources,
 		arg.UnseenSeconds,
+		arg.KeptIds,
+		arg.EmployerSource,
 		arg.MappingDomains,
 		arg.MappingIndustries,
 	)

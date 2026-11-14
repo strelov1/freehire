@@ -471,6 +471,22 @@ UPDATE companies
 SET company_info_wikipedia_checked_at = now()
 WHERE slug = sqlc.arg(slug);
 
+-- name: ListUncategorizedOpenJobTitles :many
+-- Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
+-- category predicate would drop: no column category, no enrichment answer, not confirmed
+-- technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
+-- hands the ids it keeps back as kept_ids, so the count follows search on the one branch
+-- this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
+SELECT j.id, j.title
+FROM jobs j
+WHERE j.id > sqlc.arg(after_id)
+  AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND j.company_slug <> '' AND j.description <> ''
+  AND j.category = '' AND COALESCE(j.enrichment->>'category', '') IN ('', 'other')
+  AND j.is_tech IS NOT TRUE
+ORDER BY j.id
+LIMIT sqlc.arg(batch_size);
+
 -- name: RefreshCompanyFacets :execrows
 -- Recompute every company's denormalized state in one set-based pass: the open-job
 -- count plus the facet arrays derived from those open jobs — regions/countries from
@@ -550,12 +566,17 @@ oj AS MATERIALIZED (
       -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
       -- while those same jobs are live in search.
       --
-      -- The one branch this cannot mirror is the role_type one: search also keeps an
-      -- uncategorised posting whose TITLE roletype marks a people manager ("General
-      -- Manager"), and that dictionary is Go, not SQL. Such a posting is therefore
-      -- searchable but not counted here. The residual is the price of not storing a
-      -- derived column for one count; it under-counts a company, never invents one.
-      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE)
+      -- The title branch search also keeps (a roletype role or a manager title, "General
+      -- Manager", "Vodja oddelka") runs Go dictionaries SQL cannot: the caller resolves it over
+      -- ListUncategorizedOpenJobTitles and passes the kept ids in. Without it a company hiring
+      -- only for such roles counted 0 and fell out of the companies index while its jobs stayed
+      -- live (#4503).
+      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE
+           -- The two branches search.CategoryUnresolved keeps that SQL cannot derive: a title
+           -- the Go role dictionaries keep (resolved by the caller, search.TitleKeepsUncategorized)
+           -- and a vacancy a verified employer published. IN (SELECT unnest) rather than = ANY:
+           -- kept_ids runs to ~400k ids, which a hashed subplan probes in O(1) per row.
+           OR j.id IN (SELECT unnest(sqlc.arg('kept_ids')::bigint[])) OR j.source = sqlc.arg('employer_source')::text)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
