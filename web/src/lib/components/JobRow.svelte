@@ -25,8 +25,8 @@
   import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '#lib/credentials.js';
   import AIInterviewBadge from './AIInterviewBadge.svelte';
-  import DirectApplyBadge from './DirectApplyBadge.svelte';
-  import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
+  import DirectApplyBadge, { directApplyTooltip } from './DirectApplyBadge.svelte';
+  import AppliedCompanyBadge, { appliedCompanyTooltip } from './AppliedCompanyBadge.svelte';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
@@ -360,6 +360,8 @@
     [
       linkName,
       summary,
+      directApply ? directApplyTooltip : '',
+      appliedToCompany ? appliedCompanyTooltip : '',
       shownSkills.length ? `Skills: ${shownSkills.map(skillLabel).join(', ')}` : '',
       ...(job.countries ?? []).slice(0, MAX_FLAGS).map(countryLabel),
       ...freshness.map((badge) => badge.tooltip),

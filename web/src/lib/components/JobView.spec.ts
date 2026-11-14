@@ -358,6 +358,23 @@ describe('JobRow meta and geography lines', () => {
   });
 });
 
+describe('JobRow badge evidence', () => {
+  it('keeps employer publication evidence on the stretched link', () => {
+    const view = render(JobRow, { job: { ...job, direct_apply: true, url: '' } });
+    expect(view.container.querySelector('h3 a')?.getAttribute('title')).toContain(
+      'Published by the employer on freehire',
+    );
+  });
+
+  it('keeps prior application evidence on the stretched link', () => {
+    markAppliedToCompany(job.company_slug);
+    const view = render(JobRow, { job });
+    expect(view.container.querySelector('h3 a')?.getAttribute('title')).toContain(
+      'You already applied to a position at this company',
+    );
+  });
+});
+
 describe('content tabs', () => {
   it('offers the Company tab only when the company has details to show', async () => {
     getCompany.mockResolvedValueOnce({ company: { slug: 'acme', name: 'Acme' } });
