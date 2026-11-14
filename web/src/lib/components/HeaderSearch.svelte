@@ -98,7 +98,7 @@
   const hero = $derived(size === 'hero');
 
   // The typed placeholder: see typedPlaceholder.svelte.ts.
-  const typed = typedPlaceholder(() => placeholder);
+  const typedHint = typedPlaceholder(() => placeholder);
 
   // How long the draft must sit still before the suggestions are refetched.
   //
@@ -159,7 +159,7 @@
     // which stops the placeholder animation. On the homepage — where this box IS the
     // page, and the one surface the animation exists for — that killed it before the
     // first character. A caret nobody placed has not interrupted anything.
-    typed.resume();
+    typedHint.resume();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
@@ -821,12 +821,12 @@
         // autofocused hero would stay silent when its own field is clicked.
         dismissed = false;
         activeIndex = -1;
-        typed.stop();
+        typedHint.stop();
       }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
-        typed.stop();
+        typedHint.stop();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
@@ -851,11 +851,11 @@
         // box permanently silent for the rest of the visit.
         dismissed = false;
         activeIndex = -1;
-        typed.stop();
+        typedHint.stop();
       }}
       onkeydown={onKeydown}
       type="text"
-      placeholder={typed.shown}
+      placeholder={typedHint.shown}
       aria-label={label}
       autocomplete="off"
       spellcheck="false"

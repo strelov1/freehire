@@ -235,7 +235,7 @@
   let navigatingTo = $state<string | null>(null);
 
   // The turn's elapsed seconds and spinner glyph, which the streaming reply's thinking shows.
-  const timer = turnTimer(() => turnActive);
+  const turnClock = turnTimer(() => turnActive);
 
   /**
    * Bring the newest content into view.
@@ -1052,8 +1052,8 @@
                 <AssistantReply
                   {message}
                   {active}
-                  glyph={timer.glyph}
-                  elapsedSec={timer.elapsedSec}
+                  glyph={turnClock.glyph}
+                  elapsedSec={turnClock.elapsedSec}
                   onConfirm={submitText}
                   disabled={turnActive || switching}
                   canRetry={!isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
