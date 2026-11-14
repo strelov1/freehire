@@ -8,15 +8,16 @@
 -- client already holds. Ordering by id alone would not give that, because ids are taken
 -- inside the trigger, long before a bulk close commits.
 --
--- The visibility is the search index's: canonical (duplicate_of IS NULL) and public. Not
--- closed_at IS NULL, because a closed entry is exactly what this feed carries. Judged now,
--- not at the time of the change.
+-- Visibility was judged when the change was logged (migration 0263: canonical, public, open
+-- all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+-- that is private NOW serves only `closed` entries. Those carry just a slug the client was
+-- already given while it was public, and withholding them would leave the copy listed.
 SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug
 FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > (sqlc.arg(after_xid)::bigint, sqlc.arg(after_id)::bigint)
   AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
-  AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND (NOT j.is_private OR c.kind = 'closed')
 ORDER BY c.xid, c.id
 LIMIT sqlc.arg(row_limit);
 
@@ -33,3 +34,11 @@ LIMIT 1;
 -- When the log begins (job_changes_at_idx). NULL while it is empty.
 SELECT min(at)::timestamptz AS available_since
 FROM job_changes;
+
+-- name: PruneJobChanges :execrows
+-- Retention for the feed, one bounded batch (the caller loops): entries older than the
+-- cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
+DELETE FROM job_changes d
+WHERE d.id IN (
+    SELECT o.id FROM job_changes o WHERE o.at < sqlc.arg(cutoff) ORDER BY o.at LIMIT sqlc.arg(batch_size)
+);

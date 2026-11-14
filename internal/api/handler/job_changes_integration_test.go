@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -84,7 +85,7 @@ func TestJobChangesFeed(t *testing.T) {
 	since := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
 
 	// a: opened, closed (unseen), reopened, closed again (liveness). b: opened. c: private, so
-	// never served. d: opened then marked a duplicate, so no longer served.
+	// never logged. d: opened, then marked a duplicate (a removal) and later canonical again.
 	companyRow := func() { mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`) }
 	companyRow()
 	seedJob(t, pool, "job-a", "")
@@ -100,7 +101,8 @@ func TestJobChangesFeed(t *testing.T) {
 
 	want := []changeItem{
 		{"job-a", "opened", ""}, {"job-a", "closed", "unseen"}, {"job-a", "reopened", ""},
-		{"job-b", "opened", ""}, {"job-a", "closed", "expired"},
+		{"job-b", "opened", ""}, {"job-d", "opened", ""}, {"job-d", "closed", "duplicate"},
+		{"job-a", "closed", "expired"},
 	}
 	t.Run("the whole feed arrives in order", func(t *testing.T) {
 		p := getChanges(t, app, url.Values{"since": {since}})
@@ -138,6 +140,21 @@ func TestJobChangesFeed(t *testing.T) {
 		}
 	})
 
+	t.Run("a duplicate leaving and returning is a removal then an opening", func(t *testing.T) {
+		cursor := getChanges(t, app, url.Values{"since": {since}}).Meta.NextCursor
+		mustExec(t, pool, `UPDATE jobs SET duplicate_of_role = NULL WHERE public_slug = 'job-d'`)
+		p := getChanges(t, app, url.Values{"cursor": {cursor}})
+		if len(p.Data) != 1 || p.Data[0] != (changeItem{"job-d", "reopened", ""}) {
+			t.Fatalf("after the duplicate cleared: %+v, want job-d reopened", p.Data)
+		}
+		// Becoming private withdraws it; the removal still carries the slug the client holds.
+		mustExec(t, pool, `UPDATE jobs SET is_private = true WHERE public_slug = 'job-d'`)
+		p = getChanges(t, app, url.Values{"cursor": {p.Meta.NextCursor}})
+		if len(p.Data) != 1 || p.Data[0] != (changeItem{"job-d", "closed", "private"}) {
+			t.Fatalf("after going private: %+v, want job-d closed/private", p.Data)
+		}
+	})
+
 	t.Run("a late commit never lands behind a held cursor", func(t *testing.T) {
 		head := getChanges(t, app, url.Values{"since": {since}})
 		cursor := head.Meta.NextCursor
@@ -172,4 +189,16 @@ func TestJobChangesFeed(t *testing.T) {
 			t.Fatalf("after commit got %+v, want job-late and job-e exactly once", after.Data)
 		}
 	})
+}
+
+func TestPruneJobChangesKeepsRecentEntries(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	mustExec(t, pool, `INSERT INTO job_changes (job_id, kind, at) VALUES (1, 'opened', now() - interval '40 days'), (2, 'opened', now())`)
+	n, err := db.New(pool).PruneJobChanges(ctx, db.PruneJobChangesParams{
+		Cutoff: pgtype.Timestamptz{Time: time.Now().Add(-31 * 24 * time.Hour), Valid: true}, BatchSize: 10,
+	})
+	if err != nil || n != 1 {
+		t.Fatalf("pruned %d, %v; want exactly the 40-day-old entry", n, err)
+	}
 }

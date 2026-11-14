@@ -12590,12 +12590,14 @@ func (s *JobApplyFormOK) SetData(val jx.Raw) {
 // Ref: #/components/schemas/JobChange
 type JobChange struct {
 	PublicSlug string `json:"public_slug"`
-	// `opened`: the posting entered the catalogue. `closed`: it was taken down. `reopened`: a closed
-	// posting came back (its source listed it again, or a moderator reopened it).
+	// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+	// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+	// moderator reopened it, or it is no longer a duplicate).
 	Kind JobChangeKind `json:"kind"`
 	// When the change was recorded.
 	At time.Time `json:"at"`
-	// Why a `closed` change happened (e.g. `unseen`, `expired`); absent on the other kinds.
+	// Why a `closed` change happened (e.g. `unseen`, `expired`, `duplicate`, `private`); absent on the
+	// other kinds.
 	ClosedReason OptString `json:"closed_reason"`
 }
 
@@ -12639,8 +12641,9 @@ func (s *JobChange) SetClosedReason(val OptString) {
 	s.ClosedReason = val
 }
 
-// `opened`: the posting entered the catalogue. `closed`: it was taken down. `reopened`: a closed
-// posting came back (its source listed it again, or a moderator reopened it).
+// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+// moderator reopened it, or it is no longer a duplicate).
 type JobChangeKind string
 
 const (

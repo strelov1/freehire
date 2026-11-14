@@ -98,6 +98,11 @@ func run() int {
 	rebuildEmbedProgress(ctx, analytics, cfg.RedisURL)
 	done()
 
+	// Retention for the public change feed's log, on the primary (it deletes).
+	done = worker.Stage("job changes retention")
+	pruneJobChanges(ctx, db.New(pool))
+	done()
+
 	return exit
 }
 

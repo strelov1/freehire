@@ -4772,9 +4772,10 @@ type Querier interface {
 	// client already holds. Ordering by id alone would not give that, because ids are taken
 	// inside the trigger, long before a bulk close commits.
 	//
-	// The visibility is the search index's: canonical (duplicate_of IS NULL) and public. Not
-	// closed_at IS NULL, because a closed entry is exactly what this feed carries. Judged now,
-	// not at the time of the change.
+	// Visibility was judged when the change was logged (migration 0263: canonical, public, open
+	// all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+	// that is private NOW serves only `closed` entries. Those carry just a slug the client was
+	// already given while it was public, and withholding them would leave the copy listed.
 	ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error)
 	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
 	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
@@ -6267,6 +6268,9 @@ type Querier interface {
 	// Drops snapshot rows older than the retention window (~26 weeks), keeping
 	// the table bounded.
 	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
+	// Retention for the feed, one bounded batch (the caller loops): entries older than the
+	// cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
+	PruneJobChanges(ctx context.Context, arg PruneJobChangesParams) (int64, error)
 	// Claims only matter for the day they were taken; a week of them is kept for the
 	// one-letter-a-day report and the rest is dropped.
 	PruneMailDayClaims(ctx context.Context) (int64, error)

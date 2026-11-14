@@ -120,7 +120,11 @@ Closed postings never appear in `GET /jobs`, in search or in a company's open po
 2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.
 3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.
 
-The cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`), so a mirror older than that rebuilds from search. A change shows up in the feed shortly after it happens, not at the same instant.
+The cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`), so a mirror older than that rebuilds from search. A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.
+
+The feed keeps 30 days. A `cursor` older than that answers `410`: rebuild from search and start again with `since`.
+
+A posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.
 
 ## Authentication model
 

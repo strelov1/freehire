@@ -47,7 +47,7 @@ FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > ($1::bigint, $2::bigint)
   AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
-  AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND (NOT j.is_private OR c.kind = 'closed')
 ORDER BY c.xid, c.id
 LIMIT $3
 `
@@ -76,9 +76,10 @@ type ListJobChangesRow struct {
 // client already holds. Ordering by id alone would not give that, because ids are taken
 // inside the trigger, long before a bulk close commits.
 //
-// The visibility is the search index's: canonical (duplicate_of IS NULL) and public. Not
-// closed_at IS NULL, because a closed entry is exactly what this feed carries. Judged now,
-// not at the time of the change.
+// Visibility was judged when the change was logged (migration 0263: canonical, public, open
+// all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+// that is private NOW serves only `closed` entries. Those carry just a slug the client was
+// already given while it was public, and withholding them would leave the copy listed.
 func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error) {
 	rows, err := q.db.Query(ctx, listJobChanges, arg.AfterXid, arg.AfterID, arg.RowLimit)
 	if err != nil {
@@ -104,4 +105,26 @@ func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneJobChanges = `-- name: PruneJobChanges :execrows
+DELETE FROM job_changes d
+WHERE d.id IN (
+    SELECT o.id FROM job_changes o WHERE o.at < $1 ORDER BY o.at LIMIT $2
+)
+`
+
+type PruneJobChangesParams struct {
+	Cutoff    pgtype.Timestamptz `json:"cutoff"`
+	BatchSize int32              `json:"batch_size"`
+}
+
+// Retention for the feed, one bounded batch (the caller loops): entries older than the
+// cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
+func (q *Queries) PruneJobChanges(ctx context.Context, arg PruneJobChangesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, pruneJobChanges, arg.Cutoff, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
