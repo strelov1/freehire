@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -100,9 +101,9 @@ func TestCollapseFuzzyForCompany_DivergedPostingsAreConsideredAndUnassigned(t *t
 // reporting them would release every marker in the largest groups in the catalogue over a
 // compute decision. With nothing else to judge, the pass writes nothing at all.
 func TestCollapseFuzzyForCompany_AnOversizedBucketIsNotReportedAsConsidered(t *testing.T) {
-	ids := make([]int64, 0, fuzzyMaxBucket+1)
+	ids := make([]int64, 0, jobdedup.FuzzyMaxBucket+1)
 	bodies := map[int64]string{}
-	for i := 0; i <= fuzzyMaxBucket; i++ {
+	for i := 0; i <= jobdedup.FuzzyMaxBucket; i++ {
 		id := int64(100 + i)
 		ids = append(ids, id)
 		bodies[id] = bodyA

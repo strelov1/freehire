@@ -295,6 +295,21 @@ func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form,
 			deduped = true
 		}
 	}
+	// The fuzzy tier, the same question for a near-identical repost the exact role cluster
+	// missed (descriptions differing by a localized block). CanonicalForFuzzy runs the batch
+	// pass's own rule, so the next reindex keeps this verdict. Only a row the role tier left
+	// alone is asked: a marked row is already invisible.
+	if !deduped && clustersByRole(saved) {
+		if canon, ok := jobdedup.CanonicalForFuzzy(ctx, qtx, params, saved.id); ok {
+			if _, err := qtx.MarkJobDuplicateOfFuzzy(ctx, db.MarkJobDuplicateOfFuzzyParams{
+				ID:               saved.id,
+				DuplicateOfFuzzy: pgtype.Int8{Int64: canon, Valid: true},
+			}); err != nil {
+				return fmt.Errorf("mark job %d fuzzy duplicate of %d: %w", saved.id, canon, err)
+			}
+			deduped = true
+		}
+	}
 
 	// The form belongs to the posting whether or not the posting is a searchable canon: a
 	// repost is still a job somebody can apply to, and its form is what applying costs.
