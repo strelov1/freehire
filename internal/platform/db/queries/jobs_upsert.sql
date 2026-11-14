@@ -17,7 +17,7 @@
 -- false and needs no re-push to the search index. A reopen deliberately reads a NULL old
 -- hash, so identical content still returns to search.
 WITH existing AS (
-    SELECT id, closed_at, closed_reason, application_deadline, is_private,
+    SELECT id, closed_at, closed_reason, application_deadline, is_private, team,
            CASE WHEN closed_at IS NULL THEN content_hash END AS old_hash, true AS existed
     FROM jobs
     WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
@@ -62,7 +62,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason
+    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason, team
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
@@ -82,7 +82,8 @@ INSERT INTO jobs (
     -- caller stamps them in the SAME transaction with ObserveJobActivity (job.Upsert).
     sqlc.narg(application_deadline)::date,
     CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
-    CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
+    CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END,
+    sqlc.arg(team)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -107,6 +108,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
     application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
+    team         = EXCLUDED.team,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
     cities       = EXCLUDED.cities,
@@ -208,7 +210,9 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
     COALESCE(
         (SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)
-        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline,
+        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline
+        -- team is not in the content hash either: an edited department must still reach the index.
+        OR (SELECT team FROM existing) IS DISTINCT FROM jobs.team,
         false
     )::boolean AS changed;
 
@@ -315,6 +319,7 @@ WITH hit AS MATERIALIZED (
       AND j.english_level = sqlc.arg(english_level)
       AND j.is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
       AND j.engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
+      AND j.team = sqlc.arg(team)
       AND j.application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline)
       AND (j.application_deadline IS NULL OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
       AND j.closed_at IS NULL
