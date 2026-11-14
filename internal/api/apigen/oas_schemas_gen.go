@@ -1759,6 +1759,168 @@ func (s *AutoApplyDecision) SetDecision(val string) {
 	s.Decision = val
 }
 
+// Ref: #/components/schemas/AutoApplyList
+type AutoApplyList struct {
+	Attempts []AutoApplyListItem `json:"attempts"`
+}
+
+// GetAttempts returns the value of Attempts.
+func (s *AutoApplyList) GetAttempts() []AutoApplyListItem {
+	return s.Attempts
+}
+
+// SetAttempts sets the value of Attempts.
+func (s *AutoApplyList) SetAttempts(val []AutoApplyListItem) {
+	s.Attempts = val
+}
+
+// One of the caller's automatic applications.
+// Ref: #/components/schemas/AutoApplyListItem
+type AutoApplyListItem struct {
+	// Public vacancy slug, also the posting-backed Tracking row identifier.
+	JobSlug string              `json:"job_slug"`
+	Title   string              `json:"title"`
+	Company string              `json:"company"`
+	Status  AutoApplyListStatus `json:"status"`
+	// Most recent recorded transition, or enqueue time for older attempts.
+	LastActivityAt time.Time `json:"last_activity_at"`
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *AutoApplyListItem) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// GetTitle returns the value of Title.
+func (s *AutoApplyListItem) GetTitle() string {
+	return s.Title
+}
+
+// GetCompany returns the value of Company.
+func (s *AutoApplyListItem) GetCompany() string {
+	return s.Company
+}
+
+// GetStatus returns the value of Status.
+func (s *AutoApplyListItem) GetStatus() AutoApplyListStatus {
+	return s.Status
+}
+
+// GetLastActivityAt returns the value of LastActivityAt.
+func (s *AutoApplyListItem) GetLastActivityAt() time.Time {
+	return s.LastActivityAt
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *AutoApplyListItem) SetJobSlug(val string) {
+	s.JobSlug = val
+}
+
+// SetTitle sets the value of Title.
+func (s *AutoApplyListItem) SetTitle(val string) {
+	s.Title = val
+}
+
+// SetCompany sets the value of Company.
+func (s *AutoApplyListItem) SetCompany(val string) {
+	s.Company = val
+}
+
+// SetStatus sets the value of Status.
+func (s *AutoApplyListItem) SetStatus(val AutoApplyListStatus) {
+	s.Status = val
+}
+
+// SetLastActivityAt sets the value of LastActivityAt.
+func (s *AutoApplyListItem) SetLastActivityAt(val time.Time) {
+	s.LastActivityAt = val
+}
+
+// A live attempt status, or a confirmed submission whose queue entry was retired.
+// Ref: #/components/schemas/AutoApplyListStatus
+type AutoApplyListStatus string
+
+const (
+	AutoApplyListStatusTailoring     AutoApplyListStatus = "tailoring"
+	AutoApplyListStatusPendingReview AutoApplyListStatus = "pending_review"
+	AutoApplyListStatusApproved      AutoApplyListStatus = "approved"
+	AutoApplyListStatusBlocked       AutoApplyListStatus = "blocked"
+	AutoApplyListStatusDeclined      AutoApplyListStatus = "declined"
+	AutoApplyListStatusFailed        AutoApplyListStatus = "failed"
+	AutoApplyListStatusTailorFailed  AutoApplyListStatus = "tailor_failed"
+	AutoApplyListStatusSubmitted     AutoApplyListStatus = "submitted"
+)
+
+// AllValues returns all AutoApplyListStatus values.
+func (AutoApplyListStatus) AllValues() []AutoApplyListStatus {
+	return []AutoApplyListStatus{
+		AutoApplyListStatusTailoring,
+		AutoApplyListStatusPendingReview,
+		AutoApplyListStatusApproved,
+		AutoApplyListStatusBlocked,
+		AutoApplyListStatusDeclined,
+		AutoApplyListStatusFailed,
+		AutoApplyListStatusTailorFailed,
+		AutoApplyListStatusSubmitted,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s AutoApplyListStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case AutoApplyListStatusTailoring:
+		return []byte(s), nil
+	case AutoApplyListStatusPendingReview:
+		return []byte(s), nil
+	case AutoApplyListStatusApproved:
+		return []byte(s), nil
+	case AutoApplyListStatusBlocked:
+		return []byte(s), nil
+	case AutoApplyListStatusDeclined:
+		return []byte(s), nil
+	case AutoApplyListStatusFailed:
+		return []byte(s), nil
+	case AutoApplyListStatusTailorFailed:
+		return []byte(s), nil
+	case AutoApplyListStatusSubmitted:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *AutoApplyListStatus) UnmarshalText(data []byte) error {
+	switch AutoApplyListStatus(data) {
+	case AutoApplyListStatusTailoring:
+		*s = AutoApplyListStatusTailoring
+		return nil
+	case AutoApplyListStatusPendingReview:
+		*s = AutoApplyListStatusPendingReview
+		return nil
+	case AutoApplyListStatusApproved:
+		*s = AutoApplyListStatusApproved
+		return nil
+	case AutoApplyListStatusBlocked:
+		*s = AutoApplyListStatusBlocked
+		return nil
+	case AutoApplyListStatusDeclined:
+		*s = AutoApplyListStatusDeclined
+		return nil
+	case AutoApplyListStatusFailed:
+		*s = AutoApplyListStatusFailed
+		return nil
+	case AutoApplyListStatusTailorFailed:
+		*s = AutoApplyListStatusTailorFailed
+		return nil
+	case AutoApplyListStatusSubmitted:
+		*s = AutoApplyListStatusSubmitted
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // One resolved question and answer in an auto-apply answer preview.
 // Ref: #/components/schemas/AutoApplyPreviewField
 type AutoApplyPreviewField struct {
@@ -10436,6 +10598,21 @@ func (s *GetAuthMeOK) GetData() AuthUser {
 
 // SetData sets the value of Data.
 func (s *GetAuthMeOK) SetData(val AuthUser) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAutoApplyListOK struct {
+	Data AutoApplyList `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAutoApplyListOK) GetData() AutoApplyList {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAutoApplyListOK) SetData(val AutoApplyList) {
 	s.Data = val
 }
 

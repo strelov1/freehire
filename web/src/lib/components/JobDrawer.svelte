@@ -42,6 +42,7 @@
   import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
   import { hasVisibleRows, pendingRows, type PendingAnswerRow } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
+  import JobDrawerLoadState from './JobDrawerLoadState.svelte';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
   import AssistantPanel from '#lib/components/AssistantPanel.svelte';
   import { openApplyChat } from '#lib/assistant/api.js';
@@ -49,6 +50,7 @@
 
   let {
     item,
+    initialTab = 'application',
     pendingOutcome,
     onsetstage,
     onsavenotes,
@@ -60,6 +62,7 @@
     blocked = false,
   }: {
     item: MyJob;
+    initialTab?: 'application' | 'auto_apply';
     pendingOutcome: boolean;
     onsetstage: (stage: string) => void;
     // Rejects when the write fails; the notes editor reports it and keeps the text.
@@ -335,7 +338,9 @@
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: s.tabs.application },
-    ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }] : []),
+    ...(autoApply || autoApplied || (initialTab === 'auto_apply' && emails === null)
+      ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }]
+      : []),
     { id: 'fit', label: s.tabs.jobMatch },
     { id: 'description', label: s.tabs.jobDescription },
     { id: 'history', label: s.history },
@@ -348,9 +353,10 @@
         ]
       : []),
   ]);
-  // Local UI state. The parent re-keys this component per job (JobBoard's {#key}),
-  // so a fresh mount always opens on Application.
-  let tab = $state<Tab>('application');
+  // The parent re-keys the drawer per job. A deep link chooses the opening tab;
+  // later tab navigation belongs to this drawer.
+  // svelte-ignore state_referenced_locally
+  let tab = $state<Tab>(initialTab);
 
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
@@ -367,6 +373,7 @@
       autoApply = app.auto_apply ?? null;
       posting = app.job;
       events = app.events ?? [];
+      if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
     } catch (e) {
       emailsError = errorMessage(e, s.errors.loadEmails);
     } finally {
@@ -685,11 +692,8 @@
       {:else if tab === 'history'}
         {#if !item.job}
           <p class="text-sm text-muted-foreground">{s.historyUnavailable}</p>
-        {:else if emailsLoading}
-          <p class="text-sm text-muted-foreground">{s.loading}</p>
-        {:else if emailsError}
-          <p class="text-sm text-destructive" role="alert">{emailsError}</p>
-          <Button variant="outline" size="sm" onclick={() => loadEmails(true)}>{s.retryHistory}</Button>
+        {:else if emailsLoading || emailsError}
+          <JobDrawerLoadState loading={emailsLoading} error={emailsError} onretry={() => loadEmails(true)} />
         {:else}
           {#if events.length}
             <div class="flex flex-col gap-1 text-sm">
@@ -717,6 +721,12 @@
             <p class="text-sm text-muted-foreground">{s.noHistory}</p>
           {/if}
         {/if}
+      {:else if tab === 'auto_apply' && (emailsLoading || emails === null || emailsError)}
+        <JobDrawerLoadState
+          loading={emailsLoading || (emails === null && !emailsError)}
+          error={emailsError}
+          onretry={() => loadEmails(true)}
+        />
       {:else if tab === 'auto_apply'}
         <div class="flex flex-col gap-4">
           {#if progressSteps}

@@ -49,9 +49,17 @@
   // keeping one owner is what stops them drifting apart.
   let {
     initialId,
+    initialItem,
+    initialAutoApply = false,
     initial,
     view = 'board',
-  }: { initialId?: string; initial?: MyJob[]; view?: 'board' | 'list' } = $props();
+  }: {
+    initialItem?: MyJob;
+    initialAutoApply?: boolean;
+    initialId?: string;
+    initial?: MyJob[];
+    view?: 'board' | 'list';
+  } = $props();
   let openedInitial = false;
 
   const s = $derived(t(messages, locale()));
@@ -109,7 +117,9 @@
   function build(rows: MyJob[]) {
     const next = emptyColumns();
     const cols: Record<string, BoardColumnId> = {};
-    for (const row of rows) {
+    // Keep a directly fetched deep-link target when the board's first page omits it.
+    const entries = initialItem && !rows.some((row) => row.id === initialItem.id) ? [...rows, initialItem] : rows;
+    for (const row of entries) {
       const item: BoardItem = { ...row, id: row.id };
       const col = columnOf(item);
       if (!col) continue; // neither saved nor tracked — nothing to place
@@ -763,6 +773,7 @@
   {#key openItem.id}
     {@const item = openItem}
     <JobDrawer
+      initialTab={onDeepLink && initialAutoApply ? 'auto_apply' : 'application'}
       {item}
       {pendingOutcome}
       onsetstage={setStage}

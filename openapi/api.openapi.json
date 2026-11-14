@@ -7356,6 +7356,61 @@
         }
       }
     },
+    "/me/auto-apply": {
+      "get": {
+        "operationId": "getAutoApplyList",
+        "summary": "List your automatic applications",
+        "description": "Lists the caller's live automatic applications and confirmed submissions from the last 30 days, newest activity first. Internal diagnostic errors are omitted.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AutoApplyList"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "attempts": []
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auto-apply"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
     "/me/auto-apply/{queueId}/review": {
       "post": {
         "operationId": "postAutoApplyReview",
@@ -21723,6 +21778,66 @@
             "type": "string"
           }
         }
+      },
+      "AutoApplyList": {
+        "type": "object",
+        "required": [
+          "attempts"
+        ],
+        "properties": {
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AutoApplyListItem"
+            }
+          }
+        }
+      },
+      "AutoApplyListItem": {
+        "type": "object",
+        "required": [
+          "job_slug",
+          "title",
+          "company",
+          "status",
+          "last_activity_at"
+        ],
+        "properties": {
+          "job_slug": {
+            "type": "string",
+            "description": "Public vacancy slug, also the posting-backed Tracking row identifier."
+          },
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AutoApplyListStatus"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent recorded transition, or enqueue time for older attempts.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "One of the caller's automatic applications."
+      },
+      "AutoApplyListStatus": {
+        "type": "string",
+        "enum": [
+          "tailoring",
+          "pending_review",
+          "approved",
+          "blocked",
+          "declined",
+          "failed",
+          "tailor_failed",
+          "submitted"
+        ],
+        "description": "A live attempt status, or a confirmed submission whose queue entry was retired."
       },
       "AutoApplyPreviewField": {
         "type": "object",

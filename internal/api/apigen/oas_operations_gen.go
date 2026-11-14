@@ -112,6 +112,7 @@ const (
 	GetAssistantSessionOperation          OperationName = "GetAssistantSession"
 	GetAtsReportOperation                 OperationName = "GetAtsReport"
 	GetAuthMeOperation                    OperationName = "GetAuthMe"
+	GetAutoApplyListOperation             OperationName = "GetAutoApplyList"
 	GetAutofillProfileOperation           OperationName = "GetAutofillProfile"
 	GetBillingCheckoutOperation           OperationName = "GetBillingCheckout"
 	GetBillingManageOperation             OperationName = "GetBillingManage"

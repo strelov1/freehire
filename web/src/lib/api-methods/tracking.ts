@@ -1,6 +1,7 @@
 import type { Http } from '../api-core';
 import type {
   AgentPermissions,
+  AutoApplyList,
   Allowance,
   BankedAnswer,
   ListMeta,
@@ -81,6 +82,11 @@ export function trackingApi({ call, request, requestData }: Http) {
   /** Clear a job's saved mark. Idempotent: "already not saved" is success. */
   function unsaveJob(slug: string): Promise<UserJob> {
     return jobInteraction(slug, 'save', 'DELETE');
+  }
+
+  /** Read the caller's live attempts and recent submissions. */
+  function listAutoApply(): Promise<AutoApplyList> {
+    return requestData<AutoApplyList>('/api/v1/me/auto-apply');
   }
 
   /** Start an auto-apply attempt for the current user and this job
@@ -290,6 +296,7 @@ export function trackingApi({ call, request, requestData }: Http) {
     clearApplicationStage,
     untrackApplication,
     unsaveJob,
+    listAutoApply,
     autoApplyJob,
     reviewAutoApply,
     retryAutoApply,

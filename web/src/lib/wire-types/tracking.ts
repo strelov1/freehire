@@ -36,3 +36,9 @@ export type AgentPermissions = components['schemas']['AgentPermissions'];
 
 /** One answer the candidate has banked for a screening question. */
 export type BankedAnswer = components['schemas']['BankedAnswer'];
+
+/** A live automatic application or a submission from the last 30 days. */
+export type AutoApplyListItem = components['schemas']['AutoApplyListItem'];
+
+/** The caller's automatic application list. */
+export type AutoApplyList = components['schemas']['AutoApplyList'];

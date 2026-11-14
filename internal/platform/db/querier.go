@@ -4037,8 +4037,9 @@ type Querier interface {
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]ListAutoApplyBlockedCandidatesRow, error)
 	// The caller's live attempts, newest first, with what a status derivation and a list row
 	// need. last_event_at is when anything last happened to the pair, which is what an agent
-	// polling for progress compares.
-	ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error)
+	// polling for progress compares. A NULL max_entries returns the complete browser list;
+	// the assistant keeps its bounded response by supplying a limit.
+	ListAutoApplyEntries(ctx context.Context, arg ListAutoApplyEntriesParams) ([]ListAutoApplyEntriesRow, error)
 	// The most recent history of one (user, job) pair, newest first; the caller reverses it.
 	ListAutoApplyEvents(ctx context.Context, arg ListAutoApplyEventsParams) ([]ListAutoApplyEventsRow, error)
 	// One (user, job) pair's events newer than a cursor, OLDEST first, a page at a time: the
