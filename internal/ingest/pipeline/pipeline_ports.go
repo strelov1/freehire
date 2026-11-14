@@ -55,7 +55,8 @@ type Closer interface {
 // for it and drops the refresh when a Store lacks it (test fakes), like Closer.
 type Toucher interface {
 	// Touch reports the refreshed row's stored company slug ("" when there was no row).
-	Touch(ctx context.Context, source, externalID string) (companySlug string, err error)
+	// A non-nil deadline updates the listing's last application date; nil preserves it.
+	Touch(ctx context.Context, source, externalID string, deadline *time.Time) (companySlug string, err error)
 }
 
 // CoveredRefresher refreshes the liveness of OPEN stored rows a board listed but did

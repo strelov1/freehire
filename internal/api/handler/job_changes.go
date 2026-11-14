@@ -52,7 +52,7 @@ func decodeChangesCursor(s string) (changesCursor, error) {
 var errBadChangesCursor = fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 
 // ListJobChanges serves the public change feed: what opened, closed and reopened, oldest
-// first, after a keyset position. The log and its ordering rules are in migration 0263 and
+// first, after a keyset position. The log and its ordering rules are in migration 0264 and
 // queries/job_changes.sql. Public like the other job reads; no tier gating.
 func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJobChangesParams) (*apigen.JobChangesPage, error) {
 	limit, _ := contractPageBounded(ctx, defaultChangesLimit, maxChangesLimit)

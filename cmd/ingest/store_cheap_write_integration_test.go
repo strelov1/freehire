@@ -237,7 +237,7 @@ func TestTouch_CountsAsACheapWrite(t *testing.T) {
 	if err := store.Save(ctx, cheapPosting("acme:cheap-4", "Site Engineer")); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	if _, err := store.Touch(ctx, "lever", "acme:cheap-4"); err != nil {
+	if _, err := store.Touch(ctx, "lever", "acme:cheap-4", nil); err != nil {
 		t.Fatalf("Touch: %v", err)
 	}
 

@@ -13,6 +13,14 @@
 
   let { data }: { data: PageData } = $props();
 
+  const catalogSize = $derived(data.catalogHistory.map((p) => ({ date: p.date, total: p.open_jobs })));
+  // Reconstructed days are only ever written before the first measured day
+  // (RecordReconstructedCatalogSize), so they are the series' leading run.
+  const estimatedDays = $derived.by(() => {
+    const i = data.catalogHistory.findIndex((p) => !p.reconstructed);
+    return i === -1 ? data.catalogHistory.length : i;
+  });
+
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/open`);
   const description =
@@ -270,6 +278,29 @@
     <ActivityBars points={data.activity} />
   </section>
 
+  <!-- C. Catalogue size -->
+  {#if catalogSize.length > 0}
+    <section class="mb-14">
+      <div class="flex items-baseline justify-between">
+        <p class="font-mono text-xs text-muted-foreground">// catalogue size</p>
+        {@render sourceLink('/api/v1/stats/catalog-history', '/stats/catalog-history')}
+      </div>
+      <h2 class="mt-3 text-xl font-semibold tracking-tight">Open postings over time</h2>
+      <p class="mb-6 mt-1 text-sm text-muted-foreground">
+        How many postings you could browse at the end of each day.
+        {#if estimatedDays > 0}
+          The dashed part is reconstructed from today's records, not measured on the day.
+        {/if}
+      </p>
+      <GrowthArea
+        points={catalogSize}
+        estimated={estimatedDays}
+        label="Open postings in the catalogue over time"
+        empty="No figures yet."
+      />
+    </section>
+  {/if}
+
   <!-- F. Member growth -->
   <section class="mb-14">
     <div class="flex items-baseline justify-between">
@@ -282,7 +313,7 @@
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Cumulative registered members over time. Early days — and that's the point of showing it.
     </p>
-    <GrowthArea points={data.growth} />
+    <GrowthArea points={data.growth} label="Cumulative members over time" empty="No members yet." />
     <h3 class="mt-8 text-base font-semibold tracking-tight">New members per day</h3>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
       Same series, not cumulative — how many people signed up on each day.

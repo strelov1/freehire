@@ -3897,6 +3897,82 @@ func (s *Server) handleCancelSupportTurnRequest(args [1]string, argsEscaped bool
 	}
 }
 
+// handleCatalogHistoryRequest handles catalogHistory operation.
+//
+// The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.
+//
+// GET /stats/catalog-history
+func (s *Server) handleCatalogHistoryRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *CatalogHistoryOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CatalogHistoryOperation,
+			OperationSummary: "The catalogue's size per UTC day, measured or reconstructed.",
+			OperationID:      "catalogHistory",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *CatalogHistoryOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CatalogHistory(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CatalogHistory(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCatalogHistoryResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCatalogScaleRequest handles catalogScale operation.
 //
 // The canonical numbers behind every "how big is this" figure on the site (the jobs list total, the

@@ -4410,6 +4410,21 @@ func (s *CancelSessionOK) SetData(val MentorshipBooking) {
 // CancelSupportTurnNoContent is response for CancelSupportTurn operation.
 type CancelSupportTurnNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type CatalogHistoryOK struct {
+	Data []CatalogSizePoint `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CatalogHistoryOK) GetData() []CatalogSizePoint {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CatalogHistoryOK) SetData(val []CatalogSizePoint) {
+	s.Data = val
+}
+
 // The size of the catalogue, from one published snapshot.
 // Ref: #/components/schemas/CatalogScale
 type CatalogScale struct {
@@ -4518,6 +4533,47 @@ func (s *CatalogScaleOK) GetData() CatalogScale {
 // SetData sets the value of Data.
 func (s *CatalogScaleOK) SetData(val CatalogScale) {
 	s.Data = val
+}
+
+// Ref: #/components/schemas/CatalogSizePoint
+type CatalogSizePoint struct {
+	// YYYY-MM-DD (UTC).
+	Date string `json:"date"`
+	// Open postings the public listings could page through at the end of that day.
+	OpenJobs int64 `json:"open_jobs"`
+	// True for a day estimated after the fact from today's records rather than measured that day. Such a
+	// day applies today's duplicate verdicts to the past.
+	Reconstructed bool `json:"reconstructed"`
+}
+
+// GetDate returns the value of Date.
+func (s *CatalogSizePoint) GetDate() string {
+	return s.Date
+}
+
+// GetOpenJobs returns the value of OpenJobs.
+func (s *CatalogSizePoint) GetOpenJobs() int64 {
+	return s.OpenJobs
+}
+
+// GetReconstructed returns the value of Reconstructed.
+func (s *CatalogSizePoint) GetReconstructed() bool {
+	return s.Reconstructed
+}
+
+// SetDate sets the value of Date.
+func (s *CatalogSizePoint) SetDate(val string) {
+	s.Date = val
+}
+
+// SetOpenJobs sets the value of OpenJobs.
+func (s *CatalogSizePoint) SetOpenJobs(val int64) {
+	s.OpenJobs = val
+}
+
+// SetReconstructed sets the value of Reconstructed.
+func (s *CatalogSizePoint) SetReconstructed(val bool) {
+	s.Reconstructed = val
 }
 
 // Ref: #/components/schemas/CategoryMeta

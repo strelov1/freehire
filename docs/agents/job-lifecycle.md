@@ -17,7 +17,7 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 - A source with no close signal at all (no re-crawl, no feed, a URL that outlives the vacancy) is closed by age: `telegram` today, at 45 days. It is the only close that rests on a guess.
 - Every close records which mechanism wrote it in `closed_reason`; a reopen clears it. Rows closed before the column existed carry `''` (unknown) and are never relabelled.
 - `cmd/close-chronic-boards`, separate from the ingest sweep, closes a board (or boardless provider) unreachable for a long time, not merely cooling down (`closed_reason = 'board_unreachable'`), and in a second pass a board whose crawls all SUCCEED but whose feed has carried nothing for a long time (`'feed_empty'`).
-- Every flip of "listed" (open, canonical, public: `closed_at`, `duplicate_of` via its owner columns, `is_private`; and every insert) is appended to `job_changes` by a trigger (`jobs_log_change`, migration 0263), whatever wrote it. It is the source of `GET /jobs/changes`; the feed pages by (xid, id) and serves only entries below the oldest in-flight transaction, so a closer that commits late never lands behind a client's cursor. A new closer needs nothing; a new column that decides visibility must join the trigger's condition (migration 0263). The log is never pruned.
+- Every flip of "listed" (open, canonical, public: `closed_at`, `duplicate_of` via its owner columns, `is_private`; and every insert) is appended to `job_changes` by a trigger (`jobs_log_change`, migration 0264), whatever wrote it. It is the source of `GET /jobs/changes`; the feed pages by (xid, id) and serves only entries below the oldest in-flight transaction, so a closer that commits late never lands behind a client's cursor. A new closer needs nothing; a new column that decides visibility must join the trigger's condition (migration 0264). The log is never pruned.
 - An open posting its source has not shown for more than 14 days (`last_seen_at`) is **hidden from search, not closed** (see "The unseen safety net"). It stays open, its page serves, and it returns when its source lists it again.
 
 ## How it works
@@ -25,16 +25,24 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 Observation state (`last_seen_at`, `hydrated_at`, `liveness_strikes`) is read from
 `job_activity`, keyed by `jobs.id`. `jobs_read` combines it with posting content for
 the existing `db.Job` shape. An insert trigger creates activity even for raw SQL
-inserts. During the compatible rollout, legacy writers still update `jobs`; a
-one-way bridge mirrors them into activity without regressing timestamps. This
-reader release alone does not reduce observation writes.
+inserts. Ordinary unchanged refreshes, open touches and covered refreshes update
+only activity. Full posting writes use `job.Upsert`: write content first, then
+observe activity with a second command in the same transaction. This preserves
+the insert trigger's visibility and the lock order. Body hydration advances only
+when a body was read; a substituted catalogue body preserves its previous stamp.
+Older compatible writers still update `jobs`; a one-way bridge mirrors them into
+activity without regressing timestamps until the contract release removes it.
 
 Closers that depend on freshness lock `jobs` then `job_activity` with
 `FOR NO KEY UPDATE` and recheck the observation after waiting. A plain join in an
 `UPDATE jobs` does not recheck a concurrently refreshed activity tuple. The
 activity `state_version` changes on lifecycle or cheap-match-key changes; reopening
-resets strikes. The later activity-only writer release must wait for every legacy
-reader process to exit, including crawler and liveness workers.
+resets strikes. A cheap write rejected by that version fence rolls back before
+retrying in a fresh transaction. Covered refresh commits its bulk `SKIP LOCKED`
+pass before retrying unwritten rows individually; an exhausted retry or timeout
+fails coverage instead of silently permitting a sweep. The writer release must
+wait for every pre-reader-release process to exit, including crawler and liveness
+workers, and for external SQL readers to use activity.
 
 Seven independent mechanisms write `closed_at`, each covering a gap the others can't reach. Six close on evidence; the age rule (4) guesses, which is why every close records its mechanism. The safety nets (5) and (6) read a board's history, not a posting: (5) nothing could reach the board for weeks, (6) everything reached it and found nothing.
 

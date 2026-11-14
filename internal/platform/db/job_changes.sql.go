@@ -79,7 +79,7 @@ type ListJobChangesRow struct {
 // client already holds. Ordering by id alone would not give that, because ids are taken
 // inside the trigger, long before a bulk close commits.
 //
-// Visibility was judged when the change was logged (migration 0263: canonical, public, open
+// Visibility was judged when the change was logged (migration 0264: canonical, public, open
 // all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
 // that is private NOW serves only `closed` entries. Those carry just a slug the client was
 // already given while it was public, and withholding them would leave the copy listed.

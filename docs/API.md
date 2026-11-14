@@ -3002,6 +3002,30 @@ false.
 curl "https://freehire.me/api/v1/stats/catalog"
 ```
 
+### `GET /stats/catalog-history`
+
+**Auth:** Public
+
+The catalogue's size per UTC day, measured or reconstructed.
+
+The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.
+
+```bash
+curl "https://freehire.me/api/v1/stats/catalog-history"
+```
+
+```json
+{
+  "data": [
+    {
+      "date": "2026-07-04",
+      "open_jobs": 2935357,
+      "reconstructed": true
+    }
+  ]
+}
+```
+
 ### `GET /stats/embeddings`
 
 **Auth:** Public

@@ -10521,6 +10521,63 @@
         ]
       }
     },
+    "/stats/catalog-history": {
+      "get": {
+        "operationId": "catalogHistory",
+        "summary": "The catalogue's size per UTC day, measured or reconstructed.",
+        "description": "The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogSizePoint"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "date": "2026-07-04",
+                      "open_jobs": 2935357,
+                      "reconstructed": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
     "/stats/embeddings": {
       "get": {
         "operationId": "getEmbeddingProgress",
@@ -13933,6 +13990,29 @@
           }
         },
         "description": "The size of the catalogue, from one published snapshot."
+      },
+      "CatalogSizePoint": {
+        "type": "object",
+        "required": [
+          "date",
+          "open_jobs",
+          "reconstructed"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD (UTC)."
+          },
+          "open_jobs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Open postings the public listings could page through at the end of that day."
+          },
+          "reconstructed": {
+            "type": "boolean",
+            "description": "True for a day estimated after the fact from today's records rather than measured that\nday. Such a day applies today's duplicate verdicts to the past."
+          }
+        }
       },
       "CategoryMeta": {
         "type": "object",

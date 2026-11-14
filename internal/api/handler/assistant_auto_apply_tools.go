@@ -54,7 +54,7 @@ const agentsMayApplyOff = "auto-apply by connected agents is turned off for this
 	"Account → Integrations → API keys (/my/integrations/api-keys), then try again"
 
 // errAgentsMayApplyOff carries 403 so the refusal is counted as permission_denied, not as ours.
-var errAgentsMayApplyOff = fiber.NewError(fiber.StatusForbidden, agentsMayApplyOff)
+var errAgentsMayApplyOff = assistant.WithLogReason(fiber.NewError(fiber.StatusForbidden, agentsMayApplyOff), "agents_may_apply is off")
 
 // requireAgentsMayApply refuses unless the account switched agents_may_apply on.
 func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID int64) error {
@@ -81,11 +81,11 @@ func toolError(err error) error {
 	switch {
 	// The day's auto-apply allowance is spent: the 402 the start route answers it with.
 	case errors.As(err, &refused):
-		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusPaymentRequired, err.Error()), "auto-apply allowance spent")
 	case errors.Is(err, plan.ErrPaymentRequired):
-		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusPaymentRequired, err.Error()), "paid plan required")
 	case errors.Is(err, plan.ErrRefused):
-		return fiber.NewError(fiber.StatusTooManyRequests, err.Error())
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusTooManyRequests, err.Error()), "plan allowance refused")
 	}
 	return err
 }
@@ -126,7 +126,9 @@ func (h *assistantHandlers) autoApplyStartTool() assistant.Tool {
 			"to the vacancy, checks the employer's application form against their saved answers, and "+
 			"waits for a review (auto_apply_review) before submitting. Spends one of today's auto-apply "+
 			"allowance, so it needs a paid plan, and the account's switch letting agents apply. Only "+
-			"vacancies on supported applicant-tracking systems can be started. Follow "+
+			"vacancies on supported applicant-tracking systems can be started. Refusals: "+
+			"permission_denied (the account's switch is off), payment_required (no paid plan or "+
+			"allowance spent), invalid_request (the vacancy cannot be auto-applied). Follow "+
 			"progress with auto_apply_get.",
 		assistant.EffectAdds, true,
 		func(ctx context.Context, userID int64, slug string) (any, error) {

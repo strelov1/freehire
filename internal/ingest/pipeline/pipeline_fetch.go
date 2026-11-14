@@ -157,7 +157,7 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 }
 
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,
-// without rewriting its content. It routes through the Store's optional Toucher capability; a
+// and its stated listing deadline without rewriting hydrated content. It routes through the Store's optional Toucher capability; a
 // Store without it (a test fake) drops the refresh, matching how ingestStream handles Closer.
 func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) (string, error) {
 	t, ok := r.Store.(Toucher)
@@ -165,7 +165,7 @@ func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job
 		return "", nil
 	}
 	source, externalID := jobIdentity(e, j)
-	return t.Touch(ctx, source, externalID)
+	return t.Touch(ctx, source, externalID, j.ApplicationDeadline)
 }
 
 // skippedBoard is the sweep exclusion for a board the run skipped. A boardless entry has no
