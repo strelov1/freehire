@@ -106,7 +106,7 @@ const expiryWindow = 45 * 24 * time.Hour
 // week) — none of them fullCatalog, all boardless. jobtech is the one member the sweep never
 // touches at all: it is self-closing, closing from its change feed's removals, and a removal
 // the crawl missed inside the feed's 72h window is never sent again (see jobtech.go).
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam"}
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech", "instaffo", "remotedotcom", "thehub", "reed", "arbeitsagentur", "xing", "gradcracker", "engage", "betterteam", "linkedin"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -129,6 +129,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
 		jobtechPass(client, jobtechAdAPI),
+		linkedInPass(client),
 	}, catalogStatusPasses(client)...)
 }
 

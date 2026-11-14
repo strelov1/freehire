@@ -15,6 +15,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   successfactors: 'SAP SuccessFactors',
   workatastartup: 'Work at a Startup',
   remoteok: 'RemoteOK',
+  linkedin: 'LinkedIn',
   arc: 'Arc',
   jobstash: 'JobStash',
   globalpayments: 'Global Payments',
