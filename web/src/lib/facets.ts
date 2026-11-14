@@ -337,7 +337,7 @@ export function reportedCount(n: number): number | undefined {
  *  sourceLogoUrl, the same pair /sources and JobSourceRow render their marks with).
  *  Other dynamic facets (skills, countries, cities) have no logo proxy to ask. */
 function dynamicIcon(param: string, value: string): string | undefined {
-  if (param === 'source') return sourceLogoUrl(sourceLabel(sourceLogoBrand(value))) ?? undefined;
+  if (param === 'source') return sourceLogoUrl(sourceLabel(sourceFamily(value))) ?? undefined;
   return undefined;
 }
 
@@ -600,11 +600,11 @@ export function sourceLabel(value: string): string {
   return SOURCE_LABELS[value] ?? titleCase(value.replace(/-/g, '_'));
 }
 
-// The whatjobs-<country> boards (~40 of them) are one crawl adapter's regional
-// splits of a single brand, not distinct companies — WhatJobs itself is the only
-// one with a mark the logo proxy can resolve. Used only for the LOGO lookup, never
-// the label: a picker listing every region needs each one to stay distinguishable.
-function sourceLogoBrand(value: string): string {
+// The whatjobs-<country> sources are one brand split per publisher account
+// (vocab.SourceFamilies on the server). A reader sees the brand once: the search
+// filter, /sources and /status already fold them, and the job page names, links
+// and avoids the family, which the server expands to every market.
+export function sourceFamily(value: string): string {
   return value.startsWith('whatjobs-') ? 'whatjobs' : value;
 }
 

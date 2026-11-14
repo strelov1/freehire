@@ -132,4 +132,18 @@ describe('JobSourceRow', () => {
     const other = render(JobSourceRow, props);
     expect(other.container.textContent).not.toContain('Powered by Dev Global Jobs');
   });
+
+  it('shows, links and avoids a regional market as its brand', async () => {
+    // whatjobs-uk is one of WhatJobs' per-country accounts; to a reader it is WhatJobs, and
+    // the server expands the family name to every market in the filter and the avoid.
+    const { container } = render(JobSourceRow, { ...props, source: 'whatjobs-uk' });
+
+    expect(screen.getByText('WhatJobs')).toBeTruthy();
+    expect(container.querySelector('a')?.getAttribute('href')).toContain('source=whatjobs');
+    expect(container.querySelector('a')?.getAttribute('href')).not.toContain('whatjobs-uk');
+
+    await fireEvent.click(screen.getByRole('button', { name: /Avoid this source/ }));
+
+    expect(avoidSource).toHaveBeenCalledWith('whatjobs');
+  });
 });
