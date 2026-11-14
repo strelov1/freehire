@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/reminder"
@@ -69,6 +70,10 @@ func parseHHMM(s *string) (*time.Duration, error) {
 // device to reach is a 409. Anything else falls through to a 500.
 func reminderError(err error) error {
 	switch {
+	case errors.Is(err, plan.ErrPaymentRequired):
+		return fiber.NewError(fiber.StatusPaymentRequired, "Daily inbox summaries require Pro or Ultra")
+	case errors.Is(err, reminder.ErrPlanUnavailable):
+		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
 	case errors.Is(err, reminder.ErrInvalidChannel):
 		return fiber.NewError(fiber.StatusBadRequest, "unsupported notification channel")
 	case errors.Is(err, reminder.ErrNoPushDevice):

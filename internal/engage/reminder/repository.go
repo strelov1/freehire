@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -140,4 +141,12 @@ func (r *QueriesRepository) UpsertReminder(ctx context.Context, userID, jobID in
 func (r *QueriesRepository) CancelReminder(ctx context.Context, userID, jobID int64) error {
 	_, err := r.q.CancelJobReminder(ctx, db.CancelJobReminderParams{UserID: userID, JobID: jobID})
 	return err
+}
+
+func (r *QueriesRepository) HasPaidPlan(ctx context.Context, userID int64) (bool, error) {
+	untils, err := r.q.GetPlanUntils(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now()).Paid(), nil
 }

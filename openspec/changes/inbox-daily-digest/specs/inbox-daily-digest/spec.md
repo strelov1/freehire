@@ -39,3 +39,14 @@ Generated inbox digests MUST carry an explicit product marker and MUST be exclud
 #### Scenario: Delayed classification
 - **WHEN** an old request is classified after a newer message in its conversation has already been delivered
 - **THEN** the old request does not reappear as a new action in a later digest
+
+### Requirement: Pro and Ultra entitlement
+Only a live Pro or Ultra entitlement SHALL permit enabling or delivering an inbox digest. Expiry SHALL pause delivery without erasing consent. Every account MUST be able to disable its digest or edit unrelated notification settings. Entitlement read failures MUST NOT permit new activation.
+
+#### Scenario: Subscription lapses before dispatch
+- **WHEN** an account loses its paid entitlement after selection
+- **THEN** the delivery claim is refused and no email is dispatched
+
+#### Scenario: Free account enables digest
+- **WHEN** a free account attempts to activate the digest
+- **THEN** the server returns HTTP 402 and leaves it disabled

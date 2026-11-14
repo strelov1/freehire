@@ -4,7 +4,7 @@ Candidates need one daily view of new recruiter mail, requests and application u
 
 ## What Changes
 
-- Add an opt-in daily inbox email to notification settings, using the account timezone and chosen daily digest time.
+- Add a Pro/Ultra opt-in daily inbox email to notification settings, using the account timezone and chosen daily digest time.
 - Group new classified incoming mail by known provider thread, show recent outgoing evidence, and skip empty days.
 - Deliver inside the existing notify worker with a per-local-day claim and delivery ledger, independent of search availability.
 

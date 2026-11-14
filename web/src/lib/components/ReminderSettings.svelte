@@ -35,6 +35,7 @@
   let digestFrequency = $state('daily');
   let digestTime = $state('09:00');
   let inboxDigestEnabled = $state(false);
+  let inboxDigestPaid = $state(false);
   let digestIntervalHours = $state(1);
   // 1-23: a full day is the Daily option, which also picks the hour.
   const intervalHourOptions = Array.from({ length: 23 }, (_, i) => i + 1);
@@ -76,15 +77,17 @@
   async function load() {
     status = 'loading';
     try {
-      const [settings, tg, pushDevice] = await Promise.all([
+      const [settings, tg, pushDevice, plan] = await Promise.all([
         api.getNotificationSettings(),
         api.telegramStatus(),
         api.hasPushDevice(),
+        api.myPlan().catch(() => null),
       ]);
       enabled = settings.enabled;
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
+      inboxDigestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
       digestFrequency = settings.digest_frequency || 'daily';
       digestTime = settings.digest_time ?? '09:00';
       inboxDigestEnabled = settings.inbox_digest_enabled ?? false;
@@ -310,13 +313,21 @@
       <ToggleSwitch
         on={inboxDigestEnabled}
         label="Daily inbox summary"
-        disabled={!inboxDigestEnabled && (!enabled || !channels.includes('email'))}
+        disabled={!inboxDigestEnabled && (!inboxDigestPaid || !enabled || !channels.includes('email'))}
         onToggle={() => {
           inboxDigestEnabled = !inboxDigestEnabled;
           persist();
         }}
       />
     </div>
+    {#if !inboxDigestPaid}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
+          href={resolve('/pricing')}
+          class="font-medium text-brand-strong hover:underline">View plans</a
+        >
+      </p>
+    {/if}
     <p class="mt-2 text-xs text-muted-foreground">
       Uses the daily digest time below and your account timezone. Starts with messages received after you turn it on.
     </p>

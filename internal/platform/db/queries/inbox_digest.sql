@@ -8,6 +8,7 @@ SELECT ns.user_id,
 FROM notification_settings ns
 JOIN users u ON u.id = ns.user_id
 WHERE ns.enabled AND ns.inbox_digest_enabled
+ AND (coalesce(u.pro_until > greatest(sqlc.arg(now_at)::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest(sqlc.arg(now_at)::timestamptz, now()), false))
  AND ns.channels @> ARRAY['email']::text[]
  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
  AND (sqlc.arg(now_at)::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::time >= coalesce(ns.digest_time, '09:00'::time)
@@ -79,6 +80,7 @@ INSERT INTO inbox_digest_deliveries(user_id, local_day, email_ids, claimed_at)
 SELECT ns.user_id, sqlc.arg(local_day)::date, sqlc.arg(email_ids)::bigint[], sqlc.arg(now_at)::timestamptz
 FROM notification_settings ns JOIN users u ON u.id = ns.user_id
 WHERE ns.user_id = sqlc.arg(user_id) AND ns.enabled AND ns.inbox_digest_enabled
+ AND (coalesce(u.pro_until > greatest(sqlc.arg(now_at)::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest(sqlc.arg(now_at)::timestamptz, now()), false))
  AND ns.channels @> ARRAY['email']::text[]
  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) = sqlc.arg(email)::text
  AND sqlc.arg(email)::text <> ''

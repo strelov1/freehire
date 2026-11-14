@@ -11,9 +11,11 @@ package reminder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
@@ -31,6 +33,8 @@ const DefaultNotificationHour = 9 * time.Hour
 
 // Sentinel errors mapped to HTTP statuses by the handler.
 var (
+	// ErrPlanUnavailable means paid access could not be checked (mapped to 503).
+	ErrPlanUnavailable = errors.New("reminder: cannot verify inbox digest plan")
 	// ErrInvalidChannel is an unsupported delivery channel (mapped to 400).
 	ErrInvalidChannel = errors.New("reminder: unsupported channel")
 	// ErrNoChannels is an enabled rule with no channels to deliver over (mapped to 400).
@@ -106,6 +110,7 @@ type Repository interface {
 	GetSettings(ctx context.Context, userID int64) (Settings, error)
 	// HasPushDevice reports whether the account has a registered push device.
 	HasPushDevice(ctx context.Context, userID int64) (bool, error)
+	HasPaidPlan(ctx context.Context, userID int64) (bool, error)
 	UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error)
 	GetScheduleContext(ctx context.Context, userID int64) (ScheduleContext, error)
 	UpsertReminder(ctx context.Context, userID, jobID int64, fireAt time.Time, channels []string) error
@@ -166,6 +171,22 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	}
 	if err := s.checkPushDevice(ctx, userID, in.Channels); err != nil {
 		return Settings{}, err
+	}
+	if in.InboxDigestEnabled {
+		current, err := s.repo.GetSettings(ctx, userID)
+		if err != nil {
+			return Settings{}, err
+		}
+		// Keep an existing preference editable after expiry; delivery checks the live plan.
+		if !current.InboxDigestEnabled {
+			paid, err := s.repo.HasPaidPlan(ctx, userID)
+			if err != nil {
+				return Settings{}, fmt.Errorf("%w: %w", ErrPlanUnavailable, err)
+			}
+			if !paid {
+				return Settings{}, plan.ErrPaymentRequired
+			}
+		}
 	}
 	return s.repo.UpsertSettings(ctx, userID, in)
 }

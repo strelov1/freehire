@@ -19,6 +19,10 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 so missing Meilisearch configuration does not disable inbox mail. It uses the same
 SES transport and engagement mail pause. No extra timer or model call is introduced.
 
+- A live Pro or Ultra plan is required to enable or deliver inbox digests. Expiry pauses
+  delivery without erasing consent; disabling remains available on every tier. The
+  activation service uses `plan.TierOf(...).Paid()`, and recipient selection and the
+  final delivery claim independently check both entitlement columns. No AI allowance is consumed.
 - `notification_settings.inbox_digest_enabled` defaults false. Enabling records an
   activation timestamp; older clients omitting the field preserve consent. Delivery
   requires the global activity switch, the email channel and `mail_recipient` eligibility.

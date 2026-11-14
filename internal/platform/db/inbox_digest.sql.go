@@ -16,6 +16,7 @@ INSERT INTO inbox_digest_deliveries(user_id, local_day, email_ids, claimed_at)
 SELECT ns.user_id, $1::date, $2::bigint[], $3::timestamptz
 FROM notification_settings ns JOIN users u ON u.id = ns.user_id
 WHERE ns.user_id = $4 AND ns.enabled AND ns.inbox_digest_enabled
+ AND (coalesce(u.pro_until > greatest($3::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest($3::timestamptz, now()), false))
  AND ns.channels @> ARRAY['email']::text[]
  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) = $5::text
  AND $5::text <> ''
@@ -120,6 +121,7 @@ SELECT ns.user_id,
 FROM notification_settings ns
 JOIN users u ON u.id = ns.user_id
 WHERE ns.enabled AND ns.inbox_digest_enabled
+ AND (coalesce(u.pro_until > greatest($1::timestamptz, now()), false) OR coalesce(u.ultra_until > greatest($1::timestamptz, now()), false))
  AND ns.channels @> ARRAY['email']::text[]
  AND mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <> ''
  AND ($1::timestamptz AT TIME ZONE inbox_digest_timezone(u.timezone))::time >= coalesce(ns.digest_time, '09:00'::time)

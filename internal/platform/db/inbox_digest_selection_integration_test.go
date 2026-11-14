@@ -25,6 +25,9 @@ func digestAccount(t *testing.T, pool *pgxpool.Pool, now time.Time, zone string)
 	if _, err := pool.Exec(ctx, `INSERT INTO notification_settings(user_id,enabled,channels,digest_frequency,digest_time,inbox_digest_enabled,inbox_digest_enabled_at) VALUES($1,true,'{email}','daily','09:00',true,$2)`, uid, now.Add(-2*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "UPDATE users SET pro_until_granted=$2 WHERE id=$1", uid, now.Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	return uid
 }
 func digestMail(t *testing.T, pool *pgxpool.Pool, uid int64, ext, thread, signal, direction string, at time.Time) int64 {
@@ -167,5 +170,56 @@ func TestInboxDigestDoesNotResurrectSupersededRequest(t *testing.T) {
 	}
 	if len(candidates) != 0 {
 		t.Fatal("superseded messages kept an empty account eligible")
+	}
+}
+
+func TestInboxDigestRequiresLiveProOrUltra(t *testing.T) {
+	for _, tier := range []string{"free", "expired", "pro", "ultra"} {
+		t.Run(tier, func(t *testing.T) {
+			pool := startPostgres(t)
+			q := New(pool)
+			ctx := context.Background()
+			now := time.Date(2030, 1, 2, 12, 0, 0, 0, time.UTC)
+			uid := digestAccount(t, pool, now, "UTC")
+			digestMail(t, pool, uid, "paid-test", "thread", "screening", "incoming", now.Add(-time.Hour))
+			var pro, ultra any
+			switch tier {
+			case "pro":
+				pro = now.Add(time.Hour)
+			case "ultra":
+				ultra = now.Add(time.Hour)
+			case "expired":
+				pro = now.Add(-time.Hour)
+				ultra = now.Add(-time.Hour)
+			}
+			if _, err := pool.Exec(ctx, "UPDATE users SET pro_until_granted=$2,ultra_until_granted=$3 WHERE id=$1", uid, pro, ultra); err != nil {
+				t.Fatal(err)
+			}
+			due, err := q.ListInboxDigestCandidates(ctx, ListInboxDigestCandidatesParams{NowAt: digestTime(now), BatchSize: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if tier == "pro" || tier == "ultra" {
+				want = 1
+			}
+			if len(due) != want {
+				t.Fatalf("tier=%s candidates=%d", tier, len(due))
+			}
+			if want == 0 {
+				return
+			}
+			snapshot, err := q.GetInboxDigestSnapshot(ctx, GetInboxDigestSnapshotParams{UserID: uid, EnabledAt: due[0].EnabledAt, NowAt: digestTime(now)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, "UPDATE users SET pro_until_granted=NULL,ultra_until_granted=NULL WHERE id=$1", uid); err != nil {
+				t.Fatal(err)
+			}
+			n, err := q.ClaimInboxDigest(ctx, ClaimInboxDigestParams{UserID: uid, Email: due[0].Email, Timezone: due[0].Timezone, EnabledAt: due[0].EnabledAt, EmailIds: snapshot.EmailIds, NowAt: digestTime(now), LocalDay: pgtype.Date{Time: now, Valid: true}})
+			if err != nil || n != 0 {
+				t.Fatalf("expired plan reached dispatch: claimed=%d err=%v", n, err)
+			}
+		})
 	}
 }

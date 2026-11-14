@@ -8,7 +8,7 @@ Send one useful opt-in daily email from already classified mail, without a new s
 
 ## Decisions
 
-Add inbox_digest_enabled (default false) and its activation timestamp to notification_settings. Use the existing daily digest_time, even when search alerts use another cadence. Preserve the new setting when an older client omits it. Global notifications, selected email channel, activity-group consent and the standard mail_recipient eligibility all gate delivery.
+Add inbox_digest_enabled (default false) and its activation timestamp to notification_settings. Use the existing daily digest_time, even when search alerts use another cadence. Preserve the new setting when an older client omits it. A live Pro or Ultra entitlement, global notifications, selected email channel, activity-group consent and the standard mail_recipient eligibility all gate delivery.
 
 Select incoming, classified non-other messages received since activation and within seven days; exclude deleted, future-dated, outgoing and already delivered messages. Group Gmail threads by source and provider thread id, with a per-message fallback for sources without one. Show the newest message per conversation, its source excerpt when available and a link to that exact inbox message. A later stored outgoing message is evidence of a subsequent reply, not proof that every request was resolved. Render three sections: recruiter outreach, requests in messages, application updates. Do not claim CV relevance or that a person has not answered.
 
@@ -23,3 +23,5 @@ Classifier mistakes remain visible as detected labels, as in the inbox; this dig
 ## Migration Plan
 
 Apply additive migration 0257 after 0256 and before deploying readers. Consent remains off for every existing account. Old binaries ignore the new columns. Deploy the Gmail reader guard and restart the existing long-lived mail-ingest daemon before enabling the new notify behavior. Reuse the existing notify service/timer; no host configuration change is needed.
+
+Activation uses the shared paid-tier resolution; delivery selection and claim recheck live entitlement. Expiry retains the opt-in preference but pauses sending. Existing consent can be preserved by legacy settings writes; opting out is always allowed. This is a product entitlement gate without AI metering.
