@@ -68,6 +68,13 @@ op searchJobs(
    */
   @query q_fields?: string,
   /**
+   * `true` lets the last word of `q` match as the start of a longer word (`data eng`
+   * finds `engineer`), for suggestions while someone is still typing. Off by default:
+   * the last word is read as complete, which is much faster on broad queries.
+   * (e.g. `true`)
+   */
+  @query q_prefix?: string,
+  /**
    * One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
    * relevance/newest. (e.g. `posted_at`)
    */
@@ -141,6 +148,13 @@ op agentSearchJobs(
    * `meta.ignored_params`) rather than partially applying. (e.g. `title`)
    */
   @query q_fields?: string,
+  /**
+   * `true` lets the last word of `q` match as the start of a longer word (`data eng`
+   * finds `engineer`), for suggestions while someone is still typing. Off by default:
+   * the last word is read as complete, which is much faster on broad queries.
+   * (e.g. `true`)
+   */
+  @query q_prefix?: string,
   /**
    * One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
    * relevance/newest. (e.g. `posted_at`)

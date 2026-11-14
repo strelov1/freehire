@@ -158,6 +158,10 @@ type AgentSearchJobsParams struct {
 	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
 	// partially applying. (e.g. `title`).
 	QFields OptString `json:",omitempty,omitzero"`
+	// `true` lets the last word of `q` match as the start of a longer word (`data eng` finds `engineer`),
+	// for suggestions while someone is still typing. Off by default: the last word is read as complete,
+	// which is much faster on broad queries. (e.g. `true`).
+	QPrefix OptString `json:",omitempty,omitzero"`
 	// One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
 	// relevance/newest. (e.g. `posted_at`).
 	Sort OptString `json:",omitempty,omitzero"`
@@ -189,6 +193,15 @@ func unpackAgentSearchJobsParams(packed middleware.Parameters) (params AgentSear
 		}
 		if v, ok := packed[key]; ok {
 			params.QFields = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "q_prefix",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.QPrefix = v.(OptString)
 		}
 	}
 	{
@@ -328,6 +341,47 @@ func decodeAgentSearchJobsParams(args [0]string, argsEscaped bool, r *http.Reque
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "q_fields",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: q_prefix.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "q_prefix",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotQPrefixVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotQPrefixVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.QPrefix.SetTo(paramsDotQPrefixVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "q_prefix",
 			In:   "query",
 			Err:  err,
 		}
@@ -16234,6 +16288,10 @@ type SearchJobsParams struct {
 	// name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than
 	// partially applying. (e.g. `title`).
 	QFields OptString `json:",omitempty,omitzero"`
+	// `true` lets the last word of `q` match as the start of a longer word (`data eng` finds `engineer`),
+	// for suggestions while someone is still typing. Off by default: the last word is read as complete,
+	// which is much faster on broad queries. (e.g. `true`).
+	QPrefix OptString `json:",omitempty,omitzero"`
 	// One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for
 	// relevance/newest. (e.g. `posted_at`).
 	Sort OptString `json:",omitempty,omitzero"`
@@ -16280,6 +16338,15 @@ func unpackSearchJobsParams(packed middleware.Parameters) (params SearchJobsPara
 		}
 		if v, ok := packed[key]; ok {
 			params.QFields = v.(OptString)
+		}
+	}
+	{
+		key := middleware.ParameterKey{
+			Name: "q_prefix",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.QPrefix = v.(OptString)
 		}
 	}
 	{
@@ -16428,6 +16495,47 @@ func decodeSearchJobsParams(args [0]string, argsEscaped bool, r *http.Request) (
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "q_fields",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	// Decode query: q_prefix.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "q_prefix",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				var paramsDotQPrefixVal string
+				if err := func() error {
+					val, err := d.DecodeValue()
+					if err != nil {
+						return err
+					}
+
+					c, err := conv.ToString(val)
+					if err != nil {
+						return err
+					}
+
+					paramsDotQPrefixVal = c
+					return nil
+				}(); err != nil {
+					return err
+				}
+				params.QPrefix.SetTo(paramsDotQPrefixVal)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "q_prefix",
 			In:   "query",
 			Err:  err,
 		}

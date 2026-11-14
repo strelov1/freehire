@@ -276,6 +276,29 @@ func TestSearchJobs_QFieldsRestrictsSearchableAttributes(t *testing.T) {
 	}
 }
 
+func TestSearchJobs_QPrefixOnlyWhenAsked(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want bool
+	}{
+		{"/api/v1/jobs/search?q=data+eng&q_prefix=true", true},
+		{"/api/v1/jobs/search?q=data+engineer", false},
+	} {
+		fake := &fakeSearcher{}
+		status, body := doGet(t, searchApp(fake), tc.url)
+		if status != fiber.StatusOK {
+			t.Fatalf("%s: status = %d, want 200", tc.url, status)
+		}
+		if fake.got.Prefix != tc.want {
+			t.Errorf("%s: Prefix = %v, want %v", tc.url, fake.got.Prefix, tc.want)
+		}
+		meta, _ := body["meta"].(map[string]any)
+		if _, present := meta["ignored_params"]; present {
+			t.Errorf("%s: meta.ignored_params = %v, want q_prefix read", tc.url, meta["ignored_params"])
+		}
+	}
+}
+
 func TestSearchJobs_QFieldsAbsentLeavesAllFieldsSearchable(t *testing.T) {
 	fake := &fakeSearcher{}
 	app := searchApp(fake)

@@ -435,7 +435,8 @@
       // postings.
       const [s, j, c] = await Promise.allSettled([
         api.suggest(typed, completionsLimit, ac.signal),
-        api.searchJobs(new URLSearchParams({ q: typed }), jobsLimit, 0, ac.signal),
+        // q_prefix: the draft's last word may be half-typed ("data eng").
+        api.searchJobs(new URLSearchParams({ q: typed, q_prefix: 'true' }), jobsLimit, 0, ac.signal),
         // Over-fetch: most of what the fuzzy endpoint returns is discarded below, and
         // asking for exactly three would leave the section empty whenever the fourth
         // was the only real match.

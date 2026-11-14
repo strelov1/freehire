@@ -559,6 +559,10 @@ func (s *Server) handleAgentSearchJobsRequest(args [0]string, argsEscaped bool, 
 					In:   "query",
 				}: params.QFields,
 				{
+					Name: "q_prefix",
+					In:   "query",
+				}: params.QPrefix,
+				{
 					Name: "sort",
 					In:   "query",
 				}: params.Sort,
@@ -27777,6 +27781,10 @@ func (s *Server) handleSearchJobsRequest(args [0]string, argsEscaped bool, w htt
 					Name: "q_fields",
 					In:   "query",
 				}: params.QFields,
+				{
+					Name: "q_prefix",
+					In:   "query",
+				}: params.QPrefix,
 				{
 					Name: "sort",
 					In:   "query",

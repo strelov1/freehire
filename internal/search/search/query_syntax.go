@@ -95,6 +95,20 @@ func splitOutsideQuotes(q string) []string {
 	return tokens
 }
 
+// wholeWords ends text with a space, which tells Meilisearch its last word is complete.
+// Otherwise the engine expands that word as a prefix ("engineer" → engineers,
+// engineering, …), and over a catalogue of millions of postings with long descriptions
+// a two-word query ran into the engine's 1.5s search cutoff and came back partly
+// ranked: "data engineer" took ~1.6s and put "Machine Learning Engineer" first,
+// against ~30ms and "Data Engineer" first with the space (measured on prod, 2026-11-13).
+// Typo tolerance still applies to every word.
+func wholeWords(text string) string {
+	if text == "" || strings.HasSuffix(text, " ") {
+		return text
+	}
+	return text + " "
+}
+
 // literalSearchText preserves title words and language tokens such as C++ and C#,
 // while removing the quote and unary-minus syntax Meilisearch would execute.
 func literalSearchText(text string) string {

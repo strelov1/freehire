@@ -58,6 +58,16 @@
             "explode": false
           },
           {
+            "name": "q_prefix",
+            "in": "query",
+            "required": false,
+            "description": "`true` lets the last word of `q` match as the start of a longer word (`data eng`\nfinds `engineer`), for suggestions while someone is still typing. Off by default:\nthe last word is read as complete, which is much faster on broad queries.\n(e.g. `true`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -515,6 +525,16 @@
             "in": "query",
             "required": false,
             "description": "Comma-separated subset of `title,company,description,location` to restrict `q` to,\ne.g. `title`. A name outside that set drops the whole parameter (reported in\n`meta.ignored_params`) rather than partially applying. (e.g. `title`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "q_prefix",
+            "in": "query",
+            "required": false,
+            "description": "`true` lets the last word of `q` match as the start of a longer word (`data eng`\nfinds `engineer`), for suggestions while someone is still typing. Off by default:\nthe last word is read as complete, which is much faster on broad queries.\n(e.g. `true`)",
             "schema": {
               "type": "string"
             },

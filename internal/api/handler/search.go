@@ -174,10 +174,15 @@ type searcher interface {
 // facetsParams in facets.go, companiesParams in companies.go).
 var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 
-// jobSearchParams is searchParams plus q_fields, the field-scoping parameter
-// only the two job-search endpoints (not the swipe deck, which shares
-// searchParams but never reads q_fields) understand.
-var jobSearchParams = slices.Concat(searchParams, []string{"q_fields"})
+// jobSearchParams is searchParams plus q_fields and q_prefix, the field-scoping and
+// prefix-matching parameters only the two job-search endpoints (not the swipe deck,
+// which shares searchParams but reads neither) understand.
+var jobSearchParams = slices.Concat(searchParams, []string{"q_fields", qPrefixParam})
+
+// qPrefixParam asks for q's last word to match as the start of a longer word, for a box
+// suggesting results while someone is still typing. Off by default: see
+// search.SearchParams.Prefix for what the prefix match costs.
+const qPrefixParam = "q_prefix"
 
 // hideAppliedCompaniesParam asks /jobs/search to leave out the postings of every
 // employer the caller has applied to. It is a per-person preference, not a filter:
@@ -585,6 +590,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		Sort:    sort,
 		Vector:  vector,
 		QFields: qFields,
+		Prefix:  wantsParam(vals, qPrefixParam),
 		Limit:   limit,
 		Offset:  offset,
 	}
@@ -629,7 +635,7 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		// been filterable, so an undeclared facet cannot justify dropping either.
 		retry := search.SearchParams{
 			Query: vals.Get("q"), Filter: withExcludedIDs(withFilterGroup(companyFilter, personal), exclude),
-			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
+			Sort: sort, Vector: vector, QFields: qFields, Prefix: params.Prefix, Limit: limit, Offset: offset,
 		}
 		if in.match != nil {
 			res, err = in.match.scan(ctx, h.search, retry)

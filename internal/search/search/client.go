@@ -522,6 +522,10 @@ type SearchParams struct {
 	// QFields restricts Query matching to these searchable attributes (see
 	// QFieldsFromValues). Nil means Meilisearch's default: all of them.
 	QFields []string
+	// Prefix lets the last word of Query match as the start of a longer word, for a
+	// query someone is still typing ("data eng" → engineer). Off, the last word is read
+	// as complete, which is what a submitted search means and far cheaper: see wholeWords.
+	Prefix bool
 }
 
 // SearchResult holds the matched documents and Meilisearch's estimated total.
@@ -602,6 +606,11 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 		alts, err = ParseQuery(p.Query)
 		if err != nil {
 			return SearchResult{}, err
+		}
+	}
+	if !p.Prefix {
+		for i := range alts {
+			alts[i].Text = wholeWords(alts[i].Text)
 		}
 	}
 	var (
