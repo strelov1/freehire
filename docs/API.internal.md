@@ -4134,6 +4134,64 @@ curl -X PATCH "https://freehire.me/api/v1/me/email-groups" -b cookies.txt
 
 ## Employer
 
+### `GET /employer/applications`
+
+**Auth:** Session only
+
+The delivered applications to the caller's vacancies, newest first.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | string | no | Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`) |
+| `stage` | string | no | Only applications at this stage. (e.g. `new`) |
+| `limit` | string | no | Page size, 1–100. (e.g. `50`) |
+| `offset` | string | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/employer/applications" -b cookies.txt
+```
+
+### `GET /employer/applications/{id}/cv`
+
+**Auth:** Session only
+
+The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl "https://freehire.me/api/v1/employer/applications/<id>/cv" -b cookies.txt
+```
+
+### `POST /employer/applications/{id}/stage`
+
+**Auth:** Session only
+
+Moves the application to a stage of your pipeline.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stage` | string | no |  |
+| `message` | string | no |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/stage" -b cookies.txt
+```
+
 ### `POST /employer/claim`
 
 **Auth:** Session only

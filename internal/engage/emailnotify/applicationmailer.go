@@ -10,9 +10,10 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// ApplicationMailer delivers a candidate's on-site application to the employer who posted
-// the vacancy (internal/ingest/directapply). It is a separate type from AuthMailer because
-// its recipient is a third party and it carries the candidate's CV, not a code.
+// ApplicationMailer sends the mail of an on-site application (internal/ingest/directapply):
+// the application to the employer who posted the vacancy, and the employer's answer back
+// to the candidate. It is a separate type from AuthMailer because each letter goes between
+// the two parties of an application, not to the account holder about their account.
 type ApplicationMailer struct {
 	sender Sender
 	from   string

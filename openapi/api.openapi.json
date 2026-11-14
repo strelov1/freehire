@@ -2808,6 +2808,194 @@
         ]
       }
     },
+    "/employer/applications": {
+      "get": {
+        "operationId": "listEmployerApplications",
+        "description": "The delivered applications to the caller's vacancies, newest first.",
+        "parameters": [
+          {
+            "name": "job",
+            "in": "query",
+            "required": false,
+            "description": "Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "description": "Only applications at this stage. (e.g. `new`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1–100. (e.g. `50`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip. (e.g. `0`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployerApplicationsPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
+    "/employer/applications/{id}/cv": {
+      "get": {
+        "operationId": "getEmployerApplicationCV",
+        "description": "The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Content-Disposition": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "*/*": {
+                "schema": {
+                  "contentMediaType": "*/*"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
+    "/employer/applications/{id}/stage": {
+      "post": {
+        "operationId": "moveEmployerApplication",
+        "description": "Moves the application to a stage of your pipeline.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerApplicationMoved"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerApplicationMove"
+              }
+            }
+          }
+        }
+      }
+    },
     "/employer/claim": {
       "post": {
         "operationId": "claimEmployerCompany",
@@ -26454,6 +26642,181 @@
           "active",
           "revoked"
         ]
+      },
+      "EmployerApplication": {
+        "type": "object",
+        "required": [
+          "id",
+          "job_slug",
+          "job_title",
+          "candidate_email",
+          "cv_kind",
+          "has_cv",
+          "note",
+          "answers",
+          "stage",
+          "sent_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job_slug": {
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "candidate_email": {
+            "type": "string"
+          },
+          "cv_kind": {
+            "type": "string",
+            "description": "\"tailored\" (a CV made for this vacancy) or \"resume\" (the candidate's uploaded file)."
+          },
+          "has_cv": {
+            "type": "boolean",
+            "description": "False for an application sent before its CV was kept: that CV reached you by email only."
+          },
+          "note": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerApplicationAnswer"
+            }
+          },
+          "stage": {
+            "$ref": "#/components/schemas/EmployerApplicationStage"
+          },
+          "stage_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When you last moved it; absent while it has never been moved.",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "One application sent on freehire to one of the caller's vacancies."
+      },
+      "EmployerApplicationAnswer": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "type",
+          "answer"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "\"text\", \"boolean\" (answer \"true\"/\"false\") or \"select\"."
+          },
+          "answer": {
+            "type": "string"
+          }
+        },
+        "description": "One answered question, as asked when the candidate applied."
+      },
+      "EmployerApplicationMove": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "description": "`message` is optional and goes only with `interview`, `offer` or `rejected`."
+      },
+      "EmployerApplicationMoved": {
+        "type": "object",
+        "required": [
+          "application",
+          "candidate_notified"
+        ],
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/EmployerApplication"
+          },
+          "candidate_notified": {
+            "type": "boolean",
+            "description": "Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed."
+          }
+        }
+      },
+      "EmployerApplicationStage": {
+        "type": "string",
+        "enum": [
+          "new",
+          "reviewing",
+          "interview",
+          "offer",
+          "hired",
+          "rejected"
+        ]
+      },
+      "EmployerApplicationsMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "stage_counts"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stage_counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with none is absent."
+          }
+        }
+      },
+      "EmployerApplicationsPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerApplication"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/EmployerApplicationsMeta"
+          }
+        }
       },
       "EmployerClaim": {
         "type": "object",

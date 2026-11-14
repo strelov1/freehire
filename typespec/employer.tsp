@@ -203,3 +203,109 @@ op rejectEmployerClaim(@path user_id: string): Data<EmployerRejected> | Problem;
 @route("/employer/claims/{user_id}/revoke")
 @post
 op revokeEmployerAccount(@path user_id: string): Data<EmployerAccount> | Problem;
+
+// ── The applicant inbox ─────────────────────────────────────────────────────────────
+// The applications sent on freehire to the caller's own vacancies, and the caller's
+// hiring pipeline over them. Only delivered applications are listed. Every stage but
+// `new` shows in the candidate's own tracking, and `interview`, `offer` and `rejected`
+// email the candidate (Reply-To the account's work email).
+
+enum EmployerApplicationStage {
+  new,
+  reviewing,
+  interview,
+  offer,
+  hired,
+  rejected,
+}
+
+/** One answered question, as asked when the candidate applied. */
+model EmployerApplicationAnswer {
+  id: string;
+  label: string;
+
+  /** "text", "boolean" (answer "true"/"false") or "select". */
+  type: string;
+
+  answer: string;
+}
+
+/** One application sent on freehire to one of the caller's vacancies. */
+model EmployerApplication {
+  id: int64;
+  job_slug: string;
+  job_title: string;
+  candidate_email: string;
+
+  /** "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file). */
+  cv_kind: string;
+
+  /** False for an application sent before its CV was kept: that CV reached you by email only. */
+  has_cv: boolean;
+
+  note: string;
+  answers: EmployerApplicationAnswer[];
+  stage: EmployerApplicationStage;
+
+  /** When you last moved it; absent while it has never been moved. */
+  stage_changed_at?: utcDateTime;
+
+  sent_at: utcDateTime;
+}
+
+model EmployerApplicationsMeta {
+  ...PageMeta;
+
+  /** How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with none is absent. */
+  stage_counts: Record<int64>;
+}
+
+model EmployerApplicationsPage {
+  data: EmployerApplication[];
+  meta: EmployerApplicationsMeta;
+}
+
+/** `message` is optional and goes only with `interview`, `offer` or `rejected`. */
+model EmployerApplicationMove {
+  stage?: string;
+  message?: string;
+}
+
+model EmployerApplicationMoved {
+  application: EmployerApplication;
+
+  /** Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
+  candidate_notified: boolean;
+}
+
+/** The delivered applications to the caller's vacancies, newest first. */
+@tag("Employer")
+@route("/employer/applications")
+@get
+op listEmployerApplications(
+  /** Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`) */
+  @query job?: string,
+  /** Only applications at this stage. (e.g. `new`) */
+  @query stage?: string,
+  /** Page size, 1–100. (e.g. `50`) */
+  @query limit?: string,
+  /** Rows to skip. (e.g. `0`) */
+  @query offset?: string,
+): EmployerApplicationsPage | Problem;
+
+/** The CV file the application sent, exactly as it was emailed to you. 404 when none was kept. */
+@tag("Employer")
+@route("/employer/applications/{id}/cv")
+@get
+op getEmployerApplicationCV(@path id: string): {
+  @header contentType: string;
+  @header("Content-Disposition") contentDisposition: string;
+  @header("Cache-Control") cacheControl: string;
+  @body cv: bytes;
+} | Problem;
+
+/** Moves the application to a stage of your pipeline. */
+@tag("Employer")
+@route("/employer/applications/{id}/stage")
+@post
+op moveEmployerApplication(@path id: string, @body body: EmployerApplicationMove): Data<EmployerApplicationMoved> | Problem;

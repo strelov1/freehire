@@ -745,6 +745,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The delivered applications to the caller's vacancies, newest first. */
+        get: operations["listEmployerApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/{id}/cv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The CV file the application sent, exactly as it was emailed to you. 404 when none was kept. */
+        get: operations["getEmployerApplicationCV"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/applications/{id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Moves the application to a stage of your pipeline. */
+        post: operations["moveEmployerApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/claim": {
         parameters: {
             query?: never;
@@ -7144,6 +7195,64 @@ export interface components {
         };
         /** @enum {string} */
         EmployerAccountStatus: "pending" | "active" | "revoked";
+        /** @description One application sent on freehire to one of the caller's vacancies. */
+        EmployerApplication: {
+            /** Format: int64 */
+            id: number;
+            job_slug: string;
+            job_title: string;
+            candidate_email: string;
+            /** @description "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file). */
+            cv_kind: string;
+            /** @description False for an application sent before its CV was kept: that CV reached you by email only. */
+            has_cv: boolean;
+            note: string;
+            answers: components["schemas"]["EmployerApplicationAnswer"][];
+            stage: components["schemas"]["EmployerApplicationStage"];
+            /**
+             * Format: date-time
+             * @description When you last moved it; absent while it has never been moved.
+             */
+            stage_changed_at?: string;
+            /** Format: date-time */
+            sent_at: string;
+        };
+        /** @description One answered question, as asked when the candidate applied. */
+        EmployerApplicationAnswer: {
+            id: string;
+            label: string;
+            /** @description "text", "boolean" (answer "true"/"false") or "select". */
+            type: string;
+            answer: string;
+        };
+        /** @description `message` is optional and goes only with `interview`, `offer` or `rejected`. */
+        EmployerApplicationMove: {
+            stage?: string;
+            message?: string;
+        };
+        EmployerApplicationMoved: {
+            application: components["schemas"]["EmployerApplication"];
+            /** @description Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
+            candidate_notified: boolean;
+        };
+        /** @enum {string} */
+        EmployerApplicationStage: "new" | "reviewing" | "interview" | "offer" | "hired" | "rejected";
+        EmployerApplicationsMeta: {
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+            /** @description How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with none is absent. */
+            stage_counts: {
+                [key: string]: number;
+            };
+        };
+        EmployerApplicationsPage: {
+            data: components["schemas"]["EmployerApplication"][];
+            meta: components["schemas"]["EmployerApplicationsMeta"];
+        };
         EmployerClaim: {
             company_name?: string;
             work_email?: string;
@@ -11616,6 +11725,114 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["OneClickResult"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listEmployerApplications: {
+        parameters: {
+            query?: {
+                /** @description Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`) */
+                job?: string;
+                /** @description Only applications at this stage. (e.g. `new`) */
+                stage?: string;
+                /** @description Page size, 1–100. (e.g. `50`) */
+                limit?: string;
+                /** @description Rows to skip. (e.g. `0`) */
+                offset?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployerApplicationsPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEmployerApplicationCV: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Content-Disposition": string;
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": unknown;
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    moveEmployerApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployerApplicationMove"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerApplicationMoved"];
                     };
                 };
             };

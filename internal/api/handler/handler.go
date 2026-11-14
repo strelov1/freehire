@@ -489,12 +489,24 @@ func Register(app *fiber.App, cfg Config) {
 	// Applying on freehire needs both a CV renderer and a mail transport; without either an
 	// application could be recorded but never delivered, so the routes answer 501 instead.
 	directApplyH := &directApplyHandlers{}
+	var applicationMailer *emailnotify.ApplicationMailer
+	if mailClient != nil {
+		applicationMailer = emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
+		// The inbox needs no CV renderer — it serves the CV each application kept — but it
+		// does need mail: moving an application may email the candidate.
+		employerH.inbox = directapply.NewInbox(
+			directapply.NewQueriesRepository(queries),
+			employerSvc,
+			directApplyStatusMailer{mailer: applicationMailer, origin: cfg.FrontendOrigin},
+			directapply.NewApplicationMoves(queries, cfg.Pool),
+		)
+	}
 	if cvRenderer != nil && mailClient != nil {
 		directApplyH.svc = directapply.New(
 			directapply.NewQueriesRepository(queries),
 			employerSvc,
 			directApplyCVs{pdf: cvPDF, resumes: resumeStore},
-			directApplyMailer{mailer: emailnotify.NewApplicationMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin), origin: cfg.FrontendOrigin},
+			directApplyMailer{mailer: applicationMailer, origin: cfg.FrontendOrigin},
 			directApplyTracker{tracking: tracking},
 			answerBank,
 			cfg.DirectApplyDailyLimit,

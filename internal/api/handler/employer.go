@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
+	"github.com/strelov1/freehire/internal/ingest/directapply"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -27,6 +28,10 @@ import (
 type employerHandlers struct {
 	queries  *db.Queries
 	employer *employer.Service
+	// inbox is the applicant inbox over applications sent on freehire; nil when the
+	// deployment has no mail transport, since moving an application may email the
+	// candidate. Its routes then answer 501 (employer_applications.go).
+	inbox *directapply.Inbox
 	// adminOnly is built locally rather than added to the shared middleware struct: this
 	// is the only route in the whole API gated on the admin role rather than moderator.
 	adminOnly fiber.Handler
@@ -54,6 +59,9 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/reopen", mw.cookie, contract)
+	api.Get("/employer/applications", mw.cookie, contract)
+	api.Get("/employer/applications/:id/cv", mw.cookie, contract)
+	api.Post("/employer/applications/:id/stage", mw.cookie, contract)
 
 	// Moderator review queue for a claim the domain check could not itself verify.
 	api.Get("/employer/claims", mw.cookie, mw.moderator, contract)

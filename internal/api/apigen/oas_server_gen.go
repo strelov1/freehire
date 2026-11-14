@@ -739,6 +739,12 @@ type Handler interface {
 	//
 	// GET /stats/embeddings
 	GetEmbeddingProgress(ctx context.Context) (*GetEmbeddingProgressOK, error)
+	// GetEmployerApplicationCV implements getEmployerApplicationCV operation.
+	//
+	// The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.
+	//
+	// GET /employer/applications/{id}/cv
+	GetEmployerApplicationCV(ctx context.Context, params GetEmployerApplicationCVParams) (*GetEmployerApplicationCVOKHeaders, error)
 	// GetEmployerCompany implements getEmployerCompany operation.
 	//
 	// The caller's own account in any status, with the company profile.
@@ -1270,6 +1276,12 @@ type Handler interface {
 	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListEmployerApplications implements listEmployerApplications operation.
+	//
+	// The delivered applications to the caller's vacancies, newest first.
+	//
+	// GET /employer/applications
+	ListEmployerApplications(ctx context.Context, params ListEmployerApplicationsParams) (*EmployerApplicationsPage, error)
 	// ListEmployerPendingClaims implements listEmployerPendingClaims operation.
 	//
 	// Moderators only: the claims that could not auto-activate.
@@ -1560,6 +1572,12 @@ type Handler interface {
 	//
 	// POST /me/experience/atoms/merge
 	MergeAtoms(ctx context.Context, req *MergeAtoms) (*MergeAtomsOK, error)
+	// MoveEmployerApplication implements moveEmployerApplication operation.
+	//
+	// Moves the application to a stage of your pipeline.
+	//
+	// POST /employer/applications/{id}/stage
+	MoveEmployerApplication(ctx context.Context, req *EmployerApplicationMove, params MoveEmployerApplicationParams) (*MoveEmployerApplicationOK, error)
 	// MyCompanyFeedback implements myCompanyFeedback operation.
 	//
 	// All of the caller's own reviews of the company, one per category; empty when none.
