@@ -55,7 +55,8 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 	forSuggestion := make([]jobtracking.SuggestionEmail, 0, len(rows))
 	for _, r := range rows {
 		emails = append(emails, apigen.InboxApplicationEmail{
-			ID: r.ID, Source: r.Source, FromAddr: r.FromAddr, FromName: r.FromName,
+			ID: r.ID, Source: r.Source, Direction: optString(r.Direction),
+			ToAddrs: optString(r.ToAddrs), CcAddrs: optString(r.CcAddrs), FromAddr: r.FromAddr, FromName: r.FromName,
 			Subject: r.Subject, StatusSignal: optString(pgStr(r.StatusSignal)), LinkSource: optString(pgStr(r.LinkSource)),
 			ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
 		})

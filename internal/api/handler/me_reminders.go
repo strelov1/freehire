@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/reminder"
@@ -30,6 +31,7 @@ func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
 	}
 	return apigen.NotificationSettings{
 		Enabled:             s.Enabled,
+		InboxDigestEnabled:  s.InboxDigestEnabled,
 		Channels:            ch,
 		DigestFrequency:     freq,
 		DigestTime:          nilString(formatHHMM(s.DigestTime)),
@@ -68,6 +70,10 @@ func parseHHMM(s *string) (*time.Duration, error) {
 // device to reach is a 409. Anything else falls through to a 500.
 func reminderError(err error) error {
 	switch {
+	case errors.Is(err, plan.ErrPaymentRequired):
+		return fiber.NewError(fiber.StatusPaymentRequired, "Daily inbox summaries require Pro or Ultra")
+	case errors.Is(err, reminder.ErrPlanUnavailable):
+		return fiber.NewError(fiber.StatusServiceUnavailable, "Cannot verify your plan right now")
 	case errors.Is(err, reminder.ErrInvalidChannel):
 		return fiber.NewError(fiber.StatusBadRequest, "unsupported notification channel")
 	case errors.Is(err, reminder.ErrNoPushDevice):
@@ -80,7 +86,7 @@ func reminderError(err error) error {
 	case errors.Is(err, reminder.ErrInvalidInterval):
 		return fiber.NewError(fiber.StatusBadRequest, "digest_interval_hours must be between 1 and 23")
 	case errors.Is(err, reminder.ErrMissingDigestTime):
-		return fiber.NewError(fiber.StatusBadRequest, "daily frequency requires a digest time")
+		return fiber.NewError(fiber.StatusBadRequest, "daily email requires a digest time")
 	case errors.Is(err, reminder.ErrIncompleteQuietHours):
 		return fiber.NewError(fiber.StatusBadRequest, "quiet hours needs both a start and an end")
 	default:
@@ -122,8 +128,20 @@ func (h *trackingHandlers) UpdateNotificationSettings(ctx context.Context, req *
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "quiet_hours_end must be HH:MM")
 	}
+	inboxEnabled, explicit := req.InboxDigestEnabled.Get()
+	if !explicit {
+		current, err := h.reminder.GetSettings(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		inboxEnabled = current.InboxDigestEnabled
+		if inboxEnabled && digestTime == nil {
+			digestTime = current.DigestTime
+		}
+	}
 	s, err := h.reminder.UpdateSettings(ctx, userID, reminder.Settings{
 		Enabled:             req.Enabled.Value,
+		InboxDigestEnabled:  inboxEnabled,
 		Channels:            req.Channels.Value,
 		DigestFrequency:     req.DigestFrequency.Value,
 		DigestTime:          digestTime,

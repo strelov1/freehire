@@ -3,6 +3,7 @@ package emailnotify
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
@@ -237,5 +238,27 @@ func TestClient_CheckEngagementTracking(t *testing.T) {
 	}
 	if err := (&Client{ses: &fakeSES{}}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err != nil {
 		t.Errorf("known set: %v", err)
+	}
+}
+
+func TestProductNotificationMarkerOnSimpleAndRawMessages(t *testing.T) {
+	m := Message{From: "notice@example.test", To: "member@example.test", Subject: "Daily inbox", Group: emailprefs.GroupEssential, NotificationKind: "inbox-digest", Text: "Body", HTML: "<p>Body</p>"}
+	in, err := (&Client{}).input(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]string{}
+	for _, header := range in.Content.Simple.Headers {
+		found[*header.Name] = *header.Value
+	}
+	if found["X-Freehire-Notification"] != "inbox-digest" || found["Auto-Submitted"] != "auto-generated" {
+		t.Fatalf("simple headers: %+v", found)
+	}
+	raw, err := buildRawMessage(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "X-Freehire-Notification: inbox-digest") || !strings.Contains(string(raw), "Auto-Submitted: auto-generated") {
+		t.Fatal("SMTP/raw transport lost product notification marker")
 	}
 }

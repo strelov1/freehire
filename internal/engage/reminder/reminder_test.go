@@ -20,6 +20,8 @@ type fakeRepo struct {
 	cancelled []jobKey
 
 	hasPushDevice bool
+	paid          bool
+	planErr       error
 }
 
 func (f *fakeRepo) HasPushDevice(context.Context, int64) (bool, error) {
@@ -421,3 +423,5 @@ func TestUpdateSettings_InRangeIntervalBesideDailyKeepsTheStoredOne(t *testing.T
 		t.Errorf("stored %d, want the existing 6", got.DigestIntervalHours)
 	}
 }
+
+func (f *fakeRepo) HasPaidPlan(context.Context, int64) (bool, error) { return f.paid, f.planErr }

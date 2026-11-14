@@ -26106,6 +26106,15 @@
           "source": {
             "type": "string"
           },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
           "from_addr": {
             "type": "string"
           },
@@ -26154,6 +26163,18 @@
             "type": "string"
           },
           "external_id": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
+          "thread_id": {
             "type": "string"
           },
           "from_addr": {
@@ -26291,6 +26312,18 @@
             "type": "string"
           },
           "external_id": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
+          "thread_id": {
             "type": "string"
           },
           "from_addr": {
@@ -28840,6 +28873,7 @@
       "NotificationSettings": {
         "type": "object",
         "required": [
+          "inbox_digest_enabled",
           "enabled",
           "channels",
           "digest_frequency",
@@ -28849,6 +28883,10 @@
           "quiet_hours_end"
         ],
         "properties": {
+          "inbox_digest_enabled": {
+            "type": "boolean",
+            "description": "Opt-in daily summary of classified hiring mail. Uses digest_time."
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -28901,6 +28939,17 @@
       "NotificationSettingsUpdate": {
         "type": "object",
         "properties": {
+          "inbox_digest_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted or null preserves the current inbox digest choice."
+          },
           "enabled": {
             "anyOf": [
               {

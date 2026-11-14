@@ -6,7 +6,7 @@
 -- reason again, one purpose further: `scopes` alone cannot say whether THIS consent was
 -- given, since it reuses the same calendar.readonly scope the candidate-side calendar
 -- grant already requests.
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes,
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes, sent_sync_cursor,
     mentor_busy_sync_opted_in
 FROM gmail_connections
 WHERE user_id = $1;
@@ -48,7 +48,7 @@ SET email = EXCLUDED.email,
 -- Checked on the address rather than on `scopes` for two reasons: every row that predates
 -- the scopes column has an empty list and would be excluded by a scope test, and the
 -- scope string then has to be spelled in SQL as well as in Go.
-SELECT user_id, email, sync_cursor
+SELECT user_id, email, sync_cursor, sent_sync_cursor
 FROM gmail_connections
 WHERE status = 'connected' AND email <> '';
 
@@ -76,7 +76,7 @@ WHERE gc.status = 'connected'
 
 -- name: SetGmailSynced :exec
 UPDATE gmail_connections
-SET sync_cursor = $2, last_synced_at = now()
+SET sync_cursor = $2, sent_sync_cursor = $3, last_synced_at = now()
 WHERE user_id = $1;
 
 -- name: SetGmailStatus :exec
@@ -102,14 +102,40 @@ DELETE FROM gmail_connections WHERE user_id = $1;
 -- release passes 'hosted') — the other source's mail is left untouched.
 DELETE FROM emails WHERE user_id = $1 AND source = $2;
 
+-- name: ListGmailThreadIDs :many
+-- Known hiring conversations are the boundary for sent-message body retrieval.
+SELECT DISTINCT thread_id FROM emails
+WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NULL;
+
 -- name: UpsertEmail :exec
--- Store a Gmail message, idempotent by (user_id, source, external_id) with
--- source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
+-- Gmail is idempotent; sent messages are already read and never enter employer triage.
+WITH stored AS (
 INSERT INTO emails (
-    user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, body_text, body_html, received_at, ical_uid
-) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(ical_uid))
-ON CONFLICT (user_id, source, external_id) DO NOTHING;
+ user_id, source, external_id, thread_id, from_addr, from_name,
+ subject, body_text, body_html, received_at, ical_uid, direction, to_addrs, cc_addrs, read_at
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(ical_uid),
+ COALESCE(NULLIF(sqlc.arg(direction)::text, ''), 'incoming'), sqlc.arg(to_addrs), sqlc.arg(cc_addrs),
+ CASE WHEN sqlc.arg(direction)::text = 'outgoing' THEN now() ELSE NULL END)
+ON CONFLICT (user_id, source, external_id) DO UPDATE
+-- Refresh provider metadata without changing deletion, bodies or incoming reader state.
+SET direction = EXCLUDED.direction,
+    to_addrs = EXCLUDED.to_addrs,
+    cc_addrs = EXCLUDED.cc_addrs,
+    read_at = CASE WHEN EXCLUDED.direction = 'outgoing' THEN COALESCE(emails.read_at, now()) ELSE emails.read_at END,
+    status_signal = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.status_signal END,
+    suggested_job_id = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.suggested_job_id END,
+    classified_at = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.classified_at END,
+    classification_model = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.classification_model END
+RETURNING id, user_id, direction
+), unqueued AS (
+ DELETE FROM email_classification_outbox o USING stored s
+ WHERE o.email_id = s.id AND s.direction = 'outgoing'
+ RETURNING o.id
+)
+UPDATE application_events ae SET retracted_at = now()
+FROM stored s
+WHERE ae.user_id = s.user_id AND ae.source_ref = s.id
+ AND s.direction = 'outgoing' AND ae.kind = 'employer_reply' AND ae.retracted_at IS NULL;
 
 -- name: UpsertExternalEmail :one
 -- Store a message the caller's own harness fetched, under source 'external' and
@@ -162,7 +188,7 @@ RETURNING id, (xmax = 0)::boolean AS inserted;
 -- without a GetEmail per message — which would also mark each one read. The
 -- snippet already detoasts body_text, so the extra column costs no extra read;
 -- it is guarded only to keep the web inbox's payload small.
-SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
+SELECT emails.id, emails.source, emails.external_id, emails.thread_id, emails.direction, emails.to_addrs, emails.cc_addrs, emails.from_addr, emails.from_name, emails.subject,
     left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
     (CASE WHEN sqlc.arg(with_body)::bool THEN emails.body_text ELSE '' END)::text AS body_text,
     (CASE WHEN sqlc.arg(with_body)::bool THEN emails.body_html ELSE '' END)::text AS body_html,
@@ -183,7 +209,7 @@ WHERE emails.user_id = $1
   AND (sqlc.arg(src)::text = '' OR emails.source = sqlc.arg(src))
   AND (sqlc.arg(unread)::bool = false OR emails.read_at IS NULL)
   AND (sqlc.arg(status)::text = '' OR emails.status_signal = sqlc.arg(status))
-  AND (sqlc.arg(unclassified)::bool = false OR emails.classified_at IS NULL)
+  AND (sqlc.arg(unclassified)::bool = false OR (emails.classified_at IS NULL AND emails.direction = 'incoming'))
   AND (
     sqlc.arg(link)::text = ''
     OR (sqlc.arg(link) = 'linked'    AND emails.application_id IS NOT NULL)
@@ -226,7 +252,7 @@ WHERE user_id = $1
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (sqlc.arg(unread)::bool = false OR read_at IS NULL)
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
-  AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
+  AND (sqlc.arg(unclassified)::bool = false OR (classified_at IS NULL AND direction = 'incoming'))
   AND (
     sqlc.arg(link)::text = ''
     OR (sqlc.arg(link) = 'linked'    AND application_id IS NOT NULL)
@@ -270,13 +296,13 @@ SELECT id, from_addr, from_name, subject, body_text, body_html, received_at,
 FROM emails
 WHERE user_id = $1
   AND job_id = sqlc.arg(job_id)::bigint
-  AND status_signal = 'interview_invitation'
+  AND status_signal = 'interview_invitation' AND direction = 'incoming'
   AND deleted_at IS NULL
 ORDER BY received_at DESC, id DESC
 LIMIT 1;
 
 -- name: GetEmail :one
-SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
+SELECT emails.id, emails.source, emails.external_id, emails.thread_id, emails.direction, emails.to_addrs, emails.cc_addrs, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
     emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
     -- The link is to the APPLICATION; the posting is how it is displayed while the
@@ -317,7 +343,7 @@ WHERE user_id = $1
   AND deleted_at IS NULL
   AND (sqlc.arg(src)::text = '' OR source = sqlc.arg(src))
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
-  AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
+  AND (sqlc.arg(unclassified)::bool = false OR (classified_at IS NULL AND direction = 'incoming'))
   -- The listing's `other` default, and the same reading of it: asking FOR the label is
   -- asking for it (inbox.Query.ShowsOther), so `?status=other` marks the page it shows
   -- rather than nothing at all.
@@ -361,7 +387,7 @@ WHERE id = $1 AND user_id = $2;
 SELECT coalesce(status_signal, '')::text AS label,
     count(*)::bigint AS n,
     count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
-    count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
+    count(*) FILTER (WHERE classified_at IS NULL AND direction = 'incoming')::bigint AS unclassified,
     count(*) FILTER (WHERE application_id IS NOT NULL)::bigint AS linked,
     count(*) FILTER (WHERE application_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
 FROM emails

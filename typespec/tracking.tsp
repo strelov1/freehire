@@ -163,6 +163,8 @@ model TrackingPipeline {
 }
 
 model NotificationSettings {
+  /** Opt-in daily summary of classified hiring mail. Uses digest_time. */
+  inbox_digest_enabled: boolean;
   enabled: boolean;
   channels: string[];
   digest_frequency: string;
@@ -177,6 +179,8 @@ model NotificationSettings {
 
 /** Every field is read as its zero value when left out. Times are `HH:MM`. */
 model NotificationSettingsUpdate {
+  /** Omitted or null preserves the current inbox digest choice. */
+  inbox_digest_enabled?: boolean | null;
   /** Turn notifications on or off. */
   enabled?: boolean | null;
   /**

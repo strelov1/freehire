@@ -14,19 +14,21 @@ import (
 	"github.com/jhillyerd/enmime"
 
 	"github.com/strelov1/freehire/internal/application/ical"
+	"github.com/strelov1/freehire/internal/platform/mailmeta"
 )
 
 // Parsed is the display-ready view of a received email the worker stores. The
 // full raw MIME is kept separately in S3, so this carries only what the inbox
 // list and reading pane need.
 type Parsed struct {
-	MessageID  string
-	FromAddr   string
-	FromName   string
-	Subject    string
-	TextBody   string
-	HTMLBody   string
-	ReceivedAt time.Time
+	SystemNotification bool
+	MessageID          string
+	FromAddr           string
+	FromName           string
+	Subject            string
+	TextBody           string
+	HTMLBody           string
+	ReceivedAt         time.Time
 	// CalendarUID is the identifier of the meeting an invitation attaches as its
 	// text/calendar part, and "" for the mail that carries none — which is most of it.
 	// It is the only thing that later proves a calendar entry and this invitation are
@@ -44,10 +46,11 @@ func Parse(raw []byte) (Parsed, error) {
 	}
 
 	p := Parsed{
-		MessageID: trimAngles(env.GetHeader("Message-ID")),
-		Subject:   env.GetHeader("Subject"),
-		TextBody:  env.Text,
-		HTMLBody:  env.HTML,
+		MessageID:          trimAngles(env.GetHeader("Message-ID")),
+		SystemNotification: env.GetHeader(mailmeta.NotificationHeader) == mailmeta.InboxDigest && env.GetHeader("Auto-Submitted") == "auto-generated",
+		Subject:            env.GetHeader("Subject"),
+		TextBody:           env.Text,
+		HTMLBody:           env.HTML,
 	}
 
 	if addr, err := mail.ParseAddress(env.GetHeader("From")); err == nil {

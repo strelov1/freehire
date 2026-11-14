@@ -21,7 +21,7 @@ WHERE user_id = $1
   AND ($3::text = '' OR source = $3)
   AND ($4::bool = false OR read_at IS NULL)
   AND ($5::text = '' OR status_signal = $5)
-  AND ($6::bool = false OR classified_at IS NULL)
+  AND ($6::bool = false OR (classified_at IS NULL AND direction = 'incoming'))
   AND (
     $7::text = ''
     OR ($7 = 'linked'    AND application_id IS NOT NULL)
@@ -80,7 +80,7 @@ const countEmailsByState = `-- name: CountEmailsByState :many
 SELECT coalesce(status_signal, '')::text AS label,
     count(*)::bigint AS n,
     count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
-    count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
+    count(*) FILTER (WHERE classified_at IS NULL AND direction = 'incoming')::bigint AS unclassified,
     count(*) FILTER (WHERE application_id IS NOT NULL)::bigint AS linked,
     count(*) FILTER (WHERE application_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
 FROM emails
@@ -158,7 +158,7 @@ func (q *Queries) DeleteGmailConnection(ctx context.Context, userID int64) error
 }
 
 const getEmail = `-- name: GetEmail :one
-SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
+SELECT emails.id, emails.source, emails.external_id, emails.thread_id, emails.direction, emails.to_addrs, emails.cc_addrs, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
     emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
     -- The link is to the APPLICATION; the posting is how it is displayed while the
@@ -183,6 +183,10 @@ type GetEmailRow struct {
 	ID               int64              `json:"id"`
 	Source           string             `json:"source"`
 	ExternalID       string             `json:"external_id"`
+	ThreadID         string             `json:"thread_id"`
+	Direction        string             `json:"direction"`
+	ToAddrs          string             `json:"to_addrs"`
+	CcAddrs          string             `json:"cc_addrs"`
 	S3Key            pgtype.Text        `json:"s3_key"`
 	FromAddr         string             `json:"from_addr"`
 	FromName         string             `json:"from_name"`
@@ -208,6 +212,10 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 		&i.ID,
 		&i.Source,
 		&i.ExternalID,
+		&i.ThreadID,
+		&i.Direction,
+		&i.ToAddrs,
+		&i.CcAddrs,
 		&i.S3Key,
 		&i.FromAddr,
 		&i.FromName,
@@ -229,7 +237,7 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 }
 
 const getGmailConnection = `-- name: GetGmailConnection :one
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes,
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes, sent_sync_cursor,
     mentor_busy_sync_opted_in
 FROM gmail_connections
 WHERE user_id = $1
@@ -243,6 +251,7 @@ type GetGmailConnectionRow struct {
 	ConnectedAt           pgtype.Timestamptz `json:"connected_at"`
 	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes                []string           `json:"scopes"`
+	SentSyncCursor        int64              `json:"sent_sync_cursor"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
 }
 
@@ -264,6 +273,7 @@ func (q *Queries) GetGmailConnection(ctx context.Context, userID int64) (GetGmai
 		&i.ConnectedAt,
 		&i.LastSyncedAt,
 		&i.Scopes,
+		&i.SentSyncCursor,
 		&i.MentorBusySyncOptedIn,
 	)
 	return i, err
@@ -317,7 +327,7 @@ SELECT id, from_addr, from_name, subject, body_text, body_html, received_at,
 FROM emails
 WHERE user_id = $1
   AND job_id = $2::bigint
-  AND status_signal = 'interview_invitation'
+  AND status_signal = 'interview_invitation' AND direction = 'incoming'
   AND deleted_at IS NULL
 ORDER BY received_at DESC, id DESC
 LIMIT 1
@@ -379,15 +389,16 @@ func (q *Queries) GetInterviewInvitation(ctx context.Context, arg GetInterviewIn
 }
 
 const listConnectedGmailUsers = `-- name: ListConnectedGmailUsers :many
-SELECT user_id, email, sync_cursor
+SELECT user_id, email, sync_cursor, sent_sync_cursor
 FROM gmail_connections
 WHERE status = 'connected' AND email <> ''
 `
 
 type ListConnectedGmailUsersRow struct {
-	UserID     int64  `json:"user_id"`
-	Email      string `json:"email"`
-	SyncCursor int64  `json:"sync_cursor"`
+	UserID         int64  `json:"user_id"`
+	Email          string `json:"email"`
+	SyncCursor     int64  `json:"sync_cursor"`
+	SentSyncCursor int64  `json:"sent_sync_cursor"`
 }
 
 // Drives the sync worker: every connection still authorized AND holding a mailbox.
@@ -411,7 +422,12 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 	items := []ListConnectedGmailUsersRow{}
 	for rows.Next() {
 		var i ListConnectedGmailUsersRow
-		if err := rows.Scan(&i.UserID, &i.Email, &i.SyncCursor); err != nil {
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Email,
+			&i.SyncCursor,
+			&i.SentSyncCursor,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -423,7 +439,7 @@ func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedG
 }
 
 const listEmails = `-- name: ListEmails :many
-SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.from_name, emails.subject,
+SELECT emails.id, emails.source, emails.external_id, emails.thread_id, emails.direction, emails.to_addrs, emails.cc_addrs, emails.from_addr, emails.from_name, emails.subject,
     left(regexp_replace(emails.body_text, E'\\s+', ' ', 'g'), 160)::text AS snippet,
     (CASE WHEN $2::bool THEN emails.body_text ELSE '' END)::text AS body_text,
     (CASE WHEN $2::bool THEN emails.body_html ELSE '' END)::text AS body_html,
@@ -444,7 +460,7 @@ WHERE emails.user_id = $1
   AND ($3::text = '' OR emails.source = $3)
   AND ($4::bool = false OR emails.read_at IS NULL)
   AND ($5::text = '' OR emails.status_signal = $5)
-  AND ($6::bool = false OR emails.classified_at IS NULL)
+  AND ($6::bool = false OR (emails.classified_at IS NULL AND emails.direction = 'incoming'))
   AND (
     $7::text = ''
     OR ($7 = 'linked'    AND emails.application_id IS NOT NULL)
@@ -489,6 +505,10 @@ type ListEmailsRow struct {
 	ID               int64              `json:"id"`
 	Source           string             `json:"source"`
 	ExternalID       string             `json:"external_id"`
+	ThreadID         string             `json:"thread_id"`
+	Direction        string             `json:"direction"`
+	ToAddrs          string             `json:"to_addrs"`
+	CcAddrs          string             `json:"cc_addrs"`
 	FromAddr         string             `json:"from_addr"`
 	FromName         string             `json:"from_name"`
 	Subject          string             `json:"subject"`
@@ -554,6 +574,10 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 			&i.ID,
 			&i.Source,
 			&i.ExternalID,
+			&i.ThreadID,
+			&i.Direction,
+			&i.ToAddrs,
+			&i.CcAddrs,
 			&i.FromAddr,
 			&i.FromName,
 			&i.Subject,
@@ -574,6 +598,32 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGmailThreadIDs = `-- name: ListGmailThreadIDs :many
+SELECT DISTINCT thread_id FROM emails
+WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NULL
+`
+
+// Known hiring conversations are the boundary for sent-message body retrieval.
+func (q *Queries) ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listGmailThreadIDs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var thread_id string
+		if err := rows.Scan(&thread_id); err != nil {
+			return nil, err
+		}
+		items = append(items, thread_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -629,7 +679,7 @@ WHERE user_id = $1
   AND deleted_at IS NULL
   AND ($2::text = '' OR source = $2)
   AND ($3::text = '' OR status_signal = $3)
-  AND ($4::bool = false OR classified_at IS NULL)
+  AND ($4::bool = false OR (classified_at IS NULL AND direction = 'incoming'))
   -- The listing's ` + "`" + `other` + "`" + ` default, and the same reading of it: asking FOR the label is
   -- asking for it (inbox.Query.ShowsOther), so ` + "`" + `?status=other` + "`" + ` marks the page it shows
   -- rather than nothing at all.
@@ -753,17 +803,18 @@ func (q *Queries) SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) 
 
 const setGmailSynced = `-- name: SetGmailSynced :exec
 UPDATE gmail_connections
-SET sync_cursor = $2, last_synced_at = now()
+SET sync_cursor = $2, sent_sync_cursor = $3, last_synced_at = now()
 WHERE user_id = $1
 `
 
 type SetGmailSyncedParams struct {
-	UserID     int64 `json:"user_id"`
-	SyncCursor int64 `json:"sync_cursor"`
+	UserID         int64 `json:"user_id"`
+	SyncCursor     int64 `json:"sync_cursor"`
+	SentSyncCursor int64 `json:"sent_sync_cursor"`
 }
 
 func (q *Queries) SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error {
-	_, err := q.db.Exec(ctx, setGmailSynced, arg.UserID, arg.SyncCursor)
+	_, err := q.db.Exec(ctx, setGmailSynced, arg.UserID, arg.SyncCursor, arg.SentSyncCursor)
 	return err
 }
 
@@ -802,11 +853,32 @@ func (q *Queries) SoftDeleteEmail(ctx context.Context, arg SoftDeleteEmailParams
 }
 
 const upsertEmail = `-- name: UpsertEmail :exec
+WITH stored AS (
 INSERT INTO emails (
-    user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, body_text, body_html, received_at, ical_uid
-) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT (user_id, source, external_id) DO NOTHING
+ user_id, source, external_id, thread_id, from_addr, from_name,
+ subject, body_text, body_html, received_at, ical_uid, direction, to_addrs, cc_addrs, read_at
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, $10,
+ COALESCE(NULLIF($11::text, ''), 'incoming'), $12, $13,
+ CASE WHEN $11::text = 'outgoing' THEN now() ELSE NULL END)
+ON CONFLICT (user_id, source, external_id) DO UPDATE
+SET direction = EXCLUDED.direction,
+    to_addrs = EXCLUDED.to_addrs,
+    cc_addrs = EXCLUDED.cc_addrs,
+    read_at = CASE WHEN EXCLUDED.direction = 'outgoing' THEN COALESCE(emails.read_at, now()) ELSE emails.read_at END,
+    status_signal = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.status_signal END,
+    suggested_job_id = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.suggested_job_id END,
+    classified_at = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.classified_at END,
+    classification_model = CASE WHEN EXCLUDED.direction = 'outgoing' THEN NULL ELSE emails.classification_model END
+RETURNING id, user_id, direction
+), unqueued AS (
+ DELETE FROM email_classification_outbox o USING stored s
+ WHERE o.email_id = s.id AND s.direction = 'outgoing'
+ RETURNING o.id
+)
+UPDATE application_events ae SET retracted_at = now()
+FROM stored s
+WHERE ae.user_id = s.user_id AND ae.source_ref = s.id
+ AND s.direction = 'outgoing' AND ae.kind = 'employer_reply' AND ae.retracted_at IS NULL
 `
 
 type UpsertEmailParams struct {
@@ -820,10 +892,13 @@ type UpsertEmailParams struct {
 	BodyHtml   string             `json:"body_html"`
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 	IcalUid    string             `json:"ical_uid"`
+	Direction  string             `json:"direction"`
+	ToAddrs    string             `json:"to_addrs"`
+	CcAddrs    string             `json:"cc_addrs"`
 }
 
-// Store a Gmail message, idempotent by (user_id, source, external_id) with
-// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
+// Gmail is idempotent; sent messages are already read and never enter employer triage.
+// Refresh provider metadata without changing deletion, bodies or incoming reader state.
 func (q *Queries) UpsertEmail(ctx context.Context, arg UpsertEmailParams) error {
 	_, err := q.db.Exec(ctx, upsertEmail,
 		arg.UserID,
@@ -836,6 +911,9 @@ func (q *Queries) UpsertEmail(ctx context.Context, arg UpsertEmailParams) error 
 		arg.BodyHtml,
 		arg.ReceivedAt,
 		arg.IcalUid,
+		arg.Direction,
+		arg.ToAddrs,
+		arg.CcAddrs,
 	)
 	return err
 }

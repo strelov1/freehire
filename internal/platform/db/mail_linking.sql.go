@@ -65,7 +65,7 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
                       FROM emails e
                      WHERE e.user_id = uj.user_id
                        AND e.job_id = uj.job_id
-                       AND e.deleted_at IS NULL))
+                       AND e.deleted_at IS NULL AND e.direction = 'incoming'))
         END)::timestamptz AS last_activity_at,
        (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1
@@ -76,7 +76,7 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
              -- what attaches the application — the same test the inbox's link
              -- filter makes, so the two cannot disagree about one message.
              AND e.application_id IS NULL
-             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+             AND e.deleted_at IS NULL AND e.direction = 'incoming'))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1 AND uj.job_id = $2
@@ -241,7 +241,7 @@ func (q *Queries) ListEmailsForRecall(ctx context.Context, arg ListEmailsForReca
 }
 
 const listJobEmails = `-- name: ListJobEmails :many
-SELECT id, source, from_addr, from_name, subject, status_signal, link_source,
+SELECT id, source, direction, to_addrs, cc_addrs, from_addr, from_name, subject, status_signal, link_source,
     received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1 AND job_id = $2
@@ -256,6 +256,9 @@ type ListJobEmailsParams struct {
 type ListJobEmailsRow struct {
 	ID           int64              `json:"id"`
 	Source       string             `json:"source"`
+	Direction    string             `json:"direction"`
+	ToAddrs      string             `json:"to_addrs"`
+	CcAddrs      string             `json:"cc_addrs"`
 	FromAddr     string             `json:"from_addr"`
 	FromName     string             `json:"from_name"`
 	Subject      string             `json:"subject"`
@@ -279,6 +282,9 @@ func (q *Queries) ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.Source,
+			&i.Direction,
+			&i.ToAddrs,
+			&i.CcAddrs,
 			&i.FromAddr,
 			&i.FromName,
 			&i.Subject,
