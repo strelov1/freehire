@@ -330,6 +330,11 @@ export interface Job {
    */
   application_deadline?: string;
   /**
+   * Team is the department or team the source ATS files the posting under (Greenhouse, Lever
+   * and Ashby state one), verbatim. Omitted when the source states none — not a taxonomy.
+   */
+  team?: string;
+  /**
    * ApplyQuestions is how many questions the posting's application form REQUIRES
    * beyond the standard fields every form asks for (name, contact details, CV) —
    * counted from the form captured for it (applyform.Form.RequiredQuestions), so the

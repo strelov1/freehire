@@ -29,7 +29,8 @@ WITH hit AS MATERIALIZED (
       AND j.english_level = $9
       AND j.is_tech IS NOT DISTINCT FROM $10
       AND j.engagement = COALESCE($11::text[], '{}')
-      AND j.application_deadline IS NOT DISTINCT FROM COALESCE($12::date, j.application_deadline)
+      AND j.team = $12
+      AND j.application_deadline IS NOT DISTINCT FROM COALESCE($13::date, j.application_deadline)
       AND (j.application_deadline IS NULL OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)
       AND j.closed_at IS NULL
 ), refreshed AS (
@@ -37,7 +38,7 @@ WITH hit AS MATERIALIZED (
     SET last_seen_at = GREATEST(now(), a.last_seen_at),
         -- Not when the "identical" body is the stored one the pipeline substituted for a failed
         -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
-        hydrated_at  = CASE WHEN $13::boolean THEN a.hydrated_at
+        hydrated_at  = CASE WHEN $14::boolean THEN a.hydrated_at
                             ELSE GREATEST(now(), a.hydrated_at) END
     FROM hit h
     WHERE a.job_id = h.id AND a.state_version = h.ver
@@ -46,7 +47,7 @@ WITH hit AS MATERIALIZED (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM refreshed
     WHERE duplicate_of IS NULL AND NOT is_private
-      AND prev_seen_at < $14::timestamptz
+      AND prev_seen_at < $15::timestamptz
     -- Re-stamped: a drain wave holding this entry may be removing the document right now.
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
@@ -69,6 +70,7 @@ type RefreshUnchangedJobParams struct {
 	EnglishLevel         string             `json:"english_level"`
 	IsTech               pgtype.Bool        `json:"is_tech"`
 	Engagement           []string           `json:"engagement"`
+	Team                 string             `json:"team"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
 	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 	WithheldIfSeenBefore pgtype.Timestamptz `json:"withheld_if_seen_before"`
@@ -180,6 +182,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.EnglishLevel,
 		arg.IsTech,
 		arg.Engagement,
+		arg.Team,
 		arg.ApplicationDeadline,
 		arg.BodyFromCatalogue,
 		arg.WithheldIfSeenBefore,
@@ -197,7 +200,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 
 const upsertJob = `-- name: UpsertJob :one
 WITH existing AS (
-    SELECT id, closed_at, closed_reason, application_deadline, is_private,
+    SELECT id, closed_at, closed_reason, application_deadline, is_private, team,
            CASE WHEN closed_at IS NULL THEN content_hash END AS old_hash, true AS existed
     FROM jobs
     WHERE source = $1 AND external_id = $2
@@ -240,7 +243,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason
+    content_hash, role_fingerprint, requirements_derived, application_deadline, closed_at, closed_reason, team
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, replace($6, '-', ''), $7, $8,
@@ -260,7 +263,8 @@ INSERT INTO jobs (
     -- caller stamps them in the SAME transaction with ObserveJobActivity (job.Upsert).
     $39::date,
     CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
-    CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
+    CASE WHEN $39::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END,
+    $40
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -281,6 +285,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
     application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
+    team         = EXCLUDED.team,
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
     cities       = EXCLUDED.cities,
@@ -362,7 +367,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN 'expired' ELSE '' END,
     updated_at   = now()
-WHERE NOT $40::boolean OR jobs.description = EXCLUDED.description
+WHERE NOT $41::boolean OR jobs.description = EXCLUDED.description
 RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_private, jobs.closed_at,
     (old.closed_at IS NOT NULL)::boolean AS reset_strikes,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -370,7 +375,9 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
     -- format. Compare the resulting stored date: a missing incoming date preserves it.
     COALESCE(
         (SELECT old_hash FROM existing) IS DISTINCT FROM $36
-        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline,
+        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline
+        -- team is not in the content hash either: an edited department must still reach the index.
+        OR (SELECT team FROM existing) IS DISTINCT FROM jobs.team,
         false
     )::boolean AS changed
 `
@@ -415,6 +422,7 @@ type UpsertJobParams struct {
 	RoleFingerprint      pgtype.Text        `json:"role_fingerprint"`
 	RequirementsDerived  []byte             `json:"requirements_derived"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
+	Team                 string             `json:"team"`
 	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 }
 
@@ -506,6 +514,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		arg.RoleFingerprint,
 		arg.RequirementsDerived,
 		arg.ApplicationDeadline,
+		arg.Team,
 		arg.BodyFromCatalogue,
 	)
 	var i UpsertJobRow

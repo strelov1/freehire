@@ -43,12 +43,6 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 
 ## Always true
 
-- **A marked inbox digest is our own output.** The SES and SMTP paths carry
-  `Auto-Submitted: auto-generated` plus `mailmeta.NotificationHeader` with the inbox-digest
-  kind. Gmail and hosted readers skip this exact marker pair before persistence, so the
-  digest's hiring vocabulary cannot feed tomorrow's classification and summary. Other
-  automated employer mail is unaffected; this is no domain or keyword blocklist.
-
 - **Gmail keeps both directions inside hiring threads.** Incoming search excludes SENT and
   DRAFT mail; thread expansion retains sent replies and discards drafts. Gmail's SENT label
   identifies aliases; the connected primary address is a fallback. `emails.direction` is
@@ -66,7 +60,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   refresh direction and recipient metadata; an old alias reply newly recognized as SENT
   loses its employer classification, pending work and employer-reply event. Existing
   application stages are not automatically rolled back: that would overwrite later user
-  decisions. Apply migration 0265 before deploying the readers.
+  decisions. Apply migration 0267 before deploying the readers.
 - **The fetch is scoped to hiring-SHAPED mail, not to ATS senders, and the inbox filters at
   DISPLAY.** `gmailsync.BuildQueryFor` admits mail from a curated ATS domain OR carrying one
   of the recognised application/interview phrasings, minus anything the connected address

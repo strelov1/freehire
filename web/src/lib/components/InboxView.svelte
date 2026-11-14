@@ -704,8 +704,8 @@
                       {#if msg.from_name}
                         <span aria-hidden="true">·</span>
                         <span class="truncate">{msg.from_addr}</span>
-                        {#if msg.direction === 'outgoing'}<span>{s.sent}</span>{/if}
                       {/if}
+                      {#if msg.direction === 'outgoing'}<span>{s.sent}</span>{/if}
                       <span class="ml-auto shrink-0">{timeAgo(msg.received_at, locale())}</span>
                     </div>
                   </div>

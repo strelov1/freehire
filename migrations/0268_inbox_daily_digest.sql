@@ -1,4 +1,4 @@
--- Apply after 0256 and before deploying inbox-digest readers. Existing accounts stay opted out.
+-- Apply after 0267 and before deploying inbox-digest readers. Existing accounts stay opted out.
 ALTER TABLE notification_settings
  ADD COLUMN inbox_digest_enabled boolean NOT NULL DEFAULT false,
  ADD COLUMN inbox_digest_enabled_at timestamptz;

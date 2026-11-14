@@ -110,6 +110,12 @@ type GreenhousePosting struct {
 	// Name is the employer's label ("Remote US", "Headquarters"). Read only by
 	// greenhouseOfficeCountry.
 	Offices []GreenhouseOffice `json:"offices"`
+	// Departments are the departments the posting is filed under. They nest: each carries
+	// its parent_id and child_ids. Read only by greenhouseTeam.
+	Departments []struct {
+		Name     string  `json:"name"`
+		ChildIDs []int64 `json:"child_ids"`
+	} `json:"departments"`
 }
 
 // GreenhousePayRange is one pay_input_ranges entry. Amounts use the currency's minor unit. The API
@@ -157,9 +163,27 @@ func MapGreenhousePosting(j GreenhousePosting) Job {
 		PostedAt:          parseRFC3339(j.UpdatedAt),
 		EmploymentType:    greenhouseMetadataEmploymentType(j.Metadata),
 		FallbackCountries: greenhouseOfficeCountry(j),
+		Team:              greenhouseTeam(j),
 	}
 	job.SalaryMin, job.SalaryMax, job.SalaryCurrency, job.SalaryPeriod = greenhouseSalary(j.PayInputRanges)
 	return job
+}
+
+// greenhouseTeam is the posting's most specific department: the first one with no child
+// departments (a leaf of Greenhouse's department tree), else the first listed. A posting
+// normally lists one; this only decides when it lists a parent and its child, or several.
+func greenhouseTeam(j GreenhousePosting) string {
+	for _, dep := range j.Departments {
+		if name := strings.TrimSpace(dep.Name); name != "" && len(dep.ChildIDs) == 0 {
+			return name
+		}
+	}
+	for _, dep := range j.Departments {
+		if name := strings.TrimSpace(dep.Name); name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 // greenhouseSalary reads the first base pay range if the employer states its period. Measured

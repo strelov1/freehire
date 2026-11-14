@@ -56,3 +56,19 @@ func TestApplicationDeadlineIsAbsentWhenSourceDoesNotStateOne(t *testing.T) {
 		})
 	}
 }
+
+func TestTeamIsServedWhenStatedAndAbsentOtherwise(t *testing.T) {
+	for team, want := range map[string]bool{"Platform": true, "": false} {
+		full, err := FromRow(db.Job{Team: team})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(full)
+		var fields map[string]any
+		_ = json.Unmarshal(raw, &fields)
+		got, present := fields["team"]
+		if present != want || (want && got != team) {
+			t.Errorf("team %q: served %v (present=%v)", team, got, present)
+		}
+	}
+}

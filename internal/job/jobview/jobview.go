@@ -139,6 +139,9 @@ type Job struct {
 	AutoApplyAvailable bool `json:"auto_apply_available,omitempty"`
 	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
 	ApplicationDeadline *string `json:"application_deadline,omitempty"`
+	// Team is the department or team the source ATS files the posting under (Greenhouse, Lever
+	// and Ashby state one), verbatim. Omitted when the source states none — not a taxonomy.
+	Team string `json:"team,omitempty"`
 	// ApplyQuestions is how many questions the posting's application form REQUIRES
 	// beyond the standard fields every form asks for (name, contact details, CV) —
 	// counted from the form captured for it (applyform.Form.RequiredQuestions), so the
@@ -329,6 +332,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		LastSeenAt:          rfc3339Ptr(f.LastSeenAt),
 		ClosedAt:            rfc3339Ptr(f.ClosedAt),
 		ApplicationDeadline: dateString(f.ApplicationDeadline),
+		Team:                f.Team,
 		Enrichment:          e,
 		EnrichedAt:          rfc3339Ptr(f.EnrichedAt),
 		EnrichmentVersion:   f.EnrichmentVersion,

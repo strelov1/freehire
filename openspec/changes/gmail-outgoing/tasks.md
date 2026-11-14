@@ -12,9 +12,5 @@
 
 ## Validation
 
-Full unit tests, both vet modes, changed-code Go lint, targeted mail integration tests,
-Svelte checks, frontend build, frontend lint, formatting, migration lint, file-size and
-Markdown checks passed. The full integration run reached the HTTP handler package's
-cumulative ten-minute timeout during creation of an OAuth test database. Its Gmail query
-assertion also ran an earlier binary; the corrected query and final mail regressions were
-rerun independently. The complete tagged suite is not claimed green.
+This delivery is split across the mail-direction safety and Gmail sent-mail stages.
+Stage-specific checks are recorded with each pull request; final verification is pending.

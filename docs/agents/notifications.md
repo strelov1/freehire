@@ -44,7 +44,7 @@ SES transport and engagement mail pause. No extra timer or model call is introdu
   `mailmeta.NotificationHeader` marker. Gmail and hosted ingest recognize the exact
   inbox-digest kind and skip it, preventing the summary from becoming its own next input.
 
-Apply migrations 0265 and 0266 before deploying. Roll out the Gmail reader guard and
+Apply migrations 0267 and 0268 before deploying. Roll out the Gmail reader guard and
 restart the existing mail-ingest daemon before enabling the new notify behavior. Preview: the `inbox-digest` sample
 in `design-system/static/email-previews/`; settings: `/my/notifications/settings`.
 

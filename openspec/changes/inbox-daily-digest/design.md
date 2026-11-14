@@ -22,6 +22,6 @@ Classifier mistakes remain visible as detected labels, as in the inbox; this dig
 
 ## Migration Plan
 
-Apply additive migration 0266 after 0265 and before deploying readers. Consent remains off for every existing account. Old binaries ignore the new columns. Deploy the Gmail reader guard and restart the existing long-lived mail-ingest daemon before enabling the new notify behavior. Reuse the existing notify service/timer; no host configuration change is needed.
+Apply additive migration 0268 after 0267 and before deploying readers. Consent remains off for every existing account. Old binaries ignore the new columns. Deploy the Gmail reader guard and restart the existing long-lived mail-ingest daemon before enabling the new notify behavior. Reuse the existing notify service/timer; no host configuration change is needed.
 
 Activation uses the shared paid-tier resolution; delivery selection and claim recheck live entitlement. Expiry retains the opt-in preference but pauses sending. Existing consent can be preserved by legacy settings writes; opting out is always allowed. This is a product entitlement gate without AI metering.
