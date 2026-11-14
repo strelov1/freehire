@@ -12,7 +12,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -35,7 +34,7 @@ Backend Engineer, Sber, 2017 - 2021
 Engineer, Informa, 2014 - 2017`
 
 // onboardingModelJSON is what the model returns for onboardingCV.
-const onboardingModelJSON = `{"headline":"Senior software engineer, high-availability backends",` +
+const onboardingModelJSON = `{"full_name":"Jane Doe","headline":"Senior software engineer, high-availability backends",` +
 	`"location":"Florianópolis, Brazil","total_years":11,` +
 	`"email":"jane@example.com","phone":"+1 555 0100","links":["linkedin.com/in/janedoe"],` +
 	`"experience":[` +
@@ -45,20 +44,6 @@ const onboardingModelJSON = `{"headline":"Senior software engineer, high-availab
 	`{"title":"Engineer","company":"Informa","start":"2014","end":"2016"},` +
 	`{"title":"Intern","company":"RingCentral","start":"2013","end":"2014"},` +
 	`{"title":"Intern","company":"Acme","start":"2012","end":"2013"}]}`
-
-// contactDetector reports the CV's name and residence the way the PII service does: the
-// extractor takes both from these spans, never from the model.
-type contactDetector struct{}
-
-func (contactDetector) Detect(_ context.Context, text string) ([]pii.Span, error) {
-	var spans []pii.Span
-	for value, kind := range map[string]string{"Jane Doe": pii.KindName, "Rua Bocaiúva 2468, Florianópolis, Brazil": pii.KindAddress} {
-		if i := strings.Index(text, value); i >= 0 {
-			spans = append(spans, pii.Span{Start: i, End: i + len(value), Kind: kind})
-		}
-	}
-	return spans, nil
-}
 
 func onboardingApp(h *resumeHandlers, userID int64) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -75,7 +60,7 @@ func onboardingApp(h *resumeHandlers, userID int64) *fiber.App {
 func onboardingHandlersWith(t *testing.T, client *llm.Client, keys *readCountingKeys) *resumeHandlers {
 	t.Helper()
 	return &resumeHandlers{
-		structuredExtractor: resumeextract.NewExtractor(client, contactDetector{}),
+		structuredExtractor: resumeextract.NewExtractor(client),
 		llm:                 intentBinding(t, client, keys),
 	}
 }

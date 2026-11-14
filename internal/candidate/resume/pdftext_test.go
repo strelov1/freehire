@@ -37,7 +37,7 @@ func stubPDFTool(t *testing.T, filler string, n int) {
 
 // A PDF's text layer can be far larger than the file itself, so the extractor's output is
 // not bounded by the upload limit: a 472KB file has been observed yielding 12.6MB of text,
-// and the whole string then travels to the PII filter and the embedder. Bound what is
+// and the whole string then travels to structured extraction and the embedder. Bound what is
 // retained instead.
 func TestExtractPDFText_BoundsOutputSize(t *testing.T) {
 	stubPDFTool(t, "freehire", maxPDFTextBytes+512*1024)

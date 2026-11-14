@@ -1,6 +1,6 @@
 # internal/candidate
 
-Everything about the person applying — the stored CV and its edits, the structured extraction, the experience bank, PII masking, ATS scoring, and the CV-vs-vacancy match.
+Everything about the person applying — the stored CV and its edits, the structured extraction, the experience bank, ATS scoring, and the CV-vs-vacancy match.
 
 **Layer 4 of 8.**
 
@@ -29,4 +29,4 @@ CV document, so an edit made with `cv_edit` does not show there. The packages ke
 
 ## Packages
 
-`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `fitanalysis` `hardconstraint` `hardconstraint/credentials` `headshot` `jobmatch` `matchanalysis` `pii` `resume` `resumeextract`
+`atscheck` `cv` `cvedit` `cvmatch` `cvsection` `experience` `fitanalysis` `hardconstraint` `hardconstraint/credentials` `headshot` `jobmatch` `matchanalysis` `resume` `resumeextract`

@@ -560,7 +560,7 @@ const pdfExtractTimeout = 15 * time.Second
 
 // maxPDFTextBytes bounds the text one extraction retains. A PDF's text layer is not bounded
 // by the file: a 472KB upload has been observed yielding 12.6MB of text, and the whole string
-// then travels onward to the PII filter and the embedder, so the upload limit is not the
+// then travels onward to structured extraction and the embedder, so the upload limit is not the
 // ceiling it looks like. Two megabytes is an order of magnitude past the densest real résumé
 // (a hundred pages of prose is a few hundred KB), so only a pathological document is ever
 // truncated — and for one of those, truncating beats propagating.

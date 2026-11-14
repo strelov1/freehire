@@ -293,9 +293,7 @@ empty profile the model would read as "no preferences".
 
 - `POST /cv/roast` is public — no cookie, no key. It stores nothing (unlike
   `/me/resume/extract`, which stores for a signed-in caller because their later steps
-  need the file) and never calls the LLM analyzer, so
-  `internal/candidate/pii` is not on its path: that layer protects a CV from a model, and
-  no model runs. This endpoint forks `pdftotext`.
+  need the file) and never calls the LLM analyzer. This endpoint forks `pdftotext`.
 - **`RoastCV` refuses any `Content-Encoding` header outright, before `readResumeUpload`
   runs.** Fiber's `Ctx.Body()` — which `BodyParser` and `c.FormFile` both read through —
   decompresses `Content-Encoding` transparently, chaining up to three layers, with no

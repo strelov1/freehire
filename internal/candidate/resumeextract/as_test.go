@@ -19,7 +19,7 @@ func TestAsKeepsTheExtractorsOwnClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("llm.New: %v", err)
 	}
-	e := NewExtractor(client, nil)
+	e := NewExtractor(client)
 
 	bound := e.As(llm.NewCaller("a-candidates-own-key", nil, llm.Feature("cv-extract")))
 
@@ -40,7 +40,7 @@ func TestAsIsNilSafe(t *testing.T) {
 // An extractor with no client (no gateway configured) must survive attribution too: there is
 // nothing to bind a credential to, and Extract already degrades to ErrDisabled.
 func TestAsWithoutAClientStaysDisabled(t *testing.T) {
-	e := NewExtractor(nil, nil)
+	e := NewExtractor(nil)
 
 	bound := e.As(llm.NewCaller("k", nil, llm.Feature("cv-extract")))
 

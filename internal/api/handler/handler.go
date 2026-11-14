@@ -197,7 +197,7 @@ func Register(app *fiber.App, cfg Config) {
 	// its reasoning model is slow (tens of seconds per stage), so the default would time
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
-	structuredExtractor := resumeextract.NewExtractor(cmp.Or(cfg.ResumeExtractLLM, cfg.LLM).WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
+	structuredExtractor := resumeextract.NewExtractor(cmp.Or(cfg.ResumeExtractLLM, cfg.LLM).WithTimeout(resumeExtractLLMTimeout))
 	plans := plan.NewStore(queries, cfg.Pool, cfg.Plan)
 	// Imports fetch a user-supplied page, so they dial through ingestClient (built above,
 	// where the comment on it is). cfg.Search may be nil (no engine configured), which only

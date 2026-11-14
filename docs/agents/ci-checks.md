@@ -182,18 +182,16 @@ backlog blocks nothing.
 
 ## Python lint: Ruff
 
-Every tracked `.py` file (`services/scrapling-fetch`, `services/pii-filter`, `scripts/`,
+Every tracked `.py` file (`services/scrapling-fetch`, `scripts/`,
 `.github/scripts/`) is linted and format-checked by Ruff. `ruff.toml` at the root holds the
 rules (`E4`/`E7`/`E9`/`F` plus `I`, `B`, `UP`; findings are fixed, never baselined), the
 version is pinned in `.mise.toml` and in the `python-lint` CI job (`RUFF_VERSION` and
 `RUFF_SHA256` there move with it), and the gates are the lefthook `ruff` command on staged
 files and that job, which runs `ruff check .` and `ruff format --check .`.
 
-## Python: pii-filter and scripts
+## Python scripts
 
-The `pii-filter` CI job runs `services/pii-filter`'s tests with `python -m unittest` and no
-install step (the service's tests use only the standard library; an install would hide a
-test that started needing a package), then every `scripts/test_*.py` as a script — they
+The `python-scripts` CI job runs every `scripts/test_*.py` as a script. These tests
 have their own runner, so `unittest discover` would report "Ran 0 tests" and pass.
 
 ## Artifacts we hand to others

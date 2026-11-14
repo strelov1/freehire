@@ -61,6 +61,12 @@
         "null"
       ]
     },
+    "email": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "experience": {
       "items": {
         "additionalProperties": false,
@@ -176,6 +182,12 @@
         "null"
       ]
     },
+    "full_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "headline": {
       "type": [
         "string",
@@ -188,6 +200,27 @@
       },
       "type": [
         "array",
+        "null"
+      ]
+    },
+    "links": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phone": {
+      "type": [
+        "string",
         "null"
       ]
     },
@@ -254,9 +287,14 @@
   "required": [
     "certifications",
     "education",
+    "email",
     "experience",
+    "full_name",
     "headline",
     "languages",
+    "links",
+    "location",
+    "phone",
     "projects",
     "skills",
     "summary",
