@@ -25,12 +25,18 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
 # --- typst stage: fetch the pinned, statically-linked typst binary used to render CV
 # PDFs (internal/cv). The musl build is fully static, so it runs on distroless/static;
 # Libertinus Serif is embedded in the binary, so no fonts are bundled separately. Pinned
-# to match the version verified against the ATS extraction test (local == prod output). ---
+# to match the version verified against the ATS extraction test (local == prod output).
+# TYPST_SHA256 is the GitHub release asset digest; it moves with TYPST_VERSION and with
+# the same pair in .github/workflows/ci.yml. coreutils supplies GNU sha256sum --strict,
+# which busybox's applet does not implement. ---
 FROM alpine:3.24 AS typst
 ARG TYPST_VERSION=0.15.0
+ARG TYPST_SHA256=59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabea
 # hadolint ignore=DL3018
-RUN apk add --no-cache curl xz \
+RUN apk add --no-cache curl xz coreutils \
  && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz \
+ && printf '%s  %s\n' "${TYPST_SHA256}" /tmp/typst.tar.xz > /tmp/typst.sha256 \
+ && /usr/bin/sha256sum --check --strict /tmp/typst.sha256 \
  && tar -xJf /tmp/typst.tar.xz -C /tmp \
  && install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
  && /usr/local/bin/typst --version

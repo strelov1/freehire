@@ -5,17 +5,24 @@ GET  /health                   -> {"status": "ok"}
 
 Config via env: PII_FILTER_MODEL_DIR (dir holding config.json, tokenizer.json, onnx/),
 PII_FILTER_ADDR (default 127.0.0.1:8099). The model loads once at startup.
+
+A request without a well-formed Content-Length, or whose `text` is not a string, is 400.
+It is never scored as an empty document. An unexpected failure is a generic 500; the
+exception is logged here and not written into the response.
 """
 
 import json
+import logging
 import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from detector import Model
+from detector import Model, TextTooLong
 
 MODEL = None  # set in main()
+
+log = logging.getLogger("pii-filter")
 
 # This service is reached only by the trusted internal Go backend (see README/AGENTS.md),
 # but it still sits on the CV-processing path and decodes whatever a client sends — these
@@ -25,10 +32,33 @@ REQUEST_TIMEOUT_SECONDS = 30  # per-connection socket read/write deadline
 MAX_CONCURRENT_REQUESTS = 32  # ThreadingHTTPServer spawns one thread per connection
 
 
+class ContentLengthError(Exception):
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
 def body_too_large(content_length):
     """Whether a declared Content-Length exceeds MAX_BODY_BYTES. A pure predicate so the
     cap itself is unit-testable without a running server."""
     return content_length > MAX_BODY_BYTES
+
+
+def parse_content_length(header):
+    """The declared body size. Missing or non-integer is ContentLengthError — never zero.
+
+    A missing header used to become 0, the handler read nothing, and detect("") answered
+    200 with no spans. That is a privacy miss, so it is a 400 instead.
+    """
+    if header is None or str(header).strip() == "":
+        raise ContentLengthError("missing")
+    text = str(header).strip()
+    if not text.isdigit():
+        raise ContentLengthError("malformed")
+    try:
+        return int(text, 10)
+    except ValueError:
+        raise ContentLengthError("malformed") from None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -60,17 +90,41 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {"error": "not found"})
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if body_too_large(length):
+            length = parse_content_length(self.headers.get("Content-Length"))
+        except ContentLengthError as err:
+            if err.reason == "missing":
+                self._json(400, {"error": "Content-Length is required"})
+            else:
+                self._json(400, {"error": "malformed Content-Length"})
+            return
+        if body_too_large(length):
+            self._json(413, {"error": "request body too large"})
+            return
+        try:
+            raw = self.rfile.read(length)
+            if len(raw) > MAX_BODY_BYTES:
                 self._json(413, {"error": "request body too large"})
                 return
-            req = json.loads(self.rfile.read(length) or b"{}")
-            spans = MODEL.detect(req.get("text", ""))
-            # Observability without leaking PII: log the span COUNT only, never the text.
-            print(f"detect: {len(spans)} spans", file=sys.stderr, flush=True)
-            self._json(200, {"spans": spans})
-        except Exception as e:  # fail loud so the Go caller fails closed
-            self._json(500, {"error": str(e)})
+            payload = json.loads(raw)
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("text"), str
+            ):
+                self._json(400, {"error": "text must be a string"})
+                return
+            spans = MODEL.detect(payload["text"])
+        except TextTooLong:
+            self._json(400, {"error": "text exceeds the scan limit"})
+            return
+        except (json.JSONDecodeError, UnicodeError):
+            self._json(400, {"error": "malformed request"})
+            return
+        except Exception:
+            log.exception("detect failed")
+            self._json(500, {"error": "internal error"})
+            return
+        # Observability without leaking PII: log the span COUNT only, never the text.
+        print(f"detect: {len(spans)} spans", file=sys.stderr, flush=True)
+        self._json(200, {"spans": spans})
 
     def log_message(
         self, *args

@@ -1,6 +1,13 @@
 import unittest
 
-from detector import KIND_MAP, decode_spans
+from detector import (
+    KIND_MAP,
+    MAX_SCAN_TOKENS,
+    TextTooLong,
+    decode_spans,
+    scan_tokens,
+    token_windows,
+)
 
 
 class DecodeSpansTest(unittest.TestCase):
@@ -32,6 +39,61 @@ class DecodeSpansTest(unittest.TestCase):
         self.assertEqual(KIND_MAP["private_url"], "LINK")
         # Out-of-scope categories are intentionally absent (never masked).
         self.assertNotIn("private_date", KIND_MAP)
+
+
+class ScanTokensTest(unittest.TestCase):
+    def test_pii_past_the_old_truncation_point_is_reported(self):
+        n = 5000
+        pii_at = 4500
+        self.assertGreater(pii_at, 4096)
+        ids = list(range(n))
+        offsets = [(i, i + 1) for i in range(n)]
+
+        def infer(window_ids):
+            return [
+                "S-private_email" if token == pii_at else "O" for token in window_ids
+            ]
+
+        spans = scan_tokens(ids, offsets, infer)
+        self.assertEqual(spans, [{"start": pii_at, "end": pii_at + 1, "kind": "EMAIL"}])
+
+    def test_windows_cover_every_token_including_the_tail(self):
+        ranges = list(token_windows(5000))
+        covered = set()
+        for start, end in ranges:
+            covered.update(range(start, end))
+        self.assertEqual(covered, set(range(5000)))
+        self.assertGreater(ranges[-1][1], 4096)
+        self.assertGreater(ranges[0][1], ranges[1][0])
+
+    def test_an_entity_in_the_overlap_is_reported_once(self):
+        n = 5000
+        pii_at = 4000
+        ids = list(range(n))
+        offsets = [(i, i + 1) for i in range(n)]
+
+        def infer(window_ids):
+            return [
+                "S-private_phone" if token == pii_at else "O" for token in window_ids
+            ]
+
+        spans = scan_tokens(ids, offsets, infer)
+        self.assertEqual(spans, [{"start": pii_at, "end": pii_at + 1, "kind": "PHONE"}])
+
+    def test_over_the_scan_cap_is_refused_before_any_window(self):
+        calls = []
+
+        def infer(window_ids):
+            calls.append(window_ids)
+            return ["O"] * len(window_ids)
+
+        with self.assertRaises(TextTooLong):
+            scan_tokens(
+                list(range(MAX_SCAN_TOKENS + 1)),
+                [(0, 1)] * (MAX_SCAN_TOKENS + 1),
+                infer,
+            )
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

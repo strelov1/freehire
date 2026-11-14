@@ -26,10 +26,17 @@ GET /health -> {"status": "ok"}
 ```
 
 The upstream status is DATA: a 403 page comes back with HTTP 200 and `"status": 403`. Only a
-fetch that could not complete is a 502. `proxy: true` egresses through `SOURCES_PROXY_URL`, which
+fetch that could not complete is a 502, and that 502 says `fetch failed` — the exception is
+logged on the service, not returned. `proxy: true` egresses through `SOURCES_PROXY_URL`, which
 only the service reads — no proxy credential crosses the wire. The caller's `User-Agent` and
 transport headers are dropped (they would undo the impersonation), and the returned headers omit
 `Content-Encoding`/`Content-Length`/`Transfer-Encoding`, because the body comes back decoded.
+
+Redirects are followed up to 10 hops, and only by the service. Each hop is resolved first and
+refused with 400 when any address is loopback, private, link-local (the cloud metadata address
+lives there) or otherwise non-routable — the same rule as the URL that was requested. The hop
+past the cap is not requested. Browser mode navigates in Chromium, which follows redirects
+itself; a final URL that resolves internally is still refused and its body is not returned.
 
 ## Browser sessions
 

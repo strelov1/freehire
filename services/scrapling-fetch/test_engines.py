@@ -101,6 +101,31 @@ def test_proxy_config_refuses_a_sticky_template_without_a_count():
         ProxyConfig.from_env({"SCRAPLING_PROXY_STICKY": "http://u-{n}:p@gw:80"})
 
 
+def test_http_fetcher_does_not_follow_redirects_itself():
+    seen = {}
+
+    async def fake_send(url, **kw):
+        seen.update(kw)
+
+        class P:
+            status = 302
+            body = b""
+            headers = {"Location": "http://169.254.169.254/latest/meta-data"}
+
+            def __init__(self):
+                self.url = url
+
+        return P()
+
+    fetch = http_fetcher(
+        ProxyConfig(rotating=None, sticky=[]), send=lambda method: fake_send
+    )
+    result = asyncio.run(fetch(FetchRequest(url="https://ex.com")))
+    assert seen["follow_redirects"] is False
+    assert result.status == 302
+    assert result.headers["Location"] == "http://169.254.169.254/latest/meta-data"
+
+
 def test_http_fetch_uses_the_rotating_proxy_only_when_asked(monkeypatch):
     seen = []
 

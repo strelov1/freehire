@@ -1,9 +1,10 @@
 import base64
+import logging
 
 import pytest
 from starlette.testclient import TestClient
 
-from app import FetchError, FetchResult, create_app
+from app import MAX_REDIRECTS, FetchError, FetchResult, create_app
 
 TOKEN = "t0ken"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -177,13 +178,35 @@ def test_browser_mode_uses_the_browser_fetcher():
     assert len(browser.calls) == 1 and http.calls == []
 
 
-def test_service_failure_is_502_without_upstream_status():
-    http = Recorder(error=FetchError("browser crashed"))
-    r = client(http=http).post(
-        "/fetch", json={"url": "https://ex.com", "mode": "http"}, headers=AUTH
-    )
+def test_service_failure_is_a_generic_502(caplog):
+    http = Recorder(error=FetchError("browser crashed: /var/lib/secret"))
+    with caplog.at_level(logging.ERROR, logger="scrapling-fetch"):
+        r = client(http=http).post(
+            "/fetch", json={"url": "https://ex.com", "mode": "http"}, headers=AUTH
+        )
     assert r.status_code == 502
-    assert "status" not in r.json() and "browser crashed" in r.json()["error"]
+    assert r.json() == {"error": "fetch failed"}
+    assert "status" not in r.json()
+    assert "secret" not in r.text and "Traceback" not in r.text
+    assert "/var/lib/secret" in caplog.text
+
+
+def test_resolve_failure_does_not_leak_the_resolver_error(caplog):
+    def fail(host):
+        raise OSError(f"secret resolver detail for {host}")
+
+    http = Recorder()
+    with caplog.at_level(logging.ERROR, logger="scrapling-fetch"):
+        r = client(http=http, resolve=fail).post(
+            "/fetch",
+            json={"url": "https://nowhere.invalid", "mode": "http"},
+            headers=AUTH,
+        )
+    assert r.status_code == 502
+    assert r.json() == {"error": "fetch failed"}
+    assert "secret resolver detail" not in r.text
+    assert http.calls == []
+    assert "secret resolver detail" in caplog.text
 
 
 def test_upstream_body_over_cap_is_502():
@@ -240,4 +263,209 @@ def test_an_unresolvable_host_is_a_fetch_failure_not_a_bad_request():
         "/fetch", json={"url": "https://nowhere.invalid", "mode": "http"}, headers=AUTH
     )
     assert r.status_code == 502
+    assert r.json()["error"] == "fetch failed"
+    assert "no such host" not in r.text
     assert http.calls == []
+
+
+class _Redirects:
+    """Returns a 302 on the first call and a 200 afterwards, recording each request."""
+
+    def __init__(self, location, then=b"ok"):
+        self.location = location
+        self.then = then
+        self.calls = []
+
+    async def __call__(self, req):
+        self.calls.append(req)
+        if len(self.calls) == 1:
+            return FetchResult(
+                status=302, url=req.url, headers={"location": self.location}, body=b""
+            )
+        return FetchResult(status=200, url=req.url, headers={}, body=self.then)
+
+
+@pytest.mark.parametrize(
+    ("location", "denied_host", "addrs"),
+    [
+        (
+            "http://169.254.169.254/latest/meta-data",
+            "169.254.169.254",
+            ["169.254.169.254"],
+        ),
+        ("http://evil.example/meta", "evil.example", ["10.0.0.8"]),
+        ("http://evil.example/meta", "evil.example", ["127.0.0.1"]),
+        ("https://evil.example/x", "evil.example", ["192.168.1.1"]),
+        (
+            "http://evil.example/x",
+            "evil.example",
+            ["93.184.216.34", "172.16.0.1"],
+        ),
+    ],
+)
+def test_redirect_to_a_denied_address_is_rejected_and_not_fetched(
+    location, denied_host, addrs
+):
+    http = _Redirects(location, then=b"METADATA-SECRET")
+
+    def resolve(host):
+        if host == denied_host:
+            return list(addrs)
+        return ["93.184.216.34"]
+
+    r = client(http=http, resolve=resolve).post(
+        "/fetch",
+        json={"url": "https://ex.com/start", "mode": "http"},
+        headers=AUTH,
+    )
+    assert r.status_code == 400, r.text
+    assert [call.url for call in http.calls] == ["https://ex.com/start"]
+    assert "METADATA-SECRET" not in r.text
+
+
+def test_a_public_redirect_is_followed():
+    http = _Redirects("https://cdn.example/final", then=b"ok")
+    r = client(http=http).post(
+        "/fetch",
+        json={"url": "https://ex.com/start", "mode": "http"},
+        headers=AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert base64.b64decode(r.json()["body"]) == b"ok"
+    assert [call.url for call in http.calls] == [
+        "https://ex.com/start",
+        "https://cdn.example/final",
+    ]
+
+
+def test_a_relative_redirect_is_resolved_and_checked():
+    http = _Redirects("/landed", then=b"ok")
+    r = client(http=http).post(
+        "/fetch",
+        json={"url": "https://ex.com/start", "mode": "http"},
+        headers=AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert [call.url for call in http.calls] == [
+        "https://ex.com/start",
+        "https://ex.com/landed",
+    ]
+
+
+def test_a_non_http_redirect_is_rejected_and_not_followed():
+    http = _Redirects("file:///etc/passwd", then=b"METADATA-SECRET")
+    r = client(http=http).post(
+        "/fetch",
+        json={"url": "https://ex.com/start", "mode": "http"},
+        headers=AUTH,
+    )
+    assert r.status_code == 400, r.text
+    assert [call.url for call in http.calls] == ["https://ex.com/start"]
+    assert "METADATA-SECRET" not in r.text
+
+
+def test_redirects_stop_at_the_cap_without_another_fetch():
+    class Always:
+        def __init__(self):
+            self.calls = []
+
+        async def __call__(self, req):
+            self.calls.append(req.url)
+            return FetchResult(
+                status=302,
+                url=req.url,
+                headers={"Location": f"https://ex.com/hop/{len(self.calls)}"},
+                body=b"",
+            )
+
+    http = Always()
+    r = client(http=http).post(
+        "/fetch",
+        json={"url": "https://ex.com/start", "mode": "http"},
+        headers=AUTH,
+    )
+    assert r.status_code == 502
+    assert r.json()["error"] == "too many redirects"
+    assert len(http.calls) == MAX_REDIRECTS + 1
+
+
+def test_a_302_of_post_is_followed_as_get_without_the_body():
+    http = _Redirects("https://ex.com/next", then=b"ok")
+    body = base64.b64encode(b"payload").decode()
+    r = client(http=http).post(
+        "/fetch",
+        json={
+            "url": "https://ex.com/start",
+            "mode": "http",
+            "method": "POST",
+            "body": body,
+        },
+        headers=AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert http.calls[0].method == "POST" and http.calls[0].body == b"payload"
+    assert http.calls[1].method == "GET" and http.calls[1].body == b""
+
+
+def test_a_307_keeps_the_method_and_body():
+    class Keep:
+        def __init__(self):
+            self.calls = []
+
+        async def __call__(self, req):
+            self.calls.append(req)
+            if len(self.calls) == 1:
+                return FetchResult(
+                    status=307,
+                    url=req.url,
+                    headers={"Location": "https://ex.com/next"},
+                    body=b"",
+                )
+            return FetchResult(status=200, url=req.url, headers={}, body=b"ok")
+
+    http = Keep()
+    body = base64.b64encode(b"payload").decode()
+    r = client(http=http).post(
+        "/fetch",
+        json={
+            "url": "https://ex.com/start",
+            "mode": "http",
+            "method": "POST",
+            "body": body,
+        },
+        headers=AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert http.calls[1].method == "POST" and http.calls[1].body == b"payload"
+
+
+def test_a_resolver_returning_a_non_ip_is_refused():
+    http = Recorder()
+    r = client(http=http, resolve=lambda host: ["not-an-ip"]).post(
+        "/fetch", json={"url": "https://ex.com/start", "mode": "http"}, headers=AUTH
+    )
+    assert r.status_code == 400, r.text
+    assert http.calls == []
+
+
+def test_a_fetcher_that_lands_on_an_internal_url_is_not_returned():
+    http = Recorder(
+        result=FetchResult(
+            status=200,
+            url="http://169.254.169.254/latest/meta-data",
+            headers={},
+            body=b"METADATA-SECRET",
+        )
+    )
+
+    def resolve(host):
+        if host == "169.254.169.254":
+            return ["169.254.169.254"]
+        return ["93.184.216.34"]
+
+    r = client(http=http, resolve=resolve).post(
+        "/fetch", json={"url": "https://ex.com/start", "mode": "http"}, headers=AUTH
+    )
+    assert r.status_code == 400, r.text
+    assert "METADATA-SECRET" not in r.text
+    assert len(http.calls) == 1

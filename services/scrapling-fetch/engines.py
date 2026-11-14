@@ -114,9 +114,10 @@ def _scrapling_send(method: str):
 
 def http_fetcher(proxies: ProxyConfig, send=_scrapling_send):
     """One request through curl_cffi with Chrome's TLS fingerprint, through the rotating proxy
-    when asked. A refusal or a transport failure through that proxy is retried, since the retry
-    leaves from another IP; any other outcome is returned as is — the Go client does not retry
-    over this tier."""
+    when asked. Redirects are not followed here: the HTTP layer resolves every hop and refuses
+    an internal one before the next request. A refusal or a transport failure through that proxy
+    is retried, since the retry leaves from another IP; any other outcome is returned as is —
+    the Go client does not retry over this tier."""
 
     async def fetch(req: FetchRequest) -> FetchResult:
         kwargs = dict(
@@ -124,7 +125,7 @@ def http_fetcher(proxies: ProxyConfig, send=_scrapling_send):
             headers=forwardable_headers(req.headers),
             proxy=proxies.rotating if req.proxy else None,
             timeout=HTTP_TIMEOUT_SECONDS,
-            follow_redirects=True,
+            follow_redirects=False,
             retries=1,
         )
         if req.body and req.method in ("POST", "PUT"):

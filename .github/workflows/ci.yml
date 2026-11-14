@@ -111,8 +111,8 @@ jobs:
           exit 1
 
       # Tool archives come from a cache, so a GitHub Releases outage (504s for minutes on
-      # 2026-11-08) fails only a run that bumps a version. A digest check (all but typst's)
-      # covers a cached file like a downloaded one, and a job that fails it saves no cache.
+      # 2026-11-08) fails only a run that bumps a version. A digest check covers a cached
+      # file like a downloaded one, and a job that fails it saves no cache.
       # shortcut: old versions' archives stay in the cache until GitHub evicts it (7 days unused).
       - name: Cache tool archives
         if: matrix.task != 'checks'
@@ -125,16 +125,19 @@ jobs:
       # CV rendering shells out to typst, and the render tests skip without it — including the
       # registry-driven guard that every template emits clickable links, which is the only
       # thing standing between a new template and tracer links silently counting nothing.
-      # Same pinned version and same release tarball as the prod image (Dockerfile): a
-      # different typst here would break the local == CI == prod output the ATS extraction
-      # test relies on.
+      # Same pinned version, same release tarball and same sha256 as the prod image
+      # (Dockerfile): a different typst here would break the local == CI == prod output the
+      # ATS extraction test relies on. A bump changes TYPST_VERSION and TYPST_SHA256 in both
+      # places together.
       - name: Install typst
         if: matrix.task != 'checks'
         env:
           TYPST_VERSION: 0.15.0
+          TYPST_SHA256: 59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabea
         run: |
           f=~/.cache/ci-tools/typst-${TYPST_VERSION}.tar.xz
           [ -f "$f" ] || curl -fsSL --retry 5 --retry-all-errors --create-dirs "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o "$f"
+          echo "${TYPST_SHA256}  $f" | sha256sum --check --strict -
           tar -xJf "$f" -C /tmp
           sudo install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
           typst --version

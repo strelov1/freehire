@@ -38,11 +38,20 @@ change to what production runs.
 
 ## Test
 
-`python -m unittest -v` covers the pure BIOES→span decode and the kind map, with the standard
-library alone; the `pii-filter` CI job runs exactly that, with no install step. The ONNX inference is validated by the manual smoke check against real CVs (weights not in CI).
+`python -m unittest -v` covers the BIOES→span decode, the windowed scan, and the HTTP
+fail-closed checks, with the standard library alone; the `pii-filter` CI job runs exactly
+that, with no install step. The ONNX inference is validated by the manual smoke check against
+real CVs (weights not in CI).
 
 ## Notes
 
+- The model scores at most 4096 tokens per pass. Longer text is scored in overlapping windows,
+  so a span past that first window is still returned. Past 32768 tokens the request is 400
+  (`text exceeds the scan limit`) — the tail is never dropped and answered as "no PII".
+- `POST /detect` requires a `Content-Length` and a JSON object whose `text` is a string. A
+  missing or malformed length, a body over 2_000_000 bytes, or a non-string `text` is 400
+  (413 when the declared length is over the cap) and is not scored. An unexpected failure is
+  a generic 500; the exception is logged, not written into the response.
 - Span stitching currently uses argmax + contiguous-merge (spike-validated). The shipped
   Viterbi decoder (`viterbi_calibration.json`) is the accuracy upgrade seam.
 - Deployment (systemd unit, weights, health-check, egress) lives in `freehire-ops`.
