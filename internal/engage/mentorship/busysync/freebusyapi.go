@@ -93,11 +93,7 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 		// calsync.APIReader.page for why: gmailsync.RevokedGrant is the one place a
 		// status is read as a revocation, since the flag it sets is shared with every
 		// other Google feature this account may use.
-		return nil, &gmailsync.APIError{
-			Op:         "calendar: freeBusy",
-			StatusCode: resp.StatusCode,
-			Status:     resp.Status,
-		}
+		return nil, gmailsync.NewAPIError("calendar: freeBusy", resp)
 	}
 	var body freeBusyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {

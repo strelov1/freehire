@@ -174,9 +174,7 @@ func (a *meetAPI) createEvent(ctx context.Context, in MeetEventInput) (string, s
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", "", &gmailsync.APIError{
-			Op: "mentor calendar: create event", StatusCode: resp.StatusCode, Status: resp.Status,
-		}
+		return "", "", gmailsync.NewAPIError("mentor calendar: create event", resp)
 	}
 
 	var out meetEvent
@@ -214,8 +212,6 @@ func (a *meetAPI) deleteEvent(ctx context.Context, eventID string) error {
 	case http.StatusOK, http.StatusNoContent, http.StatusNotFound, http.StatusGone:
 		return nil
 	default:
-		return &gmailsync.APIError{
-			Op: "mentor calendar: delete event", StatusCode: resp.StatusCode, Status: resp.Status,
-		}
+		return gmailsync.NewAPIError("mentor calendar: delete event", resp)
 	}
 }
