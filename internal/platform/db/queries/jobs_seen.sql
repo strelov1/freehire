@@ -105,10 +105,11 @@ WHERE j.source = sqlc.arg(source)
 -- (release B) deadlocks with that. last_seen_at, the previous stamp the withheld-then-seen requeue
 -- compares, is the locked activity row's.
 WITH existing AS MATERIALIZED (
-    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at,
+    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
+           COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) AS deadline,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
-           (j.closed_at IS NOT NULL AND (j.application_deadline IS NULL
-                                         OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
+           (j.closed_at IS NOT NULL AND (COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) IS NULL
+                                         OR COALESCE(sqlc.narg(application_deadline)::date, j.application_deadline) >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
     JOIN job_activity a ON a.job_id = j.id
     WHERE j.source = sqlc.arg(source) AND j.external_id = sqlc.arg(external_id)
@@ -116,39 +117,37 @@ WITH existing AS MATERIALIZED (
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),
-        closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+        application_deadline = e.deadline,
+        closed_at = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                          THEN COALESCE(jobs.closed_at, now()) ELSE NULL END,
-        closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+        closed_reason = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                              THEN 'expired' ELSE '' END,
         liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
         -- Stamp a lifecycle transition, not another observation of an expired posting.
         updated_at = CASE
             WHEN (jobs.closed_at IS NULL) IS DISTINCT FROM
-                 (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+                 (e.deadline IS NULL OR e.deadline >= (now() AT TIME ZONE 'UTC')::date)
+            OR jobs.application_deadline IS DISTINCT FROM e.deadline
             THEN now() ELSE updated_at END
     FROM existing e
     WHERE jobs.id = e.id AND (sqlc.arg(allow_reopen)::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
-              COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
+              jobs.application_deadline, COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
-), reopened_queued AS (
+), changed_queued AS (
+    -- Reopen, changed listing metadata, or re-seen after search withheld it.
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT t.id, t.job_posted_at
     FROM touched t JOIN existing e ON e.id = t.id
-    WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
-    ON CONFLICT (job_id) DO NOTHING
-), returned_queued AS (
-    -- Re-seen after search withheld it for going unseen: see RefreshUnchangedJob.
-    INSERT INTO search_outbox (job_id, job_posted_at)
-    SELECT t.id, t.job_posted_at
-    FROM touched t JOIN existing e ON e.id = t.id
-    WHERE t.closed_at IS NULL AND e.closed_at IS NULL AND NOT e.is_private
-      AND e.duplicate_of IS NULL
-      AND e.last_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz
+    WHERE t.closed_at IS NULL AND NOT e.is_private
+      AND (e.closed_at IS NOT NULL
+           OR t.application_deadline IS DISTINCT FROM e.previous_deadline
+           OR (e.duplicate_of IS NULL
+               AND e.last_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz))
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )

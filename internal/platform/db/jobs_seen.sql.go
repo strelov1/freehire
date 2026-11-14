@@ -347,50 +347,49 @@ func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobs
 
 const touchJob = `-- name: TouchJob :one
 WITH existing AS MATERIALIZED (
-    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at,
+    SELECT j.id, j.closed_at, j.is_private, j.duplicate_of, a.last_seen_at, j.application_deadline AS previous_deadline,
+           COALESCE($1::date, j.application_deadline) AS deadline,
            -- The touch would reopen this row: closed, and its deadline (if any) not passed.
-           (j.closed_at IS NOT NULL AND (j.application_deadline IS NULL
-                                         OR j.application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
+           (j.closed_at IS NOT NULL AND (COALESCE($1::date, j.application_deadline) IS NULL
+                                         OR COALESCE($1::date, j.application_deadline) >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
     FROM jobs j
     JOIN job_activity a ON a.job_id = j.id
-    WHERE j.source = $1 AND j.external_id = $2
+    WHERE j.source = $2 AND j.external_id = $3
     FOR NO KEY UPDATE OF j, a
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),
-        closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+        application_deadline = e.deadline,
+        closed_at = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                          THEN COALESCE(jobs.closed_at, now()) ELSE NULL END,
-        closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+        closed_reason = CASE WHEN e.deadline < (now() AT TIME ZONE 'UTC')::date
                              THEN 'expired' ELSE '' END,
         liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
         -- Stamp a lifecycle transition, not another observation of an expired posting.
         updated_at = CASE
             WHEN (jobs.closed_at IS NULL) IS DISTINCT FROM
-                 (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+                 (e.deadline IS NULL OR e.deadline >= (now() AT TIME ZONE 'UTC')::date)
+            OR jobs.application_deadline IS DISTINCT FROM e.deadline
             THEN now() ELSE updated_at END
     FROM existing e
-    WHERE jobs.id = e.id AND ($3::boolean OR NOT e.would_reopen)
+    WHERE jobs.id = e.id AND ($4::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
-              COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
+              jobs.application_deadline, COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
-), reopened_queued AS (
+), changed_queued AS (
+    -- Reopen, changed listing metadata, or re-seen after search withheld it.
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT t.id, t.job_posted_at
     FROM touched t JOIN existing e ON e.id = t.id
-    WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
-    ON CONFLICT (job_id) DO NOTHING
-), returned_queued AS (
-    -- Re-seen after search withheld it for going unseen: see RefreshUnchangedJob.
-    INSERT INTO search_outbox (job_id, job_posted_at)
-    SELECT t.id, t.job_posted_at
-    FROM touched t JOIN existing e ON e.id = t.id
-    WHERE t.closed_at IS NULL AND e.closed_at IS NULL AND NOT e.is_private
-      AND e.duplicate_of IS NULL
-      AND e.last_seen_at < $4::timestamptz
+    WHERE t.closed_at IS NULL AND NOT e.is_private
+      AND (e.closed_at IS NOT NULL
+           OR t.application_deadline IS DISTINCT FROM e.previous_deadline
+           OR (e.duplicate_of IS NULL
+               AND e.last_seen_at < $5::timestamptz))
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
@@ -401,6 +400,7 @@ FROM existing e LEFT JOIN touched t ON t.id = e.id
 `
 
 type TouchJobParams struct {
+	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
 	Source               string             `json:"source"`
 	ExternalID           string             `json:"external_id"`
 	AllowReopen          bool               `json:"allow_reopen"`
@@ -444,6 +444,7 @@ type TouchJobRow struct {
 // crawl to retry instead of open on stale facets. reopened is the transition this call made.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error) {
 	row := q.db.QueryRow(ctx, touchJob,
+		arg.ApplicationDeadline,
 		arg.Source,
 		arg.ExternalID,
 		arg.AllowReopen,

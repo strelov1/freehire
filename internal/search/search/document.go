@@ -238,7 +238,7 @@ func CategoryUnresolved(j db.Job) bool {
 	if j.IsTech.Valid && j.IsTech.Bool {
 		return false
 	}
-	if roletype.Derive(j.Title) != "" || classify.NamesManager(j.Title) {
+	if TitleKeepsUncategorized(j.Title) {
 		return false
 	}
 	var e enrich.Enrichment
@@ -246,6 +246,14 @@ func CategoryUnresolved(j db.Job) bool {
 		_ = json.Unmarshal(j.Enrichment, &e)
 	}
 	return e.Category == "" || e.Category == "other"
+}
+
+// TitleKeepsUncategorized reports whether a title alone keeps an uncategorized posting in
+// search: a role the roletype dictionary names, or a title naming a manager. It is
+// CategoryUnresolved's title branch, exported for cmd/recount-companies, whose SQL cannot
+// run these Go dictionaries and must count what search keeps (#4503).
+func TitleKeepsUncategorized(title string) bool {
+	return roletype.Derive(title) != "" || classify.NamesManager(title)
 }
 
 // DescriptionMissing reports whether a job carries no posting body at all. An adapter

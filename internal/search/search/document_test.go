@@ -429,3 +429,15 @@ func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleKeepsUncategorized(t *testing.T) {
+	for title, want := range map[string]bool{
+		"General Manager":  true,
+		"Property Manager": true,
+		"Barista":          false,
+	} {
+		if got := TitleKeepsUncategorized(title); got != want {
+			t.Errorf("TitleKeepsUncategorized(%q) = %v, want %v", title, got, want)
+		}
+	}
+}

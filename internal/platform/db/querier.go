@@ -5494,6 +5494,12 @@ type Querier interface {
 	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
 	// nullable UUID, and the handler would carry two spellings of one id.
 	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
+	// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
+	// category predicate would drop: no column category, no enrichment answer, not confirmed
+	// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
+	// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
+	// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
+	ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error)
 	// The worst $1 boards currently failing or cooled down, worst first — the source of the
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
@@ -6096,6 +6102,17 @@ type Querier interface {
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
 	ObserveLearnedDomain(ctx context.Context, domain string) (int32, error)
+	// Every open posting's title for a batch of folded company keys (normalize.CompanyKey) —
+	// cmd/catalog-coverage matches an outside sample against these by jobhash.RoleKey. Duplicates
+	// are kept on purpose: a posting we hold twice is still one we hold. Private postings (a
+	// user's pasted JD) are not catalogue. Served by
+	// jobs_open_company_slug_folded_col_idx, whose predicate the last two conditions repeat: drop
+	// one and the planner scans the whole table.
+	OpenJobTitlesByFoldedCompany(ctx context.Context, companyKeys []string) ([]OpenJobTitlesByFoldedCompanyRow, error)
+	// One board's open postings: the namespaced id (whose native part an apply link to the posting
+	// carries) and the title. board_pattern is externalid.BoardPattern of the stored board name, so
+	// the (source, external_id text_pattern_ops) index serves it as a range scan.
+	OpenJobsOnBoard(ctx context.Context, arg OpenJobsOnBoardParams) ([]OpenJobsOnBoardRow, error)
 	// Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
 	// turns into candidate ATS boards. A company qualifies when it has an open posting from one
 	// of the REQUESTED aggregators and no open posting from any source outside the FULL
