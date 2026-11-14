@@ -45,7 +45,8 @@ func emailPathID(raw string) (int64, error) {
 // internal raw-MIME pointer for hosted mail) is deliberately not exposed.
 func bodyOf(m inbox.Message) apigen.InboxEmail {
 	return apigen.InboxEmail{
-		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID, Direction: optString(m.Direction),
+		ThreadID: optString(m.ThreadID), ToAddrs: optString(m.ToAddrs), CcAddrs: optString(m.CcAddrs),
 		FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
 		BodyText: m.BodyText, BodyHTML: m.BodyHTML,
 		ReceivedAt: m.ReceivedAt, Read: m.Read,
@@ -114,7 +115,8 @@ func (h *inboxHandlers) GetInbox(ctx context.Context, _ apigen.GetInboxParams) (
 	out := make([]apigen.InboxMessage, 0, len(page.Messages))
 	for _, m := range page.Messages {
 		out = append(out, apigen.InboxMessage{
-			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID, Direction: optString(m.Direction),
+			ThreadID: optString(m.ThreadID), ToAddrs: optString(m.ToAddrs), CcAddrs: optString(m.CcAddrs),
 			FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
 			Snippet: m.Snippet, BodyText: optString(m.BodyText),
 			ReceivedAt: m.ReceivedAt, Read: m.Read,

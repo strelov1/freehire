@@ -171,7 +171,7 @@ type Querier interface {
 	// and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
 	// NOT NULL with no default) and never touched on conflict, so the nginx figures and
 	// GET /api/v1/stats/catalog keep their meaning.
-	// Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
+	// Not queued for the drain, for the same reason as ApplyDailyView.
 	ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
@@ -186,8 +186,10 @@ type Querier interface {
 	// bot-filtered signal of the two.
 	// A visitor who did both is one visitor in each, so the two do not sum with an API
 	// count; the only relation between them is page_delta <= total_delta.
-	// view_count is a sortable attribute of the search document, so the moved figure is
-	// queued for the drain; without it the most-viewed sort waited for a full rebuild.
+	// view_count is a sortable attribute of the search document, but it is NOT queued for
+	// the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+	// the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+	// kept search_outbox from ever emptying (2026-11-14).
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
 	// Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
 	// carries information rather than the dead letters: cmd/capture-apply-form takes
@@ -3061,6 +3063,9 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// The current view_count of the jobs a rollup run touched, for the index write that
+	// replaces the old per-view search_outbox enqueue.
+	GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
 	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
@@ -3750,6 +3755,16 @@ type Querier interface {
 	// alias of it counts: the person added the company under its old spelling. An alias slug a
 	// company row still holds is its own company, as in the reads above, and does not count.
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
+	// When the log begins (job_changes_at_idx). NULL while it is empty.
+	JobChangesAvailableSince(ctx context.Context) (pgtype.Timestamptz, error)
+	// Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+	// recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+	// flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+	// logged later has a lower xid), and neither is the committed minimum alone: a writer still
+	// open here may commit before the page query takes its snapshot. Computing both together means
+	// no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+	// repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
+	JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -4654,6 +4669,8 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// Known hiring conversations are the boundary for sent-message body retrieval.
+	ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
 	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
@@ -4764,6 +4781,20 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
+	// One keyset page of the public change feed, oldest first, after the (xid, id) position
+	// the caller holds. The walk is job_changes_xid_id_idx; each entry is joined to its job by
+	// primary key, so the cost of a page is its limit, never the size of the log or of jobs.
+	//
+	// Only entries whose transaction is finished are served: xid below the oldest in-flight
+	// transaction (pg_snapshot_xmin). An entry can therefore never commit behind a cursor a
+	// client already holds. Ordering by id alone would not give that, because ids are taken
+	// inside the trigger, long before a bulk close commits.
+	//
+	// Visibility was judged when the change was logged (migration 0264: canonical, public, open
+	// all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
+	// that is private NOW serves only `closed` entries. Those carry just a slug the client was
+	// already given while it was public, and withholding them would leave the copy listed.
+	ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error)
 	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
 	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
 	// the owner itself is included (it is one of the openings). Ordered by location.
@@ -8437,8 +8468,8 @@ type Querier interface {
 	// costs a second slot. Two concurrent first applications can both pass the count and land
 	// one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.
 	UpsertDirectApplication(ctx context.Context, arg UpsertDirectApplicationParams) (int64, error)
-	// Store a Gmail message, idempotent by (user_id, source, external_id) with
-	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
+	// Gmail is idempotent; sent messages are already read and never enter employer triage.
+	// Refresh provider metadata without changing deletion, bodies or incoming reader state.
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
 	// Issue (or replace) the outstanding code for one purpose. The composite primary key
 	// makes this the whole "at most one live code per (user, purpose)" rule: a resend

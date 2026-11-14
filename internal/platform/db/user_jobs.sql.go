@@ -438,7 +438,7 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = uj.user_id
        AND (e.job_id = jobs.id OR e.suggested_job_id = jobs.id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE uj.user_id = $1
   AND ($5::text = 'all'

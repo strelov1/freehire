@@ -388,7 +388,7 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 	success := false
 	defer func() { observability.RecordCVExtraction(success) }()
 	if h.structuredExtractor == nil || !h.structuredExtractor.Enabled() {
-		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM or PII detector unset)", userID)
+		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM unset)", userID)
 		if uploadedAt != nil {
 			_ = h.resume.MarkExtractFailed(context.Background(), userID, "extractor unavailable", *uploadedAt)
 		}

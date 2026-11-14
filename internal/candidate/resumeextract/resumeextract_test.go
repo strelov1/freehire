@@ -10,7 +10,6 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -114,20 +113,19 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 		`"experience":[{"title":"Senior Go Engineer","company":"Acme","start":"2020","end":"Present"}],` +
 		`"languages":["English",""]}`
 	m := &queuedModel{resp: raw}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "Senior Go Engineer, Acme, 2020 - Present")
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "Senior Go Engineer, Acme, 2020 - Present")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 	if m.n != 1 {
 		t.Errorf("LLM calls = %d, want 1", m.n)
 	}
-	// Contacts now come from detection (none here), so the model's full_name is ignored;
-	// the semantic fields are what this test covers.
+	// The original CV is visible to the model, which supplies both contacts and content.
 	if len(got.Experience) != 1 {
 		t.Errorf("parsed = %+v, want 1 experience", got)
 	}
-	if got.FullName != "" {
-		t.Errorf("FullName = %q, want empty (no detector spans, not the model's value)", got.FullName)
+	if got.FullName != "Jane Doe" {
+		t.Errorf("FullName = %q, want the extracted name", got.FullName)
 	}
 	if got.TotalYears != 0 { // sanitized: negative → 0
 		t.Errorf("TotalYears = %d, want 0 (sanitized)", got.TotalYears)
@@ -138,7 +136,7 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 }
 
 func TestExtract_UnconfiguredReturnsErrDisabled(t *testing.T) {
-	_, err := NewExtractor(nil, noopDetector{}).Extract(context.Background(), "cv")
+	_, err := NewExtractor(nil).Extract(context.Background(), "cv")
 	if !errors.Is(err, ErrDisabled) {
 		t.Fatalf("err = %v, want ErrDisabled", err)
 	}
@@ -146,19 +144,16 @@ func TestExtract_UnconfiguredReturnsErrDisabled(t *testing.T) {
 
 func TestExtract_BadJSONErrors(t *testing.T) {
 	m := &queuedModel{resp: "not json"}
-	if _, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "cv"); err == nil {
+	if _, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "cv"); err == nil {
 		t.Fatal("want error on unparseable model output, got nil")
 	}
 }
 
 func TestExtractor_EnabledReflectsClient(t *testing.T) {
-	if NewExtractor(nil, noopDetector{}).Enabled() {
+	if NewExtractor(nil).Enabled() {
 		t.Error("nil-client extractor should be disabled")
 	}
-	if NewExtractor(llm.NewWithModel(&queuedModel{}), nil).Enabled() {
-		t.Error("nil-detector extractor should be disabled (fail-closed)")
-	}
-	if !NewExtractor(llm.NewWithModel(&queuedModel{}), noopDetector{}).Enabled() {
+	if !NewExtractor(llm.NewWithModel(&queuedModel{})).Enabled() {
 		t.Error("configured extractor should be enabled")
 	}
 }
@@ -199,7 +194,7 @@ const (
 
 func TestExtract_CorrectDatesCostOneCall(t *testing.T) {
 	m := &scriptedModel{resps: []string{rightDates}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -213,7 +208,7 @@ func TestExtract_CorrectDatesCostOneCall(t *testing.T) {
 
 func TestExtract_ShiftedDatesAreRetriedAndTheBetterAnswerKept(t *testing.T) {
 	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -229,7 +224,7 @@ func TestExtract_RetryNeverReplacesABetterAnswerWithAWorseOne(t *testing.T) {
 	// First answer: one doubtful month. Retry: a year the CV never prints, which is worse.
 	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
 	m := &scriptedModel{resps: []string{doubtful, inventedYear}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -243,7 +238,7 @@ func TestExtract_RetryNeverReplacesABetterAnswerWithAWorseOne(t *testing.T) {
 
 func TestExtract_YearTheCVNeverPrintsIsDroppedNotStored(t *testing.T) {
 	m := &scriptedModel{resps: []string{inventedYear}} // the retry repeats it
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -261,7 +256,7 @@ func TestExtract_PairMissingFromNumericCVIsRetriedButNotDeleted(t *testing.T) {
 	// pair buys a retry, and when the retry is no better the model's answer stands.
 	wrongMonth := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
 	m := &scriptedModel{resps: []string{wrongMonth}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -281,19 +276,17 @@ func TestDateProblems_NonNumericCVOnlyChecksYears(t *testing.T) {
 	}
 }
 
-// The model only ever sees the redacted text, so a year the redactor eats is a year the model
-// must invent. This is the production report end to end: five consecutive "MM/YYYY - MM/YYYY"
-// roles, every year present in the text the model is given.
+// Preserve every date in a month-precision history; no preprocessing may treat
+// employment ranges as phone numbers and remove them before extraction.
 func TestExtract_ModelSeesEveryYearOfAMonthPrecisionHistory(t *testing.T) {
 	cv := "A\n08/2023 - 07/2024 | X\nB\n05/2016 - 06/2024 | X\nC\n12/2015 - 04/2016 | X\nD\n07/2013 - 02/2015 | X\nE\n06/2010 - 04/2013 | X\n"
-	red, err := pii.Build(context.Background(), cv, noopDetector{})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
+	m := &recordingModel{resp: `{}`}
+	if _, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cv); err != nil {
+		t.Fatalf("Extract: %v", err)
 	}
-	seen := red.Redact(cv)
 	for _, want := range []string{"08/2023 - 07/2024", "05/2016 - 06/2024", "12/2015 - 04/2016", "07/2013 - 02/2015", "06/2010 - 04/2013"} {
-		if !strings.Contains(seen, want) {
-			t.Errorf("model text lost %q:\n%s", want, seen)
+		if !strings.Contains(m.prompt, want) {
+			t.Errorf("model text lost %q", want)
 		}
 	}
 }
@@ -307,7 +300,7 @@ func TestExtract_TwoDigitYearCVKeepsItsDates(t *testing.T) {
 		`{"company":"Initech","start":{"year":2012,"month":1},"end":{"year":2015,"month":3}},` +
 		`{"company":"Hooli","start":{"year":2010,"month":9},"end":{"year":2011,"month":12}}]}`
 	m := &scriptedModel{resps: []string{resp}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cv)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cv)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -352,7 +345,7 @@ func TestExtract_SkipsTheRetryWhenTheDeadlineCannotAffordIt(t *testing.T) {
 	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(ctx, cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(ctx, cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -374,7 +367,7 @@ func TestExtract_RetryWithAHardProblemDoesNotReplaceDoubtfulOnes(t *testing.T) {
 		`{"company":"Acme","start":{"year":2019,"month":5},"end":{"year":2024,"month":6}},` +
 		`{"company":"Initech","start":{"year":2013,"month":12},"end":{"year":2016,"month":4}}]}`
 	m := &scriptedModel{resps: []string{twoDoubtful, oneInvented}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -389,7 +382,7 @@ func TestExtract_RetryWithAHardProblemDoesNotReplaceDoubtfulOnes(t *testing.T) {
 func TestExtract_EmptyRetryDoesNotReplaceAPopulatedFirstAnswer(t *testing.T) {
 	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
 	m := &scriptedModel{resps: []string{doubtful, `{"experience":[]}`}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -430,7 +423,7 @@ func TestExtract_RetryThatErasesTheDatesDoesNotWin(t *testing.T) {
 	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
 	undated := `{"experience":[{"company":"Acme"}]}`
 	m := &scriptedModel{resps: []string{doubtful, undated}}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), cvWithDates)
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}

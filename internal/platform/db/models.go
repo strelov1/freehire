@@ -738,6 +738,9 @@ type Email struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	ApplicationID       pgtype.Int8        `json:"application_id"`
 	IcalUid             string             `json:"ical_uid"`
+	Direction           string             `json:"direction"`
+	ToAddrs             string             `json:"to_addrs"`
+	CcAddrs             string             `json:"cc_addrs"`
 }
 
 type EmailClassificationOutbox struct {
@@ -842,6 +845,7 @@ type GmailConnection struct {
 	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes                []string           `json:"scopes"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
+	SentSyncCursor        int64              `json:"sent_sync_cursor"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
@@ -1099,6 +1103,7 @@ type Job struct {
 	LastSeenAt                pgtype.Timestamptz `json:"last_seen_at"`
 	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
 	LivenessStrikes           int32              `json:"liveness_strikes"`
+	Team                      string             `json:"team"`
 }
 
 type JobActivity struct {
@@ -1107,6 +1112,15 @@ type JobActivity struct {
 	HydratedAt      pgtype.Timestamptz `json:"hydrated_at"`
 	LivenessStrikes int32              `json:"liveness_strikes"`
 	StateVersion    int64              `json:"state_version"`
+}
+
+type JobChange struct {
+	ID     int64              `json:"id"`
+	JobID  int64              `json:"job_id"`
+	Kind   string             `json:"kind"`
+	Reason string             `json:"reason"`
+	At     pgtype.Timestamptz `json:"at"`
+	Xid    int64              `json:"xid"`
 }
 
 type JobDailyStat struct {
@@ -1229,6 +1243,8 @@ type JobRow struct {
 	// Source-stated last application day, inclusive; NULL when unstated.
 	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 	Engagement          []string    `json:"engagement"`
+	// Department or team the source ATS files the posting under, verbatim and trimmed; empty when unstated.
+	Team string `json:"team"`
 }
 
 type JobSearchPing struct {

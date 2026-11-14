@@ -11746,6 +11746,9 @@ func (s *InboxApplicationDetail) SetAutoApply(val OptAutoApplyReviewInfo) {
 type InboxApplicationEmail struct {
 	ID           int64     `json:"id"`
 	Source       string    `json:"source"`
+	Direction    OptString `json:"direction"`
+	ToAddrs      OptString `json:"to_addrs"`
+	CcAddrs      OptString `json:"cc_addrs"`
 	FromAddr     string    `json:"from_addr"`
 	FromName     string    `json:"from_name"`
 	Subject      string    `json:"subject"`
@@ -11763,6 +11766,21 @@ func (s *InboxApplicationEmail) GetID() int64 {
 // GetSource returns the value of Source.
 func (s *InboxApplicationEmail) GetSource() string {
 	return s.Source
+}
+
+// GetDirection returns the value of Direction.
+func (s *InboxApplicationEmail) GetDirection() OptString {
+	return s.Direction
+}
+
+// GetToAddrs returns the value of ToAddrs.
+func (s *InboxApplicationEmail) GetToAddrs() OptString {
+	return s.ToAddrs
+}
+
+// GetCcAddrs returns the value of CcAddrs.
+func (s *InboxApplicationEmail) GetCcAddrs() OptString {
+	return s.CcAddrs
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -11810,6 +11828,21 @@ func (s *InboxApplicationEmail) SetSource(val string) {
 	s.Source = val
 }
 
+// SetDirection sets the value of Direction.
+func (s *InboxApplicationEmail) SetDirection(val OptString) {
+	s.Direction = val
+}
+
+// SetToAddrs sets the value of ToAddrs.
+func (s *InboxApplicationEmail) SetToAddrs(val OptString) {
+	s.ToAddrs = val
+}
+
+// SetCcAddrs sets the value of CcAddrs.
+func (s *InboxApplicationEmail) SetCcAddrs(val OptString) {
+	s.CcAddrs = val
+}
+
 // SetFromAddr sets the value of FromAddr.
 func (s *InboxApplicationEmail) SetFromAddr(val string) {
 	s.FromAddr = val
@@ -11851,6 +11884,10 @@ type InboxEmail struct {
 	ID               int64     `json:"id"`
 	Source           string    `json:"source"`
 	ExternalID       string    `json:"external_id"`
+	Direction        OptString `json:"direction"`
+	ToAddrs          OptString `json:"to_addrs"`
+	CcAddrs          OptString `json:"cc_addrs"`
+	ThreadID         OptString `json:"thread_id"`
 	FromAddr         string    `json:"from_addr"`
 	FromName         string    `json:"from_name"`
 	Subject          string    `json:"subject"`
@@ -11879,6 +11916,26 @@ func (s *InboxEmail) GetSource() string {
 // GetExternalID returns the value of ExternalID.
 func (s *InboxEmail) GetExternalID() string {
 	return s.ExternalID
+}
+
+// GetDirection returns the value of Direction.
+func (s *InboxEmail) GetDirection() OptString {
+	return s.Direction
+}
+
+// GetToAddrs returns the value of ToAddrs.
+func (s *InboxEmail) GetToAddrs() OptString {
+	return s.ToAddrs
+}
+
+// GetCcAddrs returns the value of CcAddrs.
+func (s *InboxEmail) GetCcAddrs() OptString {
+	return s.CcAddrs
+}
+
+// GetThreadID returns the value of ThreadID.
+func (s *InboxEmail) GetThreadID() OptString {
+	return s.ThreadID
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -11959,6 +12016,26 @@ func (s *InboxEmail) SetSource(val string) {
 // SetExternalID sets the value of ExternalID.
 func (s *InboxEmail) SetExternalID(val string) {
 	s.ExternalID = val
+}
+
+// SetDirection sets the value of Direction.
+func (s *InboxEmail) SetDirection(val OptString) {
+	s.Direction = val
+}
+
+// SetToAddrs sets the value of ToAddrs.
+func (s *InboxEmail) SetToAddrs(val OptString) {
+	s.ToAddrs = val
+}
+
+// SetCcAddrs sets the value of CcAddrs.
+func (s *InboxEmail) SetCcAddrs(val OptString) {
+	s.CcAddrs = val
+}
+
+// SetThreadID sets the value of ThreadID.
+func (s *InboxEmail) SetThreadID(val OptString) {
+	s.ThreadID = val
 }
 
 // SetFromAddr sets the value of FromAddr.
@@ -12089,6 +12166,10 @@ type InboxMessage struct {
 	ID               int64     `json:"id"`
 	Source           string    `json:"source"`
 	ExternalID       string    `json:"external_id"`
+	Direction        OptString `json:"direction"`
+	ToAddrs          OptString `json:"to_addrs"`
+	CcAddrs          OptString `json:"cc_addrs"`
+	ThreadID         OptString `json:"thread_id"`
 	FromAddr         string    `json:"from_addr"`
 	FromName         string    `json:"from_name"`
 	Subject          string    `json:"subject"`
@@ -12117,6 +12198,26 @@ func (s *InboxMessage) GetSource() string {
 // GetExternalID returns the value of ExternalID.
 func (s *InboxMessage) GetExternalID() string {
 	return s.ExternalID
+}
+
+// GetDirection returns the value of Direction.
+func (s *InboxMessage) GetDirection() OptString {
+	return s.Direction
+}
+
+// GetToAddrs returns the value of ToAddrs.
+func (s *InboxMessage) GetToAddrs() OptString {
+	return s.ToAddrs
+}
+
+// GetCcAddrs returns the value of CcAddrs.
+func (s *InboxMessage) GetCcAddrs() OptString {
+	return s.CcAddrs
+}
+
+// GetThreadID returns the value of ThreadID.
+func (s *InboxMessage) GetThreadID() OptString {
+	return s.ThreadID
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -12197,6 +12298,26 @@ func (s *InboxMessage) SetSource(val string) {
 // SetExternalID sets the value of ExternalID.
 func (s *InboxMessage) SetExternalID(val string) {
 	s.ExternalID = val
+}
+
+// SetDirection sets the value of Direction.
+func (s *InboxMessage) SetDirection(val OptString) {
+	s.Direction = val
+}
+
+// SetToAddrs sets the value of ToAddrs.
+func (s *InboxMessage) SetToAddrs(val OptString) {
+	s.ToAddrs = val
+}
+
+// SetCcAddrs sets the value of CcAddrs.
+func (s *InboxMessage) SetCcAddrs(val OptString) {
+	s.CcAddrs = val
+}
+
+// SetThreadID sets the value of ThreadID.
+func (s *InboxMessage) SetThreadID(val OptString) {
+	s.ThreadID = val
 }
 
 // SetFromAddr sets the value of FromAddr.
@@ -12640,6 +12761,206 @@ func (s *JobApplyFormOK) GetData() jx.Raw {
 // SetData sets the value of Data.
 func (s *JobApplyFormOK) SetData(val jx.Raw) {
 	s.Data = val
+}
+
+// One transition of a posting, as the change feed reports it.
+// Ref: #/components/schemas/JobChange
+type JobChange struct {
+	PublicSlug string `json:"public_slug"`
+	// The change's order for this posting. Changes to different postings are not ordered by it, and the
+	// feed can serve one posting's changes out of order: apply a change only when its `seq` is greater
+	// than the last one you applied for that `public_slug`, and skip it otherwise (which also makes a
+	// repeated change harmless).
+	Seq int64 `json:"seq"`
+	// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+	// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+	// moderator reopened it, or it is no longer a duplicate).
+	Kind JobChangeKind `json:"kind"`
+	// When the change was recorded.
+	At time.Time `json:"at"`
+	// Why a `closed` change happened (e.g. `unseen`, `expired`, `duplicate`, `private`); absent on the
+	// other kinds.
+	ClosedReason OptString `json:"closed_reason"`
+}
+
+// GetPublicSlug returns the value of PublicSlug.
+func (s *JobChange) GetPublicSlug() string {
+	return s.PublicSlug
+}
+
+// GetSeq returns the value of Seq.
+func (s *JobChange) GetSeq() int64 {
+	return s.Seq
+}
+
+// GetKind returns the value of Kind.
+func (s *JobChange) GetKind() JobChangeKind {
+	return s.Kind
+}
+
+// GetAt returns the value of At.
+func (s *JobChange) GetAt() time.Time {
+	return s.At
+}
+
+// GetClosedReason returns the value of ClosedReason.
+func (s *JobChange) GetClosedReason() OptString {
+	return s.ClosedReason
+}
+
+// SetPublicSlug sets the value of PublicSlug.
+func (s *JobChange) SetPublicSlug(val string) {
+	s.PublicSlug = val
+}
+
+// SetSeq sets the value of Seq.
+func (s *JobChange) SetSeq(val int64) {
+	s.Seq = val
+}
+
+// SetKind sets the value of Kind.
+func (s *JobChange) SetKind(val JobChangeKind) {
+	s.Kind = val
+}
+
+// SetAt sets the value of At.
+func (s *JobChange) SetAt(val time.Time) {
+	s.At = val
+}
+
+// SetClosedReason sets the value of ClosedReason.
+func (s *JobChange) SetClosedReason(val OptString) {
+	s.ClosedReason = val
+}
+
+// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
+// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
+// moderator reopened it, or it is no longer a duplicate).
+type JobChangeKind string
+
+const (
+	JobChangeKindOpened   JobChangeKind = "opened"
+	JobChangeKindClosed   JobChangeKind = "closed"
+	JobChangeKindReopened JobChangeKind = "reopened"
+)
+
+// AllValues returns all JobChangeKind values.
+func (JobChangeKind) AllValues() []JobChangeKind {
+	return []JobChangeKind{
+		JobChangeKindOpened,
+		JobChangeKindClosed,
+		JobChangeKindReopened,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s JobChangeKind) MarshalText() ([]byte, error) {
+	switch s {
+	case JobChangeKindOpened:
+		return []byte(s), nil
+	case JobChangeKindClosed:
+		return []byte(s), nil
+	case JobChangeKindReopened:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *JobChangeKind) UnmarshalText(data []byte) error {
+	switch JobChangeKind(data) {
+	case JobChangeKindOpened:
+		*s = JobChangeKindOpened
+		return nil
+	case JobChangeKindClosed:
+		*s = JobChangeKindClosed
+		return nil
+	case JobChangeKindReopened:
+		*s = JobChangeKindReopened
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/JobChangesMeta
+type JobChangesMeta struct {
+	Limit int64 `json:"limit"`
+	// True when more changes are waiting; fetch again with `next_cursor`.
+	HasMore bool `json:"has_more"`
+	// Pass back as `cursor` for the next page. Always present, even on an empty page: store it and resume
+	// from it later, however long the feed stays quiet.
+	NextCursor string `json:"next_cursor"`
+	// The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before
+	// it.
+	AvailableSince OptDateTime `json:"available_since"`
+}
+
+// GetLimit returns the value of Limit.
+func (s *JobChangesMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetHasMore returns the value of HasMore.
+func (s *JobChangesMeta) GetHasMore() bool {
+	return s.HasMore
+}
+
+// GetNextCursor returns the value of NextCursor.
+func (s *JobChangesMeta) GetNextCursor() string {
+	return s.NextCursor
+}
+
+// GetAvailableSince returns the value of AvailableSince.
+func (s *JobChangesMeta) GetAvailableSince() OptDateTime {
+	return s.AvailableSince
+}
+
+// SetLimit sets the value of Limit.
+func (s *JobChangesMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetHasMore sets the value of HasMore.
+func (s *JobChangesMeta) SetHasMore(val bool) {
+	s.HasMore = val
+}
+
+// SetNextCursor sets the value of NextCursor.
+func (s *JobChangesMeta) SetNextCursor(val string) {
+	s.NextCursor = val
+}
+
+// SetAvailableSince sets the value of AvailableSince.
+func (s *JobChangesMeta) SetAvailableSince(val OptDateTime) {
+	s.AvailableSince = val
+}
+
+// Ref: #/components/schemas/JobChangesPage
+type JobChangesPage struct {
+	Data []JobChange    `json:"data"`
+	Meta JobChangesMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *JobChangesPage) GetData() []JobChange {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *JobChangesPage) GetMeta() JobChangesMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *JobChangesPage) SetData(val []JobChange) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *JobChangesPage) SetMeta(val JobChangesMeta) {
+	s.Meta = val
 }
 
 // Ref: #/components/schemas/JobCopiesMeta

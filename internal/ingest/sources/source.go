@@ -57,6 +57,10 @@ type Job struct {
 	// ApplicationDeadline is the source's inclusive last application date, in UTC.
 	// Nil means the source did not provide a deadline.
 	ApplicationDeadline *time.Time
+	// Team is the department or team the platform files the posting under, in a STRUCTURED
+	// field, verbatim (the adapter trims it; Greenhouse, Lever and Ashby set it). It is the
+	// ATS's own label, not a taxonomy; empty when the platform states none.
+	Team string
 	// WorkMode is the work arrangement when the platform states it in a STRUCTURED
 	// field (a workplace-type enum or an explicit remote flag) — "remote",
 	// "hybrid", or "onsite", else "". It is left empty for adapters that only
@@ -312,8 +316,12 @@ type unknownOrigin interface{ unknownOrigin() }
 // Removed set, emitted from its stream) and therefore must be excluded from the post-run
 // unseen sweep. Such a source re-reports only changed postings each run, so the sweep's
 // last_seen_at cutoff would wrongly close every still-open posting it did not touch; the
-// stream's removal events are the authoritative close signal instead. See SelfClosingProviders.
+// stream's removal events are the authoritative close signal instead. See UnseenSweepExemptProviders.
 type selfClosing interface{ selfClosing() }
+
+// probeClosing marks a bounded search whose missing postings can only be closed by
+// cmd/liveness, never by a company-, board-, or source-scoped unseen sweep.
+type probeClosing interface{ probeClosing() }
 
 // fullCatalog marks an aggregator whose every crawl lists the WHOLE catalogue in one run —
 // not a per-company board and not a subset. For such a source an open job the run did not

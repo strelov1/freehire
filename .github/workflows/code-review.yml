@@ -62,7 +62,8 @@ jobs:
     needs: context
     if: needs.context.outputs.number != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # ocr_review.py stops OCR at 55 minutes and needs the rest to publish.
+    timeout-minutes: 60
     permissions:
       contents: read
       pull-requests: write

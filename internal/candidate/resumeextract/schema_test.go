@@ -22,15 +22,11 @@ func schemaProperties(t *testing.T) map[string]any {
 	return props
 }
 
-// The model is handed a CV with the contacts redacted out. Under strict mode every
-// property is required, so a contact field left in the schema is an order to invent
-// one — the opposite of the rule this package is built on.
-func TestRequestSchema_DoesNotAskTheModelForContacts(t *testing.T) {
+func TestRequestSchema_AsksForContactsFromTheOriginalCV(t *testing.T) {
 	props := schemaProperties(t)
-
-	for _, field := range contactFields {
-		if _, ok := props[field]; ok {
-			t.Errorf("schema asks the model for %q, which only PII detection may supply", field)
+	for _, field := range []string{"full_name", "email", "phone", "location", "links"} {
+		if _, ok := props[field]; !ok {
+			t.Errorf("schema is missing contact field %q", field)
 		}
 	}
 }

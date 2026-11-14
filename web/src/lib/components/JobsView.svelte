@@ -54,6 +54,7 @@
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
+  import JobSearchError from './JobSearchError.svelte';
   import JobRow from './JobRow.svelte';
   import { Button } from '#lib/ui/index.js';
   import JobRowSkeleton from './JobRowSkeleton.svelte';
@@ -202,9 +203,14 @@
   // suggestion list keyed off that would rank by "jobs matching what you have typed so
   // far", lag it by one debounce, and drop roles in and out mid-word. Same filters, no
   // `q` — so the figure still answers what a click would give.
+  let facetsError = $state.raw<unknown>(null);
   const refreshCounts = latestOnly(
     () => api.facetCounts(scopedParams()),
-    (facets) => (catalogCounts = facets),
+    (facets) => {
+      catalogCounts = facets;
+      facetsError = null;
+    },
+    (error) => (facetsError = error),
   );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
@@ -415,6 +421,11 @@
     const next = makePaginator();
     next.start(offset);
     jobs = next;
+  }
+
+  function retrySearch() {
+    refreshCounts();
+    reloadList(pageOffset(activePage));
   }
 
   // Rows kept on screen while the guessed opening scope reloads the feed underneath
@@ -891,6 +902,8 @@
       <MatchNeedsSkillsNotice />
     {/if}
 
+    <JobSearchError error={jobs.status === 'error' ? null : facetsError} onlyRateLimit onRetry={retrySearch} />
+
     {#if jobs.status === 'loading' && !holdingOver}
       <States state="loading">
         {#snippet row()}
@@ -898,9 +911,7 @@
         {/snippet}
       </States>
     {:else if jobs.status === 'error'}
-      <!-- Retry re-runs the same query on the page being read, the same reload a changed
-           filter would start. -->
-      <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
+      <JobSearchError error={jobs.error} onRetry={retrySearch} />
     {:else if displayItems.length === 0}
       <JobsEmptyState
         kind={formerEmployersApplied ? 'formerEmployers' : watchlistApplied ? 'watchlist' : 'none'}

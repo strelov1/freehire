@@ -205,6 +205,7 @@ const (
 	ListEmployerVacanciesOperation        OperationName = "ListEmployerVacancies"
 	ListExperienceOperation               OperationName = "ListExperience"
 	ListIncomingReferralRequestsOperation OperationName = "ListIncomingReferralRequests"
+	ListJobChangesOperation               OperationName = "ListJobChanges"
 	ListJobsOperation                     OperationName = "ListJobs"
 	ListMentorBookingsOperation           OperationName = "ListMentorBookings"
 	ListMentorsOperation                  OperationName = "ListMentors"

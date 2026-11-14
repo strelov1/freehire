@@ -17,7 +17,7 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = a.user_id
        AND (e.job_id = a.job_id OR e.suggested_job_id = a.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE a.applied_at IS NOT NULL
   AND GREATEST(a.applied_at, mail.newest_mail_at)
@@ -209,7 +209,7 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = n.user_id
        AND (e.job_id = n.job_id OR e.suggested_job_id = n.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE n.id = $1;
 

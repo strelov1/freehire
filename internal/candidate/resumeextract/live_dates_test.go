@@ -6,10 +6,7 @@
 //	LLM_BASE_URL=… LLM_API_KEY=… LLM_MODEL=<alias> go test -tags=llmlive ./internal/candidate/resumeextract/ -run ExperienceDates -v
 //
 // It checks one thing: given the dates the CV prints, does THIS model copy them to the right
-// role. It sends the text as written, so it does not cover the redactor — a year the PII mask
-// eats never reaches any model (see pii.TestRegexSpans_MonthPrecisionRangesAreNotPhones and
-// TestExtract_ModelSeesEveryYearOfAMonthPrecisionHistory for that half of the production report).
-// Run it per alias with LLM_MODEL before pointing RESUME_EXTRACT_MODEL at a new one.
+// role. This complements the full Extract path's date-validation tests.
 package resumeextract
 
 import (

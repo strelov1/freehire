@@ -58,6 +58,7 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	api.Get("/jobs", contract)
 	// Static route registered before /jobs/:slug so it isn't captured as a slug.
 	api.Get("/jobs/find", contract)
+	api.Get("/jobs/changes", contract)
 	api.Get("/jobs/:slug", mw.optional, contract)
 	api.Get("/jobs/:slug/copies", contract)
 	api.Get("/jobs/:slug/apply-form", contract)

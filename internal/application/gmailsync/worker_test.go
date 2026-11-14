@@ -27,6 +27,8 @@ type fakeStore struct {
 	encToken       string
 	upserted       []StoredEmail
 	upsertErrIDs   map[string]bool // message ids on which UpsertEmail fails
+	syncedSent     int64
+	knownThreads   []string
 	syncedCursor   int64
 	syncedCalled   bool
 	reconsentUsers []int64
@@ -42,9 +44,10 @@ func (f *fakeStore) UpsertEmail(_ context.Context, e StoredEmail) error {
 	f.upserted = append(f.upserted, e)
 	return nil
 }
-func (f *fakeStore) SetSynced(_ context.Context, _, cursor int64) error {
+func (f *fakeStore) SetSynced(_ context.Context, _, cursor, sentCursor int64) error {
 	f.syncedCalled = true
 	f.syncedCursor = cursor
+	f.syncedSent = sentCursor
 	return nil
 }
 func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
@@ -55,13 +58,23 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 	return nil
 }
 
+func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
+	return f.knownThreads, nil
+}
+
 type fakeReader struct {
+	sent         []MessageRef
+	sentErr      error
 	ids          []string
 	byID         map[string]Message
 	threads      map[string][]string // threadID -> message ids
 	listErr      error
 	getErrIDs    map[string]error // message ids on which GetMessage fails
 	threadErrIDs map[string]error // thread ids on which ListThreadMessageIDs fails
+}
+
+func (f *fakeReader) ListSentMessages(context.Context, int64) ([]MessageRef, error) {
+	return f.sent, f.sentErr
 }
 
 func (f *fakeReader) ListATSMessageIDs(context.Context, string, int64) ([]string, error) {
@@ -116,7 +129,7 @@ func TestRunOnceSyncsUser(t *testing.T) {
 // TestRunOnceExpandsThread locks in thread-expansion: a matched ATS message
 // pulls in every sibling of its thread, so a recruiter's reply from a personal
 // domain (which no allowlist/phrase would match) is ingested too. The user's own
-// in-thread reply is skipped — inbound mail only.
+// in-thread reply is retained as conversation history.
 func TestRunOnceExpandsThread(t *testing.T) {
 	c := testCipher(t)
 	enc, _ := c.Encrypt("refresh-token")
@@ -145,11 +158,11 @@ func TestRunOnceExpandsThread(t *testing.T) {
 	if !got["m1"] || !got["m3"] {
 		t.Errorf("want anchor m1 and sibling m3 upserted, got %v", got)
 	}
-	if got["m9"] {
-		t.Error("user's own in-thread reply m9 should not be ingested")
+	if !got["m9"] {
+		t.Error("user reply m9 must be retained")
 	}
-	if len(store.upserted) != 2 {
-		t.Errorf("upserted = %d, want 2 (m1, m3; no dupes)", len(store.upserted))
+	if len(store.upserted) != 3 {
+		t.Errorf("upserted = %d, want 3 (no dupes)", len(store.upserted))
 	}
 }
 
@@ -462,9 +475,7 @@ func TestRunOnceRevokedTokenOnThreadListingMarksReconsent(t *testing.T) {
 	}
 }
 
-// A thread listing that fails for any other reason still only skips that one thread's
-// siblings — the anchor message it was expanding already stored fine, so the run is not
-// failed over a single thread's own hiccup. Unchanged by the fix above.
+// A transient thread failure retains both cursors so its siblings can be retried.
 func TestRunOnceDoesNotDisconnectOverATransientThreadListingFailure(t *testing.T) {
 	c := testCipher(t)
 	enc, _ := c.Encrypt("refresh-token")
@@ -490,9 +501,8 @@ func TestRunOnceDoesNotDisconnectOverATransientThreadListingFailure(t *testing.T
 	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m1" {
 		t.Fatalf("upserted = %v, want only the anchor m1 (thread expansion failed, not the anchor)", store.upserted)
 	}
-	if stats.Failed != 0 || stats.Synced != 1 || stats.Reconsent != 0 {
-		t.Errorf("stats = %+v, want the connection cleanly synced — a thread's own transient "+
-			"failure does not fail the whole run", stats)
+	if stats.Failed != 1 || stats.Synced != 0 || stats.Reconsent != 0 {
+		t.Errorf("stats = %+v, want one failed connection with retry coverage", stats)
 	}
 }
 
