@@ -68,6 +68,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Description:         r.Description,
 		PostedAt:            tsPtr(r.PostedAt),
 		ApplicationDeadline: pgconv.DatePtr(r.ApplicationDeadline),
+		Team:                r.Team,
 
 		Countries: r.Countries,
 		Regions:   r.Regions,

@@ -1,6 +1,7 @@
 package linksource
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
@@ -64,7 +65,9 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 			Content string `json:"content"`
 		} `json:"lists"`
 		Categories struct {
-			Location string `json:"location"`
+			Location   string `json:"location"`
+			Team       string `json:"team"`
+			Department string `json:"department"`
 		} `json:"categories"`
 	}
 	if err := l.http.GetJSON(ctx, api, &p); err != nil {
@@ -94,6 +97,7 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		Title:       p.Text,
 		Company:     humanizeBoard(company), // the per-posting API carries no company name
 		Location:    p.Categories.Location,
+		Team:        strings.TrimSpace(cmp.Or(strings.TrimSpace(p.Categories.Team), p.Categories.Department)),
 		Description: htmltext.Sanitize(body.String()),
 		Remote:      sources.IsRemote(p.Categories.Location),
 		PostedAt:    sources.ParseEpochMillis(p.CreatedAt),

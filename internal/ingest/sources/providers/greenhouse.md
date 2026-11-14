@@ -2,3 +2,4 @@
 
 - **`CompanyDescriber` fetches `boards-api.greenhouse.io/v1/boards/{board}`** (distinct from the `/jobs` listing `Fetch` calls), which carries an employer-authored "about us" `content` field for a meaningful share of boards (confirmed live: Coinbase, Figma, Asana). It is sanitized through `sanitizeHTML` with no `html.UnescapeString` (served as raw HTML, not entity-encoded).
 - **Empty board** (`emptyBoardListing`): `{"jobs":[],"meta":{"total":0}}`; an unknown board 404s.
+- **`Job.Team` is the posting's most specific department.** The listing's `departments` array nests (each entry has `parent_id` and `child_ids`); `greenhouseTeam` takes the first entry with no children, else the first listed. Lever (`categories.team`, falling back to `categories.department`) and Ashby (`team`, falling back to `department`) set the same field, the narrower label first. It is the ATS's own label, trimmed, `''` when absent, stored in `jobs.team` and served as `team` on the job wire.

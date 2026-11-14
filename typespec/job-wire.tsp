@@ -39,6 +39,13 @@ model Job {
   /** Source-stated last application day, inclusive. Absent when the source states no deadline. */
   application_deadline?: plainDate;
 
+  /**
+   * The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
+   * Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+   * between employers.
+   */
+  team?: string;
+
   /** True for a hand-curated posting rather than an automated crawl. */
   manually_added?: boolean;
 

@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // ashbyBaseURL is the Ashby public job-board API root.
@@ -64,6 +65,8 @@ type AshbyPosting struct {
 	IsRemote        bool   `json:"isRemote"`
 	WorkplaceType   string `json:"workplaceType"`
 	EmploymentType  string `json:"employmentType"`
+	Department      string `json:"department"`
+	Team            string `json:"team"`
 	Address         struct {
 		PostalAddress struct {
 			AddressCountry string `json:"addressCountry"`
@@ -118,6 +121,8 @@ func MapAshbyPosting(j AshbyPosting) Job {
 		Countries:      countryFromCode(j.Address.PostalAddress.AddressCountry),
 		PostedAt:       parseRFC3339(j.PublishedAt),
 		EmploymentType: ashbyEmploymentType(j.EmploymentType),
+		// team is the narrower label, nested under department on Ashby.
+		Team: firstNonEmpty(strings.TrimSpace(j.Team), strings.TrimSpace(j.Department)),
 	}
 	if c, ok := ashbySalaryComponent(j.Compensation); ok {
 		if period := ashbySalaryPeriod(c.Interval); period != "" {

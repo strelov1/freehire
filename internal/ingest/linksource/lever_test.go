@@ -18,7 +18,7 @@ const leverPostingJSON = `{
  "description": "<p>Build it.</p>",
  "additional": "<p>Perks.</p><script>evil()</script>",
  "lists": [{"text": "Requirements", "content": "<ul><li>Go</li></ul>"}],
- "categories": {"location": "Remote"}
+ "categories": {"location": "Remote", "department": "Engineering"}
 }`
 
 func TestLeverResolvesAlignedIdentity(t *testing.T) {
@@ -43,6 +43,9 @@ func TestLeverResolvesAlignedIdentity(t *testing.T) {
 	}
 	if job.Title != "Senior Backend Engineer" {
 		t.Errorf("Title = %q", job.Title)
+	}
+	if job.Team != "Engineering" { // no categories.team: falls back to the department
+		t.Errorf("Team = %q", job.Team)
 	}
 	// The per-posting API carries no company name, so the board slug is humanized.
 	if job.Company != "Offchainlabs" {
