@@ -157,4 +157,14 @@ describe('JobSourceRow', () => {
     expect(unavoidSource).toHaveBeenCalledWith('whatjobs-uk');
     expect(unavoidSource).toHaveBeenCalledWith('whatjobs');
   });
+
+  it('does not call the brand avoided when only one market is', async () => {
+    // The search hides whatjobs-uk alone for that entry, so "avoided" would be untrue.
+    profileStoreMock.profile = { excluded_sources: ['whatjobs-uk'] };
+    render(JobSourceRow, { ...props, source: 'whatjobs-de' });
+
+    await fireEvent.click(screen.getByRole('button', { name: /^Avoid this source/ }));
+
+    expect(avoidSource).toHaveBeenCalledWith('whatjobs');
+  });
 });

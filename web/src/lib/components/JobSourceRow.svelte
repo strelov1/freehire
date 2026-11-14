@@ -28,12 +28,13 @@
 
   // Compared lowercased: the server normalises excluded_sources to lowercase on save
   // (userprofile.normalizeExcludedSet), and nothing guarantees a caller hands us the same
-  // casing the list was written in. Compared by family too: this control once saved a
-  // regional key (whatjobs-uk), and undo has to clear that entry, not only the brand.
+  // casing the list was written in. Only the brand key counts as avoided: the server
+  // expands `whatjobs` to every market, but a stored regional key (whatjobs-uk, which this
+  // control once saved) hides that market alone. Undo still clears those regional entries.
   const avoidedEntries = $derived(
     (profileStore.profile?.excluded_sources ?? []).filter((s) => sourceFamily(s.toLowerCase()) === source),
   );
-  const avoided = $derived(avoidedEntries.length > 0);
+  const avoided = $derived(avoidedEntries.some((s) => s.toLowerCase() === source));
 
   let pending = $state(false);
   let failed = $state(false);
