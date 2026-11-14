@@ -15,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -42,16 +43,53 @@ func run() int {
 		unseenSources = append(unseenSources, source)
 		unseenSeconds = append(unseenSeconds, int64(window.Seconds()))
 	}
-	updated, err := db.New(pool).RefreshCompanyFacets(ctx, db.RefreshCompanyFacetsParams{
+	q := db.New(pool)
+	kept, err := keptUncategorizedIDs(ctx, q)
+	if err != nil {
+		log.Printf("recount-companies: list uncategorized titles: %v", err)
+		return 1
+	}
+	updated, err := q.RefreshCompanyFacets(ctx, db.RefreshCompanyFacetsParams{
 		MappingDomains:    mappingDomains,
 		MappingIndustries: mappingIndustries,
 		UnseenSources:     unseenSources,
 		UnseenSeconds:     unseenSeconds,
+		KeptIds:           kept,
+		EmployerSource:    job.EmployerSource,
 	})
 	if err != nil {
 		log.Printf("recount-companies: %v", err)
 		return 1
 	}
-	log.Printf("recount-companies done: companies updated=%d", updated)
+	log.Printf("recount-companies done: companies updated=%d kept_uncategorized=%d", updated, len(kept))
 	return 0
+}
+
+const uncategorizedPage = 50000
+
+type uncategorizedLister interface {
+	ListUncategorizedOpenJobTitles(context.Context, db.ListUncategorizedOpenJobTitlesParams) ([]db.ListUncategorizedOpenJobTitlesRow, error)
+}
+
+// keptUncategorizedIDs pages through the postings the recount's category predicate drops and
+// returns those whose title search keeps anyway (search.TitleKeepsUncategorized), so a
+// company hiring only for such roles is counted and indexed (#4503).
+func keptUncategorizedIDs(ctx context.Context, q uncategorizedLister) ([]int64, error) {
+	var kept []int64
+	var after int64
+	for {
+		rows, err := q.ListUncategorizedOpenJobTitles(ctx, db.ListUncategorizedOpenJobTitlesParams{AfterID: after, BatchSize: uncategorizedPage})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			if search.TitleKeepsUncategorized(r.Title) {
+				kept = append(kept, r.ID)
+			}
+		}
+		if len(rows) < uncategorizedPage {
+			return kept, nil
+		}
+		after = rows[len(rows)-1].ID
+	}
 }

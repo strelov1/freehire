@@ -5488,6 +5488,12 @@ type Querier interface {
 	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
 	// nullable UUID, and the handler would carry two spellings of one id.
 	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
+	// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
+	// category predicate would drop: no column category, no enrichment answer, not confirmed
+	// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
+	// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
+	// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
+	ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error)
 	// The worst $1 boards currently failing or cooled down, worst first — the source of the
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
