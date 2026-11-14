@@ -33,18 +33,34 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs } =
-  vi.hoisted(() => ({
-    untrackApplication: vi.fn(),
-    listMyJobs: vi.fn(),
-    trackApplication: vi.fn(),
-    saveJob: vi.fn(),
-    clearApplicationStage: vi.fn(),
-    listAppliedCompanySlugs: vi.fn(),
-  }));
+const {
+  untrackApplication,
+  listMyJobs,
+  getTrackedApplication,
+  trackApplication,
+  saveJob,
+  clearApplicationStage,
+  listAppliedCompanySlugs,
+} = vi.hoisted(() => ({
+  untrackApplication: vi.fn(),
+  listMyJobs: vi.fn(),
+  getTrackedApplication: vi.fn(),
+  trackApplication: vi.fn(),
+  saveJob: vi.fn(),
+  clearApplicationStage: vi.fn(),
+  listAppliedCompanySlugs: vi.fn(),
+}));
 
 vi.mock('#lib/api.js', () => ({
-  api: { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs },
+  api: {
+    untrackApplication,
+    listMyJobs,
+    getTrackedApplication,
+    trackApplication,
+    saveJob,
+    clearApplicationStage,
+    listAppliedCompanySlugs,
+  },
   isPlanRefusal: () => false,
 }));
 
@@ -74,6 +90,7 @@ beforeEach(() => {
   clearApplicationStage.mockReset().mockResolvedValue(undefined);
   untrackApplication.mockReset().mockResolvedValue(undefined);
   listMyJobs.mockReset();
+  getTrackedApplication.mockReset();
   trackApplication.mockReset();
   editorText.typed = '';
 });
@@ -188,6 +205,40 @@ describe('JobBoard — clearing application progress', () => {
 });
 
 describe('JobBoard — a failed stage change', () => {
+  it.each([
+    ['preloaded', 'applied'],
+    ['preloaded', 'offer'],
+    ['direct', 'applied'],
+    ['direct', 'offer'],
+  ] as const)('refreshes an out-of-page %s target after a rejected stage write back to %s', async (source, stage) => {
+    const target = {
+      ...application,
+      job: { public_slug: 'older-job', title: 'Backend Engineer', company: 'Acme' },
+    } as MyJob;
+    trackApplication.mockRejectedValue(new Error('refused'));
+    listMyJobs.mockResolvedValue({ items: [] });
+    getTrackedApplication.mockResolvedValue({ ...target, job: target.job, emails: [] });
+    render(JobBoard, {
+      initialId: target.id,
+      ...(source === 'preloaded' ? { initial: [target] } : { initialItem: target }),
+    });
+    const picker = within(await screen.findByRole('dialog')).getByRole('combobox') as HTMLSelectElement;
+    if (source === 'direct') await screen.findByRole('region', { name: 'Applied' });
+    getTrackedApplication.mockClear().mockResolvedValue({ ...target, stage, emails: [] });
+    await fireEvent.change(picker, { target: { value: 'interview' } });
+    await waitFor(() => expect(getTrackedApplication).toHaveBeenCalledWith('older-job'));
+    const label = stage === 'offer' ? 'Offer' : 'Applied';
+    expect(await screen.findByText(`Couldn't move Backend Engineer — it's back in ${label}. Try again.`)).toBeTruthy();
+    expect(picker.value).toBe(stage);
+  });
+
+  it('opens a directly loaded target while keeping a failed board read visible', async () => {
+    listMyJobs.mockRejectedValue(new Error('offline'));
+    render(JobBoard, { initialId: application.id, initialItem: application, initialAutoApply: true });
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(await screen.findByText("Couldn't load your board.")).toBeTruthy();
+  });
+
   it('rolls the card back and names where it landed', async () => {
     trackApplication.mockRejectedValue(new Error('boom'));
     listMyJobs.mockResolvedValue({ items: [application] });

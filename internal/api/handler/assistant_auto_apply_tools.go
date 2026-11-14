@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
@@ -338,7 +339,7 @@ func (h *assistantHandlers) autoApplyListTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &struct{}{}); err != nil {
 				return nil, err
 			}
-			return h.autoApplyList(ctx, userID)
+			return h.autoApplyList(ctx, userID, pgtype.Int8{Int64: 200, Valid: true})
 		},
 	}
 }
@@ -351,8 +352,12 @@ type autoApplyListItem struct {
 	LastActivityAt time.Time `json:"last_activity_at"`
 }
 
-func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64) (any, error) {
-	live, err := h.queries.ListAutoApplyEntries(ctx, userID)
+type autoApplyListResult struct {
+	Attempts []autoApplyListItem `json:"attempts"`
+}
+
+func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64, maxEntries pgtype.Int8) (*autoApplyListResult, error) {
+	live, err := h.queries.ListAutoApplyEntries(ctx, db.ListAutoApplyEntriesParams{UserID: userID, MaxEntries: maxEntries})
 	if err != nil {
 		return nil, err
 	}
@@ -360,8 +365,20 @@ func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64) (an
 	if err != nil {
 		return nil, err
 	}
+	return projectAutoApplyList(live, submitted), nil
+}
+
+func projectAutoApplyList(live []db.ListAutoApplyEntriesRow, submitted []db.ListRecentAutoApplySubmissionsRow) *autoApplyListResult {
+	// A submission can commit between the two reads; its final state wins.
+	submittedSlugs := make(map[string]struct{}, len(submitted))
+	for _, r := range submitted {
+		submittedSlugs[r.PublicSlug] = struct{}{}
+	}
 	items := make([]autoApplyListItem, 0, len(live)+len(submitted))
 	for _, r := range live {
+		if _, submitted := submittedSlugs[r.PublicSlug]; submitted {
+			continue
+		}
 		status := autoapply.DeriveStatus(autoapply.DerivedFrom{
 			HasTailoredCV:      r.TailoredCvID != nil,
 			HasResolvedPreview: r.HasPreview,
@@ -380,7 +397,7 @@ func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64) (an
 		items = append(items, autoApplyListItem{JobSlug: r.PublicSlug, Title: r.Title, Company: r.Company, Status: autoApplyStatusSubmitted, LastActivityAt: r.CreatedAt.Time.UTC()})
 	}
 	slices.SortStableFunc(items, func(a, b autoApplyListItem) int { return b.LastActivityAt.Compare(a.LastActivityAt) })
-	return map[string]any{"attempts": items}, nil
+	return &autoApplyListResult{Attempts: items}
 }
 
 func (h *assistantHandlers) answerBankListTool() assistant.Tool {

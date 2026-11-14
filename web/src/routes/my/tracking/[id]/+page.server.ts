@@ -1,6 +1,11 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { signinUrl } from '#lib/signin.js';
+import { columnOf } from '#lib/board.js';
+import { ApiError } from '#lib/api.js';
+import { serverApi } from '#lib/server/api.js';
+import type { MyJob } from '#lib/types.js';
 import { loadBoard } from '#lib/server/tracking.js';
+import { trackingItem } from '#lib/trackingItem.js';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/[id] renders the tracking board with the application's drawer open
@@ -14,5 +19,26 @@ export const load: PageServerLoad = async ({ parent, params, url, fetch, request
   if (!user) {
     redirect(302, signinUrl({ returnTo: url.pathname + url.search, cancelTo: '/', mode: 'login' }));
   }
-  return { id: params.id, board: await loadBoard(fetch, request.headers.get('cookie')) };
+  const cookie = request.headers.get('cookie');
+  const autoApply = url.searchParams.get('tab') === 'auto_apply';
+  let board = await loadBoard(fetch, cookie);
+  let initialItem: MyJob | undefined;
+  if (autoApply && !board?.some((row) => row.id === params.id)) {
+    // A live attempt can outlast its board placement or fall outside the first page.
+    // Read this application directly rather than silently opening the bare board.
+    let application;
+    try {
+      application = await serverApi(fetch, cookie).getTrackedApplication(params.id);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        redirect(302, `/jobs/${encodeURIComponent(params.id)}`);
+      }
+      error(503, 'Could not load this application. Please try again.');
+    }
+    const item = trackingItem(params.id, application);
+    if (columnOf(item) === null) redirect(302, `/jobs/${encodeURIComponent(params.id)}`);
+    if (board) board = [...board, item];
+    else initialItem = item;
+  }
+  return { id: params.id, autoApply, board, initialItem };
 };

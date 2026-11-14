@@ -9984,6 +9984,83 @@ func (s *Server) handleGetAuthMeRequest(args [0]string, argsEscaped bool, w http
 	}
 }
 
+// handleGetAutoApplyListRequest handles getAutoApplyList operation.
+//
+// Lists the caller's live automatic applications and confirmed submissions from the last 30 days,
+// newest activity first. Internal diagnostic errors are omitted.
+//
+// GET /me/auto-apply
+func (s *Server) handleGetAutoApplyListRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *GetAutoApplyListOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetAutoApplyListOperation,
+			OperationSummary: "List your automatic applications",
+			OperationID:      "getAutoApplyList",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *GetAutoApplyListOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetAutoApplyList(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetAutoApplyList(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetAutoApplyListResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetAutofillProfileRequest handles getAutofillProfile operation.
 //
 // Projected from your CV header, with the account email as a fallback — what the extension writes
