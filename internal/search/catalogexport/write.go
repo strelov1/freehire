@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -20,8 +21,12 @@ import (
 type Batch func(ctx context.Context, after int64) (lines [][]byte, next int64, err error)
 
 // Write streams every batch through gzip into the bucket as the snapshot of day, then writes
-// the manifest. A failure leaves no manifest, so the day is not listed.
+// the manifest. A previous manifest of the same day is deleted first, and a failure leaves no
+// manifest, so the day is not listed with a checksum that no longer matches the file.
 func Write(ctx context.Context, b blobstore.Bucket, day string, now time.Time, next Batch) (Manifest, error) {
+	if err := b.Delete(ctx, ManifestKey(day)); err != nil {
+		return Manifest{}, fmt.Errorf("catalogexport: unpublish %s: %w", day, err)
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -38,8 +43,7 @@ func Write(ctx context.Context, b blobstore.Bucket, day string, now time.Time, n
 	rows, err := produce(ctx, counter, next)
 	if err != nil {
 		pw.CloseWithError(err)
-		_ = <-done
-		return Manifest{}, err
+		return Manifest{}, errors.Join(err, <-done)
 	}
 	_ = pw.Close()
 	if err := <-done; err != nil {

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"testing"
 	"time"
@@ -108,5 +109,73 @@ func TestPruneKeepsNewestFinishedAndInProgress(t *testing.T) {
 	slices.Sort(want)
 	if !slices.Equal(keys, want) {
 		t.Fatalf("left %v, want %v", keys, want)
+	}
+}
+
+// flaky fails Put/Delete of chosen keys.
+type flaky struct {
+	*fakeBucket
+	failPut, failDel map[string]bool
+}
+
+func (f *flaky) Put(ctx context.Context, key, ct string, r io.Reader, n int64) error {
+	if f.failPut[key] {
+		return errors.New("put failed")
+	}
+	return f.fakeBucket.Put(ctx, key, ct, r, n)
+}
+
+func (f *flaky) Delete(ctx context.Context, key string) error {
+	if f.failDel[key] {
+		return errors.New("delete failed")
+	}
+	return f.fakeBucket.Delete(ctx, key)
+}
+
+func TestRerunUnpublishesDayWhenManifestPutFails(t *testing.T) {
+	ctx := context.Background()
+	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
+	if _, err := Write(ctx, b, "2026-11-13", now, batches(3, 10)); err != nil {
+		t.Fatal(err)
+	}
+	b.failPut[ManifestKey("2026-11-13")] = true
+	if _, err := Write(ctx, b, "2026-11-13", now, batches(5, 10)); err == nil {
+		t.Fatal("want manifest put error")
+	}
+	if got, _ := List(ctx, b); len(got) != 0 {
+		t.Fatalf("day still listed with a stale manifest: %+v", got)
+	}
+}
+
+func TestRerunStopsWhenManifestDeleteFails(t *testing.T) {
+	ctx := context.Background()
+	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
+	if _, err := Write(ctx, b, "2026-11-13", now, batches(3, 10)); err != nil {
+		t.Fatal(err)
+	}
+	old := string(b.objs[DataKey("2026-11-13")])
+	b.failDel[ManifestKey("2026-11-13")] = true
+	if _, err := Write(ctx, b, "2026-11-13", now, batches(5, 10)); err == nil {
+		t.Fatal("want delete error")
+	}
+	if string(b.objs[DataKey("2026-11-13")]) != old {
+		t.Fatal("data replaced although the manifest could not be deleted")
+	}
+}
+
+func TestPruneKeepsDataWhenManifestDeleteFails(t *testing.T) {
+	ctx := context.Background()
+	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
+	for _, d := range []string{"2026-11-09", "2026-11-10", "2026-11-11"} {
+		if _, err := Write(ctx, b, d, now, batches(1, 1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b.failDel[ManifestKey("2026-11-09")] = true
+	if _, err := Prune(ctx, b, 2); err == nil {
+		t.Fatal("want delete error")
+	}
+	if _, ok := b.objs[DataKey("2026-11-09")]; !ok {
+		t.Fatal("data deleted while its manifest is still listed")
 	}
 }

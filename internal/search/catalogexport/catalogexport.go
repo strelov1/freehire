@@ -7,6 +7,7 @@
 package catalogexport
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -123,13 +124,28 @@ func Prune(ctx context.Context, b blobstore.Store, keep int) (deleted int, err e
 	if err != nil {
 		return 0, err
 	}
+	var expired []string
 	for _, k := range keys {
 		if d := dateOf(k); d != "" && d < oldestKept {
-			if err := b.Delete(ctx, k); err != nil {
-				return deleted, err
-			}
-			deleted++
+			expired = append(expired, k)
 		}
 	}
+	// Manifests first: a listed snapshot must never point at a deleted data file.
+	slices.SortStableFunc(expired, func(x, y string) int {
+		return cmp.Compare(btoi(y == ManifestKey(dateOf(y))), btoi(x == ManifestKey(dateOf(x))))
+	})
+	for _, k := range expired {
+		if err := b.Delete(ctx, k); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
 	return deleted, nil
+}
+
+func btoi(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
