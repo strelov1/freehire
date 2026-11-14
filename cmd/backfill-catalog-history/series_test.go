@@ -38,3 +38,16 @@ func TestSeriesWithoutPrunedShare(t *testing.T) {
 		t.Fatalf("share 0 must ignore pruned postings: %+v", got)
 	}
 }
+
+func TestSeriesStartsAtAPrunedBirthBeforeTheFirstFlow(t *testing.T) {
+	got := series([]flow{{Day: day(2), Added: 4}}, []firstID{{day(0), 1}}, []pruned{{ID: 1, Day: day(3)}}, 1, day(3))
+	want := []int64{1, 1, 5, 4}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i, p := range got {
+		if p.Open != want[i] {
+			t.Errorf("day %d = %d, want %d", i, p.Open, want[i])
+		}
+	}
+}

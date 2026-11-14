@@ -39,12 +39,8 @@ type point struct {
 // archive does not say which ones those were.
 func series(flows []flow, firsts []firstID, prunes []pruned, prunedShare float64, through time.Time) []point {
 	delta := map[time.Time]float64{}
-	start := through
 	for _, f := range flows {
 		delta[f.Day] += float64(f.Added - f.Removed)
-		if f.Day.Before(start) {
-			start = f.Day
-		}
 	}
 	for _, p := range prunes {
 		born, ok := dayOfID(firsts, p.ID)
@@ -53,6 +49,14 @@ func series(flows []flow, firsts []firstID, prunes []pruned, prunedShare float64
 		}
 		delta[born] += prunedShare
 		delta[p.Day] -= prunedShare
+	}
+	// The walk starts at the earliest day anything moved — a pruned posting can be born
+	// before the first listed one, and skipping its birth would still subtract its deletion.
+	start := through
+	for d := range delta {
+		if d.Before(start) {
+			start = d
+		}
 	}
 
 	var out []point
