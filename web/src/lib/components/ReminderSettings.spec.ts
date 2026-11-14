@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ReminderSettings from './ReminderSettings.svelte';
 
-// Load the real primitives directly without initializing unrelated UI exports.
-vi.mock('#lib/ui/index.js', async () => ({
-  cn: (await import('freehire-design-system/cn.js')).cn,
-  ProviderIcon: (await import('freehire-design-system/provider-icon.svelte')).default,
+// Stub the facade instead of initializing unrelated UI exports.
+vi.mock('#lib/ui/index.js', () => ({
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
+  ProviderIcon() {},
 }));
 vi.mock('@lucide/svelte', async () => ({
   Bell: (await import('@lucide/svelte/icons/bell')).default,
@@ -97,4 +97,25 @@ it('allows Ultra to opt in', async () => {
   render(ReminderSettings);
   const toggle = await screen.findByRole('switch', { name: 'Daily inbox summary' });
   expect(toggle.hasAttribute('disabled')).toBe(false);
+});
+
+it('sends a later change only after the earlier save finishes', async () => {
+  let finishFirst = () => {};
+  backend.updateNotificationSettings.mockImplementationOnce(
+    () => new Promise((resolve) => (finishFirst = () => resolve({ ...settings }))),
+  );
+  render(ReminderSettings);
+  const toggle = await screen.findByRole('switch', { name: 'Daily inbox summary' });
+  await fireEvent.click(toggle);
+  await vi.waitFor(() => expect(backend.updateNotificationSettings).toHaveBeenCalledTimes(1));
+  await fireEvent.click(toggle);
+  await new Promise((resolve) => setTimeout(resolve, 450)); // past the autosave debounce
+  expect(backend.updateNotificationSettings).toHaveBeenCalledTimes(1);
+  finishFirst();
+  await vi.waitFor(() =>
+    expect(backend.updateNotificationSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inbox_digest_enabled: false }),
+    ),
+  );
+  expect(backend.updateNotificationSettings).toHaveBeenCalledTimes(2);
 });

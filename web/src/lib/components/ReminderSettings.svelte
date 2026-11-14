@@ -110,7 +110,14 @@
     saveTimer = setTimeout(doSave, 350);
   }
 
-  async function doSave() {
+  // Saves run one at a time, so the last request sent is the last one stored.
+  let saveQueue = Promise.resolve();
+  function doSave() {
+    saveQueue = saveQueue.then(sendSettings);
+    return saveQueue;
+  }
+
+  async function sendSettings() {
     try {
       await api.updateNotificationSettings({
         enabled,

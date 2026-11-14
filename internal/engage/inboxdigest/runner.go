@@ -70,6 +70,8 @@ func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
 			log.Printf("inbox-digest: user %d snapshot: %v", c.UserID, err)
 			continue
 		}
+		// Claim against the instant after the snapshot, so a run crossing local midnight books the new day.
+		at = now.Add(time.Since(started))
 		if len(snapshot.IDs) == 0 || len(snapshot.Items) == 0 {
 			continue
 		}
