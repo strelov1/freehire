@@ -168,6 +168,7 @@ func persist(ctx context.Context, tx pgx.Tx, qtx *db.Queries, p db.UpsertJobPara
 		IsTech:               p.IsTech,
 		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
+		Team:                 p.Team,
 		BodyFromCatalogue:    p.BodyFromCatalogue,
 		WithheldIfSeenBefore: withheldIfSeenBefore(),
 	})

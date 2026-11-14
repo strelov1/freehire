@@ -725,3 +725,17 @@ func TestUpsertParams_PreservesSourceApplicationDeadline(t *testing.T) {
 		t.Fatalf("unknown deadline must stay NULL, got %+v", got.ApplicationDeadline)
 	}
 }
+
+// Team is the source's own label, trimmed and carried through to the upsert params.
+func TestNew_TrimsTeamAndCarriesItToTheUpsert(t *testing.T) {
+	j, err := job.New(job.Draft{
+		Input: jobderive.Input{Source: "lever", ExternalID: "1", Title: "Engineer", Company: "Acme"},
+		Team:  "  Platform \n",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := j.Fields().UpsertParams().Team; got != "Platform" {
+		t.Errorf("UpsertParams().Team = %q, want %q", got, "Platform")
+	}
+}

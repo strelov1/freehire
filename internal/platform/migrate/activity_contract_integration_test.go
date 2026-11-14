@@ -23,7 +23,7 @@ func activityContractMigration(t *testing.T) migrate.Migration {
 		t.Fatal(err)
 	}
 	for _, m := range all {
-		if m.Version == "0265_job_activity_contract.sql" {
+		if m.Version == "0266_job_activity_contract.sql" {
 			m.Version = "9999_activity_contract_test.sql"
 			return m
 		}
@@ -36,8 +36,8 @@ func TestActivityContractPreservesObservationsAndRecordsOnce(t *testing.T) {
 	pool := legacyActivityPool(t)
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug,
-		last_seen_at, hydrated_at, liveness_strikes)
-		VALUES ('test', 'contract', 'https://example.test/contract', 'A', 'contract', '2020-01-01', NULL, 1);
+		last_seen_at, hydrated_at, liveness_strikes, team)
+		VALUES ('test', 'contract', 'https://example.test/contract', 'A', 'contract', '2020-01-01', NULL, 1, 'Research');
 		UPDATE job_activity SET last_seen_at = '2026-01-02T00:00:00Z', hydrated_at = '2026-01-01T00:00:00Z',
 		liveness_strikes = 3, state_version = 7`); err != nil {
 		t.Fatal(err)
@@ -61,6 +61,10 @@ func TestActivityContractPreservesObservationsAndRecordsOnce(t *testing.T) {
 	if !seen.Equal(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)) ||
 		!hydrated.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) || strikes != 3 || version != 7 {
 		t.Fatalf("activity changed: %v %v strikes=%d version=%d", seen, hydrated, strikes, version)
+	}
+	var team string
+	if err := pool.QueryRow(ctx, `SELECT team FROM jobs_read`).Scan(&team); err != nil || team != "Research" {
+		t.Fatalf("team changed across contract: %q err=%v", team, err)
 	}
 	var physicalAfter string
 	if err := pool.QueryRow(ctx, `SELECT row(xmin::text, xmax::text, ctid::text)::text FROM jobs`).Scan(&physicalAfter); err != nil {

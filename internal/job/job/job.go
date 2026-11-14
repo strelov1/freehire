@@ -8,6 +8,7 @@ package job
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -50,6 +51,8 @@ type Draft struct {
 	Remote              bool
 	PostedAt            *time.Time
 	ApplicationDeadline *time.Time
+	// Team is the department or team the source files the posting under, verbatim; trimmed by New.
+	Team string
 
 	ManualSalary *Salary
 
@@ -86,6 +89,8 @@ type Fields struct {
 	Description         string
 	PostedAt            *time.Time
 	ApplicationDeadline *time.Time
+	// Team: see Draft.Team. Empty when the source states none.
+	Team string
 	// BodyFromCatalogue: see Draft.BodyFromCatalogue.
 	BodyFromCatalogue bool
 
@@ -216,6 +221,7 @@ func New(d Draft) (Job, error) {
 		BodyFromCatalogue:   d.BodyFromCatalogue,
 		PostedAt:            d.PostedAt,
 		ApplicationDeadline: d.ApplicationDeadline,
+		Team:                strings.TrimSpace(d.Team),
 
 		Countries: der.Countries,
 		Regions:   der.Regions,
@@ -283,6 +289,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		BodyFromCatalogue:   f.BodyFromCatalogue,
 		PostedAt:            pgconv.Timestamptz(f.PostedAt),
 		ApplicationDeadline: pgconv.Date(f.ApplicationDeadline),
+		Team:                f.Team,
 		Countries:           f.Countries,
 		Regions:             f.Regions,
 		Cities:              f.Cities,

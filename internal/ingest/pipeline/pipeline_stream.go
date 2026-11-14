@@ -147,5 +147,6 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical,
 		Remote:              j.Remote,
 		PostedAt:            j.PostedAt,
 		ApplicationDeadline: j.ApplicationDeadline,
+		Team:                j.Team,
 	})
 }

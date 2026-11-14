@@ -34,7 +34,6 @@ import (
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/engage/discordlink"
 	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
@@ -329,14 +328,6 @@ func runServer(cfg config.Settings) error {
 	// token-encryption key are configured. Both nil disables the feature.
 	gmailConnector, gmailCipher := buildGmail(cfg)
 
-	// PII detector for de-identifying CV text before it reaches the LLM. Nil when
-	// PII_FILTER_URL is unset, which fails the CV→LLM paths closed (no analysis) rather
-	// than leaking PII (see internal/candidate/pii, internal/candidate/matchanalysis, internal/candidate/resumeextract).
-	var piiDetector pii.Detector
-	if cfg.PIIFilterURL != "" {
-		piiDetector = pii.NewHTTPDetector(cfg.PIIFilterURL, nil)
-	}
-
 	// Credits metering config, loaded alongside the other optional dependencies rather
 	// than inline in the handler registration.
 	planConfig := plan.ConfigFromEnv()
@@ -417,7 +408,6 @@ func runServer(cfg config.Settings) error {
 		LLMKeys:                     llmKeys,
 		Speech:                      speechClient,
 		Realtime:                    realtimeClient,
-		PIIDetector:                 piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
 		TelegramBotUsername:   cfg.TelegramBotUsername,

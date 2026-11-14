@@ -198,7 +198,7 @@ func TestReleaseCContractPreparesEveryGeneratedStatement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cleanup, err := os.ReadFile(filepath.Join(root, "migrations", "0265_job_activity_contract.sql"))
+	cleanup, err := os.ReadFile(filepath.Join(root, "migrations", "0266_job_activity_contract.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
