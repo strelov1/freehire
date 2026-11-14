@@ -2294,6 +2294,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/change-webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List change webhook subscriptions.
+         * @description The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.
+         */
+        get: operations["listChangeWebhooks"];
+        put?: never;
+        /**
+         * Subscribe a URL to the change feed.
+         * @description Subscribes a URL to the change feed and answers with the signing secret, this once. Needs
+         *     an `api` or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409`
+         *     past that). The URL is not probed here, so a receiver that verifies signatures can be set up
+         *     with the returned secret first; call the `test` endpoint to check it. Deliveries start from
+         *     about the time of this call.
+         */
+        post: operations["createChangeWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/change-webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a change webhook subscription.
+         * @description An id that is not the caller's is a `404`. Delete a disabled subscription and create it again to resume (from the changes made then).
+         */
+        delete: operations["deleteChangeWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/change-webhooks/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test event to a subscription.
+         * @description Sends a signed `webhook.test` event with no changes. `204` when the endpoint answered 2xx, `422` with what it answered otherwise.
+         */
+        post: operations["testChangeWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/contributions": {
         parameters: {
             query?: never;
@@ -6499,6 +6567,65 @@ export interface components {
         CategoryMeta: {
             category: string;
         };
+        /** @description A webhook subscription to the change feed. The secret is never part of it after creation. */
+        ChangeWebhook: {
+            /** Format: int64 */
+            id: number;
+            url: string;
+            /** @description Empty: every company. Otherwise only changes of these companies' postings are delivered. */
+            company_slugs: string[];
+            kinds: components["schemas"]["ChangeWebhookKind"][];
+            /** Format: date-time */
+            created_at: string;
+            last_success_at: string | null;
+            /**
+             * Format: int64
+             * @description Failed deliveries in a row; reset by a delivery that succeeds.
+             */
+            consecutive_failures: number;
+            /** @description What the endpoint answered to the last failed delivery; empty when the last one succeeded. */
+            last_error: string;
+            /** @description Set when the subscription was switched off after sustained failure or a `410`; null while it delivers. */
+            disabled_at: string | null;
+            disabled_reason: string;
+        };
+        ChangeWebhookCreate: {
+            /** @description Where to POST: an absolute http(s) URL. A private, loopback or link-local address is refused. */
+            url: string;
+            /** @description At most 100 company slugs, as `GET /companies/{slug}` knows them. Absent or empty: all companies. */
+            company_slugs?: string[];
+            /** @description Absent or empty: all three. */
+            kinds?: components["schemas"]["ChangeWebhookKind"][];
+        };
+        /** @description The subscription plus its signing secret, shown exactly once, in the answer that creates it. */
+        ChangeWebhookCreated: {
+            /** Format: int64 */
+            id: number;
+            url: string;
+            /** @description Empty: every company. Otherwise only changes of these companies' postings are delivered. */
+            company_slugs: string[];
+            kinds: components["schemas"]["ChangeWebhookKind"][];
+            /** Format: date-time */
+            created_at: string;
+            last_success_at: string | null;
+            /**
+             * Format: int64
+             * @description Failed deliveries in a row; reset by a delivery that succeeds.
+             */
+            consecutive_failures: number;
+            /** @description What the endpoint answered to the last failed delivery; empty when the last one succeeded. */
+            last_error: string;
+            /** @description Set when the subscription was switched off after sustained failure or a `410`; null while it delivers. */
+            disabled_at: string | null;
+            disabled_reason: string;
+            /** @description The HMAC key for `X-Freehire-Signature`. Store it now: it cannot be read again. */
+            secret: string;
+        };
+        /**
+         * @description The kinds of change a webhook can ask for; the same as the change feed's.
+         * @enum {string}
+         */
+        ChangeWebhookKind: "opened" | "closed" | "reopened";
         CityMatch: {
             /** @description Canonical city name — pass it verbatim to the `cities` facet, which matches nothing on a near miss. */
             value: string;
@@ -15385,6 +15512,187 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BuddySimilarPage"];
                 };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listChangeWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 7,
+                     *           "url": "https://mirror.example.com/hooks/freehire",
+                     *           "company_slugs": [
+                     *             "acme"
+                     *           ],
+                     *           "kinds": [
+                     *             "opened",
+                     *             "closed"
+                     *           ],
+                     *           "created_at": "2026-06-20T04:10:00Z",
+                     *           "last_success_at": "2026-06-21T09:00:00Z",
+                     *           "consecutive_failures": 0,
+                     *           "last_error": "",
+                     *           "disabled_at": null,
+                     *           "disabled_reason": ""
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ChangeWebhook"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createChangeWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "url": "https://mirror.example.com/hooks/freehire",
+                 *       "company_slugs": [
+                 *         "acme"
+                 *       ],
+                 *       "kinds": [
+                 *         "opened",
+                 *         "closed"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["ChangeWebhookCreate"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 7,
+                     *         "url": "https://mirror.example.com/hooks/freehire",
+                     *         "company_slugs": [
+                     *           "acme"
+                     *         ],
+                     *         "kinds": [
+                     *           "opened",
+                     *           "closed"
+                     *         ],
+                     *         "created_at": "2026-06-20T04:10:00Z",
+                     *         "last_success_at": null,
+                     *         "consecutive_failures": 0,
+                     *         "last_error": "",
+                     *         "disabled_at": null,
+                     *         "disabled_reason": "",
+                     *         "secret": "whsec_example_secret_shown_once"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["ChangeWebhookCreated"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteChangeWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    testChangeWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description An unexpected error response. */
             default: {

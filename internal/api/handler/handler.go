@@ -31,6 +31,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
@@ -137,6 +138,7 @@ func Register(app *fiber.App, cfg Config) {
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	webhookH := newWebhookHandlers(queries, webhooknotify.NewNotifier())
+	changeWebhookH := newChangeWebhookHandlers(queries, changehook.NewSender())
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
 	// The candidate's own screening answers (visa, salary, notice period, relocation, …) —
 	// a distinct singleton from profileSvc above (search/targeting preferences, a
@@ -658,6 +660,7 @@ func Register(app *fiber.App, cfg Config) {
 		ghostReportHandlers:          ghostReportsH,
 		talentNetworkHandlers:        talentNetworkH,
 		answerBankHandlers:           answerBankH,
+		changeWebhookHandlers:        changeWebhookH,
 		userModerationHandlers:       userModerationH,
 		companyProcessReportHandlers: companyProcessReportH,
 		contributionHandlers:         contributionsH,
@@ -825,6 +828,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Filter subscriptions (see subscriptionHandlers).
 	subscriptionH.register(api, mw, contract)
 	webhookH.register(api, mw)
+	changeWebhookH.register(api, mw, contract)
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	telegramH.register(api, mw)

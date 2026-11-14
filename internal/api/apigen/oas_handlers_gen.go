@@ -5945,6 +5945,105 @@ func (s *Server) handleCreateCVRequest(args [0]string, argsEscaped bool, w http.
 	}
 }
 
+// handleCreateChangeWebhookRequest handles createChangeWebhook operation.
+//
+// Subscribes a URL to the change feed and answers with the signing secret, this once. Needs an `api`
+// or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409` past that). The
+// URL is not probed here, so a receiver that verifies signatures can be set up with the returned
+// secret first; call the `test` endpoint to check it. Deliveries start from about the time of this
+// call.
+//
+// POST /me/change-webhooks
+func (s *Server) handleCreateChangeWebhookRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CreateChangeWebhookOperation,
+			ID:   "createChangeWebhook",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeCreateChangeWebhookRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *CreateChangeWebhookCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CreateChangeWebhookOperation,
+			OperationSummary: "Subscribe a URL to the change feed.",
+			OperationID:      "createChangeWebhook",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *ChangeWebhookCreate
+			Params   = struct{}
+			Response = *CreateChangeWebhookCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CreateChangeWebhook(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CreateChangeWebhook(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCreateChangeWebhookResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCreateEmployerVacancyRequest handles createEmployerVacancy operation.
 //
 // Publishes, or idempotently updates the caller's own vacancy at the same URL.
@@ -7801,6 +7900,102 @@ func (s *Server) handleDeleteCVRequest(args [1]string, argsEscaped bool, w http.
 	}
 
 	if err := encodeDeleteCVResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleDeleteChangeWebhookRequest handles deleteChangeWebhook operation.
+//
+// An id that is not the caller's is a `404`. Delete a disabled subscription and create it again to
+// resume (from the changes made then).
+//
+// DELETE /me/change-webhooks/{id}
+func (s *Server) handleDeleteChangeWebhookRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DeleteChangeWebhookOperation,
+			ID:   "deleteChangeWebhook",
+		}
+	)
+	params, err := decodeDeleteChangeWebhookParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *DeleteChangeWebhookNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DeleteChangeWebhookOperation,
+			OperationSummary: "Delete a change webhook subscription.",
+			OperationID:      "deleteChangeWebhook",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DeleteChangeWebhookParams
+			Response = *DeleteChangeWebhookNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDeleteChangeWebhookParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.DeleteChangeWebhook(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.DeleteChangeWebhook(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDeleteChangeWebhookResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -17489,6 +17684,82 @@ func (s *Server) handleListCVsRequest(args [0]string, argsEscaped bool, w http.R
 	}
 
 	if err := encodeListCVsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListChangeWebhooksRequest handles listChangeWebhooks operation.
+//
+// The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.
+//
+// GET /me/change-webhooks
+func (s *Server) handleListChangeWebhooksRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *ListChangeWebhooksOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListChangeWebhooksOperation,
+			OperationSummary: "List change webhook subscriptions.",
+			OperationID:      "listChangeWebhooks",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *ListChangeWebhooksOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListChangeWebhooks(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListChangeWebhooks(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListChangeWebhooksResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -29910,6 +30181,102 @@ func (s *Server) handleTailorCVRequest(args [0]string, argsEscaped bool, w http.
 	}
 
 	if err := encodeTailorCVResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleTestChangeWebhookRequest handles testChangeWebhook operation.
+//
+// Sends a signed `webhook.test` event with no changes. `204` when the endpoint answered 2xx, `422`
+// with what it answered otherwise.
+//
+// POST /me/change-webhooks/{id}/test
+func (s *Server) handleTestChangeWebhookRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: TestChangeWebhookOperation,
+			ID:   "testChangeWebhook",
+		}
+	)
+	params, err := decodeTestChangeWebhookParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *TestChangeWebhookNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    TestChangeWebhookOperation,
+			OperationSummary: "Send a test event to a subscription.",
+			OperationID:      "testChangeWebhook",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = TestChangeWebhookParams
+			Response = *TestChangeWebhookNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackTestChangeWebhookParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.TestChangeWebhook(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.TestChangeWebhook(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeTestChangeWebhookResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

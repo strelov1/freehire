@@ -384,6 +384,24 @@ type CatalogSizeDaily struct {
 	ComputedAt    pgtype.Timestamptz `json:"computed_at"`
 }
 
+type ChangeWebhook struct {
+	ID                  int64              `json:"id"`
+	UserID              int64              `json:"user_id"`
+	URL                 string             `json:"url"`
+	Secret              string             `json:"secret"`
+	CompanySlugs        []string           `json:"company_slugs"`
+	Kinds               []string           `json:"kinds"`
+	CursorXid           int64              `json:"cursor_xid"`
+	CursorID            int64              `json:"cursor_id"`
+	ConsecutiveFailures int64              `json:"consecutive_failures"`
+	NextAttemptAt       pgtype.Timestamptz `json:"next_attempt_at"`
+	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
+	LastError           string             `json:"last_error"`
+	DisabledAt          pgtype.Timestamptz `json:"disabled_at"`
+	DisabledReason      string             `json:"disabled_reason"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
