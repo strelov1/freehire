@@ -101,8 +101,6 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				reset(t)
 				id := insertChunkTestJob(t, pool, "seen", "acme")
-				exec(t, "UPDATE jobs SET last_seen_at = $1 WHERE id = $2", ts(tc.lastSeen), id)
-				// job_activity is what readers compare and the bridge never lowers it, so age it directly.
 				exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(tc.lastSeen), id)
 				clearOutbox(t, pool)
 
@@ -116,7 +114,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 				}
 
 				// The cheap re-crawl write: same rule. The match key is the row's own state.
-				exec(t, "UPDATE jobs SET last_seen_at = $1, content_hash = 'h' WHERE id = $2", ts(tc.lastSeen), id)
+				exec(t, "UPDATE jobs SET content_hash = 'h' WHERE id = $1", id)
 				exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(tc.lastSeen), id)
 				clearOutbox(t, pool)
 				if _, err := q.RefreshUnchangedJob(ctx, RefreshUnchangedJobParams{
@@ -138,7 +136,6 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 	t.Run("a re-seen posting survives the completion of a wave holding its entry", func(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "held", "acme")
-		exec(t, "UPDATE jobs SET last_seen_at = $1 WHERE id = $2", ts(-20*24*time.Hour), id)
 		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-20*24*time.Hour), id)
 		clearOutbox(t, pool)
 		exec(t, "INSERT INTO search_outbox (job_id, job_posted_at, claimed_at) VALUES ($1, now(), now())", id)
@@ -168,13 +165,13 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		otherSource := insertChunkTestJob(t, pool, "other", "acme")
 		// Re-posted long after it was first seen: fake freshness ends 15 days after posted_at.
 		repostedFresh := insertChunkTestJob(t, pool, "reposted", "acme")
-		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-15*24*time.Hour-time.Hour), crossedAge)
-		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-10*24*time.Hour), young)
-		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
+		exec(t, "UPDATE jobs SET created_at = $1 WHERE id = $2", ts(-15*24*time.Hour-time.Hour), crossedAge)
+		exec(t, "UPDATE jobs SET created_at = $1 WHERE id = $2", ts(-10*24*time.Hour), young)
+		exec(t, "UPDATE jobs SET created_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
 		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
-		exec(t, "UPDATE jobs SET source = 'nowindow', created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
+		exec(t, "UPDATE jobs SET source = 'nowindow', created_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
 		exec(t, "UPDATE job_activity SET last_seen_at = $1 WHERE job_id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
-		exec(t, "UPDATE jobs SET created_at = $1, posted_at = $2, last_seen_at = now() WHERE id = $3",
+		exec(t, "UPDATE jobs SET created_at = $1, posted_at = $2 WHERE id = $3",
 			ts(-100*24*time.Hour), ts(-15*24*time.Hour-time.Hour), repostedFresh)
 		clearOutbox(t, pool)
 
@@ -201,7 +198,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 	t.Run("a crossing skipped under an in-flight wave is caught by the overlapping next run", func(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "held-aged", "acme")
-		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-15*24*time.Hour-10*time.Minute), id)
+		exec(t, "UPDATE jobs SET created_at = $1 WHERE id = $2", ts(-15*24*time.Hour-10*time.Minute), id)
 		clearOutbox(t, pool)
 		exec(t, "INSERT INTO search_outbox (job_id, job_posted_at, claimed_at) VALUES ($1, now(), now())", id)
 		var held int64
@@ -231,7 +228,7 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		}
 	})
 
-	t.Run("a view-count rollup queues the job it counted", func(t *testing.T) {
+	t.Run("a view-count rollup moves view_count without queuing the job", func(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "viewed", "acme")
 		clearOutbox(t, pool)
@@ -242,19 +239,21 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 				t.Fatalf("apply view: %v", err)
 			}
 		})
-		if got := searchOutboxCount(t, pool, id); got != 1 {
-			t.Errorf("job queued %d after a view, want 1", got)
-		}
-
-		private := insertChunkTestJob(t, pool, "private", "acme")
-		exec(t, "UPDATE jobs SET is_private = true WHERE id = $1", private)
-		q.ApplyDailyAgentView(ctx, []ApplyDailyAgentViewParams{{Day: day, JobID: private, Delta: 1}}).Exec(func(_ int, err error) {
+		q.ApplyDailyAgentView(ctx, []ApplyDailyAgentViewParams{{Day: day, JobID: id, Delta: 3}}).Exec(func(_ int, err error) {
 			if err != nil {
 				t.Fatalf("apply agent view: %v", err)
 			}
 		})
-		if got := searchOutboxCount(t, pool, private); got != 0 {
-			t.Errorf("private job queued %d after a view, want 0", got)
+		// cmd/rollup-views writes view_count to the index itself; queuing it flooded the drain.
+		if got := searchOutboxCount(t, pool, id); got != 0 {
+			t.Errorf("job queued %d after views, want 0", got)
+		}
+		rows, err := q.GetJobViewCounts(ctx, []int64{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 || rows[0].ViewCount != 5 {
+			t.Errorf("view counts = %+v, want one row with 5", rows)
 		}
 	})
 }

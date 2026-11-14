@@ -20,20 +20,12 @@ var (
 const applyDailyAgentView = `-- name: ApplyDailyAgentView :batchexec
 WITH ins AS (
     INSERT INTO job_daily_views (day, job_id, uniques, agent_uniques)
-    VALUES ($1, $2, 0, $3)
+    VALUES ($3, $2, 0, $1)
     ON CONFLICT (day, job_id)
         DO UPDATE SET agent_uniques = job_daily_views.agent_uniques + EXCLUDED.agent_uniques
-),
-upd AS (
-    UPDATE jobs SET view_count = view_count + $3
-    WHERE id = $2
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+UPDATE jobs SET view_count = view_count + $1
+WHERE id = $2
 `
 
 type ApplyDailyAgentViewBatchResults struct {
@@ -43,23 +35,23 @@ type ApplyDailyAgentViewBatchResults struct {
 }
 
 type ApplyDailyAgentViewParams struct {
-	Day   pgtype.Date `json:"day"`
-	JobID int64       `json:"job_id"`
 	Delta int32       `json:"delta"`
+	JobID int64       `json:"job_id"`
+	Day   pgtype.Date `json:"day"`
 }
 
 // Apply one (day, job) agent-view count additively: upsert job_daily_views.agent_uniques
 // and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
 // NOT NULL with no default) and never touched on conflict, so the nginx figures and
 // GET /api/v1/stats/catalog keep their meaning.
-// Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
+// Not queued for the drain, for the same reason as ApplyDailyView.
 func (q *Queries) ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
 		vals := []interface{}{
-			a.Day,
-			a.JobID,
 			a.Delta,
+			a.JobID,
+			a.Day,
 		}
 		batch.Queue(applyDailyAgentView, vals...)
 	}
@@ -91,21 +83,13 @@ func (b *ApplyDailyAgentViewBatchResults) Close() error {
 const applyDailyView = `-- name: ApplyDailyView :batchexec
 WITH ins AS (
     INSERT INTO job_daily_views (day, job_id, uniques, page_uniques)
-    VALUES ($1, $2, $3, $4)
+    VALUES ($3, $2, $1, $4)
     ON CONFLICT (day, job_id)
         DO UPDATE SET uniques      = job_daily_views.uniques + EXCLUDED.uniques,
                       page_uniques = job_daily_views.page_uniques + EXCLUDED.page_uniques
-),
-upd AS (
-    UPDATE jobs SET view_count = view_count + $3
-    WHERE id = $2
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
-INSERT INTO search_outbox (job_id, job_posted_at)
-SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+UPDATE jobs SET view_count = view_count + $1
+WHERE id = $2
 `
 
 type ApplyDailyViewBatchResults struct {
@@ -115,9 +99,9 @@ type ApplyDailyViewBatchResults struct {
 }
 
 type ApplyDailyViewParams struct {
-	Day        pgtype.Date `json:"day"`
-	JobID      int64       `json:"job_id"`
 	TotalDelta int32       `json:"total_delta"`
+	JobID      int64       `json:"job_id"`
+	Day        pgtype.Date `json:"day"`
 	PageDelta  int32       `json:"page_delta"`
 }
 
@@ -134,15 +118,17 @@ type ApplyDailyViewParams struct {
 // bot-filtered signal of the two.
 // A visitor who did both is one visitor in each, so the two do not sum with an API
 // count; the only relation between them is page_delta <= total_delta.
-// view_count is a sortable attribute of the search document, so the moved figure is
-// queued for the drain; without it the most-viewed sort waited for a full rebuild.
+// view_count is a sortable attribute of the search document, but it is NOT queued for
+// the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+// the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+// kept search_outbox from ever emptying (2026-11-14).
 func (q *Queries) ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
 		vals := []interface{}{
-			a.Day,
-			a.JobID,
 			a.TotalDelta,
+			a.JobID,
+			a.Day,
 			a.PageDelta,
 		}
 		batch.Queue(applyDailyView, vals...)

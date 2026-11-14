@@ -174,7 +174,7 @@ type Querier interface {
 	// and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
 	// NOT NULL with no default) and never touched on conflict, so the nginx figures and
 	// GET /api/v1/stats/catalog keep their meaning.
-	// Queued for the drain for the same reason as ApplyDailyView: view_count is sortable.
+	// Not queued for the drain, for the same reason as ApplyDailyView.
 	ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
@@ -189,8 +189,10 @@ type Querier interface {
 	// bot-filtered signal of the two.
 	// A visitor who did both is one visitor in each, so the two do not sum with an API
 	// count; the only relation between them is page_delta <= total_delta.
-	// view_count is a sortable attribute of the search document, so the moved figure is
-	// queued for the drain; without it the most-viewed sort waited for a full rebuild.
+	// view_count is a sortable attribute of the search document, but it is NOT queued for
+	// the drain: cmd/rollup-views writes the new figures to the index itself at the end of
+	// the run (search.SetViewCounts). Queuing them re-built ~1.7M whole documents a day and
+	// kept search_outbox from ever emptying (2026-11-14).
 	ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults
 	// Same shape and same reasoning as SearchOutboxMetrics. The depth here is the one that
 	// carries information rather than the dead letters: cmd/capture-apply-form takes
@@ -3077,6 +3079,9 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// The current view_count of the jobs a rollup run touched, for the index write that
+	// replaces the old per-view search_outbox enqueue.
+	GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
 	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
@@ -4681,6 +4686,8 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// Known hiring conversations are the boundary for sent-message body retrieval.
+	ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
 	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
@@ -8482,8 +8489,8 @@ type Querier interface {
 	// costs a second slot. Two concurrent first applications can both pass the count and land
 	// one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.
 	UpsertDirectApplication(ctx context.Context, arg UpsertDirectApplicationParams) (int64, error)
-	// Store a Gmail message, idempotent by (user_id, source, external_id) with
-	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
+	// Gmail is idempotent; sent messages are already read and never enter employer triage.
+	// Refresh provider metadata without changing deletion, bodies or incoming reader state.
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
 	// Issue (or replace) the outstanding code for one purpose. The composite primary key
 	// makes this the whole "at most one live code per (user, purpose)" rule: a resend

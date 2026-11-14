@@ -70,8 +70,12 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return st
 	}
 
-	fetched, err := r.fetchBoard(ctx, e, src)
-	if err != nil && (ctx.Err() != nil || limiterOutOfRun(err)) {
+	// The fetch ends WriteReserve ahead of ctx, and the writes run on ctx, so a board the fetch
+	// deadline cuts short still writes what it read (see Runner.WriteReserve).
+	fetchCtx, cancelFetch := r.fetchContext(ctx)
+	defer cancelFetch()
+	fetched, err := r.fetchBoard(fetchCtx, e, src)
+	if err != nil && (fetchCtx.Err() != nil || limiterOutOfRun(err)) {
 		// The run's context ended under the fetch, or a rate limiter refused the request
 		// because it could not be sent before that end: running out of time is not the board's
 		// failure, the same reading markInterrupted gives a board that returned in time.
@@ -85,6 +89,9 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		r.recordFailure(ctx, e, err)
 		return Stats{Failed: 1}
 	}
+	// An adapter that drops the requests its context refused returns what it had and no error,
+	// so a fetch that ended with its context is read as cut short whatever it returned.
+	fetched.cut = fetchCtx.Err() != nil
 	return r.ingestFetched(ctx, e, fetched)
 }
 
@@ -143,6 +150,9 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	t := r.writeBoard(ctx, e, raw, seen, covered, canon)
 	st, rej, firstErr := t.st, t.rej, t.firstErr
+	if fetched.cut {
+		st.Interrupted = 1 // before the fingerprint below, which a cut board must not record
+	}
 	var refreshedCompanies []string
 	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
 	closed, closeFailed, closedCompanies := r.closeCovered(ctx, e, t.coveredIDs)

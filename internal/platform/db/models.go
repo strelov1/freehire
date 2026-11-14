@@ -756,6 +756,9 @@ type Email struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	ApplicationID       pgtype.Int8        `json:"application_id"`
 	IcalUid             string             `json:"ical_uid"`
+	Direction           string             `json:"direction"`
+	ToAddrs             string             `json:"to_addrs"`
+	CcAddrs             string             `json:"cc_addrs"`
 }
 
 type EmailClassificationOutbox struct {
@@ -860,6 +863,7 @@ type GmailConnection struct {
 	LastSyncedAt          pgtype.Timestamptz `json:"last_synced_at"`
 	Scopes                []string           `json:"scopes"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
+	SentSyncCursor        int64              `json:"sent_sync_cursor"`
 }
 
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
@@ -1200,12 +1204,10 @@ type JobRow struct {
 	EnrichedAt            pgtype.Timestamptz `json:"enriched_at"`
 	EnrichmentVersion     int32              `json:"enrichment_version"`
 	PublicSlug            string             `json:"public_slug"`
-	LastSeenAt            pgtype.Timestamptz `json:"last_seen_at"`
 	ClosedAt              pgtype.Timestamptz `json:"closed_at"`
 	Countries             []string           `json:"countries"`
 	Regions               []string           `json:"regions"`
 	WorkMode              string             `json:"work_mode"`
-	LivenessStrikes       int32              `json:"liveness_strikes"`
 	Skills                []string           `json:"skills"`
 	Seniority             string             `json:"seniority"`
 	Category              string             `json:"category"`
@@ -1240,20 +1242,19 @@ type JobRow struct {
 	SalaryCurrencySource  string             `json:"salary_currency_source"`
 	SalaryPeriodSource    string             `json:"salary_period_source"`
 	// company_slug with hyphens removed. Maintained by every write path that sets company_slug (enforced by a test); exists so the aggregator-suppression pass can filter on a column the planner can estimate instead of an expression it cannot.
-	CompanySlugFolded         pgtype.Text        `json:"company_slug_folded"`
-	DuplicateOfAggregator     pgtype.Int8        `json:"duplicate_of_aggregator"`
-	DuplicateOfRole           pgtype.Int8        `json:"duplicate_of_role"`
-	DuplicateOfFuzzy          pgtype.Int8        `json:"duplicate_of_fuzzy"`
-	RequiresClearance         pgtype.Bool        `json:"requires_clearance"`
-	RequirementsDerived       []byte             `json:"requirements_derived"`
-	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
-	AiInterviewReports        int32              `json:"ai_interview_reports"`
-	Metros                    []string           `json:"metros"`
-	SemanticEmbeddedInputHash pgtype.Text        `json:"semantic_embedded_input_hash"`
-	ViaRecruiter              pgtype.Bool        `json:"via_recruiter"`
-	ClearanceLevels           []string           `json:"clearance_levels"`
-	Equity                    pgtype.Text        `json:"equity"`
-	Perks                     []string           `json:"perks"`
+	CompanySlugFolded         pgtype.Text `json:"company_slug_folded"`
+	DuplicateOfAggregator     pgtype.Int8 `json:"duplicate_of_aggregator"`
+	DuplicateOfRole           pgtype.Int8 `json:"duplicate_of_role"`
+	DuplicateOfFuzzy          pgtype.Int8 `json:"duplicate_of_fuzzy"`
+	RequiresClearance         pgtype.Bool `json:"requires_clearance"`
+	RequirementsDerived       []byte      `json:"requirements_derived"`
+	AiInterviewReports        int32       `json:"ai_interview_reports"`
+	Metros                    []string    `json:"metros"`
+	SemanticEmbeddedInputHash pgtype.Text `json:"semantic_embedded_input_hash"`
+	ViaRecruiter              pgtype.Bool `json:"via_recruiter"`
+	ClearanceLevels           []string    `json:"clearance_levels"`
+	Equity                    pgtype.Text `json:"equity"`
+	Perks                     []string    `json:"perks"`
 	// Source-stated last application day, inclusive; NULL when unstated.
 	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 	Engagement          []string    `json:"engagement"`

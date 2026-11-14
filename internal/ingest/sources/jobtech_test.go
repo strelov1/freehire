@@ -52,8 +52,8 @@ func TestJobtechRegisteredAndFilterable(t *testing.T) {
 	if !slices.Contains(FilterableProviders(), "jobtech") {
 		t.Error("FilterableProviders() should include jobtech")
 	}
-	if !slices.Contains(SelfClosingProviders(All(nil)), "jobtech") {
-		t.Error("SelfClosingProviders() should include jobtech")
+	if !slices.Contains(UnseenSweepExemptProviders(All(nil)), "jobtech") {
+		t.Error("UnseenSweepExemptProviders() should include jobtech")
 	}
 }
 

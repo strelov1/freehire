@@ -26,13 +26,18 @@ func TestTargetedRunPreservesIneligibleTargetsAndUnrelatedExpiry(t *testing.T) {
 		t.Helper()
 		var id int64
 		err := pool.QueryRow(ctx, `INSERT INTO jobs
-   (source,external_id,url,title,public_slug,is_private,posted_at,last_seen_at,application_deadline,liveness_strikes)
+   (source,external_id,url,title,public_slug,is_private,posted_at,application_deadline)
    VALUES ($1,$2,'https://127.0.0.1/never-probe',$2,$2,$3,
     now()-CASE WHEN $4 THEN interval '90 days' ELSE interval '0 days' END,
-    now()-CASE WHEN $4 THEN interval '90 days' ELSE interval '0 days' END,
-    CASE WHEN $5 THEN (now() AT TIME ZONE 'UTC')::date-1 END,1) RETURNING id`,
+    CASE WHEN $5 THEN (now() AT TIME ZONE 'UTC')::date-1 END) RETURNING id`,
 			source, name, private, old, deadline).Scan(&id)
 		if err != nil {
+			t.Fatal(err)
+		}
+		// The observation is the activity row's: seen when the posting was posted, one strike.
+		if _, err := pool.Exec(ctx, `UPDATE job_activity
+			SET last_seen_at = now()-CASE WHEN $2 THEN interval '90 days' ELSE interval '0 days' END, liveness_strikes = 1
+			WHERE job_id = $1`, id, old); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -92,7 +97,8 @@ func TestTargetedRunPreservesIneligibleTargetsAndUnrelatedExpiry(t *testing.T) {
 		t.Fatalf("targeted run attempted work outside its eligible scope:\n%s", logs.String())
 	}
 	var total, changed, deletions int
-	if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE closed_at IS NOT NULL OR closed_reason<>'' OR liveness_strikes<>1) FROM jobs`).Scan(&total, &changed); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE j.closed_at IS NOT NULL OR j.closed_reason<>'' OR a.liveness_strikes<>1)
+		FROM jobs j JOIN job_activity a ON a.job_id = j.id`).Scan(&total, &changed); err != nil {
 		t.Fatal(err)
 	}
 	if total != 5 || changed != 0 {

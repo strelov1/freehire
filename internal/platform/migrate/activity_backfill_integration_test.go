@@ -15,7 +15,7 @@ import (
 )
 
 func TestActivityBackfillCommitsRangesAndPreservesMirroredRows(t *testing.T) {
-	pool := bootstrapped(t)
+	pool := legacyActivityPool(t)
 	ctx := context.Background()
 	// Model an existing catalogue at the beginning of release A. Gaps in IDs
 	// exercise separate copy transactions without thousands of fixture rows.
@@ -72,7 +72,7 @@ func TestActivityBackfillCommitsRangesAndPreservesMirroredRows(t *testing.T) {
 }
 
 func TestActivityBackfillKeepsAConcurrentLegacyObservation(t *testing.T) {
-	pool := bootstrapped(t)
+	pool := legacyActivityPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if _, err := pool.Exec(ctx, `
@@ -162,7 +162,7 @@ func activityBackfillMigrations(t *testing.T, prefix string) []migrate.Migration
 }
 
 func TestActivityBackfillIsRecordedBeforeForeignKeyLockRetry(t *testing.T) {
-	pool := bootstrapped(t)
+	pool := legacyActivityPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if _, err := pool.Exec(ctx, `ALTER TABLE job_activity DROP CONSTRAINT job_activity_job_id_fkey`); err != nil {

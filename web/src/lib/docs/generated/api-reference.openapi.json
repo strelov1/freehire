@@ -15837,6 +15837,15 @@
           "source": {
             "type": "string"
           },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
           "from_addr": {
             "type": "string"
           },
@@ -15885,6 +15894,18 @@
             "type": "string"
           },
           "external_id": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
+          "thread_id": {
             "type": "string"
           },
           "from_addr": {
@@ -15998,6 +16019,18 @@
             "type": "string"
           },
           "external_id": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "to_addrs": {
+            "type": "string"
+          },
+          "cc_addrs": {
+            "type": "string"
+          },
+          "thread_id": {
             "type": "string"
           },
           "from_addr": {

@@ -62,7 +62,7 @@ var blocks = map[string][]string{
 		"browseruse",
 		"cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "jev", "llm", "llmschema", "migrate",
-		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
+		"mailmeta", "modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",
 		// tracerlink names a CV and is still here, because what it holds is not the CV: link
 		// normalisation, an opaque token, a user-agent/device classifier and a salted visitor
