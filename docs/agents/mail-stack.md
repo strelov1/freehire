@@ -50,6 +50,10 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   Sent messages start read and never enter employer classification, stage advancement,
   employer-reply events, interview evidence or silence calculations. Hosted and external
   messages retain their existing incoming defaults; this adds no sending transport.
+  Application mail views also show unlinked sent replies when their Gmail conversation
+  has one unambiguous linked incoming job, including links classified after sync. Explicit
+  attachments win; this display inference writes no link or employer activity. Recall
+  candidates and suggestion writes remain incoming-only, including after alias repair.
 - **Sent discovery has its own cursor.** `gmail_connections.sent_sync_cursor` starts at zero:
   the first successful pass expands stored Gmail threads to recover their sent history.
   Later passes list SENT message/thread identifiers since the prior successful run (with a
