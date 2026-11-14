@@ -1,0 +1,99 @@
+name: Code review
+
+on:
+  # zizmor: ignore[dangerous-triggers] -- The pinned action checks out the trusted base and reads PR changes from git objects; it never executes PR code.
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  context:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+       contains(github.event.comment.body, '@codereview'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      base_ref: ${{ steps.pr.outputs.base_ref }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+    steps:
+      - name: Resolve an open pull request
+        id: pr
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const event = context.payload;
+            if (context.eventName === 'issue_comment' &&
+                !/(^|\s)@codereview(?=\s|$)/.test(event.comment.body)) return;
+
+            const number = context.eventName === 'workflow_dispatch'
+              ? event.inputs.pr_number
+              : event.pull_request?.number ?? event.issue.number;
+            if (!/^[1-9][0-9]*$/.test(String(number))) {
+              core.setFailed('A positive pull request number is required.');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: Number(number),
+            });
+            if (pr.state !== 'open') return;
+            if (context.eventName === 'pull_request_target' && pr.draft) return;
+            core.setOutput('number', String(pr.number));
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_sha', pr.head.sha);
+
+  review:
+    needs: context
+    if: needs.context.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    # Only resolved review requests enter this group. An unrelated comment
+    # cannot cancel a running review, even before job conditions are evaluated.
+    concurrency:
+      group: code-review-${{ needs.context.outputs.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Review pull request
+        uses: alibaba/open-code-review@0e9060da66af36a96a15516e76a001953095318b # v1.13.9
+        with:
+          llm_url: ${{ secrets.OCR_LLM_URL }}
+          llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          llm_extra_headers: x-bf-vk=${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          llm_model: ${{ vars.OCR_LLM_MODEL || 'mid' }}
+          llm_use_anthropic: 'false'
+          llm_protocol: openai
+          llm_extra_body: '{}'
+          ocr_version: '1.13.9'
+          review_concurrency: '2'
+          background: >-
+            freehire is an IT job aggregator built with Go, Fiber, PostgreSQL,
+            sqlc, Meilisearch and SvelteKit. Follow the repository AGENTS.md
+            guidance. Report actionable correctness, security and performance
+            issues in the PR, with concrete failure scenarios. All comments
+            must be in English. Never include credentials or gateway addresses.
+          upload_artifacts: 'false'
+          stream_progress: 'false'
+          sticky_summary: 'true'
+          incremental: 'true'
+          base_ref: ${{ needs.context.outputs.base_ref }}
+          head_sha: ${{ needs.context.outputs.head_sha }}
+          pr_number: ${{ needs.context.outputs.number }}
