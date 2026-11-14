@@ -7,11 +7,11 @@ Incremental facet-search indexing via the `search_outbox` queue, mirroring `inte
 A change that moves a search document without queuing its job waits for a rebuild that no longer comes. The writers that queue, and the trap each one closed:
 - ingest, tg-extract, hydrate-adzuna, employer/moderation writes — `EnqueueSearchOutbox` in the write's transaction;
 - enrichment (`cmd/enrich`'s `Complete`) — the `enrichment.*` facets;
-- view counts (`ApplyDailyView`/`ApplyDailyAgentView`) — `view_count` is sortable;
 - a DUPLICATE's change (joins/leaves a cluster, closes/reopens, geography moves) queues its canonical ROOT — the `jobs_enqueue_duplicate_owner` triggers (migration 0240), since the owner's document carries the closure geography and the cluster counts;
 - a posting re-seen after search withheld it as unseen — `RefreshUnchangedJob`/`TouchJob` (`withheld_if_seen_before`);
 - time alone (a job ages past `jobreality.AgeCrossingDays`, or its source's unseen window runs out) — `EnqueueSearchTimeCrossings`, run by `cmd/reindex`'s marker-only mode with its cursor in `marker_pass_cursors`.
 A job the drain finds withheld (`search.Withheld`) but still indexed is DELETED by the drain itself (`removeWithheld`), not routed through `search_delete_outbox` — that queue treats an open canonical job as reopened and requeues it here, a loop.
+View counts are the one sortable field that does NOT come through here: `cmd/rollup-views` writes `view_count` straight into existing documents (`search.SetViewCounts`). Queuing them re-built ~1.7M whole documents a day and kept the queue from ever emptying (2026-11-14), which left real changes to older postings waiting for days.
 What stays rebuild-only: a backfill that writes columns without queuing (the `backfill-*` notes in the root AGENTS.md say so each), and a settings change that needs re-indexed data.
 
 ## Always true
