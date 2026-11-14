@@ -6,13 +6,6 @@ vi.mock('$app/state', () => ({ page: { data: { locale: 'en' } } }));
 vi.mock('$app/paths', () => ({
   resolve: (path: string, params: { id?: string } = {}) => path.replace('[id]', params.id ?? ''),
 }));
-// Load the real primitives directly so this focused test does not compile the whole UI library.
-vi.mock('#lib/ui/index.js', async () => ({
-  Badge: (await import('freehire-design-system/badge.svelte')).default,
-  Button: (await import('freehire-design-system/button.svelte')).default,
-  EmptyState: (await import('freehire-design-system/empty-state.svelte')).default,
-  Skeleton: (await import('freehire-design-system/skeleton.svelte')).default,
-}));
 vi.mock('@lucide/svelte', async () => ({
   ArrowRight: (await import('@lucide/svelte/icons/arrow-right')).default,
   RefreshCw: (await import('@lucide/svelte/icons/refresh-cw')).default,

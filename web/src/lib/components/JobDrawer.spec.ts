@@ -189,3 +189,10 @@ it('leaves the progress tab when an auto-apply deep link no longer has an attemp
   await waitFor(() => expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true'));
   expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
 });
+
+it('opens Application for a removed posting even when the deep link requests Progress', () => {
+  render(JobDrawer, { ...props({ job: null }), initialTab: 'auto_apply' });
+  expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});

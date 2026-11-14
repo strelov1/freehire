@@ -5,6 +5,7 @@ import { ApiError } from '#lib/api.js';
 import { serverApi } from '#lib/server/api.js';
 import type { MyJob } from '#lib/types.js';
 import { loadBoard } from '#lib/server/tracking.js';
+import { trackingItem } from '#lib/trackingItem.js';
 import type { PageServerLoad } from './$types';
 
 // /my/tracking/[id] renders the tracking board with the application's drawer open
@@ -34,25 +35,7 @@ export const load: PageServerLoad = async ({ parent, params, url, fetch, request
       }
       error(503, 'Could not load this application. Please try again.');
     }
-    const item: MyJob = {
-      id: params.id,
-      job: application.job,
-      added_to_board_at: null,
-      company_slug: application.job.company_slug ?? '',
-      role_title: application.job.title,
-      viewed_at: application.viewed_at ?? '',
-      saved_at: application.saved_at,
-      applied_at: application.applied_at,
-      stage: application.stage ?? null,
-      notes: application.notes ?? null,
-      email_count: application.emails.length,
-      last_activity_at: null,
-      days_silent: null,
-      silence_state: null,
-      followed_up_at: application.followed_up_at,
-      cv_opened_at: null,
-      auto_apply_status: application.auto_apply?.status,
-    };
+    const item = trackingItem(params.id, application);
     if (columnOf(item) === null) redirect(302, `/jobs/${encodeURIComponent(params.id)}`);
     if (board) board = [...board, item];
     else initialItem = item;

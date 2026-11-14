@@ -338,7 +338,7 @@
 
   const TABS = $derived<{ id: Tab; label: string }[]>([
     { id: 'application', label: s.tabs.application },
-    ...(autoApply || autoApplied || (initialTab === 'auto_apply' && emails === null)
+    ...(autoApply || autoApplied || (hasPosting && initialTab === 'auto_apply' && emails === null)
       ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }]
       : []),
     { id: 'fit', label: s.tabs.jobMatch },
@@ -356,7 +356,7 @@
   // The parent re-keys the drawer per job. A deep link chooses the opening tab;
   // later tab navigation belongs to this drawer.
   // svelte-ignore state_referenced_locally
-  let tab = $state<Tab>(initialTab);
+  let tab = $state<Tab>(initialTab === 'auto_apply' && !item.job ? 'application' : initialTab);
 
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
