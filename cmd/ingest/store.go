@@ -558,8 +558,8 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, params db.TouchJobParam
 				return "", err
 			}
 		}
-		// Unconditionally: the touch's own enqueue is DO NOTHING, which leaves a dead-lettered
-		// entry dead and the reopened posting out of search.
+		// Re-stamp after writing the final facets. Touch also re-arms its entry;
+		// this keeps the re-derived row's search publication explicit in this transaction.
 		if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
 			return "", err
 		}
