@@ -271,10 +271,28 @@ and the paused gauge beside it identifies the silence as intentional. Do not "fi
 stamping a refused run as a success — that is exactly how `freehire-reindexw`'s skipped cycles
 stayed invisible while the search index went stale for days.
 
-Both renderings are pinned verbatim by `metrics_test.go`, the way `cmd/queue-metrics` pins its
-own, because the names are a contract with dashboards and alert rules in `freehire-ops` that
-cannot be compiled against this repo. **Adding the gauge here does not surface it there** — the
-ops-side panel and the staleness rule's annotation are part of shipping a change to it.
+**`freehire_worker_skipped` names the knob an UNCONFIGURED worker is missing** — a run that
+declines to start calls `worker.Skip("<VAR>")` (skip.go), which returns 0 and records the
+reason; the writer then appends `freehire_worker_skipped{job,instance,reason="<VAR>"} 1` to
+the run file. Half this fleet gates before Bootstrap on a credential ("a no-op that never
+opens the pool" in its doc comment), and until this existed such a run was indistinguishable
+from a working one: it called nothing, printed one line into a rotated journal and exited 0,
+so the timer stayed green whether the credential was absent or the work was done — the
+`freehire-reindexw` failure mode above, one gate earlier. `reason` is what is MISSING, in the
+operator's vocabulary, `+`-joined when the gate needs several, so the label answers "what do
+I set?" without a second lookup. Two deliberate properties: **the exit code stays 0**, because
+a skip is a deployment decision and not a failure — whether it counts as health for alerting
+is a rule in `freehire-ops`, which can now ask instead of infer; and **the series is ABSENT,
+not 0, on a run that did its work**, because a skip is not a measurement of zero and rewriting
+the file drops it on the next real run (`runOrPause` clears the mark BEFORE each run for the
+same reason). Use it for a gate that could not START — not for an empty work set: a drained
+backfill saying `nothing to do` is that run's success, and a gauge there would be noise.
+
+All three renderings are pinned verbatim by `metrics_test.go`, the way `cmd/queue-metrics` pins
+its own, because the names are a contract with dashboards and alert rules in `freehire-ops`
+that cannot be compiled against this repo. **Adding the gauge here does not surface it
+there** — the ops-side panel and the staleness rule's annotation are part of shipping a change
+to it.
 
 **The `exported_job` trap.** node_exporter's textfile collector does not set
 `honor_labels`, so Prometheus keeps its own `job="host2-node"` and renames a worker's

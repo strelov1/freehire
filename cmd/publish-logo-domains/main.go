@@ -42,7 +42,7 @@ func run() int {
 	out := outputPath()
 	if out == "" {
 		log.Print("publish-logo-domains: LOGO_DOMAIN_MAP_OUT unset, nothing to publish")
-		return 0
+		return worker.Skip("LOGO_DOMAIN_MAP_OUT")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())

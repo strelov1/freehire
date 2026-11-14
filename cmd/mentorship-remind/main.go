@@ -57,7 +57,7 @@ func run() int {
 	cfg := config.Load()
 	if cfg.NotifyEmailFrom == "" || cfg.AWSRegion == "" {
 		log.Print("mentorship-remind: no mail transport configured, nothing to send")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())

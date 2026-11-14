@@ -53,7 +53,7 @@ func run() int {
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("pro-welcome-mail: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 	// A missing reply address is a misconfiguration, not an absent feature: this letter
 	// asks for a reply. Sending it with replies going nowhere is worse than not sending

@@ -48,7 +48,7 @@ freehire_worker_last_run_duration_seconds{%[1]s} %[3]f
 # HELP freehire_worker_last_run_success Whether the worker's last run exited zero (1) or not (0).
 # TYPE freehire_worker_last_run_success gauge
 freehire_worker_last_run_success{%[1]s} %[4]d
-`, labels, time.Now().Unix(), runDuration.Seconds(), success) + pausedGauge(labels, 0) + workMetrics(labels)
+`, labels, time.Now().Unix(), runDuration.Seconds(), success) + pausedGauge(labels, 0) + workMetrics(labels) + skippedGauge(labels, loadSkipReason())
 
 	publishRunFile(dir, content)
 }
@@ -92,6 +92,26 @@ func pausedGauge(labels string, held int) string {
 # TYPE freehire_worker_paused gauge
 freehire_worker_paused{%s} %d
 `, labels, held)
+}
+
+// skippedGauge renders the freehire_worker_skipped series: present with value 1, and the
+// missing knob as its reason label, only when this run called Skip.
+//
+// The series is ABSENT rather than zero on a run that did its work, and that is the one
+// place here where absence is the honest rendering. A skip is not a measurement of zero —
+// it is a statement that this run had nothing to do — and the file is rewritten wholesale
+// on every run, so a worker that stops skipping drops the series on its next pass. Writing
+// `freehire_worker_skipped 0` beside a reason label would mean publishing a reason for a
+// run that had none, and an empty-string label value reads in a dashboard as a fourth
+// state. The sibling families keep their own rule: a drained queue still publishes 0.
+func skippedGauge(labels, reason string) string {
+	if reason == "" {
+		return ""
+	}
+	return fmt.Sprintf(`# HELP freehire_worker_skipped Whether this worker's last run deliberately did nothing because the feature is unconfigured (1), and what is missing.
+# TYPE freehire_worker_skipped gauge
+freehire_worker_skipped{%s,reason=%q} 1
+`, labels, reason)
 }
 
 // RunMetricsFilename reports the textfile-collector file this process's run
