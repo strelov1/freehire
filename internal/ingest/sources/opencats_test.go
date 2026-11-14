@@ -279,7 +279,7 @@ func TestOpencatsRegisteredInAll(t *testing.T) {
 	if s.Provider() != "opencats" {
 		t.Errorf("Provider() = %q", s.Provider())
 	}
-	if slices.Contains(SelfClosingProviders(All(nil)), "opencats") {
+	if slices.Contains(UnseenSweepExemptProviders(All(nil)), "opencats") {
 		t.Error("opencats must not be self-closing: the portal gives no removal signal")
 	}
 }

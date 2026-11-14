@@ -5,13 +5,13 @@ import (
 	"time"
 )
 
-// SelfClosingProviders returns the provider names in reg that manage their own closes and
-// must be skipped by the post-run unseen sweep (see selfClosing). cmd/ingest consults this
+// UnseenSweepExemptProviders returns the provider names in reg that manage their own closes and
+// must be skipped by the post-run unseen sweep (see selfClosing and probeClosing). cmd/ingest consults this
 // when deciding which providers to sweep.
-func SelfClosingProviders(reg map[string]Source) []string {
+func UnseenSweepExemptProviders(reg map[string]Source) []string {
 	var out []string
 	for name, src := range reg {
-		if _, ok := src.(selfClosing); ok {
+		if SelfCloses(src) || ProbeCloses(src) {
 			out = append(out, name)
 		}
 	}
@@ -24,6 +24,13 @@ func SelfClosingProviders(reg map[string]Source) []string {
 // still lists.
 func SelfCloses(src Source) bool {
 	_, ok := src.(selfClosing)
+	return ok
+}
+
+// ProbeCloses reports a bounded search whose postings require individual liveness
+// evidence. Its crawl cannot vouch for a complete listing, even when it succeeds.
+func ProbeCloses(src Source) bool {
+	_, ok := src.(probeClosing)
 	return ok
 }
 
