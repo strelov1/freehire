@@ -1,3 +1,8 @@
+<script module lang="ts">
+  export const directApplyTooltip =
+    'Published by the employer on freehire — apply here, your application goes straight to them';
+</script>
+
 <script lang="ts">
   import { BadgeCheck } from '@lucide/svelte';
   import { cn } from '#lib/ui/index.js';
@@ -9,7 +14,7 @@
 </script>
 
 <span
-  title="Published by the employer on freehire — apply here, your application goes straight to them"
+  title={directApplyTooltip}
   class={cn(
     'inline-flex items-center gap-1.5 rounded-md border border-brand/30 bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong',
     className,
