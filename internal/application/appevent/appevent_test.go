@@ -15,6 +15,9 @@ func TestOnlyObservedSourcesAreTrustedForDayMath(t *testing.T) {
 		// acting on the candidate's behalf, not an employer-side or calendar-observed
 		// timing fact — same category as SourceSystem, not the mail/calendar pair.
 		SourceAutoApply: false,
+		// The employer moving the application in their pipeline on freehire, stamped as
+		// they act: an employer-side timing fact, like the mail they would otherwise send.
+		SourceEmployer: true,
 	}
 	if len(trusted) != len(Sources) {
 		t.Fatalf("the vocabulary has %d sources but this test pins %d — a new source needs a verdict here", len(Sources), len(trusted))

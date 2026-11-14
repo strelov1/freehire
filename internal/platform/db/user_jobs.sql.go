@@ -254,6 +254,41 @@ func (q *Queries) ExcludedJobIDs(ctx context.Context, arg ExcludedJobIDsParams) 
 	return items, nil
 }
 
+const getApplicationStageForMirror = `-- name: GetApplicationStageForMirror :one
+SELECT a.stage,
+       COALESCE((SELECT e.source FROM application_events e
+         WHERE e.application_id = a.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
+         ORDER BY e.id DESC
+         LIMIT 1), '')::text AS stage_source
+FROM applications a
+WHERE a.user_id = $1 AND a.job_id = $2::bigint
+  AND (a.stage IS NOT NULL OR a.applied_at IS NOT NULL)
+`
+
+type GetApplicationStageForMirrorParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+type GetApplicationStageForMirrorRow struct {
+	Stage       pgtype.Text `json:"stage"`
+	StageSource string      `json:"stage_source"`
+}
+
+// The candidate's own record of an application, as an employer's pipeline move needs it:
+// its stage, and who set that stage last — the source of the most recently WRITTEN live
+// stage_set event (” when none), ordered by id, not occurred_at: mail events are dated by
+// the message's received_at, so a stage mail set after the employer's can carry an earlier
+// date. No row: the candidate has no record of this application, took it off their board,
+// or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
+// statement that they are not pursuing it, which an employer's move must not undo.
+func (q *Queries) GetApplicationStageForMirror(ctx context.Context, arg GetApplicationStageForMirrorParams) (GetApplicationStageForMirrorRow, error) {
+	row := q.db.QueryRow(ctx, getApplicationStageForMirror, arg.UserID, arg.JobID)
+	var i GetApplicationStageForMirrorRow
+	err := row.Scan(&i.Stage, &i.StageSource)
+	return i, err
+}
+
 const getJobVote = `-- name: GetJobVote :one
 SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2), 0)::smallint AS my_vote
 `
@@ -772,6 +807,47 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 		&i.FollowedUpAt,
 	)
 	return i, err
+}
+
+const mirrorEmployerStage = `-- name: MirrorEmployerStage :one
+WITH moved AS (
+    UPDATE applications
+    SET stage = $1::text
+    WHERE applications.user_id = $2
+      AND applications.job_id = $3::bigint
+      AND applications.stage IS NOT DISTINCT FROM $4::text
+      AND (applications.stage IS NOT NULL OR applications.applied_at IS NOT NULL)
+    RETURNING applications.id, applications.company_slug
+), event AS (
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT $2, m.id, $3::bigint, m.company_slug, 'stage_set', $1::text, now(), 'employer'
+      FROM moved m
+)
+SELECT EXISTS (SELECT 1 FROM moved) AS moved
+`
+
+type MirrorEmployerStageParams struct {
+	Stage    string      `json:"stage"`
+	UserID   int64       `json:"user_id"`
+	JobID    int64       `json:"job_id"`
+	Expected pgtype.Text `json:"expected"`
+}
+
+// Sets the candidate's stage to what the employer's pipeline says, but only if it still
+// holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
+// stage the candidate changed in between is never overwritten. Records the `stage_set`
+// ledger event with source 'employer' in the same statement. Never creates a record: an
+// application the candidate took off their board stays off it.
+func (q *Queries) MirrorEmployerStage(ctx context.Context, arg MirrorEmployerStageParams) (bool, error) {
+	row := q.db.QueryRow(ctx, mirrorEmployerStage,
+		arg.Stage,
+		arg.UserID,
+		arg.JobID,
+		arg.Expected,
+	)
+	var moved bool
+	err := row.Scan(&moved)
+	return moved, err
 }
 
 const recordApplicationFollowUp = `-- name: RecordApplicationFollowUp :one

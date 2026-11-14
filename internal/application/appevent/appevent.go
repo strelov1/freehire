@@ -51,12 +51,19 @@ const (
 	// contract a reader can filter on, not an accident of SourceSystem happening to be
 	// paired with KindApplied nowhere else today.
 	SourceAutoApply = "auto_apply"
+	// SourceEmployer is a stage the employer set in their own pipeline for an application
+	// sent on freehire (internal/ingest/directapply), mirrored onto the candidate's record.
+	// The employer's own statement about the application, so it is the one source that may
+	// move a candidate into a rejection or an offer. Trusted for day math like the mail
+	// sources and for the same reason: it is stamped when the employer acted, on our clock,
+	// not when the candidate got round to recording it.
+	SourceEmployer = "employer"
 )
 
 // Sources is the canonical, ordered source vocabulary.
 var Sources = []string{
 	SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant,
-	SourceCalendarGoogle, SourceSystem, SourceAutoApply,
+	SourceCalendarGoogle, SourceSystem, SourceAutoApply, SourceEmployer,
 }
 
 // MailSources is the mail three on their own — every source SourceForMail can return.
@@ -71,14 +78,14 @@ var MailSources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal
 // TrustedForDayMath reports whether events from this source may enter timing
 // calculations.
 //
-// Only the mail and calendar sources carry a timestamp somebody other than the candidate
-// set. A manually-recorded stage dates from when the candidate got around to updating
+// Only the mail, calendar and employer sources carry a timestamp somebody other than the
+// candidate set. A manually-recorded stage dates from when the candidate got around to updating
 // their board, so a funnel built on it would measure diligence and report it as market
 // behaviour. Unknown sources are untrusted: unknown provenance must never read as an
 // observation.
 func TrustedForDayMath(source string) bool {
 	switch source {
-	case SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceCalendarGoogle:
+	case SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceCalendarGoogle, SourceEmployer:
 		return true
 	default:
 		return false

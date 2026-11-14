@@ -2690,6 +2690,14 @@ type Querier interface {
 	// stage on an existing row and no row at all are both "not on the board" and both call for
 	// the same preparing default: the difference does not matter to the caller.
 	GetApplicationStage(ctx context.Context, arg GetApplicationStageParams) (pgtype.Text, error)
+	// The candidate's own record of an application, as an employer's pipeline move needs it:
+	// its stage, and who set that stage last — the source of the most recently WRITTEN live
+	// stage_set event ('' when none), ordered by id, not occurred_at: mail events are dated by
+	// the message's received_at, so a stage mail set after the employer's can carry an earlier
+	// date. No row: the candidate has no record of this application, took it off their board,
+	// or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
+	// statement that they are not pursuing it, which an employer's move must not undo.
+	GetApplicationStageForMirror(ctx context.Context, arg GetApplicationStageForMirrorParams) (GetApplicationStageForMirrorRow, error)
 	// Read one job's captured form for display. The only read path over this store, and it
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.
@@ -6033,6 +6041,12 @@ type Querier interface {
 	// after normalisation, so a private title merges into a public one's count rather than
 	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
+	// Sets the candidate's stage to what the employer's pipeline says, but only if it still
+	// holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
+	// stage the candidate changed in between is never overwritten. Records the `stage_set`
+	// ledger event with source 'employer' in the same statement. Never creates a record: an
+	// application the candidate took off their board stays off it.
+	MirrorEmployerStage(ctx context.Context, arg MirrorEmployerStageParams) (bool, error)
 	// Record one non-job sighting (classified `other`) against the learned domain that covers
 	// this sender host: the domain itself or a parent, the way from:domain matches. Updates only
 	// — a host no learned domain covers is not inserted, so newsletters never enter the table.

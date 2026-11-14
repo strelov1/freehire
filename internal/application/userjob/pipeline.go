@@ -56,3 +56,29 @@ func Forward(current, target string) bool {
 	}
 	return next > activeRank[current]
 }
+
+// EmployerMay reports whether an employer's own pipeline move may set the candidate's stage
+// from `current` to `target`. `currentByEmployer` is whether the employer set `current`
+// themselves (the newest stage event's source).
+//
+// Unlike Forward, an employer's move is an explicit statement about the application, not an
+// inference from mail, so it may settle it: a rejection or a hire is theirs to announce. It
+// still never overrides the candidate. A stage the candidate set is moved only forward, and
+// one they settled (withdrawn, or an outcome they recorded) is never reopened. A stage the
+// employer set is theirs to correct in any direction — a rejection clicked by mistake has to
+// be undoable, or the candidate keeps reading a decision nobody made.
+func EmployerMay(current string, currentByEmployer bool, target string) bool {
+	if current == target || !ValidStage(target) {
+		return false
+	}
+	if currentByEmployer {
+		return true
+	}
+	if IsTerminal(current) {
+		return false
+	}
+	if IsTerminal(target) {
+		return true
+	}
+	return Forward(current, target)
+}
