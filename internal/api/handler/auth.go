@@ -277,6 +277,12 @@ func (h *authHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	// itself would never be reached.
 	api.Get("/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
 	api.Get("/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
+	api.Get("/oauth/metadata/protected-resource/account", h.OAuthAccountProtectedResourceMetadata)
+	// The path-appended form some clients try after a 404 on the path-inserted one
+	// (resource URL + "/.well-known/oauth-protected-resource"). Under /api, so it reaches
+	// the API directly, not through the SvelteKit proxy.
+	api.Get("/mcp/.well-known/oauth-protected-resource", h.OAuthProtectedResourceMetadata)
+	api.Get("/mcp/account/.well-known/oauth-protected-resource", h.OAuthAccountProtectedResourceMetadata)
 	// Authorize step: GET shows consent (sessionless visitors are sent to sign
 	// in first), POST acts on the decision. optionalCookie on GET for the same
 	// reason the extension flow uses it on its own GET — see oauth_authorize.go.
