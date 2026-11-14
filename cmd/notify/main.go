@@ -1,5 +1,6 @@
 // Command notify is the standalone filter-subscription notification worker. One
-// run does a single MATCH→DELIVER pass: it re-runs each distinct saved-search
+// run first delivers opted-in inbox digests, independently of search, then does
+// a MATCH→DELIVER pass: it re-runs each distinct saved-search
 // query against the search index, records new matches in the dedup ledger, then
 // delivers each subscription's pending matches as one digest over the channel it
 // was subscribed on (Telegram, email, push, and/or webhook). Run it on a
@@ -7,7 +8,7 @@
 // non-zero when the run had delivery failures so cron can alert.
 //
 // Matching itself is optional: with the search backend unconfigured, the worker
-// logs that it is disabled and exits 0 (nothing to do), so scheduling it before
+// logs that matching is disabled; inbox digests still run. Scheduling it before
 // the feature is set up does not raise false alarms. Telegram and email are
 // each registered conditionally on their own server credential (bot token /
 // SES region+from address); push and webhook need none (Expo's relay holds
@@ -21,9 +22,11 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/inboxdigest"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
@@ -45,14 +48,8 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Matching needs the search index. Treat absence as "feature disabled" (exit 0),
-	// not an error, so an unprovisioned cron stays quiet.
-	if cfg.MeiliKey == "" {
-		log.Printf("notify: search not configured (MEILI_MASTER_KEY); nothing to do")
-		return 0
-	}
-
 	queries := db.New(pool)
+	var inboxSender emailnotify.Sender
 
 	// Register every configured delivery channel; the Router dispatches each
 	// subscription to its channel and soft-skips one that is not configured.
@@ -79,6 +76,7 @@ func run() int {
 			log.Printf("notify: email channel disabled: %v", err)
 		} else {
 			ses = ses.WithSendingBreaker()
+			inboxSender = ses
 			// A broken set costs the measurement, never the digest.
 			tracked := ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet)
 			if err := tracked.CheckEngagementTracking(ctx); err != nil {
@@ -87,6 +85,21 @@ func run() int {
 			}
 			router[notify.ChannelEmail] = emailnotify.NewNotifier(tracked, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
+	}
+	inboxFailures := 0
+	if inboxSender != nil {
+		inboxStats, err := inboxdigest.New(inboxdigest.NewDBStore(queries), inboxdigest.NewMailer(cfg.NotifyEmailFrom, cfg.FrontendOrigin, cfg.JWTSecret), inboxSender).Run(ctx, time.Now())
+		inboxFailures = inboxStats.Failed
+		log.Printf("inbox-digest: sent=%d failed=%d skipped=%d", inboxStats.Sent, inboxStats.Failed, inboxStats.Skipped)
+		if err != nil {
+			log.Printf("inbox-digest: %v", err)
+			inboxFailures++
+		}
+	}
+	// Inbox mail does not depend on the job search index.
+	if cfg.MeiliKey == "" {
+		log.Printf("notify: search not configured (MEILI_MASTER_KEY); skipping saved-search matching")
+		return worker.ExitCode(inboxFailures, 0)
 	}
 	searcher := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	runner := notify.New(queries, searcher, router, notify.DefaultConfig())
@@ -104,5 +117,5 @@ func run() int {
 		log.Printf("notify: all %d saved-search queries failed — nothing was matched this pass", stats.Queries)
 		return 1
 	}
-	return worker.ExitCode(stats.Failed, 0)
+	return worker.ExitCode(stats.Failed+inboxFailures, 0)
 }

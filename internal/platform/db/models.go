@@ -848,6 +848,14 @@ type GmailConnection struct {
 	SentSyncCursor        int64              `json:"sent_sync_cursor"`
 }
 
+type InboxDigestDelivery struct {
+	UserID    int64              `json:"user_id"`
+	LocalDay  pgtype.Date        `json:"local_day"`
+	EmailIds  []int64            `json:"email_ids"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
+}
+
 // Per (provider, shard) scheduling state: when the run is next due, whether a tick has claimed it, and how the last run ended. Machine-owned; curator settings live in ingest_schedule.
 type IngestRunState struct {
 	Provider       string             `json:"provider"`
@@ -1434,17 +1442,19 @@ type Message struct {
 }
 
 type NotificationSetting struct {
-	UserID              int64              `json:"user_id"`
-	Enabled             bool               `json:"enabled"`
-	Channels            []string           `json:"channels"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DigestFrequency     string             `json:"digest_frequency"`
-	DigestTime          pgtype.Time        `json:"digest_time"`
-	QuietHoursStart     pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd       pgtype.Time        `json:"quiet_hours_end"`
-	AlertsEmailEnabled  bool               `json:"alerts_email_enabled"`
-	NewsEmailEnabled    bool               `json:"news_email_enabled"`
-	DigestIntervalHours int16              `json:"digest_interval_hours"`
+	UserID               int64              `json:"user_id"`
+	Enabled              bool               `json:"enabled"`
+	Channels             []string           `json:"channels"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	DigestFrequency      string             `json:"digest_frequency"`
+	DigestTime           pgtype.Time        `json:"digest_time"`
+	QuietHoursStart      pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd        pgtype.Time        `json:"quiet_hours_end"`
+	AlertsEmailEnabled   bool               `json:"alerts_email_enabled"`
+	NewsEmailEnabled     bool               `json:"news_email_enabled"`
+	DigestIntervalHours  int16              `json:"digest_interval_hours"`
+	InboxDigestEnabled   bool               `json:"inbox_digest_enabled"`
+	InboxDigestEnabledAt pgtype.Timestamptz `json:"inbox_digest_enabled_at"`
 }
 
 type OauthAuthAttempt struct {

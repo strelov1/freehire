@@ -52,10 +52,10 @@ func buildRawMessage(m Message) ([]byte, error) {
 	if m.ReplyTo != "" {
 		headers = append(headers, "Reply-To: "+m.ReplyTo)
 	}
-	// The same pair the simple path sends, spelled once in unsubscribeHeaders and
+	// The same pair the simple path sends, spelled once in headers and
 	// rendered into wire form here. A raw message is assembled by hand, so this is
 	// the one place the two paths could have drifted apart.
-	for _, h := range m.unsubscribeHeaders() {
+	for _, h := range m.headers() {
 		headers = append(headers, *h.Name+": "+*h.Value)
 	}
 	for _, h := range headers {
