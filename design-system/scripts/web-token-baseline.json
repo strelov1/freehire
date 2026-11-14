@@ -1,5 +1,6 @@
 {
-  "web/src/lib/assistant/AssistantChat.svelte": 6,
+  "web/src/lib/assistant/AssistantChat.svelte": 1,
+  "web/src/lib/assistant/AssistantReply.svelte": 5,
   "web/src/lib/assistant/Composer.svelte": 2,
   "web/src/lib/assistant/ThinkingIndicator.svelte": 2,
   "web/src/lib/assistant/ToolGroupList.svelte": 2,
