@@ -47,6 +47,37 @@ func (q *Queries) AdvanceViewLogCursor(ctx context.Context, arg AdvanceViewLogCu
 	return result.RowsAffected(), nil
 }
 
+const getJobViewCounts = `-- name: GetJobViewCounts :many
+SELECT id, view_count FROM jobs WHERE id = ANY($1::bigint[])
+`
+
+type GetJobViewCountsRow struct {
+	ID        int64 `json:"id"`
+	ViewCount int32 `json:"view_count"`
+}
+
+// The current view_count of the jobs a rollup run touched, for the index write that
+// replaces the old per-view search_outbox enqueue.
+func (q *Queries) GetJobViewCounts(ctx context.Context, ids []int64) ([]GetJobViewCountsRow, error) {
+	rows, err := q.db.Query(ctx, getJobViewCounts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetJobViewCountsRow{}
+	for rows.Next() {
+		var i GetJobViewCountsRow
+		if err := rows.Scan(&i.ID, &i.ViewCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getViewLogCursor = `-- name: GetViewLogCursor :one
 SELECT job_id, day FROM view_log_cursors WHERE signature = $1
 `
