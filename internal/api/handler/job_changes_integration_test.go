@@ -397,3 +397,23 @@ func TestJobChangesWithinOneTransactionNetsOut(t *testing.T) {
 		t.Fatalf("close+reopen in one transaction left %d entries, want 1 (the original opened)", n)
 	}
 }
+
+// An empty first page still hands back a position, so a quiet feed can be resumed later
+// without `since`.
+func TestJobChangesEmptyFirstPageReturnsAResumableCursor(t *testing.T) {
+	pool := startPostgres(t)
+	h := &jobsHandlers{queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	mountJobsContract(app, h, middleware{})
+	mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`)
+
+	first := getChanges(t, app, url.Values{"since": {time.Now().UTC().Format(time.RFC3339Nano)}})
+	if len(first.Data) != 0 || first.Meta.NextCursor == "" {
+		t.Fatalf("first page = %+v, want empty with a next_cursor", first)
+	}
+	seedJob(t, pool, "job-later", "")
+	got := getChanges(t, app, url.Values{"cursor": {first.Meta.NextCursor}})
+	if len(got.Data) != 1 || got.Data[0].Slug != "job-later" || got.Data[0].Kind != "opened" {
+		t.Fatalf("resumed page = %+v, want job-later opened", got.Data)
+	}
+}

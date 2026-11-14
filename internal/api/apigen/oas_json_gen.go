@@ -41118,10 +41118,8 @@ func (s *JobChangesMeta) encodeFields(e *jx.Encoder) {
 		e.Bool(s.HasMore)
 	}
 	{
-		if s.NextCursor.Set {
-			e.FieldStart("next_cursor")
-			s.NextCursor.Encode(e)
-		}
+		e.FieldStart("next_cursor")
+		e.Str(s.NextCursor)
 	}
 	{
 		if s.AvailableSince.Set {
@@ -41172,9 +41170,11 @@ func (s *JobChangesMeta) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"has_more\"")
 			}
 		case "next_cursor":
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
-				s.NextCursor.Reset()
-				if err := s.NextCursor.Decode(d); err != nil {
+				v, err := d.Str()
+				s.NextCursor = string(v)
+				if err != nil {
 					return err
 				}
 				return nil
@@ -41201,7 +41201,7 @@ func (s *JobChangesMeta) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000011,
+		0b00000111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

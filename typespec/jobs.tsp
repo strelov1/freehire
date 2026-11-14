@@ -111,11 +111,10 @@ model JobChangesMeta {
   /** True when more changes are waiting; fetch again with `next_cursor`. */
   has_more: boolean;
   /**
-   * Pass back as `cursor` for the next page. Present whenever the call read a change or was
-   * given a cursor; keep the last one to resume later, when `has_more` is false and new
-   * changes have arrived.
+   * Pass back as `cursor` for the next page. Always present, even on an empty page: store it
+   * and resume from it later, however long the feed stays quiet.
    */
-  next_cursor?: string;
+  next_cursor: string;
   /** The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before it. */
   available_since?: utcDateTime;
 }

@@ -26826,7 +26826,8 @@
         "type": "object",
         "required": [
           "limit",
-          "has_more"
+          "has_more",
+          "next_cursor"
         ],
         "properties": {
           "limit": {
@@ -26839,7 +26840,7 @@
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass back as `cursor` for the next page. Present whenever the call read a change or was\ngiven a cursor; keep the last one to resume later, when `has_more` is false and new\nchanges have arrived."
+            "description": "Pass back as `cursor` for the next page. Always present, even on an empty page: store it\nand resume from it later, however long the feed stays quiet."
           },
           "available_since": {
             "type": "string",

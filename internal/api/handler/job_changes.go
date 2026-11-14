@@ -124,8 +124,8 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 		last := rows[len(rows)-1]
 		pos = changesCursor{xid: last.Xid, id: last.ID}
 	}
-	if len(rows) > 0 || hasPos {
-		meta.NextCursor = apigen.NewOptString(pos.encode())
-	}
+	// Always: even an empty first page from `since` has a position, so a client can store it
+	// and resume after a quiet spell without `since`'s 30-day cap forcing a resync.
+	meta.NextCursor = pos.encode()
 	return &apigen.JobChangesPage{Data: data, Meta: meta}, nil
 }

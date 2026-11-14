@@ -12712,9 +12712,9 @@ type JobChangesMeta struct {
 	Limit int64 `json:"limit"`
 	// True when more changes are waiting; fetch again with `next_cursor`.
 	HasMore bool `json:"has_more"`
-	// Pass back as `cursor` for the next page. Present whenever the call read a change or was given a
-	// cursor; keep the last one to resume later, when `has_more` is false and new changes have arrived.
-	NextCursor OptString `json:"next_cursor"`
+	// Pass back as `cursor` for the next page. Always present, even on an empty page: store it and resume
+	// from it later, however long the feed stays quiet.
+	NextCursor string `json:"next_cursor"`
 	// The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before
 	// it.
 	AvailableSince OptDateTime `json:"available_since"`
@@ -12731,7 +12731,7 @@ func (s *JobChangesMeta) GetHasMore() bool {
 }
 
 // GetNextCursor returns the value of NextCursor.
-func (s *JobChangesMeta) GetNextCursor() OptString {
+func (s *JobChangesMeta) GetNextCursor() string {
 	return s.NextCursor
 }
 
@@ -12751,7 +12751,7 @@ func (s *JobChangesMeta) SetHasMore(val bool) {
 }
 
 // SetNextCursor sets the value of NextCursor.
-func (s *JobChangesMeta) SetNextCursor(val OptString) {
+func (s *JobChangesMeta) SetNextCursor(val string) {
 	s.NextCursor = val
 }
 
