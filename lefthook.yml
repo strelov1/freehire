@@ -169,7 +169,7 @@ pre-commit:
     # nothing else. Read .squawk.toml for why the invocation is split in two.
     sql-migrations:
       glob: "migrations/*.sql"
-      run: node scripts/check-migrations.mjs {staged_files}
+      run: node scripts/check-migrations.mjs {staged_files} && node scripts/check-migration-numbers.mjs
 
     # This repository navigates by document — AGENTS.md is a table of links into the
     # blocks, each block links into its packages — and nothing has ever read those links.

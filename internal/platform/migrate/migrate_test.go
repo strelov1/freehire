@@ -198,6 +198,40 @@ func TestSplitStatementsRespectsQuotingAndComments(t *testing.T) {
 	}
 }
 
+func TestCascadeFKIndexesRunOneStatementAtATime(t *testing.T) {
+	migs, err := Load(filepath.Join("..", "..", "..", "migrations"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	var found *Migration
+	for i := range migs {
+		if migs[i].Version == "0264_cascade_fk_indexes.sql" {
+			found = &migs[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("0264_cascade_fk_indexes.sql is not in migrations/")
+	}
+	if !found.NoTx {
+		t.Fatal("0264 must carry the no-transaction marker; CREATE INDEX CONCURRENTLY cannot run inside the runner's transaction")
+	}
+	stmts := splitStatements(found.SQL)
+	if len(stmts) != 3 {
+		t.Fatalf("split into %d statements, want 3 so each CREATE INDEX CONCURRENTLY is its own implicit transaction", len(stmts))
+	}
+	joined := strings.Join(stmts, "\n")
+	for _, name := range []string{
+		"auto_apply_queue_job_id_idx",
+		"cover_letters_job_id_idx",
+		"application_interviews_application_id_idx",
+	} {
+		if !strings.Contains(joined, name) {
+			t.Errorf("statements do not name %s", name)
+		}
+	}
+}
+
 // Every no-transaction file in the catalogue must split into the statements it reads as,
 // so a future one-statement rule has a number to check and the runner has the same view of
 // the file a reader does.
