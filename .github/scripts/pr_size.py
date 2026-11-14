@@ -8,21 +8,22 @@ import subprocess
 MAX_FILES = 30
 MAX_LINES = 1500
 OVERRIDE_LABEL = "large-pr"
-# Tools rewrite these; nobody reviews them line by line.
+# Tools rewrite these; nobody reviews them line by line. doublestar globs: OCR gets them
+# as --exclude and matches whole paths, where * stops at "/".
 GENERATED = (
-    "*.sql.go",
+    "**/*.sql.go",
     "internal/platform/db/batch.go",
     "internal/platform/db/copyfrom.go",
     "internal/platform/db/db.go",
     "internal/platform/db/models.go",
     "internal/platform/db/querier.go",
-    "internal/api/apigen/*",
-    "web/src/lib/generated/*",
+    "internal/api/apigen/**",
+    "web/src/lib/generated/**",
     "openapi/api.openapi.json",
     "web/static/openapi.yaml",
-    "go.sum",
-    "*pnpm-lock.yaml",
-    "*package-lock.json",
+    "**/go.sum",
+    "**/pnpm-lock.yaml",
+    "**/package-lock.json",
 )
 
 
@@ -31,7 +32,11 @@ def parse_numstat(text: str) -> tuple[int, int]:
     files = lines = 0
     for record in filter(None, text.split("\0")):
         added, deleted, path = record.split("\t", 2)
-        if any(fnmatch.fnmatch(path, pattern) for pattern in GENERATED):
+        if any(
+            fnmatch.fnmatch(path, pattern)
+            or fnmatch.fnmatch(path, pattern.removeprefix("**/"))
+            for pattern in GENERATED
+        ):
             continue
         files += 1
         # Binary files report "-": they count as a file but not as lines.
