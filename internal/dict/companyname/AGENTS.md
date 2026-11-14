@@ -54,7 +54,9 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   header-logo alt text ("Default Brand" refused, a " Brand" tail cut), Taleo's footer
   copyright, falling back to its header-logo alt text, HiringRoom's portal title
   (`¡Oportunidades de Empleo en {Name}!` or `{Name} | Portal externo`), Zoho Recruit's careers
-  page `og:site_name` (its `<title>` is free text). SuccessFactors' career-host title is parsed
+  page `og:site_name` (its `<title>` is free text). Paycor's CareerHome listing `<title>` through `ExtractPaycorTitle` (only the
+  branded template has one: a careers label beside the name is dropped, two non-label parts are
+  refused; sampled 2026-11-13, 22 of 60 hex-id boards). SuccessFactors' career-host title is parsed
   for the observed `Jobs at {Name}` shape, and Teamtailor reads `/jobs` `og:site_name`; both are
   grounded in the two #4033 examples only (Volvo Group and BookBeat), not a generic hostname rule.
   SuccessFactors hub boards are excluded because their root page names the hub, not the tenants.

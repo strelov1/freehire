@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/sourcestats"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -79,6 +80,7 @@ func (h *statsHandlers) ListSources(ctx context.Context) (*apigen.ListSourcesOK,
 // snapshot into the wire entries, in source order. Which sources exist is decided by
 // sourcestats.Union, which argues the case once for both this endpoint and the rollup.
 func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealthRollupRow, snapshot []db.ListSourceStatsRow, now time.Time) []apigen.SourceEntry {
+	health, snapshot = foldHealthFamilies(health), foldSnapshotFamilies(snapshot)
 	byHealth := make(map[string]db.ProviderHealthRollupRow, len(health))
 	for _, r := range health {
 		byHealth[r.Provider] = r
@@ -93,7 +95,11 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 	// from the snapshot alone because the snapshot may not have run yet, and a page that
 	// lists nothing until a cron fires is worse than one that lists every adapter with
 	// absent figures.
-	names := sourcestats.Union(slices.Collect(maps.Keys(reg)), slices.Collect(maps.Keys(bySnapshot)))
+	adapters := make([]string, 0, len(reg))
+	for name := range reg {
+		adapters = append(adapters, vocab.SourceFamilyOf(name))
+	}
+	names := sourcestats.Union(adapters, slices.Collect(maps.Keys(bySnapshot)))
 
 	entries := make([]apigen.SourceEntry, 0, len(names))
 	for _, name := range names {

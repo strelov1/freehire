@@ -141,3 +141,105 @@ func TestCompanySlugAliasAcceptsBoardName(t *testing.T) {
 		t.Fatal("InsertCompanySlugAlias(guess): want the reason check to refuse it, got nil")
 	}
 }
+
+// TestRenamePlaceholderBoardJobsQueuesSearch pins that a rename reaches search: the moved row's
+// indexed company and slug change, so an open, canonical, public posting is queued in the same
+// statement, while a closed or private one (never indexed) is not.
+func TestRenamePlaceholderBoardJobsQueuesSearch(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+	truncate(t, pool)
+
+	const board = "8a7883d074274b7d01744b8825240e7f"
+	seed := func(externalID string) int64 {
+		t.Helper()
+		p := ingestParams(externalID, "Engineer")
+		p.Source, p.Company, p.CompanySlug = "paycor", board, board
+		job, err := ingestUpsert(ctx, q, p)
+		if err != nil {
+			t.Fatalf("seed %s: %v", externalID, err)
+		}
+		return job.ID
+	}
+	open := seed(board + ":1")
+	closed := seed(board + ":2")
+	private := seed(board + ":3")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", closed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE id = $1", private); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM search_outbox"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := q.RenamePlaceholderBoardJobs(ctx, RenamePlaceholderBoardJobsParams{
+		Name: "Salvagnini America, Inc.", NewSlug: "salvagnini-america-inc",
+		Source: "paycor", BoardPattern: board + ":%", OldName: board,
+	}); err != nil {
+		t.Fatalf("RenamePlaceholderBoardJobs: %v", err)
+	}
+
+	rows, err := pool.Query(ctx, "SELECT job_id FROM search_outbox ORDER BY job_id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var queued []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		queued = append(queued, id)
+	}
+	if len(queued) != 1 || queued[0] != open {
+		t.Errorf("queued = %v, want only the open posting %d", queued, open)
+	}
+}
+
+// TestRenamePlaceholderBoardJobsSurvivesAnInFlightClaim pins that a rename landing while the
+// drain holds the job's entry is not lost: completing the old claim (deleting it by id) must
+// leave the rename's own entry pending, as RequeueSearchOutbox guarantees for other rewrites.
+func TestRenamePlaceholderBoardJobsSurvivesAnInFlightClaim(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := New(pool)
+	truncate(t, pool)
+
+	const board = "8a7883d074274b7d01744b8825240e7f"
+	p := ingestParams(board+":1", "Engineer")
+	p.Source, p.Company, p.CompanySlug = "paycor", board, board
+	job, err := ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM search_outbox"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO search_outbox (job_id, job_posted_at) VALUES ($1, now())", job.ID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim: %v, %v", claimed, err)
+	}
+
+	if _, err := q.RenamePlaceholderBoardJobs(ctx, RenamePlaceholderBoardJobsParams{
+		Name: "Salvagnini America, Inc.", NewSlug: "salvagnini-america-inc",
+		Source: "paycor", BoardPattern: board + ":%", OldName: board,
+	}); err != nil {
+		t.Fatalf("RenamePlaceholderBoardJobs: %v", err)
+	}
+	if err := q.DeleteSearchOutboxEntries(ctx, []int64{claimed[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM search_outbox WHERE job_id = $1", job.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("pending entries for the renamed job after the old claim completed = %d, want 1", n)
+	}
+}

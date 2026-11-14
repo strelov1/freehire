@@ -1,6 +1,7 @@
 // Generates the API reference from the HTTP contract: openapi/api.openapi.json (compiled from
-// typespec/ by `make api-contract`) plus web/src/lib/docs/api-supplement.openapi.json, the
-// hand-written routes the contract does not describe yet (auth, SSE streams, binary reads).
+// typespec/ by `make api-contract`) plus web/src/lib/docs/api-supplement/*.openapi.json, the
+// hand-written routes the contract does not describe yet (auth, SSE streams, binary reads),
+// one file per route area.
 // Writes four files, two per audience, and the ChatGPT Actions schema:
 //
 //   src/lib/docs/generated/api-reference.openapi.json            the /docs/api Scalar page
@@ -19,7 +20,7 @@
 //
 //   node scripts/gen-api-docs.mjs
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'vite';
@@ -29,7 +30,7 @@ import { renderChatGptSchema } from './chatgptSchema.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, '..');
 const contractFile = resolve(webRoot, '..', 'openapi', 'api.openapi.json');
-const supplementFile = resolve(webRoot, 'src', 'lib', 'docs', 'api-supplement.openapi.json');
+const supplementDir = resolve(webRoot, 'src', 'lib', 'docs', 'api-supplement');
 const generatedDir = resolve(webRoot, 'src', 'lib', 'docs', 'generated');
 const chatGptFile = resolve(webRoot, 'static', 'openapi.yaml');
 const chatGptInfoFile = resolve(here, 'chatgpt-openapi-info.md');
@@ -76,13 +77,32 @@ export function mergeSupplement(contract, supplement) {
     for (const [method, op] of Object.entries(item)) {
       if (paths[path]?.[method]) {
         throw new Error(
-          `${method.toUpperCase()} ${path} is in the contract now — delete it from api-supplement.openapi.json`,
+          `${method.toUpperCase()} ${path} is in the contract now — delete it from src/lib/docs/api-supplement/`,
         );
       }
       (paths[path] ??= {})[method] = op;
     }
   }
   return { ...contract, paths };
+}
+
+// Reads the supplement's per-area files, in name order, into one document. A route in two of
+// them would leave whichever file sorts last silently winning, so it is refused.
+async function readSupplement() {
+  const files = (await readdir(supplementDir)).filter((f) => f.endsWith('.openapi.json')).sort();
+  const paths = {};
+  for (const file of files) {
+    const part = JSON.parse(await readFile(resolve(supplementDir, file), 'utf8'));
+    for (const [path, item] of Object.entries(part.paths)) {
+      for (const [method, op] of Object.entries(item)) {
+        if (paths[path]?.[method]) {
+          throw new Error(`${method.toUpperCase()} ${path} is in two supplement files (one is ${file})`);
+        }
+        (paths[path] ??= {})[method] = op;
+      }
+    }
+  }
+  return { paths };
 }
 
 const ACCESS_LABELS = {
@@ -311,7 +331,7 @@ export async function loadSources() {
   try {
     const filters = await vite.ssrLoadModule('/src/lib/docs/filters.ts');
     const contract = JSON.parse(await readFile(contractFile, 'utf8'));
-    const supplement = JSON.parse(await readFile(supplementFile, 'utf8'));
+    const supplement = await readSupplement();
     return { doc: mergeSupplement(contract, supplement), filters };
   } finally {
     await vite.close();

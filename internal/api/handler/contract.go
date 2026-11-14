@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/ogen-go/ogen/ogenerrors"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -179,8 +181,10 @@ func renderContractRequestError(ctx context.Context, w http.ResponseWriter, _ *h
 	switch {
 	case errors.As(err, &badBody):
 		msg = "invalid body"
+		recordContractReject(badBody.OperationID(), "body", err)
 	case errors.As(err, &badParams):
 		msg = "invalid params"
+		recordContractReject(badParams.OperationID(), "params", err)
 	case status < http.StatusInternalServerError:
 		msg = http.StatusText(status)
 	default:
@@ -189,6 +193,17 @@ func renderContractRequestError(ctx context.Context, w http.ResponseWriter, _ *h
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(&apigen.Problem{Error: msg}) // the client is gone if this fails
+}
+
+// recordContractReject makes a schema refusal visible: a 400 is the client's fault, but
+// when the client is our own web app it is our bug, and nothing else would show it.
+func recordContractReject(operation, kind string, err error) {
+	observability.RecordContractReject(operation, kind)
+	reason := err.Error()
+	if len(reason) > 300 {
+		reason = reason[:300] // shortcut: byte cut may split a rune, fine for a log line
+	}
+	log.Printf("contract reject: operation=%s kind=%s reason=%q", operation, kind, reason)
 }
 
 func recordContractFault(ctx context.Context, err error) {

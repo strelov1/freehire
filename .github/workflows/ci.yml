@@ -306,12 +306,10 @@ jobs:
               hadolint/hadolint:v2.15.1-alpine hadolint --config /.hadolint.yaml - < "$f"
           done
 
-      # `minimal` is the OpenAPI specification itself, not Redocly's style opinions. The
-      # question this gate asks is "can a client generator read this", and the answer stops
-      # being yes on a mistyped $ref or a schema that does not parse — neither of which
-      # anything else here would notice, since the file is served as a static asset.
+      # recommended-strict is the recommended ruleset with warnings promoted to errors:
+      # missing client errors, licence metadata and invalid examples must fail the gate.
       - name: Validate the OpenAPI description
-        run: npx --yes @redocly/cli@2.49.0 lint web/static/openapi.yaml --extends=minimal
+        run: npx --yes @redocly/cli@2.49.0 lint web/static/openapi.yaml --extends=recommended-strict
 
   # The public API's contract against main: read scripts/check-openapi-breaking.sh for
   # what counts as breaking and the `API-Break:` trailer that lets a deliberate break
@@ -1119,7 +1117,7 @@ jobs:
       - name: API docs generator smoke test
         run: pnpm run gen:api-docs:smoke
 
-      # Same `minimal` gate as web/static/openapi.yaml in the `artifacts` job: can a
+      # The broader references retain the `minimal` parsing gate: can a
       # client generator read this at all.
       - name: Validate the generated OpenAPI references
         run: |

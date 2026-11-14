@@ -195,3 +195,42 @@ func TestRefreshCompanyFacetsCountsOnlySearchableJobs(t *testing.T) {
 		t.Errorf("clinic job_count = %d, want 0 — a company with nothing findable must not reach the sitemap", got)
 	}
 }
+
+// TestRefreshCompanyFacetsCountsWhatSearchKeepsUncategorized pins the two ways an
+// uncategorized posting still reaches search (search.CategoryUnresolved), which the count
+// must follow or the company drops out of the companies index while its jobs stay live
+// (#4503): a title the Go dictionaries keep (passed in as kept_ids) and a vacancy a verified
+// employer published (employer_source).
+func TestRefreshCompanyFacetsCountsWhatSearchKeepsUncategorized(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, jobs RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	insertCompany(t, pool, "kolektor-sisteh", "Kolektor Sisteh d.o.o.")
+	insertCompany(t, pool, "employer-co", "Employer Co")
+	insertCompany(t, pool, "clinic", "Some Clinic")
+	insertUnsearchableJob(t, pool, "kolektor:1", "kolektor-sisteh", "uncategorized")
+	insertUnsearchableJob(t, pool, "employer:1", "employer-co", "uncategorized")
+	insertUnsearchableJob(t, pool, "clinic:1", "clinic", "uncategorized")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET source = 'employer' WHERE external_id = 'employer:1'"); err != nil {
+		t.Fatal(err)
+	}
+	var kept int64
+	if err := pool.QueryRow(ctx, "SELECT id FROM jobs WHERE external_id = 'kolektor:1'").Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{
+		KeptIds: []int64{kept}, EmployerSource: "employer",
+	}); err != nil {
+		t.Fatalf("recount: %v", err)
+	}
+	for slug, want := range map[string]int{"kolektor-sisteh": 1, "employer-co": 1, "clinic": 0} {
+		if got := companyJobCount(t, pool, slug); got != want {
+			t.Errorf("%s job_count = %d, want %d", slug, got, want)
+		}
+	}
+}

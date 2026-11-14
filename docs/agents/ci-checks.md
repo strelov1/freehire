@@ -185,8 +185,9 @@ The `artifacts` CI job: `web/static/install.sh` is served at `freehire.me/instal
 piped into `sh`, so shellcheck covers every tracked `*.sh`; both Dockerfiles go through
 hadolint (`.hadolint.yaml` argues its two exclusions, and a finding wrong for one line
 carries `# hadolint ignore=` beside it); and `web/static/openapi.yaml` (generated from the
-contract, see above) is validated against the OpenAPI specification, since it is served as a
-static asset nothing else parses.
+contract, see above) is linted with Redocly’s `recommended-strict` preset: the recommended
+rules with warnings promoted to errors, including missing client-error responses and licence
+metadata. The broader API references retain the `minimal` parsing gate.
 
 ## Shared JS dependencies: `pnpm check:deps`
 

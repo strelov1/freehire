@@ -1,0 +1,853 @@
+{
+  "paths": {
+    "/me/tracking/swipe": {
+      "get": {
+        "summary": "A batch of open jobs for the swipe triage deck.",
+        "description": "Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params`, exactly as in search. `503` when search is unavailable.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Optional full-text query (as in search).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "golang"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size, 1–100.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip; `offset + limit` ≤ 10000.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "...",
+                      "title": "Senior Go Engineer",
+                      "...": "..."
+                    }
+                  ],
+                  "meta": {
+                    "total": 137,
+                    "limit": 20,
+                    "offset": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Tracking"
+        ]
+      }
+    },
+    "/me/resume/extract": {
+      "post": {
+        "summary": "Extract a structured profile from an uploaded résumé (no LLM).",
+        "description": "Accepts a PDF (`multipart/form-data` field `file`) or plain text (`application/json` `{ \"text\": ... }`). Returns canonical skill slugs, the categories it spans, and the resolved seniority (omitted when unresolved). When storage is configured it also stores the résumé once.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Résumé plain text (JSON path); or send a PDF as multipart field `file`."
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "skills": [
+                      "go",
+                      "postgresql"
+                    ],
+                    "categories": [
+                      "backend"
+                    ],
+                    "seniority": "senior"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/resume": {
+      "put": {
+        "summary": "Store or replace your résumé.",
+        "description": "Accepts a PDF (multipart `file`) or JSON `{ \"text\": ... }`. Returns the résumé metadata. `501` when object storage is unconfigured.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Résumé plain text (JSON path); or send a PDF as multipart field `file`."
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The CV as a PDF."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": true,
+                    "uploaded_at": "2026-06-19T10:00:00Z",
+                    "structured": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Résumé"
+        ]
+      }
+    },
+    "/me/telegram": {
+      "get": {
+        "summary": "Your Telegram link status (for digests).",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "linked": true,
+                    "chat_id": 123456789
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Unlink your Telegram account.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/telegram/link": {
+      "post": {
+        "summary": "Start linking your Telegram account.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://t.me/free_hire_bot?start=..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/discord": {
+      "get": {
+        "summary": "Your Discord link status, and whether the paid role is on it.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "linked": true,
+                    "role_granted": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Unlink your Discord account, giving up the paid role with it.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "linked": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/webhook": {
+      "get": {
+        "summary": "Your webhook destination for saved-search matches, or null if none is configured.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "post": {
+        "summary": "Create your webhook destination, or update its URL if one already exists.",
+        "description": "There is exactly one destination per account. Deliveries are plain, unsigned HTTP POSTs — subscribe a saved search to the `webhook` channel (see `POST /me/subscriptions`) to receive its matches here. Before the URL is stored it receives a test delivery (`saved_search_name` \"freehire webhook test\", an empty `jobs` list); a URL that does not answer it with a 2xx is refused with 422, naming what it answered.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Destination URL — must be http or https.",
+                    "example": "https://example.com/hook"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "patch": {
+        "summary": "Enable or disable your webhook destination without changing its URL.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Whether the destination is enabled.",
+                    "example": "false"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": false,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": null,
+                    "disabled_at": "2026-09-04T13:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "summary": "Delete your webhook destination.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/webhook/test": {
+      "post": {
+        "summary": "Send a test delivery to your stored webhook destination.",
+        "description": "The same sample delivery saving a URL sends. A 2xx answer stamps `last_success_at` and returns the destination; anything else is a 422 naming what the destination answered, and changes nothing. 404 when no destination is configured.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "url": "https://example.com/hook",
+                    "enabled": true,
+                    "created_at": "2026-09-04T12:00:00Z",
+                    "last_success_at": "2026-09-04T13:00:00Z",
+                    "disabled_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/me/password": {
+      "post": {
+        "summary": "Change a known password.",
+        "description": "Revokes every session; your own cookie is re-issued at the new generation, so you stay signed in and everyone else is signed out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "current_password": {
+                    "type": "string",
+                    "description": "Your existing password."
+                  },
+                  "new_password": {
+                    "type": "string",
+                    "description": "The replacement."
+                  }
+                },
+                "required": [
+                  "current_password",
+                  "new_password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me": {
+      "delete": {
+        "summary": "Delete your account and everything under it.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Account"
+        ]
+      }
+    },
+    "/me/referrals/offers": {
+      "post": {
+        "summary": "Offer to refer into a company. Multipart — proof required.",
+        "description": "The proof (an offer letter, badge, anything showing you work there) is stored privately and shown only to a moderator; its storage key is never exposed on the wire. The offer is pending until decided.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "company_slug": {
+                    "type": "string",
+                    "description": "The company you can refer into."
+                  },
+                  "linkedin_url": {
+                    "type": "string",
+                    "description": "Your profile, for the moderator to check against."
+                  },
+                  "proof": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Evidence you work there."
+                  }
+                },
+                "required": [
+                  "company_slug",
+                  "proof"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": "b71e…",
+                    "company_slug": "acme",
+                    "company_name": "Acme",
+                    "status": "pending",
+                    "created_at": "2026-07-28T20:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/me/referrals/incoming/{id}/cv": {
+      "get": {
+        "summary": "View the candidate's CV for one incoming request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/referrals/offers/{id}/proof": {
+      "get": {
+        "summary": "View an offer's proof document.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The offer id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ],
+        "x-audience": "moderator"
+      }
+    },
+    "/me/cvs/{id}/pdf": {
+      "get": {
+        "summary": "Render the CV to PDF.",
+        "description": "Answers 501 on a deployment with no typst binary configured; everything else still works.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The CV id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/me/photo": {
+      "put": {
+        "summary": "Upload (or replace) your headshot.",
+        "description": "Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": true,
+                    "uploaded_at": "2026-08-18T10:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Whether you have a stored headshot, and when it was uploaded.",
+        "description": "`enabled` is false when object storage is not configured — the client should then offer no upload control at all rather than one that answers `501`. `uploaded_at` doubles as a cache-busting value for the image URL.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "enabled": true,
+                    "present": false,
+                    "uploaded_at": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      },
+      "delete": {
+        "summary": "Remove your stored headshot.",
+        "description": "Returns `204 No Content`.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      }
+    },
+    "/me/photo/image": {
+      "get": {
+        "summary": "The stored headshot itself, as image bytes.",
+        "description": "Not a JSON endpoint — the response is `image/jpeg` with a short private cache lifetime (60s), meant to be busted with `?v=<uploaded_at>`. `404` when no headshot is stored.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Photo"
+        ]
+      }
+    }
+  }
+}

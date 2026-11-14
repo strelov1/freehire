@@ -219,7 +219,9 @@ WHERE company_slug = @old_slug
 -- externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
 -- move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 -- unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
--- seen again. Guarded on the old name, so a re-run writes nothing.
+-- seen again. Guarded on the old name, so a re-run writes nothing. The moved rows' indexed
+-- company and slug change, so an open, canonical, public one is queued for search in the same
+-- statement, as every other writer of indexed job content does.
 --
 -- Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
 -- are matched by board and name, not by slug, and an alias the merge worker recorded may have
@@ -232,16 +234,26 @@ WITH moved AS (
       AND j.external_id LIKE sqlc.arg(board_pattern)
       AND j.company = sqlc.arg(old_name)
     FOR UPDATE
+), updated AS (
+    UPDATE jobs
+    SET company = sqlc.arg(name),
+        company_slug = sqlc.arg(new_slug),
+        -- Kept in step with company_slug by hand; see RenameSlugCompany.
+        company_slug_folded = replace(sqlc.arg(new_slug), '-', ''),
+        updated_at = now()
+    FROM moved
+    WHERE jobs.id = moved.id
+    RETURNING jobs.id, moved.company_slug AS old_slug, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at,
+        jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND NOT jobs.is_private AS indexed
+), queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE indexed
+    -- Re-stamp a live entry as RequeueSearchOutbox does: a drain completing a claim it took
+    -- before the rename deletes by the old id and must not take the rename's entry with it.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
-UPDATE jobs
-SET company = sqlc.arg(name),
-    company_slug = sqlc.arg(new_slug),
-    -- Kept in step with company_slug by hand; see RenameSlugCompany.
-    company_slug_folded = replace(sqlc.arg(new_slug), '-', ''),
-    updated_at = now()
-FROM moved
-WHERE jobs.id = moved.id
-RETURNING moved.company_slug AS old_slug;
+SELECT old_slug FROM updated;
 
 -- name: ListPlaceholderBoardDescriptions :many
 -- A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS
@@ -471,6 +483,22 @@ UPDATE companies
 SET company_info_wikipedia_checked_at = now()
 WHERE slug = sqlc.arg(slug);
 
+-- name: ListUncategorizedOpenJobTitles :many
+-- Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
+-- category predicate would drop: no column category, no enrichment answer, not confirmed
+-- technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
+-- hands the ids it keeps back as kept_ids, so the count follows search on the one branch
+-- this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
+SELECT j.id, j.title
+FROM jobs j
+WHERE j.id > sqlc.arg(after_id)
+  AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+  AND j.company_slug <> '' AND j.description <> ''
+  AND j.category = '' AND COALESCE(j.enrichment->>'category', '') IN ('', 'other')
+  AND j.is_tech IS NOT TRUE
+ORDER BY j.id
+LIMIT sqlc.arg(batch_size);
+
 -- name: RefreshCompanyFacets :execrows
 -- Recompute every company's denormalized state in one set-based pass: the open-job
 -- count plus the facet arrays derived from those open jobs — regions/countries from
@@ -526,6 +554,10 @@ oj AS MATERIALIZED (
     FROM jobs j
     LEFT JOIN unseen_window uw ON uw.source = j.source
     LEFT JOIN job_activity a ON a.job_id = j.id
+    -- kept_ids (see the category predicate below) as a relation: ~400k ids, so a hash join that
+    -- can spill, not an IN subplan that degrades to a per-row scan once it outgrows hash memory.
+    -- The ids are primary keys from one query, so the join never multiplies a job.
+    LEFT JOIN unnest(sqlc.arg('kept_ids')::bigint[]) AS k(id) ON k.id = j.id
     WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
       -- search.UnseenWindows.Unseen: the source has stopped showing the posting. last_seen_at is
       -- job_activity's; a job without an activity row reads as unseen, only for a windowed source.
@@ -550,12 +582,16 @@ oj AS MATERIALIZED (
       -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
       -- while those same jobs are live in search.
       --
-      -- The one branch this cannot mirror is the role_type one: search also keeps an
-      -- uncategorised posting whose TITLE roletype marks a people manager ("General
-      -- Manager"), and that dictionary is Go, not SQL. Such a posting is therefore
-      -- searchable but not counted here. The residual is the price of not storing a
-      -- derived column for one count; it under-counts a company, never invents one.
-      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE)
+      -- The title branch search also keeps (a roletype role or a manager title, "General
+      -- Manager", "Vodja oddelka") runs Go dictionaries SQL cannot: the caller resolves it over
+      -- ListUncategorizedOpenJobTitles and passes the kept ids in. Without it a company hiring
+      -- only for such roles counted 0 and fell out of the companies index while its jobs stayed
+      -- live (#4503).
+      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE
+           -- The two branches search.CategoryUnresolved keeps that SQL cannot derive: a title
+           -- the Go role dictionaries keep (resolved by the caller, search.TitleKeepsUncategorized)
+           -- and a vacancy a verified employer published.
+           OR k.id IS NOT NULL OR j.source = sqlc.arg('employer_source')::text)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug

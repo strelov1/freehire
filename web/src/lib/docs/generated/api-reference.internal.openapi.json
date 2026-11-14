@@ -9003,148 +9003,6 @@
         }
       }
     },
-    "/auth/logout-all": {
-      "post": {
-        "summary": "Sign out every session on the account, including this one.",
-        "description": "Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.",
-        "responses": {
-          "204": {
-            "description": "No content"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/auth/extension/connect": {
-      "get": {
-        "summary": "Consent screen for \"Sign in with freehire\" from the browser extension.",
-        "description": "Opened by the extension via `chrome.identity.launchWebAuthFlow`, not called directly — renders an HTML consent page, not JSON. `redirect_uri` must be an allowlisted `https://<extension-id>.chromiumapp.org` origin, or this is a `400`. A signed-out visitor is bounced through sign-in first, then back to this same consent step.",
-        "parameters": [
-          {
-            "name": "redirect_uri",
-            "in": "query",
-            "required": true,
-            "description": "The allowlisted chromiumapp.org redirect the extension is listening on.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "description": "Opaque value echoed back on completion.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      },
-      "post": {
-        "summary": "Submit the consent decision and mint the extension’s session token.",
-        "description": "Submitted by the consent screen’s own form, not called directly. On `decision=allow`, 302-redirects to `redirect_uri` with a session token in the URL fragment (never the query, so it is never logged or sent to a server); on anything else, redirects with `error=access_denied`. Not a JSON endpoint.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "redirect_uri": {
-                    "type": "string",
-                    "description": "Must match the allowlisted redirect validated on the GET step."
-                  },
-                  "state": {
-                    "type": "string",
-                    "description": "Opaque value echoed back."
-                  },
-                  "decision": {
-                    "type": "string",
-                    "description": "`allow` or `cancel`.",
-                    "example": "allow"
-                  }
-                },
-                "required": [
-                  "redirect_uri",
-                  "decision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/assistant/sessions/{id}/autopilot": {
-      "post": {
-        "summary": "Run an unattended CV-tailoring pass as one long streamed turn.",
-        "description": "Session-only, not API-key — an unattended run edits a CV, and the browser is the only place you can watch it happen and undo it. Requires a `tailor` session bound to both a CV and a vacancy (`409` otherwise). Same SSE shape as `.../messages`, no body; every edit lands in one revision batch, so undoing the run is reverting that batch.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The session id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          }
-        ],
-        "tags": [
-          "Assistant"
-        ]
-      }
-    },
     "/me/resume/extract": {
       "post": {
         "summary": "Extract a structured profile from an uploaded résumé (no LLM).",
@@ -9726,6 +9584,148 @@
         ],
         "tags": [
           "Photo"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/autopilot": {
+      "post": {
+        "summary": "Run an unattended CV-tailoring pass as one long streamed turn.",
+        "description": "Session-only, not API-key — an unattended run edits a CV, and the browser is the only place you can watch it happen and undo it. Requires a `tailor` session bound to both a CV and a vacancy (`409` otherwise). Same SSE shape as `.../messages`, no body; every edit lands in one revision batch, so undoing the run is reverting that batch.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "summary": "Sign out every session on the account, including this one.",
+        "description": "Bumps the account’s session generation (stranding every issued token and API-key session state) then clears the caller’s cookie. Cookie-only — an API key must not be able to sign a human out of their browser. Returns `204 No Content`.",
+        "responses": {
+          "204": {
+            "description": "No content"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/extension/connect": {
+      "get": {
+        "summary": "Consent screen for \"Sign in with freehire\" from the browser extension.",
+        "description": "Opened by the extension via `chrome.identity.launchWebAuthFlow`, not called directly — renders an HTML consent page, not JSON. `redirect_uri` must be an allowlisted `https://<extension-id>.chromiumapp.org` origin, or this is a `400`. A signed-out visitor is bounced through sign-in first, then back to this same consent step.",
+        "parameters": [
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "description": "The allowlisted chromiumapp.org redirect the extension is listening on.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Opaque value echoed back on completion.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
+        ]
+      },
+      "post": {
+        "summary": "Submit the consent decision and mint the extension’s session token.",
+        "description": "Submitted by the consent screen’s own form, not called directly. On `decision=allow`, 302-redirects to `redirect_uri` with a session token in the URL fragment (never the query, so it is never logged or sent to a server); on anything else, redirects with `error=access_denied`. Not a JSON endpoint.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "redirect_uri": {
+                    "type": "string",
+                    "description": "Must match the allowlisted redirect validated on the GET step."
+                  },
+                  "state": {
+                    "type": "string",
+                    "description": "Opaque value echoed back."
+                  },
+                  "decision": {
+                    "type": "string",
+                    "description": "`allow` or `cancel`.",
+                    "example": "allow"
+                  }
+                },
+                "required": [
+                  "redirect_uri",
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Auth"
         ]
       }
     }

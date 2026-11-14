@@ -122,7 +122,7 @@ pre-commit:
 
     # docs/API*.md, the two Scalar OpenAPI documents and web/static/openapi.yaml (the
     # ChatGPT Actions schema) are generated from the contract
-    # (openapi/api.openapi.json), web/src/lib/docs/api-supplement.openapi.json and
+    # (openapi/api.openapi.json), web/src/lib/docs/api-supplement/ and
     # filters.ts, and committed, so the same trap as sqlc: a contract or filter change
     # without regenerating ships with every local check green and only the `web-work`
     # CI job says so. PR #4321 spent three CI-fix attempts on exactly this.
@@ -142,6 +142,7 @@ pre-commit:
         - "web/scripts/chatgpt-openapi-info.md"
         - "web/scripts/renderFilterSection.mjs"
         - "web/src/lib/docs/*.json"
+        - "web/src/lib/docs/api-supplement/*.json"
         - "web/src/lib/docs/generated/*.json"
         - "openapi/api.openapi.json"
         - "docs/API.md"

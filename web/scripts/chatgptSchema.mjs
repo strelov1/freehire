@@ -42,6 +42,21 @@ const DATA_SCHEMAS = {
   jobFacets: 'JobFacetCounts',
 };
 
+// The TypeSpec routes share Problem as a default response. Name their client errors
+// in the public projection without changing generated Go interfaces. newContract
+// refuses NUL in any path/query with 400 (contract.go); search/facets also refuse
+// invalid queries, and job detail/similar return 404 for missing/private jobs.
+const CLIENT_ERRORS = {
+  searchJobs: { 400: 'Invalid parameters or search query.' },
+  agentSearchJobs: { 400: 'Invalid parameters or search query.' },
+  jobFacets: { 400: 'Invalid parameters, unknown facet, or incompatible facet options.' },
+  suggest: { 400: 'Invalid parameters (including a NUL byte in the query).' },
+  getJob: { 400: 'Invalid parameters.', 404: 'Job not found or not publicly visible.' },
+  similarJobs: { 400: 'Invalid parameters.', 404: 'Job not found or not publicly visible.' },
+  listCompanies: { 400: 'Invalid parameters or pagination window exceeded.' },
+  searchCities: { 400: 'Invalid parameters (including a NUL byte in the query).' },
+};
+
 // The geography facets form one OR-group, so they have no `_mode`.
 const GEOGRAPHY = new Set(['regions', 'countries', 'cities', 'metros']);
 
@@ -119,6 +134,11 @@ export function filterParameters(filters) {
 function downgrade(node) {
   if (Array.isArray(node)) return node.map(downgrade);
   if (!node || typeof node !== 'object') return node;
+  // OpenAPI 3.0 ignores siblings of a reference; keep schema annotations via allOf.
+  if (node.$ref && Object.keys(node).length > 1) {
+    const { $ref, ...annotations } = node;
+    return downgrade({ ...annotations, allOf: [{ $ref }] });
+  }
   const { anyOf, ...rest } = node;
   if (anyOf?.length === 2 && anyOf.some((s) => s.type === 'null')) {
     const schema = anyOf.find((s) => s.type !== 'null');
@@ -188,6 +208,9 @@ export function renderChatGptSchema(doc, filters, description) {
       }
     }
     const responses = { ...op.responses };
+    for (const [status, errorDescription] of Object.entries(CLIENT_ERRORS[contractId] ?? {})) {
+      responses[status] = { ...op.responses.default, description: errorDescription };
+    }
     if (DATA_SCHEMAS[contractId]) responses['200'] = typedData(op, doc, DATA_SCHEMAS[contractId]);
     const { security: _security, ...rest } = op;
     (paths[path] ??= {})[method] = {
@@ -203,7 +226,12 @@ export function renderChatGptSchema(doc, filters, description) {
   const used = new Set(Object.values(paths).flatMap((item) => Object.values(item).flatMap((op) => op.tags ?? [])));
   return downgrade({
     openapi: '3.0.3',
-    info: { title: 'freehire public API', version: '1.1.0', description },
+    info: {
+      title: 'freehire public API',
+      version: '1.1.0',
+      description,
+      license: { name: 'freehire API data licence', url: 'https://freehire.me/terms#data-licence' },
+    },
     servers: [{ url: doc.servers[0].url }],
     // Every operation answers without a key; a key only selects the API plan's budget.
     security: [{}, { PersonalApiKey: [] }],

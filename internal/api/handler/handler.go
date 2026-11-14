@@ -4,9 +4,6 @@ import (
 	"cmp"
 	"context"
 	"log"
-	"math"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,12 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/ai/speech"
 	"github.com/strelov1/freehire/internal/api/atsapply"
-	"github.com/strelov1/freehire/internal/api/ojcp"
-	"github.com/strelov1/freehire/internal/api/realtime"
-	"github.com/strelov1/freehire/internal/application/agentview"
-	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
@@ -35,7 +27,6 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
@@ -54,11 +45,8 @@ import (
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
 	"github.com/strelov1/freehire/internal/identity/accounts"
-	"github.com/strelov1/freehire/internal/identity/apiusage"
 	"github.com/strelov1/freehire/internal/identity/auth"
-	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
-	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
@@ -74,15 +62,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/companyrelation"
 	"github.com/strelov1/freehire/internal/job/privatejob"
-	"github.com/strelov1/freehire/internal/job/recentfeed"
-	"github.com/strelov1/freehire/internal/platform/blobstore"
-	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/llm"
-	"github.com/strelov1/freehire/internal/platform/tokencrypt"
-	"github.com/strelov1/freehire/internal/search/embedprogress"
-	"github.com/strelov1/freehire/internal/search/search"
-	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
 const (
@@ -193,322 +173,6 @@ type middleware struct {
 	// leaves, so forgetting it on a new route is a 500 in that route's first test rather
 	// than model spend nobody paid for.
 	paidAI func(plan.Feature) fiber.Handler
-}
-
-// pageParamsBounded reads and clamps the shared limit/offset pagination query params, with
-// caller-supplied bounds for endpoints whose page is sized differently from the shared list
-// cap (the tracking board, which is unpaginated and needs the whole set; the role-cluster
-// copies list, which pages a handful of city openings).
-//
-// The unbounded-depth reader. Every PUBLIC list calls pageParamsWindowed below instead; what
-// is left here are the caller's own resources — the tracking board, the inbox, the
-// notification list — where the set is one user's and the depth is theirs to walk.
-//
-// It is the ONLY place the offset query param is read, and a test enforces that. The clamp to
-// MaxInt32 is the reason: every paginated column binds as a Postgres int4, Fiber's QueryInt is
-// a plain strconv.Atoi that happily accepts a 64-bit value, and the int32 conversion then wraps
-// it NEGATIVE — which Postgres rejects, turning ?offset=3000000000 into a 500 rather than an
-// empty page. Naming that in a comment did not stop a second call site re-implementing the
-// parse without it.
-func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) {
-	return clampPage(c.QueryInt("limit", fallback), c.QueryInt("offset", 0), ceiling)
-}
-
-// contractPageBounded is pageParamsBounded for a contract operation, which declares its page
-// params as strings so one that does not read falls back to the default, as Fiber's QueryInt
-// does, rather than being refused.
-func contractPageBounded(ctx context.Context, fallback, ceiling int) (limit, offset int) {
-	query := contractQuery(ctx)
-	return clampPage(queryIntOr(query, "limit", fallback), queryIntOr(query, "offset", 0), ceiling)
-}
-
-// contractPageWindowed is pageParamsWithin at the shared window for a contract operation.
-func contractPageWindowed(ctx context.Context, fallback, ceiling int) (limit, offset int, err error) {
-	limit, offset = contractPageBounded(ctx, fallback, ceiling)
-	if offset+limit > maxPageWindow {
-		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
-	}
-	return limit, offset, nil
-}
-
-func clampPage(limit, offset, ceiling int) (int, int) {
-	return min(max(limit, 1), ceiling), min(max(offset, 0), math.MaxInt32)
-}
-
-// queryIntOr is Fiber's QueryInt over a parsed query: the first value, or fallback when it
-// is absent or not an integer.
-func queryIntOr(query url.Values, key string, fallback int) int {
-	n, err := strconv.Atoi(query.Get(key))
-	if err != nil {
-		return fallback
-	}
-	return n
-}
-
-// pageParamsWindowed is pageParamsBounded plus the deep-pagination refusal: it answers 400
-// rather than serving a page whose offset reaches past maxPageWindow.
-//
-// The clamp pageParamsBounded already applies bounds the VALUE, so Postgres accepts it; it
-// does not bound the WORK. `LIMIT n OFFSET k` reads and discards k rows before returning
-// any, so an offset the caller chooses sets how much of a table one request walks — and on
-// `jobs` (millions of open rows, `SELECT *`, so every skipped tuple is a heap fetch) that is
-// minutes of disk per request rather than milliseconds.
-//
-// That is not a hypothetical. On 2026-09-14 a crawler walked /api/v1/jobs?offset= in steps of
-// 100 up to ~180,000, eight requests at a time. Each one pinned a pooled connection for over
-// two minutes; ten of them exhausted the pool (defaultMaxConns = 10), every other endpoint
-// queued behind them — /api/v1/threads was served in 15m41s — and nginx answered 504 to
-// 14,007 requests over 54 minutes. Request frequency does not bound query cost: it
-// bounds requests per minute, and this endpoint's COST PER REQUEST is what the caller
-// controls (see public_read_limit.go, whose budgets are split "by cost, not by path" — a
-// split that assumes a path HAS a fixed cost).
-//
-// Refusing rather than clamping to the ceiling is the deliberate half. A clamped page answers
-// 200 with rows the caller did not ask for, which reads as success: a walker would loop over
-// the same page forever and a person paging would silently see the wrong slice. That
-// reasoning first landed on the Meili-backed lists, under a constant of their own; this
-// is that constant, moved here so one number decides for both stores.
-func pageParamsWindowed(c *fiber.Ctx, fallback, ceiling int) (limit, offset int, err error) {
-	return pageParamsWithin(c, fallback, ceiling, maxPageWindow)
-}
-
-// pageParamsWithin is pageParamsWindowed with the window named by the caller, for an
-// endpoint whose rows cost more per skipped offset than the shared window allows for.
-func pageParamsWithin(c *fiber.Ctx, fallback, ceiling, window int) (limit, offset int, err error) {
-	limit, offset = pageParamsBounded(c, fallback, ceiling)
-	if offset+limit > window {
-		return 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
-	}
-	return limit, offset, nil
-}
-
-// pageParams is pageParamsWindowed at the shared list caps — the form six of its seven call
-// sites want, and the same convenience the package carried before the window existed.
-//
-// It returns an error where the old pageParams returned two values, which is deliberate: any
-// call site left behind by the change fails to compile rather than silently skipping the
-// window.
-func pageParams(c *fiber.Ctx) (limit, offset int, err error) {
-	return pageParamsWindowed(c, defaultLimit, maxLimit)
-}
-
-// listResponseWithIgnored is the shared list envelope plus the query params the filter did
-// not read and the facet values outside their closed vocabulary (values: see
-// search.IgnoredValues; nil for an endpoint that builds no job filter), each
-// omitted entirely when there are none.
-//
-// Omitted rather than sent empty: a caller only needs the key when something
-// actually went wrong, and an always-present empty array is a field every reader
-// learns to skip — at which point the one response that does carry a warning
-// gets skipped too.
-func listResponseWithIgnored(c *fiber.Ctx, data any, total int64, limit, offset int, ignored []search.UnknownParam, values map[string][]string) error {
-	return c.JSON(fiber.Map{"data": data, "meta": listMeta(total, limit, offset, ignored, values)})
-}
-
-// listMeta is listResponseWithIgnored's meta block, for a list endpoint that has one
-// more thing of its own to say beside it.
-func listMeta(total int64, limit, offset int, ignored []search.UnknownParam, values map[string][]string) fiber.Map {
-	meta := fiber.Map{
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
-	}
-	addIgnored(meta, ignored, values)
-	return meta
-}
-
-// dataResponseWithIgnored is listResponseWithIgnored for the single-item
-// endpoints: they answer a bare {"data": ...} with no meta at all, so a clean
-// request keeps exactly that shape and the block appears only to carry a
-// warning.
-func dataResponseWithIgnored(c *fiber.Ctx, data any, ignored []search.UnknownParam, values map[string][]string) error {
-	meta := fiber.Map{}
-	addIgnored(meta, ignored, values)
-	if len(meta) == 0 {
-		return c.JSON(fiber.Map{"data": data})
-	}
-	return c.JSON(fiber.Map{"data": data, "meta": meta})
-}
-
-// addIgnored writes the two reports into a response meta, each only when it has
-// something to say.
-func addIgnored(meta fiber.Map, ignored []search.UnknownParam, values map[string][]string) {
-	if len(ignored) > 0 {
-		meta["ignored_params"] = ignored
-	}
-	if len(values) > 0 {
-		meta["ignored_values"] = values
-	}
-}
-
-// ignoredJobValues is search.IgnoredValues over this request's query, for the
-// endpoints that build a job filter from it.
-func ignoredJobValues(vals url.Values) map[string][]string {
-	return search.IgnoredValues(vals)
-}
-
-// Config is the dependency bundle Register wires onto the app: the DB pool, the
-// single browser origin allowed cross-origin
-// (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
-// cookie flag (CookieSecure), the enabled OAuth providers, and the optional
-// search client (nil disables search).
-type Config struct {
-	Pool *pgxpool.Pool
-	// AgentViews receives the postings served to agents (internal/application/agentview).
-	// Optional: nil records nothing.
-	AgentViews agentview.Sink
-	// APIUsage counts each account's Bearer-authenticated API requests per day
-	// (internal/identity/apiusage). Optional: nil counts nothing.
-	APIUsage *apiusage.Counter
-	// Cache holds values that are expensive to compute and identical for every
-	// caller — today the catalogue-scale snapshot (internal/ingest/catalogstats). Optional:
-	// nil degrades the figures it backs to their approximations, exactly as an
-	// unreachable backend does.
-	Cache                   cache.Cache
-	FrontendOrigin          string
-	AuthIntrospectionSecret string
-	JWTSecret               string
-	JWTTTL                  time.Duration
-	CookieSecure            bool
-	CookieDomains           []string
-	OAuthRegistry           *oauth.Registry
-	AuthV2Enabled           bool
-	MobileAuthCallbacks     map[string]string
-	RecentAuthTTL           time.Duration
-	AppleNative             *appleauth.Client
-	AppleGrantKeys          *appleauth.KeyRing
-	Search                  *search.Client
-	// Suggest answers the search box's completions from the dictionary index
-	// (cmd/build-suggestions writes it). Nil disables /suggest with a 503, the same
-	// shape as an unconfigured search — the rest of the site is unaffected, and the
-	// box falls back to offering nothing rather than to erroring.
-	Suggest *suggest.Service
-	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
-	// upload only extracts skills in-request (no regression).
-	Blob blobstore.Store
-	// DirectApplyDailyLimit caps how many on-site applications one candidate sends per UTC
-	// day (config.LoadDirectApplyDailyLimit, read and validated in cmd/server).
-	DirectApplyDailyLimit int64
-	// TypstBin is the resolved path to the typst binary for CV PDF rendering. Empty
-	// disables rendering: the /me/cvs/:id/pdf endpoint returns 501, the rest works.
-	TypstBin string
-
-	// CVEditAllowBulletTruncation restores silent Sanitize truncation past the
-	// per-role bullet ceiling. Default false (refuse on). Ops kill switch.
-	CVEditAllowBulletTruncation bool
-
-	// TracerLinkSalt keys the visitor hash of a traced click; empty means the CV tracing
-	// toggle cannot be enabled at all.
-	TracerLinkSalt string
-	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
-	// the ATS score stays deterministic (the report just omits content-quality).
-	LLM *llm.Client
-	// AssistantLLM backs the in-app agent. It is a separate client because the agent
-	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
-	// size rather than for cheap JSON extraction. Nil disables new turns.
-	AssistantLLM *llm.Client
-	// SearchIntentLLM backs the AI filter. Separate for latency, not capability — see
-	// config.SearchIntentModel.
-	SearchIntentLLM *llm.Client
-	// ResumeExtractLLM backs the structured parse of a stored CV — free for every
-	// account, so on its own cheap model (config.ResumeExtractModel). Nil falls back to
-	// LLM.
-	ResumeExtractLLM *llm.Client
-	// SupportLLM backs the support agent — open to every account, so on its own cheap
-	// model (config.SupportModel). Nil leaves support unavailable.
-	SupportLLM *llm.Client
-	// SupportReplyTo is the one inbox a support handover is emailed to
-	// (ONBOARDING_REPLY_TO). Empty makes the handover tool report itself unavailable.
-	SupportReplyTo string
-	// TypesafeAPIKey backs the Jev provider for the autofill agent's Choose call
-	// (autofillagent.JevPlanner). Empty disables it: Choose answers through LLM alone.
-	TypesafeAPIKey string
-	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
-	// assistant package's default.
-	AssistantMaxSteps int
-	// AssistantMaxPrompt bounds the rune length of one user message. Zero falls
-	// back to the handler default (8000).
-	AssistantMaxPrompt int
-	// LLMKeys mints the per-user gateway credential each account's model calls are
-	// spent under. Nil is the deployment that does not attribute spend: every call goes
-	// out on the service credential exactly as it did before, and no behaviour changes.
-	LLMKeys *llmkey.Client
-	// Speech transcribes dictated audio for the composer. Nil is the deployment with
-	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
-	Speech *speech.Client
-	// Realtime mints voice mode's short-lived OpenAI Realtime API credentials. Nil is
-	// the deployment with no Realtime gateway configured: the mint endpoint answers
-	// 501 and the interview session view offers no voice mode.
-	Realtime *realtime.Client
-	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
-	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
-	// to no analysis rather than send PII to the model.
-	PIIDetector pii.Detector
-	// Telegram bot for notification linking/delivery confirmations. Optional: an
-	// empty TelegramBotToken disables the feature (linking endpoints report off,
-	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret
-	// guards the inbound webhook.
-	TelegramBotToken      string
-	TelegramBotUsername   string
-	TelegramWebhookSecret string
-	// DiscordLinker enables the paid Discord channels: linking an account, and the role
-	// that follows the subscription. Nil = the feature is off and its routes are not
-	// registered at all, so they 404 rather than reporting a feature that half exists.
-	// DiscordClientID builds the consent URL; it is only read when the linker is present.
-	DiscordLinker   DiscordLinker
-	DiscordClientID string
-	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
-	// feature is off (connect routes unregistered, inbox empty).
-	GmailConnector *gmailsync.Connector
-	GmailCipher    *tokencrypt.Cipher
-	// OJCPSigner signs the OJCP manifest. Nil = the manifest is unsigned and no key set is
-	// published.
-	OJCPSigner *ojcp.Signer
-	// MailboxDomain enables the hosted-mailbox option: the receiving domain user
-	// addresses live on (<handle>@MailboxDomain). Empty = the feature is off.
-	MailboxDomain string
-	// Plan carries what each plan allows per day, per feature, and whether a refusal is
-	// enforced yet. Every metered AI surface draws on it.
-	Plan plan.Config
-	// Billing connects the Pro subscription at the payment provider to users.pro_until,
-	// which is what Plan then reads. Optional and off by default: with no provider
-	// credentials the billing routes are not mounted at all, so a deployment that never
-	// configures it cannot tell they exist.
-	Billing billing.Config
-	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
-	// the notify worker's config. Both must be set; either empty leaves referral pings
-	// Telegram-only (email disabled). NotifyEmailFrom is the verified SES sender address.
-	AWSRegion       string
-	NotifyEmailFrom string
-	// ExtensionRedirectAllowlist bounds the browser-extension connect flow: only
-	// https://<id>.chromiumapp.org or <id>.extensions.allizom.org redirects whose <id> is listed may receive a
-	// minted token. Empty leaves the connect endpoint refusing every redirect.
-	ExtensionRedirectAllowlist []string
-	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
-	// Empty defaults to the frontend origin's own host.
-	ServedHosts []string
-	// AutoApplyOrchestratorSecret is the shared, static credential
-	// cmd/auto-apply-orchestrate presents to authenticate itself (not any particular
-	// candidate) on POST /me/auto-apply/:queueId/{tailor,review} — see
-	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables the
-	// path entirely: the two routes then behave exactly as they did under plain
-	// cookie/API-key auth, with no fallback.
-	AutoApplyOrchestratorSecret string
-	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort
-	// event publish (auto-apply/review.decided) at the self-hosted Inngest server. Either
-	// empty disables the publish entirely — the review decision itself is still recorded,
-	// exactly as it is today.
-	InngestEventAPIURL string
-	InngestEventKey    string
-	// RecentJobsFeed backs the homepage's live "recently added jobs" SSE feed
-	// (internal/job/recentfeed). cmd/server owns the Poller that publishes into it;
-	// this handler only subscribes. Nil disables the route with a 503 rather than
-	// serving a feed that will never receive anything.
-	RecentJobsFeed *recentfeed.Broadcaster
-	// EmbedProgress backs the public /embeddings page's figures and stream
-	// (internal/search/embedprogress). cmd/server owns the Sampler's tick; this handler
-	// only reads it. Nil serves 503 on both routes.
-	EmbedProgress *embedprogress.Sampler
 }
 
 // Register wires all routes onto the application from cfg. Auth is same-origin
