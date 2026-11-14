@@ -118,6 +118,7 @@ class OCRReviewTest(unittest.TestCase):
                         "OCR_LLM_TOKEN": "private-token",
                     },
                 ),
+                patch("ocr_review.pr_size.check", return_value=None),
                 patch(
                     "ocr_review.subprocess.run",
                     side_effect=OSError("private diagnostic"),
@@ -128,6 +129,36 @@ class OCRReviewTest(unittest.TestCase):
             result = json.loads(output.read_text())
             self.assertFalse(result["complete"])
             self.assertNotIn("private diagnostic", result["body"])
+
+    def test_too_large_pr_is_skipped_without_running_ocr(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "result.json"
+            with (
+                patch.dict(
+                    "os.environ",
+                    {"OCR_LLM_URL": "https://gateway.example/v1", "OCR_LLM_TOKEN": "t"},
+                ),
+                patch("ocr_review.pr_size.check", return_value="too big"),
+                patch("ocr_review.subprocess.run") as run,
+            ):
+                self.assertEqual(run_review("a" * 40, "b" * 40, output), 0)
+                run.assert_not_called()
+            result = json.loads(output.read_text())
+            self.assertIn("Skipped: too big", result["body"])
+
+    def test_ocr_skips_the_files_the_size_check_ignores(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with (
+                patch.dict(
+                    "os.environ",
+                    {"OCR_LLM_URL": "https://gateway.example/v1", "OCR_LLM_TOKEN": "t"},
+                ),
+                patch("ocr_review.pr_size.check", return_value=None),
+                patch("ocr_review.subprocess.run") as run,
+            ):
+                run_review("a" * 40, "b" * 40, Path(folder) / "result.json")
+            args = run.call_args.args[0]
+            self.assertIn("openapi/api.openapi.json", args[args.index("--exclude") + 1])
 
 
 if __name__ == "__main__":
