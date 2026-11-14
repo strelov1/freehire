@@ -42,7 +42,7 @@ func TestTouchJobRefreshesLivenessAndPreservesContent(t *testing.T) {
 		t.Fatalf("age activity: %v", err)
 	}
 
-	touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1", AllowReopen: true})
+	touched, err := touchObserved(ctx, q, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1", AllowReopen: true})
 	if err != nil {
 		t.Fatalf("TouchJob: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 
 	t.Run("open row keeps its change stamp", func(t *testing.T) {
 		before := seed(t, "justjoin:open", false)
-		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open", AllowReopen: true})
+		touched, err := touchObserved(ctx, q, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open", AllowReopen: true})
 		if err != nil {
 			t.Fatalf("TouchJob: %v", err)
 		}
@@ -139,7 +139,7 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 
 	t.Run("a reopen it may not make is deferred untouched", func(t *testing.T) {
 		before := seed(t, "justjoin:deferred", true)
-		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:deferred"})
+		touched, err := touchObserved(ctx, q, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:deferred"})
 		if err != nil {
 			t.Fatalf("TouchJob: %v", err)
 		}
@@ -159,7 +159,7 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 
 	t.Run("reopen stamps it", func(t *testing.T) {
 		before := seed(t, "justjoin:closed", true)
-		if _, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:closed", AllowReopen: true}); err != nil {
+		if _, err := touchObserved(ctx, q, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:closed", AllowReopen: true}); err != nil {
 			t.Fatalf("TouchJob: %v", err)
 		}
 		after, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: "justjoin:closed"})

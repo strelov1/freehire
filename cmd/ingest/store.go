@@ -133,18 +133,28 @@ func cheapWrite(r db.RefreshUnchangedJobRow) written {
 	return written{id: r.ID, source: r.Source, companySlug: r.CompanySlug, duplicateOf: r.DuplicateOf}
 }
 
-// persist writes the posting the cheapest way that is correct. A re-crawl that matches the
-// stored row on RefreshUnchangedJob's key refreshes only last_seen_at, touching no index and
-// leaving updated_at alone; everything else — edited content, a closed row reappearing, a
-// posting the catalogue does not hold yet — takes the full upsert. Matching no row cannot
-// distinguish "changed" from "absent", and does not need to: both want the same statement.
 // withheldIfSeenBefore is the last_seen_at before which search had withheld a posting as
 // unseen (search.UnseenWindow); a liveness write that moves it past this requeues the posting.
 func withheldIfSeenBefore() pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: time.Now().Add(-search.UnseenWindow), Valid: true}
 }
 
-func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
+// errCheapFenced reports that the cheap write matched the stored row, waited for a concurrent
+// writer, and was refused because the row's state changed meanwhile (a close, a content or
+// metadata edit). The refused statement still holds the activity row, and taking the jobs row now
+// would reverse the lock order (jobs, then activity) and deadlock against a closer — so persist
+// returns at once, saveOnce rolls back, and save retries from a fresh transaction.
+var errCheapFenced = errors.New("cheap write fenced by a concurrent state change")
+
+// maxFencedAttempts bounds how often one posting's cheap write may lose to a concurrent state
+// change before save reports an error: the next crawl retries it, and nothing is silently skipped
+// or rewritten from stale parameters.
+const maxFencedAttempts = 3
+
+// persist refreshes activity when the stored posting matches, leaving the jobs tuple alone.
+// Edited, closed and absent postings take the full write. A fenced match must be retried in a
+// fresh transaction before either path can run again.
+func persist(ctx context.Context, tx pgx.Tx, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
 	cheap, err := qtx.RefreshUnchangedJob(ctx, db.RefreshUnchangedJobParams{
 		Source:               p.Source,
 		ExternalID:           p.ExternalID,
@@ -162,13 +172,17 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		WithheldIfSeenBefore: withheldIfSeenBefore(),
 	})
 	if err == nil {
+		if cheap.Fenced {
+			return written{}, errCheapFenced
+		}
 		return cheapWrite(cheap), nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return written{}, fmt.Errorf("refresh unchanged job: %w", err)
 	}
 
-	full, err := qtx.UpsertJob(ctx, p)
+	// No row matched, so no activity lock is held and the full write takes the jobs row first.
+	full, err := job.Upsert(ctx, tx, p)
 	if err != nil {
 		return written{}, fmt.Errorf("upsert job: %w", err)
 	}
@@ -241,7 +255,39 @@ func (s *dbStore) SaveWithApplyForm(ctx context.Context, j job.Job, form applyfo
 	return s.save(ctx, j, &form)
 }
 
+// save persists the posting, retrying a cheap write the state fence refused from a fresh
+// transaction. The retry is a fresh CHEAP attempt, never a forced full write: a posting the
+// fence refused for a metadata change (a company rekey, say) would otherwise be rewritten from
+// parameters that predate it. A fresh attempt whose match key no longer matches falls to the full
+// write by itself, holding no activity lock.
 func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) error {
+	f := j.Fields()
+	err := retryFenced(
+		func() error { return s.saveOrRetrySlug(ctx, j, form) },
+		func() { s.tally.recordFenced(f.Source) },
+	)
+	if errors.Is(err, errCheapFenced) {
+		return fmt.Errorf("save %s/%s: %w", f.Source, f.ExternalID, err)
+	}
+	return err
+}
+
+// retryFenced runs attempt until it stops reporting errCheapFenced, at most maxFencedAttempts
+// times, calling onFenced after each refused attempt. A budget spent is an error, not a skip.
+func retryFenced(attempt func() error, onFenced func()) error {
+	for n := 1; ; n++ {
+		err := attempt()
+		if !errors.Is(err, errCheapFenced) {
+			return err
+		}
+		onFenced()
+		if n == maxFencedAttempts {
+			return fmt.Errorf("cheap write fenced %d times: %w", n, err)
+		}
+	}
+}
+
+func (s *dbStore) saveOrRetrySlug(ctx context.Context, j job.Job, form *applyform.Form) error {
 	err := s.saveOnce(ctx, j, form, false)
 	if constraint, ok := pgerr.UniqueViolationConstraint(err); !ok || constraint != "jobs_public_slug_key" {
 		return err
@@ -272,7 +318,7 @@ func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form,
 	}
 
 	qtx := s.q.WithTx(tx)
-	saved, err := persist(ctx, qtx, params)
+	saved, err := persist(ctx, tx, qtx, params)
 	if err != nil {
 		return err
 	}
@@ -490,25 +536,31 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // Touch refreshes an already-ingested posting's liveness (last_seen_at, reopen if closed) by
 // its (source, external_id) identity, without rewriting content — the path a HydratingSource
 // (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
-// and facets are preserved. A stated listing deadline is updated alongside liveness.
+// and facets are preserved. A stated listing deadline is updated by the full touch when it changes.
 // Implements pipeline.Toucher.
 func (s *dbStore) Touch(ctx context.Context, source, externalID string, deadline *time.Time) (string, error) {
 	params := db.TouchJobParams{
-		Source:               source,
-		ExternalID:           externalID,
-		WithheldIfSeenBefore: withheldIfSeenBefore(),
+		Source: source, ExternalID: externalID, WithheldIfSeenBefore: withheldIfSeenBefore(),
 	}
 	if deadline != nil {
 		params.ApplicationDeadline = pgtype.Date{Time: *deadline, Valid: true}
 	}
-	touched, err := s.q.TouchJob(ctx, params)
+	companySlug, live, err := s.touchLive(ctx, params)
 	if err != nil {
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
-	companySlug := touched.CompanySlug
-	if touched.Deferred {
-		if companySlug, err = s.reopenAndRederive(ctx, params); err != nil {
-			return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
+	if !live {
+		// Closed, past its deadline, absent, or fenced: the full touch decides under its own
+		// transaction, now that the fast statement has ended and released its activity row.
+		touched, err := s.touchFull(ctx, params)
+		if err != nil {
+			return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
+		}
+		companySlug = touched.CompanySlug
+		if touched.Deferred {
+			if companySlug, err = s.reopenAndRederive(ctx, params); err != nil {
+				return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
+			}
 		}
 	}
 	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
@@ -524,6 +576,47 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string, deadline
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
 	return companySlug, nil
+}
+
+// touchLive is the ordinary touch of an open, unexpired posting: one autocommit statement that
+// writes only job_activity. It reports live=false when the row needs the full touch — closed,
+// past its deadline, absent, or a changed deadline — or when the state fence refused it after waiting;
+// the statement has
+// ended either way, so no lock is held when the caller falls back.
+func (s *dbStore) touchLive(ctx context.Context, params db.TouchJobParams) (companySlug string, live bool, err error) {
+	row, err := s.q.TouchOpenJob(ctx, db.TouchOpenJobParams{
+		Source:               params.Source,
+		ExternalID:           params.ExternalID,
+		WithheldIfSeenBefore: params.WithheldIfSeenBefore,
+		ApplicationDeadline:  params.ApplicationDeadline,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return row.CompanySlug, !row.Fenced, nil
+}
+
+// touchFull is the touch that may move lifecycle (a deadline closing the row, a closed row it is
+// not allowed to reopen), in one transaction with the observation of the activity row: the
+// lifecycle SQL and its triggers run first, so the observation is a separate command after them.
+// A touch that would reopen writes nothing and reports Deferred for reopenAndRederive.
+func (s *dbStore) touchFull(ctx context.Context, params db.TouchJobParams) (db.TouchJobRow, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.TouchJobRow{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	touched, err := s.q.WithTx(tx).TouchJob(ctx, params)
+	if err != nil || touched.Deferred {
+		return touched, err
+	}
+	if err := job.Observe(ctx, tx, touched.ID, false, touched.ResetStrikes); err != nil {
+		return db.TouchJobRow{}, err
+	}
+	return touched, tx.Commit(ctx)
 }
 
 // reopenAndRederive reopens a posting the plain touch deferred and re-derives it in the same
@@ -544,6 +637,9 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, params db.TouchJobParam
 	params.AllowReopen = true
 	touched, err := qtx.TouchJob(ctx, params)
 	if err != nil {
+		return "", err
+	}
+	if err := job.Observe(ctx, tx, touched.ID, false, touched.ResetStrikes); err != nil {
 		return "", err
 	}
 	if touched.Reopened {
@@ -612,14 +708,30 @@ const refreshCoveredChunk = 5000
 func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error) {
 	var refreshed []string
 	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
-		slugs, err := s.q.RefreshCoveredJobs(ctx, db.RefreshCoveredJobsParams{
+		// The bulk statement skips rows another writer holds, commits what it could write and
+		// releases every lock before any retry. A row it left unwritten is retried ALONE, waiting
+		// for the writer: holding no other row while it waits, it cannot be one edge of a cycle
+		// with a multi-row writer that visits rows in another order.
+		rows, err := s.q.RefreshCoveredJobs(ctx, db.RefreshCoveredJobsParams{
 			Source:      source,
 			ExternalIds: chunk,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("refresh covered jobs %s: %w", source, err)
 		}
-		refreshed = append(refreshed, slugs...)
+		for _, r := range rows {
+			if r.Refreshed {
+				refreshed = append(refreshed, r.CompanySlug)
+				continue
+			}
+			slug, ok, err := s.refreshCoveredOne(ctx, source, r.ExternalID)
+			if err != nil {
+				return nil, fmt.Errorf("refresh covered job %s/%s: %w", source, r.ExternalID, err)
+			}
+			if ok {
+				refreshed = append(refreshed, slug)
+			}
+		}
 	}
 	if s.crawled != nil {
 		for _, slug := range refreshed {
@@ -627,6 +739,28 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 		}
 	}
 	return refreshed, nil
+}
+
+// refreshCoveredOne refreshes one listed row the bulk statement left unwritten, waiting for the
+// writer that held it. ok=false is a row that is closed, private or absent now: a no-op, as the
+// refresh always was. A statement the state fence refused after waiting has ended, so the retry is
+// a fresh statement; running out of attempts, or the context ending, is an error — the caller
+// counts it as a failed refresh and the board never proves coverage with a listed row unrefreshed.
+func (s *dbStore) refreshCoveredOne(ctx context.Context, source, externalID string) (slug string, ok bool, err error) {
+	for attempt := 1; attempt <= maxFencedAttempts; attempt++ {
+		row, err := s.q.RefreshCoveredJob(ctx, db.RefreshCoveredJobParams{Source: source, ExternalID: externalID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		if err != nil {
+			return "", false, err
+		}
+		if row.Refreshed {
+			return row.CompanySlug, true, nil
+		}
+		s.tally.recordFenced(source)
+	}
+	return "", false, fmt.Errorf("fenced %d times", maxFencedAttempts)
 }
 
 // CloseCovered closes the open stored rows an aggregator board listed for employers the
