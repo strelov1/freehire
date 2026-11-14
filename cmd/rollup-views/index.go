@@ -8,10 +8,12 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// viewCountChunk is how many documents one index task updates. One task per ~1.7M daily
-// figures would hold a huge filter and context in a single request; 10k keeps each well
-// under Meilisearch's payload limit.
-const viewCountChunk = 10_000
+// viewCountChunk is how many documents one index task updates. Meilisearch copies the
+// task context (the whole counts map) for every document it edits, so a task's cost grows
+// with the square of its size: locally 20k documents took 6.4s in chunks of 2k and 15.7s
+// in chunks of 10k. On prod an edit task costs ~5s fixed plus ~2ms a document
+// (2026-11-14), so 2k keeps the fixed part small without the quadratic part.
+const viewCountChunk = 2_000
 
 type viewCountSetter interface {
 	SetViewCounts(ctx context.Context, counts map[int64]int64) error
