@@ -1044,6 +1044,10 @@ oj AS MATERIALIZED (
     FROM jobs j
     LEFT JOIN unseen_window uw ON uw.source = j.source
     LEFT JOIN job_activity a ON a.job_id = j.id
+    -- kept_ids (see the category predicate below) as a relation: ~400k ids, so a hash join that
+    -- can spill, not an IN subplan that degrades to a per-row scan once it outgrows hash memory.
+    -- The ids are primary keys from one query, so the join never multiplies a job.
+    LEFT JOIN unnest($3::bigint[]) AS k(id) ON k.id = j.id
     WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
       -- search.UnseenWindows.Unseen: the source has stopped showing the posting. last_seen_at is
       -- job_activity's; a job without an activity row reads as unseen, only for a windowed source.
@@ -1076,9 +1080,8 @@ oj AS MATERIALIZED (
       AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE
            -- The two branches search.CategoryUnresolved keeps that SQL cannot derive: a title
            -- the Go role dictionaries keep (resolved by the caller, search.TitleKeepsUncategorized)
-           -- and a vacancy a verified employer published. IN (SELECT unnest) rather than = ANY:
-           -- kept_ids runs to ~400k ids, which a hashed subplan probes in O(1) per row.
-           OR j.id IN (SELECT unnest($3::bigint[])) OR j.source = $4::text)
+           -- and a vacancy a verified employer published.
+           OR k.id IS NOT NULL OR j.source = $4::text)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug
