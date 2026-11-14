@@ -22,7 +22,7 @@
   }: { source: string; jobUrl: string; manuallyAdded?: boolean } = $props();
 
   // A regional market (whatjobs-uk) is shown, linked and avoided as its brand.
-  const source = $derived(sourceFamily(posted));
+  const source = $derived(sourceFamily(posted.toLowerCase()));
 
   const label = $derived(sourceLabel(source));
 
@@ -31,9 +31,7 @@
   // casing the list was written in. Compared by family too: this control once saved a
   // regional key (whatjobs-uk), and undo has to clear that entry, not only the brand.
   const avoidedEntries = $derived(
-    (profileStore.profile?.excluded_sources ?? []).filter(
-      (s) => sourceFamily(s.toLowerCase()) === source.toLowerCase(),
-    ),
+    (profileStore.profile?.excluded_sources ?? []).filter((s) => sourceFamily(s.toLowerCase()) === source),
   );
   const avoided = $derived(avoidedEntries.length > 0);
 
@@ -56,10 +54,11 @@
     try {
       if (avoid) await profileStore.avoidSource(source);
       else for (const entry of avoidedEntries) await profileStore.unavoidSource(entry);
-      void syncProfileAlert();
     } catch {
       failed = true;
     } finally {
+      // Also after a failure: an undo that cleared some entries before failing has changed the profile.
+      void syncProfileAlert();
       pending = false;
     }
   }
