@@ -75,7 +75,9 @@ BEGIN
     END IF;
     IF is_listed THEN
         INSERT INTO job_changes (job_id, kind)
-        VALUES (NEW.id, CASE WHEN TG_OP = 'INSERT' THEN 'opened' ELSE 'reopened' END);
+        -- FOUND: an earlier transaction logged this posting, so it was served before. A row
+        -- first listed by an update (inserted private or a duplicate) is still `opened`.
+        VALUES (NEW.id, CASE WHEN FOUND THEN 'reopened' ELSE 'opened' END);
     ELSE
         INSERT INTO job_changes (job_id, kind, reason)
         VALUES (NEW.id, 'closed', CASE

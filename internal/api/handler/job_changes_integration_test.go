@@ -166,6 +166,15 @@ func TestJobChangesFeed(t *testing.T) {
 		}
 	})
 
+	t.Run("a posting first listed by an update is opened, not reopened", func(t *testing.T) {
+		cursor := getChanges(t, app, url.Values{"since": {since}}).Meta.NextCursor
+		mustExec(t, pool, `UPDATE jobs SET is_private = false WHERE public_slug = 'job-c'`)
+		p := getChanges(t, app, url.Values{"cursor": {cursor}})
+		if len(p.Data) != 1 || plain(p.Data)[0] != (changeItem{0, "job-c", "opened", ""}) {
+			t.Fatalf("after going public: %+v, want job-c opened", p.Data)
+		}
+	})
+
 	t.Run("a duplicate leaving and returning is a removal then an opening", func(t *testing.T) {
 		cursor := getChanges(t, app, url.Values{"since": {since}}).Meta.NextCursor
 		mustExec(t, pool, `UPDATE jobs SET duplicate_of_role = NULL WHERE public_slug = 'job-d'`)
