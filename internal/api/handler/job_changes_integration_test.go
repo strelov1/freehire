@@ -217,18 +217,6 @@ func TestJobChangesFeed(t *testing.T) {
 	})
 }
 
-func TestPruneJobChangesKeepsRecentEntries(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	mustExec(t, pool, `INSERT INTO job_changes (job_id, kind, at) VALUES (1, 'opened', now() - interval '40 days'), (2, 'opened', now())`)
-	n, err := db.New(pool).PruneJobChanges(ctx, db.PruneJobChangesParams{
-		Cutoff: pgtype.Timestamptz{Time: time.Now().Add(-31 * 24 * time.Hour), Valid: true}, BatchSize: 10,
-	})
-	if err != nil || n != 1 {
-		t.Fatalf("pruned %d, %v; want exactly the 40-day-old entry", n, err)
-	}
-}
-
 // T100 takes its xid first but reopens A after T101 closed it, so the feed lists the reopen
 // before the close. Applying the feed by seq must still end with A open.
 func TestJobChangesInterleavedTransactionsKeepPerPostingOrder(t *testing.T) {

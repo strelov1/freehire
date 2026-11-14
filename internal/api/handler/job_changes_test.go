@@ -9,7 +9,7 @@ import (
 )
 
 func TestChangesCursorRoundTrip(t *testing.T) {
-	for _, in := range []changesCursor{{0, 0, 0}, {42, 7, 1_700_000_000}, {1 << 40, 1 << 50, 1}} {
+	for _, in := range []changesCursor{{0, 0}, {42, 7}, {1 << 40, 1 << 50}} {
 		out, err := decodeChangesCursor(in.encode())
 		if err != nil || out != in {
 			t.Fatalf("round trip of %+v = %+v, %v", in, out, err)
@@ -21,11 +21,11 @@ func TestChangesCursorRejectsGarbage(t *testing.T) {
 	enc := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
 	for name, in := range map[string]string{
 		"not base64":    "!!!",
-		"wrong version": enc("v2:1:2:3"),
-		"too few parts": enc("v1:1:2"),
-		"too many":      enc("v1:1:2:3:4"),
-		"not numbers":   enc("v1:a:b:c"),
-		"negative":      enc("v1:-1:2:3"),
+		"wrong version": enc("v2:1:2"),
+		"too few parts": enc("v1:1"),
+		"too many":      enc("v1:1:2:3"),
+		"not numbers":   enc("v1:a:b"),
+		"negative":      enc("v1:-1:2"),
 		"empty":         "",
 	} {
 		if _, err := decodeChangesCursor(in); err == nil {
@@ -54,13 +54,5 @@ func TestListJobChangesValidation(t *testing.T) {
 	// as a /jobs/:slug lookup or lost to a 404.
 	if got := windowedGet(t, app, "/api/v1/jobs/changes", "since="+valid); got == fiber.StatusBadRequest || got == fiber.StatusNotFound {
 		t.Errorf("valid since: status %d, want the handler to be reached", got)
-	}
-}
-
-func TestListJobChangesRefusesStaleCursor(t *testing.T) {
-	app := mountWindowed(jobsRegister)
-	stale := changesCursor{xid: 1, id: 1, at: time.Now().Add(-maxChangesLookback - time.Hour).Unix()}
-	if got := windowedGet(t, app, "/api/v1/jobs/changes", "cursor="+stale.encode()); got != fiber.StatusGone {
-		t.Errorf("stale cursor: status %d, want 410", got)
 	}
 }

@@ -37,11 +37,3 @@ WHERE at >= sqlc.arg(since);
 -- When the log begins (job_changes_at_idx). NULL while it is empty.
 SELECT min(at)::timestamptz AS available_since
 FROM job_changes;
-
--- name: PruneJobChanges :execrows
--- Retention for the feed, one bounded batch (the caller loops): entries older than the
--- cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
-DELETE FROM job_changes d
-WHERE d.id IN (
-    SELECT o.id FROM job_changes o WHERE o.at < sqlc.arg(cutoff) ORDER BY o.at LIMIT sqlc.arg(batch_size)
-);

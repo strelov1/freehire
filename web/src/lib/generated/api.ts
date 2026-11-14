@@ -1155,7 +1155,7 @@ export interface paths {
          *     ones arrive. A change is served only once its transaction has committed and every older
          *     one has finished, so it appears a moment after it happens (see the data freshness section). Per
          *     posting, apply a change only when its `seq` is greater than the last you applied. A cursor
-         *     older than 30 days answers 410. `since` only picks the starting point of the first call, and
+         *     never expires. `since` only picks the starting point of the first call, and
          *     can include a few changes from just before it: from then on, resume from the cursor, not from a time.
          */
         get: operations["listJobChanges"];

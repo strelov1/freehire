@@ -6273,9 +6273,6 @@ type Querier interface {
 	// Drops snapshot rows older than the retention window (~26 weeks), keeping
 	// the table bounded.
 	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
-	// Retention for the feed, one bounded batch (the caller loops): entries older than the
-	// cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
-	PruneJobChanges(ctx context.Context, arg PruneJobChangesParams) (int64, error)
 	// Claims only matter for the day they were taken; a week of them is kept for the
 	// one-letter-a-day report and the rest is dropped.
 	PruneMailDayClaims(ctx context.Context) (int64, error)

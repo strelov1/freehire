@@ -1289,9 +1289,9 @@ type Handler interface {
 	// walk never skips or repeats a change while new ones arrive. A change is served only once its
 	// transaction has committed and every older one has finished, so it appears a moment after it happens
 	// (see the data freshness section). Per posting, apply a change only when its `seq` is greater than
-	// the last you applied. A cursor older than 30 days answers 410. `since` only picks the starting point
-	// of the first call, and can include a few changes from just before it: from then on, resume from the
-	// cursor, not from a time.
+	// the last you applied. A cursor never expires. `since` only picks the starting point of the first
+	// call, and can include a few changes from just before it: from then on, resume from the cursor, not
+	// from a time.
 	//
 	// GET /jobs/changes
 	ListJobChanges(ctx context.Context, params ListJobChangesParams) (*JobChangesPage, error)

@@ -23,14 +23,13 @@ const (
 	maxChangesLookback = 30 * 24 * time.Hour
 )
 
-// changesCursor is a position in the feed: the (xid, id) of the last change served, and
-// `at`, a time (unix seconds) by which every entry after the position was recorded at or
-// after, so the handler can tell a cursor that outlived the log's retention. The handler
-// never reads it as anything but "after this", and a client never reads it at all.
-type changesCursor struct{ xid, id, at int64 }
+// changesCursor is a position in the feed: the (xid, id) of the last change served. The
+// handler never reads it as anything but "after this", and a client never reads it at all.
+// The log is never pruned, so a cursor never expires.
+type changesCursor struct{ xid, id int64 }
 
 func (c changesCursor) encode() string {
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("v1:%d:%d:%d", c.xid, c.id, c.at)))
+	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("v1:%d:%d", c.xid, c.id)))
 }
 
 func decodeChangesCursor(s string) (changesCursor, error) {
@@ -39,19 +38,16 @@ func decodeChangesCursor(s string) (changesCursor, error) {
 		return changesCursor{}, errBadChangesCursor
 	}
 	parts := strings.Split(string(raw), ":")
-	if len(parts) != 4 || parts[0] != "v1" {
+	if len(parts) != 3 || parts[0] != "v1" {
 		return changesCursor{}, errBadChangesCursor
 	}
 	xid, err1 := strconv.ParseInt(parts[1], 10, 64)
 	id, err2 := strconv.ParseInt(parts[2], 10, 64)
-	at, err3 := strconv.ParseInt(parts[3], 10, 64)
-	if err1 != nil || err2 != nil || err3 != nil || xid < 0 || id < 0 || at < 0 {
+	if err1 != nil || err2 != nil || xid < 0 || id < 0 {
 		return changesCursor{}, errBadChangesCursor
 	}
-	return changesCursor{xid: xid, id: id, at: at}, nil
+	return changesCursor{xid: xid, id: id}, nil
 }
-
-var errStaleChangesCursor = fiber.NewError(fiber.StatusGone, "cursor is older than the feed's retention (30 days): resync from search, then start again with since")
 
 var errBadChangesCursor = fiber.NewError(fiber.StatusBadRequest, "invalid cursor")
 
@@ -74,9 +70,6 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 		var err error
 		if pos, err = decodeChangesCursor(cursorIn); err != nil {
 			return nil, err
-		}
-		if time.Unix(pos.at, 0).Before(time.Now().Add(-maxChangesLookback)) {
-			return nil, errStaleChangesCursor
 		}
 		hasPos = true
 	case sinceIn != "":
@@ -103,7 +96,7 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 		if err != nil {
 			return nil, err
 		}
-		pos = changesCursor{xid: xid, at: since.Unix()}
+		pos = changesCursor{xid: xid}
 	}
 
 	// One extra row says whether more is waiting without a count.
@@ -127,14 +120,9 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 			ClosedReason: optString(r.Reason),
 		}
 	}
-	// Past the last row served, nothing older than the cursor's time is left to read: with
-	// more waiting that is the last row's time, otherwise now.
 	if len(rows) > 0 {
 		last := rows[len(rows)-1]
-		pos = changesCursor{xid: last.Xid, id: last.ID, at: last.At.Time.Unix()}
-	}
-	if !meta.HasMore {
-		pos.at = time.Now().Unix()
+		pos = changesCursor{xid: last.Xid, id: last.ID}
 	}
 	if len(rows) > 0 || hasPos {
 		meta.NextCursor = apigen.NewOptString(pos.encode())

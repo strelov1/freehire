@@ -109,25 +109,3 @@ func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) 
 	}
 	return items, nil
 }
-
-const pruneJobChanges = `-- name: PruneJobChanges :execrows
-DELETE FROM job_changes d
-WHERE d.id IN (
-    SELECT o.id FROM job_changes o WHERE o.at < $1 ORDER BY o.at LIMIT $2
-)
-`
-
-type PruneJobChangesParams struct {
-	Cutoff    pgtype.Timestamptz `json:"cutoff"`
-	BatchSize int32              `json:"batch_size"`
-}
-
-// Retention for the feed, one bounded batch (the caller loops): entries older than the
-// cutoff, by job_changes_at_idx. See jobChangesRetention in cmd/rollup-stats.
-func (q *Queries) PruneJobChanges(ctx context.Context, arg PruneJobChangesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, pruneJobChanges, arg.Cutoff, arg.BatchSize)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
