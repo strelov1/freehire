@@ -425,7 +425,7 @@
 
   function retrySearch() {
     refreshCounts();
-    reloadList(pageOffset(activePage));
+    if (jobs.status === 'error') reloadList(pageOffset(activePage));
   }
 
   // Rows kept on screen while the guessed opening scope reloads the feed underneath

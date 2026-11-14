@@ -64,8 +64,10 @@ test('search quota explains recovery and offers a higher plan', async ({ page })
 
 test('a facets-only quota refusal offers an upgrade while keeping loaded jobs', async ({ page }) => {
   test.setTimeout(120_000);
-  await page.route('**/api/v1/jobs/facets?**', (route) =>
-    route.fulfill({
+  let facetRequests = 0;
+  await page.route('**/api/v1/jobs/facets?**', (route) => {
+    facetRequests++;
+    return route.fulfill({
       status: 429,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -76,14 +78,27 @@ test('a facets-only quota refusal offers an upgrade while keeping loaded jobs', 
         retry_after_seconds: 30,
         upgrade_available: true,
       }),
-    }),
-  );
+    });
+  });
   await page.goto('/jobs?q=engineer');
   await page.waitForLoadState('networkidle');
   const notice = page.getByRole('status').filter({ hasText: 'Search limit reached' });
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(notice.getByRole('link', { name: 'Upgrade for higher search limits' })).toBeVisible();
   await expect(page.getByTestId('job-card').first()).toBeVisible();
+
+  let listRetries = 0;
+  await page.route('**/api/v1/jobs/search?**', async (route) => {
+    listRetries++;
+    await route.fulfill({ status: 429, contentType: 'application/json', body: '{"error":"still limited"}' });
+  });
+  const previousFacets = facetRequests;
+  await notice.getByRole('button', { name: 'Retry search' }).click();
+  await expect.poll(() => facetRequests).toBeGreaterThan(previousFacets);
+  // A continuing facet refusal must not replace healthy rows with a failed list.
+  await expect(notice).toBeVisible();
+  await expect(page.getByTestId('job-card').first()).toBeVisible();
+  expect(listRetries).toBe(0);
 });
 
 test('one retry clears simultaneous search and facet quota refusals', async ({ page }) => {
