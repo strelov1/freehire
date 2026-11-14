@@ -10,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
@@ -21,30 +22,41 @@ func (s deadlineListing) Fetch(context.Context, sources.CompanyEntry) ([]sources
 }
 
 func TestListingRefreshPersistsDeadlineAndLifecycle(t *testing.T) {
-	pool := testdb.Pool(t)
-	ctx := context.Background()
-	store := newDBStore(pool, 1, newCrawledSet(), nil, defaultSeenPolicy())
-	if err := store.Save(ctx, cheapPosting("acme:deadline", "Backend Engineer")); err != nil {
-		t.Fatal(err)
-	}
-	original := loadJob(t, pool, "acme:deadline")
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	for _, tc := range []struct {
-		name     string
-		deadline *time.Time
-		want     time.Time
-		closed   bool
+		name           string
+		storedDeadline *time.Time
+		wasClosed      bool
+		deadline       *time.Time
+		want           time.Time
+		closed         bool
 	}{
-		{"shortened", new(today.AddDate(0, 0, -1)), today.AddDate(0, 0, -1), true},
-		{"extended", new(today.AddDate(0, 0, 3)), today.AddDate(0, 0, 3), false},
-		{"changed while open", new(today.AddDate(0, 0, 5)), today.AddDate(0, 0, 5), false},
-		{"missing preserves stored date", nil, today.AddDate(0, 0, 5), false},
+		{"shortened", nil, false, new(today.AddDate(0, 0, -1)), today.AddDate(0, 0, -1), true},
+		{"extended", new(today.AddDate(0, 0, -1)), true, new(today.AddDate(0, 0, 3)), today.AddDate(0, 0, 3), false},
+		{"changed while open", new(today.AddDate(0, 0, 3)), false, new(today.AddDate(0, 0, 5)), today.AddDate(0, 0, 5), false},
+		{"missing preserves stored date", new(today.AddDate(0, 0, 5)), false, nil, today.AddDate(0, 0, 5), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := pool.Exec(ctx, `DELETE FROM search_outbox WHERE job_id=$1`, original.ID); err != nil {
+			pool := testdb.Pool(t)
+			ctx := context.Background()
+			store := newDBStore(pool, 1, newCrawledSet(), nil, defaultSeenPolicy())
+			if err := store.Save(ctx, cheapPosting("acme:deadline", "Backend Engineer")); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := pool.Exec(ctx, `DELETE FROM search_delete_outbox WHERE job_id=$1`, original.ID); err != nil {
+			original := loadJob(t, pool, "acme:deadline")
+			if _, err := pool.Exec(ctx, `UPDATE jobs SET application_deadline=$1::date,
+                closed_at=CASE WHEN $2::boolean THEN now() END,
+                closed_reason=CASE WHEN $2::boolean THEN 'expired' ELSE '' END WHERE id=$3`, tc.storedDeadline, tc.wasClosed, original.ID); err != nil {
+				t.Fatal(err)
+			}
+			if tc.wasClosed {
+				// Retain the previous expiry's queued removal: a delayed worker must
+				// recognize the reopened posting instead of hiding it again.
+				if _, err := pool.Exec(ctx, `INSERT INTO search_delete_outbox(job_id) VALUES($1)`, original.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pool.Exec(ctx, `DELETE FROM search_outbox WHERE job_id=$1`, original.ID); err != nil {
 				t.Fatal(err)
 			}
 			backdateStamps(t, pool, "acme:deadline")
@@ -74,6 +86,25 @@ func TestListingRefreshPersistsDeadlineAndLifecycle(t *testing.T) {
 			}
 			if !tc.closed && tc.deadline != nil && searchOutboxCount(t, pool, original.ID) != 1 {
 				t.Error("deadline change was not queued for search")
+			}
+			if tc.wasClosed {
+				rows, err := db.New(pool).PrepareSearchDeletions(ctx, []int64{original.ID})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(rows) != 0 {
+					t.Fatal("a stale expiry removal would hide the reopened posting")
+				}
+				var pending int
+				if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox WHERE job_id=$1`, original.ID).Scan(&pending); err != nil {
+					t.Fatal(err)
+				}
+				if pending != 0 {
+					t.Error("obsolete removal was not cancelled by the drain")
+				}
+				if searchOutboxCount(t, pool, original.ID) != 1 {
+					t.Error("reopened posting lost its search restoration")
+				}
 			}
 			if tc.closed {
 				var n int
