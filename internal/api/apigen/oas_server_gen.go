@@ -208,6 +208,12 @@ type Handler interface {
 	//
 	// POST /support/sessions/{id}/cancel
 	CancelSupportTurn(ctx context.Context, params CancelSupportTurnParams) error
+	// CatalogHistory implements catalogHistory operation.
+	//
+	// The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.
+	//
+	// GET /stats/catalog-history
+	CatalogHistory(ctx context.Context) (*CatalogHistoryOK, error)
 	// CatalogScale implements catalogScale operation.
 	//
 	// The canonical numbers behind every "how big is this" figure on the site (the jobs list total, the

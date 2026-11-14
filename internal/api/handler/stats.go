@@ -55,6 +55,9 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler, c
 
 	api.Get("/stats/jobs-activity", contract)
 
+	// Public catalogue size per UTC day (catalog_size_daily), the /open page's size chart.
+	api.Get("/stats/catalog-history", contract)
+
 	// Public member-growth time series (cumulative registrations per UTC day),
 	// unauthenticated like the other public reads. Computed on the fly from
 	// users.created_at (no rollup); the /open transparency page renders it as a
@@ -206,6 +209,21 @@ func (h *statsHandlers) UserGrowth(ctx context.Context) (*apigen.UserGrowthOK, e
 	}
 
 	return &apigen.UserGrowthOK{Data: points}, nil
+}
+
+// CatalogHistory serves the catalogue's size per UTC day: measured days from cmd/rollup-stats'
+// daily snapshot, earlier days reconstructed once by cmd/backfill-catalog-history and marked
+// so. The table holds one row a day, so the whole series is returned.
+func (h *statsHandlers) CatalogHistory(ctx context.Context) (*apigen.CatalogHistoryOK, error) {
+	rows, err := h.queries.ListCatalogSize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]apigen.CatalogSizePoint, len(rows))
+	for i, r := range rows {
+		points[i] = apigen.CatalogSizePoint{Date: r.Day.Time.Format(dateLayout), OpenJobs: r.OpenJobs, Reconstructed: r.Reconstructed}
+	}
+	return &apigen.CatalogHistoryOK{Data: points}, nil
 }
 
 // EngagementStats serves the public, unauthenticated engagement counts: how many
