@@ -91,7 +91,7 @@ func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
 		if err = r.sender.Send(ctx, message); err != nil {
 			if errors.Is(err, emailnotify.ErrSendingPaused) {
 				// No request was dispatched. Unlike an uncertain network result, this can be retried today.
-				cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				cleanup, cancel := detached(ctx)
 				releaseErr := r.store.ReleasePaused(cleanup, c, at)
 				cancel()
 				if releaseErr != nil {
@@ -106,7 +106,11 @@ func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
 			log.Printf("inbox-digest: user %d send: %v", c.UserID, err)
 			continue
 		}
-		if err = r.store.MarkSent(ctx, c, at); err != nil {
+		// The mail is out: a shutdown now must not leave the day unrecorded and resend it tomorrow.
+		finalize, cancel := detached(ctx)
+		err = r.store.MarkSent(finalize, c, at)
+		cancel()
+		if err != nil {
 			stats.Failed++
 			log.Printf("inbox-digest: user %d mark sent: %v", c.UserID, err)
 			continue
@@ -114,4 +118,9 @@ func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
 		stats.Sent++
 	}
 	return stats, nil
+}
+
+// detached outlives the run's cancellation for a short, bounded write.
+func detached(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 }

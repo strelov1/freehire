@@ -31,7 +31,10 @@ func (s *memoryStore) Claim(context.Context, Candidate, Snapshot, time.Time) (bo
 	s.claimed = true
 	return true, nil
 }
-func (s *memoryStore) MarkSent(context.Context, Candidate, time.Time) error {
+func (s *memoryStore) MarkSent(ctx context.Context, _ Candidate, _ time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.completed++
 	return nil
 }
@@ -112,5 +115,26 @@ func TestDailyDigestRetainsAmbiguousFailureAndReleasesPausedSend(t *testing.T) {
 				t.Fatal("ambiguous send can repeat same day")
 			}
 		}
+	}
+}
+
+type cancellingSender struct{ cancel context.CancelFunc }
+
+func (s cancellingSender) Send(context.Context, emailnotify.Message) error {
+	s.cancel() // shutdown lands right after the provider accepted the mail
+	return nil
+}
+
+func TestDailyDigestRecordsSendDespiteShutdown(t *testing.T) {
+	store := &memoryStore{candidates: []Candidate{{UserID: 7, Email: "member@example.test"}}, snapshot: Snapshot{IDs: []int64{11}, Total: 1, Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := New(store, NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32)), cancellingSender{cancel})
+	stats, err := r.Run(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.completed != 1 || stats.Sent != 1 {
+		t.Fatalf("confirmed send left unrecorded: %+v", stats)
 	}
 }
