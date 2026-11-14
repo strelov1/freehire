@@ -675,9 +675,9 @@
       <!-- The compact card has no action row, so its invitation stays a caption. -->
       <div class="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
         {#if matchState === 'guest'}
-          <Lock class="size-3.5 shrink-0" />
+          <Lock class="size-3.5 shrink-0" aria-hidden="true" />
         {:else}
-          <FileText class="size-3.5 shrink-0" />
+          <FileText class="size-3.5 shrink-0" aria-hidden="true" />
         {/if}
         {matchInvite}
       </div>

@@ -22,7 +22,7 @@ export const job: Job = {
     '<p>Acme builds logistics software. You will design and run the services behind it.</p>' +
     '<h2>Requirements</h2><ul><li>5+ years of Go</li><li>PostgreSQL in production</li></ul>',
   countries: ['DE', 'US'],
-  regions: ['eu'],
+  regions: [],
   work_mode: 'hybrid',
   skills: ['go', 'postgresql', 'event-driven-architecture'],
   cities: ['Berlin'],
@@ -76,7 +76,7 @@ export const facetCounts: FacetCounts = {
   total: 1,
   facets: {
     category: { backend: 1 },
-    countries: { DE: 1 },
+    countries: { DE: 1, US: 1 },
   },
   stats: {},
 };
