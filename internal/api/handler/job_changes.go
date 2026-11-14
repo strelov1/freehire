@@ -21,11 +21,6 @@ const (
 	// maxChangesLookback bounds `since`: the log keeps growing, and a mirror that is further
 	// behind than this should rebuild from search instead of replaying history.
 	maxChangesLookback = 30 * 24 * time.Hour
-	// changesSettleDelay is how long an entry waits before it is served. The trigger in
-	// migration 0263 cancels a listed->duplicate pair under 6 hours old (the dedup passes'
-	// conservative bound); the extra hour covers a slow transaction, so a cancelled entry is
-	// never served first. Change the two together.
-	changesSettleDelay = 7 * time.Hour
 )
 
 // changesCursor is a position in the feed: the (xid, id) of the last change served, and
@@ -108,20 +103,12 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 		if err != nil {
 			return nil, err
 		}
-		if xid < 0 {
-			return &apigen.JobChangesPage{Data: []apigen.JobChange{}, Meta: meta}, nil
-		}
 		pos = changesCursor{xid: xid, at: since.Unix()}
 	}
 
-	settle := h.changesSettle
-	if settle == 0 {
-		settle = changesSettleDelay
-	}
 	// One extra row says whether more is waiting without a count.
 	rows, err := h.queries.ListJobChanges(ctx, db.ListJobChangesParams{
 		AfterXid: pos.xid, AfterID: pos.id, RowLimit: int32(limit) + 1,
-		Settle: pgtype.Interval{Microseconds: settle.Microseconds(), Valid: true},
 	})
 	if err != nil {
 		return nil, err
@@ -147,8 +134,7 @@ func (h *jobsHandlers) ListJobChanges(ctx context.Context, params apigen.ListJob
 		pos = changesCursor{xid: last.Xid, id: last.ID, at: last.At.Time.Unix()}
 	}
 	if !meta.HasMore {
-		// Entries younger than the settle delay are still unserved, so "now" would overstate.
-		pos.at = time.Now().Add(-settle).Unix()
+		pos.at = time.Now().Unix()
 	}
 	if len(rows) > 0 || hasPos {
 		meta.NextCursor = apigen.NewOptString(pos.encode())

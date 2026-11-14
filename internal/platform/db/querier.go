@@ -3749,11 +3749,13 @@ type Querier interface {
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
 	// When the log begins (job_changes_at_idx). NULL while it is empty.
 	JobChangesAvailableSince(ctx context.Context) (pgtype.Timestamptz, error)
-	// Where a `since` begins: the LOWEST transaction id among the entries recorded at or after it
-	// (job_changes_at_idx range). The earliest entry's xid is not enough: a transaction that took
-	// its xid first and logged later has a lower xid and would be skipped. The start can reach a
-	// little before `since` (a boundary entry may repeat), which a client absorbs through seq.
-	// -1 when nothing was recorded since.
+	// Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+	// recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+	// flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+	// logged later has a lower xid), and neither is the committed minimum alone: a writer still
+	// open here may commit before the page query takes its snapshot. Computing both together means
+	// no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+	// repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
 	JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after

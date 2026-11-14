@@ -16,24 +16,20 @@ SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug
 FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > (sqlc.arg(after_xid)::bigint, sqlc.arg(after_id)::bigint)
-  AND c.xid < LEAST(
-        pg_snapshot_xmin(pg_current_snapshot())::text::bigint,
-        -- The settle delay, as a prefix of the key order so the cursor stays safe: nothing at
-        -- or after the earliest entry younger than the delay is served, and an entry older
-        -- than it but behind a younger one waits (see migration 0263, "Settle rule").
-        COALESCE((SELECT y.xid FROM job_changes y WHERE y.at >= now() - sqlc.arg(settle)::interval ORDER BY y.at, y.id LIMIT 1),
-                 9223372036854775807))
+  AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
   AND (NOT j.is_private OR c.kind = 'closed')
 ORDER BY c.xid, c.id
 LIMIT sqlc.arg(row_limit);
 
 -- name: JobChangesStartXID :one
--- Where a `since` begins: the LOWEST transaction id among the entries recorded at or after it
--- (job_changes_at_idx range). The earliest entry's xid is not enough: a transaction that took
--- its xid first and logged later has a lower xid and would be skipped. The start can reach a
--- little before `since` (a boundary entry may repeat), which a client absorbs through seq.
--- -1 when nothing was recorded since.
-SELECT COALESCE(min(xid), -1)::bigint AS xid
+-- Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+-- recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+-- flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+-- logged later has a lower xid), and neither is the committed minimum alone: a writer still
+-- open here may commit before the page query takes its snapshot. Computing both together means
+-- no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+-- repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
+SELECT LEAST(COALESCE(min(xid), 9223372036854775807), pg_snapshot_xmin(pg_current_snapshot())::text::bigint)::bigint AS xid
 FROM job_changes
 WHERE at >= sqlc.arg(since);
 

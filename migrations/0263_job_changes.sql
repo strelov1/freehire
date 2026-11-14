@@ -26,17 +26,6 @@
 -- The feed therefore exposes `id` as `seq`, and a client applies a change only when its seq
 -- is greater than the last one it applied for that posting.
 --
--- Settle rule. The dedup workers mark a posting a duplicate some time after it was inserted
--- (the synchronous role check in the upsert, the batch role pass every few hours, the
--- aggregator-vs-ATS pass; the batch cadences live in the private ops repo, so 6 hours is a
--- deliberately conservative bound). Nobody should be told about a posting that was listed
--- and withdrawn within that time. So when a listed posting becomes a duplicate and its latest
--- entry is an opened / reopened that is under 6 hours old, that entry is DELETED and no
--- `closed` is written: net effect nothing. The feed serves entries only once they are older
--- than the handler's settle delay (6 hours plus an hour for a slow transaction), so a
--- deleted entry was never served. The decision is made here, under the job's row lock, so it
--- cannot disagree with what a reader saw.
---
 -- There is deliberately no foreign key to jobs: nothing deletes jobs, and an FK would need an
 -- index on job_id only to serve deletes. A row whose job is gone simply drops out of the feed.
 -- No backfill: the log begins at this migration, and the feed reports where it begins.
@@ -52,16 +41,12 @@ CREATE TABLE job_changes (
 
 -- The feed's keyset walk.
 CREATE INDEX job_changes_xid_id_idx ON job_changes (xid, id);
--- A job's latest entry, for the settle rule in jobs_log_change below.
-CREATE INDEX job_changes_job_id_idx ON job_changes (job_id, id);
 -- Resolving `since` to a starting point, and the feed's earliest timestamp.
 CREATE INDEX job_changes_at_idx ON job_changes (at);
 
 CREATE FUNCTION public.jobs_log_change() RETURNS trigger
     LANGUAGE plpgsql AS $$
 DECLARE
-    prev record;
-    reason text;
     was_listed boolean := false;
     is_listed boolean := NEW.closed_at IS NULL AND NEW.duplicate_of IS NULL AND NOT NEW.is_private;
 BEGIN
@@ -75,18 +60,11 @@ BEGIN
         INSERT INTO job_changes (job_id, kind)
         VALUES (NEW.id, CASE WHEN TG_OP = 'INSERT' THEN 'opened' ELSE 'reopened' END);
     ELSE
-        reason := CASE
+        INSERT INTO job_changes (job_id, kind, reason)
+        VALUES (NEW.id, 'closed', CASE
             WHEN NEW.closed_at IS NOT NULL THEN NEW.closed_reason
             WHEN NEW.duplicate_of IS NOT NULL THEN 'duplicate'
-            ELSE 'private' END;
-        IF reason = 'duplicate' THEN
-            SELECT id, kind, at INTO prev FROM job_changes WHERE job_id = NEW.id ORDER BY id DESC LIMIT 1;
-            IF FOUND AND prev.kind IN ('opened', 'reopened') AND prev.at > clock_timestamp() - interval '6 hours' THEN
-                DELETE FROM job_changes WHERE id = prev.id;
-                RETURN NULL;
-            END IF;
-        END IF;
-        INSERT INTO job_changes (job_id, kind, reason) VALUES (NEW.id, 'closed', reason);
+            ELSE 'private' END);
     END IF;
     RETURN NULL;
 END;

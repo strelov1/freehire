@@ -104,7 +104,7 @@ func mustExec(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
 func TestJobChangesFeed(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	h := &jobsHandlers{queries: db.New(pool), changesSettle: time.Nanosecond}
+	h := &jobsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mountJobsContract(app, h, middleware{})
 	since := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
@@ -127,7 +127,8 @@ func TestJobChangesFeed(t *testing.T) {
 
 	want := []changeItem{
 		{0, "job-a", "opened", ""}, {0, "job-a", "closed", "unseen"}, {0, "job-a", "reopened", ""},
-		{0, "job-b", "opened", ""}, {0, "job-a", "closed", "expired"},
+		{0, "job-b", "opened", ""}, {0, "job-d", "opened", ""}, {0, "job-d", "closed", "duplicate"},
+		{0, "job-a", "closed", "expired"},
 	}
 	t.Run("the whole feed arrives in order", func(t *testing.T) {
 		p := getChanges(t, app, url.Values{"since": {since}})
@@ -180,21 +181,6 @@ func TestJobChangesFeed(t *testing.T) {
 		}
 	})
 
-	t.Run("a duplicate marked after the settle window is announced", func(t *testing.T) {
-		cursor := getChanges(t, app, url.Values{"since": {since}}).Meta.NextCursor
-		seedJob(t, pool, "job-f", "")
-		mustExec(t, pool, `UPDATE job_changes SET at = at - interval '7 hours' WHERE job_id = (SELECT id FROM jobs WHERE public_slug = 'job-f')`)
-		p := getChanges(t, app, url.Values{"cursor": {cursor}})
-		if len(p.Data) != 1 || plain(p.Data)[0] != (changeItem{0, "job-f", "opened", ""}) {
-			t.Fatalf("settled opening: %+v", p.Data)
-		}
-		mustExec(t, pool, `UPDATE jobs SET duplicate_of_role = (SELECT id FROM jobs WHERE public_slug = 'job-b') WHERE public_slug = 'job-f'`)
-		p = getChanges(t, app, url.Values{"cursor": {p.Meta.NextCursor}})
-		if len(p.Data) != 1 || plain(p.Data)[0] != (changeItem{0, "job-f", "closed", "duplicate"}) {
-			t.Fatalf("late duplicate: %+v, want closed/duplicate", p.Data)
-		}
-	})
-
 	t.Run("a late commit never lands behind a held cursor", func(t *testing.T) {
 		head := getChanges(t, app, url.Values{"since": {since}})
 		cursor := head.Meta.NextCursor
@@ -243,28 +229,12 @@ func TestPruneJobChangesKeepsRecentEntries(t *testing.T) {
 	}
 }
 
-func TestJobChangesSettleDelayHoldsYoungEntries(t *testing.T) {
-	pool := startPostgres(t)
-	h := &jobsHandlers{queries: db.New(pool)} // the default delay
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountJobsContract(app, h, middleware{})
-	mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`)
-	seedJob(t, pool, "job-old", "")
-	mustExec(t, pool, `UPDATE job_changes SET at = at - interval '8 hours'`)
-	seedJob(t, pool, "job-new", "")
-	// The old entry is served; the young one waits.
-	p := getChanges(t, app, url.Values{"cursor": {changesCursor{at: time.Now().Unix()}.encode()}})
-	if len(p.Data) != 1 || p.Data[0].Slug != "job-old" {
-		t.Fatalf("served %+v, want only job-old", p.Data)
-	}
-}
-
 // T100 takes its xid first but reopens A after T101 closed it, so the feed lists the reopen
 // before the close. Applying the feed by seq must still end with A open.
 func TestJobChangesInterleavedTransactionsKeepPerPostingOrder(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	h := &jobsHandlers{queries: db.New(pool), changesSettle: time.Nanosecond}
+	h := &jobsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mountJobsContract(app, h, middleware{})
 	since := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
@@ -305,7 +275,7 @@ func TestJobChangesInterleavedTransactionsKeepPerPostingOrder(t *testing.T) {
 func TestJobChangesSinceDoesNotSkipALowerXID(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
-	h := &jobsHandlers{queries: db.New(pool), changesSettle: time.Nanosecond}
+	h := &jobsHandlers{queries: db.New(pool)}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mountJobsContract(app, h, middleware{})
 	mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`)
@@ -334,5 +304,49 @@ func TestJobChangesSinceDoesNotSkipALowerXID(t *testing.T) {
 	}
 	if !got["job-x"] || !got["job-y"] {
 		t.Fatalf("feed from since = %v, want job-x and job-y", got)
+	}
+}
+
+// The start of a `since` is computed with the in-flight bound in one statement, so a writer
+// with a lower xid that is still open then, and commits before the page query, is not skipped.
+func TestJobChangesStartBoundCoversAWriterInFlight(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	q := db.New(pool)
+	mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`)
+
+	t1, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer t1.Rollback(ctx) //nolint:errcheck
+	if _, err := t1.Exec(ctx, `SELECT pg_current_xact_id()`); err != nil {
+		t.Fatal(err)
+	}
+	since := time.Now()
+	time.Sleep(20 * time.Millisecond)
+	seedJob(t, pool, "job-y", "") // higher xid, committed: the committed minimum alone starts above t1
+
+	start, err := q.JobChangesStartXID(ctx, pgtype.Timestamptz{Time: since, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := t1.Exec(ctx, `INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
+		VALUES ('test', 'job-x', 'https://e.test/x', 'Engineer', 'job-x', 'acme')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := t1.Commit(ctx); err != nil { // before the page query takes its snapshot
+		t.Fatal(err)
+	}
+	rows, err := q.ListJobChanges(ctx, db.ListJobChangesParams{AfterXid: start, RowLimit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, r := range rows {
+		got[r.PublicSlug] = true
+	}
+	if !got["job-x"] || !got["job-y"] {
+		t.Fatalf("page from the start bound = %v, want job-x and job-y", got)
 	}
 }

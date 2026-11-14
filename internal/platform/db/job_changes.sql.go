@@ -25,16 +25,18 @@ func (q *Queries) JobChangesAvailableSince(ctx context.Context) (pgtype.Timestam
 }
 
 const jobChangesStartXID = `-- name: JobChangesStartXID :one
-SELECT COALESCE(min(xid), -1)::bigint AS xid
+SELECT LEAST(COALESCE(min(xid), 9223372036854775807), pg_snapshot_xmin(pg_current_snapshot())::text::bigint)::bigint AS xid
 FROM job_changes
 WHERE at >= $1
 `
 
-// Where a `since` begins: the LOWEST transaction id among the entries recorded at or after it
-// (job_changes_at_idx range). The earliest entry's xid is not enough: a transaction that took
-// its xid first and logged later has a lower xid and would be skipped. The start can reach a
-// little before `since` (a boundary entry may repeat), which a client absorbs through seq.
-// -1 when nothing was recorded since.
+// Where a `since` begins, in ONE statement: below the LOWEST transaction id among the entries
+// recorded at or after it (job_changes_at_idx range) AND below the oldest transaction still in
+// flight. The earliest entry's xid is not enough (a transaction that took its xid first and
+// logged later has a lower xid), and neither is the committed minimum alone: a writer still
+// open here may commit before the page query takes its snapshot. Computing both together means
+// no such writer is skipped. The start can reach a little before `since` (a boundary entry may
+// repeat), which a client absorbs through seq. With nothing recorded it is the in-flight bound.
 func (q *Queries) JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error) {
 	row := q.db.QueryRow(ctx, jobChangesStartXID, since)
 	var xid int64
@@ -47,23 +49,16 @@ SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug
 FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > ($1::bigint, $2::bigint)
-  AND c.xid < LEAST(
-        pg_snapshot_xmin(pg_current_snapshot())::text::bigint,
-        -- The settle delay, as a prefix of the key order so the cursor stays safe: nothing at
-        -- or after the earliest entry younger than the delay is served, and an entry older
-        -- than it but behind a younger one waits (see migration 0263, "Settle rule").
-        COALESCE((SELECT y.xid FROM job_changes y WHERE y.at >= now() - $3::interval ORDER BY y.at, y.id LIMIT 1),
-                 9223372036854775807))
+  AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
   AND (NOT j.is_private OR c.kind = 'closed')
 ORDER BY c.xid, c.id
-LIMIT $4
+LIMIT $3
 `
 
 type ListJobChangesParams struct {
-	AfterXid int64           `json:"after_xid"`
-	AfterID  int64           `json:"after_id"`
-	Settle   pgtype.Interval `json:"settle"`
-	RowLimit int32           `json:"row_limit"`
+	AfterXid int64 `json:"after_xid"`
+	AfterID  int64 `json:"after_id"`
+	RowLimit int32 `json:"row_limit"`
 }
 
 type ListJobChangesRow struct {
@@ -89,12 +84,7 @@ type ListJobChangesRow struct {
 // that is private NOW serves only `closed` entries. Those carry just a slug the client was
 // already given while it was public, and withholding them would leave the copy listed.
 func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error) {
-	rows, err := q.db.Query(ctx, listJobChanges,
-		arg.AfterXid,
-		arg.AfterID,
-		arg.Settle,
-		arg.RowLimit,
-	)
+	rows, err := q.db.Query(ctx, listJobChanges, arg.AfterXid, arg.AfterID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
