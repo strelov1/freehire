@@ -111,8 +111,15 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 			if errors.Is(err, assistant.ErrInvalidArguments) {
 				code = "invalid_request"
 			}
-			result := errorResult(agentErrorText(err))
+			text := agentErrorText(err)
+			result := errorResult(text)
 			diagnostics := map[string]any{"error_code": code}
+			// A decode failure's text quotes the caller's own argument names; bad_args already
+			// names the argument, so only a fixed sentence is logged for it.
+			if errors.Is(err, assistant.ErrInvalidArguments) {
+				text = "invalid arguments"
+			}
+			diagnostics[reasonKey] = text
 			if field := assistant.ArgField(err); field != "" && code == "invalid_request" {
 				diagnostics[badArgsKey] = []string{field}
 			}
@@ -130,9 +137,8 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 // agentErrorText is what an agent is told when a tool fails. A *fiber.Error and a bad
 // argument are written for the caller, so their text is shown; anything else is an internal
 // fault whose text may name accounts, rows or personal data, so the agent gets a generic
-// sentence, as an HTTP caller gets a generic 500. Not logged either, for the same reason the
-// tool logs carry no error text: the result's diagnostics (request id, error code) are the
-// correlation.
+// sentence, as an HTTP caller gets a generic 500. Only this text is ever logged (as the
+// diagnostics' reason), so internal text stays out of the logs too.
 func agentErrorText(err error) string {
 	var fe *fiber.Error
 	switch {

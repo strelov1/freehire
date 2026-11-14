@@ -126,8 +126,10 @@ func (h *assistantHandlers) autoApplyStartTool() assistant.Tool {
 			"to the vacancy, checks the employer's application form against their saved answers, and "+
 			"waits for a review (auto_apply_review) before submitting. Spends one of today's auto-apply "+
 			"allowance, so it needs a paid plan, and the account's switch letting agents apply. Only "+
-			"vacancies on supported applicant-tracking systems can be started. Follow "+
-			"progress with auto_apply_get.",
+			"vacancies on supported applicant-tracking systems can be started. Before the first "+
+			"one, call get_setup_status and check its agents_may_apply step. A permission_denied, "+
+			"payment_required or invalid_request refusal is final for that call: tell the person "+
+			"the reason instead of retrying. Follow progress with auto_apply_get.",
 		assistant.EffectAdds, true,
 		func(ctx context.Context, userID int64, slug string) (any, error) {
 			if err := h.startAutoApply(ctx, userID, slug); err != nil {

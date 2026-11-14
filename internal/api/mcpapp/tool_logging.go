@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -73,6 +74,7 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 			code = outcome
 		}
 		var badArgs []string
+		var reason string
 		if metadata != nil && !metadata.state.ran {
 			outcome, code = "rejected", "invalid_request"
 			badArgs = badArgNames(result)
@@ -81,6 +83,7 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 			if code == "" {
 				code = resultErrorCode(result)
 			}
+			reason = handlerReason(result)
 			if code == "invalid_request" && badArgs == nil {
 				badArgs = handlerBadArgs(result)
 			}
@@ -95,6 +98,9 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 		attrs := []any{"outcome", outcome, "error_code", code, "duration_ms", elapsed.Milliseconds()}
 		if len(badArgs) > 0 {
 			attrs = append(attrs, "bad_args", strings.Join(badArgs, ","))
+		}
+		if reason != "" {
+			attrs = append(attrs, "error", reason)
 		}
 		if metadata != nil {
 			mcpClientCalls.WithLabelValues(surface, metadata.client).Inc()
@@ -122,6 +128,46 @@ const diagnosticsMetaKey = "freehire.me/diagnostics"
 // for an invalid_request. observeTool logs them and replaces the diagnostics before the
 // result leaves, so they never reach the client.
 const badArgsKey = "bad_args"
+
+// reasonKey carries, inside the diagnostics, the sentence a handler authored for a refusal
+// (never a result's text: that can echo the caller's input). observeTool logs it and replaces
+// the diagnostics before the result leaves.
+const reasonKey = "reason"
+
+const maxLoggedReasonRunes = 200
+
+// handlerReason returns the handler-authored reason, flattened to one bounded line.
+func handlerReason(result *mcp.CallToolResult) string {
+	diagnostics, _ := result.Meta[diagnosticsMetaKey].(map[string]any)
+	text, _ := diagnostics[reasonKey].(string)
+	return sanitizeReason(text)
+}
+
+func sanitizeReason(text string) string {
+	var b strings.Builder
+	runes, space := 0, false
+	for _, r := range text {
+		if unicode.IsSpace(r) {
+			space = b.Len() > 0
+			continue
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		if runes >= maxLoggedReasonRunes {
+			b.WriteString("...")
+			break
+		}
+		if space {
+			b.WriteByte(' ')
+			runes++
+			space = false
+		}
+		b.WriteRune(r)
+		runes++
+	}
+	return b.String()
+}
 
 func handlerBadArgs(result *mcp.CallToolResult) []string {
 	diagnostics, _ := result.Meta[diagnosticsMetaKey].(map[string]any)

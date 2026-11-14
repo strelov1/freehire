@@ -160,8 +160,10 @@ carries no description vectors, so the request is answered by keywords and the r
 - **Hand an internal error's text to the agent.** On the signed-in server a failed tool's
   text reaches a third-party model verbatim, so `agentErrorText` (`account.go`) shows it
   only for a `*fiber.Error` or a bad argument (`assistant.ErrInvalidArguments`); anything
-  else reads as a generic sentence, and is not logged either, because the tool logs carry
-  no error text. A message written for the agent ("slug is required", "no such answer")
+  else reads as a generic sentence. The tool log's `error` attribute carries only that same
+  agent-facing text (the diagnostics' `reason`, flattened to one line, 200 runes), never a
+  result's raw content; a decode failure logs the fixed "invalid arguments" with the argument
+  names in `bad_args`. A message written for the agent ("slug is required", "no such answer")
   is therefore a `fiber.NewError` with its status, never `errors.New`: a plain one reaches
   the agent as "something went wrong". Its status is also what the metrics count it as.
 - **Return a full description from `search_jobs`.** `/agent/jobs/search` rehydrates every
