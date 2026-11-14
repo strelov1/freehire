@@ -66,7 +66,7 @@ func run() int {
 	cfg := config.Load()
 	if !anyEngineConfigured() {
 		log.Printf("search-ping: no engine configured, nothing to do")
-		return 0
+		return worker.Skip("GOOGLE_INDEXING_KEY_FILE+INDEXNOW_KEY")
 	}
 
 	// After the gate, not before it: an origin nobody can fetch matters only once there

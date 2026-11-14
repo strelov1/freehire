@@ -53,6 +53,10 @@ func runOrPause(run func() int, extraPauseKeys []string) int {
 		writePausedMetrics()
 		return 0
 	}
+	// Cleared before the run, not after it: the mark describes THIS run, and a worker
+	// that somehow returns to runOrPause must not inherit the previous skip and publish
+	// it as if it were still true.
+	skipReason.Store(nil)
 	start := time.Now()
 	code := run()
 	writeRunMetrics(time.Since(start), code)

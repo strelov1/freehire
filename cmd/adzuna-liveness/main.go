@@ -115,7 +115,7 @@ func run() int {
 	rawURL := strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_URL"))
 	if rawURL == "" {
 		log.Print("adzuna-liveness: SCRAPLING_FETCH_URL is not set — nothing to do")
-		return 0
+		return worker.Skip("SCRAPLING_FETCH_URL")
 	}
 	tr, err := scraplingfetch.New(scraplingfetch.Config{
 		URL:   rawURL,

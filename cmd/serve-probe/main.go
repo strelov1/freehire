@@ -42,12 +42,12 @@ func run() int {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
 		log.Printf("serve-probe: %s is unset, nothing to publish", worker.PromTextfileDirEnv)
-		return 0
+		return worker.Skip(worker.PromTextfileDirEnv)
 	}
 	cfg := config.Load()
 	if cfg.MeiliKey == "" {
 		log.Print("serve-probe: MEILI_MASTER_KEY is unset, nothing to compare against")
-		return 0
+		return worker.Skip("MEILI_MASTER_KEY")
 	}
 	sample, err := worker.EnvInt32("SERVE_PROBE_SAMPLE", 500)
 	if err != nil {

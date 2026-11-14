@@ -46,7 +46,7 @@ func run() int {
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("limit-nudge-mail: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 	if cfg.OnboardingReplyTo == "" {
 		log.Print("limit-nudge-mail: ONBOARDING_REPLY_TO is unset — refusing to send a letter that asks for a reply")

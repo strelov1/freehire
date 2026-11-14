@@ -36,7 +36,7 @@ func run() int {
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("message-notify: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 	if len(cfg.JWTSecret) < 32 {
 		log.Print("message-notify: JWT_SECRET must be at least 32 bytes — the unsubscribe link would not verify; refusing")

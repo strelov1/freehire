@@ -47,7 +47,7 @@ func run() int {
 	cfg := config.Load()
 	if !cfg.LinkedInDigestConfigured() {
 		log.Print("linkedin-token-refresh: the LinkedIn channel is not configured, nothing to renew")
-		return 0
+		return worker.Skip("LINKEDIN_DIGEST")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
@@ -75,7 +75,7 @@ func run() int {
 	switch outcome.State {
 	case linkedinauth.StateMissing:
 		log.Print("linkedin-token-refresh: no credential stored — run cmd/linkedin-auth to sign in")
-		return 0
+		return worker.Skip("LINKEDIN_CREDENTIAL")
 	case linkedinauth.StateRenewed:
 		log.Printf("linkedin-token-refresh: renewed; the access token now expires %s",
 			outcome.ExpiresAt.Format(time.RFC3339))
