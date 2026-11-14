@@ -19,6 +19,8 @@ export const messages = defineMessages(
     workEmailPlaceholder: 'you@acme.com',
     workEmailHint: 'A public email provider (Gmail, Outlook, …) is not accepted — use your company address.',
     claimSubmit: 'Claim company',
+    claimTeamHint:
+      'Your company already manages its page here? Ask a colleague to invite you from Company profile → Team instead of claiming it.',
     claiming: 'Claiming…',
 
     // Confirm step: code just mailed.
@@ -132,6 +134,8 @@ export const messages = defineMessages(
       workEmailHint:
         'Публичные почтовые сервисы (Gmail, Outlook и т.п.) не принимаются — используйте корпоративный адрес.',
       claimSubmit: 'Заявить компанию',
+      claimTeamHint:
+        'Ваша компания уже ведёт здесь свою страницу? Попросите коллегу пригласить вас в разделе «Профиль компании» → «Команда», а не заявляйте права заново.',
       claiming: 'Отправка…',
 
       confirmTitle: 'Подтвердите рабочий email',
