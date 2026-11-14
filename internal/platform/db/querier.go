@@ -6094,7 +6094,8 @@ type Querier interface {
 	ObserveLearnedDomain(ctx context.Context, domain string) (int32, error)
 	// Every open posting's title for a batch of folded company keys (normalize.CompanyKey) —
 	// cmd/catalog-coverage matches an outside sample against these by jobhash.RoleKey. Duplicates
-	// are kept on purpose: a posting we hold twice is still one we hold. Served by
+	// are kept on purpose: a posting we hold twice is still one we hold. Private postings (a
+	// user's pasted JD) are not catalogue. Served by
 	// jobs_open_company_slug_folded_col_idx, whose predicate the last two conditions repeat: drop
 	// one and the planner scans the whole table.
 	OpenJobTitlesByFoldedCompany(ctx context.Context, companyKeys []string) ([]OpenJobTitlesByFoldedCompanyRow, error)

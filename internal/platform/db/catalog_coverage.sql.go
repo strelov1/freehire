@@ -12,7 +12,7 @@ import (
 const openJobTitlesByFoldedCompany = `-- name: OpenJobTitlesByFoldedCompany :many
 SELECT company_slug_folded::text AS company_key, title
 FROM jobs
-WHERE company_slug_folded = ANY($1::text[]) AND closed_at IS NULL AND company_slug <> ''
+WHERE company_slug_folded = ANY($1::text[]) AND closed_at IS NULL AND company_slug <> '' AND NOT is_private
 `
 
 type OpenJobTitlesByFoldedCompanyRow struct {
@@ -22,7 +22,8 @@ type OpenJobTitlesByFoldedCompanyRow struct {
 
 // Every open posting's title for a batch of folded company keys (normalize.CompanyKey) —
 // cmd/catalog-coverage matches an outside sample against these by jobhash.RoleKey. Duplicates
-// are kept on purpose: a posting we hold twice is still one we hold. Served by
+// are kept on purpose: a posting we hold twice is still one we hold. Private postings (a
+// user's pasted JD) are not catalogue. Served by
 // jobs_open_company_slug_folded_col_idx, whose predicate the last two conditions repeat: drop
 // one and the planner scans the whole table.
 func (q *Queries) OpenJobTitlesByFoldedCompany(ctx context.Context, companyKeys []string) ([]OpenJobTitlesByFoldedCompanyRow, error) {
@@ -49,6 +50,7 @@ const openJobsOnBoard = `-- name: OpenJobsOnBoard :many
 SELECT external_id, title
 FROM jobs
 WHERE source = $1 AND external_id LIKE $2 AND closed_at IS NULL
+  AND NOT is_private
 `
 
 type OpenJobsOnBoardParams struct {

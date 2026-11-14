@@ -63,12 +63,37 @@ const minIDLen = 4
 func (b boardPostings) holds(s sample) bool {
 	link := strings.ToLower(s.URL)
 	for _, id := range b.ids {
-		if len(id) >= minIDLen && strings.Contains(link, strings.ToLower(id)) {
+		if len(id) >= minIDLen && containsToken(link, strings.ToLower(id)) {
 			return true
 		}
 	}
 	role := jobhash.RoleKey(boardRoleScope, s.Title)
 	return role != "" && b.roles[role]
+}
+
+// containsToken reports whether id occurs in link with no letter or digit on either side, so
+// a held posting 123456 does not claim a link to 1234567.
+func containsToken(link, id string) bool {
+	for from := 0; ; {
+		i := strings.Index(link[from:], id)
+		if i < 0 {
+			return false
+		}
+		start := from + i
+		end := start + len(id)
+		if !isAlnum(link, start-1) && !isAlnum(link, end) {
+			return true
+		}
+		from = start + 1
+	}
+}
+
+func isAlnum(s string, i int) bool {
+	if i < 0 || i >= len(s) {
+		return false
+	}
+	c := s[i]
+	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
 func classify(s sample, c catalogue) (verdict, error) {

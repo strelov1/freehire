@@ -38,6 +38,7 @@ func TestClassify(t *testing.T) {
 		{"posting missing from a board we crawl", sample{Name: "Acme", Title: "Designer", URL: "https://job-boards.greenhouse.io/acme/jobs/123"}, verdict{bucketKnownBoard, "greenhouse", "acme"}},
 		{"posting on our board, matched by its id", sample{Name: "Acme Corp", Title: "Renamed", URL: "https://boards.greenhouse.io/acme/jobs/5280683007?gh_jid=5280683007"}, verdict{bucketHave, "greenhouse", "acme"}},
 		{"posting on our board, matched by title under another company spelling", sample{Name: "Acme Holdings", Title: "Systems Administrator", URL: "https://job-boards.greenhouse.io/acme/jobs/1"}, verdict{bucketHave, "greenhouse", "acme"}},
+		{"an id inside a longer id is not the posting", sample{Name: "Beta", Title: "Designer", URL: "https://boards.greenhouse.io/acme/jobs/52806830071"}, verdict{bucketKnownBoard, "greenhouse", "acme"}},
 		{"board we do not crawl", sample{Name: "Beta", Title: "Designer", URL: "https://jobs.lever.co/beta/abc"}, verdict{bucketNewBoard, "lever", "beta"}},
 		{"known employer, unrecognised link", sample{Name: "Acme", Title: "Designer", URL: "https://aggregator.example/j/9"}, verdict{Bucket: bucketKnownCompany}},
 		{"unknown employer", sample{Name: "Gamma", Title: "Designer", URL: "https://aggregator.example/j/9"}, verdict{Bucket: bucketUnknownCompany}},

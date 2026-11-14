@@ -147,10 +147,11 @@ func loadCatalogue(ctx context.Context, q *db.Queries, samples []sample) (catalo
 }
 
 // loadBoard reads one board's open postings under the board name the catalogue stores, which
-// may differ in case from the one a link spells.
+// may differ in case from the one a link spells. A retired board is one we no longer crawl, so
+// it reads as not ours: its postings are a harvest question, not a crawl gap.
 func loadBoard(ctx context.Context, q *db.Queries, provider, board string) (boardPostings, error) {
 	row, err := q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && row.Status == "retired" {
 		return boardPostings{}, nil
 	}
 	if err != nil {
