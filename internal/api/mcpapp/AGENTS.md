@@ -26,7 +26,14 @@ Fiber authentication clears external `AccountUserIDHeader` values before resolvi
 credentials. Invalid credentials fail closed. Both the root
 `/.well-known/oauth-protected-resource` and the path-inserted
 `/.well-known/oauth-protected-resource/api/v1/mcp` (`ResourceMetadataPath`, the one the
-challenge names) describe `/api/v1/mcp`.
+challenge names) describe `/api/v1/mcp`. Connectors saved with `/api/v1/mcp/account` derive
+their metadata URL from that address (RFC 9728 §3.3: `resource` must equal it), so it has its
+own document, `resource` `<origin>/api/v1/mcp/account`, at the path-inserted
+`/.well-known/oauth-protected-resource/api/v1/mcp/account` (SvelteKit proxy to
+`/api/v1/oauth/metadata/protected-resource/account`) and at the path-appended form some clients
+try, `/api/v1/mcp/account/.well-known/oauth-protected-resource`. `/api/v1/mcp/.well-known/oauth-protected-resource`
+serves the `/api/v1/mcp` document the same way. Both appended forms are API routes (under `/api`),
+not SvelteKit ones.
 
 An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
 /authorize and /token, `oauth_grants.resource`): the URI must be on this deployment's origin
@@ -160,8 +167,12 @@ carries no description vectors, so the request is answered by keywords and the r
 - **Hand an internal error's text to the agent.** On the signed-in server a failed tool's
   text reaches a third-party model verbatim, so `agentErrorText` (`account.go`) shows it
   only for a `*fiber.Error` or a bad argument (`assistant.ErrInvalidArguments`); anything
-  else reads as a generic sentence, and is not logged either, because the tool logs carry
-  no error text. A message written for the agent ("slug is required", "no such answer")
+  else reads as a generic sentence. That text is NOT logged: it can interpolate what the caller
+  sent (`jobNotFound` embeds the slug). The tool log's `error` attribute carries only a
+  constant the call site opted in with, `assistant.WithLogReason(err, "fixed sentence")`
+  (the diagnostics' `reason`, flattened to one line, 200 runes); an error without one logs
+  its `error_code` alone, and a decode failure its argument names in `bad_args`. Never build a
+  reason from arguments or data. A message written for the agent ("slug is required", "no such answer")
   is therefore a `fiber.NewError` with its status, never `errors.New`: a plain one reaches
   the agent as "something went wrong". Its status is also what the metrics count it as.
 - **Return a full description from `search_jobs`.** `/agent/jobs/search` rehydrates every

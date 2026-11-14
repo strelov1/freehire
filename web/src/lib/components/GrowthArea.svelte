@@ -1,13 +1,21 @@
 <script lang="ts">
-  import type { UserGrowthPoint } from '#lib/types.js';
+  import { dateXs } from '#lib/growthArea.js';
 
-  // A minimal single-series cumulative area chart for the member-growth series —
-  // one monotonically rising line, unlike ActivityBars' two-series added/removed
-  // bars. Hand-built SVG scaled to its container width, no charting dependency,
-  // matching the site's other bespoke charts. The series is dense and sorted by
-  // date (the backend guarantees it), so the x-axis is just even spacing.
-  let { points }: { points: UserGrowthPoint[] } = $props();
+  // A minimal single-series area chart: member growth (one monotonically rising line)
+  // and the catalogue's size over time (which falls as well as rises), unlike
+  // ActivityBars' two-series added/removed bars. Hand-built SVG scaled to its container
+  // width, no charting dependency, matching the site's other bespoke charts. The series
+  // is sorted by date (the backend guarantees it); points are placed by date, so a day
+  // the series lacks shows as a wider step rather than vanishing. The first `estimated`
+  // points are drawn dashed: values worked out after the fact rather than measured on
+  // the day, which a reader must be able to tell apart.
 
+  let {
+    points,
+    label,
+    empty,
+    estimated = 0,
+  }: { points: { date: string; total: number }[]; label: string; empty: string; estimated?: number } = $props();
   const W = 640;
   const H = 180;
   const PAD = 10;
@@ -18,14 +26,23 @@
     const first = points[0];
     const last = points[n - 1];
     if (!first || !last) return null;
-    const peak = Math.max(1, last.total); // monotonic → last point is the max
-    const x = (i: number) => (n === 1 ? W / 2 : PAD + (i / (n - 1)) * (W - 2 * PAD));
+    const peak = Math.max(1, ...points.map((p) => p.total));
+    const xs = dateXs(
+      points.map((p) => p.date),
+      W,
+      PAD,
+    );
+    const x = (i: number) => xs[i] ?? W / 2;
     const y = (t: number) => PAD + (1 - t / peak) * (H - 2 * PAD);
-    const line = points.map((p, i) => `${x(i).toFixed(1)},${y(p.total).toFixed(1)}`).join(' ');
+    const coords = points.map((p, i) => `${x(i).toFixed(1)},${y(p.total).toFixed(1)}`);
+    const line = coords.join(' ');
     const area = `${x(0).toFixed(1)},${baseY} ${line} ${x(n - 1).toFixed(1)},${baseY}`;
+    // The dashed run ends ON the first measured point, so the two lines join.
+    const cut = Math.min(estimated, n - 1);
     return {
       peak,
-      line,
+      estimatedLine: cut > 0 ? coords.slice(0, cut + 1).join(' ') : '',
+      measuredLine: coords.slice(cut).join(' '),
       area,
       endX: x(n - 1),
       endY: y(last.total),
@@ -44,10 +61,10 @@
 </script>
 
 {#if !model}
-  <p class="py-16 text-center text-sm text-muted-foreground">No members yet.</p>
+  <p class="py-16 text-center text-sm text-muted-foreground">{empty}</p>
 {:else}
   <figure class="flex flex-col gap-3">
-    <svg viewBox="0 0 {W} {H + 20}" class="w-full" role="img" aria-label="Cumulative members over time">
+    <svg viewBox="0 0 {W} {H + 20}" class="w-full" role="img" aria-label={label}>
       <!-- peak reference line + label -->
       <line x1={PAD} y1={PAD} x2={W - PAD} y2={PAD} class="stroke-border" stroke-dasharray="2 3" />
       <text x={PAD} y={PAD - 2} class="fill-muted-foreground" font-size="11">
@@ -59,7 +76,23 @@
 
       <!-- filled area + line -->
       <polygon points={model.area} class="fill-foreground/10" />
-      <polyline points={model.line} fill="none" class="stroke-foreground" stroke-width="2" stroke-linejoin="round" />
+      {#if model.estimatedLine}
+        <polyline
+          points={model.estimatedLine}
+          fill="none"
+          class="stroke-muted-foreground"
+          stroke-width="2"
+          stroke-dasharray="4 3"
+          stroke-linejoin="round"
+        />
+      {/if}
+      <polyline
+        points={model.measuredLine}
+        fill="none"
+        class="stroke-foreground"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
       <!-- end marker -->
       <circle cx={model.endX} cy={model.endY} r="3.5" class="fill-foreground" />
 

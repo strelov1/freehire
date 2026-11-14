@@ -27,6 +27,7 @@ hire
 /backfill-company-info-wikipedia
 /backfill-company-type-hint
 /backfill-company-names
+/backfill-catalog-history
 /backfill-derive
 /backfill-descriptions
 /backfill-requirements
@@ -36,6 +37,7 @@ hire
 /email-events
 /cal-sync
 /capture-apply-form
+/catalog-coverage
 /classify-mail
 /close-chronic-boards
 /cv-previews

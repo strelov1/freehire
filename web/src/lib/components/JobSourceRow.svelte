@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Ban, RotateCcw } from '@lucide/svelte';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { sourceFamily, sourceLabel } from '#lib/facets.js';
+  import { sourceFamily, sourceLabel } from '#lib/sourceLabels.js';
   import { filterHref } from '#lib/enrichment.js';
   import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
   import { profileStore } from '#lib/profile.svelte.js';

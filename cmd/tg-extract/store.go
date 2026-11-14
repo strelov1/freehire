@@ -93,7 +93,7 @@ func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, job
 
 	for _, j := range jobs {
 		f := j.Fields()
-		saved, err := qtx.UpsertJob(ctx, f.UpsertParams())
+		saved, err := job.Upsert(ctx, tx, f.UpsertParams())
 		if err != nil {
 			return fmt.Errorf("upsert job %s/%s: %w", f.Source, f.ExternalID, err)
 		}

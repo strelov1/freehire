@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
 // specServer serves the real route tree (auth metadata routes and the MCP
@@ -147,6 +149,7 @@ func wellKnownProxies(t *testing.T) map[string]string {
 	for _, want := range []string{
 		"/.well-known/oauth-protected-resource",
 		"/.well-known/oauth-protected-resource/api/v1/mcp",
+		"/.well-known/oauth-protected-resource/api/v1/mcp/account",
 		"/.well-known/oauth-authorization-server",
 	} {
 		if out[want] == "" {
@@ -281,6 +284,41 @@ func TestMCPAuthorizationSpec_BothDocumentsNameTheEndpoint(t *testing.T) {
 		if doc.Resource != origin+"/api/v1/mcp" {
 			t.Errorf("%s: resource = %q, want %q", path, doc.Resource, origin+"/api/v1/mcp")
 		}
+	}
+}
+
+// Clients connected with the saved /api/v1/mcp/account URL derive its metadata URL by
+// RFC 9728 path insertion or, as some do, by appending to the URL. Every form answers 200,
+// `resource` is the URL the client started from (§3.3), the authorization server is the
+// issuer, and the resource is one the authorization endpoint binds (CanonicalResource).
+func TestMCPAuthorizationSpec_MetadataForEveryAdvertisedURL(t *testing.T) {
+	origin, get, _ := specServer(t)
+	cases := []struct{ metadata, resource string }{
+		{"/.well-known/oauth-protected-resource/api/v1/mcp/account", "/api/v1/mcp/account"},
+		{"/api/v1/mcp/account/.well-known/oauth-protected-resource", "/api/v1/mcp/account"},
+		{"/api/v1/mcp/.well-known/oauth-protected-resource", "/api/v1/mcp"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.metadata, func(t *testing.T) {
+			resp := get(origin + tc.metadata)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status %d, want 200", resp.StatusCode)
+			}
+			if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Errorf("content type %q, want JSON", ct)
+			}
+			var doc resourceMetadata
+			decodeSpecJSON(t, resp, &doc)
+			if doc.Resource != origin+tc.resource {
+				t.Errorf("resource = %q, want %q", doc.Resource, origin+tc.resource)
+			}
+			if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != origin {
+				t.Errorf("authorization_servers = %v, want [%s]", doc.AuthorizationServers, origin)
+			}
+			if got, err := oauth2server.CanonicalResource(origin, []string{doc.Resource}); err != nil || got != oauth2server.MCPResourcePath {
+				t.Errorf("CanonicalResource(%q) = %q, %v", doc.Resource, got, err)
+			}
+		})
 	}
 }
 

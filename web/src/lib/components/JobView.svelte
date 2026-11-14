@@ -3,18 +3,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
-  import {
-    ArrowRight,
-    Bookmark,
-    Check,
-    CheckCircle2,
-    Clock,
-    ExternalLink,
-    Eye,
-    Flag,
-    RefreshCw,
-    SquarePen,
-  } from '@lucide/svelte';
+  import { ArrowRight, Bookmark, CheckCircle2, ExternalLink, Flag, SquarePen } from '@lucide/svelte';
   import { ApiError, api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
@@ -36,7 +25,6 @@
   import { profileStore } from '#lib/profile.svelte.js';
   import { Button, Chip, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { formatDateOrAgo, formatDateTime } from '#lib/utils.js';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
   import JobDiscussionPanel from './JobDiscussionPanel.svelte';
@@ -45,6 +33,8 @@
   import { supersedesReality } from '#lib/ghost.js';
   import GhostChecklist from './GhostChecklist.svelte';
   import JobPinnedHeader from './JobPinnedHeader.svelte';
+  import JobPostingMeta from './JobPostingMeta.svelte';
+  import JobScrollPadding from './JobScrollPadding.svelte';
   import JobProvenanceLine from './JobProvenanceLine.svelte';
   import JobClosedNotice from './JobClosedNotice.svelte';
   import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
@@ -153,21 +143,6 @@
   const appliedToCompany = $derived(hasAppliedToCompany(job.company_slug));
   const saved = $derived(interaction?.saved_at != null);
 
-  // Presentational values derived from the (server-rendered) job.
-  // Both read as an age for their first day ("20 minutes ago") and as a date after it —
-  // the same label the feed's card already gives a posting, so a reader arriving from
-  // the list meets the answer in the form they just left.
-  const posted = $derived(formatDateOrAgo(job.posted_at, locale(), 'short'));
-  // When the posting's own content last changed. `jobs.updated_at` is deliberately left
-  // unstamped by the liveness refresh (internal/platform/db/queries/jobs.sql), so the column
-  // means "the words moved", not "the crawler came back" — which is the only reading that
-  // earns a line beside the posting date.
-  const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
-  // Engagement counters (distinct signed-in viewers / applicants), served on the
-  // job. A zero metric is omitted so the line never reads as a dead "0 views".
-  const views = $derived(job.view_count ?? 0);
-  const applies = $derived(job.applied_count ?? 0);
-
   // The content column is tabbed so "who are these people?" and "what will they ask
   // me?" are answerable without leaving the posting. Page state, not a route: the
   // company copy already has a canonical home at /companies/<slug>, and a second URL
@@ -235,41 +210,6 @@
   $effect(() => {
     void job.public_slug;
     contentTab = untrack(initialTab);
-  });
-
-  // Keyboard focus must not land under a sticky bar (WCAG 2.4.11). Three of them cover the
-  // page's edges here: the site header (`h-14`, every width), the pinned header (lg, see
-  // JobPinnedHeader) and the phone's sticky apply bar. `scroll-padding` on the root is
-  // what the browser honours when it scrolls a newly focused element into view, so the
-  // page reserves both edges while it is mounted — on <html>, which is the scroller, and
-  // only for as long as this view is the page. The bottom edge is reserved only while the
-  // apply bar exists, which a closed posting does not render. The sizes are in the
-  // <style> block below, beside the media query that switches them.
-  $effect(() => {
-    const root = document.documentElement;
-    root.classList.add('job-scroll-pad');
-    root.classList.toggle('job-scroll-pad-bar', !closed);
-    const feedback = mobileSignInFeedback;
-    if (!closed && showSignInPrompt && feedback) {
-      const updateFeedbackHeight = () => {
-        const parent = feedback.parentElement;
-        const gap = parent ? Number.parseFloat(getComputedStyle(parent).rowGap) || 0 : 0;
-        root.style.setProperty(
-          '--job-scroll-pad-feedback-height',
-          `${feedback.getBoundingClientRect().height + gap}px`,
-        );
-      };
-      updateFeedbackHeight();
-      const observer = new ResizeObserver(updateFeedbackHeight);
-      observer.observe(feedback);
-      return () => {
-        observer.disconnect();
-        root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
-        root.style.removeProperty('--job-scroll-pad-feedback-height');
-      };
-    }
-    root.style.removeProperty('--job-scroll-pad-feedback-height');
-    return () => root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
   });
 
   // Funnel view — captured for everyone (unlike the authed-only server record
@@ -731,73 +671,6 @@
   </Button>
 {/snippet}
 
-<!-- How this posting is doing: when it went up, when its words last moved, and how many
-     people have opened it or told us they applied. Facts ABOUT the posting rather than
-     about the role, so they ride the provenance line with the company and the badges,
-     rather than the sidebar, where a reader comparing "posted 20 minutes ago" against "3
-     views" had to hold one thought across two places — past the match score and the salary
-     to reach either.
-     Every one of them is an icon and a number, which is what lets four of them share a line
-     the words would have filled on their own. The icons carry the word they replaced in an
-     `sr-only` span, so the line reads the same to a screen reader as it did when it was
-     spelled out.
-     "Updated" is dropped when it renders to the same label as the posting date: a job
-     written once and never touched would otherwise say the same thing twice. Comparing
-     the LABELS rather than the timestamps is the point — two edits an hour apart on one
-     day are a real difference while both read as ages, and stop being one the day they
-     both collapse into that date.
-     The exact clock time rides the `title` on both dates, since a reader who has read "2
-     hours ago" off a server-rendered page may want to know how old the page is.
-     Rendered twice, one visible at a time (the caller passes the display class): to the
-     right of the provenance line from lg, and under the title below it, where that line
-     already spends a phone's width on the company name and its badges. -->
-{#snippet postingMeta(className: string)}
-  {#if posted || views > 0 || applies > 0 || job.application_deadline}
-    <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
-      {#if posted}
-        <span
-          class="inline-flex items-center gap-1 whitespace-nowrap"
-          title={`Posted ${formatDateTime(job.posted_at, locale())}`}
-        >
-          <Clock class="size-3.5 shrink-0" aria-hidden="true" />
-          <span class="sr-only">Posted</span>
-          <time datetime={job.posted_at}>{posted}</time>
-        </span>
-        {#if updated && updated !== posted}
-          <span
-            class="inline-flex items-center gap-1 whitespace-nowrap"
-            title={`Updated ${formatDateTime(job.updated_at, locale())}`}
-          >
-            <RefreshCw class="size-3.5 shrink-0" aria-hidden="true" />
-            <span class="sr-only">Updated</span>
-            <time datetime={job.updated_at}>{updated}</time>
-          </span>
-        {/if}
-      {/if}
-      {#if job.application_deadline}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
-        </span>
-      {/if}
-      <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
-           opened yet measures our own traffic, not the job. -->
-      {#if views > 0}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          <Eye class="size-3.5 shrink-0" aria-hidden="true" />
-          {views}
-          {views === 1 ? 'view' : 'views'}
-        </span>
-      {/if}
-      {#if applies > 0}
-        <span class="inline-flex items-center gap-1 whitespace-nowrap">
-          <Check class="size-3.5 shrink-0" aria-hidden="true" />
-          {applies} applied
-        </span>
-      {/if}
-    </div>
-  {/if}
-{/snippet}
-
 <!-- The action strip: the QUIET things a reader does with a posting — talk about it, flag
      it, keep it, file it — on one line, sharing the tab row's rule. It carries the
      rule itself (`border-b`) rather than sitting above one, so the line reads as a
@@ -872,7 +745,7 @@
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
   <JobProvenanceLine {job} {closed}>
-    {#snippet meta()}{@render postingMeta('ml-auto hidden shrink-0 lg:flex')}{/snippet}
+    {#snippet meta()}<JobPostingMeta {job} className="ml-auto hidden shrink-0 lg:flex" />{/snippet}
   </JobProvenanceLine>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
@@ -912,7 +785,7 @@
     <!-- Keep the metadata left and the compact actions at the right edge, even when
          longer metadata wraps onto its own line. -->
     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
-      {@render postingMeta('flex min-w-0 flex-wrap')}
+      <JobPostingMeta {job} className="flex min-w-0 flex-wrap" />
       {@render actionStrip('ml-auto -mr-2 flex max-w-full flex-wrap justify-end', true)}
     </div>
 
@@ -1143,26 +1016,4 @@
   <ReferralMessageDialog slug={job.public_slug} company={job.company} onClose={() => (showReferralMessage = false)} />
 {/if}
 
-<style>
-  /* See the `job-scroll-pad` effect. Below lg: the site header on top (h-14 plus air), and
-     the apply bar at the bottom — its pt-3, an h-11 button, a padding of at least pb-3 that
-     grows with the home indicator, and a rule. From lg: the site header plus the pinned
-     header under it (py-2.5 around an h-9 button, and a rule); no bottom bar. */
-  :global(html.job-scroll-pad) {
-    scroll-padding-top: 4rem;
-  }
-
-  :global(html.job-scroll-pad.job-scroll-pad-bar) {
-    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px));
-  }
-
-  @media (min-width: 64rem) {
-    :global(html.job-scroll-pad) {
-      scroll-padding-top: 7.75rem;
-    }
-
-    :global(html.job-scroll-pad.job-scroll-pad-bar) {
-      scroll-padding-bottom: 0;
-    }
-  }
-</style>
+<JobScrollPadding {closed} signInPrompt={showSignInPrompt} feedbackEl={mobileSignInFeedback} />

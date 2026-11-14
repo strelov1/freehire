@@ -5,7 +5,7 @@
   // A provider key is a source facet code, so it renders through the one label map every
   // other surface uses: a provider must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
-  import { sourceLabel } from '#lib/facets.js';
+  import { sourceLabel } from '#lib/sourceLabels.js';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import type { HealthStatus, IngestStatus, ProviderKind } from '#lib/types.js';
   import StatusBarCalendar from './status/StatusBarCalendar.svelte';

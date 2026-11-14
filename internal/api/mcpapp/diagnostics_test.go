@@ -97,7 +97,7 @@ func TestHTTPToolErrorCorrelatesWithResponseAndResolvedIdentity(t *testing.T) {
 		if record["request_id"] != id || record["key_id"] != float64(73) || record["credential_type"] != "api_key" {
 			t.Errorf("lost context at HTTP adaptor: %v", record)
 		}
-		if raw, _ := json.Marshal(record); strings.Contains(string(raw), "private-permission-details") || strings.Contains(string(raw), "client-controlled-secret") {
+		if raw, _ := json.Marshal(record); strings.Contains(string(raw), "client-controlled-secret") || strings.Contains(string(raw), "private-permission-details") {
 			t.Fatalf("private data in log: %s", raw)
 		}
 	}
