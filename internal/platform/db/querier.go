@@ -1273,6 +1273,10 @@ type Querier interface {
 	// clock skew) still count as answered but are kept out of the median, where they would
 	// contribute a negative duration.
 	ComputeInsightsCompanyResponse(ctx context.Context) ([]ComputeInsightsCompanyResponseRow, error)
+	// Per-company Trends & Insights rollups (insights_company_*) and their reads, split out of
+	// insights.sql for size. Its header states the rules every rollup here keeps too: a prior-
+	// window count asks whether a posting EXISTED at @prev_ts (from LEAST(posted_at,
+	// created_at)), and the rule tests in this package read every queries/insights*.sql file.
 	// ---------------------------------------------------------------------------
 	// Per-company hiring signal
 	// ---------------------------------------------------------------------------

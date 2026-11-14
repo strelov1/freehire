@@ -589,36 +589,10 @@ func Register(app *fiber.App, cfg Config) {
 
 	api := app.Group("/api/v1")
 
-	// optionalAuth attaches the caller when signed in (cookie or key) but never
-	// rejects, so these public detail reads can overlay the caller's own vote
-	// (my_vote) while staying open to anonymous visitors.
-	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
-	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
-	// script holding a key can drive the same flow as the browser. The public job
-	// reads stay unauthenticated. Jobs are addressed by their public slug; the
-	// handlers resolve it to the internal id before writing user_jobs.
-	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
-	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
-	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth)
-	// cookieAuth is the single cookie-only gate (RequireAuth) for the
-	// browser-convenience surfaces below — key management, saved searches, the CV
-	// builder, the inbox, subscriptions — where a leaked API key must not act.
-	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
+	mw := a.newMiddleware(cfg, plans)
 
 	// Before any /api/v1 route: it hands them the rewritten request (signed_in_door.go).
-	mountSignedInDoor(app, keyAuth)
-
-	requireModerator := auth.RequireRole(a.queries, "moderator")
-	mw := middleware{
-		optional:       optionalAuth,
-		key:            keyAuth,
-		cvKey:          cvKeyAuth,
-		autoApplyGate:  autoApplyGate,
-		cookie:         cookieAuth,
-		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
-		moderator:      requireModerator,
-		paidAI:         paidAIGate(entitlementOf(plans)),
-	}
+	mountSignedInDoor(app, mw.key)
 
 	// The email preference centre. Its three public routes are unauthenticated on
 	// purpose — a person holding one of our mails must be able to turn it off
@@ -629,7 +603,7 @@ func Register(app *fiber.App, cfg Config) {
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
 	companyRelationH := &companyRelationHandlers{relations: companyrelation.New(cfg.Pool)}
-	contract := newContract(contractHandlers{conversationHandlers: conversationH,
+	handlers := contractHandlers{conversationHandlers: conversationH,
 		authHandlers:                 authH,
 		resumeHandlers:               resumeH,
 		matchHandlers:                matchH,
@@ -682,155 +656,22 @@ func Register(app *fiber.App, cfg Config) {
 		searchHandlers:               searchH,
 		companiesHandlers:            companiesH,
 		cvHandlers:                   cvH,
-		inboxHandlers:                inboxH})
+		inboxHandlers:                inboxH}
+	contract := newContract(handlers)
 	emailPrefsH.register(api, mw, contract)
 
-	// Job search surfaces first: their literal /jobs/* routes must precede the
-	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
-	searchH.register(api, mw, contract)
-	suggestH.register(api, contract)
-	dictionaryH.register(api, mw, contract)
-	// Beside the search it builds a filter for, though it shares none of its
-	// dependencies: interpretation needs a model and the caller's profile, not the
-	// index.
-	intentH.register(api, mw, contract)
-	sitemapH.register(api, mw)
-	// Before jobsH for the same reason searchH is: /ojcp/v1/jobs/:slug is a literal path,
-	// not a slug.
-	ojcpH.register(api, mw)
-	// The MCP server (freehire#3114): bearer-gated by an MCP OAuth grant or a full-scope
-	// key, reusing assistantH's own tool set so this surface and the in-app assistant can
-	// never disagree about what a tool does.
-	mountMCP(api, assistantH, mcpappH)
-	jobsH.register(api, mw, contract)
-	companiesH.register(api, mw, contract)
-	companyRelationH.register(api, mw, contract)
-	geoH.register(api, contract)
-
-	// Saved searches + the public shared-board read (see savedSearchHandlers).
-	savedSearchH.register(api, mw, contract)
-
-	// Public catalogue-activity, member-growth, engagement, facet-snapshot, and
-	// ingest-status reads (see statsHandlers).
-	statsH.register(api, optionalAuth, contract)
-	// The homepage's live "recently added jobs" SSE feed (see recentFeedHandlers).
-	recentFeedH.register(api)
-	// The public /embeddings page's coverage figures and their live stream.
-	embedProgressH.register(api, contract)
-	// The /open and /about pages' OG preview cards (see ogHandlers) — reads the
-	// same snapshot statsH.CatalogScale serves.
-	ogH.register(api)
-
-	// Per-user job interactions, tracking reads, and reminder controls
-	// (see trackingHandlers). The interaction writes precede the vote routes,
-	// mirroring the previous registration order.
-	trackingH.register(api, mw, contract)
-	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
-	// segment under /me/tracking — see the comment on its register.
-	timelineH.register(api, mw, contract)
-	votesH.register(api, mw, contract)
-	companyWatchH.register(api, mw, contract)
-	companyFeedbackH.register(api, mw, contract)
-	// The manual account ban (see userModerationHandlers).
-	userModerationH.register(api, mw, contract)
-	companyProcessReportH.register(api, mw, contract)
-	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
-	matchH.register(api, mw, contract)
-	// The contact block the extension writes into forms, plain and agent-driven (see
-	// autofillHandlers).
-	autofillH.register(api, mw, contract)
-	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
-	answerBankH.register(api, mw, contract)
-	agentPermissionsH.register(api, mw, contract)
-	// The browser-tool wire: a harness on one end, the caller's browser extension
-	// on the other, exchanging raw tool frames. Both ends authenticate with the
-	// session JWT (Bearer for a server-side harness, the subprotocol for the
-	// extension, which can set no headers); the relay routes strictly within one
-	// user's channel. See internal/ai/browsertools.
-	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
-
-	// Public job submissions + review queue (see submissionHandlers).
-	submissionsH.register(api, mw, contract)
-
-	// Verified-employer accounts: claim, curated profile, own vacancies, and the
-	// moderator/admin review surface (see employerHandlers).
-	employerH.register(api, mw, contract)
-	directApplyH.register(api, mw, contract)
-
-	// Link contributions (see contributionHandlers).
-	contributionsH.register(api, mw, contract)
-	jdResolveH.register(api, mw, contract)
-
-	// Employee referrals (see referralHandlers).
-	referralsH.register(api, mw, contract)
-
-	// Interview buddies (see buddyHandlers).
-	buddyH.register(api, mw, contract)
-
-	// Conversations of every kind (see conversationHandlers).
-	conversationH.register(api, mw, contract)
-
-	// The mentorship marketplace (see mentorshipHandlers).
-	mentorshipH.register(api, mw, contract)
-	mentorSuggestionsH.register(api, mw, contract)
-
-	// Job reports + review queue (see reportHandlers).
-	reportsH.register(api, mw, contract)
-	ghostReportsH.register(api, mw, contract)
-
-	// Community discussion threads (see communityHandlers).
-	communityH.register(api, mw, contract)
-
-	planH.register(api, mw, contract)
-	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
-	billingH.register(api, mw, contract)
-	// Mounted whatever billing is doing: sharing an invite link and counting who came is
-	// not a purchase, and a deployment that sells nothing can still have a referral page.
-	promoH.register(api, mw, contract)
-	plansH.register(api, contract)
-	usageH.register(api, mw, contract)
-
-	// API-key management and the auth surface (see authHandlers).
-	authH.register(api, mw, contract)
-	authH.registerV2(app.Group("/api/v2"), mw)
-
-	// The per-user profile singleton (see profileHandlers).
-	profileH.register(api, mw, contract)
-	// The candidate's own screening answers (see screeningAnswersHandlers).
-	screeningAnswersH.register(api, mw, contract)
-	surveyH.register(api, mw, contract)
-	marketPulseH.register(api, mw, contract)
-	experienceH.register(api, mw, contract)
-	talentNetworkH.register(api, mw, contract)
-	talentCatalogH.register(api, contract)
-
-	// CV builder + AI tailoring (see cvHandlers).
-	cvH.register(api, mw, contract)
-	referralMessageH.register(api, mw)
-
-	// Mail inbox (Gmail connect + hosted mailbox) and email ↔ application linking
-	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
-	// /me/tracking/:slug does not shadow them.
-	inboxH.register(api, mw, contract)
-	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
-	// resumeHandlers).
-	resumeH.register(api, mw, contract)
-	// The headshot the photo-bearing CV templates print (see photoHandlers).
-	photoH.register(api, mw)
-	// Dictation for the assistant composer.
-	speechH.register(api, mw)
-	assistantH.register(api, mw, contract)
-	assistantH.registerSupport(api, mw, contract)
-
-	// Filter subscriptions (see subscriptionHandlers).
-	subscriptionH.register(api, mw, contract)
-	webhookH.register(api, mw)
-
-	// Telegram linking + the inbound bot webhook (see telegramHandlers).
-	telegramH.register(api, mw)
-
-	// Discord linking for the paid channels. Registers nothing when the feature is
-	// unconfigured (see discordHandlers).
-	discordH.register(api, mw)
-
+	a.mountRoutes(app, api, mw, contract, routeHandlers{
+		contractHandlers: handlers,
+		sitemap:          sitemapH,
+		ojcp:             ojcpH,
+		mcpapp:           mcpappH,
+		recentFeed:       recentFeedH,
+		og:               ogH,
+		referralMessage:  referralMessageH,
+		photo:            photoH,
+		speech:           speechH,
+		webhook:          webhookH,
+		telegram:         telegramH,
+		discord:          discordH,
+	})
 }
