@@ -8,6 +8,7 @@ package jobtracking_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
@@ -53,6 +54,15 @@ func TestEmployerStagesMirror(t *testing.T) {
 	if moved, err := mirror.Mirror(ctx, userID, jobID, "interview"); err != nil || !moved || stage() != "interview" {
 		t.Fatalf("Mirror(interview) = %v, %v, stage %q", moved, err, stage())
 	}
+	// The employer's move is activity: the silence clock restarts from it.
+	if _, err := pool.Exec(ctx, `UPDATE applications SET applied_at = now() - interval '30 days' WHERE user_id = $1 AND job_id = $2`, userID, jobID); err != nil {
+		t.Fatalf("backdate applied_at: %v", err)
+	}
+	app, err := q.GetUserApplication(ctx, db.GetUserApplicationParams{UserID: userID, JobID: jobID})
+	if err != nil || !app.LastActivityAt.Valid || time.Since(app.LastActivityAt.Time) > time.Hour {
+		t.Fatalf("last activity after an employer move = %v, %v; want the move, not the 30-day-old apply date", app.LastActivityAt, err)
+	}
+
 	var source string
 	if err := pool.QueryRow(ctx, `
 		SELECT source FROM application_events WHERE user_id = $1 AND job_id = $2 AND kind = 'stage_set'
@@ -87,6 +97,24 @@ func TestEmployerStagesMirror(t *testing.T) {
 	}
 	if moved, err := mirror.Mirror(ctx, userID, jobID, "offer"); err != nil || moved || stage() != "withdrawn" {
 		t.Fatalf("Mirror(offer) over a withdrawal = %v, %v, stage %q", moved, err, stage())
+	}
+
+	// After clearing and re-applying, the record is the candidate's again: an older employer
+	// event no longer makes the employer its author, so it cannot be moved backward.
+	if _, err := svc.ClearProgress(ctx, userID, "acme-platform"); err != nil {
+		t.Fatalf("ClearProgress: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+		SELECT $1, a.id, $2, 'acme', 'stage_set', 'rejected', now(), 'employer'
+		FROM applications a WHERE a.user_id = $1 AND a.job_id = $2`, userID, jobID); err != nil {
+		t.Fatalf("employer rejection event: %v", err)
+	}
+	if _, err := svc.MarkApplied(ctx, userID, "acme-platform", appevent.SourceUser); err != nil {
+		t.Fatalf("re-apply: %v", err)
+	}
+	if moved, err := mirror.Mirror(ctx, userID, jobID, "preparing"); err != nil || moved || stage() != "applied" {
+		t.Fatalf("Mirror(preparing) after a re-apply = %v, %v, stage %q; want the candidate's applied kept", moved, err, stage())
 	}
 
 	// A record whose progress the candidate cleared is not revived by the employer.

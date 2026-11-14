@@ -1,6 +1,7 @@
 -- name: GetUserApplication :one
 -- The caller's interaction row for one job (the application-detail header).
--- last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+-- last_activity_at (apply date, linked mail, the employer's freehire pipeline moves) and
+-- has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
 -- must reach the same silence verdict as the badge on the board, and two derivations of one rule
 -- drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
 SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at,
@@ -10,7 +11,13 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
                       FROM emails e
                      WHERE e.user_id = uj.user_id
                        AND e.job_id = uj.job_id
-                       AND e.deleted_at IS NULL))
+                       AND e.deleted_at IS NULL),
+                   (SELECT max(ev.occurred_at)
+                      FROM application_events ev
+                     WHERE ev.application_id = a.id
+                       AND ev.kind = 'stage_set'
+                       AND ev.source = 'employer'
+                       AND ev.retracted_at IS NULL))
         END)::timestamptz AS last_activity_at,
        (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1

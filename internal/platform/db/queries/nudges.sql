@@ -6,7 +6,7 @@
 -- the silence verdict itself is a Go-side decision, not a SQL one, same as every
 -- other silence-state reader in this codebase.
 SELECT a.user_id, a.job_id, a.stage,
-       GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
+       GREATEST(a.applied_at, mail.newest_mail_at, emp.newest_move_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion
 FROM applications a
 JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
@@ -19,8 +19,18 @@ LEFT JOIN LATERAL (
        AND (e.job_id = a.job_id OR e.suggested_job_id = a.job_id)
        AND e.deleted_at IS NULL
 ) mail ON true
+-- The employer's newest move in their freehire pipeline counts as activity, as in
+-- ListUserJobs; a stage the candidate typed does not.
+LEFT JOIN LATERAL (
+    SELECT max(ev.occurred_at) AS newest_move_at
+      FROM application_events ev
+     WHERE ev.application_id = a.id
+       AND ev.kind = 'stage_set'
+       AND ev.source = 'employer'
+       AND ev.retracted_at IS NULL
+) emp ON true
 WHERE a.applied_at IS NOT NULL
-  AND GREATEST(a.applied_at, mail.newest_mail_at)
+  AND GREATEST(a.applied_at, mail.newest_mail_at, emp.newest_move_at)
       > now() - make_interval(days => sqlc.arg(window_days)::int);
 
 -- name: ListInterviewPrepCandidates :many
