@@ -41,7 +41,7 @@ func TestOAuthConsentPage_NamesRedirectHostAndFlagsUnverifiedName(t *testing.T) 
 // The resource a client asked for must survive the consent round trip, or the
 // POST that mints the code would bind nothing.
 func TestOAuthConsentPage_CarriesResourceOnlyWhenBound(t *testing.T) {
-	params := authorizeParams{ClientID: "cid", RedirectURI: "https://app.example.com/cb", Resource: "https://freehire.me/api/v1/mcp"}
+	params := authorizeParams{ClientID: "cid", RedirectURI: "https://app.example.com/cb", Resource: "/api/v1/mcp"} // the bound PATH, as resolveAuthorizeResource stores it
 	page, err := oauthConsentPage("Claude", "me@example.com", "https://freehire.me", params)
 	if err != nil {
 		t.Fatal(err)

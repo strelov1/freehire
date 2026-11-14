@@ -244,7 +244,7 @@ func (h *authHandlers) oauthSignInURL(params authorizeParams) string {
 		"code_challenge_method": {params.CodeChallengeMethod},
 	}
 	if params.Resource != "" {
-		back.Set("resource", params.Resource)
+		back.Set("resource", resourceURI(h.frontendOrigin, params.Resource))
 	}
 	returnTo := "/api/v1/oauth/authorize?" + back.Encode()
 	q := url.Values{"returnTo": {returnTo}, "via": {"web"}}
@@ -284,7 +284,7 @@ func oauthConsentPage(clientName, email, origin string, params authorizeParams) 
 		{"code_challenge_method", params.CodeChallengeMethod},
 	}
 	if params.Resource != "" {
-		hidden = append(hidden, hiddenField{"resource", params.Resource})
+		hidden = append(hidden, hiddenField{"resource", resourceURI(origin, params.Resource)})
 	}
 	return renderConsentScreen(consentScreen{
 		Title:       clientName + " wants to access your freehire account",
@@ -297,4 +297,11 @@ func oauthConsentPage(clientName, email, origin string, params authorizeParams) 
 		Hidden:      hidden,
 		Origin:      origin,
 	})
+}
+
+// resourceURI turns the bound resource PATH back into the absolute URI authorize accepts. The
+// sign-in detour and the consent form both send it back to authorize; a bare path there was
+// refused as invalid_target, failing every connector sign-in.
+func resourceURI(origin, path string) string {
+	return strings.TrimSuffix(origin, "/") + path
 }

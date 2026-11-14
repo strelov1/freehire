@@ -19,7 +19,8 @@ surface brings that failure back for every host except ChatGPT.
 Every tool declares `_meta.securitySchemes` `oauth2`. The eleven catalogue tools keep
 their schemas, previews and widgets. The in-app assistant's own `search_jobs`, `get_job`
 and `get_company` are never registered here (`catalogueOwned`); the catalogue's are.
-`/api/v1/mcp/account`, the earlier signed-in alias, was removed in the same change.
+`/api/v1/mcp/account`, the earlier signed-in address, is served by the same server: connectors
+saved with it must keep working (removing it in #4539 broke every one of them with a 404).
 
 Fiber authentication clears external `AccountUserIDHeader` values before resolving
 credentials. Invalid credentials fail closed. Both the root
@@ -30,10 +31,10 @@ challenge names) describe `/api/v1/mcp`.
 An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
 /authorize and /token, `oauth_grants.resource`): the URI must be on this deployment's origin
 (scheme and host case-insensitive, default port ignored, no query or fragment) with path
-`/api/v1/mcp` (one trailing slash tolerated), else `invalid_target` — the removed
-`/api/v1/mcp/account` included. Only the PATH is stored, so a frontend-origin change cannot
-orphan a grant. `AuthenticateOAuthGrant` matches on the endpoint path, so a grant still bound
-to `/api/v1/mcp/account` is refused like an unknown token (401 `invalid_token`) without
+`/api/v1/mcp` (one trailing slash tolerated), else `invalid_target`; `/api/v1/mcp/account` is
+accepted and bound as `/api/v1/mcp`. Only the PATH is stored, so a frontend-origin change cannot
+orphan a grant. `AuthenticateOAuthGrant` matches on the endpoint path, so a grant stored with the
+old `/api/v1/mcp/account` path is refused like an unknown token (401 `invalid_token`) without
 touching `last_used_at`. A grant with NULL `resource` (legacy, or a client that sent none)
 stays valid. REST does not read the binding: a
 grant is admitted wherever a key goes, and REST is not an MCP server. No refresh tokens exist.
