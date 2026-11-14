@@ -9,7 +9,7 @@
 -- indefinitely by design — the agent finds its backlog via the inbox listing's
 -- unclassified filter.
 INSERT INTO email_classification_outbox (email_id)
-SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external'
+SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external' AND direction = 'incoming'
 ON CONFLICT (email_id) DO NOTHING;
 
 -- name: ClaimEmailClassificationBatch :many
@@ -21,7 +21,7 @@ WITH claimable AS (
     SELECT o.id, o.email_id
     FROM email_classification_outbox o
     JOIN emails e ON e.id = o.email_id
-    WHERE o.failed_at IS NULL
+    WHERE e.direction = 'incoming' AND o.failed_at IS NULL
       AND (o.claimed_at IS NULL
            OR o.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
     ORDER BY e.received_at DESC, e.id DESC
@@ -75,7 +75,7 @@ SET job_id               = CASE WHEN emails.link_source IN ('manual', 'agent')
     status_signal        = sqlc.narg(status_signal),
     classification_model = sqlc.arg(model),
     classified_at        = now()
-WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
+WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id) AND emails.direction = 'incoming';
 
 -- name: AgentTriageEmail :execrows
 -- Persist an agent-produced verdict for one message, scoped to the caller (0 rows
@@ -117,7 +117,7 @@ SET status_signal        = sqlc.narg(status_signal),
     suggested_job_id     = NULL,
     classification_model = 'agent',
     classified_at        = now()
-WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
+WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id) AND emails.direction = 'incoming';
 
 -- name: DeleteEmailClassificationOutbox :exec
 DELETE FROM email_classification_outbox WHERE id = $1;
@@ -237,6 +237,7 @@ WITH prior AS (
     UPDATE applications SET stage = sqlc.arg(stage)::text
      WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint
        AND stage IS DISTINCT FROM sqlc.arg(stage)::text
+       AND EXISTS (SELECT 1 FROM emails em WHERE em.id = sqlc.arg(email_id)::bigint AND em.user_id = applications.user_id AND em.direction = 'incoming')
     RETURNING *
 )
 -- job_id and company_slug come off the application, like TrackApplicationByID: the row is
@@ -245,5 +246,5 @@ INSERT INTO application_events (user_id, application_id, job_id, company_slug, k
 SELECT u.user_id, u.id, u.job_id, u.company_slug, 'stage_set', u.stage, em.received_at, sqlc.arg(event_source)::text
   FROM upd u
   JOIN emails em ON em.id = sqlc.arg(email_id)::bigint AND em.user_id = u.user_id
- WHERE u.stage IS NOT NULL
+ WHERE em.direction = 'incoming' AND u.stage IS NOT NULL
    AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior);

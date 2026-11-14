@@ -10,7 +10,7 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
                       FROM emails e
                      WHERE e.user_id = uj.user_id
                        AND e.job_id = uj.job_id
-                       AND e.deleted_at IS NULL))
+                       AND e.deleted_at IS NULL AND e.direction = 'incoming'))
         END)::timestamptz AS last_activity_at,
        (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1
@@ -21,7 +21,7 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
              -- what attaches the application — the same test the inbox's link
              -- filter makes, so the two cannot disagree about one message.
              AND e.application_id IS NULL
-             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+             AND e.deleted_at IS NULL AND e.direction = 'incoming'))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1 AND uj.job_id = $2;

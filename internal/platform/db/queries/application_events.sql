@@ -113,6 +113,7 @@ SELECT em.user_id, em.application_id, em.job_id,
   LEFT JOIN jobs j ON j.id = em.job_id
  WHERE em.id      = $1
    AND em.user_id = $2
+   AND em.direction = 'incoming'
    AND (em.application_id IS NOT NULL OR em.job_id IS NOT NULL)
 ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
 DO NOTHING;

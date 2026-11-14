@@ -132,7 +132,7 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
        (SELECT count(*)
           FROM emails e
          WHERE e.application_id = a.id
-           AND e.deleted_at IS NULL) AS email_count,
+           AND e.deleted_at IS NULL AND e.direction = 'incoming') AS email_count,
        -- Same last-activity rule as the posting-backed rows: the apply date, or the newest
        -- linked message when that is later. Mail is reached through the application, never
        -- through the posting, which no longer exists.
@@ -141,7 +141,7 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.application_id = a.id
-                       AND e.deleted_at IS NULL))
+                       AND e.deleted_at IS NULL AND e.direction = 'incoming'))
         END)::timestamptz AS last_activity_at
   FROM applications a
  WHERE a.user_id = $1
