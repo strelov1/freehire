@@ -55,6 +55,7 @@ export class Paginator<T> {
   // place), so `raw` skips the per-item proxy overhead of deep `$state`.
   items = $state.raw<T[]>([]);
   status = $state<'loading' | 'error' | 'ready'>('loading');
+  error = $state.raw<unknown>(null);
   loadingMore = $state(false);
   // A failed `loadMore` surfaces here instead of flipping `status`, so the
   // already-loaded items stay on screen while the error shows by the button.
@@ -96,6 +97,7 @@ export class Paginator<T> {
    *  served `?page=N`, so paging continues after the seeded window instead of
    *  refetching from the top. */
   seed(slice: Slice<T>, offset = 0) {
+    this.error = null;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
     this.#seen = new Set();
     this.#baseOffset = offset;
@@ -116,6 +118,7 @@ export class Paginator<T> {
    *  on the `?page=N` the visitor is reading, rather than yanking them back to page
    *  one. A changed query passes 0, because its results are a different set. */
   async start(offset = 0) {
+    this.error = null;
     try {
       const slice = await loadWithRetry(() => this.#fetch(this.#limit, offset));
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
@@ -126,7 +129,8 @@ export class Paginator<T> {
       this.totalIsLowerBound = slice.totalIsLowerBound ?? false;
       this.hasMore = slice.hasMore;
       this.status = 'ready';
-    } catch {
+    } catch (error) {
+      this.error = error;
       this.status = 'error';
     }
   }
