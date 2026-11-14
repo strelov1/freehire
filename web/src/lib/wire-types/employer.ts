@@ -52,6 +52,19 @@ export type DirectApplication = ({ resume: true } | { cv_id: string }) & {
   note?: string;
 };
 
+/** One application sent on freehire to one of the employer's vacancies, as the applicant
+ *  inbox lists it (GET /employer/applications). */
+export type EmployerApplication = components['schemas']['EmployerApplication'];
+
+/** A position in the employer's own hiring pipeline. */
+export type EmployerApplicationStage = components['schemas']['EmployerApplicationStage'];
+
+/** One page of the inbox; `meta.stage_counts` counts every stage under the vacancy filter. */
+export type EmployerApplicationsPage = components['schemas']['EmployerApplicationsPage'];
+
+/** A moved application, and whether the candidate was emailed about the move. */
+export type EmployerApplicationMoved = components['schemas']['EmployerApplicationMoved'];
+
 /** POST /employer/jobs body. Deliberately no `company` field — the server always uses the
  *  account's own locked company name, never request content (see
  *  internal/ingest/employer/AGENTS.md). */

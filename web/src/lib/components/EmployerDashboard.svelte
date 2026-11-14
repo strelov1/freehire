@@ -1,6 +1,6 @@
 <script lang="ts">
   import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
-  import { Briefcase, Building2, Globe, MapPin, Plus } from '@lucide/svelte';
+  import { Briefcase, Building2, ClipboardList, Globe, MapPin, Plus } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
@@ -17,25 +17,39 @@
     Job,
   } from '#lib/types.js';
   import { resolve } from '$app/paths';
-  import { Button, ConfirmDialog, Input, cn } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, Input, TabStrip, cn, tabStripId } from '#lib/ui/index.js';
   import States from './States.svelte';
+  import EmployerApplications from './EmployerApplications.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 
   // `tab` is the route: /my/employer is the profile, /my/employer/vacancies the vacancies.
   // They were two tabs of one page; as routes each is its own item in the Employer
-  // workspace's sidebar.
+  // workspace's sidebar. The applicant inbox (/my/employer/vacancies/applications) is a
+  // routed tab of the vacancies section rather than a third sidebar item: one more nav href
+  // pushes the union past what `resolve()` can relate (see accountNav.ts).
   let {
     company,
     tab,
     onProfileSaved,
   }: {
     company: EmployerCompany;
-    tab: 'profile' | 'vacancies';
+    tab: 'profile' | 'vacancies' | 'applications';
     onProfileSaved: (updated: EmployerCompany) => void;
   } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  const PANEL_ID = 'employer-vacancies-panel';
+  const tabs = $derived([
+    { id: 'vacancies' as const, label: s.tabVacancies, icon: Briefcase, href: resolve('/my/employer/vacancies') },
+    {
+      id: 'applications' as const,
+      label: s.tabApplications,
+      icon: ClipboardList,
+      href: resolve('/my/employer/vacancies/applications'),
+    },
+  ]);
 
   const selectClass =
     'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
@@ -347,197 +361,206 @@
       </Button>
     </form>
   {:else}
-    <div class="flex flex-col gap-4">
-      {#if !formOpen}
-        <Button size="sm" class="w-fit gap-1.5" onclick={openCreate}>
-          <Plus class="size-3.5" />
-          {s.newVacancy}
-        </Button>
-      {/if}
-
-      {#if formOpen}
-        <form onsubmit={submitForm} class="flex flex-col gap-4 rounded-lg border border-border p-4">
-          <h2 class="text-sm font-semibold">{editingSlug ? s.formTitleEdit : s.formTitleNew}</h2>
-          {#if !editingSlug}
-            <fieldset class="flex flex-col gap-2">
-              <legend class="text-sm font-medium">{s.applyModeLabel}</legend>
-              {#each [['freehire', s.applyModeFreehire, s.applyModeFreehireHint], ['external', s.applyModeExternal, s.applyModeExternalHint]] as [mode, label, hint] (mode)}
-                <label class="flex items-start gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="apply-mode"
-                    value={mode}
-                    bind:group={applyMode}
-                    class="mt-1 accent-current"
-                  />
-                  <span class="flex flex-col">
-                    <span class="font-medium">{label}</span>
-                    <span class="text-xs text-muted-foreground">{hint}</span>
-                  </span>
-                </label>
-              {/each}
-            </fieldset>
-            {#if applyMode === 'external'}
-              <label class="flex flex-col gap-1">
-                <span class="text-sm font-medium">{s.fieldUrl}</span>
-                <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
-                <span class="text-xs text-muted-foreground">{s.fieldUrlHint}</span>
-              </label>
-            {/if}
-          {/if}
-          <div class="flex flex-col gap-4 sm:flex-row">
-            <label class="flex flex-1 flex-col gap-1">
-              <span class="flex items-center gap-1.5 text-sm font-medium">
-                <Briefcase class="size-3.5 text-muted-foreground" />
-                {s.fieldTitle}
-              </span>
-              <Input bind:value={title} class="w-full" />
-            </label>
-            <label class="flex flex-1 flex-col gap-1">
-              <span class="flex items-center gap-1.5 text-sm font-medium">
-                <MapPin class="size-3.5 text-muted-foreground" />
-                {s.fieldLocation}
-              </span>
-              <Input bind:value={location} class="w-full" />
-            </label>
-          </div>
-          <div class="flex flex-col gap-4 sm:flex-row">
-            {#if !editingSlug}
-              <label class="flex flex-1 flex-col gap-1">
-                <span class="text-sm font-medium">{s.fieldWorkMode}</span>
-                <select bind:value={workMode} class={cn(selectClass, 'w-full')}>
-                  <option value="">—</option>
-                  {#each WORK_MODE_OPTIONS as o (o.value)}
-                    <option value={o.value}>{o.label}</option>
-                  {/each}
-                </select>
-              </label>
-              <label class="flex flex-1 flex-col gap-1">
-                <span class="text-sm font-medium">{s.fieldEmploymentType}</span>
-                <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
-                  <option value="">—</option>
-                  {#each EMPLOYMENT_TYPE_OPTIONS as o (o.value)}
-                    <option value={o.value}>{o.label}</option>
-                  {/each}
-                </select>
-              </label>
-              <label class="flex flex-1 flex-col gap-1">
-                <span class="text-sm font-medium">{s.fieldSeniority}</span>
-                <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
-                  <option value="">—</option>
-                  {#each SENIORITY_OPTIONS as o (o.value)}
-                    <option value={o.value}>{o.label}</option>
-                  {/each}
-                </select>
-              </label>
-            {/if}
-          </div>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm font-medium">{s.fieldDescription}</span>
-            <span class="text-xs text-muted-foreground">{s.fieldDescriptionHint}</span>
-            <textarea
-              bind:value={descriptionMd}
-              rows="6"
-              class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
-            ></textarea>
-          </label>
-          {#if !editingSlug}
-            <label class="flex flex-col gap-1">
-              <span class="text-sm font-medium">{s.fieldSkills}</span>
-              <TokenInput label={s.fieldSkills} tokens={skills} onAdd={addSkill} onRemove={removeSkill} />
-            </label>
-          {/if}
-          {#if applyMode === 'freehire' && questionsLoaded}
-            <EmployerQuestionsEditor bind:questions />
-          {/if}
-          {#if formError}
-            <p class="text-sm text-destructive">{formError}</p>
-          {/if}
-          <div class="flex gap-2">
-            <Button type="submit" disabled={saving || !canSubmit}>
-              {#if editingSlug}
-                {saving ? s.savingChanges : s.saveChanges}
-              {:else}
-                {saving ? s.publishing : s.publish}
-              {/if}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onclick={() => {
-                formOpen = false;
-                resetForm();
-              }}
-            >
-              {s.cancel}
-            </Button>
-          </div>
-        </form>
-      {/if}
-
-      {#if vacanciesData.status === 'loading'}
-        <States state="loading" />
-      {:else if vacanciesData.status === 'error'}
-        <States state="error" message={s.vacanciesLoadError} />
-      {:else if vacanciesData.value.length === 0}
-        <States state="empty" message={s.vacanciesEmpty} />
+    <TabStrip {tabs} active={tab} label={s.vacancyTabsLabel} panelId={PANEL_ID} />
+    <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)}>
+      {#if tab === 'applications'}
+        <EmployerApplications />
       {:else}
-        <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {#each vacanciesData.value as job (job.public_slug)}
-            <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-              <div class="flex min-w-0 flex-col gap-0.5">
-                <span class="flex items-center gap-2 truncate text-sm font-medium">
-                  <a
-                    href={resolve('/jobs/[slug]', { slug: job.public_slug })}
-                    title={s.viewVacancy}
-                    class="truncate underline-offset-2 hover:underline">{job.title}</a
-                  >
-                  {#if job.direct_apply}
-                    <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
-                      {s.onSiteLabel}
-                    </span>
-                  {/if}
-                  {#if job.closed_at}
-                    <span class="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
-                      {s.closedLabel}
-                    </span>
-                  {/if}
-                </span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {job.location}{job.work_mode === 'remote' ? ` · ${s.fieldRemote}` : ''}
-                </span>
+        <div class="flex flex-col gap-4">
+          {#if !formOpen}
+            <Button size="sm" class="w-fit gap-1.5" onclick={openCreate}>
+              <Plus class="size-3.5" />
+              {s.newVacancy}
+            </Button>
+          {/if}
+
+          {#if formOpen}
+            <form onsubmit={submitForm} class="flex flex-col gap-4 rounded-lg border border-border p-4">
+              <h2 class="text-sm font-semibold">{editingSlug ? s.formTitleEdit : s.formTitleNew}</h2>
+              {#if !editingSlug}
+                <fieldset class="flex flex-col gap-2">
+                  <legend class="text-sm font-medium">{s.applyModeLabel}</legend>
+                  {#each [['freehire', s.applyModeFreehire, s.applyModeFreehireHint], ['external', s.applyModeExternal, s.applyModeExternalHint]] as [mode, label, hint] (mode)}
+                    <label class="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="apply-mode"
+                        value={mode}
+                        bind:group={applyMode}
+                        class="mt-1 accent-current"
+                      />
+                      <span class="flex flex-col">
+                        <span class="font-medium">{label}</span>
+                        <span class="text-xs text-muted-foreground">{hint}</span>
+                      </span>
+                    </label>
+                  {/each}
+                </fieldset>
+                {#if applyMode === 'external'}
+                  <label class="flex flex-col gap-1">
+                    <span class="text-sm font-medium">{s.fieldUrl}</span>
+                    <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+                    <span class="text-xs text-muted-foreground">{s.fieldUrlHint}</span>
+                  </label>
+                {/if}
+              {/if}
+              <div class="flex flex-col gap-4 sm:flex-row">
+                <label class="flex flex-1 flex-col gap-1">
+                  <span class="flex items-center gap-1.5 text-sm font-medium">
+                    <Briefcase class="size-3.5 text-muted-foreground" />
+                    {s.fieldTitle}
+                  </span>
+                  <Input bind:value={title} class="w-full" />
+                </label>
+                <label class="flex flex-1 flex-col gap-1">
+                  <span class="flex items-center gap-1.5 text-sm font-medium">
+                    <MapPin class="size-3.5 text-muted-foreground" />
+                    {s.fieldLocation}
+                  </span>
+                  <Input bind:value={location} class="w-full" />
+                </label>
               </div>
-              <div class="flex shrink-0 gap-2">
-                <Button variant="ghost" size="sm" onclick={() => openEdit(job)}>{s.editVacancy}</Button>
-                {#if !job.closed_at}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={closingSlug === job.public_slug}
-                    onclick={() => {
-                      closeTarget = job;
-                      confirmOpen = true;
-                    }}
-                  >
-                    {closingSlug === job.public_slug ? s.closing : s.closeVacancy}
-                  </Button>
-                {:else}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={reopeningSlug === job.public_slug}
-                    onclick={() => reopenVacancy(job)}
-                  >
-                    {reopeningSlug === job.public_slug ? s.reopening : s.reopenVacancy}
-                  </Button>
+              <div class="flex flex-col gap-4 sm:flex-row">
+                {#if !editingSlug}
+                  <label class="flex flex-1 flex-col gap-1">
+                    <span class="text-sm font-medium">{s.fieldWorkMode}</span>
+                    <select bind:value={workMode} class={cn(selectClass, 'w-full')}>
+                      <option value="">—</option>
+                      {#each WORK_MODE_OPTIONS as o (o.value)}
+                        <option value={o.value}>{o.label}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-1 flex-col gap-1">
+                    <span class="text-sm font-medium">{s.fieldEmploymentType}</span>
+                    <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
+                      <option value="">—</option>
+                      {#each EMPLOYMENT_TYPE_OPTIONS as o (o.value)}
+                        <option value={o.value}>{o.label}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-1 flex-col gap-1">
+                    <span class="text-sm font-medium">{s.fieldSeniority}</span>
+                    <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
+                      <option value="">—</option>
+                      {#each SENIORITY_OPTIONS as o (o.value)}
+                        <option value={o.value}>{o.label}</option>
+                      {/each}
+                    </select>
+                  </label>
                 {/if}
               </div>
-              {#if reopenError?.slug === job.public_slug}
-                <p class="text-sm text-destructive">{reopenError.message}</p>
+              <label class="flex flex-col gap-1">
+                <span class="text-sm font-medium">{s.fieldDescription}</span>
+                <span class="text-xs text-muted-foreground">{s.fieldDescriptionHint}</span>
+                <textarea
+                  bind:value={descriptionMd}
+                  rows="6"
+                  class="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30"
+                ></textarea>
+              </label>
+              {#if !editingSlug}
+                <label class="flex flex-col gap-1">
+                  <span class="text-sm font-medium">{s.fieldSkills}</span>
+                  <TokenInput label={s.fieldSkills} tokens={skills} onAdd={addSkill} onRemove={removeSkill} />
+                </label>
               {/if}
-            </li>
-          {/each}
-        </ul>
+              {#if applyMode === 'freehire' && questionsLoaded}
+                <EmployerQuestionsEditor bind:questions />
+              {/if}
+              {#if formError}
+                <p class="text-sm text-destructive">{formError}</p>
+              {/if}
+              <div class="flex gap-2">
+                <Button type="submit" disabled={saving || !canSubmit}>
+                  {#if editingSlug}
+                    {saving ? s.savingChanges : s.saveChanges}
+                  {:else}
+                    {saving ? s.publishing : s.publish}
+                  {/if}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onclick={() => {
+                    formOpen = false;
+                    resetForm();
+                  }}
+                >
+                  {s.cancel}
+                </Button>
+              </div>
+            </form>
+          {/if}
+
+          {#if vacanciesData.status === 'loading'}
+            <States state="loading" />
+          {:else if vacanciesData.status === 'error'}
+            <States state="error" message={s.vacanciesLoadError} />
+          {:else if vacanciesData.value.length === 0}
+            <States state="empty" message={s.vacanciesEmpty} />
+          {:else}
+            <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
+              {#each vacanciesData.value as job (job.public_slug)}
+                <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="flex min-w-0 flex-col gap-0.5">
+                    <span class="flex items-center gap-2 truncate text-sm font-medium">
+                      <a
+                        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+                        title={s.viewVacancy}
+                        class="truncate underline-offset-2 hover:underline">{job.title}</a
+                      >
+                      {#if job.direct_apply}
+                        <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
+                          {s.onSiteLabel}
+                        </span>
+                      {/if}
+                      {#if job.closed_at}
+                        <span
+                          class="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground"
+                        >
+                          {s.closedLabel}
+                        </span>
+                      {/if}
+                    </span>
+                    <span class="truncate text-xs text-muted-foreground">
+                      {job.location}{job.work_mode === 'remote' ? ` · ${s.fieldRemote}` : ''}
+                    </span>
+                  </div>
+                  <div class="flex shrink-0 gap-2">
+                    <Button variant="ghost" size="sm" onclick={() => openEdit(job)}>{s.editVacancy}</Button>
+                    {#if !job.closed_at}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={closingSlug === job.public_slug}
+                        onclick={() => {
+                          closeTarget = job;
+                          confirmOpen = true;
+                        }}
+                      >
+                        {closingSlug === job.public_slug ? s.closing : s.closeVacancy}
+                      </Button>
+                    {:else}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={reopeningSlug === job.public_slug}
+                        onclick={() => reopenVacancy(job)}
+                      >
+                        {reopeningSlug === job.public_slug ? s.reopening : s.reopenVacancy}
+                      </Button>
+                    {/if}
+                  </div>
+                  {#if reopenError?.slug === job.public_slug}
+                    <p class="text-sm text-destructive">{reopenError.message}</p>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}
