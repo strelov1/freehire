@@ -1,0 +1,33 @@
+name: PR size
+
+# A PR over the limit in .github/scripts/pr_size.py is too big to review, by people or by
+# the code review workflow (it runs out of time). The large-pr label lets one through.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check PR size
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LARGE_PR: ${{ contains(github.event.pull_request.labels.*.name, 'large-pr') }}
+        run: python3 .github/scripts/pr_size.py --base "$BASE_SHA" --head "$HEAD_SHA"

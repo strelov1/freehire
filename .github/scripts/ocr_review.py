@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import pr_size
+
 MARKER = "<!-- freehire-ocr-review -->"
 BACKGROUND = (
     "freehire is an IT job aggregator using Go, Fiber, PostgreSQL, sqlc, Meilisearch "
@@ -84,6 +86,20 @@ def run_review(base: str, head: str, output: Path) -> int:
             raise ValueError("Invalid commit SHA")
         if not os.environ.get("OCR_LLM_URL") or not os.environ.get("OCR_LLM_TOKEN"):
             raise ValueError("Missing private connection settings")
+        # A diff this big does not finish in the time limit; the PR size check already fails it.
+        too_large = pr_size.check(base, head)
+        if too_large:
+            output.write_text(
+                json.dumps(
+                    {
+                        "body": f"{MARKER}\n**OpenCodeReview** — commit `{head[:12]}`\n\n"
+                        f"Skipped: {too_large}. Split the PR to get a review.",
+                        "complete": True,
+                    }
+                )
+            )
+            output.chmod(0o600)
+            return 0
         with tempfile.TemporaryDirectory() as folder:
             raw = Path(folder) / "result.json"
             process = subprocess.run(
@@ -99,14 +115,14 @@ def run_review(base: str, head: str, output: Path) -> int:
                     "--format",
                     "json",
                     "--concurrency",
-                    "2",
+                    "4",
                     "--background",
                     BACKGROUND,
                     "--output",
                     str(raw),
                 ],
                 capture_output=True,
-                timeout=40 * 60,
+                timeout=55 * 60,
                 check=False,
             )
             if raw.is_file():
@@ -115,7 +131,7 @@ def run_review(base: str, head: str, output: Path) -> int:
                 raise ValueError("Invalid review result")
             if process.returncode:
                 result["status"] = "failed"
-    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         result = failure
     body, complete = render_result(
         result,
