@@ -56,12 +56,12 @@ func New(store Store, mailer *Mailer, sender emailnotify.Sender) *Runner {
 }
 
 func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
+	started := time.Now() // the selection query's time counts too
 	candidates, err := r.store.Candidates(ctx, now, BatchSize)
 	if err != nil {
 		return Stats{}, err
 	}
 	var stats Stats
-	started := time.Now()
 	for _, c := range candidates {
 		at := now.Add(time.Since(started))
 		snapshot, err := r.store.Snapshot(ctx, c, at)

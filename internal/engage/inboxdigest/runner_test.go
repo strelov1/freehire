@@ -138,3 +138,30 @@ func TestDailyDigestRecordsSendDespiteShutdown(t *testing.T) {
 		t.Fatalf("confirmed send left unrecorded: %+v", stats)
 	}
 }
+
+// slowStore delays recipient selection and records the instant each claim books.
+type slowStore struct {
+	memoryStore
+	claimedAt time.Time
+}
+
+func (s *slowStore) Candidates(ctx context.Context, now time.Time, n int32) ([]Candidate, error) {
+	time.Sleep(50 * time.Millisecond)
+	return s.memoryStore.Candidates(ctx, now, n)
+}
+func (s *slowStore) Claim(ctx context.Context, c Candidate, snap Snapshot, at time.Time) (bool, error) {
+	s.claimedAt = at
+	return s.memoryStore.Claim(ctx, c, snap, at)
+}
+
+func TestDailyDigestClaimCountsSelectionTime(t *testing.T) {
+	store := &slowStore{memoryStore: memoryStore{candidates: []Candidate{{UserID: 7, Email: "member@example.test", Timezone: "UTC"}}, snapshot: Snapshot{IDs: []int64{11}, Total: 1, Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}}
+	start := time.Date(2030, 1, 2, 23, 59, 59, 990_000_000, time.UTC) // selection crosses midnight
+	r := New(store, NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32)), &capturingSender{})
+	if _, err := r.Run(context.Background(), start); err != nil {
+		t.Fatal(err)
+	}
+	if store.claimedAt.Day() != 3 {
+		t.Fatalf("claim booked %v, before the selection finished", store.claimedAt)
+	}
+}
