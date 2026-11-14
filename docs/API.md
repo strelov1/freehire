@@ -883,6 +883,25 @@ curl "https://freehire.me/api/v1/companies/subindustries"
 }
 ```
 
+### `GET /ojcp/v1/employers/{slug}`
+
+**Auth:** Public
+
+OJCP: read an employer
+
+The `get_employer_context` tool, by the `ojcp_employer_id` a posting carries.
+Includes `open_roles_count`, the one figure a single posting cannot state.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer's ojcp_employer_id (its company slug). |
+
+```bash
+curl "https://freehire.me/api/v1/ojcp/v1/employers/<slug>"
+```
+
 ### `GET /companies/{slug}`
 
 **Auth:** Public
@@ -1064,25 +1083,6 @@ curl "https://freehire.me/api/v1/companies/<slug>/hiring"
     }
   }
 }
-```
-
-### `GET /ojcp/v1/employers/{slug}`
-
-**Auth:** Public
-
-OJCP: read an employer
-
-The `get_employer_context` tool, by the `ojcp_employer_id` a posting carries.
-Includes `open_roles_count`, the one figure a single posting cannot state.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `slug` | string | yes | The employer's ojcp_employer_id (its company slug). |
-
-```bash
-curl "https://freehire.me/api/v1/ojcp/v1/employers/<slug>"
 ```
 
 ## Search

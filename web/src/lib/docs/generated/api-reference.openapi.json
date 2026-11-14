@@ -11636,67 +11636,26 @@
         ]
       }
     },
-    "/jobs/{slug}/match-analysis/stream": {
+    "/me/tracking/swipe": {
       "get": {
-        "summary": "Run the match analysis over Server-Sent Events.",
-        "description": "The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the match-analysis endpoints). Not a JSON endpoint.",
+        "summary": "A batch of open jobs for the swipe triage deck.",
+        "description": "Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params`, exactly as in search. `503` when search is unavailable.",
         "parameters": [
           {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "description": "The job `public_slug`.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "data: {\"kind\":\"stage_start\",\"stage\":1,\"label\":\"Extracting requirements\"}\n\ndata: {\"kind\":\"requirements\",\"requirements\":[ { \"...\": \"...\" } ]}\n\ndata: {\"kind\":\"final\",\"analysis\":{\"overall_score\":82,\"verdict\":\"Strong Fit\",\"...\":\"...\"}}"
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Fit"
-        ]
-      }
-    },
-    "/companies/{slug}": {
-      "get": {
-        "operationId": "getCompany",
-        "summary": "A company and a page of its open jobs.",
-        "parameters": [
-          {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "description": "The company slug.",
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Optional full-text query (as in search).",
             "schema": {
               "type": "string"
             },
-            "example": "acme"
+            "example": "golang"
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Page size for the jobs list.",
+            "description": "Page size, 1–100.",
             "schema": {
               "type": "integer"
             },
@@ -11706,142 +11665,7 @@
             "name": "offset",
             "in": "query",
             "required": false,
-            "description": "Rows to skip in the jobs list.",
-            "schema": {
-              "type": "integer"
-            },
-            "example": "0"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "example": {
-                  "data": {
-                    "company": {
-                      "slug": "acme",
-                      "name": "Acme",
-                      "job_count": 12,
-                      "collections": [
-                        "yc"
-                      ],
-                      "regions": [
-                        "eu"
-                      ],
-                      "countries": [
-                        "DE"
-                      ],
-                      "domains": [
-                        "fintech"
-                      ],
-                      "company_types": [
-                        "product"
-                      ],
-                      "company_sizes": [
-                        "51-200"
-                      ],
-                      "industries": [
-                        "payments"
-                      ],
-                      "year_founded": 2015,
-                      "employee_count": 120,
-                      "hq_country": "DE",
-                      "organization_type": "private",
-                      "tagline": "Payments for builders",
-                      "company_info": {
-                        "...": "..."
-                      },
-                      "remote_regions": [
-                        "eu"
-                      ],
-                      "yc_batch": [
-                        "W21"
-                      ],
-                      "yc_status": [
-                        "active"
-                      ],
-                      "yc_stage": [
-                        "series-a"
-                      ],
-                      "yc_flags": [
-                        "hiring"
-                      ],
-                      "maturity": "growth"
-                    },
-                    "jobs": [
-                      {
-                        "public_slug": "senior-go-engineer-acme-1a2b",
-                        "title": "Senior Go Engineer",
-                        "company": "Acme"
-                      }
-                    ]
-                  }
-                },
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/CompanyPage"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {}
-        ],
-        "tags": [
-          "Companies"
-        ]
-      }
-    },
-    "/companies/{slug}/closed-jobs": {
-      "get": {
-        "summary": "A company’s closed postings — the company page’s Closed tab.",
-        "description": "A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
-        "parameters": [
-          {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "description": "The company slug.",
-            "schema": {
-              "type": "string"
-            },
-            "example": "acme"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Page size (max 100).",
-            "schema": {
-              "type": "integer"
-            },
-            "example": "20"
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "description": "Rows to skip; `offset + limit` may not exceed 2000.",
+            "description": "Rows to skip; `offset + limit` ≤ 10000.",
             "schema": {
               "type": "integer"
             },
@@ -11856,15 +11680,15 @@
                 "example": {
                   "data": [
                     {
-                      "public_slug": "backend-engineer-acme-1a2b3c4d",
-                      "title": "Backend Engineer",
-                      "closed_at": "2026-10-01T09:00:00Z"
+                      "public_slug": "...",
+                      "title": "Senior Go Engineer",
+                      "...": "..."
                     }
                   ],
                   "meta": {
+                    "total": 137,
                     "limit": 20,
-                    "offset": 0,
-                    "has_more": true
+                    "offset": 0
                   }
                 }
               }
@@ -11872,100 +11696,267 @@
           }
         },
         "security": [
-          {}
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
         ],
         "tags": [
-          "Companies"
+          "Tracking"
         ]
       }
     },
-    "/companies/{slug}/hiring": {
+    "/me/referrals/incoming/{id}/cv": {
       "get": {
-        "summary": "How one company hires over time — the company page’s Hiring tab.",
-        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "summary": "View the candidate's CV for one incoming request.",
         "parameters": [
           {
-            "name": "slug",
+            "name": "id",
             "in": "path",
             "required": true,
-            "description": "The company slug.",
-            "schema": {
-              "type": "string"
-            },
-            "example": "acme"
-          },
-          {
-            "name": "granularity",
-            "in": "query",
-            "required": false,
-            "description": "One of `day`, `week`, `month` (default `day`).",
-            "schema": {
-              "type": "string"
-            },
-            "example": "week"
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "required": false,
-            "description": "Start date (UTC). Defaults to a per-granularity window before `to`.",
+            "description": "The request id.",
             "schema": {
               "type": "string",
-              "format": "date"
-            },
-            "example": "2026-01-01"
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
           },
           {
-            "name": "to",
-            "in": "query",
-            "required": false,
-            "description": "End date (UTC). Defaults to today.",
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Referrals"
+        ]
+      }
+    },
+    "/me/cvs/{id}/pdf": {
+      "get": {
+        "summary": "Render the CV to PDF.",
+        "description": "Answers 501 on a deployment with no typst binary configured; everything else still works.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The CV id.",
             "schema": {
               "type": "string",
-              "format": "date"
-            },
-            "example": "2026-06-30"
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "CV"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/messages": {
+      "post": {
+        "summary": "Send a message and stream the turn as Server-Sent Events.",
+        "description": "Body is `{\"text\": \"...\"}` (max ~8000 characters, deployment-configured). The response is `text/event-stream`, not JSON: each frame is `event: <kind>` plus a `data:` line carrying the JSON event (whose own `type` field repeats the kind). Kinds: `queued` (this turn waited for one already running), `user_prompt`, `assistant_text` / `assistant_thought` (streamed deltas), `tool_use` / `tool_result`, `usage`, and exactly one terminal `result` carrying `stop_reason` (`completed`, `cancelled`, or `error`). The turn keeps running even if you stop reading — stopping it is a separate call to `.../cancel`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Your message.",
+                    "example": "Should I relocate for this role?"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: user_prompt\ndata: {\"type\":\"user_prompt\",\"text\":\"Should I relocate for this role?\"}\n\nevent: assistant_text\ndata: {\"type\":\"assistant_text\",\"text\":\"Based on the salary range...\"}\n\nevent: result\ndata: {\"type\":\"result\",\"stop_reason\":\"completed\"}\n\n"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/opening": {
+      "post": {
+        "summary": "Have the assistant speak first, on an `interview`/`debrief` session.",
+        "description": "Streams one turn under a server-side brief (no body), the same SSE shape as `.../messages`. `409` if the session’s preset does not open by itself, or if it already has an assistant message (an opening cannot be re-run).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Success",
             "content": {
-              "application/json": {
-                "example": {
-                  "data": {
-                    "open": 42,
-                    "open_prev": 30,
-                    "growth": 12,
-                    "views": 2114,
-                    "views_prev": 1800,
-                    "series": [
-                      {
-                        "period": "2026-06-01",
-                        "added": 5,
-                        "removed": 2
-                      },
-                      {
-                        "period": "2026-06-08",
-                        "added": 3,
-                        "removed": 4
-                      }
-                    ],
-                    "lifetime": {
-                      "closed": 37,
-                      "median_days": 21.5
-                    }
-                  }
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
           }
         },
         "security": [
-          {}
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
         ],
         "tags": [
-          "Companies"
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/sync": {
+      "post": {
+        "summary": "Catch an `apply` session up on its automatic application.",
+        "description": "When the application has events the conversation has not narrated, streams one turn telling the candidate what changed (no body), the same SSE shape as `.../messages`; otherwise `204` and nothing runs. Not charged to the assistant-message allowance. A turn that fails is narrated again on the next call. `409` for a session that is not an `apply` conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/retry": {
+      "post": {
+        "summary": "Resume after a failed turn, without adding another user message.",
+        "description": "Re-runs the loop over the existing history (no body) — the same SSE shape as `.../messages`. `409 \"nothing to retry\"` when the session has no prior user message.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
         ]
       }
     },
@@ -12173,405 +12164,6 @@
         "tags": [
           "Auth"
         ]
-      }
-    },
-    "/me/tracking/swipe": {
-      "get": {
-        "summary": "A batch of open jobs for the swipe triage deck.",
-        "description": "Runs the same query as search (same facets, `q`, and sort), then excludes the jobs you have already saved or dismissed. A param no filter reads is ignored rather than refused, and listed in `meta.ignored_params`, exactly as in search. `503` when search is unavailable.",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "description": "Optional full-text query (as in search).",
-            "schema": {
-              "type": "string"
-            },
-            "example": "golang"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "description": "Page size, 1–100.",
-            "schema": {
-              "type": "integer"
-            },
-            "example": "20"
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "description": "Rows to skip; `offset + limit` ≤ 10000.",
-            "schema": {
-              "type": "integer"
-            },
-            "example": "0"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "example": {
-                  "data": [
-                    {
-                      "public_slug": "...",
-                      "title": "Senior Go Engineer",
-                      "...": "..."
-                    }
-                  ],
-                  "meta": {
-                    "total": 137,
-                    "limit": 20,
-                    "offset": 0
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Tracking"
-        ]
-      }
-    },
-    "/assistant/sessions/{id}/messages": {
-      "post": {
-        "summary": "Send a message and stream the turn as Server-Sent Events.",
-        "description": "Body is `{\"text\": \"...\"}` (max ~8000 characters, deployment-configured). The response is `text/event-stream`, not JSON: each frame is `event: <kind>` plus a `data:` line carrying the JSON event (whose own `type` field repeats the kind). Kinds: `queued` (this turn waited for one already running), `user_prompt`, `assistant_text` / `assistant_thought` (streamed deltas), `tool_use` / `tool_result`, `usage`, and exactly one terminal `result` carrying `stop_reason` (`completed`, `cancelled`, or `error`). The turn keeps running even if you stop reading — stopping it is a separate call to `.../cancel`.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The session id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "description": "Your message.",
-                    "example": "Should I relocate for this role?"
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "event: user_prompt\ndata: {\"type\":\"user_prompt\",\"text\":\"Should I relocate for this role?\"}\n\nevent: assistant_text\ndata: {\"type\":\"assistant_text\",\"text\":\"Based on the salary range...\"}\n\nevent: result\ndata: {\"type\":\"result\",\"stop_reason\":\"completed\"}\n\n"
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Assistant"
-        ]
-      }
-    },
-    "/assistant/sessions/{id}/opening": {
-      "post": {
-        "summary": "Have the assistant speak first, on an `interview`/`debrief` session.",
-        "description": "Streams one turn under a server-side brief (no body), the same SSE shape as `.../messages`. `409` if the session’s preset does not open by itself, or if it already has an assistant message (an opening cannot be re-run).",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The session id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Assistant"
-        ]
-      }
-    },
-    "/assistant/sessions/{id}/sync": {
-      "post": {
-        "summary": "Catch an `apply` session up on its automatic application.",
-        "description": "When the application has events the conversation has not narrated, streams one turn telling the candidate what changed (no body), the same SSE shape as `.../messages`; otherwise `204` and nothing runs. Not charged to the assistant-message allowance. A turn that fails is narrated again on the next call. `409` for a session that is not an `apply` conversation.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The session id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Assistant"
-        ]
-      }
-    },
-    "/assistant/sessions/{id}/retry": {
-      "post": {
-        "summary": "Resume after a failed turn, without adding another user message.",
-        "description": "Re-runs the loop over the existing history (no body) — the same SSE shape as `.../messages`. `409 \"nothing to retry\"` when the session has no prior user message.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The session id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Assistant"
-        ]
-      }
-    },
-    "/stats/embeddings/stream": {
-      "get": {
-        "summary": "The same document as server-sent events, one per sample.",
-        "description": "A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "event: progress\ndata: {\"eligible\":1903114,\"covered\":1897020,\"snapshot_covered\":1889512,\"queued\":6094,\"rate_per_minute\":570.4,\"eta_seconds\":641,\"snapshot_at\":\"2026-10-19T09:22:03Z\",\"measured_at\":\"2026-10-19T12:04:15Z\"}"
-              }
-            }
-          }
-        },
-        "security": [
-          {}
-        ],
-        "tags": [
-          "Stats"
-        ]
-      }
-    },
-    "/me/referrals/incoming/{id}/cv": {
-      "get": {
-        "summary": "View the candidate's CV for one incoming request.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The request id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Referrals"
-        ]
-      }
-    },
-    "/me/cvs/{id}/pdf": {
-      "get": {
-        "summary": "Render the CV to PDF.",
-        "description": "Answers 501 on a deployment with no typst binary configured; everything else still works.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The CV id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "CV"
-        ]
-      }
-    },
-    "/speech/transcriptions": {
-      "post": {
-        "summary": "Transcribe one short audio recording to text.",
-        "description": "Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "example": {
-                  "data": {
-                    "text": "remote go engineer roles in Berlin"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "CookieSession": []
-          },
-          {
-            "PersonalApiKey": []
-          }
-        ],
-        "tags": [
-          "Speech"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary"
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/ojcp/v1/search": {
@@ -12963,6 +12555,414 @@
         "security": [
           {}
         ]
+      }
+    },
+    "/jobs/{slug}/match-analysis/stream": {
+      "get": {
+        "summary": "Run the match analysis over Server-Sent Events.",
+        "description": "The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE (`text/event-stream`) rather than a single JSON body. Each event’s `kind` is one of `stage_start`, `stage_done`, `thinking`, `requirements`, `dimensions`, `final`; the `final` event carries the completed `analysis` (the same shape as the match-analysis endpoints). Not a JSON endpoint.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The job `public_slug`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"kind\":\"stage_start\",\"stage\":1,\"label\":\"Extracting requirements\"}\n\ndata: {\"kind\":\"requirements\",\"requirements\":[ { \"...\": \"...\" } ]}\n\ndata: {\"kind\":\"final\",\"analysis\":{\"overall_score\":82,\"verdict\":\"Strong Fit\",\"...\":\"...\"}}"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Fit"
+        ]
+      }
+    },
+    "/companies/{slug}": {
+      "get": {
+        "operationId": "getCompany",
+        "summary": "A company and a page of its open jobs.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size for the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip in the jobs list.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "company": {
+                      "slug": "acme",
+                      "name": "Acme",
+                      "job_count": 12,
+                      "collections": [
+                        "yc"
+                      ],
+                      "regions": [
+                        "eu"
+                      ],
+                      "countries": [
+                        "DE"
+                      ],
+                      "domains": [
+                        "fintech"
+                      ],
+                      "company_types": [
+                        "product"
+                      ],
+                      "company_sizes": [
+                        "51-200"
+                      ],
+                      "industries": [
+                        "payments"
+                      ],
+                      "year_founded": 2015,
+                      "employee_count": 120,
+                      "hq_country": "DE",
+                      "organization_type": "private",
+                      "tagline": "Payments for builders",
+                      "company_info": {
+                        "...": "..."
+                      },
+                      "remote_regions": [
+                        "eu"
+                      ],
+                      "yc_batch": [
+                        "W21"
+                      ],
+                      "yc_status": [
+                        "active"
+                      ],
+                      "yc_stage": [
+                        "series-a"
+                      ],
+                      "yc_flags": [
+                        "hiring"
+                      ],
+                      "maturity": "growth"
+                    },
+                    "jobs": [
+                      {
+                        "public_slug": "senior-go-engineer-acme-1a2b",
+                        "title": "Senior Go Engineer",
+                        "company": "Acme"
+                      }
+                    ]
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CompanyPage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/closed-jobs": {
+      "get": {
+        "summary": "A company’s closed postings — the company page’s Closed tab.",
+        "description": "A page of the postings the company has closed, most recently closed first. Closed postings are not in search, so this is the only list of them. There is no total: `meta.has_more` says whether another page follows. Paging reaches the first 2000 rows (`offset + limit` ≤ 2000); a deeper page is a `400`. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size (max 100).",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "20"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Rows to skip; `offset + limit` may not exceed 2000.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": "0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "backend-engineer-acme-1a2b3c4d",
+                      "title": "Backend Engineer",
+                      "closed_at": "2026-10-01T09:00:00Z"
+                    }
+                  ],
+                  "meta": {
+                    "limit": 20,
+                    "offset": 0,
+                    "has_more": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/companies/{slug}/hiring": {
+      "get": {
+        "summary": "How one company hires over time — the company page’s Hiring tab.",
+        "description": "The company’s postings added vs. removed per period (dense, missing periods are 0, same window rules as `/stats/jobs-activity`), its open postings now and 30 days ago, and the median days its postings stay open before an employer-side closure over the last 180 days, and the page views its postings drew over the last 30 days and the 30 before (`views`, `views_prev`: one visitor counted once per posting per day, crawlers excluded). `lifetime` is omitted below 5 such closures — absent, never 0. An unknown slug is a `404`; a slug retired by a company merge redirects `301` to the canonical one.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The company slug.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "acme"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "One of `day`, `week`, `month` (default `day`).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "week"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Start date (UTC). Defaults to a per-granularity window before `to`.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-01-01"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "End date (UTC). Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-06-30"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "open": 42,
+                    "open_prev": 30,
+                    "growth": 12,
+                    "views": 2114,
+                    "views_prev": 1800,
+                    "series": [
+                      {
+                        "period": "2026-06-01",
+                        "added": 5,
+                        "removed": 2
+                      },
+                      {
+                        "period": "2026-06-08",
+                        "added": 3,
+                        "removed": 4
+                      }
+                    ],
+                    "lifetime": {
+                      "closed": 37,
+                      "median_days": 21.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Companies"
+        ]
+      }
+    },
+    "/stats/embeddings/stream": {
+      "get": {
+        "summary": "The same document as server-sent events, one per sample.",
+        "description": "A `progress` event carrying the full document on connect and after every 15-second sample, with a `ping` event between to keep idle connections alive.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: progress\ndata: {\"eligible\":1903114,\"covered\":1897020,\"snapshot_covered\":1889512,\"queued\":6094,\"rate_per_minute\":570.4,\"eta_seconds\":641,\"snapshot_at\":\"2026-10-19T09:22:03Z\",\"measured_at\":\"2026-10-19T12:04:15Z\"}"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "Stats"
+        ]
+      }
+    },
+    "/speech/transcriptions": {
+      "post": {
+        "summary": "Transcribe one short audio recording to text.",
+        "description": "Multipart upload of the `file` part — webm, mp4, m4a, ogg, wav, or mp3, capped at ~8 minutes of audio (2 MB). `501` when no speech gateway is configured, `502` if the gateway call itself fails, `400` for an empty recording.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "text": "remote go engineer roles in Berlin"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Speech"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

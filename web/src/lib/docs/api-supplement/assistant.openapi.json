@@ -1,0 +1,227 @@
+{
+  "paths": {
+    "/assistant/sessions/{id}/messages": {
+      "post": {
+        "summary": "Send a message and stream the turn as Server-Sent Events.",
+        "description": "Body is `{\"text\": \"...\"}` (max ~8000 characters, deployment-configured). The response is `text/event-stream`, not JSON: each frame is `event: <kind>` plus a `data:` line carrying the JSON event (whose own `type` field repeats the kind). Kinds: `queued` (this turn waited for one already running), `user_prompt`, `assistant_text` / `assistant_thought` (streamed deltas), `tool_use` / `tool_result`, `usage`, and exactly one terminal `result` carrying `stop_reason` (`completed`, `cancelled`, or `error`). The turn keeps running even if you stop reading — stopping it is a separate call to `.../cancel`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Your message.",
+                    "example": "Should I relocate for this role?"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: user_prompt\ndata: {\"type\":\"user_prompt\",\"text\":\"Should I relocate for this role?\"}\n\nevent: assistant_text\ndata: {\"type\":\"assistant_text\",\"text\":\"Based on the salary range...\"}\n\nevent: result\ndata: {\"type\":\"result\",\"stop_reason\":\"completed\"}\n\n"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/opening": {
+      "post": {
+        "summary": "Have the assistant speak first, on an `interview`/`debrief` session.",
+        "description": "Streams one turn under a server-side brief (no body), the same SSE shape as `.../messages`. `409` if the session’s preset does not open by itself, or if it already has an assistant message (an opening cannot be re-run).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/sync": {
+      "post": {
+        "summary": "Catch an `apply` session up on its automatic application.",
+        "description": "When the application has events the conversation has not narrated, streams one turn telling the candidate what changed (no body), the same SSE shape as `.../messages`; otherwise `204` and nothing runs. Not charged to the assistant-message allowance. A turn that fails is narrated again on the next call. `409` for a session that is not an `apply` conversation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/retry": {
+      "post": {
+        "summary": "Resume after a failed turn, without adding another user message.",
+        "description": "Re-runs the loop over the existing history (no body) — the same SSE shape as `.../messages`. `409 \"nothing to retry\"` when the session has no prior user message.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/sessions/{id}/autopilot": {
+      "post": {
+        "summary": "Run an unattended CV-tailoring pass as one long streamed turn.",
+        "description": "Session-only, not API-key — an unattended run edits a CV, and the browser is the only place you can watch it happen and undo it. Requires a `tailor` session bound to both a CV and a vacancy (`409` otherwise). Same SSE shape as `.../messages`, no body; every edit lands in one revision batch, so undoing the run is reverting that batch.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The session id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          }
+        ],
+        "tags": [
+          "Assistant"
+        ]
+      }
+    }
+  }
+}

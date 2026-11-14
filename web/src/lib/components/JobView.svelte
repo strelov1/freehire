@@ -8,7 +8,6 @@
     Bookmark,
     Check,
     CheckCircle2,
-    CircleSlash,
     Clock,
     ExternalLink,
     Eye,
@@ -22,9 +21,6 @@
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
   import { tailorHref } from '#lib/tailorHref.js';
   import { promptSignIn, signinUrl } from '#lib/signin.js';
-  import { formatSalary, summaryFacets } from '#lib/enrichment.js';
-  import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
-  import { freshnessBadges } from '#lib/freshness.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
   import {
@@ -34,35 +30,27 @@
   } from '#lib/appliedCompanies.svelte.js';
   import { track } from '#lib/analytics.js';
   import { foreignContentLang } from '#lib/seo.js';
-  import { roleAddressExists, seniorityLabel } from '#lib/insights.js';
-  import { categoryLabel } from '#lib/labels.js';
   import type { Display } from '#lib/generated/contracts.js';
   import type { Company, Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
   import { hasCompanyDetails } from '#lib/companyDetails.js';
-  import { companyLogoUrl } from '#lib/logo.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { Button, Chip, EntityLogo, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Button, Chip, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { formatDate, formatDateOrAgo, formatDateTime } from '#lib/utils.js';
-  import BackerBadge from './BackerBadge.svelte';
-  import CountryFlagStack from './CountryFlagStack.svelte';
+  import { formatDateOrAgo, formatDateTime } from '#lib/utils.js';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
   import JobDiscussionPanel from './JobDiscussionPanel.svelte';
-  import JobSourceRow from './JobSourceRow.svelte';
-  import JobDescription from './JobDescription.svelte';
-  import JobMatch from './JobMatch.svelte';
+  import JobFactsCard from './JobFactsCard.svelte';
+  import JobPostingBody from './JobPostingBody.svelte';
   import { supersedesReality } from '#lib/ghost.js';
   import GhostChecklist from './GhostChecklist.svelte';
-  import AIInterviewBadge from './AIInterviewBadge.svelte';
-  import DirectApplyBadge from './DirectApplyBadge.svelte';
+  import JobPinnedHeader from './JobPinnedHeader.svelte';
+  import JobProvenanceLine from './JobProvenanceLine.svelte';
+  import JobClosedNotice from './JobClosedNotice.svelte';
   import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
-  import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import MentorBlock from './MentorBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
-  import SkillChip from './SkillChip.svelte';
-  import VoteControl from './VoteControl.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
   // the article's content is in the initial HTML. Only the per-user interactions
@@ -82,11 +70,6 @@
   // sticky bar that carries them — is withheld rather than left to lead somewhere dead.
   // Save stays: keeping a closed posting for reference is still a reasonable thing to do.
   const closed = $derived(job.closed_at != null);
-
-  // Both facets live under `enrichment` on the wire (jobview sets them from the
-  // dictionary columns), and either can be absent.
-  const roleCategory = $derived(job.enrichment?.category ?? '');
-  const roleSeniority = $derived(job.enrichment?.seniority ?? '');
 
   // Set on the two subtrees below that carry the posting's own words; undefined
   // (so unset) when it is English. See foreignContentLang for why the document
@@ -180,19 +163,10 @@
   // means "the words moved", not "the crawler came back" — which is the only reading that
   // earns a line beside the posting date.
   const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
-  const e = $derived(job.enrichment ?? {});
-  const salary = $derived(formatSalary(e, 'standard'));
-  const equity = $derived(equityLabel(job.equity));
-  // A closed posting takes no applications, so what its form asks is beside the point.
-  const questions = $derived(closed ? null : applyQuestionsLabel(job.apply_questions));
-  const facets = $derived(summaryFacets(job));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
   const views = $derived(job.view_count ?? 0);
   const applies = $derived(job.applied_count ?? 0);
-  // "New" / "Be an early applicant" — see freshness.ts for why the posting date alone
-  // does not earn either.
-  const freshness = $derived(freshnessBadges(job.posted_at, job.reality, applies, job.closed_at));
 
   // The content column is tabbed so "who are these people?" and "what will they ask
   // me?" are answerable without leaving the posting. Page state, not a route: the
@@ -263,40 +237,9 @@
     contentTab = untrack(initialTab);
   });
 
-  // The pinned header. Once the posting's own header has scrolled under the top bar,
-  // a one-line copy of it — company, title, apply — takes its place, so "who is this
-  // for?" and the button stay a glance away through a description that routinely runs
-  // several screens.
-  //
-  // It rides a zero-height sticky rail inside an absolutely-positioned overlay, so the
-  // bar occupies no space in the flow and appearing can never shift the text under it.
-  // The obvious alternative — pinning the real header and collapsing it — cannot say
-  // that: its flow box loses ~90px the instant it pins, jerking the paragraph the
-  // reader is mid-sentence in, and again in reverse on the way back up.
-  const PINNED_HEADER_TOP = 56; // `top-14` on the rail below, and the top bar's own `h-14`.
-  let headerSentinel: HTMLElement | undefined = $state();
-  let headerPinned = $state(false);
-  $effect(() => {
-    const el = headerSentinel;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        // `isIntersecting` alone also reads false while the sentinel is BELOW the fold,
-        // which is where it sits on a short viewport before anything has been scrolled.
-        // The rect settles which edge it left by.
-        headerPinned = !entry.isIntersecting && entry.boundingClientRect.top < PINNED_HEADER_TOP;
-      },
-      { rootMargin: `-${PINNED_HEADER_TOP}px 0px 0px 0px` },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  });
-
   // Keyboard focus must not land under a sticky bar (WCAG 2.4.11). Three of them cover the
   // page's edges here: the site header (`h-14`, every width), the pinned header (lg, see
-  // PINNED_HEADER_TOP) and the phone's sticky apply bar. `scroll-padding` on the root is
+  // JobPinnedHeader) and the phone's sticky apply bar. `scroll-padding` on the root is
   // what the browser honours when it scrolls a newly focused element into view, so the
   // page reserves both edges while it is mounted — on <html>, which is the scroller, and
   // only for as long as this view is the page. The bottom edge is reserved only while the
@@ -917,102 +860,6 @@
   {/if}
 {/snippet}
 
-<!-- The posting itself. A snippet because it is rendered either inside the Description
-     tab panel or, on a job whose employer we don't know, straight into the column with
-     no tab strip above it at all. -->
-{#snippet descriptionContent()}
-  {#if e.summary}
-    <!-- Model-written synopsis (only on enriched jobs). Plain text, capped at
-         400 chars server-side — the headline above the full description. -->
-    <section class="flex flex-col gap-2">
-      <h2 class="text-base font-semibold">Summary</h2>
-      <p class="text-sm leading-relaxed">{e.summary}</p>
-    </section>
-  {:else}
-    <!-- The description's own headings are demoted to h3 (descriptionHeadings.ts) to sit
-         under a section heading. Without the Summary there is none between them and the
-         page's h1, so name the section for the outline: h1 → h2 → h3. -->
-    <h2 class="sr-only">Description</h2>
-  {/if}
-
-  <!-- The Summary above is an LLM synopsis the enrichment prompt pins to English
-       (internal/enrich), so the body is the only part of this snippet that takes
-       the posting's language. -->
-  <JobDescription html={job.description} lang={contentLang} />
-
-  <!-- Some sources carry no body at all and enrichment had nothing to summarise, which
-       left the Description tab blank — a reader could not tell an empty posting from a
-       page that failed to load. Say so, and offer the posting's own page, which is the
-       only place the rest of it can be. Not for a vacancy published here (`direct_apply`):
-       it has no outside page to send anyone to. -->
-  {#if !e.summary && !job.description?.trim()}
-    <p class="text-sm text-muted-foreground">
-      The posting didn't include a description.
-      {#if job.url && !job.direct_apply}
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-          href={job.url}
-          target="_blank"
-          rel="nofollow noopener noreferrer"
-          class="font-medium text-brand-strong underline underline-offset-4"
-        >
-          Read it on the original site
-        </a>
-      {/if}
-    </p>
-  {/if}
-
-  {#if job.skills?.length}
-    <!-- Top-level `skills` is the served (deterministic-dictionary) facet; the raw
-         `enrichment.skills` is kept in the JSONB and never served (see JobRow's same
-         fix), so reading it here always rendered nothing. -->
-    <section class="flex flex-col gap-2 border-t border-border pt-4">
-      <h2 class="text-base font-semibold">Skills</h2>
-      <ul class="flex flex-wrap gap-1.5">
-        {#each job.skills as skill (skill)}
-          <li>
-            <!-- The chip used to print the raw slug, so a posting read "ci-cd" beside a
-                 filter panel reading "CI/CD" — the same skill spelled two ways on one
-                 screen. SkillChip labels it from the dictionary and, for a skill the
-                 glossary has reached, carries the definition too. -->
-            <SkillChip slug={skill} />
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
-
-  <!-- The way into the role's skill page, placed here because this is the moment the
-       question arises: the reader has just seen what THIS posting asks for and the next
-       thought is whether that is the role or just this employer. Before this the page
-       existed and nothing in the product linked to it — reachable only from the footer,
-       four clicks deep, from no screen where anybody is thinking about their skills.
-
-       Shown only when both facets name a real role — the same check the route 404s on,
-       so the link cannot point at a page that refuses it. Being BUSY enough to index is
-       a separate question the route answers with noindex, because this page cannot know
-       it without a request of its own on the hottest page on the site.
-
-       That is a minority of postings:
-       measured 2026-09-18, 98.7% of open technical postings state a category and just
-       39.0% state a seniority. The link is absent rather than guessed when either is
-       missing. It never 404s — a role below the publication floor is served and marked
-       noindex rather than refused. -->
-  {#if roleAddressExists(roleCategory, roleSeniority)}
-    <section class="border-t border-border pt-4">
-      <a
-        class="text-brand-strong hover:underline"
-        href={resolve('/insights/roles/[category]/[seniority]', {
-          category: roleCategory,
-          seniority: roleSeniority,
-        })}
-      >
-        What {seniorityLabel(roleSeniority)}
-        {categoryLabel(roleCategory)} jobs ask for — and how much of it you have →
-      </a>
-    </section>
-  {/if}
-{/snippet}
-
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
      sticky left sidebar (match + salary + metadata) starts level with the title,
      and the description reads in the right column. On mobile everything stacks:
@@ -1024,82 +871,9 @@
 <article
   class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <!-- The company line and the badges about the posting. It WRAPS, at every width: the
-       badges are one `shrink-0` group that drops to a line of its own when it does not fit
-       beside the company name. It used to be one non-wrapping row below lg with the
-       company name as the part that gave way, and measured at 360px a reality chip and its
-       "posting date refreshed" note left "Grupo …" of the employer — the one fact on the
-       line a reader needs whole. The name still carries `min-w-0` and truncates, but only
-       when it alone is wider than the column.
-       The badge group keeps `shrink-0` rather than the default `min-width: auto`, whose
-       floor for text is the longest WORD: a squeezed chip does not stay one line, it wraps
-       "Be an early / applicant" inside itself. `max-w-full` plus its own `flex-wrap` let
-       the chips wrap BETWEEN each other instead when even a line of their own is too
-       narrow for all of them. -->
-  <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 lg:col-start-2 lg:row-start-1 lg:gap-x-3">
-    <EntityLogo
-      name={job.company || 'Unknown company'}
-      src={companyLogoUrl(job.company) ?? undefined}
-      shape="square"
-      size="sm"
-    />
-    <p class="min-w-0 text-sm text-muted-foreground max-lg:truncate">
-      {#if job.company_slug}
-        <a
-          href={resolve('/companies/[slug]', { slug: job.company_slug })}
-          class="hover:text-foreground hover:underline"
-        >
-          {job.company || 'Unknown company'}
-        </a>
-      {:else}
-        {job.company || 'Unknown company'}
-      {/if}
-    </p>
-
-    <div class="flex max-w-full shrink-0 flex-wrap items-center gap-x-2 gap-y-2 lg:gap-x-3">
-      <!-- Who backed the employer. The page has room the feed card does not, so the
-           badge carries the brand name too and links to that collection's roles. -->
-      <BackerBadge collections={job.collections} withLabel />
-
-      <!-- How long this has really been open, on the provenance line rather than under
-           the title: it is a fact ABOUT the posting, like the company and the backer,
-           and a chip on its own row read as a headline. The ghost checklist stays below
-           the title — it is a disclosure with a criteria list inside, not a chip, and it
-           supersedes this badge rather than joining it. -->
-      <!-- Nor on a closed posting: "Open 35d · reposted 4×" describes one still taking
-           applications and contradicts the closure notice under the title. -->
-      {#if !closed && !supersedesReality(job.ghost, locale())}
-        <RealityBadge reality={job.reality} detailed />
-      {/if}
-
-      <!-- How the employer screens, beside how the posting reads. Neutral by design:
-           the badge names the practice and its report count, and lets the reader
-           decide. -->
-      {#if job.direct_apply}
-        <DirectApplyBadge />
-      {/if}
-      <AIInterviewBadge count={job.ai_interview_reports} />
-
-      <!-- Freshness rides the same provenance line: like the backer and the reality
-           badge it describes the POSTING, not the role, so the title keeps a single
-           voice and the reader still meets all of it in one glance. A closed posting
-           earns nothing here — that rule lives in freshnessBadges, beside the reality
-           gate, rather than as a second copy in this template. -->
-      {#each freshness as badge (badge.label)}
-        <!-- The tooltip rides a wrapper, not the Chip: the primitive takes only
-             variant/class/children, so a `title` passed to it would be dropped
-             silently and the badge would state a claim with its evidence gone. -->
-        <span title={badge.tooltip} class="inline-flex">
-          <!-- The same look as on every job card: plain text, no pill. -->
-          <span class="text-xs font-semibold text-foreground">{badge.label}</span>
-        </span>
-      {/each}
-    </div>
-
-    <!-- `ml-auto` rather than a grid column: the badges above are a variable-width group,
-         so the dates take whatever is left of the line and sit against its right edge. -->
-    {@render postingMeta('ml-auto hidden shrink-0 lg:flex')}
-  </div>
+  <JobProvenanceLine {job} {closed}>
+    {#snippet meta()}{@render postingMeta('ml-auto hidden shrink-0 lg:flex')}{/snippet}
+  </JobProvenanceLine>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
     <div class="flex flex-wrap items-center gap-2.5">
@@ -1115,45 +889,7 @@
       {/if}
     </div>
 
-    <!-- Directly under the title, before anything that reads as a way in: a closed
-         posting's first fact is that it is closed. It sat below the tab row once, under
-         live Apply buttons that led to a dead page — the controls are withheld now (see
-         `closed`), and the reader is pointed at the open postings the route lists below. -->
-    {#if job.closed_at}
-      {@const closedOn = formatDate(job.closed_at, locale())}
-      <div
-        class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-secondary px-4 py-3 text-sm"
-      >
-        <p class="inline-flex items-center gap-2 font-medium">
-          <CircleSlash class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span>
-            This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
-          </span>
-        </p>
-        <!-- The posting's own page stays reachable: a reader who doubts the closure (or
-             a crawl that read it wrong) has nowhere else to check, and the Apply buttons
-             that used to carry this link are withheld. A quiet link, not a CTA, so it does
-             not read as a way to apply; `nofollow` for the reason `applyCta` states. -->
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {#if job.url && !job.direct_apply}
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-              href={job.url}
-              target="_blank"
-              rel="nofollow noopener noreferrer"
-              class="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
-              View the original posting
-            </a>
-          {/if}
-          {#if hasSimilar}
-            <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
-              See similar open jobs →
-            </a>
-          {/if}
-        </div>
-      </div>
-    {/if}
+    <JobClosedNotice {job} {hasSimilar} />
 
     <!-- The CTAs take a row of their own under the title rather than riding its right
          edge: the title is the longest string on the page and the buttons are the widest
@@ -1206,157 +942,19 @@
     {/if}
   </header>
 
-  <aside class="w-full shrink-0 lg:col-start-1 lg:row-span-3 lg:row-start-1">
-    <!-- `top-20`, not `top-6`: the site header is `sticky top-0 h-14` and opaque, so a
-         card pinned 24px from the viewport spends the whole read with its first 32px —
-         the border, the padding, and the top of the match score — behind it. 80px is
-         the header's 56 plus the same 24 of air the card was asking for. -->
-    <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
-      <JobMatch {job} {matchAnalysis} />
-
-      <!-- The pay and what applying costs, together: equity is the other half of the
-           pay (a posting may offer it with no salary figure), and the question count is
-           what stands between the reader and the Apply button. Each renders only when
-           known — absence is "not stated", never "none". -->
-      {#if salary || equity || questions}
-        <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
-          {#if salary}
-            <p class="text-xl font-semibold tabular-nums tracking-tight">{salary}</p>
-          {/if}
-          {#if equity || questions}
-            <div class="flex flex-wrap gap-1.5">
-              {#if equity}<Chip>{equity}</Chip>{/if}
-              {#if questions}<Chip>{questions}</Chip>{/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if facets.length}
-        <dl class="flex flex-col gap-2 border-t border-border pt-4 text-sm first:border-t-0 first:pt-0">
-          {#each facets as facet (facet.label)}
-            <div class="flex items-baseline justify-between gap-3">
-              <dt class="shrink-0 text-muted-foreground">{facet.label}</dt>
-              {#if facet.values.every((v) => v.flag)}
-                <!-- Flag facet (Country): an overlapping cluster of round flags,
-                     right-aligned, each linking to its filter. The stack laps the
-                     flags over one another so a many-country remote role stays a
-                     single compact row instead of wrapping. -->
-                <dd class="flex min-w-0 justify-end text-base">
-                  <!-- `labelClass` matches the sibling `dd` below (text-sm font-medium,
-                       ordinary foreground) — the component's own default is a muted
-                       caption sized for the browse card and company panel instead. -->
-                  <CountryFlagStack
-                    codes={facet.values.map((v) => v.flag ?? '')}
-                    link
-                    labelClass="text-sm font-medium"
-                  />
-                </dd>
-              {:else}
-                <dd class="min-w-0 break-words text-right font-medium">
-                  {#each facet.values as v, i (v.text)}{#if i > 0},
-                    {/if}{#if v.href}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve --><a
-                        href={v.href}
-                        class="hover:text-foreground hover:underline">{v.text}</a
-                      >{:else}{v.text}{/if}{/each}
-                </dd>
-              {/if}
-            </div>
-          {/each}
-        </dl>
-      {/if}
-
-      <!-- One quiet footer line: where the posting came from (with the control to stop seeing
-           that source) and the votes. They were two divided bands, each holding one control. -->
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
-      >
-        <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
-        <div class="flex shrink-0">
-          <!-- Keyed on the slug so a client-side navigation to another job remounts
-               the control and re-seeds its counts/highlight (JobView itself is not
-               remounted on param change). -->
-          {#key job.public_slug}
-            <VoteControl
-              target="job"
-              slug={job.public_slug}
-              upvoteCount={job.upvote_count ?? 0}
-              downvoteCount={job.downvote_count ?? 0}
-              myVote={job.my_vote ?? 0}
-            />
-          {/key}
-        </div>
-      </div>
-    </div>
-  </aside>
+  <JobFactsCard {job} {matchAnalysis} {closed} />
 
   <div class="relative flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-3">
-    <!-- The pinned header (see PINNED_HEADER_TOP). The overlay spans this column, which
-         is what gives the rail inside it something to travel: a `sticky` element is
-         clamped to its containing block, and the column is exactly the stretch the bar
-         should stay pinned over — it releases at the end of the posting, not over the
-         related jobs below. The `bottom-14` inset is the bar's own height: the rail is
-         zero-height, so without it the bar hangs a further ~52px past the end of the
-         overlay and spills over the "See also" strip on the last screen.
-         `pointer-events-none` on the overlay keeps the description selectable through
-         it; the bar itself takes them back.
-         `invisible` rather than a conditional block: keeping the bar mounted lets it
-         fade, and visibility:hidden takes it out of the focus order and the a11y tree
-         while it is away, so the duplicate apply button is not tabbable from the top
-         of the page. -->
-    <div class="pointer-events-none absolute inset-x-0 top-0 bottom-14">
-      <div bind:this={headerSentinel} aria-hidden="true" class="h-px w-full"></div>
-      <div class="sticky top-14 z-20 h-0">
-        <div
-          class={[
-            // Opaque, not frosted: the description slides directly under this and a
-            // translucent bar leaves a blurred ghost of the text inside it, which reads
-            // as a rendering fault rather than as glass. The mobile apply bar below can
-            // afford the frost because nothing scrolls under it at speed.
-            'pointer-events-auto flex items-center gap-3 border-b border-border bg-background py-2.5 transition-opacity duration-150',
-            headerPinned ? 'opacity-100' : 'invisible opacity-0',
-          ]}
-        >
-          <EntityLogo
-            name={job.company || 'Unknown company'}
-            src={companyLogoUrl(job.company) ?? undefined}
-            shape="square"
-            size="sm"
-          />
-          <p class="min-w-0 flex-1 truncate text-sm">
-            {#if job.company_slug}
-              <a
-                href={resolve('/companies/[slug]', { slug: job.company_slug })}
-                class="text-muted-foreground hover:text-foreground hover:underline"
-              >
-                {job.company || 'Unknown company'}
-              </a>
-            {:else}
-              <span class="text-muted-foreground">{job.company || 'Unknown company'}</span>
-            {/if}
-            <span class="px-1 text-muted-foreground" aria-hidden="true">·</span>
-            <span class="font-semibold" lang={contentLang}>{job.title}</span>
-          </p>
-          <!-- Hidden below lg for the same reason as the action strip's own copy: on
-               mobile the CTA is the sticky bottom bar, and two pinned buttons would
-               fight. Save comes along, since this bar is what a reader has in front of
-               them for most of a description several screens long.
-               It carries the SAME buttons as the header, in the same order, plan and all —
-               this bar is the header for most of the read, and an `Apply` here for the link
-               the title row calls a quiet `Apply on company site` would be one link at two ranks on
-               one page. `Tailor my CV` comes along for the same reason: the page's primary
-               CTA must not be a thing the reader scrolls past and loses. -->
-          <div class="hidden shrink-0 items-center gap-2 lg:flex">
-            {@render saveButton('size-9 rounded-md px-0', true)}
-            {#if !closed}
-              {@render autoApplyCta('md', 'shrink-0')}
-              {@render applyCta('md', 'shrink-0', cta.external)}
-              {@render tailorCta('md', 'shrink-0')}
-            {/if}
-          </div>
-        </div>
-      </div>
-    </div>
+    <JobPinnedHeader {job} lang={contentLang}>
+      {#snippet actions()}
+        {@render saveButton('size-9 rounded-md px-0', true)}
+        {#if !closed}
+          {@render autoApplyCta('md', 'shrink-0')}
+          {@render applyCta('md', 'shrink-0', cta.external)}
+          {@render tailorCta('md', 'shrink-0')}
+        {/if}
+      {/snippet}
+    </JobPinnedHeader>
 
     <div class="flex items-end justify-between">
       <TabStrip
@@ -1482,7 +1080,7 @@
          would have to click for. -->
     <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
       <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
-        {@render descriptionContent()}
+        <JobPostingBody {job} lang={contentLang} />
       </div>
       {#if companyWithDetails}
         <div class={contentTab === 'company' ? 'block' : 'hidden'}>

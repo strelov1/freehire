@@ -9,7 +9,7 @@ import (
 
 // helperFile is where the shared pagination parse lives, and the one file allowed to read the
 // raw query params.
-const helperFile = "handler.go"
+const helperFile = "pagination.go"
 
 // TestOffsetIsParsedOnlyByTheSharedHelper pins a rule that a comment failed to hold.
 //
