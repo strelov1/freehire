@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -33,15 +32,6 @@ func NewSender() *Sender { return newSender(safehttp.NewClient(requestTimeout)) 
 func newSender(c *http.Client) *Sender {
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Sender{http: c}
-}
-
-// ValidateURL is the creation-time check: an absolute http(s) URL with a host.
-func ValidateURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("url must be an absolute http or https URL")
-	}
-	return nil
 }
 
 // Send signs and POSTs ev. A 2xx is success, 410 is ErrGone, anything else an error to retry.
@@ -73,10 +63,4 @@ func (s *Sender) Send(ctx context.Context, dest, secret string, ev Event) error 
 		return fmt.Errorf("changehook: endpoint responded %d", resp.StatusCode)
 	}
 	return nil
-}
-
-// Test sends an event with no changes, so an owner can prove the URL and the signature check
-// before relying on them.
-func (s *Sender) Test(ctx context.Context, dest, secret string) error {
-	return s.Send(ctx, dest, secret, Event{ID: "test-" + strconv.FormatInt(time.Now().UnixNano(), 36), Type: EventTest, Changes: []Change{}})
 }
