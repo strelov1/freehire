@@ -7,11 +7,14 @@ ON CONFLICT (day) DO UPDATE
 SET open_jobs = EXCLUDED.open_jobs, reconstructed = false, computed_at = EXCLUDED.computed_at;
 
 -- name: RecordReconstructedCatalogSize :exec
--- Fill days the catalogue was never measured on. A day already holding a row keeps it: a
--- measured day must not be overwritten by an estimate, and a rerun of the backfill must
--- not move the past it already published.
+-- Fill the days before the catalogue was first measured. A day already holding a row keeps
+-- it, so a rerun does not move the past it already published. Days from the first measured
+-- one on are left alone even when a run was missed: reconstructed days stay one leading run,
+-- before every measurement, which is what lets a reader tell the estimate from the record.
 INSERT INTO catalog_size_daily (day, open_jobs, reconstructed)
-SELECT unnest(sqlc.arg(days)::date[]), unnest(sqlc.arg(open_jobs)::bigint[]), true
+SELECT d.day, d.open_jobs, true
+FROM (SELECT unnest(sqlc.arg(days)::date[]) AS day, unnest(sqlc.arg(open_jobs)::bigint[]) AS open_jobs) AS d
+WHERE d.day < COALESCE((SELECT min(day) FROM catalog_size_daily WHERE NOT reconstructed), 'infinity'::date)
 ON CONFLICT (day) DO NOTHING;
 
 -- name: ListCatalogSize :many

@@ -14,7 +14,8 @@
   let { data }: { data: PageData } = $props();
 
   const catalogSize = $derived(data.catalogHistory.map((p) => ({ date: p.date, total: p.open_jobs })));
-  // Reconstructed days are the oldest ones, so they are the series' leading run.
+  // Reconstructed days are only ever written before the first measured day
+  // (RecordReconstructedCatalogSize), so they are the series' leading run.
   const estimatedDays = $derived.by(() => {
     const i = data.catalogHistory.findIndex((p) => !p.reconstructed);
     return i === -1 ? data.catalogHistory.length : i;

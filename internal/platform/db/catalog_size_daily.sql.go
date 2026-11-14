@@ -179,7 +179,9 @@ func (q *Queries) RecordCatalogSize(ctx context.Context, arg RecordCatalogSizePa
 
 const recordReconstructedCatalogSize = `-- name: RecordReconstructedCatalogSize :exec
 INSERT INTO catalog_size_daily (day, open_jobs, reconstructed)
-SELECT unnest($1::date[]), unnest($2::bigint[]), true
+SELECT d.day, d.open_jobs, true
+FROM (SELECT unnest($1::date[]) AS day, unnest($2::bigint[]) AS open_jobs) AS d
+WHERE d.day < COALESCE((SELECT min(day) FROM catalog_size_daily WHERE NOT reconstructed), 'infinity'::date)
 ON CONFLICT (day) DO NOTHING
 `
 
@@ -188,9 +190,10 @@ type RecordReconstructedCatalogSizeParams struct {
 	OpenJobs []int64       `json:"open_jobs"`
 }
 
-// Fill days the catalogue was never measured on. A day already holding a row keeps it: a
-// measured day must not be overwritten by an estimate, and a rerun of the backfill must
-// not move the past it already published.
+// Fill the days before the catalogue was first measured. A day already holding a row keeps
+// it, so a rerun does not move the past it already published. Days from the first measured
+// one on are left alone even when a run was missed: reconstructed days stay one leading run,
+// before every measurement, which is what lets a reader tell the estimate from the record.
 func (q *Queries) RecordReconstructedCatalogSize(ctx context.Context, arg RecordReconstructedCatalogSizeParams) error {
 	_, err := q.db.Exec(ctx, recordReconstructedCatalogSize, arg.Days, arg.OpenJobs)
 	return err

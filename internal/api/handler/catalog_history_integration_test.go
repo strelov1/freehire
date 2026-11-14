@@ -42,8 +42,8 @@ func TestCatalogHistoryEndpoint(t *testing.T) {
 
 	measure("2026-07-02", 300)
 	if err := q.RecordReconstructedCatalogSize(ctx, db.RecordReconstructedCatalogSizeParams{
-		Days:     []pgtype.Date{date("2026-07-01"), date("2026-07-02")},
-		OpenJobs: []int64{100, 999},
+		Days:     []pgtype.Date{date("2026-07-01"), date("2026-07-02"), date("2026-07-03")},
+		OpenJobs: []int64{100, 999, 777}, // 07-03 follows a measured day, so it is not written
 	}); err != nil {
 		t.Fatal(err)
 	}

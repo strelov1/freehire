@@ -1,11 +1,15 @@
 <script lang="ts">
+  import { dateXs } from '#lib/growthArea.js';
+
   // A minimal single-series area chart: member growth (one monotonically rising line)
   // and the catalogue's size over time (which falls as well as rises), unlike
   // ActivityBars' two-series added/removed bars. Hand-built SVG scaled to its container
   // width, no charting dependency, matching the site's other bespoke charts. The series
-  // is dense and sorted by date (the backend guarantees it), so the x-axis is just even
-  // spacing. The first `estimated` points are drawn dashed: values worked out after the
-  // fact rather than measured on the day, which a reader must be able to tell apart.
+  // is sorted by date (the backend guarantees it); points are placed by date, so a day
+  // the series lacks shows as a wider step rather than vanishing. The first `estimated`
+  // points are drawn dashed: values worked out after the fact rather than measured on
+  // the day, which a reader must be able to tell apart.
+
   let {
     points,
     label,
@@ -23,7 +27,12 @@
     const last = points[n - 1];
     if (!first || !last) return null;
     const peak = Math.max(1, ...points.map((p) => p.total));
-    const x = (i: number) => (n === 1 ? W / 2 : PAD + (i / (n - 1)) * (W - 2 * PAD));
+    const xs = dateXs(
+      points.map((p) => p.date),
+      W,
+      PAD,
+    );
+    const x = (i: number) => xs[i] ?? W / 2;
     const y = (t: number) => PAD + (1 - t / peak) * (H - 2 * PAD);
     const coords = points.map((p, i) => `${x(i).toFixed(1)},${y(p.total).toFixed(1)}`);
     const line = coords.join(' ');

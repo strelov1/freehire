@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"time"
@@ -35,7 +36,7 @@ func run() int {
 	share := flag.Float64("pruned-share", -1, "fraction of pruned postings to count as listed, 0..1 (required)")
 	apply := flag.Bool("apply", false, "write the reconstructed days (default: print them)")
 	flag.Parse()
-	if *share < 0 || *share > 1 {
+	if math.IsNaN(*share) || *share < 0 || *share > 1 {
 		log.Printf("backfill-catalog-history: -pruned-share must be set, between 0 and 1")
 		return 2
 	}
