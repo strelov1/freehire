@@ -1,15 +1,9 @@
 //go:build integration
 
-// Release B contract rehearsal. The contract release (C) drops jobs.last_seen_at, hydrated_at and
-// liveness_strikes while binaries of release B may still run, and anything in their SQL that still
-// names a dropped column fails with 42703 on every call. A source regex cannot see what sqlc
-// expanded (a `RETURNING *` or an embedded row becomes an explicit column list), so this does what
-// the database will do: in an isolated copy of the release B schema it installs the intended C
-// insert-trigger body, removes the legacy bridge, drops the three columns, and prepares every SQL
-// constant of the generated code, then requires that nothing which prepared before now fails.
-// Statements are prepared, not executed.
-//
-// The C migration itself is NOT in migrations/: it is added when the B rollout has drained.
+// The B-to-C contract regression prepares every generated query on the historical
+// expanded schema and after applying the actual cleanup migration. This catches
+// generated column expansion as well as direct references to removed columns.
+// Statements are prepared, not executed. The historical fixture stays disposable.
 //
 // Run with: go test -tags=integration ./internal/platform/db/
 package db
@@ -19,6 +13,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -27,6 +22,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/strelov1/freehire/internal/platform/modroot"
+	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
 // generatedSQL returns every query constant of the sqlc output in this package by name, read
@@ -174,6 +172,7 @@ func TestUnexpectedBaselineCatchesEveryDrift(t *testing.T) {
 
 func TestReleaseCContractPreparesEveryGeneratedStatement(t *testing.T) {
 	pool := startPostgres(t)
+	testdb.InstallLegacyJobActivity(t, pool)
 	ctx := context.Background()
 	stmts := generatedSQL(t)
 	if len(stmts) < 1000 {
@@ -195,24 +194,16 @@ func TestReleaseCContractPreparesEveryGeneratedStatement(t *testing.T) {
 		t.Fatalf("the release B baseline is not what the allow-list says:\n%s", strings.Join(problems, "\n"))
 	}
 
-	for _, ddl := range []string{
-		// The intended release C insert trigger: every new job gets an activity row of defaults.
-		`CREATE OR REPLACE FUNCTION job_activity_insert() RETURNS trigger LANGUAGE plpgsql AS $$
-		BEGIN
-		    INSERT INTO job_activity AS a (job_id) VALUES (NEW.id)
-		    ON CONFLICT (job_id) DO UPDATE SET
-		        last_seen_at = now(), hydrated_at = NULL, liveness_strikes = 0, state_version = a.state_version + 1;
-		    RETURN NULL;
-		END;
-		$$`,
-		// A trigger bound with UPDATE OF <column> blocks DROP COLUMN, so the bridge goes first.
-		`DROP TRIGGER job_activity_legacy_bridge ON jobs`,
-		`DROP FUNCTION job_activity_legacy_bridge()`,
-		`ALTER TABLE jobs DROP COLUMN last_seen_at, DROP COLUMN hydrated_at, DROP COLUMN liveness_strikes`,
-	} {
-		if _, err := pool.Exec(ctx, ddl); err != nil {
-			t.Fatalf("contract DDL failed (%v):\n%s", err, ddl)
-		}
+	root, err := modroot.Find()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup, err := os.ReadFile(filepath.Join(root, "migrations", "0265_job_activity_contract.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, string(cleanup)); err != nil {
+		t.Fatalf("apply actual contract migration: %v", err)
 	}
 
 	after := prepareAll(t, pool, stmts)

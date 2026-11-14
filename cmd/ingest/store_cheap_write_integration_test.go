@@ -46,14 +46,14 @@ func cheapPosting(externalID, title string) job.Job {
 func backdateStamps(t *testing.T, pool *pgxpool.Pool, externalID string) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`UPDATE jobs SET last_seen_at = now() - interval '10 days', updated_at = now() - interval '10 days'
+		`UPDATE jobs SET updated_at = now() - interval '10 days'
 		 WHERE source = 'lever' AND external_id = $1`, externalID,
 	); err != nil {
-		t.Fatalf("back-date stamps for %s: %v", externalID, err)
+		t.Fatalf("back-date updated_at for %s: %v", externalID, err)
 	}
 	if _, err := pool.Exec(context.Background(),
-		`UPDATE job_activity a SET last_seen_at=j.last_seen_at FROM jobs j
-		 WHERE a.job_id=j.id AND j.source='lever' AND j.external_id=$1`, externalID,
+		`UPDATE job_activity a SET last_seen_at = now() - interval '10 days' FROM jobs j
+		 WHERE a.job_id = j.id AND j.source = 'lever' AND j.external_id = $1`, externalID,
 	); err != nil {
 		t.Fatalf("back-date activity for %s: %v", externalID, err)
 	}
@@ -159,10 +159,16 @@ func TestSave_ClosedPostingReopensOnUnchangedRecrawl(t *testing.T) {
 	}
 	backdateStamps(t, pool, "acme:cheap-2")
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET closed_at = now(), closed_reason = 'unseen', liveness_strikes = 2
+		`UPDATE jobs SET closed_at = now(), closed_reason = 'unseen'
 		 WHERE source = 'lever' AND external_id = 'acme:cheap-2'`,
 	); err != nil {
 		t.Fatalf("close setup: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE job_activity a SET liveness_strikes = 2 FROM jobs j
+		 WHERE a.job_id = j.id AND j.source = 'lever' AND j.external_id = 'acme:cheap-2'`,
+	); err != nil {
+		t.Fatalf("strike setup: %v", err)
 	}
 	before := loadJob(t, pool, "acme:cheap-2")
 

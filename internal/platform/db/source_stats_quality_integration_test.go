@@ -39,11 +39,18 @@ func TestAggregateOpenJobsBySourceCountsQualityGaps(t *testing.T) {
 	}
 	for _, values := range seed {
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO jobs (source, external_id, company_slug, work_mode, countries, regions, last_seen_at, posted_at,
+			`INSERT INTO jobs (source, external_id, company_slug, work_mode, countries, regions, posted_at,
 			                   url, title, public_slug)
-			 SELECT s, e, c, w, co::text[], r::text[], l, p, 'http://example.test', 'A job', 'job-' || e
+			 SELECT s, e, c, w, co::text[], r::text[], p, 'http://example.test', 'A job', 'job-' || e
 			 FROM (VALUES `+values+`) AS v(s, e, c, w, co, r, l, p)`); err != nil {
 			t.Fatalf("seed %s: %v", values, err)
+		}
+		// l is when the posting was last seen: its activity row's, created with the job.
+		if _, err := pool.Exec(ctx,
+			`UPDATE job_activity a SET last_seen_at = v.l
+			 FROM jobs j, (VALUES `+values+`) AS v(s, e, c, w, co, r, l, p)
+			 WHERE j.id = a.job_id AND j.source = v.s AND j.external_id = v.e`); err != nil {
+			t.Fatalf("stamp %s: %v", values, err)
 		}
 	}
 	// No posting date: its age falls back to when we first stored it.

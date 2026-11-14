@@ -38,12 +38,8 @@ func TestSave_BodyFromCatalogueLeavesHydratedAt(t *testing.T) {
 		return j
 	}
 	backdate := func() {
-		if _, err := pool.Exec(ctx, `UPDATE jobs SET hydrated_at = now() - interval '40 days'
-			WHERE source = 'lever' AND external_id = $1`, id); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := pool.Exec(ctx, `UPDATE job_activity a SET hydrated_at = j.hydrated_at
-			FROM jobs j WHERE a.job_id=j.id AND j.source='lever' AND j.external_id=$1`, id); err != nil {
+		if _, err := pool.Exec(ctx, `UPDATE job_activity a SET hydrated_at = now() - interval '40 days'
+			FROM jobs j WHERE a.job_id = j.id AND j.source = 'lever' AND j.external_id = $1`, id); err != nil {
 			t.Fatal(err)
 		}
 	}

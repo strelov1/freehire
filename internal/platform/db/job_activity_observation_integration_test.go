@@ -26,7 +26,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/testdb"
 )
+
+// These migration regressions deliberately retain release A's conflicting legacy
+// stamps. Current contracted-schema sweeps are also exercised by the ingest and
+// liveness packages; this historical fixture must keep detecting old-reader bugs.
+func historicalObservationPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	pool := startPostgres(t)
+	testdb.InstallLegacyJobActivity(t, pool)
+	return pool
+}
 
 // obsAge makes a job look stale to a reader of job_activity while its LEGACY jobs.last_seen_at
 // still says "just seen", so a statement that still reads the old column answers wrongly.
@@ -146,7 +157,7 @@ func obsSeedPair(t *testing.T, pool *pgxpool.Pool) (stale, fresh int64) {
 }
 
 func TestClosersDecideOnActivityNotTheLegacyColumn(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	obsSeedPair(t, pool)
@@ -195,7 +206,7 @@ func TestClosersDecideOnActivityNotTheLegacyColumn(t *testing.T) {
 }
 
 func TestUnseenCandidateScansReadActivity(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	stale, _ := obsSeedPair(t, pool)
@@ -221,7 +232,7 @@ func TestUnseenCandidateScansReadActivity(t *testing.T) {
 
 // The strike count the probe worker carries into its verdict is the activity row's.
 func TestLivenessCandidatesCarryActivityStrikes(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	stale, _ := obsSeedPair(t, pool)
@@ -255,7 +266,7 @@ func TestLivenessCandidatesCarryActivityStrikes(t *testing.T) {
 // The probe's compare-and-set must test the activity row: a crawl (release B) that freshened
 // ONLY job_activity has just proved the posting live.
 func TestMarkLivenessExpiredCASReadsActivity(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	_, fresh := obsSeedPair(t, pool)
@@ -271,7 +282,7 @@ func TestMarkLivenessExpiredCASReadsActivity(t *testing.T) {
 // reaches its verdict. The probe must wait for it, re-check the latest activity version and
 // write nothing.
 func TestMarkLivenessExpiredWaitsForFreshObservationAndWritesNothing(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	stale, _ := obsSeedPair(t, pool)
@@ -342,7 +353,7 @@ func TestClosersWaitForFreshObservationAndSkipTheRow(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			pool := startPostgres(t)
+			pool := historicalObservationPool(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			stale, _ := obsSeedPair(t, pool)
@@ -387,7 +398,7 @@ func TestClosersWaitForFreshObservationAndSkipTheRow(t *testing.T) {
 // tuple and waits for the activity row must not conflict with that KEY SHARE: FOR UPDATE would
 // deadlock here (SQLSTATE 40P01), FOR NO KEY UPDATE does not.
 func TestCloserWaitingForActivityDoesNotDeadlockAgainstAChildInsert(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	stale, _ := obsSeedPair(t, pool)
@@ -435,7 +446,7 @@ func TestCloserWaitingForActivityDoesNotDeadlockAgainstAChildInsert(t *testing.T
 // transaction that is a deadlock waiting to happen. A plain UPDATE's lock (NO KEY UPDATE) is
 // what it must take.
 func TestTouchJobIsNotBlockedByAKeyShareHolder(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, fresh := obsSeedPair(t, pool)
@@ -475,7 +486,7 @@ func TestTouchJobIsNotBlockedByAKeyShareHolder(t *testing.T) {
 // The withheld-then-seen requeue compares the activity row's previous stamp, not the legacy
 // column's.
 func TestTouchJobRequeuesAPostingWhoseActivityWasWithheld(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	stale, _ := obsSeedPair(t, pool)
@@ -499,7 +510,7 @@ func TestTouchJobRequeuesAPostingWhoseActivityWasWithheld(t *testing.T) {
 
 // hydrated_at in the per-board and per-provider seen-set is the activity row's.
 func TestSeenSetReadsActivityHydratedAt(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	truncate(t, pool)
@@ -553,7 +564,7 @@ func TestSeenSetReadsActivityHydratedAt(t *testing.T) {
 // The predicate readers that count or gate on "seen recently". One posting: its legacy column
 // always says "just seen", and only job_activity says otherwise.
 func TestObservationPredicateReadersUseActivity(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	truncate(t, pool)
@@ -615,7 +626,7 @@ func TestResetLivenessStrikesClearsActivityWhateverTheLegacyColumnSays(t *testin
 		{"legacy four, activity four", `UPDATE jobs SET liveness_strikes = 4 WHERE id = $1`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pool := startPostgres(t)
+			pool := historicalObservationPool(t)
 			id := obsSeedOne(t, pool)
 			if _, err := pool.Exec(context.Background(), tc.legacySQL, id); err != nil {
 				t.Fatal(err)
@@ -638,7 +649,7 @@ func TestResetLivenessStrikesClearsActivityWhateverTheLegacyColumnSays(t *testin
 func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 	ctx := context.Background()
 	t.Run("activity ahead of a frozen legacy column", func(t *testing.T) {
-		pool := startPostgres(t)
+		pool := historicalObservationPool(t)
 		id := obsSeedOne(t, pool)
 		if _, err := pool.Exec(ctx, `UPDATE job_activity SET liveness_strikes = 4 WHERE job_id = $1`, id); err != nil {
 			t.Fatal(err)
@@ -660,7 +671,7 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		}
 	})
 	t.Run("computed count equals the stale legacy value", func(t *testing.T) {
-		pool := startPostgres(t)
+		pool := historicalObservationPool(t)
 		id := obsSeedOne(t, pool)
 		// legacy 1, activity 0: the next strike is 1, which the bridge sees as no change.
 		if _, err := pool.Exec(ctx, `UPDATE jobs SET liveness_strikes = 1 WHERE id = $1`, id); err != nil {
@@ -681,7 +692,7 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		// The activity write must land BEFORE the jobs write whose state trigger updates the same
 		// activity row: legacy 1, activity 0, threshold 1 makes the bridge silent (1 -> 1) and the
 		// close fires the state trigger in the same statement.
-		pool := startPostgres(t)
+		pool := historicalObservationPool(t)
 		id := obsSeedOne(t, pool)
 		if _, err := pool.Exec(ctx, `UPDATE jobs SET liveness_strikes = 1 WHERE id = $1`, id); err != nil {
 			t.Fatal(err)
@@ -702,7 +713,7 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 		}
 	})
 	t.Run("closes on the activity count", func(t *testing.T) {
-		pool := startPostgres(t)
+		pool := historicalObservationPool(t)
 		id := obsSeedOne(t, pool)
 		if _, err := pool.Exec(ctx, `UPDATE job_activity SET liveness_strikes = 1 WHERE job_id = $1`, id); err != nil {
 			t.Fatal(err)
@@ -716,7 +727,7 @@ func TestMarkLivenessExpiredCountsFromActivityAndWritesOnlyThere(t *testing.T) {
 
 // A private posting is one user's pasted JD: no sweep closes it (the guard walks the closers too).
 func TestClosersLeavePrivatePostingsAlone(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	q := New(pool)
 	ctx := context.Background()
 	stale, _ := obsSeedPair(t, pool)
@@ -751,8 +762,8 @@ func obsRefreshParams() RefreshUnchangedJobParams {
 	}
 }
 
-// obsSeedStaleHashed stores one open posting that a sweep or probe would act on.
-func obsSeedStaleHashed(t *testing.T, pool *pgxpool.Pool) int64 {
+// obsLegacySeedStaleHashed stores one open posting that a sweep or probe would act on.
+func obsLegacySeedStaleHashed(t *testing.T, pool *pgxpool.Pool) int64 {
 	t.Helper()
 	truncate(t, pool)
 	job, err := ingestUpsert(context.Background(), New(pool), obsHashedParams())
@@ -797,10 +808,10 @@ func obsCloseVerdicts() []struct {
 func TestClosersWaitForARealLegacyRefreshAndWriteNothing(t *testing.T) {
 	for _, c := range obsCloseVerdicts() {
 		t.Run(c.name, func(t *testing.T) {
-			pool := startPostgres(t)
+			pool := historicalObservationPool(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			id := obsSeedStaleHashed(t, pool)
+			id := obsLegacySeedStaleHashed(t, pool)
 
 			crawl, err := pool.Begin(ctx)
 			if err != nil {
@@ -855,10 +866,10 @@ func obsSeenAge(t *testing.T, pool *pgxpool.Pool, id int64) time.Duration {
 func TestRealWritersReopenWhatACloserClosedFirst(t *testing.T) {
 	for _, c := range obsCloseVerdicts() {
 		t.Run(c.name, func(t *testing.T) {
-			pool := startPostgres(t)
+			pool := historicalObservationPool(t)
 			ctx := context.Background()
 			q := New(pool)
-			id := obsSeedStaleHashed(t, pool)
+			id := obsLegacySeedStaleHashed(t, pool)
 			if err := c.run(ctx, q, id); err != nil {
 				t.Fatalf("%s: %v", c.name, err)
 			}
@@ -886,10 +897,10 @@ func TestRealWritersReopenWhatACloserClosedFirst(t *testing.T) {
 
 // A TouchJob that reopens a posting a closer is closing right now waits for the close, then reopens.
 func TestTouchJobReopensWhatAConcurrentCloserClosed(t *testing.T) {
-	pool := startPostgres(t)
+	pool := historicalObservationPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	id := obsSeedStaleHashed(t, pool)
+	id := obsLegacySeedStaleHashed(t, pool)
 
 	closing, err := pool.Begin(ctx)
 	if err != nil {
@@ -950,8 +961,8 @@ func TestRealWritersKeepActivityStrikesOnOpenRowsAndClearThemOnReopen(t *testing
 	}
 	for _, w := range reseen {
 		t.Run(w.name+" keeps strikes on an open row", func(t *testing.T) {
-			pool := startPostgres(t)
-			id := obsSeedStaleHashed(t, pool)
+			pool := historicalObservationPool(t)
+			id := obsLegacySeedStaleHashed(t, pool)
 			if _, err := pool.Exec(ctx, `UPDATE job_activity SET liveness_strikes = 4 WHERE job_id = $1`, id); err != nil {
 				t.Fatal(err)
 			}
@@ -966,8 +977,8 @@ func TestRealWritersKeepActivityStrikesOnOpenRowsAndClearThemOnReopen(t *testing
 			continue // never refreshes a closed row; the reopen belongs to UpsertJob / TouchJob
 		}
 		t.Run(w.name+" clears strikes on reopen", func(t *testing.T) {
-			pool := startPostgres(t)
-			id := obsSeedStaleHashed(t, pool)
+			pool := historicalObservationPool(t)
+			id := obsLegacySeedStaleHashed(t, pool)
 			if _, err := pool.Exec(ctx, `UPDATE job_activity SET liveness_strikes = 4 WHERE job_id = $1`, id); err != nil {
 				t.Fatal(err)
 			}
@@ -996,16 +1007,16 @@ func TestCloseUnseenJobByIDRechecksFreshnessUnderItsLocks(t *testing.T) {
 		return pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
 	}
 	t.Run("stale row closes", func(t *testing.T) {
-		pool := startPostgres(t)
-		id := obsSeedStaleHashed(t, pool)
+		pool := historicalObservationPool(t)
+		id := obsLegacySeedStaleHashed(t, pool)
 		n, err := New(pool).CloseUnseenJobByID(context.Background(), CloseUnseenJobByIDParams{ID: id, Cutoff: cutoff()})
 		if err != nil || n != 1 {
 			t.Fatalf("closed %d, %v; want 1", n, err)
 		}
 	})
 	t.Run("refresh committed since the listing", func(t *testing.T) {
-		pool := startPostgres(t)
-		id := obsSeedStaleHashed(t, pool)
+		pool := historicalObservationPool(t)
+		id := obsLegacySeedStaleHashed(t, pool)
 		if _, err := New(pool).RefreshUnchangedJob(context.Background(), obsRefreshParams()); err != nil {
 			t.Fatal(err)
 		}
@@ -1022,10 +1033,10 @@ func TestCloseUnseenJobByIDRechecksFreshnessUnderItsLocks(t *testing.T) {
 		}
 	})
 	t.Run("refresh still in flight waits then writes nothing", func(t *testing.T) {
-		pool := startPostgres(t)
+		pool := historicalObservationPool(t)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		id := obsSeedStaleHashed(t, pool)
+		id := obsLegacySeedStaleHashed(t, pool)
 		crawl, err := pool.Begin(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -1057,4 +1068,22 @@ func TestCloseUnseenJobByIDRechecksFreshnessUnderItsLocks(t *testing.T) {
 			t.Fatalf("closed = %v, want nothing closed", got)
 		}
 	})
+}
+
+// obsSeedStaleHashed is also used by the fence/child-lock tests on the current,
+// contracted schema. Those scenarios need stale activity, not legacy columns.
+func obsSeedStaleHashed(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+	truncate(t, pool)
+	job, err := ingestUpsert(context.Background(), New(pool), obsHashedParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE job_activity SET last_seen_at = now() - interval '10 days' WHERE job_id = $1`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE jobs SET created_at = now() - interval '60 days' WHERE id = $1`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	return job.ID
 }

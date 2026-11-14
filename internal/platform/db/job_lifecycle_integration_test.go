@@ -24,18 +24,13 @@ func pgTimestamptz(t time.Time) pgtype.Timestamptz {
 }
 
 // ageJob backdates a job's last_seen_at so sweep cutoffs can be exercised
-// without sleeping. The sweeps and probes read job_activity, so that row is aged too, AFTER the
-// legacy column: the one-way bridge only ever moves job_activity forward (GREATEST), so a legacy
-// write made after ageing the activity row would undo the ageing.
+// without sleeping. The stamp is the posting's job_activity row.
 func ageJob(t *testing.T, pool *pgxpool.Pool, id int64, seenAgo time.Duration) {
 	t.Helper()
-	for _, stmt := range []string{
-		"UPDATE jobs SET last_seen_at = now() - $2::interval WHERE id = $1",
+	if _, err := pool.Exec(context.Background(),
 		"UPDATE job_activity SET last_seen_at = now() - $2::interval WHERE job_id = $1",
-	} {
-		if _, err := pool.Exec(context.Background(), stmt, id, seenAgo.String()); err != nil {
-			t.Fatalf("backdate last_seen_at: %v", err)
-		}
+		id, seenAgo.String()); err != nil {
+		t.Fatalf("backdate last_seen_at: %v", err)
 	}
 }
 
