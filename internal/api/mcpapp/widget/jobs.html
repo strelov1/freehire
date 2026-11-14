@@ -41,7 +41,7 @@
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
   .btn { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--fh-border); color: var(--fh-fg); text-decoration: none; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; font-family: inherit; }
   .btn.primary { background: var(--fh-fg); color: var(--fh-bg); border-color: var(--fh-fg); }
-  .btn:focus-visible, select:focus-visible { outline: 2px solid var(--fh-fg); outline-offset: 3px; }
+  .btn:focus-visible { outline: 2px solid var(--fh-fg); outline-offset: 3px; }
   .btn[hidden] { display: none; }
   .btn:disabled { cursor: default; opacity: 0.6; }
   /* The account controls sit in the card's own action row; status lines wrap below it. */
@@ -91,7 +91,8 @@
   let hostCapabilities = {};
   let nextId = 1;
   let lastToolResult;
-  let profileRequested = false;
+  let profilePending = false, profileLoaded = false;
+  let matchViews = [];
   let profileSkills = [];
   const actionStates = new Map();
 
@@ -240,6 +241,7 @@
     if (!toolResult) return;
     if (toolResult.isError) {
       lastToolResult = null;
+      matchViews = [];
       root.replaceChildren();
       const first = (toolResult.content || [])[0];
       root.append(el("p", "empty", first && first.text ? first.text : "freehire could not answer this request."));
@@ -255,6 +257,7 @@
     const result = lastToolResult && lastToolResult.structuredContent;
     if (!result) return;
     loadProfile(result);
+    matchViews = [];
     for (const state of actionStates.values()) state.views = [];
     root.replaceChildren();
     if (Array.isArray(result.jobs)) renderList(result);
@@ -354,8 +357,16 @@
     }
     if (job.source) actions.append(el("span", "source", "via " + job.source));
     body.append(actions);
-    const match = matchBar(job);
-    if (match) body.append(match);
+    // Updating only the strip preserves focused controls and the save live region.
+    const matchSlot = el("div");
+    function updateMatch() {
+      const match = matchBar(job);
+      matchSlot.replaceChildren();
+      if (match) matchSlot.append(match);
+    }
+    updateMatch();
+    matchViews.push(updateMatch);
+    body.append(matchSlot);
 
     node.append(body);
     return node;
@@ -457,13 +468,13 @@
     return panel;
   }
 
-  // Read once through the host, then use the same exact skill overlap as JobMatchBar.
-  // A missing profile is not a zero match: it leaves the strip absent.
+  // Cache a valid profile, including an empty one. A failed read may retry on the next
+  // tool result, never in a loop. Missing profile data leaves the strip absent.
   function loadProfile(result) {
     const postings = Array.isArray(result.jobs) ? result.jobs : [result];
-    if (!ready || !hostCapabilities.serverTools || profileRequested ||
+    if (!ready || !hostCapabilities.serverTools || profilePending || profileLoaded ||
         !postings.some(function (job) { return Array.isArray(job.skills) && job.skills.length; })) return;
-    profileRequested = true;
+    profilePending = true;
     request("tools/call", { name: "get_profile", arguments: {} }, 30000).then(function (reply) {
       if (!reply || reply.isError) return;
       let profile = reply.structuredContent;
@@ -473,15 +484,17 @@
       }
       if (!profile || !Array.isArray(profile.skills)) return;
       profileSkills = profile.skills.filter(function (skill) { return typeof skill === "string" && skill.trim(); });
-      if (profileSkills.length) draw();
-    }).catch(function () {});
+      profileLoaded = true;
+      for (const view of matchViews) view();
+    }).catch(function () {}).finally(function () { profilePending = false; });
   }
 
   function matchBar(job) {
-    if (!profileSkills.length || !Array.isArray(job.skills) || !job.skills.length) return null;
+    const skills = Array.isArray(job.skills) ? job.skills.filter(function (skill) { return typeof skill === "string" && skill.trim(); }) : [];
+    if (!profileSkills.length || !skills.length) return null;
     const have = new Set(profileSkills.map(function (skill) { return skill.toLowerCase(); }));
-    const total = job.skills.length;
-    const matched = job.skills.filter(function (skill) { return have.has(skill.toLowerCase()); }).length;
+    const total = skills.length;
+    const matched = skills.filter(function (skill) { return have.has(skill.toLowerCase()); }).length;
     const percent = Math.round(matched / total * 100);
     const strip = el("div", "match");
     const track = el("div", "match-track");

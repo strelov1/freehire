@@ -36,17 +36,15 @@ function mount({ capabilities = { serverTools: {} }, posting = job } = {}) {
   const window = dom.window;
   const receive = (data, source = window) => window.dispatchEvent(new window.MessageEvent('message', { data, source }));
   const answer = (message, result) => receive({ jsonrpc: '2.0', id: message.id, result });
+  const toolResult = (params) => receive({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params });
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   const init = sent.find((message) => message.method === 'ui/initialize');
   answer(init, { hostCapabilities: capabilities, hostContext: { theme: 'light' } });
-  receive({
-    jsonrpc: '2.0',
-    method: 'ui/notifications/tool-result',
-    params: { structuredContent: { jobs: [posting], total: 1 } },
-  });
+  toolResult({ structuredContent: { jobs: [posting], total: 1 } });
   return {
     window,
     receive,
+    toolResult,
     answer,
     tick,
     sent,
@@ -116,13 +114,9 @@ describe('MCP job-card actions over the host bridge', () => {
     const ui = mount({ posting: { ...job, skills: ['go'] } });
     await ui.tick();
     const profileCall = ui.calls()[0];
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: {
-        isError: true,
-        content: [{ type: 'text', text: 'Search failed' }],
-      },
+    ui.toolResult({
+      isError: true,
+      content: [{ type: 'text', text: 'Search failed' }],
     });
     ui.answer(profileCall, { structuredContent: { skills: ['go'] }, content: [] });
     await ui.tick();
@@ -140,13 +134,12 @@ describe('MCP job-card actions over the host bridge', () => {
     await ui.tick();
     expect(ui.window.document.querySelector('.match-text').textContent).toBe(label);
     expect(ui.window.document.querySelector('.match-fill').style.transform).toBe('translateX(' + offset + ')');
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: { structuredContent: { jobs: [{ ...job, skills: ['go'] }] } },
-    });
+    ui.toolResult({ structuredContent: { jobs: [{ ...job, skills: ['go'] }] } });
     await ui.tick();
     expect(ui.calls()).toHaveLength(1);
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe(
+      skills.includes('rust') ? '0% · 0/1 skills' : '100% · 1/1 skills',
+    );
   });
 
   it.each([{ isError: true }, { structuredContent: { skills: [] } }, { content: [] }])(
@@ -160,6 +153,90 @@ describe('MCP job-card actions over the host bridge', () => {
       expect(ui.window.document.body.textContent).toContain(job.title);
     },
   );
+
+  it.each([[], undefined, [null, 42, {}, ''], ['go', null, 42, '']])(
+    'handles missing or malformed job skills after loading a profile: %j',
+    async (skills) => {
+      const ui = mount({ posting: { ...job, skills: ['go'] } });
+      await ui.tick();
+      ui.answer(ui.calls()[0], { structuredContent: { skills: ['go'] }, content: [] });
+      await ui.tick();
+      ui.toolResult({ structuredContent: { jobs: [{ ...job, skills }] } });
+      await ui.tick();
+      expect(ui.window.document.querySelector('.title').textContent).toBe(job.title);
+      if (skills?.includes('go')) {
+        expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+      } else {
+        expect(ui.window.document.querySelector('.match')).toBeNull();
+      }
+      expect(ui.calls()).toHaveLength(1);
+    },
+  );
+
+  it.each(['tool-error', 'rpc-error', 'timeout', 'malformed-json', 'missing-skills'])(
+    'retries a failed profile read on a later result: %s',
+    async (failure) => {
+      const posting = { ...job, skills: ['go'] };
+      const ui = mount({ posting });
+      await ui.tick();
+      const first = ui.calls()[0];
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(1);
+      if (failure === 'timeout') ui.timers.find((timer) => timer.delay === 30000).callback();
+      else if (failure === 'rpc-error')
+        ui.receive({ jsonrpc: '2.0', id: first.id, error: { code: -32603, message: 'Temporary failure' } });
+      else
+        ui.answer(
+          first,
+          failure === 'tool-error'
+            ? { isError: true, content: [] }
+            : failure === 'malformed-json'
+              ? { content: [{ type: 'text', text: 'invalid JSON' }] }
+              : { structuredContent: {} },
+        );
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match')).toBeNull();
+      expect(ui.calls()).toHaveLength(1);
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(2);
+      ui.answer(ui.calls()[1], { structuredContent: { skills: ['go'] }, content: [] });
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(2);
+    },
+  );
+
+  it('keeps a known empty profile cached across later results', async () => {
+    const posting = { ...job, skills: ['go'] };
+    const ui = mount({ posting });
+    await ui.tick();
+    ui.answer(ui.calls()[0], { structuredContent: { skills: [] }, content: [] });
+    await ui.tick();
+    ui.toolResult({ structuredContent: { jobs: [posting] } });
+    await ui.tick();
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.window.document.querySelector('.match')).toBeNull();
+  });
+
+  it('adds profile coverage without replacing focused controls or pending-save status', async () => {
+    const ui = mount({ posting: { ...job, skills: ['go'] } });
+    await ui.tick();
+    const profileCall = ui.calls()[0];
+    const save = ui.button('Save job');
+    const status = ui.window.document.querySelector('[role="status"]');
+    save.click();
+    const link = ui.window.document.querySelector('a');
+    link.focus();
+    ui.answer(profileCall, { structuredContent: { skills: ['go'] }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+    expect(ui.window.document.activeElement).toBe(link);
+    expect(ui.button('Saving...')).toBe(save);
+    expect(ui.window.document.querySelector('[role="status"]')).toBe(status);
+    expect(status.textContent).toContain('Saving');
+    expect(save.disabled).toBe(true);
+  });
 
   it('shows a failed tool response as a failure and allows a deliberate retry', async () => {
     const ui = mount();
@@ -208,11 +285,7 @@ describe('MCP job-card actions over the host bridge', () => {
     const first = ui.calls()[0];
     ui.timers.find((timer) => timer.delay === 30000).callback();
     await ui.tick();
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: { structuredContent: { jobs: [job], total: 1 } },
-    });
+    ui.toolResult({ structuredContent: { jobs: [job], total: 1 } });
     await ui.tick();
     const reset = ui.button('I checked, allow retry');
     expect(reset).toBeDefined();
@@ -282,11 +355,7 @@ describe('MCP job-card actions over the host bridge', () => {
     const ui = mount();
     await ui.tick();
     ui.button('Save job').click();
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: { structuredContent: { jobs: [job], total: 1 } },
-    });
+    ui.toolResult({ structuredContent: { jobs: [job], total: 1 } });
     await ui.tick();
     expect(ui.button('Saving...').disabled).toBe(true);
     ui.button('Saving...').click();

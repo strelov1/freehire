@@ -321,9 +321,11 @@ that ignores `_meta.ui` sees exactly what it saw before.
   and assistant tools rather than the card.
 - **The match strip uses exact profile skill overlap**, like the website's
   `JobMatchBar`: percentage and matched/total job skills, case-insensitive. One
-  host-mediated `get_profile` read serves the whole widget when a posting has skills.
-  No profile, no skills or an unavailable host read means no strip, never a fabricated
-  zero score. The profile response is not rendered; only the coverage is shown.
+  successful host-mediated `get_profile` read serves the whole widget when a posting has
+  skills; a failed read may retry on the next tool result. No profile, no skills or an
+  unavailable host read means no strip, never a fabricated zero score. The profile
+  response is not rendered; only the coverage is shown. Strips update in place so a late
+  profile reply preserves focused controls and pending-save status announcements.
 - **Success needs a server confirmation.** The returned tracking record must have
   a valid job id and saved timestamp. An unknown
   result or timeout locks writes until the person explicitly confirms their tracking
