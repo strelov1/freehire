@@ -110,8 +110,8 @@ func TestJobChangesFeed(t *testing.T) {
 	since := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
 
 	// a: opened, closed (unseen), reopened, closed again (liveness). b: opened. c: private, so
-	// never logged. d: opened, then marked a duplicate within the settle window, so both entries
-	// are cancelled and nobody hears of it; it later becomes canonical again.
+	// never logged. d: opened, then marked a duplicate, so it closes with reason duplicate; it
+	// later becomes canonical again.
 	companyRow := func() { mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`) }
 	companyRow()
 	seedJob(t, pool, "job-a", "")
@@ -171,7 +171,7 @@ func TestJobChangesFeed(t *testing.T) {
 		mustExec(t, pool, `UPDATE jobs SET duplicate_of_role = NULL WHERE public_slug = 'job-d'`)
 		p := getChanges(t, app, url.Values{"cursor": {cursor}})
 		if len(p.Data) != 1 || plain(p.Data)[0] != (changeItem{0, "job-d", "reopened", ""}) {
-			t.Fatalf("after the duplicate cleared: %+v, want job-d reopened (it was never announced as opened)", p.Data)
+			t.Fatalf("after the duplicate cleared: %+v, want job-d reopened", p.Data)
 		}
 		// Becoming private withdraws it; the removal still carries the slug the client holds.
 		mustExec(t, pool, `UPDATE jobs SET is_private = true WHERE public_slug = 'job-d'`)
