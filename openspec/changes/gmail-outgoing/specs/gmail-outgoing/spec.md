@@ -12,7 +12,7 @@ The system SHALL store sent Gmail messages only in known hiring threads, with di
 - **THEN** its body is not fetched or stored
 
 ### Requirement: Discover outgoing updates independently
-The system SHALL backfill known threads once and discover new sent replies without a new incoming anchor. Failed passes MUST preserve retry coverage and repeated passes MUST NOT duplicate messages.
+The system SHALL backfill the 50 newest known threads once (older threads keep no pre-feature replies) and discover new sent replies without a new incoming anchor. Failed passes MUST preserve retry coverage and repeated passes MUST NOT duplicate messages.
 
 #### Scenario: Reply to an old thread
 - **WHEN** a candidate sends a reply in a stored thread after its incoming synchronization watermark

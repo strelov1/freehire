@@ -244,7 +244,7 @@ const listJobEmails = `-- name: ListJobEmails :many
 SELECT e.id, e.source, e.direction, e.to_addrs, e.cc_addrs, e.from_addr, e.from_name, e.subject, e.status_signal, e.link_source,
     e.received_at, (e.read_at IS NOT NULL)::boolean AS read
 FROM emails e
-WHERE e.user_id = $1 AND (e.job_id = $2 OR (
+WHERE e.user_id = $1 AND e.deleted_at IS NULL AND (e.job_id = $2 OR (
     -- Infer display membership after incoming mail is linked, even if its reply arrived first.
     -- Explicit attachments win; conversations naming multiple jobs stay unassigned.
     e.job_id IS NULL AND e.application_id IS NULL AND e.deleted_at IS NULL

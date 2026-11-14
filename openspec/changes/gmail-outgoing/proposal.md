@@ -5,7 +5,7 @@ The inbox discards the candidate's replies, so a future digest cannot describe b
 ## What Changes
 
 - Store Gmail direction and recipients and expose them to inbox readers.
-- Backfill sent replies in existing hiring threads once and discover new sent replies even when no new inbound anchor arrives.
+- Backfill sent replies in the 50 newest existing hiring threads once and discover new sent replies even when no new inbound anchor arrives.
 - Exclude outgoing messages from classification, employer-reply events and automatic stage changes.
 
 ## Capabilities
