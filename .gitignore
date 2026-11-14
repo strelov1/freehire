@@ -16,6 +16,12 @@ hire
 # ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
+# The list below is the union of every cmd/ target plus the six binaries that no longer
+# have one (prune, reslug, backfill-company-info, backfill-justjoin,
+# discord-register-commands, hire-api) — kept exhaustive on purpose: release.sh builds each
+# cmd/ target into the checkout ROOT, so an omission lands an untracked 25-55 MB binary
+# that a `git add -A` sweeps into a commit. Regenerate after adding a worker:
+#   { ls cmd; grep -E '^/[a-z0-9-]+$' .gitignore | tr -d /; } | sort -u
 /add-board
 /adzuna-liveness
 /apple-revoke
@@ -29,8 +35,8 @@ hire
 /backfill-clearance
 /backfill-company-info
 /backfill-company-info-wikipedia
-/backfill-company-type-hint
 /backfill-company-names
+/backfill-company-type-hint
 /backfill-derive
 /backfill-descriptions
 /backfill-duplicate-marker-owner
@@ -38,47 +44,63 @@ hire
 /backfill-ess-urls
 /backfill-experience
 /backfill-experience-dates
+/backfill-justjoin
 /backfill-profession-it-tech
 /backfill-remote-perk-false-positive
 /backfill-remote-region-restriction
 /backfill-requirements
-/backfill-talent-handle
 /backfill-resume-geo
 /backfill-resume-structured
 /backfill-semantic-input-hash
 /backfill-slug-folded
+/backfill-talent-handle
 /backfill-telegram-prefilter
 /backfill-us-subdivision-collision
 /backfill-username-from-mailbox
 /billing-sync
 /broadcast
+/build-suggestions
 /cal-sync
 /capture-apply-form
 /classify-mail
 /close-apploi-misattributed
 /close-chronic-boards
 /cv-previews
+/discord-register-commands
 /discord-sync
 /embed
 /enrich
+/gen-cities
+/gen-contracts
+/gen-metros
+/gen-skill-descriptions
 /ghost-crosscheck
 /gmail-sync
+/harvest-ats
+/harvest-boards
+/harvest-erecruiter
 /harvest-linkedin
+/harvest-loxo
 /harvest-orphans
+/harvest-role
 /hire-api
 /hydrate-adzuna-description
+/import-collections
 /import-company-industries
-/linkedin-auth
-/linkedin-token-refresh
+/import-yc
 /ingest
 /ingest-scheduler
 /limit-nudge-mail
+/linkedin-auth
+/linkedin-token-refresh
 /liveness
 /llm-probe
 /mail-ingest
 /mail-preview
 /mentor-busy-sync
 /mentorship-remind
+/merge-companies
+/message-notify
 /migrate
 /mine-titles
 /notify
@@ -92,39 +114,30 @@ hire
 /queue-metrics
 /recount-companies
 /reindex
+/reindex-companies
 /rekey-gupy-boards
 /remind
+/report-classify-drift
+/report-geo-gaps
+/report-skill-gaps
+/report-unclassified-titles
+/reslug
 /resolve-url
 /rollup-company
+/rollup-facets
+/rollup-stats
 /rollup-views
 /schedule-board
-/search-ping
-/social-digest
 /search-drain
+/search-ping
 /search-settings-drift
-/serve-probe
 /seed-adzuna-description-queue
 /seed-from-inventory
-/similar-backfill
-/sweep-tracer-clicks
-# Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
-/backfill-company-info
-/backfill-derive
-/discord-register-commands
-/enrich
-/gen-contracts
-/harvest-ats
-/harvest-boards
-/harvest-erecruiter
-/harvest-role
-/import-collections
-/ingest
-/liveness
-/notify
-/recount-companies
-/reindex
-/reslug
+/serve-probe
 /server
+/similar-backfill
+/social-digest
+/sweep-tracer-clicks
 /tg-extract
 /tg-ingest
 
@@ -164,8 +177,12 @@ hire
 .vscode/
 .DS_Store
 
-# Claude Code local settings
+# Agent tooling local state. `.claude/` and `.codex/` are per-machine configuration for
+# the harnesses agents run under — the same class of file as an editor's local settings —
+# and `.agents/` is what they generate. None of it is part of the tree: the shared rules
+# live in AGENTS.md, which IS committed.
 .claude/
+.codex/
 .agents/
 skills-lock.json
 
@@ -202,46 +219,6 @@ node_modules/
 extension/.wxt/
 extension/.output/
 extension/*.zip
-
-# Compiled cmd/* worker binaries (go build ./cmd/<name>/ writes <name> into the repo root)
-/backfill-company-info
-/backfill-derive
-/backfill-descriptions
-/backfill-justjoin
-/embed
-/enrich
-/gen-cities
-/gen-metros
-/gen-contracts
-/gen-skill-descriptions
-/gmail-sync
-/harvest-ats
-/harvest-boards
-/harvest-erecruiter
-/harvest-loxo
-/harvest-role
-/import-collections
-/import-yc
-/ingest
-/liveness
-/mail-ingest
-/merge-companies
-/notify
-/recount-companies
-/reindex
-/reindex-companies
-/report-classify-drift
-/report-geo-gaps
-/report-skill-gaps
-/report-unclassified-titles
-/reslug
-/rollup-facets
-/build-suggestions
-/message-notify
-/rollup-stats
-/server
-/tg-extract
-/tg-ingest
 
 # Local-only compose overrides (per-machine service wiring; never shared).
 /docker-compose.override.yml
