@@ -3749,8 +3749,11 @@ type Querier interface {
 	IsWatchingCompany(ctx context.Context, arg IsWatchingCompanyParams) (bool, error)
 	// When the log begins (job_changes_at_idx). NULL while it is empty.
 	JobChangesAvailableSince(ctx context.Context) (pgtype.Timestamptz, error)
-	// Where a `since` begins: the transaction of the earliest entry recorded at or after it,
-	// found by job_changes_at_idx. No row (pgx.ErrNoRows) means nothing has changed since.
+	// Where a `since` begins: the LOWEST transaction id among the entries recorded at or after it
+	// (job_changes_at_idx range). The earliest entry's xid is not enough: a transaction that took
+	// its xid first and logged later has a lower xid and would be skipped. The start can reach a
+	// little before `since` (a boundary entry may repeat), which a client absorbs through seq.
+	// -1 when nothing was recorded since.
 	JobChangesStartXID(ctx context.Context, since pgtype.Timestamptz) (int64, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after

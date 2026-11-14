@@ -43,6 +43,8 @@ type jobsHandlers struct {
 	// is not. See openJobTotal.
 	cache     cache.Cache
 	estimator catalogstats.Estimator
+	// changesSettle overrides changesSettleDelay; only tests set it.
+	changesSettle time.Duration
 }
 
 func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postings sources.PostingURLResolver, c cache.Cache) *jobsHandlers {

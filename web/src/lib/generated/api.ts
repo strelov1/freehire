@@ -1153,9 +1153,10 @@ export interface paths {
          *     (an RFC 3339 time, at most 30 days back), then follow `meta.next_cursor` as `cursor`:
          *     the cursor is a keyset position, so a walk never skips or repeats a change while new
          *     ones arrive. A change is served only once its transaction has committed and every older
-         *     one has finished, so it appears a moment after it happens. For one posting, apply changes in
-         *     the order served; a cursor older than 30 days answers 410; `at` is the recorded time, not a sort key. `since` only picks the
-         *     starting point of the first call: from then on, resume from the cursor, not from a time.
+         *     one has finished, so it appears a while after it happens (hours: see the data freshness section). Per
+         *     posting, apply a change only when its `seq` is greater than the last you applied. A cursor
+         *     older than 30 days answers 410. `since` only picks the starting point of the first call, and
+         *     can include a few changes from just before it: from then on, resume from the cursor, not from a time.
          */
         get: operations["listJobChanges"];
         put?: never;
@@ -7661,6 +7662,14 @@ export interface components {
         JobChange: {
             public_slug: string;
             /**
+             * Format: int64
+             * @description The change's order for this posting. Changes to different postings are not ordered by
+             *     it, and the feed can serve one posting's changes out of order: apply a change only when
+             *     its `seq` is greater than the last one you applied for that `public_slug`, and skip it
+             *     otherwise (which also makes a repeated change harmless).
+             */
+            seq: number;
+            /**
              * @description `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken
              *     down, or it became a duplicate or private). `reopened`: it is listed again (its source
              *     listed it again, a moderator reopened it, or it is no longer a duplicate).
@@ -12357,6 +12366,7 @@ export interface operations {
                      *       "data": [
                      *         {
                      *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "seq": 98765,
                      *           "kind": "closed",
                      *           "at": "2026-06-20T04:10:00Z",
                      *           "closed_reason": "unseen"

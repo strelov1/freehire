@@ -12590,6 +12590,11 @@ func (s *JobApplyFormOK) SetData(val jx.Raw) {
 // Ref: #/components/schemas/JobChange
 type JobChange struct {
 	PublicSlug string `json:"public_slug"`
+	// The change's order for this posting. Changes to different postings are not ordered by it, and the
+	// feed can serve one posting's changes out of order: apply a change only when its `seq` is greater
+	// than the last one you applied for that `public_slug`, and skip it otherwise (which also makes a
+	// repeated change harmless).
+	Seq int64 `json:"seq"`
 	// `opened`: the posting entered the catalogue. `closed`: it stopped being listed (taken down, or it
 	// became a duplicate or private). `reopened`: it is listed again (its source listed it again, a
 	// moderator reopened it, or it is no longer a duplicate).
@@ -12604,6 +12609,11 @@ type JobChange struct {
 // GetPublicSlug returns the value of PublicSlug.
 func (s *JobChange) GetPublicSlug() string {
 	return s.PublicSlug
+}
+
+// GetSeq returns the value of Seq.
+func (s *JobChange) GetSeq() int64 {
+	return s.Seq
 }
 
 // GetKind returns the value of Kind.
@@ -12624,6 +12634,11 @@ func (s *JobChange) GetClosedReason() OptString {
 // SetPublicSlug sets the value of PublicSlug.
 func (s *JobChange) SetPublicSlug(val string) {
 	s.PublicSlug = val
+}
+
+// SetSeq sets the value of Seq.
+func (s *JobChange) SetSeq(val int64) {
+	s.Seq = val
 }
 
 // SetKind sets the value of Kind.

@@ -107,7 +107,7 @@ A posting is **open** until something closes it, and a closed posting carries `c
 
 Postings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.
 
-How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. A posting its source has not shown for 14 days is hidden from search but stays open.
+How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
 Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
 
@@ -119,7 +119,7 @@ Closed postings never appear in `GET /jobs`, in search or in a company's open po
 2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.
 3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.
 
-The cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`), so a mirror older than that rebuilds from search. A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.
+The cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. Each change carries a `seq`: for a given `public_slug`, apply a change only when its `seq` is greater than the last one you applied, and skip it otherwise. The feed can serve one posting's changes slightly out of order, and the first call with `since` can repeat a few changes from just before it; this rule makes both harmless. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`), so a mirror older than that rebuilds from search. A change shows up in the feed hours after it happens, not at the same instant. The feed holds each change back for a settle delay of about seven hours, so that a posting that was listed and then withdrawn as a duplicate within six hours (the dedup passes mark duplicates some time after insertion) is never announced at all. Closes are held back the same way, because the feed is read in order. On top of that, the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.
 
 The feed keeps 30 days. A `cursor` older than that answers `410`: rebuild from search and start again with `since`.
 
@@ -431,9 +431,10 @@ mirror of the catalogue can stay in sync and delist what closed. Start with `sin
 (an RFC 3339 time, at most 30 days back), then follow `meta.next_cursor` as `cursor`:
 the cursor is a keyset position, so a walk never skips or repeats a change while new
 ones arrive. A change is served only once its transaction has committed and every older
-one has finished, so it appears a moment after it happens. For one posting, apply changes in
-the order served; a cursor older than 30 days answers 410; `at` is the recorded time, not a sort key. `since` only picks the
-starting point of the first call: from then on, resume from the cursor, not from a time.
+one has finished, so it appears a while after it happens (hours: see the data freshness section). Per
+posting, apply a change only when its `seq` is greater than the last you applied. A cursor
+older than 30 days answers 410. `since` only picks the starting point of the first call, and
+can include a few changes from just before it: from then on, resume from the cursor, not from a time.
 
 **Query parameters**
 
@@ -452,6 +453,7 @@ curl "https://freehire.me/api/v1/jobs/changes"
   "data": [
     {
       "public_slug": "senior-go-engineer-acme-1a2b",
+      "seq": 98765,
       "kind": "closed",
       "at": "2026-06-20T04:10:00Z",
       "closed_reason": "unseen"
