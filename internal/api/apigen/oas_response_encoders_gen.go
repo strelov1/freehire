@@ -1580,6 +1580,19 @@ func encodeGetEmployerCompanyResponse(response *GetEmployerCompanyOK, w http.Res
 	return nil
 }
 
+func encodeGetEmployerTeamResponse(response *GetEmployerTeamOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetInboxResponse(response *InboxPage, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2344,6 +2357,19 @@ func encodeInterpretSearchResponse(response *InterpretSearchOK, w http.ResponseW
 	return nil
 }
 
+func encodeInviteEmployerTeamMemberResponse(response *InviteEmployerTeamMemberCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeJobApplyFormResponse(response *JobApplyFormOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2384,6 +2410,19 @@ func encodeJobFacetsResponse(response *JobFacetsOK, w http.ResponseWriter) error
 }
 
 func encodeJobsActivityResponse(response *JobsActivity, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeJoinEmployerTeamResponse(response *JoinEmployerTeamOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -3433,6 +3472,19 @@ func encodePrefillSubmissionResponse(response *PrefillSubmissionOK, w http.Respo
 	return nil
 }
 
+func encodePreviewEmployerTeamInvitationResponse(response *PreviewEmployerTeamInvitationOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodePreviewPromoCodeResponse(response *PreviewPromoCodeOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -3621,6 +3673,19 @@ func encodeRejectSubmissionResponse(response *RejectSubmissionOK, w http.Respons
 }
 
 func encodeReleaseMailboxResponse(response *ReleaseMailboxOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeRemoveEmployerTeamMemberResponse(response *RemoveEmployerTeamMemberOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -4724,6 +4789,19 @@ func encodeVoteCompanyResponse(response *VoteCompanyOK, w http.ResponseWriter) e
 }
 
 func encodeVoteJobResponse(response *VoteJobOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeWithdrawEmployerTeamInvitationResponse(response *WithdrawEmployerTeamInvitationOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

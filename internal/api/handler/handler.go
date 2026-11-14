@@ -485,6 +485,12 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
 	employerSvc := employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc)
+	// A properly nil InviteMailer without mail, for the typed-nil reason given above.
+	var teamInvites employer.InviteMailer
+	if mailClient != nil {
+		teamInvites = teamInviteMailer{emailnotify.NewTeamInviteMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)}
+	}
+	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
 	employerH := newEmployerHandlers(queries, employerSvc)
 	// Applying on freehire needs both a CV renderer and a mail transport; without either an
 	// application could be recorded but never delivered, so the routes answer 501 instead.

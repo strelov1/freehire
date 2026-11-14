@@ -62,6 +62,12 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/applications", mw.cookie, contract)
 	api.Get("/employer/applications/:id/cv", mw.cookie, contract)
 	api.Post("/employer/applications/:id/stage", mw.cookie, contract)
+	api.Get("/employer/team", mw.cookie, contract)
+	api.Post("/employer/team/invitations", mw.cookie, contract)
+	api.Delete("/employer/team/invitations/:id", mw.cookie, contract)
+	api.Delete("/employer/team/members/:user_id", mw.cookie, contract)
+	api.Post("/employer/team/invitation-preview", mw.cookie, contract)
+	api.Post("/employer/team/join", mw.cookie, contract)
 
 	// Moderator review queue for a claim the domain check could not itself verify.
 	api.Get("/employer/claims", mw.cookie, mw.moderator, contract)
@@ -97,6 +103,14 @@ func employerError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "work email is already confirmed")
 	case errors.Is(err, employer.ErrJobNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "vacancy not found")
+	case errors.Is(err, employer.ErrInvitationInvalid):
+		return fiber.NewError(fiber.StatusNotFound, "this invitation link is invalid or has expired")
+	case errors.Is(err, employer.ErrMemberNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "no such team member")
+	case errors.Is(err, employer.ErrInvitationNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "no such invitation")
+	case errors.Is(err, employer.ErrTooManyInvitations):
+		return fiber.NewError(fiber.StatusTooManyRequests, "too many open invitations — withdraw one first")
 	case errors.Is(err, employer.ErrURLTaken):
 		return fiber.NewError(fiber.StatusConflict, "this URL is already used by another employer's vacancy")
 	case errors.Is(err, employer.ErrMailUnavailable), errors.Is(err, accounts.ErrMailUnavailable):
@@ -126,6 +140,7 @@ func employerAccountOut(a employer.Account) apigen.EmployerAccount {
 		Status:         apigen.EmployerAccountStatus(a.Status),
 		EmailConfirmed: a.EmailConfirmed(),
 		CreatedAt:      a.CreatedAt,
+		Member:         a.Member,
 	}
 	if a.VerifiedAt != nil {
 		out.VerifiedAt = apigen.NewOptDateTime(*a.VerifiedAt)
@@ -216,6 +231,7 @@ func employerCompanyOut(acc employer.Account, company db.Company, found bool) ap
 	out := apigen.EmployerCompany{
 		UserID: a.UserID, CompanySlug: a.CompanySlug, CompanyName: a.CompanyName, WorkEmail: a.WorkEmail,
 		Status: a.Status, VerifiedAt: a.VerifiedAt, EmailConfirmed: a.EmailConfirmed, CreatedAt: a.CreatedAt,
+		Member: a.Member,
 	}
 	if !found {
 		return out

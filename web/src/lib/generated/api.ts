@@ -1011,6 +1011,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Everyone who acts for the caller's company, and the invitations still open. */
+        get: operations["getEmployerTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/team/invitation-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Which company an invitation link invites to, at which address. 404 for a dead link. */
+        post: operations["previewEmployerTeamInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/team/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
+        post: operations["inviteEmployerTeamMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/team/invitations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Withdraws an invitation; its link stops working. */
+        delete: operations["withdrawEmployerTeamInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/team/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Joins the team an invitation link invites to. 409 when the caller already acts for a company. */
+        post: operations["joinEmployerTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employer/team/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The claimant cannot be removed. */
+        delete: operations["removeEmployerTeamMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/geo/cities": {
         parameters: {
             query?: never;
@@ -7203,6 +7305,8 @@ export interface components {
             verified_at?: string;
             /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
             email_confirmed: boolean;
+            /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
+            member: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -7300,6 +7404,8 @@ export interface components {
             verified_at?: string;
             /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
             email_confirmed: boolean;
+            /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
+            member: boolean;
             /** Format: date-time */
             created_at: string;
             tagline?: string;
@@ -7336,6 +7442,44 @@ export interface components {
         };
         EmployerRejected: {
             rejected: boolean;
+        };
+        EmployerRemoved: {
+            removed: boolean;
+        };
+        EmployerTeam: {
+            members: components["schemas"]["EmployerTeamMember"][];
+            invitations: components["schemas"]["EmployerTeamInvitation"][];
+        };
+        /** @description An invitation whose link still works. */
+        EmployerTeamInvitation: {
+            /** Format: int64 */
+            id: number;
+            email: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @description What an invitation link offers before it is accepted. */
+        EmployerTeamInvitationPreview: {
+            company_name: string;
+            email: string;
+        };
+        EmployerTeamInvite: {
+            email?: string;
+        };
+        /** @description Someone who acts for the company. `holder` is the claimant, who cannot be removed. */
+        EmployerTeamMember: {
+            /** Format: int64 */
+            user_id: number;
+            work_email: string;
+            /** Format: date-time */
+            joined_at: string;
+            holder: boolean;
+        };
+        /** @description The token from the invitation link. */
+        EmployerTeamToken: {
+            token?: string;
         };
         /** @description `title` is required, and `url` too unless `apply_mode` is "freehire". */
         EmployerVacancyCreate: {
@@ -12389,6 +12533,208 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["EmployerClosed"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEmployerTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerTeam"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEmployerTeamInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployerTeamToken"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerTeamInvitationPreview"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    inviteEmployerTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployerTeamInvite"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerTeamInvitation"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    withdrawEmployerTeamInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerRemoved"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    joinEmployerTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployerTeamToken"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerAccount"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeEmployerTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerRemoved"];
                     };
                 };
             };

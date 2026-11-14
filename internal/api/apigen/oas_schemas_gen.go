@@ -8801,8 +8801,11 @@ type EmployerAccount struct {
 	Status      EmployerAccountStatus `json:"status"`
 	VerifiedAt  OptDateTime           `json:"verified_at"`
 	// Whether the claimant still owes the mailed code or is waiting on a moderator.
-	EmailConfirmed bool      `json:"email_confirmed"`
-	CreatedAt      time.Time `json:"created_at"`
+	EmailConfirmed bool `json:"email_confirmed"`
+	// True when the caller acts for the company as a member of its team rather than as its claimant;
+	// `work_email` is then the caller's own.
+	Member    bool      `json:"member"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // GetUserID returns the value of UserID.
@@ -8838,6 +8841,11 @@ func (s *EmployerAccount) GetVerifiedAt() OptDateTime {
 // GetEmailConfirmed returns the value of EmailConfirmed.
 func (s *EmployerAccount) GetEmailConfirmed() bool {
 	return s.EmailConfirmed
+}
+
+// GetMember returns the value of Member.
+func (s *EmployerAccount) GetMember() bool {
+	return s.Member
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -8878,6 +8886,11 @@ func (s *EmployerAccount) SetVerifiedAt(val OptDateTime) {
 // SetEmailConfirmed sets the value of EmailConfirmed.
 func (s *EmployerAccount) SetEmailConfirmed(val bool) {
 	s.EmailConfirmed = val
+}
+
+// SetMember sets the value of Member.
+func (s *EmployerAccount) SetMember(val bool) {
+	s.Member = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -9401,16 +9414,19 @@ type EmployerCompany struct {
 	Status      EmployerAccountStatus `json:"status"`
 	VerifiedAt  OptDateTime           `json:"verified_at"`
 	// Whether the claimant still owes the mailed code or is waiting on a moderator.
-	EmailConfirmed bool      `json:"email_confirmed"`
-	CreatedAt      time.Time `json:"created_at"`
-	Tagline        OptString `json:"tagline"`
-	Description    OptString `json:"description"`
-	Website        OptString `json:"website"`
-	Industries     []string  `json:"industries"`
-	YearFounded    OptInt64  `json:"year_founded"`
-	EmployeeCount  OptInt64  `json:"employee_count"`
-	HqCountry      OptString `json:"hq_country"`
-	Subindustry    OptString `json:"subindustry"`
+	EmailConfirmed bool `json:"email_confirmed"`
+	// True when the caller acts for the company as a member of its team rather than as its claimant;
+	// `work_email` is then the caller's own.
+	Member        bool      `json:"member"`
+	CreatedAt     time.Time `json:"created_at"`
+	Tagline       OptString `json:"tagline"`
+	Description   OptString `json:"description"`
+	Website       OptString `json:"website"`
+	Industries    []string  `json:"industries"`
+	YearFounded   OptInt64  `json:"year_founded"`
+	EmployeeCount OptInt64  `json:"employee_count"`
+	HqCountry     OptString `json:"hq_country"`
+	Subindustry   OptString `json:"subindustry"`
 }
 
 // GetUserID returns the value of UserID.
@@ -9446,6 +9462,11 @@ func (s *EmployerCompany) GetVerifiedAt() OptDateTime {
 // GetEmailConfirmed returns the value of EmailConfirmed.
 func (s *EmployerCompany) GetEmailConfirmed() bool {
 	return s.EmailConfirmed
+}
+
+// GetMember returns the value of Member.
+func (s *EmployerCompany) GetMember() bool {
+	return s.Member
 }
 
 // GetCreatedAt returns the value of CreatedAt.
@@ -9526,6 +9547,11 @@ func (s *EmployerCompany) SetVerifiedAt(val OptDateTime) {
 // SetEmailConfirmed sets the value of EmailConfirmed.
 func (s *EmployerCompany) SetEmailConfirmed(val bool) {
 	s.EmailConfirmed = val
+}
+
+// SetMember sets the value of Member.
+func (s *EmployerCompany) SetMember(val bool) {
+	s.Member = val
 }
 
 // SetCreatedAt sets the value of CreatedAt.
@@ -9743,6 +9769,203 @@ func (s *EmployerRejected) GetRejected() bool {
 // SetRejected sets the value of Rejected.
 func (s *EmployerRejected) SetRejected(val bool) {
 	s.Rejected = val
+}
+
+// Ref: #/components/schemas/EmployerRemoved
+type EmployerRemoved struct {
+	Removed bool `json:"removed"`
+}
+
+// GetRemoved returns the value of Removed.
+func (s *EmployerRemoved) GetRemoved() bool {
+	return s.Removed
+}
+
+// SetRemoved sets the value of Removed.
+func (s *EmployerRemoved) SetRemoved(val bool) {
+	s.Removed = val
+}
+
+// Ref: #/components/schemas/EmployerTeam
+type EmployerTeam struct {
+	Members     []EmployerTeamMember     `json:"members"`
+	Invitations []EmployerTeamInvitation `json:"invitations"`
+}
+
+// GetMembers returns the value of Members.
+func (s *EmployerTeam) GetMembers() []EmployerTeamMember {
+	return s.Members
+}
+
+// GetInvitations returns the value of Invitations.
+func (s *EmployerTeam) GetInvitations() []EmployerTeamInvitation {
+	return s.Invitations
+}
+
+// SetMembers sets the value of Members.
+func (s *EmployerTeam) SetMembers(val []EmployerTeamMember) {
+	s.Members = val
+}
+
+// SetInvitations sets the value of Invitations.
+func (s *EmployerTeam) SetInvitations(val []EmployerTeamInvitation) {
+	s.Invitations = val
+}
+
+// An invitation whose link still works.
+// Ref: #/components/schemas/EmployerTeamInvitation
+type EmployerTeamInvitation struct {
+	ID        int64     `json:"id"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerTeamInvitation) GetID() int64 {
+	return s.ID
+}
+
+// GetEmail returns the value of Email.
+func (s *EmployerTeamInvitation) GetEmail() string {
+	return s.Email
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *EmployerTeamInvitation) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetExpiresAt returns the value of ExpiresAt.
+func (s *EmployerTeamInvitation) GetExpiresAt() time.Time {
+	return s.ExpiresAt
+}
+
+// SetID sets the value of ID.
+func (s *EmployerTeamInvitation) SetID(val int64) {
+	s.ID = val
+}
+
+// SetEmail sets the value of Email.
+func (s *EmployerTeamInvitation) SetEmail(val string) {
+	s.Email = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *EmployerTeamInvitation) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetExpiresAt sets the value of ExpiresAt.
+func (s *EmployerTeamInvitation) SetExpiresAt(val time.Time) {
+	s.ExpiresAt = val
+}
+
+// What an invitation link offers before it is accepted.
+// Ref: #/components/schemas/EmployerTeamInvitationPreview
+type EmployerTeamInvitationPreview struct {
+	CompanyName string `json:"company_name"`
+	Email       string `json:"email"`
+}
+
+// GetCompanyName returns the value of CompanyName.
+func (s *EmployerTeamInvitationPreview) GetCompanyName() string {
+	return s.CompanyName
+}
+
+// GetEmail returns the value of Email.
+func (s *EmployerTeamInvitationPreview) GetEmail() string {
+	return s.Email
+}
+
+// SetCompanyName sets the value of CompanyName.
+func (s *EmployerTeamInvitationPreview) SetCompanyName(val string) {
+	s.CompanyName = val
+}
+
+// SetEmail sets the value of Email.
+func (s *EmployerTeamInvitationPreview) SetEmail(val string) {
+	s.Email = val
+}
+
+// Ref: #/components/schemas/EmployerTeamInvite
+type EmployerTeamInvite struct {
+	Email OptString `json:"email"`
+}
+
+// GetEmail returns the value of Email.
+func (s *EmployerTeamInvite) GetEmail() OptString {
+	return s.Email
+}
+
+// SetEmail sets the value of Email.
+func (s *EmployerTeamInvite) SetEmail(val OptString) {
+	s.Email = val
+}
+
+// Someone who acts for the company. `holder` is the claimant, who cannot be removed.
+// Ref: #/components/schemas/EmployerTeamMember
+type EmployerTeamMember struct {
+	UserID    int64     `json:"user_id"`
+	WorkEmail string    `json:"work_email"`
+	JoinedAt  time.Time `json:"joined_at"`
+	Holder    bool      `json:"holder"`
+}
+
+// GetUserID returns the value of UserID.
+func (s *EmployerTeamMember) GetUserID() int64 {
+	return s.UserID
+}
+
+// GetWorkEmail returns the value of WorkEmail.
+func (s *EmployerTeamMember) GetWorkEmail() string {
+	return s.WorkEmail
+}
+
+// GetJoinedAt returns the value of JoinedAt.
+func (s *EmployerTeamMember) GetJoinedAt() time.Time {
+	return s.JoinedAt
+}
+
+// GetHolder returns the value of Holder.
+func (s *EmployerTeamMember) GetHolder() bool {
+	return s.Holder
+}
+
+// SetUserID sets the value of UserID.
+func (s *EmployerTeamMember) SetUserID(val int64) {
+	s.UserID = val
+}
+
+// SetWorkEmail sets the value of WorkEmail.
+func (s *EmployerTeamMember) SetWorkEmail(val string) {
+	s.WorkEmail = val
+}
+
+// SetJoinedAt sets the value of JoinedAt.
+func (s *EmployerTeamMember) SetJoinedAt(val time.Time) {
+	s.JoinedAt = val
+}
+
+// SetHolder sets the value of Holder.
+func (s *EmployerTeamMember) SetHolder(val bool) {
+	s.Holder = val
+}
+
+// The token from the invitation link.
+// Ref: #/components/schemas/EmployerTeamToken
+type EmployerTeamToken struct {
+	Token OptString `json:"token"`
+}
+
+// GetToken returns the value of Token.
+func (s *EmployerTeamToken) GetToken() OptString {
+	return s.Token
+}
+
+// SetToken sets the value of Token.
+func (s *EmployerTeamToken) SetToken(val OptString) {
+	s.Token = val
 }
 
 // `title` is required, and `url` too unless `apply_mode` is "freehire".
@@ -11316,6 +11539,21 @@ func (s *GetEmployerCompanyOK) GetData() EmployerCompany {
 
 // SetData sets the value of Data.
 func (s *GetEmployerCompanyOK) SetData(val EmployerCompany) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetEmployerTeamOK struct {
+	Data EmployerTeam `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerTeamOK) GetData() EmployerTeam {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerTeamOK) SetData(val EmployerTeam) {
 	s.Data = val
 }
 
@@ -13404,6 +13642,21 @@ func (s *Invite) SetPercentOff(val int64) {
 }
 
 // A single item: `{"data": ...}`.
+type InviteEmployerTeamMemberCreated struct {
+	Data EmployerTeamInvitation `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *InviteEmployerTeamMemberCreated) GetData() EmployerTeamInvitation {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *InviteEmployerTeamMemberCreated) SetData(val EmployerTeamInvitation) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type JobApplyFormOK struct {
 	Data jx.Raw `json:"data"`
 }
@@ -14582,6 +14835,21 @@ func (s *JobsActivity) SetData(val []ActivityPoint) {
 // SetMeta sets the value of Meta.
 func (s *JobsActivity) SetMeta(val ActivityMeta) {
 	s.Meta = val
+}
+
+// A single item: `{"data": ...}`.
+type JoinEmployerTeamOK struct {
+	Data EmployerAccount `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *JoinEmployerTeamOK) GetData() EmployerAccount {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *JoinEmployerTeamOK) SetData(val EmployerAccount) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.
@@ -21592,6 +21860,21 @@ func (s *PrefillSubmissionOK) SetData(val SubmissionPrefill) {
 }
 
 // A single item: `{"data": ...}`.
+type PreviewEmployerTeamInvitationOK struct {
+	Data EmployerTeamInvitationPreview `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PreviewEmployerTeamInvitationOK) GetData() EmployerTeamInvitationPreview {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PreviewEmployerTeamInvitationOK) SetData(val EmployerTeamInvitationPreview) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type PreviewPromoCodeOK struct {
 	Data PromoDiscount `json:"data"`
 }
@@ -23353,6 +23636,21 @@ func (s *ReleaseMailboxOK) GetData() MailboxStatus {
 
 // SetData sets the value of Data.
 func (s *ReleaseMailboxOK) SetData(val MailboxStatus) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type RemoveEmployerTeamMemberOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RemoveEmployerTeamMemberOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RemoveEmployerTeamMemberOK) SetData(val EmployerRemoved) {
 	s.Data = val
 }
 
@@ -29868,6 +30166,21 @@ func (s *WatchlistPageHeaders) SetCacheControl(val string) {
 // SetResponse sets the value of Response.
 func (s *WatchlistPageHeaders) SetResponse(val WatchlistPage) {
 	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
+type WithdrawEmployerTeamInvitationOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *WithdrawEmployerTeamInvitationOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *WithdrawEmployerTeamInvitationOK) SetData(val EmployerRemoved) {
+	s.Data = val
 }
 
 // WithdrawMentorProfileNoContent is response for WithdrawMentorProfile operation.

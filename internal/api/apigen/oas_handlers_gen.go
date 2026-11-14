@@ -11491,6 +11491,82 @@ func (s *Server) handleGetEmployerCompanyRequest(args [0]string, argsEscaped boo
 	}
 }
 
+// handleGetEmployerTeamRequest handles getEmployerTeam operation.
+//
+// Everyone who acts for the caller's company, and the invitations still open.
+//
+// GET /employer/team
+func (s *Server) handleGetEmployerTeamRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *GetEmployerTeamOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetEmployerTeamOperation,
+			OperationSummary: "",
+			OperationID:      "getEmployerTeam",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *GetEmployerTeamOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetEmployerTeam(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetEmployerTeam(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetEmployerTeamResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetInboxRequest handles getInbox operation.
 //
 // `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
@@ -16226,6 +16302,102 @@ func (s *Server) handleInterpretSearchRequest(args [0]string, argsEscaped bool, 
 	}
 }
 
+// handleInviteEmployerTeamMemberRequest handles inviteEmployerTeamMember operation.
+//
+// Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again
+// replaces its link. 429 past twenty open invitations.
+//
+// POST /employer/team/invitations
+func (s *Server) handleInviteEmployerTeamMemberRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: InviteEmployerTeamMemberOperation,
+			ID:   "inviteEmployerTeamMember",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeInviteEmployerTeamMemberRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *InviteEmployerTeamMemberCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    InviteEmployerTeamMemberOperation,
+			OperationSummary: "",
+			OperationID:      "inviteEmployerTeamMember",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *EmployerTeamInvite
+			Params   = struct{}
+			Response = *InviteEmployerTeamMemberCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.InviteEmployerTeamMember(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.InviteEmployerTeamMember(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeInviteEmployerTeamMemberResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleJobApplyFormRequest handles jobApplyForm operation.
 //
 // The questions a candidate will have to answer, shaped for reading. Only captured for a minority of
@@ -16631,6 +16803,101 @@ func (s *Server) handleJobsActivityRequest(args [0]string, argsEscaped bool, w h
 	}
 
 	if err := encodeJobsActivityResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleJoinEmployerTeamRequest handles joinEmployerTeam operation.
+//
+// Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+//
+// POST /employer/team/join
+func (s *Server) handleJoinEmployerTeamRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: JoinEmployerTeamOperation,
+			ID:   "joinEmployerTeam",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeJoinEmployerTeamRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *JoinEmployerTeamOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    JoinEmployerTeamOperation,
+			OperationSummary: "",
+			OperationID:      "joinEmployerTeam",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *EmployerTeamToken
+			Params   = struct{}
+			Response = *JoinEmployerTeamOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.JoinEmployerTeam(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.JoinEmployerTeam(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeJoinEmployerTeamResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -23653,6 +23920,101 @@ func (s *Server) handlePrefillSubmissionRequest(args [0]string, argsEscaped bool
 	}
 }
 
+// handlePreviewEmployerTeamInvitationRequest handles previewEmployerTeamInvitation operation.
+//
+// Which company an invitation link invites to, at which address. 404 for a dead link.
+//
+// POST /employer/team/invitation-preview
+func (s *Server) handlePreviewEmployerTeamInvitationRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PreviewEmployerTeamInvitationOperation,
+			ID:   "previewEmployerTeamInvitation",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodePreviewEmployerTeamInvitationRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *PreviewEmployerTeamInvitationOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PreviewEmployerTeamInvitationOperation,
+			OperationSummary: "",
+			OperationID:      "previewEmployerTeamInvitation",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *EmployerTeamToken
+			Params   = struct{}
+			Response = *PreviewEmployerTeamInvitationOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PreviewEmployerTeamInvitation(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PreviewEmployerTeamInvitation(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePreviewEmployerTeamInvitationResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handlePreviewPromoCodeRequest handles previewPromoCode operation.
 //
 // What a code would take off, without using it. 404 for a code that cannot be used.
@@ -25274,6 +25636,102 @@ func (s *Server) handleReleaseMailboxRequest(args [0]string, argsEscaped bool, w
 	}
 
 	if err := encodeReleaseMailboxResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleRemoveEmployerTeamMemberRequest handles removeEmployerTeamMember operation.
+//
+// Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The
+// claimant cannot be removed.
+//
+// DELETE /employer/team/members/{user_id}
+func (s *Server) handleRemoveEmployerTeamMemberRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RemoveEmployerTeamMemberOperation,
+			ID:   "removeEmployerTeamMember",
+		}
+	)
+	params, err := decodeRemoveEmployerTeamMemberParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *RemoveEmployerTeamMemberOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RemoveEmployerTeamMemberOperation,
+			OperationSummary: "",
+			OperationID:      "removeEmployerTeamMember",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "user_id",
+					In:   "path",
+				}: params.UserID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = RemoveEmployerTeamMemberParams
+			Response = *RemoveEmployerTeamMemberOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRemoveEmployerTeamMemberParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.RemoveEmployerTeamMember(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.RemoveEmployerTeamMember(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRemoveEmployerTeamMemberResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -33585,6 +34043,101 @@ func (s *Server) handleVoteJobRequest(args [1]string, argsEscaped bool, w http.R
 	}
 
 	if err := encodeVoteJobResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleWithdrawEmployerTeamInvitationRequest handles withdrawEmployerTeamInvitation operation.
+//
+// Withdraws an invitation; its link stops working.
+//
+// DELETE /employer/team/invitations/{id}
+func (s *Server) handleWithdrawEmployerTeamInvitationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: WithdrawEmployerTeamInvitationOperation,
+			ID:   "withdrawEmployerTeamInvitation",
+		}
+	)
+	params, err := decodeWithdrawEmployerTeamInvitationParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *WithdrawEmployerTeamInvitationOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    WithdrawEmployerTeamInvitationOperation,
+			OperationSummary: "",
+			OperationID:      "withdrawEmployerTeamInvitation",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = WithdrawEmployerTeamInvitationParams
+			Response = *WithdrawEmployerTeamInvitationOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackWithdrawEmployerTeamInvitationParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.WithdrawEmployerTeamInvitation(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.WithdrawEmployerTeamInvitation(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeWithdrawEmployerTeamInvitationResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
