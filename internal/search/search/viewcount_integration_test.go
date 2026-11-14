@@ -27,6 +27,9 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := c.SetViewCounts(ctx, nil); err != nil {
+		t.Fatalf("empty counts: %v", err)
+	}
 	if err := c.SetViewCounts(ctx, map[int64]int64{1: 42, 999: 7}); err != nil {
 		t.Fatal(err)
 	}
