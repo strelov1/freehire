@@ -44,6 +44,7 @@ func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Sett
 	}
 	return Settings{
 		Enabled:             row.Enabled,
+		InboxDigestEnabled:  row.InboxDigestEnabled,
 		Channels:            row.Channels,
 		DigestFrequency:     row.DigestFrequency,
 		DigestTime:          pgconv.DurationPtr(row.DigestTime),
@@ -72,6 +73,10 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 			digestTime = &t
 		}
 	}
+	if s.InboxDigestEnabled && digestTime == nil {
+		t := notify.DefaultDigestTime
+		digestTime = &t
+	}
 	hours := s.DigestIntervalHours
 	if hours == 0 {
 		hours = notify.DefaultIntervalHours
@@ -79,6 +84,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
 		UserID:              userID,
 		Enabled:             s.Enabled,
+		InboxDigestEnabled:  s.InboxDigestEnabled,
 		Channels:            s.Channels,
 		DigestFrequency:     freq,
 		DigestTime:          pgconv.Duration(digestTime),
@@ -91,6 +97,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 	}
 	return Settings{
 		Enabled:             row.Enabled,
+		InboxDigestEnabled:  row.InboxDigestEnabled,
 		Channels:            row.Channels,
 		DigestFrequency:     row.DigestFrequency,
 		DigestTime:          pgconv.DurationPtr(row.DigestTime),

@@ -1175,11 +1175,15 @@
                   </div>
                   <div class="min-w-0 flex-1">
                     <div class="flex items-baseline gap-2">
-                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
+                      <span class="min-w-0 flex-1 truncate text-sm font-medium"
+                        >{e.direction === 'outgoing'
+                          ? `${s.sent} · ${e.to_addrs || e.from_addr}`
+                          : e.from_name || e.from_addr}</span
+                      >
                       <span class="shrink-0 text-[11px] text-muted-foreground">{timeAgo(e.received_at, locale())}</span>
                     </div>
                     <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || s.noSubject}</div>
-                    {#if statusLabel(e.status_signal, locale())}
+                    {#if e.direction !== 'outgoing' && statusLabel(e.status_signal, locale())}
                       <!-- The chip, and what its signal means for the stage. The chip alone left
                            three different situations looking identical: the signal moved the
                            stage, it named one only the candidate may apply, or it was never

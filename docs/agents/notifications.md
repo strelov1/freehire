@@ -13,6 +13,37 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 | `internal/engage/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; each of `notify`/`reminder`/`nudge` has its own thin `PushNotifier` on top, same as Telegram/email | — |
 | `internal/engage/webhooknotify` | Webhook channel (plain, unsigned HTTP POST to an account's own URL) — implements `notify.Notifier` for `notify` ONLY, see the bullet below | — |
 
+## Daily inbox summary
+
+`internal/engage/inboxdigest` runs inside `cmd/notify`, before saved-search matching,
+so missing Meilisearch configuration does not disable inbox mail. It uses the same
+SES transport and engagement mail pause. No extra timer or model call is introduced.
+
+- `notification_settings.inbox_digest_enabled` defaults false. Enabling records an
+  activation timestamp; older clients omitting the field preserve consent. Delivery
+  requires the global activity switch, the email channel and `mail_recipient` eligibility.
+- The existing daily `digest_time` and account timezone schedule it independently of
+  saved-search frequency. Empty or invalid timezones fall back to UTC.
+- Select classified incoming non-`other`, non-deleted mail received since activation,
+  within seven days. Group by source and provider thread, with per-message fallback;
+  show the newest message in each conversation and a link to `/my/inbox?message=<id>`.
+  A visible later outgoing reply is evidence, not a claim that every request is resolved.
+- Show ten conversations and count overflow; successful delivery retires the entire
+  covered window, preventing an old backlog. A late-classified message superseded by
+  a newer already-delivered message in its thread cannot resurrect an outdated request.
+- A unique `(user_id, local_day)` claim precedes dispatch and rechecks live consent,
+  address, timezone and schedule. Empty snapshots claim nothing. An uncertain send or
+  failed acknowledgement retains the claim for that day; unconfirmed messages can be
+  retried on a later day. A definite pre-dispatch SES pause releases its claim. Sending
+  and the ledger are not one transaction, so cross-day replay after a crash is possible.
+- Generated summaries carry `Auto-Submitted: auto-generated` and the shared
+  `mailmeta.NotificationHeader` marker. Gmail and hosted ingest recognize the exact
+  inbox-digest kind and skip it, preventing the summary from becoming its own next input.
+
+Apply migrations 0256 and 0257 before deploying. Roll out the Gmail reader guard and
+restart the existing mail-ingest daemon before enabling the new notify behavior. Preview: the `inbox-digest` sample
+in `design-system/static/email-previews/`; settings: `/my/notifications/settings`.
+
 ## Always true
 
 - **Every subscription with something pending gets served in a pass — the claim is capped

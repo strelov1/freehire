@@ -436,7 +436,7 @@ func (h *inboxHandlers) SyncGmail(c *fiber.Ctx) error {
 	worker := gmailsync.NewWorker(gmailStore, h.gmailCipher, h.gmailConnector.ReaderFactory()).WithLearnedDomains(gmailStore)
 	// Background context: the sync outlives this request.
 	go worker.SyncUser(context.Background(), gmailsync.Connection{
-		UserID: conn.UserID, Email: conn.Email, Cursor: conn.SyncCursor,
+		UserID: conn.UserID, Email: conn.Email, Cursor: conn.SyncCursor, SentCursor: conn.SentSyncCursor,
 	})
 	return c.JSON(fiber.Map{"data": fiber.Map{"started": true}})
 }

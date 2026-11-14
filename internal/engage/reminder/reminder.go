@@ -60,8 +60,9 @@ var (
 // saved-search digests; QuietHoursStart/End defer
 // delivery across all three notification engines — see internal/application/deliverywindow.
 type Settings struct {
-	Enabled  bool
-	Channels []string
+	Enabled            bool
+	InboxDigestEnabled bool
+	Channels           []string
 	// DigestFrequency is one of notify.Frequency*; empty reads as notify.FrequencyInterval.
 	DigestFrequency string
 	DigestTime      *time.Duration
@@ -152,7 +153,7 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	default:
 		return Settings{}, ErrInvalidFrequency
 	}
-	if in.DigestFrequency == notify.FrequencyDaily && in.DigestTime == nil {
+	if (in.DigestFrequency == notify.FrequencyDaily || in.InboxDigestEnabled) && in.DigestTime == nil {
 		return Settings{}, ErrMissingDigestTime
 	}
 	hours, err := s.resolveIntervalHours(ctx, userID, in)

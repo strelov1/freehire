@@ -60,6 +60,10 @@ type inboxMessage struct {
 	ID         int64     `json:"id"`
 	Source     string    `json:"source"`
 	ExternalID string    `json:"external_id"`
+	Direction  string    `json:"direction"`
+	ThreadID   string    `json:"thread_id,omitempty"`
+	ToAddrs    string    `json:"to_addrs,omitempty"`
+	CcAddrs    string    `json:"cc_addrs,omitempty"`
 	FromAddr   string    `json:"from_addr"`
 	FromName   string    `json:"from_name"`
 	Subject    string    `json:"subject"`
@@ -76,6 +80,10 @@ type emailBody struct {
 	ID         int64     `json:"id"`
 	Source     string    `json:"source"`
 	ExternalID string    `json:"external_id"`
+	Direction  string    `json:"direction"`
+	ThreadID   string    `json:"thread_id,omitempty"`
+	ToAddrs    string    `json:"to_addrs,omitempty"`
+	CcAddrs    string    `json:"cc_addrs,omitempty"`
 	FromAddr   string    `json:"from_addr"`
 	FromName   string    `json:"from_name"`
 	Subject    string    `json:"subject"`
@@ -89,7 +97,7 @@ type emailBody struct {
 // bodyOf projects the service's message onto the single-message wire shape.
 func bodyOf(m inbox.Message) emailBody {
 	return emailBody{
-		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID, Direction: m.Direction, ThreadID: m.ThreadID, ToAddrs: m.ToAddrs, CcAddrs: m.CcAddrs,
 		FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
 		BodyText: m.BodyText, BodyHTML: m.BodyHTML,
 		ReceivedAt: m.ReceivedAt, Read: m.Read,
@@ -149,7 +157,7 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	out := make([]inboxMessage, 0, len(page.Messages))
 	for _, m := range page.Messages {
 		out = append(out, inboxMessage{
-			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID, Direction: m.Direction, ThreadID: m.ThreadID, ToAddrs: m.ToAddrs, CcAddrs: m.CcAddrs,
 			FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
 			Snippet: m.Snippet, BodyText: m.BodyText,
 			ReceivedAt: m.ReceivedAt, Read: m.Read,

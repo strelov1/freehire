@@ -19,6 +19,9 @@ import (
 type applicationEmail struct {
 	ID           int64     `json:"id"`
 	Source       string    `json:"source"`
+	Direction    string    `json:"direction"`
+	ToAddrs      string    `json:"to_addrs,omitempty"`
+	CcAddrs      string    `json:"cc_addrs,omitempty"`
 	FromAddr     string    `json:"from_addr"`
 	FromName     string    `json:"from_name"`
 	Subject      string    `json:"subject"`
@@ -89,7 +92,7 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 	forSuggestion := make([]jobtracking.SuggestionEmail, 0, len(rows))
 	for _, r := range rows {
 		emails = append(emails, applicationEmail{
-			ID: r.ID, Source: r.Source, FromAddr: r.FromAddr, FromName: r.FromName,
+			ID: r.ID, Source: r.Source, Direction: r.Direction, ToAddrs: r.ToAddrs, CcAddrs: r.CcAddrs, FromAddr: r.FromAddr, FromName: r.FromName,
 			Subject: r.Subject, StatusSignal: pgStr(r.StatusSignal), LinkSource: pgStr(r.LinkSource),
 			ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
 		})

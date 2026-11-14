@@ -14823,6 +14823,7 @@
       "NotificationSettings": {
         "type": "object",
         "required": [
+          "inbox_digest_enabled",
           "enabled",
           "channels",
           "digest_frequency",
@@ -14832,6 +14833,10 @@
           "quiet_hours_end"
         ],
         "properties": {
+          "inbox_digest_enabled": {
+            "type": "boolean",
+            "description": "Opt-in daily summary of classified hiring mail. Uses digest_time."
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -14884,6 +14889,17 @@
       "NotificationSettingsUpdate": {
         "type": "object",
         "properties": {
+          "inbox_digest_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted or null preserves the current inbox digest choice."
+          },
           "enabled": {
             "anyOf": [
               {

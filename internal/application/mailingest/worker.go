@@ -109,6 +109,10 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 		return nil
 	}
 
+	if parsed.SystemNotification {
+		return nil
+	}
+
 	recipient, ok := pickDomainRecipient(in.Recipients, w.domain)
 	if !ok {
 		log.Printf("mailingest: message %s has no %s recipient, dropped", in.S3Key, w.domain)

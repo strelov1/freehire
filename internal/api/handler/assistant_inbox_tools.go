@@ -86,6 +86,10 @@ func (h *assistantHandlers) inboxOverviewTool() assistant.Tool {
 type assistantMailMessage struct {
 	ID           int64  `json:"id"`
 	Source       string `json:"source"`
+	Direction    string `json:"direction"`
+	ThreadID     string `json:"thread_id,omitempty"`
+	ToAddrs      string `json:"to_addrs,omitempty"`
+	CcAddrs      string `json:"cc_addrs,omitempty"`
 	From         string `json:"from"`
 	Subject      string `json:"subject"`
 	ReceivedAt   string `json:"received_at"`
@@ -110,7 +114,7 @@ func mailMessageView(m inbox.Message, withBody bool) assistantMailMessage {
 		from = fmt.Sprintf("%s <%s>", m.FromName, m.FromAddr)
 	}
 	out := assistantMailMessage{
-		ID: m.ID, Source: m.Source, From: from, Subject: m.Subject,
+		ID: m.ID, Source: m.Source, From: from, Subject: m.Subject, Direction: m.Direction, ThreadID: m.ThreadID, ToAddrs: m.ToAddrs, CcAddrs: m.CcAddrs,
 		ReceivedAt: m.ReceivedAt.Format(time.RFC3339), Read: m.Read,
 		Label: m.StatusSignal, LinkState: m.LinkState,
 		LinkedSlug: m.LinkedSlug, LinkedTo: m.LinkedCompany, SuggestedFor: m.SuggestedSlug,

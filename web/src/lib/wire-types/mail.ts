@@ -16,6 +16,9 @@ export interface EmailLinking {
 
 /** One email linked to an application, on the application detail page. */
 export interface ApplicationEmail {
+  direction?: 'incoming' | 'outgoing';
+  to_addrs?: string;
+  cc_addrs?: string;
   id: number;
   source: string;
   from_addr: string;

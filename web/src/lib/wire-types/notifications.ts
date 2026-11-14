@@ -3,11 +3,13 @@
  *  (follow-up, interview-prep) — one shared rule, no per-kind or per-job control. */
 export interface NotificationSettings {
   enabled: boolean;
+  /** Opt-in inbox email at digest_time; independent of search-alert frequency. */
+  inbox_digest_enabled?: boolean;
   channels: string[];
   /** 'daily' (default, at 09:00), 'instant' or 'interval' — governs only saved-search
    *  digests, not reminders/nudges. */
   digest_frequency: string;
-  /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */
+  /** "HH:MM" local time, also used by the daily inbox email. */
   digest_time: string | null;
   /** 1-23: at most one digest per alert every this many hours, meaningful only
    *  when digest_frequency is 'interval'. Omitted on a write reads as 1. */

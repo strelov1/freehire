@@ -258,6 +258,10 @@ export interface InboxMessage extends EmailLinking {
   id: number;
   source: string;
   external_id: string;
+  direction?: 'incoming' | 'outgoing';
+  thread_id?: string;
+  to_addrs?: string;
+  cc_addrs?: string;
   from_addr: string;
   from_name: string;
   subject: string;
@@ -271,6 +275,10 @@ export interface EmailBody extends EmailLinking {
   id: number;
   source: string;
   external_id: string;
+  direction?: 'incoming' | 'outgoing';
+  thread_id?: string;
+  to_addrs?: string;
+  cc_addrs?: string;
   from_addr: string;
   from_name: string;
   subject: string;

@@ -130,3 +130,15 @@ func TestRunOnce_StoreErrorNotAcked(t *testing.T) {
 		t.Errorf("store error must NOT ack (redelivery), acked = %v", src.acked)
 	}
 }
+
+func TestOwnInboxDigestIsAcknowledgedWithoutReingestion(t *testing.T) {
+	raw := "From: freehire <notice@example.test>\r\nTo: member@inbox.freehire.me\r\nSubject: Your daily hiring inbox\r\nAuto-Submitted: auto-generated\r\nX-Freehire-Notification: inbox-digest\r\n\r\nInterview invitation"
+	source := &fakeSource{batch: []Inbound{{Raw: []byte(raw), Recipients: []string{"member@inbox.freehire.me"}, AckHandle: "digest"}}}
+	store := &fakeStore{byAddr: map[string]int64{"member@inbox.freehire.me": 7}}
+	if err := NewWorker(source, store, "inbox.freehire.me").RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.stored) != 0 || len(source.acked) != 1 {
+		t.Fatalf("digest stored=%d acked=%d", len(store.stored), len(source.acked))
+	}
+}
