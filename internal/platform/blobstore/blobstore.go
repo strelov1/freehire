@@ -47,6 +47,9 @@ type Config struct {
 	Bucket    string
 	AccessKey string
 	SecretKey string
+	// Region is optional. Set it for providers that do not answer the bucket-location probe
+	// minio otherwise makes before the first signed request (Hetzner: "hel1", "fsn1", "nbg1").
+	Region string
 }
 
 func (c Config) configured() bool {
@@ -86,10 +89,38 @@ func PhotoKey(userID int64) string {
 	return fmt.Sprintf("photos/%d", userID)
 }
 
+// Bucket is a Store that can also stream an object of unknown length in and hand out a
+// time-limited download link. It backs the catalogue export, whose objects are far too large
+// to buffer and are fetched by the customer straight from the bucket.
+type Bucket interface {
+	Store
+	// PutStream uploads r until EOF as a multipart upload (about 64 MiB held in memory).
+	PutStream(ctx context.Context, key, contentType string, r io.Reader) error
+	// PresignGet returns a URL that serves the object without credentials until ttl runs out.
+	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+}
+
+// NewBucket is New for a Bucket: (nil, nil) when the settings are incomplete.
+func NewBucket(c Config) (Bucket, error) {
+	s, err := newS3(c)
+	if s == nil || err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 // New builds an S3-backed Store from the config, or returns (nil, nil) when the
 // settings are incomplete (storage disabled). minio.New does not dial here — the
 // first network call happens on Put/Get/Delete.
 func New(c Config) (Store, error) {
+	s, err := newS3(c)
+	if s == nil || err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func newS3(c Config) (*s3Store, error) {
 	if !c.configured() {
 		return nil, nil
 	}
@@ -108,6 +139,7 @@ func New(c Config) (Store, error) {
 	client, err := minio.New(host, &minio.Options{
 		Creds:  credentials.NewStaticV4(c.AccessKey, c.SecretKey, ""),
 		Secure: secure,
+		Region: c.Region,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("blobstore: %w", err)
@@ -126,6 +158,27 @@ func (s *s3Store) Put(ctx context.Context, key, contentType string, r io.Reader,
 		return fmt.Errorf("blobstore: put %s: %w", key, err)
 	}
 	return nil
+}
+
+// streamPartSize is the multipart part size of PutStream. Without a known length minio sizes
+// parts for a 5 TiB object (~525 MiB each); 64 MiB keeps memory modest and still allows 640 GB
+// (10000 parts).
+const streamPartSize = 64 << 20
+
+func (s *s3Store) PutStream(ctx context.Context, key, contentType string, r io.Reader) error {
+	_, err := s.client.PutObject(ctx, s.bucket, key, r, -1, minio.PutObjectOptions{ContentType: contentType, PartSize: streamPartSize})
+	if err != nil {
+		return fmt.Errorf("blobstore: put %s: %w", key, err)
+	}
+	return nil
+}
+
+func (s *s3Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("blobstore: presign %s: %w", key, err)
+	}
+	return u.String(), nil
 }
 
 func (s *s3Store) Get(ctx context.Context, key string) (io.ReadCloser, error) {

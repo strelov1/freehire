@@ -66,6 +66,9 @@ type Config struct {
 	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
+	// Export backs the bulk catalogue download (internal/search/catalogexport), a bucket of its
+	// own because Blob holds résumés. Nil answers GET /catalogue/snapshots with 501.
+	Export blobstore.Bucket
 	// DirectApplyDailyLimit caps how many on-site applications one candidate sends per UTC
 	// day (config.LoadDirectApplyDailyLimit, read and validated in cmd/server).
 	DirectApplyDailyLimit int64

@@ -212,6 +212,7 @@ func Register(app *fiber.App, cfg Config) {
 	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
+	catalogueH := newCatalogueHandlers(queries, cfg.Export)
 	billingSvc := billing.New(cfg.Billing, queries)
 	// The store provider reads its own environment rather than taking configuration from
 	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
@@ -677,6 +678,7 @@ func Register(app *fiber.App, cfg Config) {
 		referralHandlers:             referralsH,
 		billingHandlers:              billingH,
 		planHandlers:                 planH,
+		catalogueHandlers:            catalogueH,
 		directApplyHandlers:          directApplyH,
 		jobsHandlers:                 jobsH,
 		searchHandlers:               searchH,
@@ -782,6 +784,7 @@ func Register(app *fiber.App, cfg Config) {
 	communityH.register(api, mw, contract)
 
 	planH.register(api, mw, contract)
+	catalogueH.register(api, mw, contract)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	billingH.register(api, mw, contract)
 	// Mounted whatever billing is doing: sharing an invite link and counting who came is

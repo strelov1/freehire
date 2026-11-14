@@ -102,6 +102,7 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 
 // Listed last-first: decorators apply bottom-up, and the reference shows the tags in
 // the order they are applied.
+@tagMetadata("Catalogue export", #{ description: "Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /jobs/{slug}` (full `description` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence." })
 @tagMetadata("Watchlist", #{})
 @tagMetadata("Tailoring", #{})
 @tagMetadata("Support", #{})

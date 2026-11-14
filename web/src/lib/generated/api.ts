@@ -374,6 +374,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/catalogue/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bulk catalogue snapshots and their download links.
+         * @description Lists the finished snapshots, newest first, each with a short-lived pre-signed download URL
+         *     (about 15 minutes; call this again for a fresh link). Needs the Data plan: any other
+         *     account gets `403`. `501` means bulk files are not set up on this deployment.
+         */
+        get: operations["listCatalogueSnapshots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies": {
         parameters: {
             query?: never;
@@ -6496,6 +6518,34 @@ export interface components {
              */
             reconstructed: boolean;
         };
+        /** @description One finished bulk snapshot of the catalogue. */
+        CatalogueSnapshot: {
+            /** @description UTC day the snapshot is named by, `YYYY-MM-DD`. */
+            date: string;
+            /**
+             * Format: int32
+             * @description Version of the line shape in the file. A removed or re-meant field bumps it; a new field does not.
+             */
+            schema_version: number;
+            /**
+             * Format: int64
+             * @description Number of lines (jobs) in the file.
+             */
+            rows: number;
+            /**
+             * Format: int64
+             * @description Size of the gzip file in bytes.
+             */
+            bytes: number;
+            /** @description Hex SHA-256 of the gzip file, to check a download. */
+            sha256: string;
+            /** Format: date-time */
+            generated_at: string;
+            /** @description Pre-signed link to the gzip file; it works without credentials until `url_expires_at`. */
+            download_url: string;
+            /** Format: date-time */
+            url_expires_at: string;
+        };
         CategoryMeta: {
             category: string;
         };
@@ -10482,6 +10532,53 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["BillingOverview"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCatalogueSnapshots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "date": "2026-11-13",
+                     *           "schema_version": 1,
+                     *           "rows": 4500000,
+                     *           "bytes": 7000000000,
+                     *           "sha256": "3b1f0c7e5d9a4c2e8f6a1b0d7c3e9f52a4b8d6c1e0f7a3b5c9d2e4f6a8b0c1d3",
+                     *           "generated_at": "2026-11-13T04:10:00Z",
+                     *           "download_url": "https://example-bucket.example.com/catalogue/2026-11-13/jobs.jsonl.gz?X-Amz-Signature=...",
+                     *           "url_expires_at": "2026-11-13T12:15:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["CatalogueSnapshot"][];
                     };
                 };
             };

@@ -17497,6 +17497,84 @@ func (s *Server) handleListCVsRequest(args [0]string, argsEscaped bool, w http.R
 	}
 }
 
+// handleListCatalogueSnapshotsRequest handles listCatalogueSnapshots operation.
+//
+// Lists the finished snapshots, newest first, each with a short-lived pre-signed download URL (about
+// 15 minutes; call this again for a fresh link). Needs the Data plan: any other account gets `403`.
+// `501` means bulk files are not set up on this deployment.
+//
+// GET /catalogue/snapshots
+func (s *Server) handleListCatalogueSnapshotsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *ListCatalogueSnapshotsOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListCatalogueSnapshotsOperation,
+			OperationSummary: "List bulk catalogue snapshots and their download links.",
+			OperationID:      "listCatalogueSnapshots",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *ListCatalogueSnapshotsOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListCatalogueSnapshots(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListCatalogueSnapshots(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListCatalogueSnapshotsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleListCompaniesRequest handles listCompanies operation.
 //
 // Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
