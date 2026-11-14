@@ -432,7 +432,8 @@ SELECT id FROM deleted;
 -- name: ListAutoApplyEntries :many
 -- The caller's live attempts, newest first, with what a status derivation and a list row
 -- need. last_event_at is when anything last happened to the pair, which is what an agent
--- polling for progress compares.
+-- polling for progress compares. A NULL max_entries returns the complete browser list;
+-- the assistant keeps its bounded response by supplying a limit.
 SELECT q.id, j.public_slug, j.title, j.company, q.review_decision, q.failed_at, q.blocked_at,
        q.tailored_cv_id, (q.resolved_preview IS NOT NULL)::boolean AS has_preview,
        q.preview_failed_at, q.tailor_failed_at, q.created_at,
@@ -442,7 +443,7 @@ FROM auto_apply_queue q
 JOIN jobs j ON j.id = q.job_id
 WHERE q.user_id = sqlc.arg(user_id)
 ORDER BY q.id DESC
-LIMIT 200;
+LIMIT sqlc.narg(max_entries)::bigint;
 
 -- name: ListRecentAutoApplySubmissions :many
 -- The caller's attempts that submitted within the last 30 days. A submission deletes its

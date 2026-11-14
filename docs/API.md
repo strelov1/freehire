@@ -4666,6 +4666,26 @@ curl -X DELETE "https://freehire.me/api/v1/me/answer-bank/<id>" -H "Authorizatio
 
 ## Auto-apply
 
+### `GET /me/auto-apply`
+
+**Auth:** Session or API key
+
+List your automatic applications
+
+Lists the caller's live automatic applications and confirmed submissions from the last 30 days, newest activity first. Internal diagnostic errors are omitted.
+
+```bash
+curl "https://freehire.me/api/v1/me/auto-apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "attempts": []
+  }
+}
+```
+
 ### `POST /me/auto-apply/{queueId}/review`
 
 **Auth:** Session or API key

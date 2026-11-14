@@ -1,7 +1,7 @@
 <script lang="ts">
   import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import type { Snippet } from 'svelte';
-  import { Bookmark, Eye, EyeOff } from '@lucide/svelte';
+  import { Bookmark, Eye, EyeOff, Send } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -25,6 +25,7 @@
   const SECTIONS = [
     { id: 'saved', href: '/my/activity', icon: Bookmark },
     { id: 'history', href: '/my/activity/history', icon: Eye },
+    { id: 'autoApply', href: '/my/activity/auto-apply', icon: Send },
     { id: 'hidden', href: '/my/activity/hidden', icon: EyeOff },
   ] as const;
   const PANEL_ID = 'activity-tabpanel';
