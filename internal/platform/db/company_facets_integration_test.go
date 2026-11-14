@@ -188,14 +188,23 @@ func TestRefreshCompanyFacetsSkipsUnseenPostings(t *testing.T) {
 
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, countries,
-		                   enrichment, description, category, last_seen_at)
+		                   enrichment, description, category)
 		 VALUES ('greenhouse', 'acme:1', 'http://example.test/1', 'Backend Engineer', 'job-1', 'acme',
-		         '{europe}', '{de}', '{}', 'We are hiring.', 'backend', now() - interval '1 day'),
+		         '{europe}', '{de}', '{}', 'We are hiring.', 'backend'),
 		        ('greenhouse', 'acme:2', 'http://example.test/2', 'Data Engineer', 'job-2', 'acme',
-		         '{americas}', '{us}', '{}', 'We are hiring.', 'data', now() - interval '15 days'),
+		         '{americas}', '{us}', '{}', 'We are hiring.', 'data'),
 		        ('telegram', 'chan:3', 'http://example.test/3', 'QA Engineer', 'job-3', 'acme',
-		         '{asia}', '{sg}', '{}', 'We are hiring.', 'qa', now() - interval '40 days')`); err != nil {
+		         '{asia}', '{sg}', '{}', 'We are hiring.', 'qa')`); err != nil {
 		t.Fatalf("insert jobs: %v", err)
+	}
+	// When each posting was last seen is its activity row's.
+	if _, err := pool.Exec(ctx,
+		`UPDATE job_activity a
+		    SET last_seen_at = now() - CASE j.external_id WHEN 'acme:1' THEN interval '1 day'
+		                                                   WHEN 'acme:2' THEN interval '15 days'
+		                                                   ELSE interval '40 days' END
+		   FROM jobs j WHERE j.id = a.job_id`); err != nil {
+		t.Fatalf("stamp last_seen_at: %v", err)
 	}
 
 	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{

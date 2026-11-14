@@ -80,16 +80,6 @@ func TestJobsReadServesTheActivityStampsAndFailsOpen(t *testing.T) {
 		job.ID, seen, hydrated); err != nil {
 		t.Fatalf("set activity: %v", err)
 	}
-	// A legacy column the view must NOT read: made visibly different from the activity row.
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = $2, hydrated_at = $2, liveness_strikes = 9 WHERE id = $1`,
-		job.ID, seen.Add(-1000*time.Hour)); err != nil {
-		t.Fatalf("set legacy columns: %v", err)
-	}
-	// The legacy-column write above is bridged into activity, so state the activity row last.
-	if _, err := pool.Exec(ctx, `UPDATE job_activity SET last_seen_at = $2, hydrated_at = $3, liveness_strikes = 2 WHERE job_id = $1`,
-		job.ID, seen, hydrated); err != nil {
-		t.Fatalf("restate activity: %v", err)
-	}
 
 	got, err := q.GetJob(ctx, job.ID)
 	if err != nil {

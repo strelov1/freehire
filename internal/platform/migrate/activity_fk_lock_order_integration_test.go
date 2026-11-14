@@ -28,7 +28,7 @@ import (
 // recorded copy, against a writer that holds jobs and then reaches for job_activity once the DDL
 // is queued, and demands that nobody is chosen as a deadlock victim.
 func TestForeignKeyMigrationDoesNotDeadlockWithABridgeWriter(t *testing.T) {
-	pool := bootstrapped(t)
+	pool := legacyActivityPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	// Production after 0259: the copy is done and recorded, the constraint does not exist yet.
@@ -169,7 +169,7 @@ func logTableLocks(t *testing.T, ctx context.Context, pool interface {
 }
 
 func TestForeignKeyCorrectionDoesNotBlockWritersWhenTheConstraintExists(t *testing.T) {
-	pool := bootstrapped(t)
+	pool := legacyActivityPool(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	writer, err := pool.Begin(ctx)
