@@ -490,19 +490,24 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // Touch refreshes an already-ingested posting's liveness (last_seen_at, reopen if closed) by
 // its (source, external_id) identity, without rewriting content — the path a HydratingSource
 // (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
-// and facets are preserved. Implements pipeline.toucher.
-func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string, error) {
-	touched, err := s.q.TouchJob(ctx, db.TouchJobParams{
+// and facets are preserved. A stated listing deadline is updated alongside liveness.
+// Implements pipeline.Toucher.
+func (s *dbStore) Touch(ctx context.Context, source, externalID string, deadline *time.Time) (string, error) {
+	params := db.TouchJobParams{
 		Source:               source,
 		ExternalID:           externalID,
 		WithheldIfSeenBefore: withheldIfSeenBefore(),
-	})
+	}
+	if deadline != nil {
+		params.ApplicationDeadline = pgtype.Date{Time: *deadline, Valid: true}
+	}
+	touched, err := s.q.TouchJob(ctx, params)
 	if err != nil {
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
 	companySlug := touched.CompanySlug
 	if touched.Deferred {
-		if companySlug, err = s.reopenAndRederive(ctx, source, externalID); err != nil {
+		if companySlug, err = s.reopenAndRederive(ctx, params); err != nil {
 			return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
 		}
 	}
@@ -529,16 +534,15 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 // locked by the touch, so the derive reads the version it writes over. The company slug and
 // fingerprint stay as stored: moving them needs the companies reconcile only backfill-derive
 // runs. The row is requeued with a re-stamp, superseding the touch's own entry.
-func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID string) (string, error) {
+func (s *dbStore) reopenAndRederive(ctx context.Context, params db.TouchJobParams) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
-	touched, err := qtx.TouchJob(ctx, db.TouchJobParams{
-		Source: source, ExternalID: externalID, AllowReopen: true, WithheldIfSeenBefore: withheldIfSeenBefore(),
-	})
+	params.AllowReopen = true
+	touched, err := qtx.TouchJob(ctx, params)
 	if err != nil {
 		return "", err
 	}
@@ -554,8 +558,8 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 				return "", err
 			}
 		}
-		// Unconditionally: the touch's own enqueue is DO NOTHING, which leaves a dead-lettered
-		// entry dead and the reopened posting out of search.
+		// Re-stamp after writing the final facets. Touch also re-arms its entry;
+		// this keeps the re-derived row's search publication explicit in this transaction.
 		if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
 			return "", err
 		}

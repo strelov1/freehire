@@ -100,7 +100,7 @@ func (s *fakeStore) Close(_ context.Context, source, externalID string) error {
 	return nil
 }
 
-func (s *fakeStore) Touch(_ context.Context, source, externalID string) (string, error) {
+func (s *fakeStore) Touch(_ context.Context, source, externalID string, deadline *time.Time) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
