@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
