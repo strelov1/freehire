@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "freehire API",
-    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Data freshness and closed jobs\n\nA posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:\n\n- The crawl no longer lists the posting: `unseen`. A crawl that ran incompletely, or whose board failed, closes nothing.\n- A source that streams removals reports the posting taken down: `feed_removed`.\n- Two consecutive liveness reads find the page expired, or the source answers that it is gone: `probe_expired`.\n- A source with no close signal at all is closed by age (`expired`), and so is a posting whose application deadline has passed. The age rule is a guess, which is why the reason says so.\n- A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).\n- An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).\n- A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).\n\nPostings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.\n\nHow often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.\n\nClosed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.\n\n### Keeping a mirror in sync\n\n`GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:\n\n1. Load the postings you want through the list and search endpoints, and note the time you started.\n2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.\n3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.\n\nThe cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. Each change carries a `seq`: for a given `public_slug`, apply a change only when its `seq` is greater than the last one you applied, and skip it otherwise. The feed can serve one posting's changes slightly out of order, and the first call with `since` can repeat a few changes from just before it; this rule makes both harmless. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`). A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.\n\nThe feed keeps the full history and nothing is deleted from it, so a `cursor` you hold never expires. Only `since` is capped, at 30 days back, so a first call stays cheap: a mirror older than that rebuilds from search and then starts the feed with `since`.\n\nA posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.\n\n## External vs internal endpoints\n\nThis reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal).\n\n## Filtering jobs\n\n\n\nExcept where noted below, these parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.\n\n\n\n- Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.\n\n- Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.\n\n- Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.\n\n- Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.\n\n- Geography is a single OR group: `regions`, `countries`, `metros` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means \"in Europe **or** in Italy\", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The four name a single concept — *where* — so picking two places reads as \"either\", which is what makes `regions=eu&countries=BR` (\"Europe or Brazil\") useful. There is no AND to switch on: `_mode=and` does not apply to geography.\n\n- Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.\n\n- A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{\"data\": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.\n\n\n\n### Facets\n\n\n\nEvery facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, sequoia, accel, greylock, usv, bond, lightspeed, index-ventures, softbank-vision-fund, founders-fund, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |\n\n| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |\n\n| `work_mode` | Work format | remote, hybrid, onsite |\n\n| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, it_support, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, occupational_safety, product, project_management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, social_services, science, manufacturing, public_safety, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other. The retired value management is still accepted and answered as role_type=people_manager |\n\n| `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |\n\n| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |\n\n| `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means \"no marker\", not \"IC\" |\n\n| `skills` | Skills | Open vocabulary — call /jobs/facets for live values |\n\n| `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |\n\n| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |\n\n| `countries` | Countries | Open vocabulary — call /jobs/facets for live values |\n\n| `cities` | City | Open vocabulary — call /jobs/facets for live values. Recognized dictionary aliases such as München and Köln resolve to their canonical city names. |\n\n| `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |\n\n| `relocation` | Relocation | not_supported, supported, required |\n\n| `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |\n\n| `engagement` | Contract terms | ir35_outside, ir35_inside, w2, 1099, c2c, contract_to_hire, b2b, uop, umowa_zlecenie, umowa_o_dzielo, clt, pj, tk, gph, samozanyaty, ip, freiberuflich, arbeitnehmerueberlassung, zzp, auto_entrepreneur, portage_salarial, autonomo, monotributo — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type |\n\n| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |\n\n| `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |\n\n| `reality` | Posting reality | fresh, stale, likely-evergreen |\n\n| `salary_currency` | Currency | USD, EUR, GBP, RUB |\n\n| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |\n\n| `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |\n\n| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |\n\n| `source_type` | Source type | ats, company, aggregator, social |\n\n| `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |\n\n| `source` | Source | Open vocabulary — call /jobs/facets for live values |\n\n| `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |\n\n| `education_level` | Education level | none, bachelor, master, phd |\n\n| `salary_period` | Salary period | year, month, day, hour |\n\n| `is_tech` | Technical role | tech, non_tech |\n\n\n\n### Numeric & boolean filters\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `visa_sponsorship` | Visa sponsorship | true, false |\n\n| `requires_clearance` | Security clearance required | true, false |\n\n| `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |\n\n| `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |\n\n| `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |\n\n| `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |\n\n| `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |\n\n| `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |\n\n| `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all, unless experience_include_unspecified is set |\n\n| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound |\n\n| `experience_only_seniority_unspecified` | Experience only without a level | true — apply either experience bound only to the jobs that carry no seniority level; a job with a level passes the bound whatever it states. With seniority and seniority_include_unspecified this reads \"one of these levels, or no level and within the bound\". Has no effect without a bound |\n\n| `seniority_include_unspecified` | Include unstated seniority | true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority |\n\n| `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |\n\n| `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |\n\n| `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the \"short form\" filter). Jobs with no form freehire could read are excluded: unknown is not short |\n\n| `auto_apply_available` | Auto-apply can attempt it | true — only postings whose ATS freehire auto-apply can currently attempt to fill and submit for; a provider-eligibility signal, never a guarantee the submission succeeds |\n\n| `work_mode_remote_anywhere` | Remote from anywhere, other modes at home | true — with `remote` and a physical work_mode both selected and a geography facet set, reads \"remote anywhere, OR hybrid/onsite within the geography\" instead of ANDing them. Otherwise, or with work_mode_mode=and, it changes nothing |\n\n| `work_mode_remote_regions` | Remote arm: regions | Region values, as regions — bound the remote arm of work_mode_remote_anywhere. Read only while it is in force |\n\n| `work_mode_remote_countries` | Remote arm: countries | ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force |\n\n\n\n### Recipes\n\n\n\n- **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`\n\n- **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`\n\n- **One country only — no region param, or it widens back out** — `countries=IT&employment_type=contract`\n\n- **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`\n\n- **Exclude outstaff companies** — `company_type_exclude=outstaff`\n\n- **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`\n\n- **Excluding jobs that need a security clearance** — `clearance_levels=none`\n\n- **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`\n\n- **Only jobs that need a security clearance** — `requires_clearance=true`",
+    "description": "## Base URL\n\nAll endpoints are served under `https://freehire.me/api/v1`. The API is read-first and open: the job, search, facet, and company endpoints need no authentication and may be called cross-origin.\n\nAuthenticated endpoints accept either the browser session cookie (set by sign-in, same-origin) or a personal API key sent as a Bearer token — see the authentication model below. Keys are created in your account, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.\n\n## Response envelope\n\nSingle items are wrapped as `{ \"data\": ... }`. Collections add pagination metadata: `{ \"data\": [...], \"meta\": { \"total\", \"limit\", \"offset\" } }`. Errors are `{ \"error\": \"message\" }` with a matching HTTP status.\n\n```json\n{ \"data\": { \"...\": \"single item\" } }\n\n{ \"data\": [ ... ], \"meta\": { \"total\": 4213, \"limit\": 20, \"offset\": 0 } }\n\n{ \"error\": \"job not found\" }\n```\n\n## Pagination\n\nList and search endpoints page with `limit` (default 20, max 100) and `offset` (default 0). `meta.total` reports the total matching the current filters, so you can compute the number of pages.\n\nPagination is bounded on **every** list endpoint: `offset + limit` may not exceed 10000 (`pagination too deep` → 400). This is deep-paging protection, not a cap on the reported total — use filters to narrow rather than paging that far.\n\nThe bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means \"there is no such page\", which is the truth.\n\n## Errors\n\nErrors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), 429 (request limit exceeded), and 503 (service temporarily unavailable). Application errors use `{ \"error\": ... }`. nginx rate-limit rejections can return a non-JSON body; see API plans below.\n\n## API plans\n\nThe public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).\n\nSend a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.\n\nThe API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.\n\nThe limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.\n\nPagination returns 20 listings by default and up to 100 with `limit=100`. Requests carrying `offset` or `company_slug` also pass through separate per-IP nginx limits of 2 requests per second each, including paid requests. The `offset` limit allows a burst of 50 excess requests; the `company_slug` limit allows 30. A request carrying both parameters draws on both limits. For sustained pagination or company-filtered reads, keep the combined traffic from one IP within the applicable 2-request-per-second limit.\n\nThe gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.\n\n## Data freshness and closed jobs\n\nA posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:\n\n- The crawl no longer lists the posting: `unseen`. A crawl that ran incompletely, or whose board failed, closes nothing.\n- A source that streams removals reports the posting taken down: `feed_removed`.\n- Two consecutive liveness reads find the page expired, or the source answers that it is gone: `probe_expired`.\n- A source with no close signal at all is closed by age (`expired`), and so is a posting whose application deadline has passed. The age rule is a guess, which is why the reason says so.\n- A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).\n- An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).\n- A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).\n\nPostings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.\n\nHow often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.\n\nClosed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.\n\n### Keeping a mirror in sync\n\n`GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:\n\n1. Load the postings you want through the list and search endpoints, and note the time you started.\n2. Call `GET /jobs/changes?since=<that time>` and follow `meta.next_cursor` as `cursor` until `meta.has_more` is false. Store the last `next_cursor`.\n3. From then on, call `GET /jobs/changes?cursor=<stored cursor>` on your own schedule. A `closed` change means delist the posting; `opened` and `reopened` mean fetch it with `GET /jobs/{slug}` and list it.\n\nThe cursor is a position, not a time, so a walk never skips or repeats a change while new ones arrive. Each change carries a `seq`: for a given `public_slug`, apply a change only when its `seq` is greater than the last one you applied, and skip it otherwise. The feed can serve one posting's changes slightly out of order, and the first call with `since` can repeat a few changes from just before it; this rule makes both harmless. `since` can reach back 30 days at most, and the feed begins when it was introduced (`meta.available_since`). A change shows up in the feed shortly after it happens, not at the same instant: the feed trails the oldest transaction still open in the database, so a long-running one delays new entries until it ends. Nothing is lost, only late.\n\nThe feed keeps the full history and nothing is deleted from it, so a `cursor` you hold never expires. Only `since` is capped, at 30 days back, so a first call stays cheap: a mirror older than that rebuilds from search and then starts the feed with `since`.\n\nA posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.\n\n### Change webhooks\n\nInstead of polling the feed you can have it pushed. `POST /me/change-webhooks` subscribes a URL (with an `api` or `api_data` plan); the answer carries the signing `secret`, **once**. A subscription can ask for only some companies (`company_slugs`) and some kinds of change (`kinds`), and receives changes made from about the time it was created (a change from the moment just before can arrive once; `seq` dedupes it). It reads the same feed as `GET /jobs/changes`, in the same order, and the same postings.\n\nA delivery is a `POST` with a JSON body and these headers:\n\n| Header | Value |\n|---|---|\n| `X-Freehire-Timestamp` | Unix seconds when it was signed. |\n| `X-Freehire-Signature` | `v1=` plus the hex HMAC-SHA256, keyed by your secret, of the timestamp, a `.`, and the raw body. |\n| `X-Freehire-Delivery` | An id, the same for a retry of the same batch. |\n| `X-Freehire-Event` | `job.changes`, or `webhook.test` for a test. |\n\n```json\n{\"id\": \"7-4821-90210\", \"type\": \"job.changes\", \"changes\": [\n  {\"public_slug\": \"senior-go-engineer-acme-1a2b\", \"company_slug\": \"acme\", \"seq\": 98765, \"kind\": \"closed\", \"at\": \"2026-06-20T04:10:00Z\", \"closed_reason\": \"unseen\"}\n]}\n```\n\n`changes` is a batch of up to 100, oldest first, each shaped like a feed change plus `company_slug`. Apply a change only when its `seq` is greater than the last one you applied for that `public_slug` (this also drops a repeat). `opened` and `reopened` mean fetch the posting with `GET /jobs/{slug}`; `closed` means delist it.\n\nVerify before you trust a body: recompute the HMAC over the timestamp header, `.` and the **raw** body bytes (not re-serialised JSON), compare in constant time, and refuse a timestamp more than 5 minutes from your clock. In Go:\n\n```go\nfunc verify(secret, ts, sig string, body []byte) bool {\n\tn, err := strconv.ParseInt(ts, 10, 64)\n\tif err != nil || math.Abs(time.Since(time.Unix(n, 0)).Seconds()) > 300 {\n\t\treturn false\n\t}\n\tmac := hmac.New(sha256.New, []byte(secret))\n\tfmt.Fprintf(mac, \"%s.\", ts)\n\tmac.Write(body)\n\treturn hmac.Equal([]byte(\"v1=\"+hex.EncodeToString(mac.Sum(nil))), []byte(sig))\n}\n```\n\nAnswer any `2xx` to accept a batch. Anything else, a timeout (10 seconds) or a redirect counts as a failure: the same batch is sent again after 30 seconds, doubling up to an hour. Delivery is at least once, so expect repeats and dedupe on `seq`. After 25 failures in a row, or at once on a `410 Gone`, the subscription is disabled (`disabled_at` and `disabled_reason` in the list); delete it and create it again to resume, from the changes made then. Plan for the feed instead if you need what happened meanwhile. While your plan has lapsed, deliveries pause and pick up where they stopped once it is renewed.\n\n## Authentication model\n\nBrowser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.\n\nEndpoints marked “Session or API key” accept either; endpoints marked “Session only” (saved searches, subscriptions) accept only the cookie, so a leaked key cannot manage credentials. “Moderator” endpoints additionally require the moderator role.\n\n## What is not here\n\nThis reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.\n\nManaging API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.\n\nThe `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.\n\nMost of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.\n\n## External vs internal endpoints\n\nThis reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal).\n\n## Filtering jobs\n\n\n\nExcept where noted below, these parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.\n\n\n\n- Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.\n\n- Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.\n\n- Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.\n\n- Different facets are ANDed together; numeric and boolean filters are ANDed too. The geography facets are the one exception — see below.\n\n- Geography is a single OR group: `regions`, `countries`, `metros` and `cities` widen each other instead of narrowing. `regions=eu&countries=IT` means \"in Europe **or** in Italy\", so it returns everything `regions=eu` alone would. To search one country, drop the region: `countries=IT`. The four name a single concept — *where* — so picking two places reads as \"either\", which is what makes `regions=eu&countries=BR` (\"Europe or Brazil\") useful. There is no AND to switch on: `_mode=and` does not apply to geography.\n\n- Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.\n\n- A param no filter reads is ignored rather than refused — so old links and saved searches keep working — and comes back in `meta.ignored_params`, with `did_you_mean` when it is only the singular of a real facet. Check it: a dropped filter otherwise looks like a genuinely broad result. At most 10 are listed per response. The same report rides on `/jobs/facets`, `/market/coverage` and `/companies`, which answer `{\"data\": ...}` and grow a `meta` block only when there is something to warn about. `/companies` filters on its own vocabulary, so a jobs facet sent there is reported as ignored.\n\n\n\n### Facets\n\n\n\nEvery facet below supports repeat-OR, `_mode=and`, and `_exclude` as described above.\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, sequoia, accel, greylock, usv, bond, lightspeed, index-ventures, softbank-vision-fund, founders-fund, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, indian-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor, ca-lmia-employer, ie-permit-employer, dk-fast-track-company |\n\n| `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |\n\n| `work_mode` | Work format | remote, hybrid, onsite |\n\n| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, it_support, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, creative, engineering_design, industrial_engineering, occupational_safety, product, project_management, healthcare, skilled_trades, retail, hospitality, logistics, education, personal_services, administration, social_services, science, manufacturing, public_safety, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other. The retired value management is still accepted and answered as role_type=people_manager |\n\n| `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |\n\n| `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |\n\n| `role_type` | Role type | people_manager — the title names a people-management role. One value only: carrying nothing means no management marker was found, NOT that the posting is individual-contributor work, so role_type_exclude means \"no marker\", not \"IC\" |\n\n| `skills` | Skills | Open vocabulary — call /jobs/facets for live values |\n\n| `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |\n\n| `company_type` | Company type | product, startup, outsource, outstaff, agency, inhouse, government |\n\n| `countries` | Countries | Open vocabulary — call /jobs/facets for live values |\n\n| `cities` | City | Open vocabulary — call /jobs/facets for live values. Recognized dictionary aliases such as München and Köln resolve to their canonical city names. |\n\n| `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |\n\n| `relocation` | Relocation | not_supported, supported, required |\n\n| `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |\n\n| `engagement` | Contract terms | ir35_outside, ir35_inside, w2, 1099, c2c, contract_to_hire, b2b, uop, umowa_zlecenie, umowa_o_dzielo, clt, pj, tk, gph, samozanyaty, ip, freiberuflich, arbeitnehmerueberlassung, zzp, auto_entrepreneur, portage_salarial, autonomo, monotributo — employee or own business, in each market's own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source's own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type |\n\n| `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |\n\n| `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |\n\n| `reality` | Posting reality | fresh, stale, likely-evergreen |\n\n| `salary_currency` | Currency | USD, EUR, GBP, RUB |\n\n| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |\n\n| `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |\n\n| `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |\n\n| `source_type` | Source type | ats, company, aggregator, social |\n\n| `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |\n\n| `source` | Source | Open vocabulary — call /jobs/facets for live values |\n\n| `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |\n\n| `education_level` | Education level | none, bachelor, master, phd |\n\n| `salary_period` | Salary period | year, month, day, hour |\n\n| `is_tech` | Technical role | tech, non_tech |\n\n\n\n### Numeric & boolean filters\n\n\n\n| Param | Filter | Values |\n\n| --- | --- | --- |\n\n| `visa_sponsorship` | Visa sponsorship | true, false |\n\n| `requires_clearance` | Security clearance required | true, false |\n\n| `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |\n\n| `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |\n\n| `watchlist` | Your watchlist: companies you follow | true — signed in only; an empty watchlist matches nothing. Anonymous, it is reported in meta.ignored_params. Kept in a saved search, so `watchlist=true` is the alert for new postings at the companies you follow. `/jobs/facets` never applies this filter, so its counts ignore it |\n\n| `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |\n\n| `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |\n\n| `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |\n\n| `experience_years_max` | Maximum experience | integer — jobs requiring at most this many years, the same figure experience_years_min bounds from below. Use 0 for jobs stating no prior experience is required. Either bound excludes jobs that state no requirement at all, unless experience_include_unspecified is set |\n\n| `experience_include_unspecified` | Include unstated experience | true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound |\n\n| `experience_only_seniority_unspecified` | Experience only without a level | true — apply either experience bound only to the jobs that carry no seniority level; a job with a level passes the bound whatever it states. With seniority and seniority_include_unspecified this reads \"one of these levels, or no level and within the bound\". Has no effect without a bound |\n\n| `seniority_include_unspecified` | Include unstated seniority | true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority |\n\n| `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |\n\n| `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |\n\n| `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the \"short form\" filter). Jobs with no form freehire could read are excluded: unknown is not short |\n\n| `auto_apply_available` | Auto-apply can attempt it | true — only postings whose ATS freehire auto-apply can currently attempt to fill and submit for; a provider-eligibility signal, never a guarantee the submission succeeds |\n\n| `work_mode_remote_anywhere` | Remote from anywhere, other modes at home | true — with `remote` and a physical work_mode both selected and a geography facet set, reads \"remote anywhere, OR hybrid/onsite within the geography\" instead of ANDing them. Otherwise, or with work_mode_mode=and, it changes nothing |\n\n| `work_mode_remote_regions` | Remote arm: regions | Region values, as regions — bound the remote arm of work_mode_remote_anywhere. Read only while it is in force |\n\n| `work_mode_remote_countries` | Remote arm: countries | ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force |\n\n\n\n### Recipes\n\n\n\n- **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`\n\n- **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`\n\n- **One country only — no region param, or it widens back out** — `countries=IT&employment_type=contract`\n\n- **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`\n\n- **Exclude outstaff companies** — `company_type_exclude=outstaff`\n\n- **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`\n\n- **Excluding jobs that need a security clearance** — `clearance_levels=none`\n\n- **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`\n\n- **Only jobs that need a security clearance** — `requires_clearance=true`",
     "version": "1.0.0"
   },
   "servers": [
@@ -130,6 +130,10 @@
     },
     {
       "name": "Plans"
+    },
+    {
+      "name": "Change webhooks",
+      "description": "Push delivery of the change feed to your own endpoint. Session or API key; needs an `api` or `api_data` plan. See Change webhooks above for the payload and how to verify a signature."
     },
     {
       "name": "Speech"
@@ -4861,6 +4865,254 @@
         },
         "tags": [
           "Autofill"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/change-webhooks": {
+      "get": {
+        "operationId": "listChangeWebhooks",
+        "summary": "List change webhook subscriptions.",
+        "description": "The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChangeWebhook"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 7,
+                      "url": "https://mirror.example.com/hooks/freehire",
+                      "company_slugs": [
+                        "acme"
+                      ],
+                      "kinds": [
+                        "opened",
+                        "closed"
+                      ],
+                      "created_at": "2026-06-20T04:10:00Z",
+                      "last_success_at": "2026-06-21T09:00:00Z",
+                      "consecutive_failures": 0,
+                      "last_error": "",
+                      "disabled_at": null,
+                      "disabled_reason": ""
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Change webhooks"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createChangeWebhook",
+        "summary": "Subscribe a URL to the change feed.",
+        "description": "Subscribes a URL to the change feed and answers with the signing secret, this once. Needs\nan `api` or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409`\npast that). The URL is probed with a signed `webhook.test` event first and refused with\n`422` if it does not answer 2xx. Deliveries start from about the time of this call.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChangeWebhookCreated"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 7,
+                    "url": "https://mirror.example.com/hooks/freehire",
+                    "company_slugs": [
+                      "acme"
+                    ],
+                    "kinds": [
+                      "opened",
+                      "closed"
+                    ],
+                    "created_at": "2026-06-20T04:10:00Z",
+                    "last_success_at": null,
+                    "consecutive_failures": 0,
+                    "last_error": "",
+                    "disabled_at": null,
+                    "disabled_reason": "",
+                    "secret": "whsec_example_secret_shown_once"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Change webhooks"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeWebhookCreate"
+              },
+              "example": {
+                "url": "https://mirror.example.com/hooks/freehire",
+                "company_slugs": [
+                  "acme"
+                ],
+                "kinds": [
+                  "opened",
+                  "closed"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/change-webhooks/{id}": {
+      "delete": {
+        "operationId": "deleteChangeWebhook",
+        "summary": "Delete a change webhook subscription.",
+        "description": "An id that is not the caller's is a `404`. Delete a disabled subscription and create it again to resume (from the changes made then).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Change webhooks"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/change-webhooks/{id}/test": {
+      "post": {
+        "operationId": "testChangeWebhook",
+        "summary": "Send a test event to a subscription.",
+        "description": "Sends a signed `webhook.test` event with no changes. `204` when the endpoint answered 2xx, `422` with what it answered otherwise.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Change webhooks"
         ],
         "security": [
           {
@@ -13944,6 +14196,206 @@
             "type": "string"
           }
         }
+      },
+      "ChangeWebhook": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "company_slugs",
+          "kinds",
+          "created_at",
+          "last_success_at",
+          "consecutive_failures",
+          "last_error",
+          "disabled_at",
+          "disabled_reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string"
+          },
+          "company_slugs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty: every company. Otherwise only changes of these companies' postings are delivered."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangeWebhookKind"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed deliveries in a row; reset by a delivery that succeeds."
+          },
+          "last_error": {
+            "type": "string",
+            "description": "What the endpoint answered to the last failed delivery; empty when the last one succeeded."
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the subscription was switched off after sustained failure or a `410`; null while it delivers."
+          },
+          "disabled_reason": {
+            "type": "string"
+          }
+        },
+        "description": "A webhook subscription to the change feed. The secret is never part of it after creation."
+      },
+      "ChangeWebhookCreate": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Where to POST: an absolute http(s) URL. A private, loopback or link-local address is refused."
+          },
+          "company_slugs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most 100 company slugs, as `GET /companies/{slug}` knows them. Absent or empty: all companies."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangeWebhookKind"
+            },
+            "description": "Absent or empty: all three."
+          }
+        }
+      },
+      "ChangeWebhookCreated": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "company_slugs",
+          "kinds",
+          "created_at",
+          "last_success_at",
+          "consecutive_failures",
+          "last_error",
+          "disabled_at",
+          "disabled_reason",
+          "secret"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string"
+          },
+          "company_slugs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty: every company. Otherwise only changes of these companies' postings are delivered."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangeWebhookKind"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed deliveries in a row; reset by a delivery that succeeds."
+          },
+          "last_error": {
+            "type": "string",
+            "description": "What the endpoint answered to the last failed delivery; empty when the last one succeeded."
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the subscription was switched off after sustained failure or a `410`; null while it delivers."
+          },
+          "disabled_reason": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string",
+            "description": "The HMAC key for `X-Freehire-Signature`. Store it now: it cannot be read again."
+          }
+        },
+        "description": "The subscription plus its signing secret, shown exactly once, in the answer that creates it."
+      },
+      "ChangeWebhookKind": {
+        "type": "string",
+        "enum": [
+          "opened",
+          "closed",
+          "reopened"
+        ],
+        "description": "The kinds of change a webhook can ask for; the same as the change feed's."
       },
       "CityMatch": {
         "type": "object",

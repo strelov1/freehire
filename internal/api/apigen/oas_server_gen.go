@@ -349,6 +349,15 @@ type Handler interface {
 	//
 	// POST /me/cvs
 	CreateCV(ctx context.Context, req *CvCreate) (*CreateCVCreated, error)
+	// CreateChangeWebhook implements createChangeWebhook operation.
+	//
+	// Subscribes a URL to the change feed and answers with the signing secret, this once. Needs an `api`
+	// or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409` past that). The
+	// URL is probed with a signed `webhook.test` event first and refused with `422` if it does not answer
+	// 2xx. Deliveries start from about the time of this call.
+	//
+	// POST /me/change-webhooks
+	CreateChangeWebhook(ctx context.Context, req *ChangeWebhookCreate) (*CreateChangeWebhookCreated, error)
 	// CreateEmployerVacancy implements createEmployerVacancy operation.
 	//
 	// Publishes, or idempotently updates the caller's own vacancy at the same URL.
@@ -466,6 +475,13 @@ type Handler interface {
 	//
 	// DELETE /me/cvs/{id}
 	DeleteCV(ctx context.Context, params DeleteCVParams) error
+	// DeleteChangeWebhook implements deleteChangeWebhook operation.
+	//
+	// An id that is not the caller's is a `404`. Delete a disabled subscription and create it again to
+	// resume (from the changes made then).
+	//
+	// DELETE /me/change-webhooks/{id}
+	DeleteChangeWebhook(ctx context.Context, params DeleteChangeWebhookParams) error
 	// DeleteCompanyFeedback implements deleteCompanyFeedback operation.
 	//
 	// Returns the company's freshly recomputed counters, the same cast/clear shape as the vote endpoints.
@@ -1219,6 +1235,12 @@ type Handler interface {
 	//
 	// GET /me/cvs
 	ListCVs(ctx context.Context) (*ListCVsOK, error)
+	// ListChangeWebhooks implements listChangeWebhooks operation.
+	//
+	// The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.
+	//
+	// GET /me/change-webhooks
+	ListChangeWebhooks(ctx context.Context) (*ListChangeWebhooksOK, error)
 	// ListCompanies implements listCompanies operation.
 	//
 	// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
@@ -2113,6 +2135,13 @@ type Handler interface {
 	//
 	// POST /me/cvs/tailor
 	TailorCV(ctx context.Context, req *CvTailorRequest) (TailorCVRes, error)
+	// TestChangeWebhook implements testChangeWebhook operation.
+	//
+	// Sends a signed `webhook.test` event with no changes. `204` when the endpoint answered 2xx, `422`
+	// with what it answered otherwise.
+	//
+	// POST /me/change-webhooks/{id}/test
+	TestChangeWebhook(ctx context.Context, params TestChangeWebhookParams) error
 	// TestPushToken implements testPushToken operation.
 	//
 	// Never targets another user or a caller-supplied destination — only your own registered tokens.

@@ -47,6 +47,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Mentorship](#mentorship)
 - [Plan](#plan)
 - [Plans](#plans)
+- [Change webhooks](#change-webhooks)
 - [Speech](#speech)
 
 ## Base URL
@@ -124,6 +125,44 @@ The cursor is a position, not a time, so a walk never skips or repeats a change 
 The feed keeps the full history and nothing is deleted from it, so a `cursor` you hold never expires. Only `since` is capped, at 30 days back, so a first call stays cheap: a mirror older than that rebuilds from search and then starts the feed with `since`.
 
 A posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.
+
+### Change webhooks
+
+Instead of polling the feed you can have it pushed. `POST /me/change-webhooks` subscribes a URL (with an `api` or `api_data` plan); the answer carries the signing `secret`, **once**. A subscription can ask for only some companies (`company_slugs`) and some kinds of change (`kinds`), and receives changes made from about the time it was created (a change from the moment just before can arrive once; `seq` dedupes it). It reads the same feed as `GET /jobs/changes`, in the same order, and the same postings.
+
+A delivery is a `POST` with a JSON body and these headers:
+
+| Header | Value |
+|---|---|
+| `X-Freehire-Timestamp` | Unix seconds when it was signed. |
+| `X-Freehire-Signature` | `v1=` plus the hex HMAC-SHA256, keyed by your secret, of the timestamp, a `.`, and the raw body. |
+| `X-Freehire-Delivery` | An id, the same for a retry of the same batch. |
+| `X-Freehire-Event` | `job.changes`, or `webhook.test` for a test. |
+
+```json
+{"id": "7-4821-90210", "type": "job.changes", "changes": [
+  {"public_slug": "senior-go-engineer-acme-1a2b", "company_slug": "acme", "seq": 98765, "kind": "closed", "at": "2026-06-20T04:10:00Z", "closed_reason": "unseen"}
+]}
+```
+
+`changes` is a batch of up to 100, oldest first, each shaped like a feed change plus `company_slug`. Apply a change only when its `seq` is greater than the last one you applied for that `public_slug` (this also drops a repeat). `opened` and `reopened` mean fetch the posting with `GET /jobs/{slug}`; `closed` means delist it.
+
+Verify before you trust a body: recompute the HMAC over the timestamp header, `.` and the **raw** body bytes (not re-serialised JSON), compare in constant time, and refuse a timestamp more than 5 minutes from your clock. In Go:
+
+```go
+func verify(secret, ts, sig string, body []byte) bool {
+	n, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil || math.Abs(time.Since(time.Unix(n, 0)).Seconds()) > 300 {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	fmt.Fprintf(mac, "%s.", ts)
+	mac.Write(body)
+	return hmac.Equal([]byte("v1="+hex.EncodeToString(mac.Sum(nil))), []byte(sig))
+}
+```
+
+Answer any `2xx` to accept a batch. Anything else, a timeout (10 seconds) or a redirect counts as a failure: the same batch is sent again after 30 seconds, doubling up to an hour. Delivery is at least once, so expect repeats and dedupe on `seq`. After 25 failures in a row, or at once on a `410 Gone`, the subscription is disabled (`disabled_at` and `disabled_reason` in the list); delete it and create it again to resume, from the changes made then. Plan for the feed instead if you need what happened meanwhile. While your plan has lapsed, deliveries pause and pick up where they stopped once it is renewed.
 
 ## Authentication model
 
@@ -5358,6 +5397,128 @@ What each plan allows and what it costs, read from the configuration metering us
 
 ```bash
 curl "https://freehire.me/api/v1/plans"
+```
+
+## Change webhooks
+
+Push delivery of the change feed to your own endpoint. Session or API key; needs an `api` or `api_data` plan. See Change webhooks above for the payload and how to verify a signature.
+
+### `GET /me/change-webhooks`
+
+**Auth:** Session or API key
+
+List change webhook subscriptions.
+
+The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.
+
+```bash
+curl "https://freehire.me/api/v1/me/change-webhooks" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 7,
+      "url": "https://mirror.example.com/hooks/freehire",
+      "company_slugs": [
+        "acme"
+      ],
+      "kinds": [
+        "opened",
+        "closed"
+      ],
+      "created_at": "2026-06-20T04:10:00Z",
+      "last_success_at": "2026-06-21T09:00:00Z",
+      "consecutive_failures": 0,
+      "last_error": "",
+      "disabled_at": null,
+      "disabled_reason": ""
+    }
+  ]
+}
+```
+
+### `POST /me/change-webhooks`
+
+**Auth:** Session or API key
+
+Subscribe a URL to the change feed.
+
+Subscribes a URL to the change feed and answers with the signing secret, this once. Needs
+an `api` or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409`
+past that). The URL is probed with a signed `webhook.test` event first and refused with
+`422` if it does not answer 2xx. Deliveries start from about the time of this call.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | yes | Where to POST: an absolute http(s) URL. A private, loopback or link-local address is refused. |
+| `company_slugs` | string[] | no | At most 100 company slugs, as `GET /companies/{slug}` knows them. Absent or empty: all companies. |
+| `kinds` | ChangeWebhookKind[] | no | Absent or empty: all three. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/change-webhooks" -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' -d '{"url":"https://mirror.example.com/hooks/freehire","company_slugs":["acme"],"kinds":["opened","closed"]}'
+```
+
+```json
+{
+  "data": {
+    "id": 7,
+    "url": "https://mirror.example.com/hooks/freehire",
+    "company_slugs": [
+      "acme"
+    ],
+    "kinds": [
+      "opened",
+      "closed"
+    ],
+    "created_at": "2026-06-20T04:10:00Z",
+    "last_success_at": null,
+    "consecutive_failures": 0,
+    "last_error": "",
+    "disabled_at": null,
+    "disabled_reason": "",
+    "secret": "whsec_example_secret_shown_once"
+  }
+}
+```
+
+### `DELETE /me/change-webhooks/{id}`
+
+**Auth:** Session or API key
+
+Delete a change webhook subscription.
+
+An id that is not the caller's is a `404`. Delete a disabled subscription and create it again to resume (from the changes made then).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/change-webhooks/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /me/change-webhooks/{id}/test`
+
+**Auth:** Session or API key
+
+Send a test event to a subscription.
+
+Sends a signed `webhook.test` event with no changes. `204` when the endpoint answered 2xx, `422` with what it answered otherwise.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/change-webhooks/<id>/test" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ## Speech

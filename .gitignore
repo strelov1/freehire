@@ -37,6 +37,7 @@ hire
 /cal-sync
 /capture-apply-form
 /classify-mail
+/changes-webhook
 /close-chronic-boards
 /cv-previews
 /discord-sync

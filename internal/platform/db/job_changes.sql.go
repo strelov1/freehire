@@ -45,7 +45,7 @@ func (q *Queries) JobChangesStartXID(ctx context.Context, since pgtype.Timestamp
 }
 
 const listJobChanges = `-- name: ListJobChanges :many
-SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug
+SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug, j.company_slug
 FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > ($1::bigint, $2::bigint)
@@ -62,12 +62,13 @@ type ListJobChangesParams struct {
 }
 
 type ListJobChangesRow struct {
-	ID         int64              `json:"id"`
-	Xid        int64              `json:"xid"`
-	Kind       string             `json:"kind"`
-	Reason     string             `json:"reason"`
-	At         pgtype.Timestamptz `json:"at"`
-	PublicSlug string             `json:"public_slug"`
+	ID          int64              `json:"id"`
+	Xid         int64              `json:"xid"`
+	Kind        string             `json:"kind"`
+	Reason      string             `json:"reason"`
+	At          pgtype.Timestamptz `json:"at"`
+	PublicSlug  string             `json:"public_slug"`
+	CompanySlug string             `json:"company_slug"`
 }
 
 // One keyset page of the public change feed, oldest first, after the (xid, id) position
@@ -83,6 +84,7 @@ type ListJobChangesRow struct {
 // all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
 // that is private NOW serves only `closed` entries. Those carry just a slug the client was
 // already given while it was public, and withholding them would leave the copy listed.
+// company_slug is selected for the webhook worker (internal/engage/changehook), which filters on it.
 func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) ([]ListJobChangesRow, error) {
 	rows, err := q.db.Query(ctx, listJobChanges, arg.AfterXid, arg.AfterID, arg.RowLimit)
 	if err != nil {
@@ -99,6 +101,7 @@ func (q *Queries) ListJobChanges(ctx context.Context, arg ListJobChangesParams) 
 			&i.Reason,
 			&i.At,
 			&i.PublicSlug,
+			&i.CompanySlug,
 		); err != nil {
 			return nil, err
 		}

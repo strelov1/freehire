@@ -4535,6 +4535,348 @@ func (s *CategoryMeta) SetCategory(val string) {
 	s.Category = val
 }
 
+// A webhook subscription to the change feed. The secret is never part of it after creation.
+// Ref: #/components/schemas/ChangeWebhook
+type ChangeWebhook struct {
+	ID  int64  `json:"id"`
+	URL string `json:"url"`
+	// Empty: every company. Otherwise only changes of these companies' postings are delivered.
+	CompanySlugs  []string            `json:"company_slugs"`
+	Kinds         []ChangeWebhookKind `json:"kinds"`
+	CreatedAt     time.Time           `json:"created_at"`
+	LastSuccessAt NilDateTime         `json:"last_success_at"`
+	// Failed deliveries in a row; reset by a delivery that succeeds.
+	ConsecutiveFailures int64 `json:"consecutive_failures"`
+	// What the endpoint answered to the last failed delivery; empty when the last one succeeded.
+	LastError string `json:"last_error"`
+	// Set when the subscription was switched off after sustained failure or a `410`; null while it
+	// delivers.
+	DisabledAt     NilDateTime `json:"disabled_at"`
+	DisabledReason string      `json:"disabled_reason"`
+}
+
+// GetID returns the value of ID.
+func (s *ChangeWebhook) GetID() int64 {
+	return s.ID
+}
+
+// GetURL returns the value of URL.
+func (s *ChangeWebhook) GetURL() string {
+	return s.URL
+}
+
+// GetCompanySlugs returns the value of CompanySlugs.
+func (s *ChangeWebhook) GetCompanySlugs() []string {
+	return s.CompanySlugs
+}
+
+// GetKinds returns the value of Kinds.
+func (s *ChangeWebhook) GetKinds() []ChangeWebhookKind {
+	return s.Kinds
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ChangeWebhook) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetLastSuccessAt returns the value of LastSuccessAt.
+func (s *ChangeWebhook) GetLastSuccessAt() NilDateTime {
+	return s.LastSuccessAt
+}
+
+// GetConsecutiveFailures returns the value of ConsecutiveFailures.
+func (s *ChangeWebhook) GetConsecutiveFailures() int64 {
+	return s.ConsecutiveFailures
+}
+
+// GetLastError returns the value of LastError.
+func (s *ChangeWebhook) GetLastError() string {
+	return s.LastError
+}
+
+// GetDisabledAt returns the value of DisabledAt.
+func (s *ChangeWebhook) GetDisabledAt() NilDateTime {
+	return s.DisabledAt
+}
+
+// GetDisabledReason returns the value of DisabledReason.
+func (s *ChangeWebhook) GetDisabledReason() string {
+	return s.DisabledReason
+}
+
+// SetID sets the value of ID.
+func (s *ChangeWebhook) SetID(val int64) {
+	s.ID = val
+}
+
+// SetURL sets the value of URL.
+func (s *ChangeWebhook) SetURL(val string) {
+	s.URL = val
+}
+
+// SetCompanySlugs sets the value of CompanySlugs.
+func (s *ChangeWebhook) SetCompanySlugs(val []string) {
+	s.CompanySlugs = val
+}
+
+// SetKinds sets the value of Kinds.
+func (s *ChangeWebhook) SetKinds(val []ChangeWebhookKind) {
+	s.Kinds = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ChangeWebhook) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetLastSuccessAt sets the value of LastSuccessAt.
+func (s *ChangeWebhook) SetLastSuccessAt(val NilDateTime) {
+	s.LastSuccessAt = val
+}
+
+// SetConsecutiveFailures sets the value of ConsecutiveFailures.
+func (s *ChangeWebhook) SetConsecutiveFailures(val int64) {
+	s.ConsecutiveFailures = val
+}
+
+// SetLastError sets the value of LastError.
+func (s *ChangeWebhook) SetLastError(val string) {
+	s.LastError = val
+}
+
+// SetDisabledAt sets the value of DisabledAt.
+func (s *ChangeWebhook) SetDisabledAt(val NilDateTime) {
+	s.DisabledAt = val
+}
+
+// SetDisabledReason sets the value of DisabledReason.
+func (s *ChangeWebhook) SetDisabledReason(val string) {
+	s.DisabledReason = val
+}
+
+// Ref: #/components/schemas/ChangeWebhookCreate
+type ChangeWebhookCreate struct {
+	// Where to POST: an absolute http(s) URL. A private, loopback or link-local address is refused.
+	URL string `json:"url"`
+	// At most 100 company slugs, as `GET /companies/{slug}` knows them. Absent or empty: all companies.
+	CompanySlugs []string `json:"company_slugs"`
+	// Absent or empty: all three.
+	Kinds []ChangeWebhookKind `json:"kinds"`
+}
+
+// GetURL returns the value of URL.
+func (s *ChangeWebhookCreate) GetURL() string {
+	return s.URL
+}
+
+// GetCompanySlugs returns the value of CompanySlugs.
+func (s *ChangeWebhookCreate) GetCompanySlugs() []string {
+	return s.CompanySlugs
+}
+
+// GetKinds returns the value of Kinds.
+func (s *ChangeWebhookCreate) GetKinds() []ChangeWebhookKind {
+	return s.Kinds
+}
+
+// SetURL sets the value of URL.
+func (s *ChangeWebhookCreate) SetURL(val string) {
+	s.URL = val
+}
+
+// SetCompanySlugs sets the value of CompanySlugs.
+func (s *ChangeWebhookCreate) SetCompanySlugs(val []string) {
+	s.CompanySlugs = val
+}
+
+// SetKinds sets the value of Kinds.
+func (s *ChangeWebhookCreate) SetKinds(val []ChangeWebhookKind) {
+	s.Kinds = val
+}
+
+// The subscription plus its signing secret, shown exactly once, in the answer that creates it.
+// Ref: #/components/schemas/ChangeWebhookCreated
+type ChangeWebhookCreated struct {
+	ID  int64  `json:"id"`
+	URL string `json:"url"`
+	// Empty: every company. Otherwise only changes of these companies' postings are delivered.
+	CompanySlugs  []string            `json:"company_slugs"`
+	Kinds         []ChangeWebhookKind `json:"kinds"`
+	CreatedAt     time.Time           `json:"created_at"`
+	LastSuccessAt NilDateTime         `json:"last_success_at"`
+	// Failed deliveries in a row; reset by a delivery that succeeds.
+	ConsecutiveFailures int64 `json:"consecutive_failures"`
+	// What the endpoint answered to the last failed delivery; empty when the last one succeeded.
+	LastError string `json:"last_error"`
+	// Set when the subscription was switched off after sustained failure or a `410`; null while it
+	// delivers.
+	DisabledAt     NilDateTime `json:"disabled_at"`
+	DisabledReason string      `json:"disabled_reason"`
+	// The HMAC key for `X-Freehire-Signature`. Store it now: it cannot be read again.
+	Secret string `json:"secret"`
+}
+
+// GetID returns the value of ID.
+func (s *ChangeWebhookCreated) GetID() int64 {
+	return s.ID
+}
+
+// GetURL returns the value of URL.
+func (s *ChangeWebhookCreated) GetURL() string {
+	return s.URL
+}
+
+// GetCompanySlugs returns the value of CompanySlugs.
+func (s *ChangeWebhookCreated) GetCompanySlugs() []string {
+	return s.CompanySlugs
+}
+
+// GetKinds returns the value of Kinds.
+func (s *ChangeWebhookCreated) GetKinds() []ChangeWebhookKind {
+	return s.Kinds
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *ChangeWebhookCreated) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetLastSuccessAt returns the value of LastSuccessAt.
+func (s *ChangeWebhookCreated) GetLastSuccessAt() NilDateTime {
+	return s.LastSuccessAt
+}
+
+// GetConsecutiveFailures returns the value of ConsecutiveFailures.
+func (s *ChangeWebhookCreated) GetConsecutiveFailures() int64 {
+	return s.ConsecutiveFailures
+}
+
+// GetLastError returns the value of LastError.
+func (s *ChangeWebhookCreated) GetLastError() string {
+	return s.LastError
+}
+
+// GetDisabledAt returns the value of DisabledAt.
+func (s *ChangeWebhookCreated) GetDisabledAt() NilDateTime {
+	return s.DisabledAt
+}
+
+// GetDisabledReason returns the value of DisabledReason.
+func (s *ChangeWebhookCreated) GetDisabledReason() string {
+	return s.DisabledReason
+}
+
+// GetSecret returns the value of Secret.
+func (s *ChangeWebhookCreated) GetSecret() string {
+	return s.Secret
+}
+
+// SetID sets the value of ID.
+func (s *ChangeWebhookCreated) SetID(val int64) {
+	s.ID = val
+}
+
+// SetURL sets the value of URL.
+func (s *ChangeWebhookCreated) SetURL(val string) {
+	s.URL = val
+}
+
+// SetCompanySlugs sets the value of CompanySlugs.
+func (s *ChangeWebhookCreated) SetCompanySlugs(val []string) {
+	s.CompanySlugs = val
+}
+
+// SetKinds sets the value of Kinds.
+func (s *ChangeWebhookCreated) SetKinds(val []ChangeWebhookKind) {
+	s.Kinds = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *ChangeWebhookCreated) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetLastSuccessAt sets the value of LastSuccessAt.
+func (s *ChangeWebhookCreated) SetLastSuccessAt(val NilDateTime) {
+	s.LastSuccessAt = val
+}
+
+// SetConsecutiveFailures sets the value of ConsecutiveFailures.
+func (s *ChangeWebhookCreated) SetConsecutiveFailures(val int64) {
+	s.ConsecutiveFailures = val
+}
+
+// SetLastError sets the value of LastError.
+func (s *ChangeWebhookCreated) SetLastError(val string) {
+	s.LastError = val
+}
+
+// SetDisabledAt sets the value of DisabledAt.
+func (s *ChangeWebhookCreated) SetDisabledAt(val NilDateTime) {
+	s.DisabledAt = val
+}
+
+// SetDisabledReason sets the value of DisabledReason.
+func (s *ChangeWebhookCreated) SetDisabledReason(val string) {
+	s.DisabledReason = val
+}
+
+// SetSecret sets the value of Secret.
+func (s *ChangeWebhookCreated) SetSecret(val string) {
+	s.Secret = val
+}
+
+// The kinds of change a webhook can ask for; the same as the change feed's.
+// Ref: #/components/schemas/ChangeWebhookKind
+type ChangeWebhookKind string
+
+const (
+	ChangeWebhookKindOpened   ChangeWebhookKind = "opened"
+	ChangeWebhookKindClosed   ChangeWebhookKind = "closed"
+	ChangeWebhookKindReopened ChangeWebhookKind = "reopened"
+)
+
+// AllValues returns all ChangeWebhookKind values.
+func (ChangeWebhookKind) AllValues() []ChangeWebhookKind {
+	return []ChangeWebhookKind{
+		ChangeWebhookKindOpened,
+		ChangeWebhookKindClosed,
+		ChangeWebhookKindReopened,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s ChangeWebhookKind) MarshalText() ([]byte, error) {
+	switch s {
+	case ChangeWebhookKindOpened:
+		return []byte(s), nil
+	case ChangeWebhookKindClosed:
+		return []byte(s), nil
+	case ChangeWebhookKindReopened:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *ChangeWebhookKind) UnmarshalText(data []byte) error {
+	switch ChangeWebhookKind(data) {
+	case ChangeWebhookKindOpened:
+		*s = ChangeWebhookKindOpened
+		return nil
+	case ChangeWebhookKindClosed:
+		*s = ChangeWebhookKindClosed
+		return nil
+	case ChangeWebhookKindReopened:
+		*s = ChangeWebhookKindReopened
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
 // A single item: `{"data": ...}`.
 type CheckUsernameOK struct {
 	Data AccountUsernameAvailability `json:"data"`
@@ -6348,6 +6690,21 @@ func (s *CreateCVCreated) SetData(val CvRecord) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateChangeWebhookCreated struct {
+	Data ChangeWebhookCreated `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateChangeWebhookCreated) GetData() ChangeWebhookCreated {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateChangeWebhookCreated) SetData(val ChangeWebhookCreated) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type CreateEmployerVacancyCreated struct {
 	Data jx.Raw `json:"data"`
 }
@@ -7701,6 +8058,9 @@ func (s *DeleteBankedAnswerOK) SetData(val Deleted) {
 
 // DeleteCVNoContent is response for DeleteCV operation.
 type DeleteCVNoContent struct{}
+
+// DeleteChangeWebhookNoContent is response for DeleteChangeWebhook operation.
+type DeleteChangeWebhookNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type DeleteCompanyFeedbackOK struct {
@@ -13925,6 +14285,21 @@ func (s *ListCVsOK) GetData() []CvTailored {
 
 // SetData sets the value of Data.
 func (s *ListCVsOK) SetData(val []CvTailored) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListChangeWebhooksOK struct {
+	Data []ChangeWebhook `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListChangeWebhooksOK) GetData() []ChangeWebhook {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListChangeWebhooksOK) SetData(val []ChangeWebhook) {
 	s.Data = val
 }
 
@@ -27018,6 +27393,9 @@ func (s *TalentRole) SetCurrent(val OptBool) {
 func (s *TalentRole) SetStack(val []string) {
 	s.Stack = val
 }
+
+// TestChangeWebhookNoContent is response for TestChangeWebhook operation.
+type TestChangeWebhookNoContent struct{}
 
 // A single item: `{"data": ...}`.
 type TestPushTokenOK struct {

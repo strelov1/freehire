@@ -786,6 +786,19 @@ func encodeCreateCVResponse(response *CreateCVCreated, w http.ResponseWriter) er
 	return nil
 }
 
+func encodeCreateChangeWebhookResponse(response *CreateChangeWebhookCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeCreateEmployerVacancyResponse(response *CreateEmployerVacancyCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -1018,6 +1031,12 @@ func encodeDeleteBankedAnswerResponse(response *DeleteBankedAnswerOK, w http.Res
 }
 
 func encodeDeleteCVResponse(response *DeleteCVNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
+func encodeDeleteChangeWebhookResponse(response *DeleteChangeWebhookNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
 	return nil
@@ -2459,6 +2478,19 @@ func encodeListCVTracerLinksResponse(response *ListCVTracerLinksOK, w http.Respo
 }
 
 func encodeListCVsResponse(response *ListCVsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeListChangeWebhooksResponse(response *ListChangeWebhooksOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -4205,6 +4237,12 @@ func encodeTailorCVResponse(response TailorCVRes, w http.ResponseWriter) error {
 	default:
 		return errors.Errorf("unexpected response type: %T", response)
 	}
+}
+
+func encodeTestChangeWebhookResponse(response *TestChangeWebhookNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
 }
 
 func encodeTestPushTokenResponse(response *TestPushTokenOK, w http.ResponseWriter) error {
