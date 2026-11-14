@@ -208,8 +208,8 @@ export function renderChatGptSchema(doc, filters, description) {
       }
     }
     const responses = { ...op.responses };
-    for (const [status, description] of Object.entries(CLIENT_ERRORS[contractId] ?? {})) {
-      responses[status] = { ...op.responses.default, description };
+    for (const [status, errorDescription] of Object.entries(CLIENT_ERRORS[contractId] ?? {})) {
+      responses[status] = { ...op.responses.default, description: errorDescription };
     }
     if (DATA_SCHEMAS[contractId]) responses['200'] = typedData(op, doc, DATA_SCHEMAS[contractId]);
     const { security: _security, ...rest } = op;
