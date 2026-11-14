@@ -365,8 +365,20 @@ func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64, max
 	if err != nil {
 		return nil, err
 	}
+	return projectAutoApplyList(live, submitted), nil
+}
+
+func projectAutoApplyList(live []db.ListAutoApplyEntriesRow, submitted []db.ListRecentAutoApplySubmissionsRow) *autoApplyListResult {
+	// A submission can commit between the two reads; its final state wins.
+	submittedSlugs := make(map[string]struct{}, len(submitted))
+	for _, r := range submitted {
+		submittedSlugs[r.PublicSlug] = struct{}{}
+	}
 	items := make([]autoApplyListItem, 0, len(live)+len(submitted))
 	for _, r := range live {
+		if _, submitted := submittedSlugs[r.PublicSlug]; submitted {
+			continue
+		}
 		status := autoapply.DeriveStatus(autoapply.DerivedFrom{
 			HasTailoredCV:      r.TailoredCvID != nil,
 			HasResolvedPreview: r.HasPreview,
@@ -385,7 +397,7 @@ func (h *assistantHandlers) autoApplyList(ctx context.Context, userID int64, max
 		items = append(items, autoApplyListItem{JobSlug: r.PublicSlug, Title: r.Title, Company: r.Company, Status: autoApplyStatusSubmitted, LastActivityAt: r.CreatedAt.Time.UTC()})
 	}
 	slices.SortStableFunc(items, func(a, b autoApplyListItem) int { return b.LastActivityAt.Compare(a.LastActivityAt) })
-	return &autoApplyListResult{Attempts: items}, nil
+	return &autoApplyListResult{Attempts: items}
 }
 
 func (h *assistantHandlers) answerBankListTool() assistant.Tool {
