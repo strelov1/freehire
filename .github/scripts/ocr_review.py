@@ -66,7 +66,8 @@ def render_result(
                 )
             )
     for value in sorted(values, key=len, reverse=True):
-        body = re.sub(re.escape(value), "[private]", body, flags=re.IGNORECASE)
+        for needle in {value, value.replace("@", "@\u200b")}:
+            body = re.sub(re.escape(needle), "[private]", body, flags=re.IGNORECASE)
     if len(body) > 55000:
         body = (
             body[:55000]

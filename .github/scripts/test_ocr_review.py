@@ -42,6 +42,16 @@ class OCRReviewTest(unittest.TestCase):
         self.assertIn("A bug", body)
         self.assertNotIn("No findings", body)
 
+    def test_private_values_containing_mentions_are_still_redacted(self):
+        secret = "private@token"
+        body, complete = render_result(
+            {"status": "complete", "comments": [{"path": secret, "content": secret}]},
+            "a" * 40,
+            [secret],
+        )
+        self.assertTrue(complete)
+        self.assertNotIn(secret, body.replace("\u200b", ""))
+
     def test_failure_diagnostics_are_never_published(self):
         body, complete = render_result(
             {
