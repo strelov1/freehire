@@ -24,7 +24,7 @@ func TestPaycorProbe(t *testing.T) {
 		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=empty":   `<html><body><a href="/about">About</a></body></html>`,
 	}
 	// Live: two DISTINCT postings — the repeated link counts once, the id-less "submit your
-	// resume" link is not a posting, and neither is one on another board. No name is published.
+	// resume" link is not a posting, and neither is one on another board. An untitled listing names no one.
 	if name, n, err := p.probe(context.Background(), getter, live); err != nil || name != "" || n != 2 {
 		t.Errorf("live: got (%q,%d,%v), want (\"\",2,nil)", name, n, err)
 	}
@@ -164,5 +164,17 @@ func TestPaycorProbeFindsPlaceholderTitleAfterApplyLink(t *testing.T) {
 	}
 	if _, count, err := (paycorProber{}).probe(context.Background(), getter, board); err != nil || count != 0 {
 		t.Fatalf("placeholder titles after Apply links: got count=%d err=%v, want 0,nil", count, err)
+	}
+}
+
+// The branded listing template titles the page with the employer, which names the entry.
+func TestPaycorProbeNamesBrandedBoards(t *testing.T) {
+	const board = "8a7883d07dc02468017de8f4c24e0fc4"
+	getter := fakeGetter{
+		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=" + board: `<html><head><title>Careers | rPlus Energies</title></head><body>
+<a href="/career/JobIntroduction.action?clientId=` + board + `&amp;id=aa11">Engineer</a></body></html>`,
+	}
+	if name, n, err := (paycorProber{}).probe(context.Background(), getter, board); err != nil || name != "rPlus Energies" || n != 1 {
+		t.Errorf("got (%q,%d,%v), want (\"rPlus Energies\",1,nil)", name, n, err)
 	}
 }

@@ -1247,28 +1247,38 @@ const renamePlaceholderBoardJobs = `-- name: RenamePlaceholderBoardJobs :many
 WITH moved AS (
     SELECT j.id, j.company_slug
     FROM jobs j
-    WHERE j.source = $3
-      AND j.external_id LIKE $4
-      AND j.company = $5
+    WHERE j.source = $1
+      AND j.external_id LIKE $2
+      AND j.company = $3
     FOR UPDATE
+), updated AS (
+    UPDATE jobs
+    SET company = $4,
+        company_slug = $5,
+        -- Kept in step with company_slug by hand; see RenameSlugCompany.
+        company_slug_folded = replace($5, '-', ''),
+        updated_at = now()
+    FROM moved
+    WHERE jobs.id = moved.id
+    RETURNING jobs.id, moved.company_slug AS old_slug, COALESCE(jobs.posted_at, jobs.created_at) AS eff_posted_at,
+        jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND NOT jobs.is_private AS indexed
+), queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT id, eff_posted_at FROM updated WHERE indexed
+    -- Re-stamp a live entry as RequeueSearchOutbox does: a drain completing a claim it took
+    -- before the rename deletes by the old id and must not take the rename's entry with it.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
-UPDATE jobs
-SET company = $1,
-    company_slug = $2,
-    -- Kept in step with company_slug by hand; see RenameSlugCompany.
-    company_slug_folded = replace($2, '-', ''),
-    updated_at = now()
-FROM moved
-WHERE jobs.id = moved.id
-RETURNING moved.company_slug AS old_slug
+SELECT old_slug FROM updated
 `
 
 type RenamePlaceholderBoardJobsParams struct {
-	Name         string `json:"name"`
-	NewSlug      string `json:"new_slug"`
 	Source       string `json:"source"`
 	BoardPattern string `json:"board_pattern"`
 	OldName      string `json:"old_name"`
+	Name         string `json:"name"`
+	NewSlug      string `json:"new_slug"`
 }
 
 // Apply a resolved display name to every stored job of ONE board whose company is still that
@@ -1276,7 +1286,9 @@ type RenamePlaceholderBoardJobsParams struct {
 // externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
 // move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 // unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
-// seen again. Guarded on the old name, so a re-run writes nothing.
+// seen again. Guarded on the old name, so a re-run writes nothing. The moved rows' indexed
+// company and slug change, so an open, canonical, public one is queued for search in the same
+// statement, as every other writer of indexed job content does.
 //
 // Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
 // are matched by board and name, not by slug, and an alias the merge worker recorded may have
@@ -1284,11 +1296,11 @@ type RenamePlaceholderBoardJobsParams struct {
 // these for orphaned companies rows.
 func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) ([]string, error) {
 	rows, err := q.db.Query(ctx, renamePlaceholderBoardJobs,
-		arg.Name,
-		arg.NewSlug,
 		arg.Source,
 		arg.BoardPattern,
 		arg.OldName,
+		arg.Name,
+		arg.NewSlug,
 	)
 	if err != nil {
 		return nil, err

@@ -6951,7 +6951,9 @@ type Querier interface {
 	// externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
 	// move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 	// unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
-	// seen again. Guarded on the old name, so a re-run writes nothing.
+	// seen again. Guarded on the old name, so a re-run writes nothing. The moved rows' indexed
+	// company and slug change, so an open, canonical, public one is queued for search in the same
+	// statement, as every other writer of indexed job content does.
 	//
 	// Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
 	// are matched by board and name, not by slug, and an alias the merge worker recorded may have

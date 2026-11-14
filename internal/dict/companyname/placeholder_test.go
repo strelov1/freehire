@@ -462,3 +462,54 @@ func TestPlaceholderTeamtailorUsesSiteName(t *testing.T) {
 		}
 	}
 }
+
+// Live-sampled 2026-11-13: 22 of 60 hex-labelled Paycor boards use the branded CareerHome
+// template, whose <title> names the employer; the plain template has no title at all.
+func TestPlaceholderPaycorUsesTheCareerHomeTitle(t *testing.T) {
+	const board = "8a7883d074274b7d01744b8825240e7f"
+	getter := fakeHTTP{
+		"https://recruitingbypaycor.com/career/CareerHome.action?clientId=" + board: `<html><head><title>Careers | Salvagnini America, Inc.</title></head></html>`,
+	}
+	got, err := NewPlaceholderRegistry(getter)["paycor"].Name(context.Background(), board)
+	if err != nil || got != "Salvagnini America, Inc." {
+		t.Errorf("Name = %q, %v; want Salvagnini America, Inc.", got, err)
+	}
+}
+
+func TestExtractPaycorTitle(t *testing.T) {
+	for title, want := range map[string]string{
+		"Careers | Paloma Resort Properties":               "Paloma Resort Properties",
+		"CAREERS | HORAN Wealth, LLC":                      "HORAN Wealth, LLC",
+		"Smith Dairy Queens, Ltd. | Careers":               "Smith Dairy Queens, Ltd.",
+		"Current Opportunities | Craig Technologies":       "Craig Technologies",
+		"The Dirty Buffalo Careers":                        "The Dirty Buffalo",
+		"Girl Scouts of Greater Iowa":                      "Girl Scouts of Greater Iowa",
+		"The Magic House, St. Louis Children&#39;s Museum": "The Magic House, St. Louis Children's Museum",
+		"":                                    "",
+		"Careers":                             "",
+		"Join Our Team | Careers":             "",
+		"Acme | Join the Best Team":           "", // two candidate parts: refuse rather than guess
+		"Careers - Jelly Belly Candy Company": "Jelly Belly Candy Company",
+		"Careers — RNDC-IL":                   "RNDC-IL",
+		"Careers at Urban Chestnut Brewing Company":                        "Urban Chestnut Brewing Company",
+		"Meeder Investment Management -":                                   "Meeder Investment Management",
+		"Aero Propulsion Support, Inc. - Employment":                       "Aero Propulsion Support, Inc.",
+		"Lutheran Care Center at Concord Village : Who We Are :":           "Lutheran Care Center at Concord Village",
+		"Athelas Institute, Inc. : About Us : Employment Opportunities":    "Athelas Institute, Inc.",
+		"Ohio Valley Residential Services – Balancing Mission, Management": "",
+		"Mysite":                                "",
+		"Add Company Name":                      "",
+		"Jobs at Company Name":                  "",
+		"Careers at Add Company Name":           "",
+		"Careers at Company Name Careers":       "",
+		"Company Name":                          "",
+		"neighorhood":                           "",
+		"GR Metrology Employment Opportunities": "GR Metrology",
+		"The Little Gym Jobs":                   "The Little Gym",
+		"Join Our Team at Ice Industries":       "Ice Industries",
+	} {
+		if got := ExtractPaycorTitle(title); got != want {
+			t.Errorf("ExtractPaycorTitle(%q) = %q, want %q", title, got, want)
+		}
+	}
+}

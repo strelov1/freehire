@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"maps"
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -76,6 +78,7 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"successfactors": successfactorsResolver{http: http},
 		"teamtailor":     teamtailorResolver{http: http},
 		"zohorecruit":    zohoResolver{http: http},
+		"paycor":         newTitleResolver(http, "https://recruitingbypaycor.com/career/CareerHome.action?clientId=%s", ExtractPaycorTitle),
 	}
 }
 
@@ -184,6 +187,60 @@ func ExtractHiringRoomTitle(title string) string {
 		return clean(strings.TrimSuffix(strings.TrimSpace(rest), "!"))
 	}
 	return ExtractSuffixName(title, " | Portal externo")
+}
+
+// paycorTitleLabels are the section labels and stock site names a branded Paycor CareerHome
+// title puts beside the employer ("Careers | Acme", "Acme : About Us"), lower-cased.
+var paycorTitleLabels = map[string]bool{
+	"careers": true, "jobs": true, "employment": true, "join our team": true, "about us": true,
+	"who we are": true, "feedback": true, "applicant tracking": true, "current openings": true,
+	"current opportunities": true, "career opportunities": true, "employment opportunities": true,
+	"job opportunities": true, "open positions": true, "mysite": true,
+}
+
+// paycorTemplatePlaceholders are the template's stock names a tenant never filled in. Unlike a
+// label they are never cut off a part: a title left holding one names nobody.
+var paycorTemplatePlaceholders = map[string]bool{"company name": true, "add company name": true}
+
+// paycorTitleLabelOrder fixes the order labels are cut in, so a title reads the same every run.
+var paycorTitleLabelOrder = slices.Sorted(maps.Keys(paycorTitleLabels))
+
+// paycorTitleSeparator splits a Paycor title into parts: a pipe, or a dash or colon standing
+// apart from its neighbours (never the hyphen inside "RNDC-IL" or "Coca-Cola").
+var paycorTitleSeparator = regexp.MustCompile(`\s*\|\s*|\s+[-–—:](?:\s+|$)`)
+
+// ExtractPaycorTitle reads the employer out of a Paycor CareerHome <title>. The branded
+// template titles the listing with the employer, alone or beside section labels ("Careers -
+// Acme", "Acme : About Us", "Careers at Acme", "Acme Careers"); the plain template has no
+// title. A label is dropped whole, as a "<label> at" lead-in or as a trailing word. A title
+// with two parts that are not labels (a name and a slogan) is refused rather than guessed
+// between.
+func ExtractPaycorTitle(title string) string {
+	name := ""
+	for _, part := range paycorTitleSeparator.Split(html.UnescapeString(title), -1) {
+		part = strings.Join(strings.Fields(part), " ")
+		if paycorTitleLabels[strings.ToLower(part)] {
+			continue
+		}
+		for _, label := range paycorTitleLabelOrder {
+			if rest, ok := cutPrefixFold(part, label+" at "); ok {
+				part = rest
+			}
+			if rest, ok := cutSuffixFold(part, " "+label); ok {
+				part = rest
+			}
+		}
+		if part == "" || paycorTitleLabels[strings.ToLower(part)] {
+			continue
+		}
+		// A second candidate is ambiguous; an all-lower-case one is a stray word ("neighorhood").
+		if name != "" || paycorTemplatePlaceholders[strings.ToLower(part)] ||
+			!strings.ContainsFunc(part, unicode.IsUpper) {
+			return ""
+		}
+		name = part
+	}
+	return name
 }
 
 // AcceptPlaceholder decodes and validates a candidate resolved for a placeholder board. No
