@@ -5,6 +5,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"sync"
@@ -34,9 +35,23 @@ type Runner struct {
 	// health at all — neither success, yield nor failure — and never recovers a cooled provider.
 	// Zero is the ordinary full crawl.
 	RecentWindow time.Duration
+	// WriteReserve, when positive, ends every board's fetch that long ahead of the run's context
+	// deadline, so a board the deadline catches mid-crawl still writes what it read. Without it
+	// the fetch and the writes ended together: a board too big for one run read thousands of
+	// postings, saved none on the ended context, and the next run started it from zero again.
+	// No effect on a context without a deadline.
+	WriteReserve time.Duration
 }
 
 func (r Runner) recent() bool { return r.RecentWindow > 0 }
+
+// fetchContext is what a board's fetch runs on: ctx, ending WriteReserve ahead of its deadline.
+func (r Runner) fetchContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if dl, ok := ctx.Deadline(); ok && r.WriteReserve > 0 {
+		return context.WithDeadline(ctx, dl.Add(-r.WriteReserve))
+	}
+	return context.WithCancel(ctx)
+}
 
 // AliasLookup resolves folded company slugs to the canonical slug a merge elected for that
 // employer (company_slug_aliases). Keyed on the FOLD rather than on the slug so a spelling
@@ -117,6 +132,9 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 	})
 	defer stopHeartbeat()
 	sem := make(chan struct{}, defaultConcurrency)
+	// No board starts once the fetches are over: it would have nothing to read in.
+	fetchCtx, cancelFetch := r.fetchContext(ctx)
+	defer cancelFetch()
 
 	for _, e := range entries {
 		wg.Add(1)
@@ -127,11 +145,11 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			// before starting and while parked waiting for a slot.
 			select {
 			case sem <- struct{}{}:
-			case <-ctx.Done():
+			case <-fetchCtx.Done():
 				return
 			}
 			defer func() { <-sem }()
-			if ctx.Err() != nil {
+			if fetchCtx.Err() != nil {
 				return
 			}
 
@@ -160,6 +178,11 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 
 	if err := ctx.Err(); err != nil {
 		return byProv, err
+	}
+	// The fetch window closing on a board, or ahead of one, is the deadline cutting the run
+	// short even though the writes after it finished in time.
+	if err := fetchCtx.Err(); err != nil && (byProv.Total().Interrupted > 0 || int(crawled.Load()) < total) {
+		return byProv, fmt.Errorf("the fetch window closed before every board was read: %w", err)
 	}
 	// A board interrupted while the context is still alive met a limiter's early deadline
 	// refusal (limiterOutOfRun). The run did not crawl it, so it reports itself cut short like

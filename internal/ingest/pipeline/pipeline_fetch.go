@@ -94,11 +94,11 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		if covered := r.coverageProbe(ctx, e); covered != nil {
 			gate := sources.DetailGate{Covered: covered, Rejected: listingRejected(e)}
 			jobs, err := cg.FetchNewGated(ctx, e, seen, gate)
-			return fetchedBoard{jobs, set, deferredAny(jobs), seenUnknown}, err
+			return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
 		}
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
-	return fetchedBoard{jobs, set, deferredAny(jobs), seenUnknown}, err
+	return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
 }
 
 // fetchedBoard is what fetchBoard read from one board. deferred reports that a hydrating adapter
@@ -110,6 +110,8 @@ type fetchedBoard struct {
 	seen        map[string]bool
 	deferred    bool
 	seenUnknown bool
+	// cut reports that the fetch's context ended under it (Runner.WriteReserve).
+	cut bool
 }
 
 // coverageProbe builds the resolver a CoverageGated adapter consults mid-crawl: given the

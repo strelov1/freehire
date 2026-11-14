@@ -229,6 +229,7 @@ func run() int {
 		// serves, and the pipeline asks for it once per board run.
 		Aliases:      store,
 		RecentWindow: recentWindow,
+		WriteReserve: budget.writeReserve(),
 	}
 
 	crawlCtx, cancelCrawl := budget.crawlContext(ctx, started)
@@ -423,6 +424,12 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 // INGEST_SWEEP_RESERVE_SECONDS rather than taxing every crawl for it.
 const defaultSweepReserve = 10 * time.Minute
 
+// maxWriteReserve bounds how much of the crawl is kept for writing what the boards still in flight
+// at its deadline had read (pipeline.Runner.WriteReserve). Writes ran at ~200 postings a second
+// per board from the crawl host (measured 2026-10-22), so five minutes writes the largest boards
+// the deadline catches (Domino's 25k, Costco 19k, Lowe's 11k postings, 2026-11-13).
+const maxWriteReserve = 5 * time.Minute
+
 // runBudget splits a run's timeout between the crawl and the sweep that follows it.
 //
 // The unit's timeout is a hard kill: systemd sends SIGTERM, the signal context cancels, and
@@ -477,6 +484,16 @@ func (b runBudget) crawlContext(parent context.Context, started time.Time) (cont
 		return context.WithCancel(parent)
 	}
 	return context.WithDeadline(parent, started.Add(b.timeout-b.reserve))
+}
+
+// writeReserve is the crawl's share kept for the writes after its fetches end: maxWriteReserve,
+// but never more than a quarter of the crawl. Zero when the run has no known timeout, since the
+// crawl then has no deadline to keep it ahead of.
+func (b runBudget) writeReserve() time.Duration {
+	if b.timeout == 0 {
+		return 0
+	}
+	return min(maxWriteReserve, (b.timeout-b.reserve)/4)
 }
 
 // sweepContext is what the sweep runs on: detached from parent's cancellation, so neither the
