@@ -1,4 +1,15 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function searchFor(page: Page, text: string) {
+  const box = page.getByRole('combobox', { name: 'Search jobs' });
+  // An SSR input is editable before hydration. The clear button proves that
+  // the app received the draft before Enter commits it to the search store.
+  await expect(async () => {
+    await box.fill(text);
+    await expect(page.getByRole('button', { name: 'Clear search', exact: true })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 30_000 });
+  await box.press('Enter');
+}
 
 // Force the gateway response at the browser boundary; the page and its initial
 // postings come from the real local stack. Gateway accounting has its own HTTP suite.
@@ -22,9 +33,7 @@ test('search quota explains recovery and offers a higher plan', async ({ page })
       }),
     }),
   );
-  const search = page.getByRole('combobox', { name: 'Search jobs' });
-  await search.fill('engineer');
-  await search.press('Enter');
+  await searchFor(page, 'engineer');
   const notice = page.getByRole('status').filter({ hasText: 'Search limit reached' });
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(notice).toContainText('300 requests per minute');
@@ -75,4 +84,38 @@ test('a facets-only quota refusal offers an upgrade while keeping loaded jobs', 
   await expect(notice).toBeVisible({ timeout: 30_000 });
   await expect(notice.getByRole('link', { name: 'Upgrade for higher search limits' })).toBeVisible();
   await expect(page.getByTestId('job-card').first()).toBeVisible();
+});
+
+test('one retry clears simultaneous search and facet quota refusals', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/jobs');
+  await page.waitForLoadState('networkidle');
+  let blocked = true;
+  const failed = { search: 0, facets: 0 };
+  await page.route(/\/api\/v1\/jobs\/(search|facets)\?/, async (route) => {
+    if (!blocked) return route.continue();
+    const kind = new URL(route.request().url()).pathname.endsWith('/facets') ? 'facets' : 'search';
+    failed[kind]++;
+    await route.fulfill({
+      status: 429,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'rate_limited',
+        budget: 'publicread',
+        tier: 'free',
+        limit: 300,
+        retry_after_seconds: 1,
+        upgrade_available: true,
+      }),
+    });
+  });
+  await searchFor(page, 'engineer');
+  await expect.poll(() => failed.search, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect.poll(() => failed.facets, { timeout: 30_000 }).toBeGreaterThan(0);
+  const notice = page.getByRole('status').filter({ hasText: 'Search limit reached' });
+  await expect(notice).toBeVisible();
+  blocked = false;
+  await notice.getByRole('button', { name: 'Retry search' }).click();
+  await expect(page.getByTestId('job-card').first()).toBeVisible({ timeout: 30_000 });
+  await expect(notice).toHaveCount(0, { timeout: 10_000 });
 });

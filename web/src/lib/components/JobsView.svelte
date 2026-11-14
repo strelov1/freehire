@@ -423,6 +423,11 @@
     jobs = next;
   }
 
+  function retrySearch() {
+    refreshCounts();
+    reloadList(pageOffset(activePage));
+  }
+
   // Rows kept on screen while the guessed opening scope reloads the feed underneath
   // them. A filter change builds a fresh paginator, which starts empty and `loading`
   // — for a change the visitor made that is the honest answer, but the guess is one
@@ -897,14 +902,7 @@
       <MatchNeedsSkillsNotice />
     {/if}
 
-    <JobSearchError
-      error={jobs.status === 'error' ? null : facetsError}
-      onlyRateLimit
-      onRetry={() => {
-        refreshCounts();
-        reloadList(pageOffset(activePage));
-      }}
-    />
+    <JobSearchError error={jobs.status === 'error' ? null : facetsError} onlyRateLimit onRetry={retrySearch} />
 
     {#if jobs.status === 'loading' && !holdingOver}
       <States state="loading">
@@ -913,7 +911,7 @@
         {/snippet}
       </States>
     {:else if jobs.status === 'error'}
-      <JobSearchError error={jobs.error} onRetry={() => reloadList(pageOffset(activePage))} />
+      <JobSearchError error={jobs.error} onRetry={retrySearch} />
     {:else if displayItems.length === 0}
       <JobsEmptyState
         kind={formerEmployersApplied ? 'formerEmployers' : watchlistApplied ? 'watchlist' : 'none'}
