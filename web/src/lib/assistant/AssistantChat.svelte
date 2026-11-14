@@ -1,17 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack, type Snippet } from 'svelte';
-  import {
-    AlertTriangle,
-    ArrowDown,
-    FileText,
-    MessagesSquare,
-    PanelLeft,
-    Phone,
-    Plus,
-    Rocket,
-    Trash2,
-    X,
-  } from '@lucide/svelte';
+  import { ArrowDown, FileText, PanelLeft, Phone, Plus, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -39,15 +28,13 @@
   } from '#lib/assistant/client.js';
   import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
-  import { splitPresentingCalls } from '#lib/assistant/deck.js';
   import { atBottom } from '#lib/assistant/scrolling.js';
-  import { renderMarkdown } from '#lib/markdown.js';
   import { Button, Chip, ConfirmDialog } from '#lib/ui/index.js';
-  import JobDeck from '#lib/assistant/JobDeck.svelte';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
-  import ToolGroupList from '#lib/assistant/ToolGroupList.svelte';
+  import AssistantReply from '#lib/assistant/AssistantReply.svelte';
   import Composer from '#lib/assistant/Composer.svelte';
-  import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
+  import AssistantAlerts from './AssistantAlerts.svelte';
+  import OpeningActions from './OpeningActions.svelte';
   import {
     fromSummary,
     upsertSession,
@@ -62,7 +49,7 @@
   import { messages } from './AssistantChat.messages';
   import ThinkingIndicator from './ThinkingIndicator.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { format, plural, t } from '#lib/i18n/t.js';
+  import { t } from '#lib/i18n/t.js';
 
   // The agent chat. The agent runs inside the freehire backend, so this is an
   // ordinary authenticated API surface: the session list, one session's stored
@@ -1041,66 +1028,14 @@
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
 <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-  {#if error}
-    <div
-      class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
-      role="alert"
-    >
-      <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-      <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <span>{error.message}</span>
-        {#if error.planLimitReached}
-          <!-- outline, not the default primary: this alert is already destructive-styled, and a
-             filled brand-colored button would fight that treatment (see PlanLimitLink). -->
-          <PlanLimitLink variant="outline" />
-        {/if}
-      </div>
-    </div>
-  {/if}
-  {#if refusal}
-    <div
-      class="m-3 mb-0 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm"
-      role="status"
-    >
-      <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
-      <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <span>{refusal.message}</span>
-        {#if refusal.ceiling > 0}
-          <span class="text-xs text-muted-foreground">
-            {format(plural(locale(), refusal.ceiling, s.turnsUsed), {
-              turns: String(refusal.turns),
-              ceiling: String(refusal.ceiling),
-            })}
-          </span>
-        {/if}
-      </div>
-      <button
-        type="button"
-        class="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-60"
-        onclick={continueSession}
-        disabled={extending}
-      >
-        {extending ? s.continuingEllipsis : s.continueUsesSession}
-      </button>
-    </div>
-  {/if}
-  {#if bulletCapAlert}
-    <div
-      class="m-3 mb-0 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-foreground"
-      role="status"
-    >
-      <AlertTriangle class="mt-0.5 size-4 shrink-0 text-warning-strong" />
-      <span class="min-w-0 flex-1">{bulletCapAlert}</span>
-      <button
-        type="button"
-        class="relative shrink-0 rounded-md p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-0.5 hover:bg-muted hover:text-foreground"
-        aria-label={s.dismiss}
-        onclick={() => (bulletCapAlert = null)}
-      >
-        <X class="size-4" />
-      </button>
-    </div>
-  {/if}
+  <AssistantAlerts
+    {error}
+    {refusal}
+    {extending}
+    onContinue={continueSession}
+    {bulletCapAlert}
+    onDismissBulletCap={() => (bulletCapAlert = null)}
+  />
 
   {#if notFound}
     <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
@@ -1221,38 +1156,7 @@
             {#if phase === 'loading'}
               <p class="text-sm text-muted-foreground">{s.connecting}</p>
             {:else if chat.messages.length === 0 && openingActions?.length}
-              <!-- A plain list of left-aligned rows rather than filled pills in a boxed card: the
-                 brand fill is kept for the unattended run, the one action that does the work;
-                 a question to ask is a quiet row, so three of them no longer read as three
-                 competing calls to action. -->
-              <div>
-                <div class="flex flex-col gap-2">
-                  <!-- The icon comes from the action's kind, not from the action itself: the
-                     surfaces that offer these are plain modules, and a Svelte component cannot
-                     travel through one. The two kinds are the two rhythms — the unattended run
-                     and the conversation — so the mapping is complete by construction. -->
-                  {#each openingActions as action (action.label)}
-                    {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
-                    <button
-                      type="button"
-                      class={[
-                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:opacity-50',
-                        action.kind === 'autopilot'
-                          ? 'bg-brand text-brand-foreground hover:opacity-90'
-                          : 'border border-border bg-card text-foreground hover:bg-accent',
-                      ]}
-                      disabled={turnActive || switching}
-                      onclick={() => runOpening(action)}
-                    >
-                      <Icon class={['size-4 shrink-0', action.kind !== 'autopilot' && 'text-muted-foreground']} />
-                      {action.label}
-                    </button>
-                  {/each}
-                </div>
-                {#each openingActions.filter((a) => a.hint) as action (action.label)}
-                  <p class="mt-2 text-xs text-muted-foreground">{action.hint}</p>
-                {/each}
-              </div>
+              <OpeningActions actions={openingActions} disabled={turnActive || switching} onRun={runOpening} />
             {:else if chat.messages.length === 0 && !autoRun}
               <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
                  yet, but the run has already started — inviting the candidate to type here
@@ -1300,70 +1204,17 @@
                 </article>
               {:else}
                 {@const active = i === chat.messages.length - 1 && message.streaming}
-                {#if message.thinking}
-                  <details class="self-start max-w-[88%] text-xs text-muted-foreground" open={active}>
-                    <summary
-                      class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/50 [&::-webkit-details-marker]:hidden [&::marker]:hidden"
-                    >
-                      <span
-                        class={[
-                          'font-mono text-[0.85rem] font-semibold',
-                          active ? 'star-glow' : 'text-muted-foreground/60',
-                        ]}
-                      >
-                        {active ? SPINNER_GLYPHS[spinnerIdx] : '✶'}
-                      </span>
-                      <span class={['font-medium', active && 'shimmer']}>{s.verbs.thinking}</span>
-                      {#if active}
-                        <span class="font-mono text-[0.7rem] text-muted-foreground">({elapsedSec}s)</span>
-                      {/if}
-                    </summary>
-                    <div
-                      class="md mt-1 max-h-56 overflow-y-auto border-l-2 border-border pl-3 py-1 text-muted-foreground"
-                    >
-                      <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                      {@html renderMarkdown(message.thinking)}
-                    </div>
-                  </details>
-                {/if}
-
-                <!-- A recommendation is a `present_jobs` call, not prose. Its cards
-                   render as a deck here and the call itself is withheld from the
-                   activity list, so no progress chip sits above the deck it
-                   produced — the work that found the vacancies stays in the
-                   activity list above them. `message.streaming` decides what an
-                   unanswered call means: a placeholder mid-turn, nothing once the
-                   turn has closed without its result. -->
-                {@const { decks, rest } = splitPresentingCalls(message.tools, message.streaming)}
-                <ToolGroupList calls={rest} onConfirm={submitText} disabled={turnActive || switching} />
-                {#each decks as slot, di (di)}
-                  <div class="self-start w-full">
-                    <JobDeck {slot} />
-                  </div>
-                {/each}
-
-                {#if message.text}
-                  <article class="md self-start max-w-[88%] px-1 py-1 text-sm leading-relaxed text-foreground">
-                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
-                    {@html renderMarkdown(message.text)}
-                  </article>
-                {/if}
-
-                {#if message.errored}
-                  <div class="self-start flex flex-wrap items-center gap-2 text-xs">
-                    <p class="text-destructive">{s.turnErrored}</p>
-                    {#if !isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
-                      <button
-                        type="button"
-                        class="rounded-md border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        disabled={!canStartTurn()}
-                        onclick={retryFailedTurn}
-                      >
-                        {s.retry}
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
+                <AssistantReply
+                  {message}
+                  {active}
+                  glyph={SPINNER_GLYPHS[spinnerIdx]}
+                  {elapsedSec}
+                  onConfirm={submitText}
+                  disabled={turnActive || switching}
+                  canRetry={!isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
+                  retryDisabled={!canStartTurn()}
+                  onRetry={retryFailedTurn}
+                />
               {/if}
             {/each}
 
@@ -1458,153 +1309,3 @@
   variant="destructive"
   onConfirm={confirmRemoveChat}
 />
-
-<style>
-  /* Shimmer over the spinner verb. background-clip masks the text shape onto
-     a moving gradient — no JS, no repaints beyond the GPU-composited layer. */
-  .shimmer {
-    background: linear-gradient(
-      90deg,
-      var(--color-muted-foreground) 0%,
-      var(--color-muted-foreground) 35%,
-      var(--color-foreground) 50%,
-      var(--color-muted-foreground) 65%,
-      var(--color-muted-foreground) 100%
-    );
-    background-size: 200% 100%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    animation: shimmer-pan 2.4s linear infinite;
-  }
-  @keyframes shimmer-pan {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
-  }
-
-  .star-glow {
-    color: var(--color-foreground);
-    animation: star-pulse 1.8s ease-in-out infinite;
-  }
-  @keyframes star-pulse {
-    0%,
-    100% {
-      opacity: 0.7;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .star-glow {
-      animation: none;
-      opacity: 1;
-    }
-    .shimmer {
-      animation: none;
-      background: none;
-      color: var(--color-foreground);
-      -webkit-text-fill-color: currentColor;
-    }
-  }
-
-  /* Markdown rendering — scoped, applied with :global to reach @html output. */
-  .md :global(*:first-child) {
-    margin-top: 0;
-  }
-  .md :global(*:last-child) {
-    margin-bottom: 0;
-  }
-  .md :global(p) {
-    margin: 0 0 0.5rem;
-    line-height: 1.55;
-  }
-  .md :global(h1),
-  .md :global(h2),
-  .md :global(h3),
-  .md :global(h4) {
-    margin: 0.8rem 0 0.35rem;
-    line-height: 1.3;
-    font-weight: 600;
-  }
-  .md :global(h1) {
-    font-size: 1.1rem;
-  }
-  .md :global(h2) {
-    font-size: 1rem;
-  }
-  .md :global(h3),
-  .md :global(h4) {
-    font-size: 0.95rem;
-  }
-  .md :global(ul),
-  .md :global(ol) {
-    margin: 0 0 0.5rem;
-    padding-left: 1.25rem;
-  }
-  .md :global(li) {
-    margin: 0.1rem 0;
-  }
-  .md :global(li > p) {
-    margin: 0;
-  }
-  .md :global(a) {
-    color: oklch(0.6 0.18 280);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  .md :global(strong) {
-    font-weight: 600;
-  }
-  .md :global(em) {
-    font-style: italic;
-  }
-  .md :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.85em;
-    padding: 0.05rem 0.3rem;
-    border-radius: 4px;
-    background: color-mix(in oklab, currentColor 10%, transparent);
-  }
-  .md :global(pre) {
-    background: color-mix(in oklab, currentColor 12%, transparent);
-    padding: 0.65rem 0.8rem;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin: 0.4rem 0;
-    font-size: 0.85em;
-  }
-  .md :global(pre code) {
-    background: transparent;
-    padding: 0;
-    font-size: 1em;
-  }
-  .md :global(blockquote) {
-    margin: 0.4rem 0;
-    padding: 0.2rem 0.7rem;
-    border-left: 3px solid var(--color-border);
-    color: var(--color-muted-foreground);
-  }
-  .md :global(table) {
-    border-collapse: collapse;
-    margin: 0.4rem 0;
-    font-size: 0.85em;
-  }
-  .md :global(th),
-  .md :global(td) {
-    border: 1px solid var(--color-border);
-    padding: 0.25rem 0.55rem;
-    text-align: left;
-  }
-  .md :global(hr) {
-    border: none;
-    border-top: 1px solid var(--color-border);
-    margin: 0.6rem 0;
-  }
-</style>

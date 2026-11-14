@@ -104,7 +104,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   the `/docs/api` and `/docs/api/internal` OpenAPI documents (`src/lib/docs/generated/`)
   and `docs/API*.md` from `openapi/api.openapi.json`, plus the filter table from
   `src/lib/docs/filters.ts`. Endpoint text is written in `typespec/` (see
-  `internal/api/AGENTS.md`). `src/lib/docs/api-supplement.openapi.json` describes only the
+  `internal/api/AGENTS.md`). `src/lib/docs/api-supplement/` (one file per route area) describes only the
   routes still outside the contract (auth, streams, PDF and photo reads); when one moves
   into the contract the generator fails until its supplement entry is deleted.
 - **Job-fit analysis**: the standalone `/match/[slug]/` page is gone — its
