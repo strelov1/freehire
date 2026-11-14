@@ -2670,6 +2670,14 @@ type Querier interface {
 	// is offered again on purpose: it is the only way the pass can ever re-decide it, and without
 	// that a marker survives its canon closing, the descriptions diverging, and every later run.
 	FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error)
+	// FuzzyDedupCandidateTitlesForCompany with a row cap, for the per-insert check
+	// (jobdedup.CanonicalForFuzzy). THE PREDICATE MUST STAY IDENTICAL to that query's: the two tiers
+	// agree on the canon only while they see the same candidate set (an integration test pins it).
+	// Served by jobs_open_fuzzy_candidate_idx (migration 0267) as an index-only scan in id order, so
+	// the cost is bounded by max_rows index entries, not by the company's size. The caller asks for
+	// cap+1 rows and skips the check when it gets more than cap: a company that large is left to the
+	// batch pass rather than paying a scan on every insert.
+	FuzzyDedupCandidateTitlesForCompanyCapped(ctx context.Context, arg FuzzyDedupCandidateTitlesForCompanyCappedParams) ([]FuzzyDedupCandidateTitlesForCompanyCappedRow, error)
 	// The id span cmd/report-geo-gaps walks. Same shape as ClassifyDriftReportBounds.
 	GeoGapReportBounds(ctx context.Context) (GeoGapReportBoundsRow, error)
 	// Authentication accepts only active identities. A pending Apple revocation
@@ -5886,6 +5894,10 @@ type Querier interface {
 	// from the row's own applied_at, so a dated recording carries the mail's date
 	// into the ledger rather than now().
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
+	// Point one row at its FUZZY canon at insert, as MarkJobDuplicateOfRole does for the role tier.
+	// Writes only the owned column; the trigger derives duplicate_of. The row must still be open and
+	// unclaimed by an exact pass, the same candidate predicate the batch applies.
+	MarkJobDuplicateOfFuzzy(ctx context.Context, arg MarkJobDuplicateOfFuzzyParams) (int64, error)
 	// Point one row at its ROLE canon. The import path only: the batch passes recompute whole
 	// companies (RecomputeRoleDuplicatesForCompanies, SuppressAggregatorDuplicatesForCompanies) and
 	// must keep doing so — this marks the single row an import just wrote.

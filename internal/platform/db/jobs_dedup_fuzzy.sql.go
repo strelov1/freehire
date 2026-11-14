@@ -65,6 +65,7 @@ SELECT id, title
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
 ORDER BY id
 `
 
@@ -93,6 +94,53 @@ func (q *Queries) FuzzyDedupCandidateTitlesForCompany(ctx context.Context, compa
 	items := []FuzzyDedupCandidateTitlesForCompanyRow{}
 	for rows.Next() {
 		var i FuzzyDedupCandidateTitlesForCompanyRow
+		if err := rows.Scan(&i.ID, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fuzzyDedupCandidateTitlesForCompanyCapped = `-- name: FuzzyDedupCandidateTitlesForCompanyCapped :many
+SELECT id, title
+FROM jobs
+WHERE company_slug = $1 AND closed_at IS NULL
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
+ORDER BY id
+LIMIT $2::int
+`
+
+type FuzzyDedupCandidateTitlesForCompanyCappedParams struct {
+	Company string `json:"company"`
+	MaxRows int32  `json:"max_rows"`
+}
+
+type FuzzyDedupCandidateTitlesForCompanyCappedRow struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+// FuzzyDedupCandidateTitlesForCompany with a row cap, for the per-insert check
+// (jobdedup.CanonicalForFuzzy). THE PREDICATE MUST STAY IDENTICAL to that query's: the two tiers
+// agree on the canon only while they see the same candidate set (an integration test pins it).
+// Served by jobs_open_fuzzy_candidate_idx (migration 0267) as an index-only scan in id order, so
+// the cost is bounded by max_rows index entries, not by the company's size. The caller asks for
+// cap+1 rows and skips the check when it gets more than cap: a company that large is left to the
+// batch pass rather than paying a scan on every insert.
+func (q *Queries) FuzzyDedupCandidateTitlesForCompanyCapped(ctx context.Context, arg FuzzyDedupCandidateTitlesForCompanyCappedParams) ([]FuzzyDedupCandidateTitlesForCompanyCappedRow, error) {
+	rows, err := q.db.Query(ctx, fuzzyDedupCandidateTitlesForCompanyCapped, arg.Company, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FuzzyDedupCandidateTitlesForCompanyCappedRow{}
+	for rows.Next() {
+		var i FuzzyDedupCandidateTitlesForCompanyCappedRow
 		if err := rows.Scan(&i.ID, &i.Title); err != nil {
 			return nil, err
 		}
@@ -193,6 +241,29 @@ func (q *Queries) MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuz
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const markJobDuplicateOfFuzzy = `-- name: MarkJobDuplicateOfFuzzy :one
+UPDATE jobs
+SET duplicate_of_fuzzy = $1, updated_at = now()
+WHERE id = $2 AND closed_at IS NULL
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+RETURNING id
+`
+
+type MarkJobDuplicateOfFuzzyParams struct {
+	DuplicateOfFuzzy pgtype.Int8 `json:"duplicate_of_fuzzy"`
+	ID               int64       `json:"id"`
+}
+
+// Point one row at its FUZZY canon at insert, as MarkJobDuplicateOfRole does for the role tier.
+// Writes only the owned column; the trigger derives duplicate_of. The row must still be open and
+// unclaimed by an exact pass, the same candidate predicate the batch applies.
+func (q *Queries) MarkJobDuplicateOfFuzzy(ctx context.Context, arg MarkJobDuplicateOfFuzzyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, markJobDuplicateOfFuzzy, arg.DuplicateOfFuzzy, arg.ID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const orphanAggregatorCompanies = `-- name: OrphanAggregatorCompanies :many

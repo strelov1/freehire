@@ -65,7 +65,34 @@ SELECT id, title
 FROM jobs
 WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
 ORDER BY id;
+
+-- name: FuzzyDedupCandidateTitlesForCompanyCapped :many
+-- FuzzyDedupCandidateTitlesForCompany with a row cap, for the per-insert check
+-- (jobdedup.CanonicalForFuzzy). THE PREDICATE MUST STAY IDENTICAL to that query's: the two tiers
+-- agree on the canon only while they see the same candidate set (an integration test pins it).
+-- Served by jobs_open_fuzzy_candidate_idx (migration 0267) as an index-only scan in id order, so
+-- the cost is bounded by max_rows index entries, not by the company's size. The caller asks for
+-- cap+1 rows and skips the check when it gets more than cap: a company that large is left to the
+-- batch pass rather than paying a scan on every insert.
+SELECT id, title
+FROM jobs
+WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+  AND NOT is_private
+ORDER BY id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: MarkJobDuplicateOfFuzzy :one
+-- Point one row at its FUZZY canon at insert, as MarkJobDuplicateOfRole does for the role tier.
+-- Writes only the owned column; the trigger derives duplicate_of. The row must still be open and
+-- unclaimed by an exact pass, the same candidate predicate the batch applies.
+UPDATE jobs
+SET duplicate_of_fuzzy = sqlc.arg(duplicate_of_fuzzy), updated_at = now()
+WHERE id = sqlc.arg(id) AND closed_at IS NULL
+  AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
+RETURNING id;
 
 -- name: MarkFuzzyDuplicatesForCompany :one
 -- Write one company's whole fuzzy verdict in a single statement rather than a round trip per
