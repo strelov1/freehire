@@ -2655,6 +2655,9 @@ type Querier interface {
 	// The moderator's lookup: one account by id, exact email (case-insensitive) or username,
 	// with its ban state. The query is matched against all three; an id only when numeric.
 	FindUserForModeration(ctx context.Context, arg FindUserForModerationParams) (FindUserForModerationRow, error)
+	// The smallest job id created on each UTC day. Ids are allocated in creation order, so this
+	// dates a row that no longer carries created_at (pruned_jobs) by the day its id falls in.
+	FirstJobIDPerDay(ctx context.Context) ([]FirstJobIDPerDayRow, error)
 	// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
 	// description. The caller groups these into buckets with the same normalized-title function the
 	// rest of the codebase uses (jobhash.RoleKey), then loads descriptions for the buckets that
@@ -4239,6 +4242,9 @@ type Querier interface {
 	// Every slug already elected canonical. The merge worker holds these out of a new election,
 	// which is what "frozen" means in practice.
 	ListCanonicalCompanySlugs(ctx context.Context) ([]string, error)
+	// The whole catalogue-size series, oldest first: one row a day, so it stays small. Days with
+	// no row are absent, not zero.
+	ListCatalogSize(ctx context.Context) ([]ListCatalogSizeRow, error)
 	// The boards that have proven unreachable for at least `age_window`, not merely cooled down from
 	// a recent run of failures (openspec change close-chronically-unreachable-boards, issue #2017).
 	// A board that has succeeded at least once is measured from last_success_at; one that never has
@@ -5662,6 +5668,10 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// Per UTC day, how many listed postings (catalogstats' predicate minus closed_at) were
+	// created and how many closed, for the one-off history reconstruction. A full scan: run it
+	// on the analytics replica, never on a request path.
+	ListedJobDailyFlow(ctx context.Context) ([]ListedJobDailyFlowRow, error)
 	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
 	LockAssistantSessionCreation(ctx context.Context, userID int64) error
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
@@ -6281,6 +6291,8 @@ type Querier interface {
 	// The `count = 1` condition is what makes this safe: a phrase two people have searched
 	// survives however old it is, so a seasonal query does not vanish between seasons.
 	PruneSearchQueries(ctx context.Context, before pgtype.Timestamptz) (int64, error)
+	// Every pruned posting's id and the day it was deleted, for the history reconstruction.
+	PrunedJobIDs(ctx context.Context) ([]PrunedJobIDsRow, error)
 	// Depth and age only: this queue carries neither attempts nor failed_at, because
 	// DeletePushTickets removes a ticket on every terminal receipt outcome and an
 	// unprocessed batch (Expo unreachable) simply stays queued for the next run. There is no
@@ -6434,6 +6446,9 @@ type Querier interface {
 	// Burns the step after a definite send failure: the row stays, with the error, and the
 	// step is never retried on its own — re-arming one is a deliberate DELETE.
 	RecordCVLifecycleSendError(ctx context.Context, arg RecordCVLifecycleSendErrorParams) error
+	// Store one day's measured catalogue size. Replaces whatever the day held, a reconstructed
+	// estimate included: a measurement always beats a reconstruction.
+	RecordCatalogSize(ctx context.Context, arg RecordCatalogSizeParams) error
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from
 	// spending a bounded budget twice.
@@ -6582,6 +6597,11 @@ type Querier interface {
 	// file for the distinction.
 	RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error
 	RecordProblemReport(ctx context.Context, arg RecordProblemReportParams) (RecordProblemReportRow, error)
+	// Fill the days before the catalogue was first measured. A day already holding a row keeps
+	// it, so a rerun does not move the past it already published. Days from the first measured
+	// one on are left alone even when a run was missed: reconstructed days stay one leading run,
+	// before every measurement, which is what lets a reader tell the estimate from the record.
+	RecordReconstructedCatalogSize(ctx context.Context, arg RecordReconstructedCatalogSizeParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.

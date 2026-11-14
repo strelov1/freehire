@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
 	"github.com/strelov1/freehire/internal/platform/cache"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -22,7 +26,11 @@ import (
 // The error is returned rather than acted on: the rollups are this worker's primary job
 // and have already committed by the time this runs, so whether a failed snapshot should
 // fail the run is the caller's decision, and the caller's answer is no.
-func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c cache.Cache, telegramChannels int, uniqueOpenJobs int64) error {
+//
+// The open-jobs figure is also recorded as the day's catalogue size (catalog_size_daily), the
+// series behind the size-over-time chart. It is recorded only once the snapshot is stored, so
+// the history never holds a figure no surface published.
+func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c cache.Cache, history sizeRecorder, telegramChannels int, uniqueOpenJobs int64) error {
 	snapshot, err := catalogstats.Compute(ctx, counts, telegramChannels, uniqueOpenJobs)
 	if err != nil {
 		return err
@@ -30,7 +38,20 @@ func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c ca
 	if err := catalogstats.Store(ctx, c, snapshot); err != nil {
 		return fmt.Errorf("publishing the catalogue snapshot: %w", err)
 	}
+	if err := history.RecordCatalogSize(ctx, db.RecordCatalogSizeParams{
+		Day:        pgtype.Date{Time: snapshot.ComputedAt.Truncate(24 * time.Hour), Valid: true},
+		OpenJobs:   snapshot.OpenJobs,
+		ComputedAt: pgtype.Timestamptz{Time: snapshot.ComputedAt, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("the snapshot is published, but recording the day's catalogue size failed: %w", err)
+	}
 	return nil
+}
+
+// sizeRecorder stores one day's measured catalogue size. *db.Queries on the writer satisfies
+// it; the counts come from the analytics replica, the history must not.
+type sizeRecorder interface {
+	RecordCatalogSize(ctx context.Context, arg db.RecordCatalogSizeParams) error
 }
 
 // snapshotCache builds the shared cache the snapshot is published to. A malformed

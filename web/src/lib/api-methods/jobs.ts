@@ -4,6 +4,7 @@ import type {
   ActivityPoint,
   ApiSuggestion,
   CatalogScale,
+  CatalogSizePoint,
   DirectApplication,
   DirectApplyForm,
   EmbedProgress,
@@ -237,6 +238,12 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     return requestData<UserGrowthPoint[]>(`/api/v1/stats/user-growth`);
   }
 
+  /** The catalogue's size per UTC day, oldest first; reconstructed days are marked.
+   *  Unauthenticated. */
+  async function catalogHistory(): Promise<CatalogSizePoint[]> {
+    return requestData<CatalogSizePoint[]>(`/api/v1/stats/catalog-history`);
+  }
+
   /** Aggregate engagement counts across all users (jobs saved / applied / viewed, CVs
    *  uploaded and tailored, matches analyzed, inboxes connected, searches saved).
    *  Aggregate-only, unauthenticated. */
@@ -326,6 +333,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
     facetCounts,
     jobsActivity,
     userGrowth,
+    catalogHistory,
     engagementStats,
     statsFacets,
     skillNeighbours,
