@@ -21,10 +21,10 @@ export const job: Job = {
   description:
     '<p>Acme builds logistics software. You will design and run the services behind it.</p>' +
     '<h2>Requirements</h2><ul><li>5+ years of Go</li><li>PostgreSQL in production</li></ul>',
-  countries: ['DE'],
+  countries: ['DE', 'US'],
   regions: ['eu'],
   work_mode: 'hybrid',
-  skills: ['go', 'postgresql'],
+  skills: ['go', 'postgresql', 'event-driven-architecture'],
   cities: ['Berlin'],
   metros: [],
   collections: [],
