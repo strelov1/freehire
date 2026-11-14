@@ -219,6 +219,15 @@ freehire_worker_paused{job="ingest",instance="eightfold"} 0
 # TYPE freehire_worker_paused gauge
 freehire_worker_paused{job="ingest",instance="eightfold"} 1
 `
+
+	// A skipped run renders the completed-run family unchanged — a skip is not a failure,
+	// so last_run_success stays 1 — plus one extra series naming what is missing. Pinned
+	// in full for the same reason as the pair above: the label VALUE is the answer an
+	// operator reads off a dashboard, and a rename here silently empties a query.
+	wantSkippedRunRender = wantCompletedRunRender + `# HELP freehire_worker_skipped Whether this worker's last run deliberately did nothing because the feature is unconfigured (1), and what is missing.
+# TYPE freehire_worker_skipped gauge
+freehire_worker_skipped{job="ingest",instance="eightfold",reason="SCRAPLING_FETCH_URL"} 1
+`
 )
 
 var runStamp = regexp.MustCompile(`(freehire_worker_last_run_timestamp_seconds\{[^}]*\} )\d+`)
@@ -258,6 +267,47 @@ func TestMetricsRenderMatchesThePublishedContract(t *testing.T) {
 			t.Errorf("refused-run render mismatch:\ngot:\n%s\nwant:\n%s", got, wantPausedRunRender)
 		}
 	})
+
+	t.Run("skipped run", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv(PromTextfileDirEnv, dir)
+		t.Cleanup(func() { skipReason.Store(nil) })
+
+		if code := Skip("SCRAPLING_FETCH_URL"); code != 0 {
+			t.Fatalf("Skip returned %d, want 0: an unconfigured feature is not a failure", code)
+		}
+		writeRunMetrics(2500*time.Millisecond, 0)
+
+		if got := readRunFile(t, dir); got != wantSkippedRunRender {
+			t.Errorf("skipped-run render mismatch:\ngot:\n%s\nwant:\n%s", got, wantSkippedRunRender)
+		}
+	})
+}
+
+// A worker that skips must not keep saying so once a run does its work: runOrPause clears
+// the mark BEFORE the next run, and the file is rewritten wholesale, so the series has to
+// disappear rather than linger at 1 on every later pass.
+func TestSkipIsClearedBeforeTheNextRun(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(PromTextfileDirEnv, dir)
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"/opt/freehire/src/hire-current/publish-logo-domains"}
+	t.Setenv(IgnorePauseEnv, "1")
+
+	Skip("LOGO_DOMAIN_MAP_OUT")
+	if code := runOrPause(func() int { return 0 }, nil); code != 0 {
+		t.Fatalf("runOrPause = %d, want 0", code)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "publish-logo-domains.prom"))
+	if err != nil {
+		t.Fatalf("read metrics file: %v", err)
+	}
+	if strings.Contains(string(data), "freehire_worker_skipped") {
+		t.Errorf("a previous run's skip leaked into this one; got:\n%s", string(data))
+	}
 }
 
 func TestWriteRunMetricsWithoutInstance(t *testing.T) {

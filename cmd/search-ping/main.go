@@ -59,7 +59,7 @@ func run() int {
 	cfg := config.Load()
 	if !anyEngineConfigured() {
 		log.Printf("search-ping: no engine configured, nothing to do")
-		return 0
+		return worker.Skip("GOOGLE_INDEXING_KEY_FILE+INDEXNOW_KEY")
 	}
 
 	// After the gate, so an unconfigured developer checkout is not an hourly red unit.

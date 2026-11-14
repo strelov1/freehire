@@ -36,7 +36,7 @@ func run() int {
 	g := cfg.OAuth["google"]
 	if g.ClientID == "" || g.ClientSecret == "" || len(cfg.GmailTokenKey) != 32 {
 		log.Print("cal-sync: not configured (Google OAuth client / GMAIL_TOKEN_KEY) — nothing to do")
-		return 0
+		return worker.Skip("GOOGLE_OAUTH_CLIENT+GMAIL_TOKEN_KEY")
 	}
 	cipher, err := tokencrypt.New(cfg.GmailTokenKey)
 	if err != nil {

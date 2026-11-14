@@ -68,7 +68,7 @@ func run() int {
 		// Not a failure: no channel configured means this is not turned on, and it should not look
 		// like a broken worker every night.
 		log.Printf("social-digest: no channel configured, nothing to do")
-		return 0
+		return worker.Skip("SOCIAL_CHANNELS")
 	}
 
 	// FRONTEND_ORIGIN defaults to localhost, and every link in the post is rooted at it. This
