@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, tick, untrack, type Snippet } from 'svelte';
-  import { ArrowDown, FileText, PanelLeft, Phone, Plus, Trash2 } from '@lucide/svelte';
+  import { onMount, tick, untrack } from 'svelte';
+  import { ArrowDown } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -10,7 +10,6 @@
     SessionNotFound,
     SUPPORT_BASE,
   } from '#lib/assistant/api.js';
-  import VoiceCall from '#lib/assistant/VoiceCall.svelte';
   import { canUseVoiceCall } from '#lib/assistant/voiceCall.js';
   import { VOICE_CALL_ENABLED } from '#lib/assistant/audioAvailability.js';
   import { track } from '#lib/analytics.js';
@@ -29,11 +28,16 @@
   import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
   import { atBottom } from '#lib/assistant/scrolling.js';
-  import { Button, Chip, ConfirmDialog } from '#lib/ui/index.js';
+  import { ConfirmDialog } from '#lib/ui/index.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import AssistantReply from '#lib/assistant/AssistantReply.svelte';
-  import Composer from '#lib/assistant/Composer.svelte';
+  import ChatInputArea from './ChatInputArea.svelte';
+  import ChatStarters from './ChatStarters.svelte';
+  import UserMessage from './UserMessage.svelte';
   import AssistantAlerts from './AssistantAlerts.svelte';
+  import type { AssistantChatProps } from './AssistantChat.props';
+  import ChatSessionBar from './ChatSessionBar.svelte';
+  import { turnTimer } from './turnTimer.svelte';
   import OpeningActions from './OpeningActions.svelte';
   import {
     fromSummary,
@@ -84,56 +88,7 @@
     autoRun = false,
     navTrigger = undefined,
     syncApplication: keepInSync = false,
-  }: {
-    session?: string;
-    kickoff?: string;
-    sessionLabel?: string;
-    onTurnComplete?: () => void;
-    /** Told after each successful `cv_edit` tool call resolves — not just at the end of the
-     *  turn — so the tailoring host can refresh the CV preview as a run writes it instead of
-     *  only once the whole turn finishes. `onTurnComplete` still fires at turn end regardless
-     *  (the safety net for anything this per-call signal missed); this is additive. */
-    onDocumentEdited?: () => void;
-    /** Told when an UNATTENDED run starts and ends. The tailoring host locks its editor for
-     *  the duration: a run rewrites the same document the editor holds and saves on a
-     *  debounce, and whoever writes last would silently win. */
-    onRunStateChange?: (running: boolean) => void;
-    /** Told when ANY turn starts and ends, so a host can disable what a running turn would
-     *  make a no-op. `onRunStateChange` is the narrower signal: only unattended runs. */
-    onTurnStateChange?: (active: boolean) => void;
-    /** Awaited before a turn is started. The tailoring host writes its pending edit here: a
-     *  debounce armed a moment ago would otherwise fire mid-turn and overwrite what the agent
-     *  wrote — and the run's pre-run snapshot would be taken without that edit in it. */
-    beforeTurn?: () => Promise<void>;
-    onSessionChange?: (id: string) => void;
-    showSessionRail?: boolean;
-    /** What an empty conversation offers instead of a blank prompt. Shown only while the
-     *  session has no messages: once it has any, the composer is the way in. A host that
-     *  passes these should NOT also pass a kickoff — the whole point is that the first turn
-     *  is the caller's choice rather than ours. */
-    openingActions?: OpeningAction[];
-    /** Which unbound conversation a NEW session starts as. An existing session keeps
-     *  whatever preset it was created with. `support` is the help agent: it runs on its own
-     *  routes, which only create, send and cancel, so it never lists, reopens or deletes a
-     *  conversation and offers no attachments, dictation or retry. */
-    preset?: ChatPreset;
-    /** Start an unattended run the moment the session is ready, instead of waiting for the
-     *  candidate to pick an opening action. The tailoring host sets this on a cold-start
-     *  bootstrap (a vacancy tailored for the first time) — only on an empty session, and only
-     *  once, the same guard `kickoff` already uses. A host that passes this should not also
-     *  pass `openingActions`: there is nothing left to offer once the run is already starting. */
-    autoRun?: boolean;
-    /** The host's own control for opening the account navigation below `lg`, where
-     *  `AccountNavRail collapsible` folds into a drawer the host has to open. Rendered at
-     *  the start of the chat's header row — the one row this surface has — so the host does
-     *  not stack a second bar above it. Only shown where a header row exists, which is
-     *  wherever `showSessionRail` is on. */
-    navTrigger?: Snippet;
-    /** The conversation is held against one automatic application: catch it up on what
-     *  happened to the application when it opens and every few seconds while it is shown.
-     *  A check with nothing new costs nothing and paints nothing. */
-    syncApplication?: boolean;
-  } = $props();
+  }: AssistantChatProps = $props();
 
   const s = $derived(t(messages, locale()));
 
@@ -279,30 +234,8 @@
    *  `session` prop catches up, so a switch we started is never undone by the stale URL. */
   let navigatingTo = $state<string | null>(null);
 
-  // --- Streaming spinner / thinking timers ---------------------------------
-  const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;
-  let elapsedSec = $state(0);
-  let spinnerIdx = $state(0);
-  let turnStartedAt = $state<number | null>(null);
-
-  $effect(() => {
-    if (turnActive && turnStartedAt === null) {
-      turnStartedAt = Date.now();
-      elapsedSec = 0;
-      spinnerIdx = 0;
-    } else if (!turnActive) {
-      turnStartedAt = null;
-      elapsedSec = 0;
-    }
-  });
-  $effect(() => {
-    if (!turnActive || turnStartedAt === null) return;
-    const id = setInterval(() => {
-      elapsedSec = Math.floor((Date.now() - (turnStartedAt as number)) / 1000);
-      spinnerIdx = (spinnerIdx + 1) % SPINNER_GLYPHS.length;
-    }, 120);
-    return () => clearInterval(id);
-  });
+  // The turn's elapsed seconds and spinner glyph, which the streaming reply's thinking shows.
+  const timer = turnTimer(() => turnActive);
 
   /**
    * Bring the newest content into view.
@@ -1067,76 +1000,18 @@
 
       <!-- Chat pane -->
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
         {#if showSessionRail}
-          <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
-            {@render navTrigger?.()}
-            <button
-              type="button"
-              onclick={() => (sidebarOpen = !sidebarOpen)}
-              class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label={sidebarOpen ? s.hideChats : s.showChats}
-              title={sidebarOpen ? s.hideChats : s.showChats}
-            >
-              <PanelLeft class="size-4" />
-            </button>
-            {#if !sidebarOpen}
-              <button
-                type="button"
-                onclick={newChat}
-                disabled={creating || switching || phase !== 'ready'}
-                class="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                title={s.newChat}
-              >
-                <Plus class="size-4" />{s.newChat}
-              </button>
-            {/if}
-          </div>
-        {/if}
-        <!-- Mobile session switcher -->
-        {#if showSessionRail}
-          <!-- One compact bar, every control at the design system's h-8: it is chrome above the
-           conversation, and at 44px with a filled brand button it read as the page's main
-           action and took ~60px of a phone's height. "New" stays labelled rather than a
-           bare glyph. Delete is pushed away with a gap: an unlabelled trash icon flush
-           against the "new" control is a mis-tap that destroys a conversation. -->
-          <div class="flex items-center gap-2 border-b border-border px-2 py-1.5 md:hidden">
-            {@render navTrigger?.()}
-            <select
-              value={activeId}
-              onchange={(e) => selectSession(e.currentTarget.value)}
-              disabled={switching}
-              aria-label={s.selectChat}
-              class="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              {#each sessions as sess (sess.id)}
-                <option value={sess.id}>{sess.label}</option>
-              {/each}
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              class="shrink-0 gap-1.5 px-2.5"
-              onclick={newChat}
-              disabled={creating || switching || phase !== 'ready'}
-              title={s.newChat}
-            >
-              <Plus class="size-4" aria-hidden="true" />
-              {s.newChatShort}
-            </Button>
-            {#if activeId}
-              <Button
-                variant="ghost"
-                size="icon"
-                class="ml-1 shrink-0 text-muted-foreground"
-                onclick={() => requestRemoveChat(activeId as string)}
-                aria-label={s.deleteChatAria}
-                title={s.deleteChatAria}
-              >
-                <Trash2 class="size-4" aria-hidden="true" />
-              </Button>
-            {/if}
-          </div>
+          <ChatSessionBar
+            {sessions}
+            {activeId}
+            {switching}
+            newDisabled={creating || switching || phase !== 'ready'}
+            bind:sidebarOpen
+            {navTrigger}
+            onNew={newChat}
+            onSelect={selectSession}
+            onDelete={requestRemoveChat}
+          />
         {/if}
 
         <!-- Message list -->
@@ -1165,50 +1040,20 @@
               <!-- Starters only in a plain chat: a profile interview opens with its own
                  kickoff, and these questions belong to the job search, not to it. -->
               {#if activePreset === 'chat'}
-                <ul class="flex flex-wrap gap-2" aria-label={s.startersLabel}>
-                  {#each starters as starter (starter)}
-                    <li>
-                      <button
-                        type="button"
-                        class="rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        disabled={!canStartTurn()}
-                        onclick={() => submitText(starter)}
-                      >
-                        {starter}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
+                <ChatStarters {starters} disabled={!canStartTurn()} onPick={(text) => submitText(text)} />
               {/if}
             {/if}
 
             {#each chat.messages as message, i (i)}
               {#if message.role === 'user'}
-                <article
-                  class="self-end max-w-[80%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-sm leading-relaxed text-secondary-foreground"
-                >
-                  {#if message.text}
-                    <pre class="m-0 whitespace-pre-wrap break-words font-sans">{message.text}</pre>
-                  {/if}
-                  {#if message.attachments.length > 0}
-                    <ul class={['flex flex-wrap gap-1.5', message.text && 'mt-2']} aria-label={s.attachedFiles}>
-                      {#each message.attachments as name, j (j)}
-                        <li>
-                          <Chip class="max-w-full gap-1 bg-background"
-                            ><FileText class="size-3 shrink-0" /><span class="truncate">{name}</span></Chip
-                          >
-                        </li>
-                      {/each}
-                    </ul>
-                  {/if}
-                </article>
+                <UserMessage {message} />
               {:else}
                 {@const active = i === chat.messages.length - 1 && message.streaming}
                 <AssistantReply
                   {message}
                   {active}
-                  glyph={SPINNER_GLYPHS[spinnerIdx]}
-                  {elapsedSec}
+                  glyph={timer.glyph}
+                  elapsedSec={timer.elapsedSec}
                   onConfirm={submitText}
                   disabled={turnActive || switching}
                   canRetry={!isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
@@ -1242,52 +1087,25 @@
           {/if}
         </div>
 
-        {#if voiceCallOpen && activeId}
-          <!-- Keyed on activeId: switching sessions while a call is open must destroy
-             this instance (its onDestroy ends the call cleanly) rather than reuse it
-             with a new sessionId prop, which would silently post the OLD call's turns
-             into the NEW session's transcript. -->
-          {#key activeId}
-            <div class="border-t border-border p-3">
-              <div class="mx-auto w-full max-w-3xl">
-                <VoiceCall
-                  sessionId={activeId}
-                  onClose={closeVoiceCall}
-                  onUnavailable={() => {
-                    voiceModeOff = true;
-                    closeVoiceCall();
-                  }}
-                />
-              </div>
-            </div>
-          {/key}
-        {:else}
-          <Composer
-            bind:draft
-            bind:attachments
-            {queue}
-            {turnActive}
-            attachable={!isSupport}
-            dictatable={!isSupport}
-            disabled={phase !== 'ready' || switching}
-            onSubmit={submitText}
-            onRemoveQueued={removeQueued}
-            onCancel={cancelTurn}
-          />
-          {#if activePreset === 'interview' && activeId && voiceSupported && !voiceModeOff}
-            <div class="flex justify-center border-t border-border/60 py-2">
-              <button
-                type="button"
-                onclick={() => (voiceCallOpen = true)}
-                disabled={phase !== 'ready' || switching || turnActive}
-                class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Phone class="size-3.5" />
-                {s.voiceModeButton}
-              </button>
-            </div>
-          {/if}
-        {/if}
+        <ChatInputArea
+          bind:draft
+          bind:attachments
+          bind:voiceCallOpen
+          sessionId={activeId}
+          {queue}
+          {turnActive}
+          support={isSupport}
+          disabled={phase !== 'ready' || switching}
+          canCall={activePreset === 'interview' && voiceSupported && !voiceModeOff}
+          onSubmit={submitText}
+          onRemoveQueued={removeQueued}
+          onCancel={cancelTurn}
+          onClose={closeVoiceCall}
+          onUnavailable={() => {
+            voiceModeOff = true;
+            closeVoiceCall();
+          }}
+        />
       </div>
     </div>
   {/if}

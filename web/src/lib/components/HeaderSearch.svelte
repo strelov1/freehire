@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Link2, Search, SlidersHorizontal, X } from '@lucide/svelte';
+  import { Search, SlidersHorizontal, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
@@ -19,35 +19,21 @@
   import { runLinkIntake, type LinkIntakeStep } from '#lib/linkIntake.js';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '#lib/searchDraft.js';
   import { starterSuggestions, type Suggestion } from '#lib/suggestions.js';
-  import { loadSourceDistribution } from '#lib/sourceDictionary.js';
-  import type { FacetOption } from '#lib/facets.js';
+  import { OperatorLookup } from '#lib/operatorLookup.js';
   import {
     activeOperator,
-    companyOptions,
     hasOperators,
-    matchCompany,
-    matchSource,
     operatorPlan,
     parseOperators,
     replaceToken,
-    sourceOptions,
-    titleOptions,
     unresolvedToken,
     type OperatorOption,
-    type OperatorResolvers,
-    type OperatorToken,
   } from '#lib/searchOperators.js';
-  import {
-    completeWord,
-    typedTail,
-    typewriterStart,
-    typewriterStep,
-    type TypewriterState,
-  } from '#lib/placeholderRoles.js';
+  import { typedPlaceholder, type SearchPlaceholder } from '#lib/typedPlaceholder.svelte.js';
   import { cn } from '#lib/ui/index.js';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
   import HeaderSearchRow from './HeaderSearchRow.svelte';
-  import IntakeOutcome from './IntakeOutcome.svelte';
+  import LinkIntakeRow from './LinkIntakeRow.svelte';
 
   // The header's search box — the ONE of them, on every page.
   //
@@ -85,7 +71,7 @@
      *  would always win and leave the static string dead at every animating call site —
      *  the reader would have two candidates and no way to tell which one ships. Either
      *  way this is never the field's accessible name; that is `label`. */
-    placeholder: string | { prefix: string; roles: string[] };
+    placeholder: SearchPlaceholder;
     /** The field's accessible name. Static, and required of every caller rather than
      *  defaulting to `placeholder`: the two were one prop until the placeholder learned
      *  to rotate, at which point a screen reader announced the input as whatever example
@@ -111,101 +97,8 @@
 
   const hero = $derived(size === 'hero');
 
-  // ---- the typed placeholder ----
-  //
-  // Runs only while the box is empty and has never been touched. The first focus or
-  // keystroke stops it for the rest of the visit — text moving under the cursor while a
-  // query is being composed is the failure an animated placeholder invites.
-  //
-  // Only the tail moves; `prefix` is never rewritten, so the sentence stays readable and
-  // the eye has one place to look. The words and the stepping both live in
-  // lib/placeholderRoles.ts, which is where they can be tested without a browser.
-  const typing = $derived(typeof placeholder === 'string' ? null : placeholder);
-
-  // Capturing just the initial value is the intent: this is where the animation STARTS,
-  // and the server renders it. A caller that later swaps its word list is handled by the
-  // stepper instead — a role index the new list has no word for steps past on the next
-  // tick rather than needing this seed to be recomputed.
-  // svelte-ignore state_referenced_locally
-  let typewriter = $state<TypewriterState>(typewriterStart(typeof placeholder === 'string' ? [] : placeholder.roles));
-  let typingStopped = $state(false);
-
-  function stopTyping() {
-    if (typingStopped || !typing) return;
-    // Finish the word on the way out. Freezing on "Devo" reads as a typo rather than as
-    // an animation that stopped, and it would do so at the exact moment the visitor's
-    // attention arrived on the field.
-    typewriter = completeWord(typewriter, typing.roles);
-    typingStopped = true;
-  }
-
-  /** Undo a stop that no visitor asked for — see the autofocus effect below. */
-  function resumeTyping() {
-    if (!typing) return;
-    // Both halves, not just the flag: stopTyping also FILLED IN the current word, so
-    // clearing the flag alone would leave the animation resuming from a finished word
-    // and skip typing the very first one — on the homepage hero, the one surface this
-    // exists for.
-    typewriter = typewriterStart(typing.roles);
-    typingStopped = false;
-  }
-
-  // Sampled AND subscribed: the OS-level setting can be turned on mid-visit, and reading
-  // it once would leave that visitor with a timer already running for the rest of it.
-  let reduceMotion = $state(false);
-  $effect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    reduceMotion = query.matches;
-    const onChange = (e: MediaQueryListEvent) => (reduceMotion = e.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  });
-
-  $effect(() => {
-    if (typingStopped || !typing) return;
-    const roles = typing.roles;
-    // Under reduced motion nothing is scheduled at all and the first role simply stands.
-    if (reduceMotion || roles.length === 0) return;
-
-    // One chained timeout rather than an interval: every step has its own delay (a typed
-    // character, a faster deleted one, and the long hold on a finished word), so a fixed
-    // tick would have to be the shortest of them and then count its way to the others.
-    //
-    // `untrack` is what makes that chain real. Read plainly, the seed below would
-    // subscribe this effect to the very state its own callback writes: each character
-    // would invalidate the effect, the cleanup would cancel the link already scheduled,
-    // and the animation would be driven by re-runs at the mercy of flush latency rather
-    // than by the delays computed here.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = (from: TypewriterState) => {
-      const { next, delayMs } = typewriterStep(from, roles);
-      timer = setTimeout(() => {
-        // Untracked on the WRITE as well as on the seed below, and for the same reason
-        // stated the other way round: this chain drives itself, so neither end of it is
-        // part of any reaction. Svelte's `set` refuses a write whose active reaction is a
-        // derived or a block effect (svelte/src/internal/client/reactivity/sources.js),
-        // and `untrack` is what says this assignment answers to neither —
-        // state_unsafe_mutation reached production from this line (FREEHIRE-WEB-26) and
-        // took the header down with it, which a placeholder animation must never be able
-        // to do whatever raced it.
-        untrack(() => {
-          typewriter = next;
-        });
-        schedule(next);
-      }, delayMs);
-    };
-    schedule(untrack(() => typewriter));
-    return () => clearTimeout(timer);
-  });
-
-  // Server-rendered markup carries the prefix with an empty tail, since the effect above
-  // is client-only — so the sentence is already there and only its last word arrives.
-  // Under reduced motion the first role is shown whole instead.
-  const shownPlaceholder = $derived.by(() => {
-    if (!typing) return placeholder as string;
-    if (reduceMotion && !typingStopped) return typing.prefix + (typing.roles[0] ?? '');
-    return typing.prefix + typedTail(typewriter, typing.roles);
-  });
+  // The typed placeholder: see typedPlaceholder.svelte.ts.
+  const typed = typedPlaceholder(() => placeholder);
 
   // How long the draft must sit still before the suggestions are refetched.
   //
@@ -266,7 +159,7 @@
     // which stops the placeholder animation. On the homepage — where this box IS the
     // page, and the one surface the animation exists for — that killed it before the
     // first character. A caret nobody placed has not interrupted anything.
-    resumeTyping();
+    typed.resume();
   });
   // -1 means nothing is highlighted, which is the state the dropdown opens in: Enter
   // then falls through to the free-text search it has always run.
@@ -491,41 +384,8 @@
     return operatorAnswer?.key === liveOperator.key ? operatorOptions : [];
   });
 
-  // Company names this box has seen resolved to a slug — picked rows and exact matches —
-  // so committing a picked `company:Google` does not ask the endpoint again. Keyed by
-  // the lower-cased name. Not reactive: it is read at commit time only.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache nothing renders from
-  const knownCompanies = new Map<string, string>();
-  // The cache key for a typed company value: what `formatOperator` writes back into the
-  // box drops `"`, so the key must too, or a picked name with a quote never hits it.
-  const companyKey = (value: string) => value.replaceAll('"', '').toLowerCase();
-
-  // The live source distribution, fetched once, the first time a `source:` appears. A
-  // failed fetch is forgotten so the next attempt asks again.
-  let sourceDist: Promise<FacetOption[]> | null = null;
-  function sources(): Promise<FacetOption[]> {
-    sourceDist ??= loadSourceDistribution().catch((err: unknown) => {
-      sourceDist = null;
-      throw err;
-    });
-    return sourceDist;
-  }
-
-  async function companiesNamed(value: string, signal?: AbortSignal): Promise<CompanyListItem[]> {
-    const { items } = await api.listCompanies(value, companiesFetch, 0, undefined, signal);
-    const exact = matchCompany(value, items);
-    if (exact) knownCompanies.set(companyKey(value), exact);
-    return items;
-  }
-
-  async function optionsFor(op: OperatorToken, signal: AbortSignal): Promise<OperatorOption[] | null> {
-    if (op.key === 'company') {
-      return companyOptions(await companiesNamed(op.value, signal), op.value, OPERATOR_LIMIT);
-    }
-    if (op.key === 'source') return sourceOptions(await sources(), op.value, OPERATOR_LIMIT);
-    if (op.value.length < SUGGEST_MIN_CHARS) return null;
-    return titleOptions(await api.suggest(op.value, OPERATOR_LIMIT, signal));
-  }
+  // The operator lookups and the company names they have resolved: see operatorLookup.ts.
+  const lookup = new OperatorLookup({ companiesFetch, optionLimit: OPERATOR_LIMIT, minChars: SUGGEST_MIN_CHARS });
 
   // The settled token as a string, so moving the caret WITHIN an unchanged value — an
   // arrow key inside `company:goo` — does not abort and resend the same lookup.
@@ -546,7 +406,8 @@
     }
     // Same abandonment rule as the ordinary fetch above: a newer pause aborts this one.
     const ac = new AbortController();
-    void optionsFor(op, ac.signal)
+    void lookup
+      .optionsFor(op, ac.signal)
       .catch(() => null)
       .then((opts) => {
         if (!ac.signal.aborted) operatorAnswer = { key: op.key, value: op.value, options: opts };
@@ -570,27 +431,11 @@
     // The row may belong to the token the caret just LEFT (its answer is a debounce
     // behind); writing a company over a `source:` token is a wrong filter, not a pick.
     if (!op || op.key !== option.key) return;
-    if (option.key === 'company') knownCompanies.set(companyKey(option.value), option.id);
+    if (option.key === 'company') lookup.rememberCompany(option.value, option.id);
     const next = replaceToken(draft.text, op, option.value);
     draft = edit(draft, next.text);
     activeIndex = -1;
     void placeCaret(next.caret);
-  }
-
-  /** Resolve every operator value in `text`, asking the companies endpoint for the
-   *  names this box has not seen. A failed lookup resolves to nothing, which stops the
-   *  commit on that token rather than guessing. */
-  async function resolversFor(text: string): Promise<OperatorResolvers> {
-    const parsed = parseOperators(text);
-    const unseen = parsed.company.filter((v) => !knownCompanies.has(companyKey(v)));
-    const [dist] = await Promise.all([
-      parsed.source.length ? sources().catch(() => []) : Promise.resolve([]),
-      ...unseen.map((v) => companiesNamed(v).catch(() => [])),
-    ]);
-    return {
-      company: (v) => knownCompanies.get(companyKey(v)) ?? null,
-      source: (v) => matchSource(v, dist),
-    };
   }
 
   /** Enter on a draft carrying operators. Everything applies, or — when a value names
@@ -598,7 +443,7 @@
    *  feed filtered by half of what was typed is not what was typed. */
   async function runOperatorSearch(apply: (plan: ApplyPlan) => void) {
     const text = draft.text;
-    const resolvers = await resolversFor(text);
+    const resolvers = await lookup.resolversFor(text);
     // Typing went on while the lookups were out; this answer is about older text.
     if (draft.text !== text) return;
     const bad = unresolvedToken(text, resolvers);
@@ -631,14 +476,6 @@
   // Where the last run stopped, when it stopped anywhere worth showing. Null while
   // nothing has been asked yet — the row then offers to ask.
   let linkStep = $state.raw<LinkIntakeStep | null>(null);
-
-  /** Where a signed-out visitor goes to hand this link in. The link rides along in the
-   *  return path so it survives the round trip — otherwise signing in costs them the
-   *  paste, and the whole point was that they had it in hand. */
-  const signinHref = $derived.by(() => {
-    const back = `/my/contributions?url=${encodeURIComponent(link?.url ?? '')}`;
-    return `${resolve('/signin')}?returnTo=${encodeURIComponent(back)}`;
-  });
 
   /** Look this link up, and hand it in if we don't have it. See #lib/linkIntake for the
    *  order and why it is that way round. */
@@ -984,12 +821,12 @@
         // autofocused hero would stay silent when its own field is clicked.
         dismissed = false;
         activeIndex = -1;
-        stopTyping();
+        typed.stop();
       }}
       oninput={(e) => {
         dismissed = false;
         activeIndex = -1;
-        stopTyping();
+        typed.stop();
         // Editing the text asks a different question, so the last link's answer goes
         // with it — otherwise a half-corrected URL sits under a verdict on the old one.
         linkStep = null;
@@ -1014,11 +851,11 @@
         // box permanently silent for the rest of the visit.
         dismissed = false;
         activeIndex = -1;
-        stopTyping();
+        typed.stop();
       }}
       onkeydown={onKeydown}
       type="text"
-      placeholder={shownPlaceholder}
+      placeholder={typed.shown}
       aria-label={label}
       autocomplete="off"
       spellcheck="false"
@@ -1096,43 +933,7 @@
        (sign in, view the company), which cannot live inside an option's button. -->
   {#if link && !dismissed}
     <div class={linkPanelClass} role="status" aria-live="polite">
-      {#if linkBusy}
-        <span class="flex items-center gap-2 text-muted-foreground">
-          <Link2 class="size-4 shrink-0" />
-          Checking whether we have this one…
-        </span>
-      {:else if linkStep?.kind === 'signin'}
-        <span class="flex flex-col gap-1">
-          <span>We don't have this one yet.</span>
-          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path -->
-          <a href={signinHref} class="font-medium underline underline-offset-4"> Sign in to send it to us → </a>
-        </span>
-      {:else if linkStep?.kind === 'outcome'}
-        <IntakeOutcome resolved={linkStep.resolved} />
-      {:else if linkStep?.kind === 'error'}
-        <span class="flex flex-col gap-1">
-          <span>That didn't go through.</span>
-          <button
-            type="button"
-            onclick={() => link && activateLink(link)}
-            class="self-start font-medium underline underline-offset-4"
-          >
-            Try again
-          </button>
-        </span>
-      {:else}
-        <button
-          type="button"
-          onclick={() => link && activateLink(link)}
-          class="flex w-full items-center gap-2 text-left"
-        >
-          <Link2 class="size-4 shrink-0 text-muted-foreground" />
-          <span class="min-w-0 flex-1 truncate">Open this job link</span>
-          <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">
-            ↵
-          </kbd>
-        </button>
-      {/if}
+      <LinkIntakeRow url={link.url} busy={linkBusy} step={linkStep} onActivate={() => link && activateLink(link)} />
     </div>
   {:else if operatorMiss && liveOperator && !dismissed}
     <div class={linkPanelClass} role="status" aria-live="polite">

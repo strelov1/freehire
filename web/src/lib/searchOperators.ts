@@ -8,7 +8,8 @@
 // Pure by design: no Svelte, no DOM, no network.
 
 import { quoteForTitleSearch, type ApplyPlan } from './apiSuggestions';
-import { sourceLabel, type FacetOption } from './facets';
+import type { FacetOption } from './facets';
+import { sourceLabel } from './sourceLabels';
 import { namedCompanies } from './dropdownRows';
 import type { ApiSuggestion, CompanyListItem } from './types';
 
