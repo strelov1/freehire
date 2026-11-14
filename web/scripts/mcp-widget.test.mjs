@@ -36,17 +36,15 @@ function mount({ capabilities = { serverTools: {} }, posting = job } = {}) {
   const window = dom.window;
   const receive = (data, source = window) => window.dispatchEvent(new window.MessageEvent('message', { data, source }));
   const answer = (message, result) => receive({ jsonrpc: '2.0', id: message.id, result });
+  const toolResult = (params) => receive({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params });
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   const init = sent.find((message) => message.method === 'ui/initialize');
   answer(init, { hostCapabilities: capabilities, hostContext: { theme: 'light' } });
-  receive({
-    jsonrpc: '2.0',
-    method: 'ui/notifications/tool-result',
-    params: { structuredContent: { jobs: [posting], total: 1 } },
-  });
+  toolResult({ structuredContent: { jobs: [posting], total: 1 } });
   return {
     window,
     receive,
+    toolResult,
     answer,
     tick,
     sent,
@@ -83,24 +81,161 @@ describe('MCP job-card actions over the host bridge', () => {
     expect(ui.status()).toBe('Saved to your freehire board.');
   });
 
-  it('changes the chosen stage only on explicit update and never overwrites notes', async () => {
+  it('keeps stage changes out of the widget', async () => {
     const ui = mount();
     await ui.tick();
-    const select = ui.window.document.querySelector('select');
-    expect(select).not.toBeNull();
-    expect(ui.button('Update stage')?.disabled).toBe(true);
-    select.value = 'interview';
-    select.dispatchEvent(new ui.window.Event('change'));
-    expect(ui.calls()).toHaveLength(0);
-    ui.button('Update stage').click();
-    expect(ui.calls()[0].params).toEqual({ name: 'track_job', arguments: { slug: job.slug, stage: 'interview' } });
-    expect(ui.button('Save job').disabled).toBe(true);
-    ui.answer(ui.calls()[0], {
-      structuredContent: { job_id: 42, stage: 'interview', notes: 'Existing private note' },
-      content: [],
-    });
+    expect(ui.window.document.querySelector('select')).toBeNull();
+    expect(ui.button('Update stage')).toBeUndefined();
+    expect(page).not.toContain('track_job');
+  });
+
+  it.each([false, true])('renders profile skill coverage from the host (text response: %s)', async (textOnly) => {
+    const ui = mount({ posting: { ...job, skills: ['go', 'sql', 'docker'] } });
     await ui.tick();
-    expect(ui.status()).toBe('Stage updated to Interview.');
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.calls()[0].params).toEqual({ name: 'get_profile', arguments: {} });
+    expect(ui.window.document.querySelector('.match')).toBeNull();
+    const profile = { skills: ['GO', 'sql'] };
+    ui.answer(
+      ui.calls()[0],
+      textOnly
+        ? { content: [{ type: 'text', text: JSON.stringify(profile) }] }
+        : { structuredContent: profile, content: [] },
+    );
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe('67% · 2/3 skills');
+    expect(ui.window.document.querySelector('.sr-only').textContent).toBe('Profile match: 67%, 2 of 3 skills');
+    expect(ui.window.document.querySelector('.match-fill').style.transform).toBe('translateX(-33%)');
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.button('Save job')).toBeDefined();
+  });
+
+  it('does not replace a newer tool error when an older profile read finishes', async () => {
+    const ui = mount({ posting: { ...job, skills: ['go'] } });
+    await ui.tick();
+    const profileCall = ui.calls()[0];
+    ui.toolResult({
+      isError: true,
+      content: [{ type: 'text', text: 'Search failed' }],
+    });
+    ui.answer(profileCall, { structuredContent: { skills: ['go'] }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('#root').textContent).toBe('Search failed');
+    expect(ui.window.document.querySelector('.card')).toBeNull();
+  });
+
+  it.each([
+    [['rust'], '0% · 0/2 skills', '-100%'],
+    [['GO', 'sql'], '100% · 2/2 skills', '0%'],
+  ])('renders coverage endpoints for %j', async (skills, label, offset) => {
+    const ui = mount({ posting: { ...job, skills: ['go', 'sql'] } });
+    await ui.tick();
+    ui.answer(ui.calls()[0], { structuredContent: { skills }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe(label);
+    expect(ui.window.document.querySelector('.match-fill').style.transform).toBe('translateX(' + offset + ')');
+    ui.toolResult({ structuredContent: { jobs: [{ ...job, skills: ['go'] }] } });
+    await ui.tick();
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe(
+      skills.includes('rust') ? '0% · 0/1 skills' : '100% · 1/1 skills',
+    );
+  });
+
+  it.each([{ isError: true }, { structuredContent: { skills: [] } }, { content: [] }])(
+    'omits match when a profile is unavailable: %j',
+    async (reply) => {
+      const ui = mount({ posting: { ...job, skills: ['go'] } });
+      await ui.tick();
+      ui.answer(ui.calls()[0], reply);
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match')).toBeNull();
+      expect(ui.window.document.body.textContent).toContain(job.title);
+    },
+  );
+
+  it.each([[], undefined, [null, 42, {}, ''], ['go', null, 42, '']])(
+    'handles missing or malformed job skills after loading a profile: %j',
+    async (skills) => {
+      const ui = mount({ posting: { ...job, skills: ['go'] } });
+      await ui.tick();
+      ui.answer(ui.calls()[0], { structuredContent: { skills: ['go'] }, content: [] });
+      await ui.tick();
+      ui.toolResult({ structuredContent: { jobs: [{ ...job, skills }] } });
+      await ui.tick();
+      expect(ui.window.document.querySelector('.title').textContent).toBe(job.title);
+      if (skills?.includes('go')) {
+        expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+      } else {
+        expect(ui.window.document.querySelector('.match')).toBeNull();
+      }
+      expect(ui.calls()).toHaveLength(1);
+    },
+  );
+
+  it.each(['tool-error', 'rpc-error', 'timeout', 'malformed-json', 'missing-skills'])(
+    'retries a failed profile read on a later result: %s',
+    async (failure) => {
+      const posting = { ...job, skills: ['go'] };
+      const ui = mount({ posting });
+      await ui.tick();
+      const first = ui.calls()[0];
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(1);
+      if (failure === 'timeout') ui.timers.find((timer) => timer.delay === 30000).callback();
+      else if (failure === 'rpc-error')
+        ui.receive({ jsonrpc: '2.0', id: first.id, error: { code: -32603, message: 'Temporary failure' } });
+      else
+        ui.answer(
+          first,
+          failure === 'tool-error'
+            ? { isError: true, content: [] }
+            : failure === 'malformed-json'
+              ? { content: [{ type: 'text', text: 'invalid JSON' }] }
+              : { structuredContent: {} },
+        );
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match')).toBeNull();
+      expect(ui.calls()).toHaveLength(1);
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(2);
+      ui.answer(ui.calls()[1], { structuredContent: { skills: ['go'] }, content: [] });
+      await ui.tick();
+      expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+      ui.toolResult({ structuredContent: { jobs: [posting] } });
+      expect(ui.calls()).toHaveLength(2);
+    },
+  );
+
+  it('keeps a known empty profile cached across later results', async () => {
+    const posting = { ...job, skills: ['go'] };
+    const ui = mount({ posting });
+    await ui.tick();
+    ui.answer(ui.calls()[0], { structuredContent: { skills: [] }, content: [] });
+    await ui.tick();
+    ui.toolResult({ structuredContent: { jobs: [posting] } });
+    await ui.tick();
+    expect(ui.calls()).toHaveLength(1);
+    expect(ui.window.document.querySelector('.match')).toBeNull();
+  });
+
+  it('adds profile coverage without replacing focused controls or pending-save status', async () => {
+    const ui = mount({ posting: { ...job, skills: ['go'] } });
+    await ui.tick();
+    const profileCall = ui.calls()[0];
+    const save = ui.button('Save job');
+    const status = ui.window.document.querySelector('[role="status"]');
+    save.click();
+    const link = ui.window.document.querySelector('a');
+    link.focus();
+    ui.answer(profileCall, { structuredContent: { skills: ['go'] }, content: [] });
+    await ui.tick();
+    expect(ui.window.document.querySelector('.match-text').textContent).toBe('100% · 1/1 skills');
+    expect(ui.window.document.activeElement).toBe(link);
+    expect(ui.button('Saving...')).toBe(save);
+    expect(ui.window.document.querySelector('[role="status"]')).toBe(status);
+    expect(status.textContent).toContain('Saving');
+    expect(save.disabled).toBe(true);
   });
 
   it('shows a failed tool response as a failure and allows a deliberate retry', async () => {
@@ -150,11 +285,7 @@ describe('MCP job-card actions over the host bridge', () => {
     const first = ui.calls()[0];
     ui.timers.find((timer) => timer.delay === 30000).callback();
     await ui.tick();
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: { structuredContent: { jobs: [job], total: 1 } },
-    });
+    ui.toolResult({ structuredContent: { jobs: [job], total: 1 } });
     await ui.tick();
     const reset = ui.button('I checked, allow retry');
     expect(reset).toBeDefined();
@@ -210,19 +341,6 @@ describe('MCP job-card actions over the host bridge', () => {
     expect(ui.calls()).toHaveLength(0);
   });
 
-  it('refuses a mismatched stage confirmation', async () => {
-    const ui = mount();
-    await ui.tick();
-    const select = ui.window.document.querySelector('select');
-    select.value = 'interview';
-    select.dispatchEvent(new ui.window.Event('change'));
-    ui.button('Update stage').click();
-    ui.answer(ui.calls()[0], { structuredContent: { job_id: 42, stage: 'preparing' }, content: [] });
-    await ui.tick();
-    expect(ui.status()).toContain('could not confirm');
-    expect(ui.button('Update stage').disabled).toBe(true);
-  });
-
   it('handles malformed content without losing pending-state control', async () => {
     const ui = mount();
     await ui.tick();
@@ -237,11 +355,7 @@ describe('MCP job-card actions over the host bridge', () => {
     const ui = mount();
     await ui.tick();
     ui.button('Save job').click();
-    ui.receive({
-      jsonrpc: '2.0',
-      method: 'ui/notifications/tool-result',
-      params: { structuredContent: { jobs: [job], total: 1 } },
-    });
+    ui.toolResult({ structuredContent: { jobs: [job], total: 1 } });
     await ui.tick();
     expect(ui.button('Saving...').disabled).toBe(true);
     ui.button('Saving...').click();
@@ -249,19 +363,6 @@ describe('MCP job-card actions over the host bridge', () => {
     ui.answer(ui.calls()[0], { structuredContent: { job_id: 42, saved_at: '2026-11-05T03:00:00Z' }, content: [] });
     await ui.tick();
     expect(ui.button('Saved')?.disabled).toBe(true);
-  });
-
-  it('uses the backend application-stage vocabulary', async () => {
-    const source = readFileSync(new URL('../../internal/application/userjob/stages.go', import.meta.url), 'utf8');
-    const body = source.match(/var Stages = \[\]string\{([^}]+)\}/s)?.[1];
-    expect(body).toBeDefined();
-    const expected = Array.from(body.matchAll(/"([^"]+)"/g), (match) => match[1]);
-    const ui = mount();
-    await ui.tick();
-    expect(Array.from(ui.window.document.querySelector('select').options, (option) => option.value)).toEqual([
-      '',
-      ...expected,
-    ]);
   });
 
   it('ignores responses from another frame', async () => {
