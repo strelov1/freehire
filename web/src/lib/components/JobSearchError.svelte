@@ -1,9 +1,15 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button, EmptyState } from '#lib/ui/index.js';
+  import States from './States.svelte';
   import { searchRateLimit } from '#lib/searchRateLimit.js';
 
-  let { error, onRetry }: { error: unknown; onRetry: () => void } = $props();
+  // The caller retries the current query and page; the upgrade opens separately.
+  let {
+    error,
+    onRetry,
+    onlyRateLimit = false,
+  }: { error: unknown; onRetry: () => void; onlyRateLimit?: boolean } = $props();
   const notice = $derived(searchRateLimit(error));
 </script>
 
@@ -14,6 +20,8 @@
     class="rounded-xl border border-dashed border-border"
     action={actions}
   />
+{:else if !onlyRateLimit}
+  <States state="error" message="Failed to load jobs." {onRetry} />
 {/if}
 
 {#snippet actions()}

@@ -1,14 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
-import SearchRateLimitNotice from './SearchRateLimitNotice.svelte';
+import JobSearchError from './JobSearchError.svelte';
 
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 
-describe('SearchRateLimitNotice', () => {
+describe('JobSearchError', () => {
   it('offers an upgrade and retry without replacing the current search', async () => {
     const retry = vi.fn();
-    render(SearchRateLimitNotice, {
+    render(JobSearchError, {
       error: new ApiError(429, 'refused', {
         code: 'rate_limited',
         budget: 'publicread',
@@ -29,8 +29,20 @@ describe('SearchRateLimitNotice', () => {
   });
 
   it('does not offer a tariff upgrade for an unclassified nginx refusal', () => {
-    render(SearchRateLimitNotice, { error: new ApiError(429, 'Too Many Requests'), onRetry: vi.fn() });
+    render(JobSearchError, { error: new ApiError(429, 'Too Many Requests'), onRetry: vi.fn() });
     expect(screen.getByText('Too many search requests')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
+});
+
+it('preserves the ordinary failure message for a failed jobs request', () => {
+  render(JobSearchError, { error: new ApiError(500, 'fault'), onRetry: vi.fn() });
+  expect(screen.getByText('Failed to load jobs.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+});
+
+it('keeps non-quota facet failures silent', () => {
+  render(JobSearchError, { error: new ApiError(500, 'fault'), onlyRateLimit: true, onRetry: vi.fn() });
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
 });
