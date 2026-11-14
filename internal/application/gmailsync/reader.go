@@ -5,29 +5,16 @@ import (
 	"time"
 )
 
-const (
-	DirectionIncoming = "incoming"
-	DirectionOutgoing = "outgoing"
-)
-
-// MessageRef identifies a message without reading its contents.
-type MessageRef struct{ ID, ThreadID string }
-
-// Message is one fetched Gmail message with decoded bodies and provider direction.
+// Message is one fetched Gmail message in domain form (bodies already decoded).
 type Message struct {
-	Draft              bool
-	SystemNotification bool
-	Direction          string
-	ToAddrs            string
-	CcAddrs            string
-	ID                 string
-	ThreadID           string
-	FromAddr           string
-	FromName           string
-	Subject            string
-	BodyText           string
-	BodyHTML           string
-	ReceivedAt         time.Time
+	ID         string
+	ThreadID   string
+	FromAddr   string
+	FromName   string
+	Subject    string
+	BodyText   string
+	BodyHTML   string
+	ReceivedAt time.Time
 	// CalendarUID identifies the meeting an invitation attaches, and is "" for the mail
 	// that carries none. It is what later proves a calendar entry is this same meeting —
 	// the only link calmatch may make without asking the candidate.
@@ -45,8 +32,6 @@ type GmailReader interface {
 	// that knows it, and because a reader built for a search (see MailboxSearcher) has no
 	// business carrying it.
 	ListATSMessageIDs(ctx context.Context, selfAddr string, afterUnix int64) ([]string, error)
-	// ListSentMessages returns metadata only; callers fetch bodies only for known hiring threads.
-	ListSentMessages(ctx context.Context, afterUnix int64) ([]MessageRef, error)
 	// ListThreadMessageIDs returns the ids of every message in a thread, so replies
 	// that carry no ATS marker (personal recruiters, scheduling) are ingested
 	// alongside the matched message that anchors the thread.
