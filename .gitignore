@@ -16,54 +16,77 @@ hire
 # ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
 # to theirs. 26 package directories were shadowed this way; a new source file in one of them
 # would simply never be committed.
+# The worker entries below used to be written out three times, 22 of them twice, which is
+# how a target added to one block silently went unignored by the other two. This is now the
+# union of all three plus every current cmd/ target — 104 entries, 9 of which no longer have
+# a target and stay because a deploy host that built them still has that binary sitting in
+# its checkout root. Regenerate after adding a worker:
+#   { ls cmd; grep -E '^/[^/]+$' .gitignore | tr -d /; } | sort -u
+# The 9 retired ones are backfill-company-info, backfill-engagement, backfill-justjoin, backfill-requirements, discord-register-commands, hire-api, prune, reslug and similar-backfill.
 /add-board
 /adzuna-liveness
 /apple-revoke
 /auth-cleanup
 /auto-apply
 /auto-apply-orchestrate
-/backfill-engagement
+/backfill-catalog-history
 /backfill-company-info
 /backfill-company-info-wikipedia
-/backfill-company-type-hint
 /backfill-company-names
-/backfill-catalog-history
+/backfill-company-type-hint
 /backfill-derive
 /backfill-descriptions
+/backfill-engagement
+/backfill-justjoin
 /backfill-requirements
 /backfill-telegram-prefilter
 /billing-sync
 /broadcast
-/email-events
+/build-suggestions
 /cal-sync
 /capture-apply-form
 /catalog-coverage
 /classify-mail
 /close-chronic-boards
+/cv-lifecycle-mail
 /cv-previews
+/discord-register-commands
 /discord-sync
+/email-events
 /embed
 /enrich
+/facetd
+/gen-cities
+/gen-contracts
+/gen-metros
+/gen-skill-descriptions
 /ghost-crosscheck
 /gmail-sync
+/harvest-ats
+/harvest-boards
+/harvest-erecruiter
 /harvest-linkedin
+/harvest-loxo
 /harvest-orphans
+/harvest-role
 /hire-api
 /hydrate-adzuna-description
+/import-collections
 /import-company-industries
-/linkedin-auth
-/linkedin-token-refresh
+/import-yc
 /ingest
 /ingest-scheduler
 /limit-nudge-mail
-/cv-lifecycle-mail
+/linkedin-auth
+/linkedin-token-refresh
 /liveness
 /llm-probe
 /mail-ingest
-/facetd
 /mail-preview
 /mentor-busy-sync
 /mentorship-remind
+/merge-companies
+/message-notify
 /migrate
 /mine-titles
 /notify
@@ -77,38 +100,31 @@ hire
 /queue-metrics
 /recount-companies
 /reindex
+/reindex-companies
 /remind
+/report-classify-drift
+/report-company-website-twins
+/report-cv-letters
+/report-geo-gaps
+/report-skill-gaps
+/report-unclassified-titles
+/reslug
 /resolve-url
 /rollup-company
+/rollup-facets
+/rollup-stats
 /rollup-views
 /schedule-board
-/search-ping
-/social-digest
 /search-drain
+/search-ping
 /search-settings-drift
-/serve-probe
 /seed-adzuna-description-queue
 /seed-from-inventory
-/similar-backfill
-/sweep-tracer-clicks
-# Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
-/backfill-company-info
-/backfill-derive
-/discord-register-commands
-/enrich
-/gen-contracts
-/harvest-ats
-/harvest-boards
-/harvest-erecruiter
-/harvest-role
-/import-collections
-/ingest
-/liveness
-/notify
-/recount-companies
-/reindex
-/reslug
+/serve-probe
 /server
+/similar-backfill
+/social-digest
+/sweep-tracer-clicks
 /tg-extract
 /tg-ingest
 
@@ -148,9 +164,21 @@ hire
 .vscode/
 .DS_Store
 
-# Claude Code local settings
+# Agent tooling local state. `.claude/` and `.codex/` are per-machine configuration for
+# the harnesses agents run under — the same class of file as an editor's local settings —
+# and `skills-lock.json` is what they install. None of that belongs in the tree: the
+# shared rules live in AGENTS.md, which IS committed.
+#
+# `.agents/` is deliberately NOT ignored wholesale. It used to be, and the skills under
+# `.agents/skills/` are committed, so the rule shadowed ten tracked files and would have
+# swallowed the next one added beside them — the exact trap the worker-binary block above
+# describes, in the other direction. Local state directly under `.agents/` stays ignored;
+# the tracked subtree is re-admitted because excluding a directory stops git descending
+# into it at all, so `.agents/*` alone would still hide the skills.
 .claude/
-.agents/
+.codex/
+.agents/*
+!.agents/skills/
 skills-lock.json
 
 # Spec Kit — local-only (not part of the freehire tree). Keep on disk for personal
@@ -186,48 +214,6 @@ node_modules/
 extension/.wxt/
 extension/.output/
 extension/*.zip
-
-# Compiled cmd/* worker binaries (go build ./cmd/<name>/ writes <name> into the repo root)
-/backfill-company-info
-/backfill-derive
-/backfill-descriptions
-/backfill-justjoin
-/embed
-/enrich
-/gen-cities
-/gen-metros
-/gen-contracts
-/gen-skill-descriptions
-/gmail-sync
-/harvest-ats
-/harvest-boards
-/harvest-erecruiter
-/harvest-loxo
-/harvest-role
-/import-collections
-/import-yc
-/ingest
-/liveness
-/mail-ingest
-/merge-companies
-/notify
-/recount-companies
-/reindex
-/reindex-companies
-/report-company-website-twins
-/report-cv-letters
-/report-classify-drift
-/report-geo-gaps
-/report-skill-gaps
-/report-unclassified-titles
-/reslug
-/rollup-facets
-/build-suggestions
-/message-notify
-/rollup-stats
-/server
-/tg-extract
-/tg-ingest
 
 # Local-only compose overrides (per-machine service wiring; never shared).
 /docker-compose.override.yml
