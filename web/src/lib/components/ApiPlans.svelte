@@ -70,7 +70,7 @@
         price: dataPrice,
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
-        perks: ['Everything in API', 'Bulk catalogue files — coming soon'],
+        perks: ['Everything in API', 'Bulk catalogue files: gzip JSON Lines snapshots with download links'],
       },
     ].filter((c) => !!c);
   });

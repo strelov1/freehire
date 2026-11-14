@@ -215,6 +215,15 @@ func runServer(cfg config.Settings) error {
 		return fmt.Errorf("blobstore: %w", err)
 	}
 
+	// The catalogue export bucket is separate from the résumé one and optional the same way.
+	exportBucket, err := blobstore.NewBucket(blobstore.Config{
+		Endpoint: cfg.ExportS3Endpoint, Bucket: cfg.ExportS3Bucket,
+		AccessKey: cfg.ExportS3AccessKey, SecretKey: cfg.ExportS3SecretKey, Region: cfg.ExportS3Region,
+	})
+	if err != nil {
+		return fmt.Errorf("catalogue export bucket: %w", err)
+	}
+
 	// The LLM is optional and built through the shared construction path
 	// (llm.NewClient): it powers the CV ATS qualitative review, wires Langfuse
 	// tracing (source "cv-ats") when LANGFUSE_* are set, and returns a flush func for
@@ -401,6 +410,7 @@ func runServer(cfg config.Settings) error {
 		Search:                      searchClient,
 		Suggest:                     suggestSvc,
 		Blob:                        blobStore,
+		Export:                      exportBucket,
 		TypstBin:                    cfg.TypstBin,
 		DirectApplyDailyLimit:       directApplyLimit,
 		CVEditAllowBulletTruncation: cfg.CVEditAllowBulletTruncation,

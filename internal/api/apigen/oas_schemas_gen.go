@@ -4520,6 +4520,105 @@ func (s *CatalogScaleOK) SetData(val CatalogScale) {
 	s.Data = val
 }
 
+// One finished bulk snapshot of the catalogue.
+// Ref: #/components/schemas/CatalogueSnapshot
+type CatalogueSnapshot struct {
+	// UTC day the snapshot is named by, `YYYY-MM-DD`.
+	Date string `json:"date"`
+	// Version of the line shape in the file. A removed or re-meant field bumps it; a new field does not.
+	SchemaVersion int32 `json:"schema_version"`
+	// Number of lines (jobs) in the file.
+	Rows int64 `json:"rows"`
+	// Size of the gzip file in bytes.
+	Bytes int64 `json:"bytes"`
+	// Hex SHA-256 of the gzip file, to check a download.
+	SHA256      string    `json:"sha256"`
+	GeneratedAt time.Time `json:"generated_at"`
+	// Pre-signed link to the gzip file; it works without credentials until `url_expires_at`.
+	DownloadURL  string    `json:"download_url"`
+	URLExpiresAt time.Time `json:"url_expires_at"`
+}
+
+// GetDate returns the value of Date.
+func (s *CatalogueSnapshot) GetDate() string {
+	return s.Date
+}
+
+// GetSchemaVersion returns the value of SchemaVersion.
+func (s *CatalogueSnapshot) GetSchemaVersion() int32 {
+	return s.SchemaVersion
+}
+
+// GetRows returns the value of Rows.
+func (s *CatalogueSnapshot) GetRows() int64 {
+	return s.Rows
+}
+
+// GetBytes returns the value of Bytes.
+func (s *CatalogueSnapshot) GetBytes() int64 {
+	return s.Bytes
+}
+
+// GetSHA256 returns the value of SHA256.
+func (s *CatalogueSnapshot) GetSHA256() string {
+	return s.SHA256
+}
+
+// GetGeneratedAt returns the value of GeneratedAt.
+func (s *CatalogueSnapshot) GetGeneratedAt() time.Time {
+	return s.GeneratedAt
+}
+
+// GetDownloadURL returns the value of DownloadURL.
+func (s *CatalogueSnapshot) GetDownloadURL() string {
+	return s.DownloadURL
+}
+
+// GetURLExpiresAt returns the value of URLExpiresAt.
+func (s *CatalogueSnapshot) GetURLExpiresAt() time.Time {
+	return s.URLExpiresAt
+}
+
+// SetDate sets the value of Date.
+func (s *CatalogueSnapshot) SetDate(val string) {
+	s.Date = val
+}
+
+// SetSchemaVersion sets the value of SchemaVersion.
+func (s *CatalogueSnapshot) SetSchemaVersion(val int32) {
+	s.SchemaVersion = val
+}
+
+// SetRows sets the value of Rows.
+func (s *CatalogueSnapshot) SetRows(val int64) {
+	s.Rows = val
+}
+
+// SetBytes sets the value of Bytes.
+func (s *CatalogueSnapshot) SetBytes(val int64) {
+	s.Bytes = val
+}
+
+// SetSHA256 sets the value of SHA256.
+func (s *CatalogueSnapshot) SetSHA256(val string) {
+	s.SHA256 = val
+}
+
+// SetGeneratedAt sets the value of GeneratedAt.
+func (s *CatalogueSnapshot) SetGeneratedAt(val time.Time) {
+	s.GeneratedAt = val
+}
+
+// SetDownloadURL sets the value of DownloadURL.
+func (s *CatalogueSnapshot) SetDownloadURL(val string) {
+	s.DownloadURL = val
+}
+
+// SetURLExpiresAt sets the value of URLExpiresAt.
+func (s *CatalogueSnapshot) SetURLExpiresAt(val time.Time) {
+	s.URLExpiresAt = val
+}
+
 // Ref: #/components/schemas/CategoryMeta
 type CategoryMeta struct {
 	Category string `json:"category"`
@@ -13725,6 +13824,21 @@ func (s *ListCVsOK) GetData() []CvTailored {
 
 // SetData sets the value of Data.
 func (s *ListCVsOK) SetData(val []CvTailored) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListCatalogueSnapshotsOK struct {
+	Data []CatalogueSnapshot `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListCatalogueSnapshotsOK) GetData() []CatalogueSnapshot {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListCatalogueSnapshotsOK) SetData(val []CatalogueSnapshot) {
 	s.Data = val
 }
 

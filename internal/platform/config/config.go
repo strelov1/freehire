@@ -203,6 +203,18 @@ type Settings struct {
 	S3AccessKey string
 	S3SecretKey string
 
+	// Catalogue export (internal/search/catalogexport): a separate bucket from S3_* because
+	// that one holds résumés. Optional and inert when any of the first four is empty — the
+	// worker refuses to run and the download endpoint answers 501. ExportS3Region is the
+	// provider's region name (Hetzner: hel1, fsn1, nbg1). ExportKeep is how many complete
+	// snapshots the worker leaves in the bucket.
+	ExportS3Endpoint  string
+	ExportS3Bucket    string
+	ExportS3AccessKey string
+	ExportS3SecretKey string
+	ExportS3Region    string
+	ExportKeep        int
+
 	// TypstBin is the resolved path to the typst binary used to render CV PDFs
 	// (internal/candidate/cv). Optional: an empty value disables PDF rendering (the /me/cvs/:id/pdf
 	// endpoint returns 501, the rest of the CV builder still works). Resolved via
@@ -470,6 +482,13 @@ func Load() Settings {
 		S3Bucket:    os.Getenv("S3_BUCKET"),
 		S3AccessKey: os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey: os.Getenv("S3_SECRET_KEY"),
+
+		ExportS3Endpoint:  os.Getenv("CATALOGUE_EXPORT_S3_ENDPOINT"),
+		ExportS3Bucket:    os.Getenv("CATALOGUE_EXPORT_S3_BUCKET"),
+		ExportS3AccessKey: os.Getenv("CATALOGUE_EXPORT_S3_ACCESS_KEY"),
+		ExportS3SecretKey: os.Getenv("CATALOGUE_EXPORT_S3_SECRET_KEY"),
+		ExportS3Region:    os.Getenv("CATALOGUE_EXPORT_S3_REGION"),
+		ExportKeep:        envInt("CATALOGUE_EXPORT_KEEP", 4),
 
 		TypstBin:                    resolveTypstBin(env("TYPST_BIN", "typst")),
 		CVEditAllowBulletTruncation: envBool("CV_EDIT_ALLOW_BULLET_TRUNCATION", false),

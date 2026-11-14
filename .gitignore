@@ -221,6 +221,7 @@ extension/*.zip
 /reslug
 /rollup-facets
 /build-suggestions
+/catalogue-export
 /message-notify
 /rollup-stats
 /server

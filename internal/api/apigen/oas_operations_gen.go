@@ -194,6 +194,7 @@ const (
 	ListCVTemplatesOperation              OperationName = "ListCVTemplates"
 	ListCVTracerLinksOperation            OperationName = "ListCVTracerLinks"
 	ListCVsOperation                      OperationName = "ListCVs"
+	ListCatalogueSnapshotsOperation       OperationName = "ListCatalogueSnapshots"
 	ListCompaniesOperation                OperationName = "ListCompanies"
 	ListCompanyFeedbackOperation          OperationName = "ListCompanyFeedback"
 	ListConversationMessagesOperation     OperationName = "ListConversationMessages"

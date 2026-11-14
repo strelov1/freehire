@@ -46,6 +46,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Mentorship](#mentorship)
 - [Plan](#plan)
 - [Plans](#plans)
+- [Catalogue export](#catalogue-export)
 - [Speech](#speech)
 
 ## Base URL
@@ -5277,6 +5278,41 @@ What each plan allows and what it costs, read from the configuration metering us
 
 ```bash
 curl "https://freehire.me/api/v1/plans"
+```
+
+## Catalogue export
+
+Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /jobs/{slug}` (full `description` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence.
+
+### `GET /catalogue/snapshots`
+
+**Auth:** Session or API key
+
+List bulk catalogue snapshots and their download links.
+
+Lists the finished snapshots, newest first, each with a short-lived pre-signed download URL
+(about 15 minutes; call this again for a fresh link). Needs the Data plan: any other
+account gets `403`. `501` means bulk files are not set up on this deployment.
+
+```bash
+curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "date": "2026-11-13",
+      "schema_version": 1,
+      "rows": 4500000,
+      "bytes": 7000000000,
+      "sha256": "3b1f0c7e5d9a4c2e8f6a1b0d7c3e9f52a4b8d6c1e0f7a3b5c9d2e4f6a8b0c1d3",
+      "generated_at": "2026-11-13T04:10:00Z",
+      "download_url": "https://example-bucket.example.com/catalogue/2026-11-13/jobs.jsonl.gz?X-Amz-Signature=...",
+      "url_expires_at": "2026-11-13T12:15:00Z"
+    }
+  ]
+}
 ```
 
 ## Speech
