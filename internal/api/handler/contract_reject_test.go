@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ogen-go/ogen/ogenerrors"
@@ -34,21 +35,27 @@ func contractRejectCount(t *testing.T, operation, kind string) float64 {
 	return 0
 }
 
-// A body the schema refuses is the client's fault, so it is no fault report; but it
-// must still be counted, or a broken web client fails every user unseen.
-func TestRenderContractRequestError_CountsABodyReject(t *testing.T) {
-	before := contractRejectCount(t, "createAPIKey", "body")
-	err := &ogenerrors.DecodeRequestError{
-		OperationContext: ogenerrors.OperationContext{Name: "CreateAPIKey", ID: "createAPIKey"},
-		Err:              errors.New(`decode application/json: "scope": unexpected null`),
+// A body or params the schema refuses is the client's fault, so it is no fault report;
+// but it must still be counted, or a broken web client fails every user unseen.
+func TestRenderContractRequestError_CountsRejects(t *testing.T) {
+	op := ogenerrors.OperationContext{Name: "CreateAPIKey", ID: "createAPIKey"}
+	cases := []struct {
+		kind, want string
+		err        error
+	}{
+		{"body", "invalid body", &ogenerrors.DecodeRequestError{OperationContext: op, Err: errors.New(strings.Repeat("x", 400))}},
+		{"params", "invalid params", &ogenerrors.DecodeParamsError{OperationContext: op, Err: errors.New("bad")}},
 	}
-	w := httptest.NewRecorder()
-	renderContractRequestError(context.Background(), w, nil, err)
+	for _, tc := range cases {
+		before := contractRejectCount(t, "createAPIKey", tc.kind)
+		w := httptest.NewRecorder()
+		renderContractRequestError(context.Background(), w, nil, tc.err)
 
-	if w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"invalid body"}`+"\n" {
-		t.Fatalf("got %d %q, want 400 invalid body", w.Code, w.Body.String())
-	}
-	if got := contractRejectCount(t, "createAPIKey", "body") - before; got != 1 {
-		t.Fatalf("reject counter grew by %v, want 1", got)
+		if w.Code != http.StatusBadRequest || w.Body.String() != `{"error":"`+tc.want+`"}`+"\n" {
+			t.Errorf("%s: got %d %q, want 400 %s", tc.kind, w.Code, w.Body.String(), tc.want)
+		}
+		if got := contractRejectCount(t, "createAPIKey", tc.kind) - before; got != 1 {
+			t.Errorf("%s: reject counter grew by %v, want 1", tc.kind, got)
+		}
 	}
 }
