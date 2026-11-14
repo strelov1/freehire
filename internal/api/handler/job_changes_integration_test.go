@@ -338,3 +338,62 @@ func TestJobChangesStartBoundCoversAWriterInFlight(t *testing.T) {
 		t.Fatalf("page from the start bound = %v, want job-x and job-y", got)
 	}
 }
+
+// Net state at commit decides: a flip that reverses the entry its own transaction just wrote
+// removes that (uncommitted) entry, so the feed never hears of it. Committed entries stay.
+func TestJobChangesWithinOneTransactionNetsOut(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	mustExec(t, pool, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`)
+	count := func(slug string) (n int) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM job_changes c JOIN jobs j ON j.id = c.job_id WHERE j.public_slug = $1`, slug).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	inTx := func(stmts ...string) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+		for _, s := range stmts {
+			if _, err := tx.Exec(ctx, s); err != nil {
+				t.Fatalf("%s: %v", s, err)
+			}
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert := func(slug string) string {
+		return `INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
+			VALUES ('test', '` + slug + `', 'https://e.test/` + slug + `', 'Engineer', '` + slug + `', 'acme')`
+	}
+	markDup := func(slug string) string {
+		return `UPDATE jobs SET duplicate_of_role = (SELECT id FROM jobs WHERE public_slug = 'job-canon') WHERE public_slug = '` + slug + `'`
+	}
+	seedJob(t, pool, "job-canon", "")
+
+	// Insert and role-duplicate mark in one transaction, as the upsert does: nothing logged.
+	inTx(insert("job-dup"), markDup("job-dup"))
+	if n := count("job-dup"); n != 0 {
+		t.Fatalf("insert+duplicate in one transaction logged %d entries, want 0", n)
+	}
+
+	// Committed insert, duplicate in a later transaction: both entries, committed history kept.
+	inTx(insert("job-late"))
+	inTx(markDup("job-late"))
+	if n := count("job-late"); n != 2 {
+		t.Fatalf("insert then later duplicate logged %d entries, want 2 (opened, closed)", n)
+	}
+
+	// Close and reopen in one transaction: nothing.
+	inTx(`UPDATE jobs SET closed_at = now(), closed_reason = 'unseen' WHERE public_slug = 'job-canon'`,
+		`UPDATE jobs SET closed_at = NULL, closed_reason = '' WHERE public_slug = 'job-canon'`)
+	if n := count("job-canon"); n != 1 { // its own opened only
+		t.Fatalf("close+reopen in one transaction left %d entries, want 1 (the original opened)", n)
+	}
+}

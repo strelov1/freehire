@@ -14,6 +14,13 @@
 -- posting that leaves is `closed` (reason: the close reason, else 'duplicate' or 'private');
 -- one that returns is `reopened`. Judging visibility only when the feed is read would lose both.
 --
+-- Net state at commit decides. A flip that reverses the entry this same transaction wrote a
+-- moment ago deletes that entry and logs nothing: an insert followed by a role-duplicate mark
+-- in the upsert's transaction (~68k pairs a day) never reaches the feed, and neither does a
+-- close and reopen inside one transaction. Only an UNCOMMITTED entry (xid = this transaction)
+-- is ever removed; committed history is never deleted. Flips alternate, so the job's latest
+-- entry is always the opposite of the new flip.
+--
 -- `xid` is the writing transaction's id (xid8 as bigint). The feed pages by (xid, id) and
 -- serves only rows below the oldest still-running transaction, so a long bulk close that
 -- commits late can never land behind a cursor a client already holds. `id` alone cannot give
@@ -43,10 +50,13 @@ CREATE TABLE job_changes (
 CREATE INDEX job_changes_xid_id_idx ON job_changes (xid, id);
 -- Resolving `since` to a starting point, and the feed's earliest timestamp.
 CREATE INDEX job_changes_at_idx ON job_changes (at);
+-- A job's latest entry, for the in-transaction undo in jobs_log_change below.
+CREATE INDEX job_changes_job_id_idx ON job_changes (job_id, id);
 
 CREATE FUNCTION public.jobs_log_change() RETURNS trigger
     LANGUAGE plpgsql AS $$
 DECLARE
+    prev record;
     was_listed boolean := false;
     is_listed boolean := NEW.closed_at IS NULL AND NEW.duplicate_of IS NULL AND NOT NEW.is_private;
 BEGIN
@@ -55,6 +65,13 @@ BEGIN
     END IF;
     IF is_listed = was_listed THEN
         RETURN NULL;
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        SELECT id, xid INTO prev FROM job_changes WHERE job_id = NEW.id ORDER BY id DESC LIMIT 1;
+        IF FOUND AND prev.xid = pg_current_xact_id()::text::bigint THEN
+            DELETE FROM job_changes WHERE id = prev.id;
+            RETURN NULL;
+        END IF;
     END IF;
     IF is_listed THEN
         INSERT INTO job_changes (job_id, kind)
