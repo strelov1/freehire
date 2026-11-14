@@ -111,6 +111,9 @@ func TestChangeWebhooks(t *testing.T) {
 			t.Fatalf("create = %d %s", code, b)
 		}
 		created = decode(b)
+		if len(tester.urls) != 0 {
+			t.Fatal("creation probed the endpoint: a verifying receiver has no secret yet")
+		}
 		if !strings.HasPrefix(created.Secret, "whsec_") || strings.Join(created.CompanySlugs, ",") != "acme,beta" || strings.Join(created.Kinds, ",") != "closed" {
 			t.Fatalf("created = %+v", created)
 		}
@@ -128,18 +131,9 @@ func TestChangeWebhooks(t *testing.T) {
 			t.Fatalf("defaults = %+v", s)
 		}
 	})
-	t.Run("refuses a bad url, a failing probe, and a sixth subscription", func(t *testing.T) {
+	t.Run("refuses a bad url and a sixth subscription", func(t *testing.T) {
 		if code, _ := call(apiUser, fiber.MethodPost, "", `{"url":"ftp://x.test/h"}`); code != fiber.StatusBadRequest {
 			t.Fatalf("ftp url = %d", code)
-		}
-		tester.err = errors.New("changehook: endpoint responded 404")
-		code, b := call(apiUser, fiber.MethodPost, "", `{"url":"https://down.example.com/h"}`)
-		tester.err = nil
-		if code != fiber.StatusUnprocessableEntity || !strings.Contains(string(b), "responded 404") {
-			t.Fatalf("failing probe = %d %s", code, b)
-		}
-		if _, b := call(apiUser, fiber.MethodGet, "", ""); decodeList(t, b) != 1 {
-			t.Fatal("a probe that failed left a subscription behind")
 		}
 		for range 4 {
 			if code, b := call(apiUser, fiber.MethodPost, "", `{"url":"https://m.example.com/h"}`); code != fiber.StatusCreated {

@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -20,8 +22,7 @@ const (
 	// maxPages bounds one subscription's catch-up per run, so one slow mirror cannot hold
 	// the run; the rest is read on the next one.
 	maxPages = 20
-	// claimLimit and concurrency bound one run.
-	claimLimit  = 500
+	// concurrency bounds one run: that many subscriptions are delivered at a time.
 	concurrency = 8
 )
 
@@ -42,17 +43,24 @@ type Stats struct{ Subscriptions, Changes, Failed, Disabled int64 }
 // "finished transactions only" bound and the same privacy rule, so a subscriber sees exactly
 // what a client polling GET /jobs/changes would.
 func (w *Worker) Run(ctx context.Context) (Stats, error) {
-	subs, err := w.q.ClaimDueChangeWebhooks(ctx, db.ClaimDueChangeWebhooksParams{LeaseSecs: leaseSecs, RowLimit: claimLimit})
-	if err != nil {
-		return Stats{}, err
-	}
 	var st struct{ subs, changes, failed, disabled atomic.Int64 }
-	jobs := make(chan db.ClaimDueChangeWebhooksRow)
+	started := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	var claimErr atomic.Value
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Go(func() {
-			for sub := range jobs {
-				n, outcome := w.deliver(ctx, sub)
+			// Each worker claims one subscription when it is free, so a lease starts when
+			// delivery starts and never expires while the row waits in a queue.
+			for ctx.Err() == nil {
+				subs, err := w.q.ClaimDueChangeWebhooks(ctx, db.ClaimDueChangeWebhooksParams{LeaseSecs: leaseSecs, RowLimit: 1, DueAt: started})
+				if err != nil {
+					claimErr.CompareAndSwap(nil, err)
+					return
+				}
+				if len(subs) == 0 {
+					return
+				}
+				n, outcome := w.deliver(ctx, subs[0])
 				st.subs.Add(1)
 				st.changes.Add(n)
 				switch outcome {
@@ -65,11 +73,10 @@ func (w *Worker) Run(ctx context.Context) (Stats, error) {
 			}
 		})
 	}
-	for _, s := range subs {
-		jobs <- s
-	}
-	close(jobs)
 	wg.Wait()
+	if err, _ := claimErr.Load().(error); err != nil && st.subs.Load() == 0 {
+		return Stats{}, err
+	}
 	return Stats{st.subs.Load(), st.changes.Load(), st.failed.Load(), st.disabled.Load()}, ctx.Err()
 }
 
@@ -102,6 +109,10 @@ func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) 
 		if batch := f.Batch(rows); len(batch) > 0 {
 			err := w.send.Send(ctx, sub.URL, sub.Secret, Event{ID: deliveryID(sub.ID, last), Type: EventChanges, Changes: batch})
 			if err != nil {
+				// Keep the pages the endpoint already accepted; the failure then counts from there.
+				if delivered {
+					w.advance(ctx, sub.ID, xid, id, true)
+				}
 				return sent, w.fail(ctx, sub, err)
 			}
 			sent += int64(len(batch))
@@ -113,11 +124,7 @@ func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) 
 		}
 	}
 	// Always: it stores the position and releases the lease, so the next run is not held off.
-	if err := w.q.AdvanceChangeWebhook(context.WithoutCancel(ctx), db.AdvanceChangeWebhookParams{
-		ID: sub.ID, CursorXid: xid, CursorID: id, Delivered: delivered,
-	}); err != nil {
-		log.Printf("changehook: subscription %d: store position: %v", sub.ID, err)
-	}
+	w.advance(ctx, sub.ID, xid, id, delivered)
 	return sent, outcomeOK
 }
 
@@ -143,4 +150,12 @@ func (w *Worker) disable(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, 
 		log.Printf("changehook: subscription %d: disable: %v", sub.ID, err)
 	}
 	return outcomeDisabled
+}
+
+func (w *Worker) advance(ctx context.Context, id int64, xid, cid int64, delivered bool) {
+	if err := w.q.AdvanceChangeWebhook(context.WithoutCancel(ctx), db.AdvanceChangeWebhookParams{
+		ID: id, CursorXid: xid, CursorID: cid, Delivered: delivered,
+	}); err != nil {
+		log.Printf("changehook: subscription %d: store position: %v", id, err)
+	}
 }

@@ -31,12 +31,12 @@ DELETE FROM change_webhooks WHERE id = $1 AND user_id = $2;
 
 -- name: ClaimDueChangeWebhooks :many
 -- The worker's pick: enabled subscriptions that are due, leased for lease_secs so a second
--- run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart.
+-- run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart. due_at is the run's start, so a row this run just delivered (next_attempt_at = now()) is not claimed again by it.
 UPDATE change_webhooks w
 SET next_attempt_at = now() + make_interval(secs => sqlc.arg(lease_secs)::bigint)
 WHERE w.id IN (
     SELECT d.id FROM change_webhooks d
-    WHERE d.disabled_at IS NULL AND d.next_attempt_at <= now()
+    WHERE d.disabled_at IS NULL AND d.next_attempt_at <= sqlc.arg(due_at)::timestamptz
       -- Only while the account holds an API plan (billing.APITierOf, in SQL): a lapsed one pauses.
       AND EXISTS (SELECT 1 FROM users u WHERE u.id = d.user_id
                   AND GREATEST(u.api_until_stripe, u.api_data_until_stripe) > now())

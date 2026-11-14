@@ -2311,8 +2311,9 @@ export interface paths {
          * Subscribe a URL to the change feed.
          * @description Subscribes a URL to the change feed and answers with the signing secret, this once. Needs
          *     an `api` or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409`
-         *     past that). The URL is probed with a signed `webhook.test` event first and refused with
-         *     `422` if it does not answer 2xx. Deliveries start from about the time of this call.
+         *     past that). The URL is not probed here, so a receiver that verifies signatures can be set up
+         *     with the returned secret first; call the `test` endpoint to check it. Deliveries start from
+         *     about the time of this call.
          */
         post: operations["createChangeWebhook"];
         delete?: never;

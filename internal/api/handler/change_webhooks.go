@@ -94,10 +94,8 @@ func (h *changeWebhookHandlers) CreateChangeWebhook(ctx context.Context, req *ap
 	if err != nil {
 		return nil, err
 	}
-	// Prove the endpoint answers before storing it, like the saved-search webhook does.
-	if err := h.tester.Test(ctx, url, secret); err != nil {
-		return nil, probeFailure(err)
-	}
+	// No probe here: the receiver cannot verify a signature before it has the secret this call
+	// returns. The /test endpoint checks it afterwards.
 	created, err := h.queries.CreateChangeWebhook(ctx, db.CreateChangeWebhookParams{
 		UserID: userID, URL: url, Secret: secret, CompanySlugs: slugs, Kinds: kinds,
 	})

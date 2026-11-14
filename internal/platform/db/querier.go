@@ -499,7 +499,7 @@ type Querier interface {
 	// so a crash or a concurrent run can never send the same step twice.
 	ClaimCVLifecycleSend(ctx context.Context, arg ClaimCVLifecycleSendParams) (int64, error)
 	// The worker's pick: enabled subscriptions that are due, leased for lease_secs so a second
-	// run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart.
+	// run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart. due_at is the run's start, so a row this run just delivered (next_attempt_at = now()) is not claimed again by it.
 	ClaimDueChangeWebhooks(ctx context.Context, arg ClaimDueChangeWebhooksParams) ([]ClaimDueChangeWebhooksRow, error)
 	// Take up to max_runs due runs, exactly once each, from the HEAVY pool only. See
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls

@@ -5949,8 +5949,9 @@ func (s *Server) handleCreateCVRequest(args [0]string, argsEscaped bool, w http.
 //
 // Subscribes a URL to the change feed and answers with the signing secret, this once. Needs an `api`
 // or `api_data` plan (`402` without one), at most 5 subscriptions per account (`409` past that). The
-// URL is probed with a signed `webhook.test` event first and refused with `422` if it does not answer
-// 2xx. Deliveries start from about the time of this call.
+// URL is not probed here, so a receiver that verifies signatures can be set up with the returned
+// secret first; call the `test` endpoint to check it. Deliveries start from about the time of this
+// call.
 //
 // POST /me/change-webhooks
 func (s *Server) handleCreateChangeWebhookRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {

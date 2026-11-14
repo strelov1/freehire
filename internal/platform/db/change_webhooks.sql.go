@@ -43,12 +43,12 @@ UPDATE change_webhooks w
 SET next_attempt_at = now() + make_interval(secs => $1::bigint)
 WHERE w.id IN (
     SELECT d.id FROM change_webhooks d
-    WHERE d.disabled_at IS NULL AND d.next_attempt_at <= now()
+    WHERE d.disabled_at IS NULL AND d.next_attempt_at <= $2::timestamptz
       -- Only while the account holds an API plan (billing.APITierOf, in SQL): a lapsed one pauses.
       AND EXISTS (SELECT 1 FROM users u WHERE u.id = d.user_id
                   AND GREATEST(u.api_until_stripe, u.api_data_until_stripe) > now())
     ORDER BY d.next_attempt_at
-    LIMIT $2
+    LIMIT $3
     FOR UPDATE SKIP LOCKED
 )
 RETURNING w.id, w.user_id, w.url, w.secret, w.company_slugs, w.kinds, w.cursor_xid, w.cursor_id,
@@ -56,8 +56,9 @@ RETURNING w.id, w.user_id, w.url, w.secret, w.company_slugs, w.kinds, w.cursor_x
 `
 
 type ClaimDueChangeWebhooksParams struct {
-	LeaseSecs int64 `json:"lease_secs"`
-	RowLimit  int32 `json:"row_limit"`
+	LeaseSecs int64              `json:"lease_secs"`
+	DueAt     pgtype.Timestamptz `json:"due_at"`
+	RowLimit  int32              `json:"row_limit"`
 }
 
 type ClaimDueChangeWebhooksRow struct {
@@ -73,9 +74,9 @@ type ClaimDueChangeWebhooksRow struct {
 }
 
 // The worker's pick: enabled subscriptions that are due, leased for lease_secs so a second
-// run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart.
+// run does not deliver the same ones, and only for accounts with a live API plan. SKIP LOCKED keeps concurrent claimers apart. due_at is the run's start, so a row this run just delivered (next_attempt_at = now()) is not claimed again by it.
 func (q *Queries) ClaimDueChangeWebhooks(ctx context.Context, arg ClaimDueChangeWebhooksParams) ([]ClaimDueChangeWebhooksRow, error) {
-	rows, err := q.db.Query(ctx, claimDueChangeWebhooks, arg.LeaseSecs, arg.RowLimit)
+	rows, err := q.db.Query(ctx, claimDueChangeWebhooks, arg.LeaseSecs, arg.DueAt, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,8 @@ type endpoint struct {
 	secret string
 	mu     sync.Mutex
 	status int
+	n      int // requests seen
+	failAt int // the request number answered 500 regardless of status; 0 = none
 	got    []received
 }
 
@@ -46,6 +48,11 @@ func (e *endpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.got = append(e.got, received{r.Header.Get(HeaderDelivery), ev})
+	e.n++
+	if e.n == e.failAt {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(e.status)
 }
 
@@ -232,5 +239,20 @@ func TestDeliveryEndToEnd(t *testing.T) {
 		due()
 		total = Stats{}
 		until(func() bool { return total.Disabled == 1 })
+	})
+	t.Run("pages accepted before a later page fails are kept", func(t *testing.T) {
+		exec(t, pool, `UPDATE change_webhooks SET disabled_at = NULL, disabled_reason = '', consecutive_failures = 0, next_attempt_at = now() WHERE id = $1`, sub.ID)
+		exec(t, pool, `INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
+			SELECT 'test', 'bulk-'||g, 'https://e.test/bulk-'||g, 'Engineer', 'bulk-'||g, 'acme' FROM generate_series(1, 250) g`)
+		ep.status = http.StatusOK
+		before := state()
+		ep.mu.Lock()
+		ep.failAt = ep.n + 2 // the first page is accepted, the second refused
+		ep.mu.Unlock()
+		total = Stats{}
+		until(func() bool { return total.Failed == 1 })
+		if s := state(); s.CursorID <= before.CursorID || s.ConsecutiveFailures != 1 {
+			t.Fatalf("accepted page not checkpointed: before %+v after %+v", before, s)
+		}
 	})
 }
