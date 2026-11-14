@@ -3,7 +3,7 @@ package changehook
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,7 +45,16 @@ type Stats struct{ Subscriptions, Changes, Failed, Disabled int64 }
 func (w *Worker) Run(ctx context.Context) (Stats, error) {
 	var st struct{ subs, changes, failed, disabled atomic.Int64 }
 	started := pgtype.Timestamptz{Time: time.Now(), Valid: true}
-	var claimErr atomic.Value
+	// Database errors fail the run (exit 1); an endpoint refusing is a delivery outcome.
+	var errMu sync.Mutex
+	var errs []error
+	record := func(err error) {
+		if err != nil {
+			errMu.Lock()
+			errs = append(errs, err)
+			errMu.Unlock()
+		}
+	}
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Go(func() {
@@ -54,13 +63,14 @@ func (w *Worker) Run(ctx context.Context) (Stats, error) {
 			for ctx.Err() == nil {
 				subs, err := w.q.ClaimDueChangeWebhooks(ctx, db.ClaimDueChangeWebhooksParams{LeaseSecs: leaseSecs, RowLimit: 1, DueAt: started})
 				if err != nil {
-					claimErr.CompareAndSwap(nil, err)
+					record(err)
 					return
 				}
 				if len(subs) == 0 {
 					return
 				}
-				n, outcome := w.deliver(ctx, subs[0])
+				n, outcome, err := w.deliver(ctx, subs[0])
+				record(err)
 				st.subs.Add(1)
 				st.changes.Add(n)
 				switch outcome {
@@ -74,10 +84,8 @@ func (w *Worker) Run(ctx context.Context) (Stats, error) {
 		})
 	}
 	wg.Wait()
-	if err, _ := claimErr.Load().(error); err != nil && st.subs.Load() == 0 {
-		return Stats{}, err
-	}
-	return Stats{st.subs.Load(), st.changes.Load(), st.failed.Load(), st.disabled.Load()}, ctx.Err()
+	stats := Stats{st.subs.Load(), st.changes.Load(), st.failed.Load(), st.disabled.Load()}
+	return stats, errors.Join(append(errs, ctx.Err())...)
 }
 
 type outcome int
@@ -91,16 +99,17 @@ const (
 // deliver walks one subscription forward page by page. The position moves only after the
 // endpoint accepted the page's batch (or the page held nothing it wanted), so a failure
 // repeats the same batch: at-least-once, deduplicated by the receiver through seq.
-func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) (int64, outcome) {
+func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) (int64, outcome, error) {
 	f := Filter{CompanySlugs: sub.CompanySlugs, Kinds: sub.Kinds}
 	xid, id := sub.CursorXid, sub.CursorID
 	var sent int64
 	delivered := false
+	var readErr error
 	for range maxPages {
 		rows, err := w.q.ListJobChangesForWebhook(ctx, db.ListJobChangesForWebhookParams{AfterXid: xid, AfterID: id, RowLimit: pageSize})
 		if err != nil {
-			log.Printf("changehook: subscription %d: read feed: %v", sub.ID, err)
-			break // the lease expires and the next run retries; not the endpoint's fault
+			readErr = fmt.Errorf("subscription %d: read feed: %w", sub.ID, err)
+			break // the position so far is still stored below; not the endpoint's fault
 		}
 		if len(rows) == 0 {
 			break
@@ -109,11 +118,16 @@ func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) 
 		if batch := f.Batch(rows); len(batch) > 0 {
 			err := w.send.Send(ctx, sub.URL, sub.Secret, Event{ID: deliveryID(sub.ID, last), Type: EventChanges, Changes: batch})
 			if err != nil {
-				// Keep the pages the endpoint already accepted; the failure then counts from there.
+				// Keep the pages the endpoint already accepted; the failure then counts from there,
+				// as the stored count does once the advance has reset it.
+				var advErr error
 				if delivered {
-					w.advance(ctx, sub.ID, xid, id, true)
+					if advErr = w.advance(ctx, sub.ID, xid, id, true); advErr == nil {
+						sub.ConsecutiveFailures = 0
+					}
 				}
-				return sent, w.fail(ctx, sub, err)
+				o, failErr := w.fail(ctx, sub, err)
+				return sent, o, errors.Join(advErr, failErr)
 			}
 			sent += int64(len(batch))
 			delivered = true
@@ -124,11 +138,10 @@ func (w *Worker) deliver(ctx context.Context, sub db.ClaimDueChangeWebhooksRow) 
 		}
 	}
 	// Always: it stores the position and releases the lease, so the next run is not held off.
-	w.advance(ctx, sub.ID, xid, id, delivered)
-	return sent, outcomeOK
+	return sent, outcomeOK, errors.Join(readErr, w.advance(ctx, sub.ID, xid, id, delivered))
 }
 
-func (w *Worker) fail(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, cause error) outcome {
+func (w *Worker) fail(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, cause error) (outcome, error) {
 	ctx = context.WithoutCancel(ctx) // a run cut short still records what happened
 	msg := cause.Error()
 	switch {
@@ -140,22 +153,23 @@ func (w *Worker) fail(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, cau
 	if err := w.q.FailChangeWebhook(ctx, db.FailChangeWebhookParams{
 		ID: sub.ID, LastError: msg, BackoffSecs: int64(backoff(sub.ConsecutiveFailures) / time.Second),
 	}); err != nil {
-		log.Printf("changehook: subscription %d: record failure: %v", sub.ID, err)
+		return outcomeFailed, fmt.Errorf("subscription %d: record failure: %w", sub.ID, err)
 	}
-	return outcomeFailed
+	return outcomeFailed, nil
 }
 
-func (w *Worker) disable(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, reason, lastErr string) outcome {
+func (w *Worker) disable(ctx context.Context, sub db.ClaimDueChangeWebhooksRow, reason, lastErr string) (outcome, error) {
 	if err := w.q.DisableChangeWebhook(ctx, db.DisableChangeWebhookParams{ID: sub.ID, Reason: reason, LastError: lastErr}); err != nil {
-		log.Printf("changehook: subscription %d: disable: %v", sub.ID, err)
+		return outcomeDisabled, fmt.Errorf("subscription %d: disable: %w", sub.ID, err)
 	}
-	return outcomeDisabled
+	return outcomeDisabled, nil
 }
 
-func (w *Worker) advance(ctx context.Context, id int64, xid, cid int64, delivered bool) {
+func (w *Worker) advance(ctx context.Context, id int64, xid, cid int64, delivered bool) error {
 	if err := w.q.AdvanceChangeWebhook(context.WithoutCancel(ctx), db.AdvanceChangeWebhookParams{
 		ID: id, CursorXid: xid, CursorID: cid, Delivered: delivered,
 	}); err != nil {
-		log.Printf("changehook: subscription %d: store position: %v", id, err)
+		return fmt.Errorf("subscription %d: store position: %w", id, err)
 	}
+	return nil
 }

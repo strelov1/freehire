@@ -241,7 +241,8 @@ func TestDeliveryEndToEnd(t *testing.T) {
 		until(func() bool { return total.Disabled == 1 })
 	})
 	t.Run("pages accepted before a later page fails are kept", func(t *testing.T) {
-		exec(t, pool, `UPDATE change_webhooks SET disabled_at = NULL, disabled_reason = '', consecutive_failures = 0, next_attempt_at = now() WHERE id = $1`, sub.ID)
+		// One failure short of disabling: the accepted page resets the count, so this failure is the first.
+		exec(t, pool, `UPDATE change_webhooks SET disabled_at = NULL, disabled_reason = '', consecutive_failures = $2, next_attempt_at = now() WHERE id = $1`, sub.ID, maxFailures-1)
 		exec(t, pool, `INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
 			SELECT 'test', 'bulk-'||g, 'https://e.test/bulk-'||g, 'Engineer', 'bulk-'||g, 'acme' FROM generate_series(1, 250) g`)
 		ep.status = http.StatusOK
@@ -251,7 +252,7 @@ func TestDeliveryEndToEnd(t *testing.T) {
 		ep.mu.Unlock()
 		total = Stats{}
 		until(func() bool { return total.Failed == 1 })
-		if s := state(); s.CursorID <= before.CursorID || s.ConsecutiveFailures != 1 {
+		if s := state(); s.CursorID <= before.CursorID || s.ConsecutiveFailures != 1 || total.Disabled != 0 {
 			t.Fatalf("accepted page not checkpointed: before %+v after %+v", before, s)
 		}
 	})
