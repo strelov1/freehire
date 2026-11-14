@@ -36,6 +36,13 @@ async function forwardApi(page: Page) {
   });
 }
 
+// A changed URL precedes the destination's mounted widgets and their API calls.
+async function expectJobPage(page: Page) {
+  await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+  await expect(page.getByRole('tablist', { name: 'Job details' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+}
+
 for (const { name, path, content } of PAGES) {
   test(`${name} (${path}) has no serious or critical accessibility violations`, async ({ page }) => {
     await forwardApi(page);
@@ -109,9 +116,7 @@ for (const path of ['/jobs', `/companies/${COMPANY_SLUG}`]) {
     });
     expect(outline).toEqual({ width: '2px', offset: '-2px', style: 'solid' });
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
-    await expect(page.getByRole('tablist', { name: 'Job details' })).toBeVisible();
-    await page.waitForLoadState('networkidle');
+    await expectJobPage(page);
   });
 
   test(`job metadata opens the posting on ${path}`, async ({ page }) => {
@@ -123,9 +128,7 @@ for (const path of ['/jobs', `/companies/${COMPANY_SLUG}`]) {
       const card = page.getByTestId('job-card').first();
       // Hit the chip's coordinates: the stretched link intentionally covers it.
       await card.getByText('Go', { exact: true }).click({ force: true });
-      await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
-      await expect(page.getByRole('tablist', { name: 'Job details' })).toBeVisible();
-      await page.waitForLoadState('networkidle');
+      await expectJobPage(page);
     }
   });
 }
@@ -175,5 +178,5 @@ test('overlapping country flags still open the job', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   const card = page.getByTestId('job-card').first();
   await card.getByRole('img', { name: 'United States', exact: true }).click({ force: true });
-  await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+  await expectJobPage(page);
 });
