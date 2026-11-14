@@ -377,6 +377,13 @@ type CandidateSurvey struct {
 	BiggestChallenges     []string           `json:"biggest_challenges"`
 }
 
+type CatalogSizeDaily struct {
+	Day           pgtype.Date        `json:"day"`
+	OpenJobs      int64              `json:"open_jobs"`
+	Reconstructed bool               `json:"reconstructed"`
+	ComputedAt    pgtype.Timestamptz `json:"computed_at"`
+}
+
 type ChangeWebhook struct {
 	ID                  int64              `json:"id"`
 	UserID              int64              `json:"user_id"`

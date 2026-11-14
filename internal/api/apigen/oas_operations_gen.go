@@ -47,6 +47,7 @@ const (
 	CancelAssistantTurnOperation          OperationName = "CancelAssistantTurn"
 	CancelSessionOperation                OperationName = "CancelSession"
 	CancelSupportTurnOperation            OperationName = "CancelSupportTurn"
+	CatalogHistoryOperation               OperationName = "CatalogHistory"
 	CatalogScaleOperation                 OperationName = "CatalogScale"
 	CheckUsernameOperation                OperationName = "CheckUsername"
 	ClaimEmployerCompanyOperation         OperationName = "ClaimEmployerCompany"

@@ -5319,6 +5319,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/catalog-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The catalogue's size per UTC day, measured or reconstructed.
+         * @description The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.
+         */
+        get: operations["catalogHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/embeddings": {
         parameters: {
             query?: never;
@@ -6528,6 +6548,20 @@ export interface components {
             computed_at: string;
             /** @description False when the snapshot is unavailable and `open_jobs` is the approximate fallback. */
             exact: boolean;
+        };
+        CatalogSizePoint: {
+            /** @description YYYY-MM-DD (UTC). */
+            date: string;
+            /**
+             * Format: int64
+             * @description Open postings the public listings could page through at the end of that day.
+             */
+            open_jobs: number;
+            /**
+             * @description True for a day estimated after the fact from today's records rather than measured that
+             *     day. Such a day applies today's duplicate verdicts to the past.
+             */
+            reconstructed: boolean;
         };
         CategoryMeta: {
             category: string;
@@ -7816,11 +7850,10 @@ export interface components {
             /** @description True when more changes are waiting; fetch again with `next_cursor`. */
             has_more: boolean;
             /**
-             * @description Pass back as `cursor` for the next page. Present whenever the call read a change or was
-             *     given a cursor; keep the last one to resume later, when `has_more` is false and new
-             *     changes have arrived.
+             * @description Pass back as `cursor` for the next page. Always present, even on an empty page: store it
+             *     and resume from it later, however long the feed stays quiet.
              */
-            next_cursor?: string;
+            next_cursor: string;
             /**
              * Format: date-time
              * @description The oldest change the feed holds: it starts when it was introduced, and `since` cannot reach before it.
@@ -22604,6 +22637,48 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["CatalogScale"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    catalogHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "date": "2026-07-04",
+                     *           "open_jobs": 2935357,
+                     *           "reconstructed": true
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["CatalogSizePoint"][];
                     };
                 };
             };

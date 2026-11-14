@@ -1,4 +1,4 @@
--- Push delivery of the job change feed (job_changes, migration 0263) to API customers.
+-- Push delivery of the job change feed (job_changes, migration 0264) to API customers.
 --
 -- One row is one subscription: a target URL, a filter, and the position in the feed it has
 -- been delivered up to. Unlike webhook_configs (one unsigned URL per account, for saved-search

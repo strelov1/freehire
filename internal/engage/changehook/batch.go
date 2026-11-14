@@ -42,7 +42,7 @@ type Filter struct {
 	Kinds        []string
 }
 
-func (f Filter) match(r db.ListJobChangesRow) bool {
+func (f Filter) match(r db.ListJobChangesForWebhookRow) bool {
 	return contains(f.Kinds, r.Kind) && (len(f.CompanySlugs) == 0 || contains(f.CompanySlugs, r.CompanySlug))
 }
 
@@ -57,7 +57,7 @@ func contains(set []string, s string) bool {
 
 // Batch is the changes of one feed page the subscription wants, in feed order. Rows it does
 // not want still move its position, which is the caller's business.
-func (f Filter) Batch(rows []db.ListJobChangesRow) []Change {
+func (f Filter) Batch(rows []db.ListJobChangesForWebhookRow) []Change {
 	var out []Change
 	for _, r := range rows {
 		if f.match(r) {
@@ -70,7 +70,7 @@ func (f Filter) Batch(rows []db.ListJobChangesRow) []Change {
 
 // deliveryID names a batch by its subscription and the feed position it ends at, so a retry
 // of the same batch carries the same id.
-func deliveryID(sub int64, last db.ListJobChangesRow) string {
+func deliveryID(sub int64, last db.ListJobChangesForWebhookRow) string {
 	return fmt.Sprintf("%d-%d-%d", sub, last.Xid, last.ID)
 }
 

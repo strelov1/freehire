@@ -103,6 +103,8 @@ func TestDeliveryEndToEnd(t *testing.T) {
 		return row
 	}
 	run := func() Stats {
+		// A failing customer endpoint must not surface as an error (it would fail the unit):
+		// the "failure retries" case below runs through here with the endpoint answering 500.
 		st, err := w.Run(ctx)
 		if err != nil {
 			t.Fatal(err)

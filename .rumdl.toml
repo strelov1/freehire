@@ -1,5 +1,5 @@
 # rumdl (https://github.com/rvben/rumdl), run by the `docs` CI job and by lefthook.
-# CI and .mise.toml pin the version together with its digest (see ci.yml).
+# CI and .mise.toml pin the version together with its digest (see .github/workflows/lint.yml).
 #
 # The policy: keep the rules that catch a document that RENDERS WRONG — an unclosed code
 # fence swallowing the rest of the file, a skipped heading level, a malformed list or table,

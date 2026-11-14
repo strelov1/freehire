@@ -46,13 +46,13 @@ func TestSignAndVerify(t *testing.T) {
 
 var kinds3 = []string{"opened", "closed", "reopened"}
 
-func row(id int64, kind, company string) db.ListJobChangesRow {
-	return db.ListJobChangesRow{ID: id, Xid: 10, Kind: kind, CompanySlug: company, PublicSlug: "job-" + company,
+func row(id int64, kind, company string) db.ListJobChangesForWebhookRow {
+	return db.ListJobChangesForWebhookRow{ID: id, Xid: 10, Kind: kind, CompanySlug: company, PublicSlug: "job-" + company,
 		At: pgtype.Timestamptz{Time: time.Unix(1_800_000_000, 0), Valid: true}}
 }
 
 func TestBatchFiltersByCompanyAndKindKeepingOrder(t *testing.T) {
-	rows := []db.ListJobChangesRow{row(1, "opened", "acme"), row(2, "closed", "other"), row(3, "closed", "acme"), row(4, "reopened", "acme")}
+	rows := []db.ListJobChangesForWebhookRow{row(1, "opened", "acme"), row(2, "closed", "other"), row(3, "closed", "acme"), row(4, "reopened", "acme")}
 
 	all := Filter{Kinds: kinds3}.Batch(rows)
 	if len(all) != 4 {

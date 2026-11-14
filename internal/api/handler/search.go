@@ -160,7 +160,7 @@ type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
 }
 
-// The pagination guard the search endpoints apply is maxPageWindow (handler.go), which
+// The pagination guard the search endpoints apply is maxPageWindow (api.go), which
 // they no longer own: it used to be a `maxSearchWindow` const here, and the Postgres-backed
 // lists carried no equivalent at all — the asymmetry the 2026-09-14 deep-offset outage went
 // through. It stays decoupled from the index's maxTotalHits (which now only sets how high

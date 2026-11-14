@@ -35,11 +35,12 @@ async function buildPayload(fetchImpl: typeof fetch) {
   // view rollup on a cache miss) and sits far below the fold, so the page goes out
   // without it and the section fills in when it lands.
   const engagement = api.engagementStats().catch(() => null);
-  const [scale, activity, facets, growth, github] = await Promise.allSettled([
+  const [scale, activity, facets, growth, catalogHistory, github] = await Promise.allSettled([
     api.catalogScale(),
     api.jobsActivity('day'),
     api.statsFacets(),
     api.userGrowth(),
+    api.catalogHistory(),
     githubStats(fetchImpl),
   ]);
 
@@ -62,6 +63,7 @@ async function buildPayload(fetchImpl: typeof fetch) {
     activity: settledValue(activity) ?? [],
     facets: settledValue(facets) ?? null,
     growth: settledValue(growth) ?? [],
+    catalogHistory: settledValue(catalogHistory) ?? [],
     engagement,
     github: settledValue(github),
   };

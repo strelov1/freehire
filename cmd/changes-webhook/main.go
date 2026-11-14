@@ -3,9 +3,9 @@
 // position in job_changes. One run claims every due subscription, delivers it until it has
 // caught up with the feed (bounded per run) and exits; run it every minute.
 //
-// It exits non-zero when any delivery failed, so the timer surfaces a run in which an
-// endpoint was down. The failed subscription is retried by backoff and eventually disabled
-// by the worker itself, so a persistently dead customer endpoint does not page forever.
+// A customer endpoint failing is normal and does not fail the run: the worker records it on
+// the subscription, retries by backoff and eventually disables it. The process exits non-zero
+// only on an infrastructure error (database unreachable, a claim query failing).
 //
 // Needs only DATABASE_URL.
 package main
@@ -40,5 +40,5 @@ func run() int {
 		log.Printf("changes-webhook: %d subscription(s), %d change(s) delivered, %d failed, %d disabled",
 			stats.Subscriptions, stats.Changes, stats.Failed, stats.Disabled)
 	}
-	return worker.ExitCode(int(stats.Failed), 0)
+	return 0
 }

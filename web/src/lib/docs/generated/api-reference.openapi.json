@@ -10773,6 +10773,63 @@
         ]
       }
     },
+    "/stats/catalog-history": {
+      "get": {
+        "operationId": "catalogHistory",
+        "summary": "The catalogue's size per UTC day, measured or reconstructed.",
+        "description": "The same set `/stats/catalog` counts as `open_jobs`, one figure per UTC day.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogSizePoint"
+                      }
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "date": "2026-07-04",
+                      "open_jobs": 2935357,
+                      "reconstructed": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stats"
+        ],
+        "security": [
+          {}
+        ]
+      }
+    },
     "/stats/embeddings": {
       "get": {
         "operationId": "getEmbeddingProgress",
@@ -14186,6 +14243,29 @@
         },
         "description": "The size of the catalogue, from one published snapshot."
       },
+      "CatalogSizePoint": {
+        "type": "object",
+        "required": [
+          "date",
+          "open_jobs",
+          "reconstructed"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD (UTC)."
+          },
+          "open_jobs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Open postings the public listings could page through at the end of that day."
+          },
+          "reconstructed": {
+            "type": "boolean",
+            "description": "True for a day estimated after the fact from today's records rather than measured that\nday. Such a day applies today's duplicate verdicts to the past."
+          }
+        }
+      },
       "CategoryMeta": {
         "type": "object",
         "required": [
@@ -16953,7 +17033,8 @@
         "type": "object",
         "required": [
           "limit",
-          "has_more"
+          "has_more",
+          "next_cursor"
         ],
         "properties": {
           "limit": {
@@ -16966,7 +17047,7 @@
           },
           "next_cursor": {
             "type": "string",
-            "description": "Pass back as `cursor` for the next page. Present whenever the call read a change or was\ngiven a cursor; keep the last one to resume later, when `has_more` is false and new\nchanges have arrived."
+            "description": "Pass back as `cursor` for the next page. Always present, even on an empty page: store it\nand resume from it later, however long the feed stays quiet."
           },
           "available_since": {
             "type": "string",

@@ -1,0 +1,149 @@
+name: Code review
+
+on:
+  # zizmor: ignore[dangerous-triggers] -- Checkout is pinned to the trusted workflow commit; PR files are read from git objects, never executed.
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  context:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+       contains(github.event.comment.body, '@codereview'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+    steps:
+      - name: Resolve an open pull request
+        id: pr
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const event = context.payload;
+            if (context.eventName === 'issue_comment' &&
+                !/(^|\s)@codereview(?=\s|$)/.test(event.comment.body)) return;
+
+            const number = context.eventName === 'workflow_dispatch'
+              ? event.inputs.pr_number
+              : event.pull_request?.number ?? event.issue.number;
+            if (!/^[1-9][0-9]*$/.test(String(number))) {
+              core.setFailed('A positive pull request number is required.');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: Number(number),
+            });
+            if (pr.state !== 'open') return;
+            if (context.eventName === 'pull_request_target' && pr.draft) return;
+            core.setOutput('number', String(pr.number));
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('head_sha', pr.head.sha);
+
+  review:
+    needs: context
+    if: needs.context.outputs.number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    # Only resolved review requests enter this group. An unrelated comment
+    # cannot cancel a running review, even before job conditions are evaluated.
+    concurrency:
+      group: code-review-${{ needs.context.outputs.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install OCR
+        env:
+          OCR_NO_UPDATE: '1'
+        run: npm install --global @alibaba-group/open-code-review@1.13.9 # zizmor: ignore[adhoc-packages] -- Exact CLI version is pinned.
+
+      - name: Fetch PR objects without checking out PR code
+        env:
+          PR_NUMBER: ${{ needs.context.outputs.number }}
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+        run: |
+          git fetch origin "pull/${PR_NUMBER}/head"
+          git fetch origin "$BASE_SHA"
+
+      - name: Run private review
+        id: review
+        env:
+          OCR_NO_UPDATE: '1'
+          OCR_LLM_URL: ${{ secrets.OCR_LLM_URL }}
+          OCR_LLM_TOKEN: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          OCR_LLM_EXTRA_HEADERS: x-bf-vk=${{ secrets.OCR_LLM_AUTH_TOKEN }}
+          OCR_LLM_MODEL: ${{ vars.OCR_LLM_MODEL || 'mid' }}
+          OCR_LLM_PROTOCOL: openai
+          OCR_USE_ANTHROPIC: 'false'
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+        run: >-
+          python3 .github/scripts/ocr_review.py
+          --base "$BASE_SHA" --head "$HEAD_SHA"
+          --output "$RUNNER_TEMP/ocr-public.json"
+
+      - name: Publish sanitized review
+        if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ needs.context.outputs.number }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const file = `${process.env.RUNNER_TEMP}/ocr-public.json`;
+            if (!fs.existsSync(file)) {
+              core.setFailed('Review did not produce a public result.');
+              return;
+            }
+            const marker = '<!-- freehire-ocr-review -->';
+            const { body } = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const issue_number = Number(process.env.PR_NUMBER);
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: issue_number,
+            });
+            if (pr.state !== 'open' || pr.head.sha !== process.env.HEAD_SHA) return;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number, per_page: 100,
+            });
+            const previous = comments.find(c =>
+              c.user.login === 'github-actions[bot]' && c.body?.startsWith(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({
+                ...context.repo, comment_id: previous.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({...context.repo, issue_number, body});
+            }

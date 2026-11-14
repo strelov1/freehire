@@ -67,3 +67,16 @@ WHERE id = sqlc.arg(id);
 UPDATE change_webhooks
 SET disabled_at = now(), disabled_reason = sqlc.arg(reason), last_error = sqlc.arg(last_error)
 WHERE id = sqlc.arg(id);
+
+-- name: ListJobChangesForWebhook :many
+-- One page of the public feed (ListJobChanges, same order, same finished-transactions bound,
+-- same privacy rule) plus company_slug, which the worker filters on. Kept separate so the
+-- public feed's row stays exactly what GET /jobs/changes serves.
+SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug, j.company_slug
+FROM job_changes c
+JOIN jobs j ON j.id = c.job_id
+WHERE (c.xid, c.id) > (sqlc.arg(after_xid)::bigint, sqlc.arg(after_id)::bigint)
+  AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+  AND (NOT j.is_private OR c.kind = 'closed')
+ORDER BY c.xid, c.id
+LIMIT sqlc.arg(row_limit);

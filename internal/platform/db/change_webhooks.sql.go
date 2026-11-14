@@ -316,3 +316,61 @@ func (q *Queries) ListChangeWebhooks(ctx context.Context, userID int64) ([]ListC
 	}
 	return items, nil
 }
+
+const listJobChangesForWebhook = `-- name: ListJobChangesForWebhook :many
+SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug, j.company_slug
+FROM job_changes c
+JOIN jobs j ON j.id = c.job_id
+WHERE (c.xid, c.id) > ($1::bigint, $2::bigint)
+  AND c.xid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+  AND (NOT j.is_private OR c.kind = 'closed')
+ORDER BY c.xid, c.id
+LIMIT $3
+`
+
+type ListJobChangesForWebhookParams struct {
+	AfterXid int64 `json:"after_xid"`
+	AfterID  int64 `json:"after_id"`
+	RowLimit int32 `json:"row_limit"`
+}
+
+type ListJobChangesForWebhookRow struct {
+	ID          int64              `json:"id"`
+	Xid         int64              `json:"xid"`
+	Kind        string             `json:"kind"`
+	Reason      string             `json:"reason"`
+	At          pgtype.Timestamptz `json:"at"`
+	PublicSlug  string             `json:"public_slug"`
+	CompanySlug string             `json:"company_slug"`
+}
+
+// One page of the public feed (ListJobChanges, same order, same finished-transactions bound,
+// same privacy rule) plus company_slug, which the worker filters on. Kept separate so the
+// public feed's row stays exactly what GET /jobs/changes serves.
+func (q *Queries) ListJobChangesForWebhook(ctx context.Context, arg ListJobChangesForWebhookParams) ([]ListJobChangesForWebhookRow, error) {
+	rows, err := q.db.Query(ctx, listJobChangesForWebhook, arg.AfterXid, arg.AfterID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJobChangesForWebhookRow{}
+	for rows.Next() {
+		var i ListJobChangesForWebhookRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Xid,
+			&i.Kind,
+			&i.Reason,
+			&i.At,
+			&i.PublicSlug,
+			&i.CompanySlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

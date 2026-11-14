@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_LABELS, sourceLabel } from './facets';
+import { SOURCE_LABELS, sourceLabel } from './sourceLabels';
 import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from './logo';
 
 // The logo proxy resolves a brand from a NAME and, when given one, from an explicit

@@ -77,12 +77,13 @@ func (optius) marketCountries(CompanyEntry) []string { return []string{"si"} }
 
 // optiusCard is one listing card: what the gate and the job need before the page is bought.
 type optiusCard struct {
-	id      string
-	url     string
-	title   string
-	company string
-	place   string
-	abroad  bool
+	id       string
+	url      string
+	title    string
+	company  string
+	place    string
+	abroad   bool
+	deadline *time.Time
 }
 
 // optiusIDPath is a posting path: a slug ending in the posting id, written twice.
@@ -286,8 +287,17 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 				return true
 			}
 			left, right := firstByClass(x, "left"), firstByClass(x, "right")
-			if left != nil && right != nil && collapseSpace(textContent(left)) == "Kraj dela" {
-				c.place = optiusPlace(textContent(right))
+			if left != nil && right != nil {
+				switch collapseSpace(textContent(left)) {
+				case "Kraj dela":
+					c.place = optiusPlace(textContent(right))
+				case "Prijave do":
+					if date := firstByClass(right, "date"); date != nil {
+						if d, err := time.Parse("2.1.2006", strings.ReplaceAll(collapseSpace(textContent(date)), " ", "")); err == nil {
+							c.deadline = &d
+						}
+					}
+				}
 			}
 			return false
 		})
@@ -314,11 +324,12 @@ func optiusPlace(s string) string {
 // applies only when the place, the title and the body name no country of their own.
 func optiusBaseJob(c optiusCard) Job {
 	j := Job{
-		ExternalID: c.id,
-		URL:        c.url,
-		Title:      c.title,
-		Company:    c.company,
-		Location:   c.place,
+		ExternalID:          c.id,
+		URL:                 c.url,
+		Title:               c.title,
+		Company:             c.company,
+		Location:            c.place,
+		ApplicationDeadline: c.deadline,
 	}
 	if !c.abroad {
 		j.FallbackCountries = []string{"si"}

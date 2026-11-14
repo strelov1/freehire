@@ -8,12 +8,11 @@
 -- client already holds. Ordering by id alone would not give that, because ids are taken
 -- inside the trigger, long before a bulk close commits.
 --
--- Visibility was judged when the change was logged (migration 0263: canonical, public, open
+-- Visibility was judged when the change was logged (migration 0264: canonical, public, open
 -- all feed one "listed" flag), so it is not re-judged here, with one privacy guard: a job
 -- that is private NOW serves only `closed` entries. Those carry just a slug the client was
 -- already given while it was public, and withholding them would leave the copy listed.
--- company_slug is selected for the webhook worker (internal/engage/changehook), which filters on it.
-SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug, j.company_slug
+SELECT c.id, c.xid, c.kind, c.reason, c.at, j.public_slug
 FROM job_changes c
 JOIN jobs j ON j.id = c.job_id
 WHERE (c.xid, c.id) > (sqlc.arg(after_xid)::bigint, sqlc.arg(after_id)::bigint)
