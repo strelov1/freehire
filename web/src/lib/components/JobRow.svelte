@@ -510,7 +510,7 @@
         aria-describedby={summary ? summaryId : undefined}
         title={linkTooltip}
         class={[
-          "block after:absolute after:inset-0 after:z-10 after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring",
+          'block after:absolute after:inset-0 after:z-10 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-ring',
           !flat && 'after:rounded-xl',
         ]}
       >

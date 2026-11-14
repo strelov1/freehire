@@ -21,6 +21,7 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 // Navigation assertions can finish while the destination still fetches its data.
 // Finish the stub handlers before Playwright disposes their response context.
 test.afterEach(async ({ page }) => {
+  await page.waitForLoadState('networkidle');
   await page.unrouteAll({ behavior: 'wait' });
 });
 
@@ -109,6 +110,8 @@ for (const path of ['/jobs', `/companies/${COMPANY_SLUG}`]) {
     expect(outline).toEqual({ width: '2px', offset: '-2px', style: 'solid' });
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+    await expect(page.getByRole('tablist', { name: 'Job details' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
   });
 
   test(`job metadata opens the posting on ${path}`, async ({ page }) => {
@@ -121,6 +124,8 @@ for (const path of ['/jobs', `/companies/${COMPANY_SLUG}`]) {
       // Hit the chip's coordinates: the stretched link intentionally covers it.
       await card.getByText('Go', { exact: true }).click({ force: true });
       await expect(page).toHaveURL(`/jobs/${JOB_SLUG}`);
+      await expect(page.getByRole('tablist', { name: 'Job details' })).toBeVisible();
+      await page.waitForLoadState('networkidle');
     }
   });
 }
