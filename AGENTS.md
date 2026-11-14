@@ -33,7 +33,7 @@ what it is and what it may reach for; substantial packages carry their own (tabl
 6. application   tracking, stages, the event ledger, mail and calendar
    search        Meili topology, the drain, saved searches, intent
 5. job           the posting: identity, facets, wire shape, dedup, ghost signal
-4. candidate     CV, structured extraction, experience bank, PII, matching
+4. candidate     CV, structured extraction, experience bank, matching
 3. ai            enrichment, embeddings, assistant, speech, plan limits
    identity      accounts, auth, profile
 2. dict          the facet dictionaries and normalisation under them
@@ -61,7 +61,6 @@ Non-obvious:
 - **There is no `sources/` directory.** The board catalog is the `boards` table (`internal/ingest/boardcatalog`) and the Telegram channel list is `telegram_channels`; nothing parses a board file any more. `internal/ingest/sources` is the *adapters*, not the catalog.
 - `design-system/` — a separate pnpm package linked into `web/` (pnpm `link:`) and `extension/` (npm `file:`), both symlinks. **Install it before building either consumer** — neither package manager installs a linked package's own dependencies. A type it imports must be one version across all three manifests (`pnpm check:deps`; see [design-system/AGENTS.md](design-system/AGENTS.md)).
 - `extension/` — the browser extension (WXT + Svelte side-panel agent client), npm-managed unlike the rest of the JS. See [extension/AGENTS.md](extension/AGENTS.md).
-- `services/pii-filter` — a standalone service, not a Go package.
 - **Host configuration is not in this repo.** Systemd units, nginx snippets and operator scripts (`release.sh`, `autodeploy.sh`, `gen-ingest-timers.sh`) live only in the private `freehire-ops` repository (`provision/host2/`, `scripts/host2/`; read `provision/host2/AGENTS.md`). Nothing there deploys itself: `release.sh` builds and flips the app but never touches a unit, snippet or script, so editing one is half the job — copy it to the host and `systemctl daemon-reload`; `scripts/host2/drift-check.sh` reports drift. `deploy/rollback/` stays here: those are a migration's SQL.
 
 ## Commands
@@ -175,7 +174,6 @@ Each is self-contained and can be read independently.
 | **Résumé identity** | [internal/candidate/resume/AGENTS.md](internal/candidate/resume/AGENTS.md) |
 | **Talent Network** | [internal/candidate/talentnetwork/AGENTS.md](internal/candidate/talentnetwork/AGENTS.md) |
 | **Structured CV** | [internal/candidate/resumeextract/AGENTS.md](internal/candidate/resumeextract/AGENTS.md) |
-| **PII masking** | [internal/candidate/pii/AGENTS.md](internal/candidate/pii/AGENTS.md) |
 | **Cover letters** | [internal/candidate/coverletter/AGENTS.md](internal/candidate/coverletter/AGENTS.md) |
 | **CV rendering** | [internal/candidate/cv/AGENTS.md](internal/candidate/cv/AGENTS.md) |
 | **CV edits** (the only writer) | [internal/candidate/cvedit/AGENTS.md](internal/candidate/cvedit/AGENTS.md) |

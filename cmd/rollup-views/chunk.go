@@ -21,6 +21,11 @@ import (
 // A var only so the tests can shrink it.
 var applyChunkRows = 1000
 
+// touchedJobs collects every job whose view_count a committed chunk moved, for the
+// index write at the end of the run (pushViewCounts). Package state is enough: this is a
+// run-once worker whose two passes run one after the other.
+var touchedJobs = map[int64]struct{}{}
+
 // errAlreadyApplied reports a file another run has applied, or is applying, already.
 var errAlreadyApplied = errors.New("view log file already applied")
 
@@ -87,6 +92,7 @@ func applyChunked[P any](
 		}
 		for _, p := range chunk {
 			applied += views(p)
+			touchedJobs[key(p).jobID] = struct{}{}
 		}
 		prev = &last
 		params = params[len(chunk):]

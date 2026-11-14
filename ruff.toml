@@ -1,5 +1,5 @@
 # The one Ruff config for every tracked Python file: services/scrapling-fetch,
-# services/pii-filter, scripts/ and .github/scripts/. The version is pinned in .mise.toml
+# scripts/ and .github/scripts/. The version is pinned in .mise.toml
 # and in the python-lint job of .github/workflows/lint.yml.
 #
 # Findings are fixed, not baselined: no per-file ignores and no broader rule set here.
@@ -11,7 +11,7 @@ include = ["*.py"]
 
 # Each directory is a flat set of modules that import one another by bare name, so isort
 # must see them as first-party rather than sort them in with the installed packages.
-src = ["services/scrapling-fetch", "services/pii-filter", "scripts", ".github/scripts"]
+src = ["services/scrapling-fetch", "scripts", ".github/scripts"]
 
 [lint]
 # Ruff's classic default selection (E4, E7, E9, F) written out, plus import sorting (I),
