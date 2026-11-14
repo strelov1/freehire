@@ -3,13 +3,13 @@ import {
   EMPLOYER_CREDENTIALS,
   FACETS,
   JOB_COLLECTION,
-  SOURCE_LABELS,
   type FacetDef,
   type FacetOption,
 } from './facets';
 import { CATEGORY_GROUPS, RAIL, type RailGroup } from './filterSections';
 import { EXPERIENCE_PRESETS, FRESHNESS_PRESETS } from './filterControls';
 import { fuzzyMatch } from './fuzzy';
+import { SOURCE_LABELS } from './sourceLabels';
 import { SKILL_LABELS } from './generated/contracts';
 
 export const FILTER_SEARCH_MIN_QUERY = 2;

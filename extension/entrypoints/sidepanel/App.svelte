@@ -27,14 +27,13 @@
     resolveNotice,
     type FreehireJob,
     type JobMatch,
-    type AutofillProfile,
   } from '../../lib/freehire';
   import { offersAddJob } from '../../lib/addJob';
   import {
     planLabelFills,
     looksLikeApplication,
     scopeToApplication,
-    formatAuthorizedCountries,
+    profileToValues,
     normalizeLabel,
   } from '../../lib/form';
   import {
@@ -54,21 +53,11 @@
   import AppliedPrompt from './AppliedPrompt.svelte';
   import PlanRefusalAlert from './PlanRefusalAlert.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
-  import ToolGroupList from './ToolGroupList.svelte';
-  import JobDeck from './JobDeck.svelte';
-  import { splitPresentingCalls } from '../../lib/assistant/deck';
-  import {
-    Alert,
-    Badge,
-    Button,
-    Card,
-    EmptyState,
-    Input,
-    Skeleton,
-    TabStrip,
-    tabStripId,
-  } from 'freehire-design-system';
-  import { ArrowUp, Plus, Square, RectangleEllipsis } from '@lucide/svelte';
+  import AddJobOffer from './AddJobOffer.svelte';
+  import ChatPanel from './ChatPanel.svelte';
+  import PanelHeader from './PanelHeader.svelte';
+  import { Button, EmptyState, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
+  import { Square, RectangleEllipsis } from '@lucide/svelte';
 
   let chat = $state<ChatState>(initChat());
   // Local action feedback (autofill results, errors) — not part of a turn.
@@ -693,26 +682,6 @@
     }
   }
 
-  function profileToValues(p: AutofillProfile): Record<string, string> {
-    return {
-      fullName: p.full_name,
-      firstName: p.first_name,
-      lastName: p.last_name,
-      email: p.email,
-      phone: p.phone,
-      city: p.location,
-      linkedin: p.linkedin,
-      github: p.github,
-      portfolio: p.portfolio,
-      authorizedCountries: formatAuthorizedCountries(p.authorized_countries),
-      visaSponsorshipNeeded: p.visa_sponsorship_needed,
-      desiredSalary: p.desired_salary,
-      noticePeriod: p.notice_period,
-      willingToRelocate: p.willing_to_relocate,
-      age18OrOlder: p.age_18_or_older,
-    };
-  }
-
   /**
    * Autofill, agent-first: freehire's agent reads the form through the wire,
    * maps the profile onto it, and fills what it can justify. The deterministic
@@ -988,34 +957,7 @@
 </script>
 
 <div class="app">
-  <header>
-    <div class="top">
-      <span class="brand">
-        <img src="/icon/32.png" alt="" class="brand-mark" width="18" height="18" />
-        <strong>freehire</strong>
-        <!-- The build, in the one place both of us can see it: a side panel keeps
-             its script until it is closed, so "did the reload take?" is otherwise
-             unanswerable from a screenshot. -->
-        <span class="build">v{browser.runtime.getManifest().version}</span>
-      </span>
-      <Badge variant={sending ? 'brand' : 'outline'}>
-        {sending ? 'working…' : user ? 'ready' : 'offline'}
-      </Badge>
-    </div>
-    <div class="auth">
-      {#if user}
-        <span class="who">Signed in as <b>{user.email}</b></span>
-        <button class="link" onclick={handleSignOut}>Sign out</button>
-      {:else}
-        <Button variant="primary" size="sm" onclick={handleSignIn} disabled={authBusy}>
-          {authBusy ? 'Signing in…' : 'Sign in with freehire'}
-        </Button>
-      {/if}
-    </div>
-    {#if authError}
-      <Alert variant="destructive">{authError}</Alert>
-    {/if}
-  </header>
+  <PanelHeader {user} {sending} {authBusy} {authError} onSignIn={handleSignIn} onSignOut={handleSignOut} />
 
   <TabStrip
     class="tab-strip"
@@ -1069,19 +1011,7 @@
                    the one moment the panel can ask for something useful, so it leads with
                    the action and says what it buys — rather than reporting a miss. Any
                    other page gets nothing here (see canAddJob). -->
-              <Card class="add-job">
-                <Button
-                  class="add-job-cta"
-                  variant="primary"
-                  size="lg"
-                  onclick={contributePage}
-                  disabled={contributing}
-                >
-                  <Plus class="size-4" />
-                  {contributing ? 'Adding this job…' : 'Add this job in one click'}
-                </Button>
-                <p class="add-job-hint">See your match score and tailor your CV</p>
-              </Card>
+              <AddJobOffer adding={contributing} onAdd={contributePage} />
             {/if}
 
             <!-- The account of the form the user is standing in front of. It is
@@ -1149,78 +1079,18 @@
         {/if}
       </div>
     {:else}
-      <div class="chat-panel">
-        {#if user}
-          <div class="chat-toolbar">
-            <Button variant="ghost" size="sm" onclick={newChat} disabled={sending}>Reset</Button>
-          </div>
-        {/if}
-        <div class="messages">
-          {#each chat.messages as message, mi (mi)}
-            {@const split = splitPresentingCalls(message.tools, message.streaming)}
-            {#each split.decks as slot, di (di)}
-              <JobDeck {slot} />
-            {/each}
-            {#if split.rest.length > 0}
-              <ToolGroupList calls={split.rest} />
-            {/if}
-            {#if message.text || message.streaming}
-              <div class="message {message.role}" class:errored={message.errored}>
-                {message.text}{#if message.streaming && !message.text}<span class="dots">…</span>{/if}
-              </div>
-            {/if}
-          {/each}
-          {#if chatError}
-            <div class="message system err">{chatError}</div>
-          {/if}
-          {#if planRefusal}
-            <PlanRefusalAlert refusal={planRefusal} />
-          {/if}
-          {#if chat.messages.length === 0}
-            <p class="empty">
-              {#if restoring}
-                Loading your conversation…
-              {:else if user}
-                Ask about the page you're on — the agent can read it.
-              {:else}
-                Sign in to chat with the agent.
-              {/if}
-            </p>
-          {/if}
-        </div>
-
-        <div class="composer">
-          <Input
-            class="flex-1"
-            placeholder={user ? 'Message the agent…' : 'Sign in to chat'}
-            bind:value={draft}
-            disabled={!user || sending}
-            onkeydown={(e) => e.key === 'Enter' && sendMessage()}
-          />
-          {#if sending}
-            <Button
-              class="rounded-full"
-              variant="primary"
-              size="icon"
-              aria-label="Stop the assistant"
-              onclick={stopTurn}
-            >
-              <Square class="size-3.5" fill="currentColor" />
-            </Button>
-          {:else}
-            <Button
-              class="rounded-full"
-              variant="primary"
-              size="icon"
-              aria-label="Send message"
-              onclick={sendMessage}
-              disabled={!user}
-            >
-              <ArrowUp class="size-4" strokeWidth={2.5} />
-            </Button>
-          {/if}
-        </div>
-      </div>
+      <ChatPanel
+        {user}
+        {chat}
+        {chatError}
+        {planRefusal}
+        {restoring}
+        {sending}
+        bind:draft
+        onReset={newChat}
+        onSend={sendMessage}
+        onStop={stopTurn}
+      />
     {/if}
   </div>
 </div>
@@ -1232,44 +1102,6 @@
     height: 100vh;
     overflow: hidden;
     font-size: 14px;
-  }
-
-  header {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px;
-  }
-
-  .top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .brand-mark {
-    border-radius: 4px;
-  }
-
-  .auth {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 12px;
-  }
-
-  .who {
-    color: var(--muted-foreground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .link {
@@ -1352,41 +1184,6 @@
     border-top: 1px solid var(--border);
   }
 
-  .chat-panel {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* :global — Card renders its own root, which carries the design system's scope
-   * hash rather than this component's; the same reason .tab-strip and
-   * .match-scroll > * are written this way. */
-  :global(.add-job) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 20px 16px;
-    text-align: center;
-  }
-
-  /* A pill, not the square primary button: this is an invitation on an otherwise
-   * empty panel, and the panel's own committed action (Autofill, pinned below) is
-   * the squared one — keeping the shapes apart keeps the hierarchy readable. */
-  :global(.add-job-cta) {
-    border-radius: 9999px;
-    white-space: normal;
-    max-width: 100%;
-  }
-
-  .add-job-hint {
-    color: var(--muted-foreground);
-    font-size: 13px;
-    line-height: 1.4;
-  }
-
   .match-skeleton {
     display: flex;
     align-items: center;
@@ -1398,28 +1195,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-
-  .messages {
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  /* Same fix as .match-panel above, same reason: without it a long transcript
-   * would squash individual messages instead of just scrolling past them. */
-  .messages > :global(*) {
-    flex-shrink: 0;
-  }
-
-  .build {
-    font-size: 11px;
-    color: var(--muted-foreground);
   }
 
   .no-plan {
@@ -1442,50 +1217,10 @@
     word-break: break-word;
   }
 
-  .message.user {
-    align-self: flex-end;
-    background: var(--brand);
-    color: var(--brand-foreground);
-  }
-
-  .message.assistant {
-    align-self: flex-start;
-    background: var(--muted);
-    color: var(--foreground);
-  }
-
   .message.system {
     align-self: center;
     background: var(--warning-muted);
     font-size: 12px;
     color: var(--warning-strong);
-  }
-
-  .message.system.err {
-    background: color-mix(in srgb, var(--destructive) 8%, transparent);
-    color: var(--destructive);
-  }
-
-  .message.assistant.errored {
-    border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
-  }
-
-  .dots {
-    opacity: 0.5;
-  }
-
-  .chat-toolbar {
-    display: flex;
-    justify-content: flex-end;
-    padding: 6px 10px 0;
-    flex-shrink: 0;
-  }
-
-  .composer {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px;
-    border-top: 1px solid var(--border);
   }
 </style>

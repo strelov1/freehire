@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceLabel } from './facets';
+import { sourceLabel } from './sourceLabels';
 import {
   activeOperator,
   companyOptions,
