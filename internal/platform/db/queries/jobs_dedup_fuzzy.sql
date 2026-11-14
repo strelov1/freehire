@@ -71,7 +71,7 @@ ORDER BY id;
 -- FuzzyDedupCandidateTitlesForCompany with a row cap, for the per-insert check
 -- (jobdedup.CanonicalForFuzzy). THE PREDICATE MUST STAY IDENTICAL to that query's: the two tiers
 -- agree on the canon only while they see the same candidate set (an integration test pins it).
--- Served by jobs_open_fuzzy_candidate_idx (migration 0266) as an index-only scan in id order, so
+-- Served by jobs_open_fuzzy_candidate_idx (migration 0267) as an index-only scan in id order, so
 -- the cost is bounded by max_rows index entries, not by the company's size. The caller asks for
 -- cap+1 rows and skips the check when it gets more than cap: a company that large is left to the
 -- batch pass rather than paying a scan on every insert.
