@@ -14,7 +14,9 @@ import (
 const advanceChangeWebhook = `-- name: AdvanceChangeWebhook :exec
 UPDATE change_webhooks
 SET cursor_xid = $1, cursor_id = $2,
-    consecutive_failures = 0, last_error = '', next_attempt_at = now(),
+    consecutive_failures = CASE WHEN $3::boolean THEN 0 ELSE consecutive_failures END,
+    last_error = CASE WHEN $3::boolean THEN '' ELSE last_error END,
+    next_attempt_at = now(),
     last_success_at = CASE WHEN $3::boolean THEN now() ELSE last_success_at END
 WHERE id = $4
 `
@@ -26,8 +28,9 @@ type AdvanceChangeWebhookParams struct {
 	ID        int64 `json:"id"`
 }
 
-// A batch was delivered (or nothing in the scanned range matched): move the position, clear
-// the failure state and release the lease.
+// Move the position and release the lease. Only a delivery the endpoint accepted clears the
+// failure state: a run that sent nothing (nothing matched, or the feed read failed) proves
+// nothing about the endpoint.
 func (q *Queries) AdvanceChangeWebhook(ctx context.Context, arg AdvanceChangeWebhookParams) error {
 	_, err := q.db.Exec(ctx, advanceChangeWebhook,
 		arg.CursorXid,

@@ -166,10 +166,16 @@ func TestDeliveryEndToEnd(t *testing.T) {
 		}
 	})
 	t.Run("nothing new is nothing sent", func(t *testing.T) {
+		exec(t, pool, `UPDATE change_webhooks SET consecutive_failures = 3, last_error = 'earlier' WHERE id = $1`, sub.ID)
 		run()
 		if n := len(ep.take()); n != 0 {
 			t.Fatalf("a caught-up subscription was sent %d delivery(ies)", n)
 		}
+		// Sending nothing proves nothing about the endpoint: its failure history stays.
+		if s := state(); s.ConsecutiveFailures != 3 {
+			t.Fatalf("failure count after a run that sent nothing = %d, want 3", s.ConsecutiveFailures)
+		}
+		exec(t, pool, `UPDATE change_webhooks SET consecutive_failures = 0, last_error = '' WHERE id = $1`, sub.ID)
 	})
 	t.Run("failure retries the same batch with the same id, then the cursor advances", func(t *testing.T) {
 		seedJob(t, pool, "job-b", "acme")

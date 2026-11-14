@@ -39,8 +39,9 @@ type Querier interface {
 	// over the same events both narrate, and only the first to finish moves the cursor, so the
 	// second neither rewinds it nor skips past an event it never saw.
 	AdvanceAssistantNarratedEvent(ctx context.Context, arg AdvanceAssistantNarratedEventParams) (int64, error)
-	// A batch was delivered (or nothing in the scanned range matched): move the position, clear
-	// the failure state and release the lease.
+	// Move the position and release the lease. Only a delivery the endpoint accepted clears the
+	// failure state: a run that sent nothing (nothing matched, or the feed read failed) proves
+	// nothing about the endpoint.
 	AdvanceChangeWebhook(ctx context.Context, arg AdvanceChangeWebhookParams) error
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence), and record the

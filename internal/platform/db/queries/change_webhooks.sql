@@ -48,11 +48,14 @@ RETURNING w.id, w.user_id, w.url, w.secret, w.company_slugs, w.kinds, w.cursor_x
           w.consecutive_failures;
 
 -- name: AdvanceChangeWebhook :exec
--- A batch was delivered (or nothing in the scanned range matched): move the position, clear
--- the failure state and release the lease.
+-- Move the position and release the lease. Only a delivery the endpoint accepted clears the
+-- failure state: a run that sent nothing (nothing matched, or the feed read failed) proves
+-- nothing about the endpoint.
 UPDATE change_webhooks
 SET cursor_xid = sqlc.arg(cursor_xid), cursor_id = sqlc.arg(cursor_id),
-    consecutive_failures = 0, last_error = '', next_attempt_at = now(),
+    consecutive_failures = CASE WHEN sqlc.arg(delivered)::boolean THEN 0 ELSE consecutive_failures END,
+    last_error = CASE WHEN sqlc.arg(delivered)::boolean THEN '' ELSE last_error END,
+    next_attempt_at = now(),
     last_success_at = CASE WHEN sqlc.arg(delivered)::boolean THEN now() ELSE last_success_at END
 WHERE id = sqlc.arg(id);
 
