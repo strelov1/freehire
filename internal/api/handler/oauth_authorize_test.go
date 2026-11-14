@@ -1,6 +1,11 @@
 package handler
 
-import "testing"
+import (
+	"net/url"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
+)
 
 // parseAuthorizeParams is pure and DB-free, so its validation rules are covered
 // here directly; the full GET/POST flow (client lookup, redirect matching,
@@ -31,5 +36,24 @@ func TestParseAuthorizeParams(t *testing.T) {
 				t.Errorf("parseAuthorizeParams(%+v) = %v, want nil", tc, err)
 			}
 		})
+	}
+}
+
+// The sign-in detour must hand authorize back a resource it accepts: a bare path there
+// failed every signed-out connector sign-in with invalid_target.
+func TestOAuthSignInURLKeepsAnAcceptableResource(t *testing.T) {
+	const origin = "https://freehire.me"
+	h := &authHandlers{frontendOrigin: origin}
+	signIn, err := url.Parse(h.oauthSignInURL(authorizeParams{ClientID: "c", RedirectURI: "http://127.0.0.1:9999/cb", Resource: oauth2server.MCPResourcePath}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := url.Parse(signIn.Query().Get("returnTo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := oauth2server.CanonicalResource(origin, back.Query()["resource"])
+	if err != nil || got != oauth2server.MCPResourcePath {
+		t.Fatalf("CanonicalResource(%v) = %q, %v; want %q", back.Query()["resource"], got, err, oauth2server.MCPResourcePath)
 	}
 }

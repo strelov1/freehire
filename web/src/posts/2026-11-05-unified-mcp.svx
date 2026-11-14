@@ -89,6 +89,6 @@ secrets and personal documents.
 
 **Update, 13 November 2026:** the hosted MCP now requires sign-in for every tool,
 search included, because Claude.ai and other assistants only offer sign-in when a
-server asks for it on the first request. The `/api/v1/mcp/account` address was
-removed: if your connector uses it, remove it and add
-`https://freehire.me/api/v1/mcp` again.
+server asks for it on the first request. A connector saved with
+the older `/api/v1/mcp/account` address keeps working; if it asks you to sign in
+again, do.

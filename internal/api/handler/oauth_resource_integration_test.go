@@ -183,13 +183,16 @@ func TestOAuthResource_UnknownResourceAtAuthorizeRedirectsInvalidTarget(t *testi
 	}
 }
 
-// /api/v1/mcp/account was a second resource until the endpoint was removed: asking for
-// it now is invalid_target, like any resource this server does not protect.
-func TestOAuthResource_TheRemovedAccountResourceIsInvalidTarget(t *testing.T) {
+// /api/v1/mcp/account is an alias of /api/v1/mcp (connectors saved before #4539 still
+// use it): asking for it issues a code bound to the one resource.
+func TestOAuthResource_TheAccountAliasBindsTheOneResource(t *testing.T) {
 	f := newResourceFixture(t, "res-account-1")
-	loc := f.authorize(t, resourceAccount)
-	if got := loc.Query().Get("error"); got != "invalid_target" || loc.Query().Get("code") != "" {
-		t.Fatalf("Location %s, want invalid_target and no code", loc)
+	token := f.grantToken(t, resourceAccount, "")
+	if stored, _ := f.grantRow(t, token); stored == nil || *stored != oauth2server.MCPResourcePath {
+		t.Fatalf("stored resource = %v, want %q", stored, oauth2server.MCPResourcePath)
+	}
+	if status, _ := f.callMCP(t, "/api/v1/mcp", token); status != 200 {
+		t.Fatalf("status = %d, want 200", status)
 	}
 }
 
@@ -253,11 +256,10 @@ func TestOAuthResource_TokenEndpoint(t *testing.T) {
 		}
 	})
 
-	t.Run("the removed account resource is invalid_target at /token too", func(t *testing.T) {
+	t.Run("the account alias matches the one resource at /token too", func(t *testing.T) {
 		code := f.authorize(t, resourceMixed).Query().Get("code")
-		status, body := f.exchange(t, code, resourceAccount)
-		if status != fiber.StatusBadRequest || body["error"] != "invalid_target" {
-			t.Fatalf("status %d body %v, want 400 invalid_target", status, body)
+		if status, body := f.exchange(t, code, resourceAccount); status != fiber.StatusOK {
+			t.Fatalf("status %d body %v, want 200", status, body)
 		}
 	})
 

@@ -13,9 +13,13 @@ var ErrInvalidTarget = errors.New("invalid_target")
 // MCPResourcePath is the one MCP resource. A grant is bound to it by PATH, never
 // the origin-qualified URL, so a later change of the frontend origin (domain move,
 // www/apex) does not orphan bound grants. The origin is checked when the resource
-// is requested. "/api/v1/mcp/account" was a second resource until that endpoint was
-// removed; a grant still bound to it is refused at /api/v1/mcp.
-const MCPResourcePath = "/api/v1/mcp"
+// is requested. "/api/v1/mcp/account" was a second resource; it is now an alias of the
+// same server, so asking for it binds MCPResourcePath. A grant already stored with the
+// old path is refused (invalid_token) and the client signs in again.
+const (
+	MCPResourcePath        = "/api/v1/mcp"
+	mcpAccountResourcePath = "/api/v1/mcp/account"
+)
 
 // CanonicalResource validates the `resource` values a request carried against
 // this deployment's origin and returns the single MCP resource PATH to bind, or
@@ -55,8 +59,9 @@ func resourcePath(wantOrigin, raw string) (string, error) {
 	if got, ok := originKey(raw); !ok || got != wantOrigin {
 		return "", ErrInvalidTarget
 	}
-	if path := strings.TrimSuffix(u.Path, "/"); path == MCPResourcePath {
-		return path, nil
+	switch strings.TrimSuffix(u.Path, "/") {
+	case MCPResourcePath, mcpAccountResourcePath:
+		return MCPResourcePath, nil
 	}
 	return "", ErrInvalidTarget
 }
