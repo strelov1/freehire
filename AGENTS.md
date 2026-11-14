@@ -54,7 +54,7 @@ public submission queue are `ingest` (manual job intake, not applications).
 
 Non-obvious:
 
-- `migrations/` — the source for **both** sqlc codegen and Postgres initdb. **Never edit an applied migration; add a new file** (`pnpm check:sql` enforces it).
+- `migrations/` — the source for **both** sqlc codegen and Postgres initdb. **Never edit an applied migration; add a new file** (`pnpm check:sql` enforces it). A new file takes the next free number (`pnpm check:migration-numbers`).
 - `typespec/` — **the HTTP contract**, moving in one route group at a time: `make api-contract` compiles it to `openapi/api.openapi.json` and generates `internal/api/apigen` (both committed, never edited by hand). See [internal/api/AGENTS.md](internal/api/AGENTS.md#the-http-contract-typespec--openapi--ogen).
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc` (the hook and CI regenerate and diff).
 - **Files have a size limit.** `scripts/check-file-size.mjs` (a pre-commit hook on staged files, the `file-size` CI job and `pnpm check:size` over all files) fails on a file over its `MAX_TOKENS` (tokens = bytes / 4), and its error says how to split one. Lockfiles, generated code, data assets, applied migrations and frozen history are ignored. The limit goes down step by step to 5000 as big files are split: lower it in the change that splits the files above the new value, never raise it.
@@ -111,7 +111,8 @@ real finding means **revoke the credential**.
 
 **CI gates** — each is explained, with its escape hatch, in
 [docs/agents/ci-checks.md](docs/agents/ci-checks.md): migration edits and squawk
-(`pnpm check:sql`, `Migration-Edit:` trailer), sqlc drift, knip dead JS incl. unused exports
+(`pnpm check:sql`, `Migration-Edit:` trailer), duplicate migration numbers
+(`pnpm check:migration-numbers`), sqlc drift, knip dead JS incl. unused exports
 (`pnpm check:dead`), Go `deadcode`, actionlint + zizmor (SHA-pinned actions), agnix (32 KiB
 cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdiff on
 `web/static/openapi.yaml` (`API-Break:` trailer), Schemathesis over the TypeSpec contract, the official MCP conformance suite over OJCP's MCP, changed-line coverage (diff-cover, Go

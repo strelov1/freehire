@@ -566,6 +566,13 @@ jobs:
       - name: Lint new migrations
         run: pnpm check:sql
 
+      # The allowlist is the duplicate prefixes already applied, each with its file
+      # count. A new file that reuses a number — including one more 0144 — fails here.
+      - name: Check migration numbers
+        run: |
+          node --test scripts/check-migration-numbers.test.mjs
+          pnpm check:migration-numbers
+
   design-system:
     runs-on: ubuntu-latest
     defaults:
