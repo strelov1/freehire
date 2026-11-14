@@ -88,12 +88,6 @@ func TestFollowUpDraft_PrefillsTheRecipientFromLinkedMail(t *testing.T) {
 		t.Fatalf("seed mail: %v", err)
 	}
 
-	if _, err := f.pool.Exec(context.Background(),
-		`INSERT INTO emails (user_id,external_id,thread_id,from_addr,received_at,source,job_id,direction)
-		 VALUES ($1,'fu-sent','t-1','fu-replied@example.test',now(),'gmail',$2,'outgoing')`, f.userID, jid); err != nil {
-		t.Fatal(err)
-	}
-
 	status, body := f.callKey(fiber.MethodGet, "/api/v1/me/tracking/followup-replied/followup", nil)
 
 	if status != fiber.StatusOK {

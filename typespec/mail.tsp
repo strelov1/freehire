@@ -46,10 +46,6 @@ model InboxMessage {
   id: int64;
   source: string;
   external_id: string;
-  direction?: string;
-  to_addrs?: string;
-  cc_addrs?: string;
-  thread_id?: string;
   from_addr: string;
   from_name: string;
   subject: string;
@@ -65,10 +61,6 @@ model InboxEmail {
   id: int64;
   source: string;
   external_id: string;
-  direction?: string;
-  to_addrs?: string;
-  cc_addrs?: string;
-  thread_id?: string;
   from_addr: string;
   from_name: string;
   subject: string;
@@ -119,9 +111,6 @@ model InboxIngested {
 model InboxApplicationEmail {
   id: int64;
   source: string;
-  direction?: string;
-  to_addrs?: string;
-  cc_addrs?: string;
   from_addr: string;
   from_name: string;
   subject: string;

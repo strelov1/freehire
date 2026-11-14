@@ -11923,9 +11923,6 @@ func (s *InboxApplicationDetail) SetAutoApply(val OptAutoApplyReviewInfo) {
 type InboxApplicationEmail struct {
 	ID           int64     `json:"id"`
 	Source       string    `json:"source"`
-	Direction    OptString `json:"direction"`
-	ToAddrs      OptString `json:"to_addrs"`
-	CcAddrs      OptString `json:"cc_addrs"`
 	FromAddr     string    `json:"from_addr"`
 	FromName     string    `json:"from_name"`
 	Subject      string    `json:"subject"`
@@ -11943,21 +11940,6 @@ func (s *InboxApplicationEmail) GetID() int64 {
 // GetSource returns the value of Source.
 func (s *InboxApplicationEmail) GetSource() string {
 	return s.Source
-}
-
-// GetDirection returns the value of Direction.
-func (s *InboxApplicationEmail) GetDirection() OptString {
-	return s.Direction
-}
-
-// GetToAddrs returns the value of ToAddrs.
-func (s *InboxApplicationEmail) GetToAddrs() OptString {
-	return s.ToAddrs
-}
-
-// GetCcAddrs returns the value of CcAddrs.
-func (s *InboxApplicationEmail) GetCcAddrs() OptString {
-	return s.CcAddrs
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -12005,21 +11987,6 @@ func (s *InboxApplicationEmail) SetSource(val string) {
 	s.Source = val
 }
 
-// SetDirection sets the value of Direction.
-func (s *InboxApplicationEmail) SetDirection(val OptString) {
-	s.Direction = val
-}
-
-// SetToAddrs sets the value of ToAddrs.
-func (s *InboxApplicationEmail) SetToAddrs(val OptString) {
-	s.ToAddrs = val
-}
-
-// SetCcAddrs sets the value of CcAddrs.
-func (s *InboxApplicationEmail) SetCcAddrs(val OptString) {
-	s.CcAddrs = val
-}
-
 // SetFromAddr sets the value of FromAddr.
 func (s *InboxApplicationEmail) SetFromAddr(val string) {
 	s.FromAddr = val
@@ -12061,10 +12028,6 @@ type InboxEmail struct {
 	ID               int64     `json:"id"`
 	Source           string    `json:"source"`
 	ExternalID       string    `json:"external_id"`
-	Direction        OptString `json:"direction"`
-	ToAddrs          OptString `json:"to_addrs"`
-	CcAddrs          OptString `json:"cc_addrs"`
-	ThreadID         OptString `json:"thread_id"`
 	FromAddr         string    `json:"from_addr"`
 	FromName         string    `json:"from_name"`
 	Subject          string    `json:"subject"`
@@ -12093,26 +12056,6 @@ func (s *InboxEmail) GetSource() string {
 // GetExternalID returns the value of ExternalID.
 func (s *InboxEmail) GetExternalID() string {
 	return s.ExternalID
-}
-
-// GetDirection returns the value of Direction.
-func (s *InboxEmail) GetDirection() OptString {
-	return s.Direction
-}
-
-// GetToAddrs returns the value of ToAddrs.
-func (s *InboxEmail) GetToAddrs() OptString {
-	return s.ToAddrs
-}
-
-// GetCcAddrs returns the value of CcAddrs.
-func (s *InboxEmail) GetCcAddrs() OptString {
-	return s.CcAddrs
-}
-
-// GetThreadID returns the value of ThreadID.
-func (s *InboxEmail) GetThreadID() OptString {
-	return s.ThreadID
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -12193,26 +12136,6 @@ func (s *InboxEmail) SetSource(val string) {
 // SetExternalID sets the value of ExternalID.
 func (s *InboxEmail) SetExternalID(val string) {
 	s.ExternalID = val
-}
-
-// SetDirection sets the value of Direction.
-func (s *InboxEmail) SetDirection(val OptString) {
-	s.Direction = val
-}
-
-// SetToAddrs sets the value of ToAddrs.
-func (s *InboxEmail) SetToAddrs(val OptString) {
-	s.ToAddrs = val
-}
-
-// SetCcAddrs sets the value of CcAddrs.
-func (s *InboxEmail) SetCcAddrs(val OptString) {
-	s.CcAddrs = val
-}
-
-// SetThreadID sets the value of ThreadID.
-func (s *InboxEmail) SetThreadID(val OptString) {
-	s.ThreadID = val
 }
 
 // SetFromAddr sets the value of FromAddr.
@@ -12343,10 +12266,6 @@ type InboxMessage struct {
 	ID               int64     `json:"id"`
 	Source           string    `json:"source"`
 	ExternalID       string    `json:"external_id"`
-	Direction        OptString `json:"direction"`
-	ToAddrs          OptString `json:"to_addrs"`
-	CcAddrs          OptString `json:"cc_addrs"`
-	ThreadID         OptString `json:"thread_id"`
 	FromAddr         string    `json:"from_addr"`
 	FromName         string    `json:"from_name"`
 	Subject          string    `json:"subject"`
@@ -12375,26 +12294,6 @@ func (s *InboxMessage) GetSource() string {
 // GetExternalID returns the value of ExternalID.
 func (s *InboxMessage) GetExternalID() string {
 	return s.ExternalID
-}
-
-// GetDirection returns the value of Direction.
-func (s *InboxMessage) GetDirection() OptString {
-	return s.Direction
-}
-
-// GetToAddrs returns the value of ToAddrs.
-func (s *InboxMessage) GetToAddrs() OptString {
-	return s.ToAddrs
-}
-
-// GetCcAddrs returns the value of CcAddrs.
-func (s *InboxMessage) GetCcAddrs() OptString {
-	return s.CcAddrs
-}
-
-// GetThreadID returns the value of ThreadID.
-func (s *InboxMessage) GetThreadID() OptString {
-	return s.ThreadID
 }
 
 // GetFromAddr returns the value of FromAddr.
@@ -12475,26 +12374,6 @@ func (s *InboxMessage) SetSource(val string) {
 // SetExternalID sets the value of ExternalID.
 func (s *InboxMessage) SetExternalID(val string) {
 	s.ExternalID = val
-}
-
-// SetDirection sets the value of Direction.
-func (s *InboxMessage) SetDirection(val OptString) {
-	s.Direction = val
-}
-
-// SetToAddrs sets the value of ToAddrs.
-func (s *InboxMessage) SetToAddrs(val OptString) {
-	s.ToAddrs = val
-}
-
-// SetCcAddrs sets the value of CcAddrs.
-func (s *InboxMessage) SetCcAddrs(val OptString) {
-	s.CcAddrs = val
-}
-
-// SetThreadID sets the value of ThreadID.
-func (s *InboxMessage) SetThreadID(val OptString) {
-	s.ThreadID = val
 }
 
 // SetFromAddr sets the value of FromAddr.
