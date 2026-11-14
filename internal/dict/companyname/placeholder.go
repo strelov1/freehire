@@ -225,7 +225,8 @@ func ExtractPaycorTitle(title string) string {
 		for _, label := range paycorTitleLabelOrder {
 			if rest, ok := cutPrefixFold(part, label+" at "); ok {
 				part = rest
-			} else if rest, ok := cutSuffixFold(part, " "+label); ok {
+			}
+			if rest, ok := cutSuffixFold(part, " "+label); ok {
 				part = rest
 			}
 		}

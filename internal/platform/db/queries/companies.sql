@@ -248,7 +248,10 @@ WITH moved AS (
 ), queued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT id, eff_posted_at FROM updated WHERE indexed
-    ON CONFLICT (job_id) DO NOTHING
+    -- Re-stamp a live entry as RequeueSearchOutbox does: a drain completing a claim it took
+    -- before the rename deletes by the old id and must not take the rename's entry with it.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
 SELECT old_slug FROM updated;
 

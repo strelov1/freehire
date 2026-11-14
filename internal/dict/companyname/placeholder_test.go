@@ -501,6 +501,7 @@ func TestExtractPaycorTitle(t *testing.T) {
 		"Add Company Name":                      "",
 		"Jobs at Company Name":                  "",
 		"Careers at Add Company Name":           "",
+		"Careers at Company Name Careers":       "",
 		"Company Name":                          "",
 		"neighorhood":                           "",
 		"GR Metrology Employment Opportunities": "GR Metrology",
