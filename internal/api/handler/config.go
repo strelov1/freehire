@@ -12,7 +12,6 @@ import (
 	"github.com/strelov1/freehire/internal/api/realtime"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
-	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
@@ -120,10 +119,6 @@ type Config struct {
 	// the deployment with no Realtime gateway configured: the mint endpoint answers
 	// 501 and the interview session view offers no voice mode.
 	Realtime *realtime.Client
-	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
-	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
-	// to no analysis rather than send PII to the model.
-	PIIDetector pii.Detector
 	// Telegram bot for notification linking/delivery confirmations. Optional: an
 	// empty TelegramBotToken disables the feature (linking endpoints report off,
 	// webhook inert). TelegramBotUsername builds the deep link; TelegramWebhookSecret

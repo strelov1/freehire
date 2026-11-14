@@ -68,7 +68,7 @@ Structured CVs rendered to PDF through Typst templates, each marked for whether
 it survives an ATS parser and whether it prints a headshot. Editing is
 revisioned and undoable. Contact details can be masked on a per-CV basis.
 
-**Live:** /my/cvs · **Code:** `internal/candidate/cv`, `internal/candidate/cvsection`, `internal/candidate/headshot`, `internal/candidate/pii` · **Deep dive:** [internal/candidate/cv/AGENTS.md](../internal/candidate/cv/AGENTS.md)
+**Live:** /my/cvs · **Code:** `internal/candidate/cv`, `internal/candidate/cvsection`, `internal/candidate/headshot` · **Deep dive:** [internal/candidate/cv/AGENTS.md](../internal/candidate/cv/AGENTS.md)
 
 ### Match score and fit analysis
 

@@ -7473,6 +7473,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             source: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7488,6 +7491,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7532,6 +7539,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7636,6 +7647,12 @@ export interface components {
              * @description Source-stated last application day, inclusive. Absent when the source states no deadline.
              */
             application_deadline?: string;
+            /**
+             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
+             *     Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+             *     between employers.
+             */
+            team?: string;
             /** @description True for a hand-curated posting rather than an automated crawl. */
             manually_added?: boolean;
             /**

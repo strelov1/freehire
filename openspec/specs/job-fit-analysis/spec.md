@@ -173,9 +173,8 @@ MUST NOT error the request and MUST leave the deterministic profile-match unaffe
 caller has no stored CV, the response MUST indicate `has_cv: false` and prompt an upload instead of
 running the LLM. When the caller has a CV but no current structured résumé, the chain MUST degrade
 to no analysis (the structured résumé is the fit input, and it is what carries the de-identified
-signal). An unavailable PII detector SHALL still leave the chain fail-closed, but by that same
-route rather than by masking inside it: extraction is what fail-closes on the detector, so a
-detector outage leaves no current structured résumé and the fit degrades to no analysis.
+signal). Fit analysis SHALL NOT depend on a PII detector; it consumes the existing
+contact-free derived projection.
 
 #### Scenario: LLM unconfigured
 
@@ -191,11 +190,6 @@ detector outage leaves no current structured résumé and the fit degrades to no
 
 - **WHEN** a user POSTs the fit endpoint with a CV but no current structured résumé
 - **THEN** the system responds `200` with no analysis and does not persist a cache row
-
-#### Scenario: PII detector unavailable is fail-closed
-
-- **WHEN** a user POSTs the fit endpoint while the PII detector is unconfigured or failing
-- **THEN** the system responds `200` with no analysis, does not send the CV to the LLM, and does not persist a cache row
 
 ### Requirement: Profile-match UI shows the AI analysis on demand
 

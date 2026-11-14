@@ -19,13 +19,14 @@ WITH prior AS (
     UPDATE applications SET stage = $5::text
      WHERE user_id = $3::bigint AND job_id = $4::bigint
        AND stage IS DISTINCT FROM $5::text
+       AND EXISTS (SELECT 1 FROM emails em WHERE em.id = $2::bigint AND em.user_id = applications.user_id AND em.direction = 'incoming')
     RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
 )
 INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
 SELECT u.user_id, u.id, u.job_id, u.company_slug, 'stage_set', u.stage, em.received_at, $1::text
   FROM upd u
   JOIN emails em ON em.id = $2::bigint AND em.user_id = u.user_id
- WHERE u.stage IS NOT NULL
+ WHERE em.direction = 'incoming' AND u.stage IS NOT NULL
    AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
 `
 
@@ -110,7 +111,7 @@ SET status_signal        = $1,
     suggested_job_id     = NULL,
     classification_model = 'agent',
     classified_at        = now()
-WHERE emails.id = $4 AND emails.user_id = $5
+WHERE emails.id = $4 AND emails.user_id = $5 AND emails.direction = 'incoming'
 `
 
 type AgentTriageEmailParams struct {
@@ -156,7 +157,7 @@ WITH claimable AS (
     SELECT o.id, o.email_id
     FROM email_classification_outbox o
     JOIN emails e ON e.id = o.email_id
-    WHERE o.failed_at IS NULL
+    WHERE e.direction = 'incoming' AND o.failed_at IS NULL
       AND (o.claimed_at IS NULL
            OR o.claimed_at < now() - make_interval(secs => $1::int))
     ORDER BY e.received_at DESC, e.id DESC
@@ -235,7 +236,7 @@ func (q *Queries) DeleteEmailClassificationOutbox(ctx context.Context, id int64)
 
 const enqueuePendingEmailClassification = `-- name: EnqueuePendingEmailClassification :execrows
 INSERT INTO email_classification_outbox (email_id)
-SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external'
+SELECT id FROM emails WHERE classified_at IS NULL AND source <> 'external' AND direction = 'incoming'
 ON CONFLICT (email_id) DO NOTHING
 `
 
@@ -439,7 +440,7 @@ SET job_id               = CASE WHEN emails.link_source IN ('manual', 'agent')
     status_signal        = $5,
     classification_model = $6,
     classified_at        = now()
-WHERE emails.id = $7 AND emails.user_id = $8
+WHERE emails.id = $7 AND emails.user_id = $8 AND emails.direction = 'incoming'
 `
 
 type SetEmailClassificationParams struct {

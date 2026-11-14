@@ -62,7 +62,7 @@ var blocks = map[string][]string{
 		"browseruse",
 		"cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "jev", "llm", "llmschema", "migrate",
-		"modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
+		"mailmeta", "modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",
 		// tracerlink names a CV and is still here, because what it holds is not the CV: link
 		// normalisation, an opaque token, a user-agent/device classifier and a salted visitor
@@ -132,7 +132,7 @@ var blocks = map[string][]string{
 		// coalescing); matchanalysis stays the prompt chain and the Analysis type.
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
-		"matchanalysis", "pii", "perioddate", "resume", "resumeextract",
+		"matchanalysis", "perioddate", "resume", "resumeextract",
 		// survey holds the candidate's self-reported segmentation answers (job-search
 		// stage, biggest challenge, current income). It sits here rather than in engage,
 		// whose digests are its most likely future reader, because it states what a
@@ -234,7 +234,7 @@ var blocks = map[string][]string{
 	// only to ask which tier an account holds. Placing it in identity would invert that —
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "buddy", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
+		"broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
 		// limitnudge is outbound engagement like prowelcome below, and needs even less
 		// reach than it: the trigger (a free-tier plan-ceiling refusal) is written by
 		// internal/ai/plan.Store directly into plan_limit_hits, so this package never

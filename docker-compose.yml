@@ -114,11 +114,6 @@ services:
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:-s3mock}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:-s3mock}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
-      # PII_FILTER_URL intentionally has no local default: it fronts a real span-detection
-      # model (services/pii-filter) with no lightweight local stand-in, so unset here is the
-      # correct out-of-the-box state — résumé structuring/import degrade gracefully without
-      # it (internal/resumeextract's Enabled() check), same as an unconfigured LLM.
-      PII_FILTER_URL: "${PII_FILTER_URL:-}"
       # LLM-backed features (enrich, fit analysis, résumé structuring, the assistant, …)
       # were silently unreachable locally: these were never passed through from .env at
       # all, so every model call degraded as "unconfigured" with no error. Empty is a

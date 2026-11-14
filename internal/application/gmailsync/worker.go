@@ -2,17 +2,21 @@ package gmailsync
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/tokencrypt"
 )
 
 // Connection is a connected user the sync worker processes.
 type Connection struct {
-	UserID int64
-	Email  string
-	Cursor int64 // Unix watermark of the newest synced message
+	UserID     int64
+	Email      string
+	Cursor     int64 // Unix watermark of the newest synced incoming message
+	SentCursor int64 // Run-start watermark of the last complete sent scan
 }
 
 // StoredEmail is a fetched message ready to persist.
@@ -26,7 +30,8 @@ type Store interface {
 	ListConnected(ctx context.Context) ([]Connection, error)
 	RefreshToken(ctx context.Context, userID int64) (encToken string, err error)
 	UpsertEmail(ctx context.Context, e StoredEmail) error
-	SetSynced(ctx context.Context, userID, cursorUnix int64) error
+	SetSynced(ctx context.Context, userID, cursorUnix, sentCursor int64) error
+	ListThreadIDs(ctx context.Context, userID int64) ([]string, error)
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }
 
@@ -128,6 +133,7 @@ func (w *Worker) markRevoked(ctx context.Context, userID int64) outcome {
 func (w *Worker) SyncUser(ctx context.Context, u Connection) { _ = w.syncUser(ctx, u) }
 
 func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
+	started := time.Now().Unix()
 	encToken, err := w.store.RefreshToken(ctx, u.UserID)
 	if err != nil {
 		log.Printf("gmail-sync: user %d: read token: %v", u.UserID, err)
@@ -171,8 +177,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	var threadIDs []string
 
 	// fetch persists one message, deduping by id, tracking the watermark, and
-	// recording its thread for expansion. The user's own in-thread replies are
-	// skipped — the inbox stores inbound mail only. newest tracks the highest
+	// recording its thread for expansion. Both directions are retained; newest tracks incoming
 	// ReceivedAt seen regardless of order; once any message in the wave fails,
 	// it is reset to u.Cursor right before SetSynced (below) rather than merely
 	// frozen at whatever it last reached — a newer message can easily succeed
@@ -191,6 +196,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		seen[id] = true
 		msg, err := reader.GetMessage(ctx, id)
 		if err != nil {
+			if missingMessage(err) {
+				return
+			}
 			if RevokedGrant(err) {
 				log.Printf("gmail-sync: user %d: get %s: %v — marking needs_reconsent", u.UserID, id, err)
 				revoked = true
@@ -200,19 +208,31 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			sawFailure = true
 			return
 		}
+		if msg.SystemNotification {
+			if ts := msg.ReceivedAt.Unix(); ts > newest {
+				newest = ts
+			}
+			return
+		}
+		if msg.Draft {
+			return
+		}
 		if msg.ThreadID != "" && !seenThread[msg.ThreadID] {
 			seenThread[msg.ThreadID] = true
 			threadIDs = append(threadIDs, msg.ThreadID)
 		}
-		if strings.EqualFold(msg.FromAddr, u.Email) {
-			return
+		if msg.Direction == "" {
+			msg.Direction = DirectionIncoming
+		}
+		if u.Email != "" && strings.EqualFold(msg.FromAddr, u.Email) {
+			msg.Direction = DirectionOutgoing
 		}
 		if err := w.store.UpsertEmail(ctx, StoredEmail{UserID: u.UserID, Message: msg}); err != nil {
 			log.Printf("gmail-sync: user %d: store %s: %v", u.UserID, id, err)
 			sawFailure = true
 			return
 		}
-		if ts := msg.ReceivedAt.Unix(); ts > newest {
+		if ts := msg.ReceivedAt.Unix(); msg.Direction == DirectionIncoming && ts > newest {
 			newest = ts
 		}
 	}
@@ -223,6 +243,40 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			break
 		}
 	}
+	// Existing stored threads are the privacy boundary for outgoing discovery.
+	knownThreads, err := w.store.ListThreadIDs(ctx, u.UserID)
+	if err != nil {
+		log.Printf("gmail-sync: user %d: known threads: %v", u.UserID, err)
+		return outcomeFailed
+	}
+	known := make(map[string]bool, len(knownThreads))
+	for _, tid := range knownThreads {
+		known[tid] = true
+		if u.SentCursor == 0 && !seenThread[tid] {
+			seenThread[tid] = true
+			threadIDs = append(threadIDs, tid)
+		}
+	}
+	if u.SentCursor != 0 && !revoked {
+		refs, err := reader.ListSentMessages(ctx, u.SentCursor)
+		if err != nil {
+			if RevokedGrant(err) {
+				return w.markRevoked(ctx, u.UserID)
+			}
+			log.Printf("gmail-sync: user %d: sent messages: %v", u.UserID, err)
+			sawFailure = true
+		} else {
+			for _, ref := range refs {
+				if known[ref.ThreadID] || seenThread[ref.ThreadID] {
+					fetch(ref.ID)
+					if revoked {
+						break
+					}
+				}
+			}
+		}
+	}
+
 	// Thread expansion: pull every sibling of a matched message's thread so a
 	// reply with no ATS marker (a personal recruiter, a scheduling follow-up) is
 	// ingested behind the anchor the search already found. Skipped once the grant
@@ -233,12 +287,16 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		}
 		siblings, err := reader.ListThreadMessageIDs(ctx, tid)
 		if err != nil {
+			if missingMessage(err) {
+				continue
+			}
 			if RevokedGrant(err) {
 				log.Printf("gmail-sync: user %d: thread %s: %v — marking needs_reconsent", u.UserID, tid, err)
 				revoked = true
 				break
 			}
 			log.Printf("gmail-sync: user %d: thread %s: %v", u.UserID, tid, err)
+			sawFailure = true
 			continue
 		}
 		for _, id := range siblings {
@@ -255,8 +313,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 
 	if sawFailure {
 		newest = u.Cursor
+		started = u.SentCursor
 	}
-	if err := w.store.SetSynced(ctx, u.UserID, newest); err != nil {
+	if err := w.store.SetSynced(ctx, u.UserID, newest, started); err != nil {
 		log.Printf("gmail-sync: user %d: set synced: %v", u.UserID, err)
 		return outcomeFailed
 	}
@@ -264,4 +323,10 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		return outcomeFailed
 	}
 	return outcomeSynced
+}
+
+// A permanently removed provider resource has no content left to synchronize.
+func missingMessage(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
