@@ -234,7 +234,7 @@ var blocks = map[string][]string{
 	// only to ask which tier an account holds. Placing it in identity would invert that —
 	// billing would import a community integration — and the guard would say so.
 	"engage": {
-		"broadcast", "buddy", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
+		"broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
 		// limitnudge is outbound engagement like prowelcome below, and needs even less
 		// reach than it: the trigger (a free-tier plan-ceiling refusal) is written by
 		// internal/ai/plan.Store directly into plan_limit_hits, so this package never
