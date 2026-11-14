@@ -97,12 +97,9 @@ func TestHTTPToolErrorCorrelatesWithResponseAndResolvedIdentity(t *testing.T) {
 		if record["request_id"] != id || record["key_id"] != float64(73) || record["credential_type"] != "api_key" {
 			t.Errorf("lost context at HTTP adaptor: %v", record)
 		}
-		if raw, _ := json.Marshal(record); strings.Contains(string(raw), "client-controlled-secret") {
+		if raw, _ := json.Marshal(record); strings.Contains(string(raw), "client-controlled-secret") || strings.Contains(string(raw), "private-permission-details") {
 			t.Fatalf("private data in log: %s", raw)
 		}
-	}
-	if finish["error"] != "private-permission-details" || start["error"] != nil {
-		t.Errorf("handler's own refusal text should be logged on finish only: %v", finish)
 	}
 	if finish["outcome"] != "tool_error" || finish["error_code"] != "permission_denied" {
 		t.Errorf("HTTP 200 hid failure: %v", finish)

@@ -24,7 +24,8 @@ const accountProfileInstructions = " and keeps the job-search profile. Call get_
 const accountSetupInstructions = "get_setup_status: the next setup step. "
 
 // The capability line already says auto-apply prepares applications for review.
-const accountAutoApplyInstructions = "Auto-apply: saved answers may be sent to employers. "
+const accountAutoApplyInstructions = "Auto-apply: saved answers may be sent to employers. " +
+	"Check get_setup_status before the first auto_apply_start; its refusals are final for that call, so relay the reason instead of retrying. "
 
 // accountPlanInstructions is kept to one clause: the tool's own description says what the
 // plan carries and that the free plan includes no AI. Only for a session served auto-apply,
@@ -111,15 +112,13 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 			if errors.Is(err, assistant.ErrInvalidArguments) {
 				code = "invalid_request"
 			}
-			text := agentErrorText(err)
-			result := errorResult(text)
+			result := errorResult(agentErrorText(err))
 			diagnostics := map[string]any{"error_code": code}
-			// A decode failure's text quotes the caller's own argument names; bad_args already
-			// names the argument, so only a fixed sentence is logged for it.
-			if errors.Is(err, assistant.ErrInvalidArguments) {
-				text = "invalid arguments"
+			// Only a reason the call site wrote as a constant is logged: the agent-facing text
+			// of other errors can interpolate what the caller sent (a slug, a search text).
+			if reason := assistant.LogReason(err); reason != "" {
+				diagnostics[reasonKey] = reason
 			}
-			diagnostics[reasonKey] = text
 			if field := assistant.ArgField(err); field != "" && code == "invalid_request" {
 				diagnostics[badArgsKey] = []string{field}
 			}
@@ -137,8 +136,9 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 // agentErrorText is what an agent is told when a tool fails. A *fiber.Error and a bad
 // argument are written for the caller, so their text is shown; anything else is an internal
 // fault whose text may name accounts, rows or personal data, so the agent gets a generic
-// sentence, as an HTTP caller gets a generic 500. Only this text is ever logged (as the
-// diagnostics' reason), so internal text stays out of the logs too.
+// sentence, as an HTTP caller gets a generic 500. This text is not logged: it can echo the
+// caller's input. The log carries only a constant reason an error opted in with
+// (assistant.WithLogReason).
 func agentErrorText(err error) string {
 	var fe *fiber.Error
 	switch {
