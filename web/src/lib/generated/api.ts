@@ -7432,6 +7432,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             source: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7447,6 +7450,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7491,6 +7498,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;

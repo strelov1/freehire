@@ -4664,6 +4664,8 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// Known hiring conversations are the boundary for sent-message body retrieval.
+	ListGmailThreadIDs(ctx context.Context, userID int64) ([]string, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
 	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
@@ -8461,8 +8463,8 @@ type Querier interface {
 	// costs a second slot. Two concurrent first applications can both pass the count and land
 	// one over the cap; the cap bounds abuse, it is not a quota anyone is billed against.
 	UpsertDirectApplication(ctx context.Context, arg UpsertDirectApplicationParams) (int64, error)
-	// Store a Gmail message, idempotent by (user_id, source, external_id) with
-	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
+	// Gmail is idempotent; sent messages are already read and never enter employer triage.
+	// Refresh provider metadata without changing deletion, bodies or incoming reader state.
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
 	// Issue (or replace) the outstanding code for one purpose. The composite primary key
 	// makes this the whole "at most one live code per (user, purpose)" rule: a resend

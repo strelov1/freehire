@@ -142,7 +142,7 @@ func BuildQueryFor(selfAddr string, afterUnix int64, extraDomains []string) stri
 	if afterUnix > 0 {
 		q += fmt.Sprintf(" after:%d", afterUnix)
 	}
-	return q
+	return q + " -in:sent -in:drafts"
 }
 
 // IsATSSender reports whether a From header (address or "Name <addr>") comes from

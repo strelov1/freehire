@@ -29,7 +29,7 @@ WHERE uj.user_id = $1 AND uj.job_id = $2;
 -- name: ListJobEmails :many
 -- The emails linked to one of the caller's applications, newest first, for the
 -- application detail page.
-SELECT id, source, from_addr, from_name, subject, status_signal, link_source,
+SELECT id, source, direction, to_addrs, cc_addrs, from_addr, from_name, subject, status_signal, link_source,
     received_at, (read_at IS NOT NULL)::boolean AS read
 FROM emails
 WHERE user_id = $1 AND job_id = $2

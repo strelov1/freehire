@@ -149,6 +149,10 @@ type Message struct {
 	ID         int64
 	Source     string
 	ExternalID string
+	Direction  string
+	ThreadID   string
+	ToAddrs    string
+	CcAddrs    string
 	FromAddr   string
 	FromName   string
 	Subject    string
@@ -267,7 +271,7 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 	out := make([]Message, 0, len(rows))
 	for _, r := range rows {
 		m := Message{
-			ID: r.ID, Source: r.Source, ExternalID: r.ExternalID,
+			ID: r.ID, Source: r.Source, ExternalID: r.ExternalID, Direction: r.Direction, ThreadID: r.ThreadID, ToAddrs: r.ToAddrs, CcAddrs: r.CcAddrs,
 			FromAddr: r.FromAddr, FromName: r.FromName, Subject: r.Subject,
 			Snippet: r.Snippet, ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
 			StatusSignal:     pgStr(r.StatusSignal),
@@ -298,7 +302,7 @@ func (s *Service) Get(ctx context.Context, userID, id int64) (Message, error) {
 		return Message{}, err
 	}
 	return Message{
-		ID: row.ID, Source: row.Source, ExternalID: row.ExternalID,
+		ID: row.ID, Source: row.Source, ExternalID: row.ExternalID, Direction: row.Direction, ThreadID: row.ThreadID, ToAddrs: row.ToAddrs, CcAddrs: row.CcAddrs,
 		FromAddr: row.FromAddr, FromName: row.FromName, Subject: row.Subject,
 		BodyText: row.BodyText, BodyHTML: row.BodyHtml,
 		ReceivedAt: row.ReceivedAt.Time, Read: row.Read,
