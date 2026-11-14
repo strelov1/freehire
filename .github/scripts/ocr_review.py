@@ -116,6 +116,8 @@ def run_review(base: str, head: str, output: Path) -> int:
                     "json",
                     "--concurrency",
                     "4",
+                    "--exclude",
+                    ",".join(pr_size.GENERATED),
                     "--background",
                     BACKGROUND,
                     "--output",
