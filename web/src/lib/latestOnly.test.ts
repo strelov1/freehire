@@ -52,3 +52,36 @@ describe('latestOnly', () => {
     expect(applied).toBe('untouched');
   });
 });
+
+describe('latestOnly errors', () => {
+  it('reports a current error without applying a value', async () => {
+    const failure = new Error('quota');
+    let reported: unknown;
+    const run = latestOnly(
+      () => Promise.reject(failure),
+      () => {},
+      (error) => {
+        reported = error;
+      },
+    );
+    await run();
+    expect(reported).toBe(failure);
+  });
+  it('does not replace a fresh result with a stale failure', async () => {
+    const first = deferred<number>();
+    let call = 0;
+    let reported: unknown;
+    const run = latestOnly(
+      () => (call++ === 0 ? first.promise : Promise.resolve(2)),
+      () => {},
+      (error) => {
+        reported = error;
+      },
+    );
+    const old = run();
+    await run();
+    first.reject(new Error('stale quota'));
+    await old;
+    expect(reported).toBeUndefined();
+  });
+});
