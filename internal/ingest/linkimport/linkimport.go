@@ -219,6 +219,8 @@ func draftFrom(r linksource.Resolved) job.Draft {
 		URL:      r.Job.URL,
 		Remote:   r.Job.Remote,
 		PostedAt: r.Job.PostedAt,
+		// A URL import shares the board crawl's identity, so an empty team would overwrite the crawled one.
+		Team: r.Job.Team,
 	}
 }
 

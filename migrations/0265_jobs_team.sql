@@ -91,3 +91,35 @@ LEFT JOIN LATERAL (
     FROM job_activity x WHERE x.job_id = j.id
     LIMIT 1
 ) a ON true;
+
+-- RefreshUnchangedJob now matches on team, so a team-only write must bump job_activity's
+-- state_version too, or a refresh fenced on the old version would pass after a team change.
+-- Same trigger as 0258 with team added.
+DROP TRIGGER job_activity_state ON jobs;
+CREATE TRIGGER job_activity_state AFTER UPDATE OF
+    closed_at, content_hash, cities, salary_min_source, salary_max_source,
+    salary_currency_source, salary_period_source, english_level, is_tech,
+    engagement, application_deadline, duplicate_of, is_private,
+    company_slug, posted_at, created_at,
+    -- duplicate_of is derived by a BEFORE trigger from these owners. UPDATE OF
+    -- checks the statement's SET list, including the owner rather than its result.
+    duplicate_of_role, duplicate_of_aggregator, duplicate_of_fuzzy, team
+ON jobs FOR EACH ROW WHEN (
+    OLD.closed_at IS DISTINCT FROM NEW.closed_at OR
+    OLD.content_hash IS DISTINCT FROM NEW.content_hash OR
+    OLD.cities IS DISTINCT FROM NEW.cities OR
+    OLD.salary_min_source IS DISTINCT FROM NEW.salary_min_source OR
+    OLD.salary_max_source IS DISTINCT FROM NEW.salary_max_source OR
+    OLD.salary_currency_source IS DISTINCT FROM NEW.salary_currency_source OR
+    OLD.salary_period_source IS DISTINCT FROM NEW.salary_period_source OR
+    OLD.english_level IS DISTINCT FROM NEW.english_level OR
+    OLD.is_tech IS DISTINCT FROM NEW.is_tech OR
+    OLD.engagement IS DISTINCT FROM NEW.engagement OR
+    OLD.application_deadline IS DISTINCT FROM NEW.application_deadline OR
+    OLD.duplicate_of IS DISTINCT FROM NEW.duplicate_of OR
+    OLD.is_private IS DISTINCT FROM NEW.is_private OR
+    OLD.company_slug IS DISTINCT FROM NEW.company_slug OR
+    OLD.posted_at IS DISTINCT FROM NEW.posted_at OR
+    OLD.created_at IS DISTINCT FROM NEW.created_at OR
+    OLD.team IS DISTINCT FROM NEW.team
+) EXECUTE FUNCTION job_activity_state();
