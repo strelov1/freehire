@@ -268,31 +268,34 @@ func (in *Inbox) move(ctx context.Context, sc MoveScope, acc employer.Account, e
 	if err != nil {
 		return MoveResult{}, err
 	}
-	var notified bool
 	if mv.Changed {
+		// Best effort: a mirror failure is contained by the MoveScope (a savepoint in
+		// ApplicationMoves) and logged, never failing the move.
 		if _, err := sc.Mirror.Mirror(ctx, mv.CandidateID, mv.JobID, candidateStage[st]); err != nil {
 			log.Printf("directapply: candidate's tracking not updated for application %d: %v", id, err)
 		}
-		if st.Notifies() {
-			err := in.notifier.SendStatusUpdate(ctx, StatusMail{
-				To:          mv.CandidateEmail,
-				ReplyTo:     acc.WorkEmail,
-				CompanyName: mv.Company,
-				JobTitle:    mv.JobTitle,
-				JobSlug:     mv.JobSlug,
-				Stage:       st,
-				Message:     message,
-			})
-			if err != nil {
-				log.Printf("directapply: candidate not emailed about application %d: %v", id, err)
-			}
-			notified = err == nil
-		}
 	}
-
 	app, err := sc.Repo.Get(ctx, employerID, id)
 	if err != nil {
 		return MoveResult{}, err
+	}
+	// The letter goes last, once every database step of the move has succeeded, so a
+	// failure there can never follow a letter about a decision that is then rolled back.
+	var notified bool
+	if mv.Changed && st.Notifies() {
+		err := in.notifier.SendStatusUpdate(ctx, StatusMail{
+			To:          mv.CandidateEmail,
+			ReplyTo:     acc.WorkEmail,
+			CompanyName: mv.Company,
+			JobTitle:    mv.JobTitle,
+			JobSlug:     mv.JobSlug,
+			Stage:       st,
+			Message:     message,
+		})
+		if err != nil {
+			log.Printf("directapply: candidate not emailed about application %d: %v", id, err)
+		}
+		notified = err == nil
 	}
 	return MoveResult{Application: app, Notified: notified}, nil
 }

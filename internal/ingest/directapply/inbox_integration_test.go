@@ -208,6 +208,14 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 	ctx := context.Background()
 
 	firstIn, release := make(chan struct{}), make(chan struct{})
+	var released bool
+	releaseOnce := func() {
+		if !released {
+			released = true
+			close(release)
+		}
+	}
+	t.Cleanup(releaseOnce) // a failed assertion must not leave the first move blocked
 	done := make(chan error, 1)
 	go func() {
 		done <- moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) error {
@@ -216,7 +224,13 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 			return nil
 		})
 	}()
-	<-firstIn
+	select {
+	case <-firstIn:
+	case err := <-done:
+		t.Fatalf("the first move ended before running its callback: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first move never ran its callback")
+	}
 
 	secondRan := make(chan struct{})
 	go func() {
@@ -231,7 +245,7 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 	if err := moves.RunMove(ctx, 43, func(context.Context, directapply.MoveScope) error { return nil }); err != nil {
 		t.Fatalf("RunMove(43): %v", err)
 	}
-	close(release)
+	releaseOnce()
 	if err := <-done; err != nil {
 		t.Fatalf("first RunMove: %v", err)
 	}

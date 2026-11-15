@@ -249,9 +249,9 @@ func (r *QueriesRepository) SetStage(ctx context.Context, employerID, id int64, 
 // serialised, and the move's own reads and writes — the stage, the candidate's tracking —
 // use that transaction's connection, so a move never holds one connection while waiting
 // for another (which, with enough concurrent moves, would exhaust the pool). The stage
-// write and the candidate's mirror commit together. The candidate's letter is sent inside
-// the run, before the commit, so letters keep the order of the moves; a commit that then
-// fails is reported as the move failing.
+// write and the candidate's mirror commit together; the mirror runs in a savepoint so its
+// failure leaves the stage write standing. The move sends the candidate's letter after its
+// last database step, inside the run, so letters keep the order of the moves.
 type ApplicationMoves struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
@@ -273,8 +273,30 @@ func (m *ApplicationMoves) RunMove(ctx context.Context, id int64, fn func(contex
 	if err := qtx.LockDirectApplication(ctx, id); err != nil {
 		return err
 	}
-	if err := fn(ctx, MoveScope{Repo: NewQueriesRepository(qtx), Mirror: jobtracking.NewEmployerStages(qtx)}); err != nil {
+	mirror := savepointMirror{tx: tx, build: func(d db.DBTX) StageMirror { return jobtracking.NewEmployerStages(db.New(d)) }}
+	if err := fn(ctx, MoveScope{Repo: NewQueriesRepository(qtx), Mirror: mirror}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// savepointMirror runs each mirror inside a savepoint of the move's transaction. The mirror
+// is best effort, but a statement that fails in Postgres aborts the whole transaction —
+// without the savepoint, a failed mirror would roll back the employer's stage too.
+type savepointMirror struct {
+	tx    pgx.Tx
+	build func(db.DBTX) StageMirror
+}
+
+func (m savepointMirror) Mirror(ctx context.Context, userID, jobID int64, stage string) (bool, error) {
+	sp, err := m.tx.Begin(ctx) // a savepoint: pgx nests a transaction begun on a transaction
+	if err != nil {
+		return false, err
+	}
+	moved, err := m.build(sp).Mirror(ctx, userID, jobID, stage)
+	if err != nil {
+		_ = sp.Rollback(ctx)
+		return false, err
+	}
+	return moved, sp.Commit(ctx)
 }

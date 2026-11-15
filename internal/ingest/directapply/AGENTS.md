@@ -73,7 +73,9 @@ and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes
   application's advisory lock (`LockDirectApplication`), so an older move can never mirror
   or mail after a newer one, and whose connection carries the move's own reads and writes,
   so a move never holds one connection while waiting for another. The stage and the mirror
-  commit together; the letter goes out inside the run, before the commit. A message is refused with a stage that sends no letter rather than dropped.
+  commit together, the mirror in a savepoint so its failure (which would otherwise abort
+  the transaction) leaves the stage standing; the letter goes out last, after every
+  database step of the move, so it never announces a decision that is then rolled back. A message is refused with a stage that sends no letter rather than dropped.
 - **Every stage maps onto a userjob stage** (`candidateStage`): new → applied (what the
   record reads on arrival, so moving back undoes a stage the employer set by mistake),
   reviewing → screening, hired → accepted, the rest by name. Whether the candidate's record
