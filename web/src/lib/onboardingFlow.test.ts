@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { filtersFromProfile, filtersToParams } from './facetModel';
+import { filtersToParams } from './facetModel';
+
+import { filtersFromProfile } from './profileFilters';
 import {
   answerChips,
   matchCompanies,

@@ -9,7 +9,7 @@
   import CategoryPane from '#lib/components/filters/CategoryPane.svelte';
   import SearchSelect from '#lib/components/facets/SearchSelect.svelte';
   import { ApiError, api } from '#lib/api.js';
-  import { dynamicOptions } from '#lib/facets.js';
+  import { dynamicOptions } from '#lib/facetOptions.js';
   import { filtersToParams } from '#lib/filters.js';
   import { promptSignIn } from '#lib/signin.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';

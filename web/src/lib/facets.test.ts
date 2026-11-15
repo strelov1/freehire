@@ -1,17 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
-import {
-  rankOptionMatches,
-  cityOption,
-  collapseCities,
-  countryFromSlug,
-  countryLabel,
-  countrySlug,
-  COUNTRY_OPTIONS,
-  dynamicLabel,
-  FACETS,
-  slugifiedCountries,
-} from './facets';
+import { countryLabel, COUNTRY_OPTIONS, dynamicLabel, FACETS } from './facets';
+import { countryFromSlug, countrySlug, slugifiedCountries } from './countrySlugs';
+import { rankOptionMatches, cityOption, collapseCities } from './facetOptions';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
 

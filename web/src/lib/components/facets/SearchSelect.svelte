@@ -3,7 +3,8 @@
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from './SearchSelect.messages';
   import type { Snippet } from 'svelte';
-  import { optionMatches, uniqueByValue, type FacetOption } from '#lib/facets.js';
+  import { type FacetOption } from '#lib/facets.js';
+  import { optionMatches, uniqueByValue } from '#lib/facetOptions.js';
   import { CountryFlag, EntityLogo, Input } from '#lib/ui/index.js';
   import SkillIcon from '../SkillIcon.svelte';
   import { pillClass, pillPressed, pillTitle } from './pill';

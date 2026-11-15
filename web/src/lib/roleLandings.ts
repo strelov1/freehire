@@ -12,7 +12,8 @@
 // one way on an indexed page and another way in the app.
 
 import type { InsightSalaryBand } from './api';
-import { countryLabel, countrySlug } from './facets';
+import { countryLabel } from './facets';
+import { countrySlug } from './countrySlugs';
 import { CATEGORY_VALUES } from './generated/contracts';
 import { categoryLabel } from './labels';
 

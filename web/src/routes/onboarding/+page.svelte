@@ -23,7 +23,8 @@
   import { ArrowRight, FileUp, MessageCircleQuestionMark, RotateCcw, Search, UserRound } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
-  import { filtersFromProfile, filtersToParams } from '#lib/facetModel.js';
+  import { filtersToParams } from '#lib/facetModel.js';
+  import { filtersFromProfile } from '#lib/profileFilters.js';
   import { countryLabel } from '#lib/facets.js';
   import { gotoPath } from '#lib/gotoPath.js';
   import { carryFailureMessage, carryInto, type CarryDeps, type CarryStep } from '#lib/onboardingCarry.js';

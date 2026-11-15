@@ -9,7 +9,7 @@
 // silently fall out of the modal.
 
 import { CATEGORY_VALUES, FACET_ALIASES, type Category } from './generated/contracts';
-import { optionMatches } from './facets';
+import { optionMatches } from './facetOptions';
 import { categoryLabel } from './labels';
 
 // `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { uniqueByValue, type FacetOption } from '#lib/facets.js';
+  import { type FacetOption } from '#lib/facets.js';
+  import { uniqueByValue } from '#lib/facetOptions.js';
   import { pillClass, pillPressed, pillTitle } from './pill';
   import PillMeta from './PillMeta.svelte';
 

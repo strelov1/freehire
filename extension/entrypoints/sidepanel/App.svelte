@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage, type LabelFill, type FramedField, type FramedUpload } from '../../lib/protocol';
+  import { type RuntimeMessage, type FramedField, type FramedUpload } from '../../lib/protocol';
   import { TOP_FRAME } from '../../lib/tools/attachCv';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
@@ -14,28 +14,9 @@
   import { pageIdentity, readStablePageKey } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import {
-    freehireSlugFromUrl,
-    findJob,
-    getJob,
-    getMatch,
-    getAutofillProfile,
-    runAgentAutofill,
-    saveBankAnswer,
-    markApplied,
-    resolveJob,
-    resolveNotice,
-    type FreehireJob,
-    type JobMatch,
-  } from '../../lib/freehire';
-  import { offersAddJob } from '../../lib/addJob';
-  import {
-    planLabelFills,
-    looksLikeApplication,
-    scopeToApplication,
-    profileToValues,
-    normalizeLabel,
-  } from '../../lib/form';
+  import { markApplied, type FreehireJob, type JobMatch } from '../../lib/freehire';
+  import { contributePageUrl, matchPage } from '../../lib/pageMatch';
+  import { scopeToApplication, normalizeLabel } from '../../lib/form';
   import {
     buildPlan,
     leftAnApplication,
@@ -44,7 +25,8 @@
     type ApplyPlan,
     type PlanItem,
   } from '../../lib/applyPlan';
-  import { startWalk, nextStep, applyStep, skipStep, stopWalk, type Walk } from '../../lib/walk';
+  import type { WalkHooks } from '../../lib/formWalk';
+  import { agentAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
   import MatchCard from './MatchCard.svelte';
@@ -193,20 +175,6 @@
     return pageIdentity(tab?.url ?? '');
   }
 
-  /** Strips the fragment and any embedded credentials from a URL before it goes to
-   *  the server for a catalog lookup — neither affects which job a page is, and a
-   *  fragment can carry an SSO token on some ATS redirects. Query parameters are
-   *  kept: Greenhouse's embedded application form encodes the board and job id
-   *  there (`for`, `token`), which `sources.RefFromURL` depends on. */
-  function sanitizeForLookup(url: string): string {
-    try {
-      const u = new URL(url);
-      return `${u.origin}${u.pathname}${u.search}`;
-    } catch {
-      return url;
-    }
-  }
-
   /**
    * Runs on every tab switch and page load. A genuine change of page clears
    * whatever conversation is on screen — there is nothing on the new page for it
@@ -287,14 +255,6 @@
   // newer one's result after the user has already tabbed or navigated again.
   let matchRequestId = 0;
 
-  async function loadCatalog(slug: string, token: string, requestId: number): Promise<boolean> {
-    const [job, m] = await Promise.all([getJob(slug, token), getMatch(slug, token)]);
-    if (requestId !== matchRequestId) return false;
-    matchJob = job;
-    match = m;
-    return true;
-  }
-
   async function loadMatch() {
     const requestId = ++matchRequestId;
     const token = await getToken();
@@ -313,47 +273,20 @@
     matchStatus = 'loading';
     matchError = '';
     try {
-      // Freehire's own job page → curated slug directly.
-      const directSlug = freehireSlugFromUrl(url);
-      if (directSlug) {
-        if (!(await loadCatalog(directSlug, token, requestId))) return;
-        matchStatus = 'ready';
-        return;
+      const result = await matchPage(url, token, () => requestId !== matchRequestId);
+      if (!result) return;
+      if (result.status === 'ready') {
+        matchJob = result.job;
+        match = result.match;
+      } else {
+        canAddJob = result.canAddJob;
       }
-
-      // Any other page: recognise it as a catalog job from its URL (curated card),
-      // else there is nothing to show. No ad-hoc scrape-and-match call here — that
-      // used to run automatically on every tab the panel happened to be open on,
-      // job posting or not, which is both wasted work and a wasted LLM call for
-      // the vast majority of pages. `contributePage` (the "Add vacancy" action on
-      // the empty state) is the explicit, on-demand equivalent.
-      const found = await findJob(sanitizeForLookup(url), token);
-      if (requestId !== matchRequestId) return;
-      if (found.slug) {
-        if (!(await loadCatalog(found.slug, token, requestId))) return;
-        matchStatus = 'ready';
-        return;
-      }
-      const offer = offersAddJob({
-        atsBoard: found.atsBoard,
-        // The page is asked only when the URL alone did not settle it.
-        jobPostingMarkup: !found.atsBoard && (await readJobPostingMarkup()),
-      });
-      if (requestId !== matchRequestId) return;
-      canAddJob = offer;
-      matchStatus = 'empty';
+      matchStatus = result.status;
     } catch (err) {
       if (requestId !== matchRequestId) return;
       matchError = err instanceof Error ? err.message : 'Could not load match';
       matchStatus = 'error';
     }
-  }
-
-  async function readJobPostingMarkup(): Promise<boolean> {
-    const reply = (await browser.runtime.sendMessage({
-      kind: 'GET_JOB_POSTING_MARKUP',
-    } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-    return reply?.kind === 'JOB_POSTING_MARKUP' && reply.present;
   }
 
   let contributing = $state(false);
@@ -380,9 +313,9 @@
         notices.push('No page to add.');
         return;
       }
-      const resolved = await resolveJob(url, token);
-      notices.push(resolveNotice(resolved.status));
-      if (resolved.public_slug) await loadMatch();
+      const resolved = await contributePageUrl(url, token);
+      notices.push(resolved.notice);
+      if (resolved.slug) await loadMatch();
     } catch (err) {
       notices.push(`Could not add this page: ${err instanceof Error ? err.message : 'error'}`);
     } finally {
@@ -682,34 +615,25 @@
     }
   }
 
-  /**
-   * Autofill, agent-first: freehire's agent reads the form through the wire,
-   * maps the profile onto it, and fills what it can justify. The deterministic
-   * filler stays as the fallback until the agent path has proven itself — it
-   * only knows a fixed set of labels, but it needs nothing but this browser.
-   */
-  /**
-   * Names the first few labels and counts the rest. A real ATS form leaves
-   * dozens of fields untouched (Greenhouse alone contributes a checkbox per
-   * country), and a notice that lists them all is one the user cannot read.
-   */
-  function nameSome(labels: string[], shown = 5): string {
-    const trimmed = labels.map((l) => l.trim().replace(/\s+/g, ' ')).filter(Boolean);
-    if (trimmed.length <= shown) return trimmed.join(', ');
-    return `${trimmed.slice(0, shown).join(', ')} and ${trimmed.length - shown} more`;
-  }
-
-  /** How long each filled question stays in view before the walk moves on. It is
-   *  there for the eye: without it the walk is a flicker, which is the batch fill
-   *  this replaced. */
-  const WALK_STEP_MS = 300;
-
   /** Set while a walk runs, so Stop can end it between steps. */
   let walkStop = $state(false);
 
-  function pause(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+  // What the walks in lib/formWalk report back to this panel.
+  const walkHooks: WalkHooks = {
+    filling: (label) => (fillingLabel = label),
+    stopped: () => walkStop,
+    wrote: () => (formFilled = true),
+    answered: (label, frame, form) => tickOff(label, frame, form),
+  };
+  // What the fallback filler in lib/formFill reports back to this panel.
+  const fillPanel: FillPanel = {
+    notice: (text) => notices.push(text),
+    offerOverride: (run) => (overrideFill = run),
+    walk: walkHooks,
+    refreshPlan: () => refreshPlan(),
+    known: (label) => autofilled.add(normalizeLabel(label)),
+    refused: (err) => (autofillRefusal = err),
+  };
 
   /** Ticks one question off the plan, narrowed by whatever address the caller
    *  has: a fill knows its frame and form, the agent's report knows the label
@@ -723,65 +647,6 @@
     if (item) plan = markAnswered(plan, item.key);
   }
 
-  /**
-   * Works through `fills` one question at a time, each one revealed as its value
-   * lands, ticking the plan off as it goes. Returns what it managed — the caller
-   * owns the closing sentence, because the two callers reach the walk from
-   * different places (its own plan, or the agent's report).
-   */
-  async function walkFills(fills: LabelFill[]): Promise<Walk<LabelFill>> {
-    let walk = startWalk(fills);
-    try {
-      // `nextStep` is the continuation test: it ends the walk both when the list
-      // runs out and when Stop has been pressed.
-      for (let fill = nextStep(walk); fill !== null; fill = nextStep(walk)) {
-        fillingLabel = fill.label;
-        const applied = (await browser.runtime.sendMessage({
-          kind: 'FILL_BY_LABEL',
-          fills: [fill],
-          reveal: true,
-        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-        const outcome = applied?.kind === 'FILL_OUTCOMES' ? applied.outcomes[0] : undefined;
-        if (outcome?.status === 'filled') {
-          walk = applyStep(walk, fill);
-          formFilled = true;
-          // Ticked off from what was just written, not from a fresh read: the
-          // page's own change notice is debounced, so re-reading here would leave
-          // the counter a step behind the value on screen.
-          tickOff(fill.label, fill.frame, fill.form);
-        } else {
-          walk = skipStep(walk, fill);
-        }
-        if (walkStop) return stopWalk(walk);
-        await pause(WALK_STEP_MS);
-      }
-      return walk;
-    } finally {
-      fillingLabel = null;
-    }
-  }
-
-  /** Plays a list of labels the agent says it filled back over the page, so the
-   *  user sees what changed. Nothing is written — the agent already did that. */
-  async function walkReported(labels: string[]) {
-    try {
-      for (const label of labels) {
-        if (walkStop) return;
-        fillingLabel = label;
-        await browser.runtime.sendMessage({
-          kind: 'REVEAL_FIELD',
-          request: { label },
-        } satisfies RuntimeMessage);
-        tickOff(label);
-        await pause(WALK_STEP_MS);
-      }
-    } finally {
-      // Whatever ended the walk — the list, Stop, or a throw — no question is
-      // being filled once it is over, and a stuck spinner would say otherwise.
-      fillingLabel = null;
-    }
-  }
-
   async function autofill() {
     const token = await getToken();
     if (!token || autofilling) return;
@@ -789,55 +654,12 @@
     walkStop = false;
     autofillRefusal = null;
     try {
-      // Read the form first: the walk ticks questions off the plan, and a page
-      // whose form arrived after the last read (an ATS step change, which fires
-      // no page load) would otherwise be walked with nothing to tick.
-      await refreshPlan();
-      const report = await runAgentAutofill(token);
-      // The agent filled the page itself, server-side. Play its report back so
-      // the user watches what changed rather than finding it later.
-      if (report.filled.length > 0) formFilled = true;
-      // Every label the agent filled is known up front: a walk stopped part-way still
-      // leaves those answers written, and they came from the profile, not the candidate.
-      for (const label of report.filled) autofilled.add(normalizeLabel(label));
-      await walkReported(report.filled);
-      const filled = report.filled.length;
-      track('autofill', { mode: 'agent', filled });
-      notices.push(
-        filled > 0
-          ? `✓ Autofilled ${filled} field${filled === 1 ? '' : 's'} — review before submitting.`
-          : 'The agent found nothing on this form it could fill from your profile.',
-      );
-      if (report.deferred.length > 0) {
-        notices.push(`Not fillable yet (custom dropdowns): ${nameSome(report.deferred)}.`);
-      }
-    } catch (err) {
-      if (err instanceof PlanRefused) {
-        // The plan said no: a paywall with the upgrade link, not an error line.
-        autofillRefusal = err;
-        notices.push('Using the basic filler instead.');
-      } else {
-        // The server's own sentence, not just the status: /me/autofill/run answers
-        // 409 for three unrelated states, and only that sentence says which.
-        notices.push(
-          `Agent autofill unavailable: ${err instanceof Error ? err.message : 'error'} — using the basic filler.`,
-        );
-      }
-      track('autofill', { mode: 'basic' });
-      await deterministicAutofill(token);
+      await agentAutofill(token, fillPanel);
     } finally {
       autofilling = false;
     }
   }
 
-  /**
-   * The fallback filler, over the same frame-aware primitives the agent drives:
-   * an apply form is routinely served from an ATS iframe, and a careers page
-   * carrying any other iframe would otherwise be answered by whichever frame
-   * replied first. Addressing questions by label rather than by position also
-   * keeps the read and the write on the same question when a form re-renders
-   * between them.
-   */
   /**
    * The fill the user has been offered but not yet confirmed, because the page
    * does not look like it is showing an application form. Held so "Fill anyway"
@@ -845,32 +667,15 @@
    */
   let overrideFill = $state<(() => Promise<void>) | null>(null);
 
-  /**
-   * Saves the answers the candidate chose into their answer bank, one at a time. One
-   * refused answer (too long, no readable question) does not stop the rest; the
-   * notice names what did not go through.
-   */
   async function saveAnswers(chosen: AnswerOffer[]) {
     const token = await getToken();
     if (!token || savingAnswers) return;
     savingAnswers = true;
-    const failed: string[] = [];
     try {
-      for (const offer of chosen) {
-        try {
-          await saveBankAnswer(offer.question, offer.answer, token);
-          // Saved answers leave the offer: the next read must not ask for them again.
-          autofilled.add(normalizeLabel(offer.question));
-        } catch {
-          failed.push(offer.question);
-        }
-      }
-      const saved = chosen.length - failed.length;
-      track('answers_saved', { saved, failed: failed.length });
-      if (saved > 0) {
-        notices.push(`✓ Saved ${saved} answer${saved === 1 ? '' : 's'} — freehire will fill them on the next form.`);
-      }
-      if (failed.length > 0) notices.push(`Could not save: ${nameSome(failed)}.`);
+      await saveChosenAnswers(chosen, token, {
+        notice: (text) => notices.push(text),
+        saved: (question) => autofilled.add(normalizeLabel(question)),
+      });
     } finally {
       savingAnswers = false;
     }
@@ -902,56 +707,6 @@
       await run();
     } finally {
       autofilling = false;
-    }
-  }
-
-  async function deterministicAutofill(token: string, force = false) {
-    try {
-      const formReply = (await browser.runtime.sendMessage({
-        kind: 'GET_FRAMED_FORM',
-      } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-      if (formReply?.kind !== 'FRAMED_FORM' || formReply.fields.length === 0) {
-        notices.push('No form fields found on this page.');
-        return;
-      }
-
-      // A careers page keeps the application behind an "Apply" button and shows a
-      // job-alert signup meanwhile; filling that one silently is worse than
-      // declining, so the user is told and can insist.
-      if (!force && !looksLikeApplication(formReply.uploads)) {
-        notices.push(
-          `This doesn't look like the application form — ${formReply.fields.length} field${
-            formReply.fields.length === 1 ? '' : 's'
-          } are showing and none of them takes a CV. Open the application on the page, then try again.`,
-        );
-        overrideFill = () => deterministicAutofill(token, true);
-        return;
-      }
-      overrideFill = null;
-
-      // One form, not every question on the page: an application and a job-alert
-      // signup each have their own "Email".
-      const scoped = scopeToApplication(formReply.fields, formReply.uploads);
-      const fills = planLabelFills(scoped, profileToValues(await getAutofillProfile(token)));
-      if (fills.length === 0) {
-        notices.push('Nothing matched your profile on this form.');
-        return;
-      }
-      const walk = await walkFills(fills);
-      // The form has now accepted values, which is stronger evidence than
-      // anything its markup says — so read it again and let the checklist appear.
-      await refreshPlan();
-      const n = walk.done.length;
-      // What was left unanswered is not listed here: the checklist above shows
-      // exactly which questions those are, and naming thirty of them in a notice
-      // is the wall of text this feature replaced.
-      notices.push(
-        walk.stopped
-          ? `Stopped after ${n} field${n === 1 ? '' : 's'} — what was filled stays.`
-          : `✓ Autofilled ${n} field${n === 1 ? '' : 's'} — review before submitting.`,
-      );
-    } catch (err) {
-      notices.push(`Autofill failed: ${err instanceof Error ? err.message : 'error'}`);
     }
   }
 </script>

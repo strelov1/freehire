@@ -2,7 +2,7 @@
   import { SearchX } from '@lucide/svelte';
   import { highlightParts } from '#lib/fuzzy.js';
   import { matchFilterSearch, type FilterSearchHit } from '#lib/filterSearch.js';
-  import { reportedCount } from '#lib/facets.js';
+  import { reportedCount } from '#lib/facetOptions.js';
   import type { FacetCounts } from '#lib/types.js';
   import { pillClass, pillTitle } from '../facets/pill';
 

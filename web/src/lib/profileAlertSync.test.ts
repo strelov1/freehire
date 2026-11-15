@@ -51,7 +51,8 @@ vi.mock('#lib/savedSearches.svelte.js', () => ({
 
 // Exercise the real query builder without importing the SvelteKit-bound filter store.
 vi.mock('#lib/filters.js', async () => {
-  const { filtersFromProfile, filtersToParams } = await import('./facetModel');
+  const { filtersToParams } = await import('./facetModel');
+  const { filtersFromProfile } = await import('./profileFilters');
   return { filtersFromProfile, filtersToParams };
 });
 

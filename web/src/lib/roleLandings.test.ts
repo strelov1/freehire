@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { slugifiedCountries } from './facets';
+import { slugifiedCountries } from './countrySlugs';
 import { CATEGORY_VALUES } from './generated/contracts';
 import {
   categoryFromSlug,

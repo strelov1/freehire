@@ -13,7 +13,8 @@
 
 import { challengeChip } from './onboardingChallenge';
 import { MAX_SPECIALIZATIONS } from './profileLimits';
-import { filtersFromProfile, filtersToParams } from './facetModel';
+import { filtersToParams } from './facetModel';
+import { filtersFromProfile } from './profileFilters';
 import { countryLabel } from './facets';
 import { categoryLabel, SENIORITY_LABELS, titleCase } from './labels';
 import { regionFromCountry, WORLDWIDE_REGION } from './geoScope';

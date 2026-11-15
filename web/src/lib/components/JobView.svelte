@@ -1,14 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
   import { ArrowRight, Bookmark, CheckCircle2, ExternalLink, Flag, SquarePen } from '@lucide/svelte';
   import { ApiError, api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
-  import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
-  import { tailorHref } from '#lib/tailorHref.js';
   import { promptSignIn, signinUrl } from '#lib/signin.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
@@ -20,12 +17,11 @@
   import { track } from '#lib/analytics.js';
   import { foreignContentLang } from '#lib/seo.js';
   import type { Display } from '#lib/generated/contracts.js';
-  import type { Company, Job, MatchAnalysisResponse, PlanState, UserJob } from '#lib/types.js';
-  import { hasCompanyDetails } from '#lib/companyDetails.js';
+  import type { Job, PlanState, UserJob } from '#lib/types.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { Button, Chip, ProviderIcon, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Button, Chip, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
+  import JobApplyForm from './JobApplyForm.svelte';
   import JobCompanyPanel from './JobCompanyPanel.svelte';
   import JobDiscussionPanel from './JobDiscussionPanel.svelte';
   import JobFactsCard from './JobFactsCard.svelte';
@@ -33,6 +29,11 @@
   import { supersedesReality } from '#lib/ghost.js';
   import GhostChecklist from './GhostChecklist.svelte';
   import JobPinnedHeader from './JobPinnedHeader.svelte';
+  import JobApplyNotices from './JobApplyNotices.svelte';
+  import JobSignInGate from './JobSignInGate.svelte';
+  import { JobTailor } from '#lib/jobTailor.svelte.js';
+  import { JobContentTabs } from './jobContentTabs.svelte';
+  import JobPeopleLinks from './JobPeopleLinks.svelte';
   import JobPostingMeta from './JobPostingMeta.svelte';
   import JobScrollPadding from './JobScrollPadding.svelte';
   import JobProvenanceLine from './JobProvenanceLine.svelte';
@@ -75,22 +76,6 @@
   // page whose visibility (not just its outcome) depends on the plan tier.
   let userPlan = $state.raw<PlanState | null>(null);
   const isPro = $derived(userPlan?.plan === 'pro' || userPlan?.plan === 'ultra');
-  // Open-thread count for the "Discussion · N" badge; loaded client-side so the
-  // page renders immediately and the number fills in. Failures leave it hidden.
-  let threadCount = $state<number | null>(null);
-  $effect(() => {
-    let alive = true;
-    // Cleared first: on a client-side move to another job the tab would keep the last
-    // job's count until the new one arrives.
-    threadCount = null;
-    api
-      .countThreads('job', job.public_slug)
-      .then((n) => alive && (threadCount = n))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  });
   // Set after the user confirms "Yes" on the apply prompt: surfaces a one-tap
   // link to the Tracking board where the job now sits. Reset when the job changes.
   let justApplied = $state(false);
@@ -143,74 +128,15 @@
   const appliedToCompany = $derived(hasAppliedToCompany(job.company_slug));
   const saved = $derived(interaction?.saved_at != null);
 
-  // The content column is tabbed so "who are these people?" and "what will they ask
-  // me?" are answerable without leaving the posting. Page state, not a route: the
-  // company copy already has a canonical home at /companies/<slug>, and a second URL
-  // serving it would be a thin duplicate we'd then have to keep out of the index.
-  //
-  // Built per job rather than fixed, because neither Company nor Application is always
-  // there: we may know nothing about the employer, and only a few ATS platforms publish a
-  // form we can read. A tab is offered only when its panel has something in it —
-  // `applyFormWorthShowing` is the same predicate the panel itself renders on, so the two
-  // cannot disagree about whether there is anything to show. Discussion is always there.
-  type ContentTab = 'description' | 'company' | 'application' | 'discussion';
-
-  const companySlug = $derived(job.company_slug ?? '');
-  // The company behind the Company tab, read in the browser only (see JobCompanyPanel for
-  // why it is not server-rendered). The tab appears once the read shows there is
-  // something to put in it: an empty "no details yet" tab was a click to nowhere. A failed
-  // read leaves the tab out too; the company row's link still reaches the company page.
-  let companyProfile = $state.raw<Company | null>(null);
-  $effect(() => {
-    const slug = companySlug;
-    companyProfile = null;
-    if (!slug) return;
-    let stale = false;
-    // `limit=1` is the endpoint's floor; the one job that comes back is discarded.
-    api
-      .getCompany(slug, 1, 0)
-      .then((r) => {
-        if (!stale) companyProfile = r.company;
-      })
-      .catch(() => {});
-    return () => {
-      stale = true;
-    };
-  });
-  const companyWithDetails = $derived(companyProfile && hasCompanyDetails(companyProfile) ? companyProfile : null);
-  const contentTabs: { id: ContentTab; label: string }[] = $derived([
-    { id: 'description', label: 'Description' },
-    ...(companyWithDetails ? [{ id: 'company' as const, label: 'Company' }] : []),
-    // The screening form is pointless once the posting stops taking applications.
-    ...(!closed && applyFormWorthShowing(applyForm) ? [{ id: 'application' as const, label: 'Application' }] : []),
-    { id: 'discussion', label: threadCount ? `Discussion · ${threadCount}` : 'Discussion' },
-  ]);
-  // `?tab=discussion` is where the old /jobs/<slug>/discussion page redirects, so its
-  // links (a thread's "Back to discussion") land on the tab they meant.
-  const initialTab = (): ContentTab =>
-    page.url.searchParams.get('tab') === 'discussion' ? 'discussion' : 'description';
-  let contentTab = $state<ContentTab>(initialTab());
-  // Discussion is mirrored into the URL so Back from a topic, and the return from sign-in,
-  // land on the tab again. The other tabs leave the URL clean.
-  function selectTab(id: ContentTab) {
-    contentTab = id;
-    const url = new URL(page.url.href);
-    if (id === 'discussion') url.searchParams.set('tab', 'discussion');
-    else url.searchParams.delete('tab');
-    // A shallow replace: the address changes, nothing reloads and Back is not doubled.
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the current page's own URL, only its query changed
-    if (url.href !== page.url.href) void goto(url, { replace: true, shallow: true, state: page.state });
-  }
+  // The content tabs: Description, Company, Application, Discussion (see JobContentTabs).
+  const tabs = new JobContentTabs(
+    () => job,
+    () => closed,
+    () => applyForm,
+  );
   // Per-instance so a second JobView on one page can't claim the same panel, which
   // would leave both strips' aria-controls pointing at the first one's panel.
   const panelId = $props.id();
-  // Reset when the visitor navigates client-side to another job: JobView is not
-  // remounted on a param change, so the Company tab would otherwise stay selected
-  // over a company they never asked about.
-  $effect(() => {
-    void job.public_slug;
-    contentTab = untrack(initialTab);
-  });
 
   // Funnel view — captured for everyone (unlike the authed-only server record
   // below). Keyed on the slug alone so it fires once per job and never re-emits
@@ -432,59 +358,8 @@
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
 
-  // The cached fit analysis, read ONCE for the whole page: the CTA row's `Tailor my CV`
-  // button needs it to know whether the reader has a CV at all, and the sidebar's
-  // MatchSummary needs the analysis itself. It used to be MatchSummary's own fetch; moving
-  // the button up must not buy a second call to the same endpoint, so the read moved with
-  // it and the response goes down as a prop.
-  //
-  // Guarded on the slug the way MatchSummary guarded it, so a slow response for a previous
-  // posting cannot overwrite the current one. Never read for a guest: the endpoint is
-  // authenticated, and a rejected request per visit from one address is what got real users
-  // fail2banned once already.
-  let matchAnalysis = $state.raw<MatchAnalysisResponse | null>(null);
-  $effect(() => {
-    const forSlug = job.public_slug;
-    matchAnalysis = null;
-    if (!isAuthenticated()) return;
-    api
-      .getMatchAnalysis(forSlug)
-      .then((d) => {
-        if (forSlug === job.public_slug) matchAnalysis = d;
-      })
-      .catch(() => {});
-  });
-
-  // Withheld only once the page KNOWS there is no CV. Unknown — a guest, or a read still in
-  // flight — still offers the button: the offer is what brings a guest to sign in, and
-  // withholding the page's primary CTA until a fetch resolves makes the row jump.
-  const canTailor = $derived(matchAnalysis?.has_cv !== false);
-
-  // Tailoring navigates away; the confirmation dialog owns its own fetch of the
-  // deterministic skill/requirement check, so this only needs to await the yes/no. The
-  // dialog also states what the session costs and what today has left — which is why
-  // nothing beside the button does.
-  let tailoring = $state(false);
-
-  async function onTailorClick() {
-    if (!isAuthenticated()) {
-      promptSignIn();
-      return;
-    }
-    if (tailoring) return;
-    tailoring = true;
-    try {
-      const choice = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
-      if (choice) await goto(tailorHref(job.public_slug, choice.baseCvId));
-    } finally {
-      // Released even on the happy path, where the navigation has already left this page:
-      // a rejected `goto` would otherwise leave all THREE copies of the page's primary CTA
-      // permanently disabled with no way back. It mattered less when this was one sidebar
-      // button; it is the whole call to action now.
-      tailoring = false;
-    }
-  }
+  // Tailoring: the cached fit analysis, whether there is a CV, and the start (see JobTailor).
+  const tailor = new JobTailor(() => job);
 
   async function onAutoApplyClick() {
     if (!isAuthenticated()) {
@@ -553,26 +428,12 @@
 
 {#snippet signInFeedback()}
   {#if showSignInPrompt}
-    <div
-      aria-live="polite"
-      class="flex flex-col gap-3 rounded-md border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-    >
-      <span class="text-sm text-pretty">
-        {job.direct_apply
-          ? 'Sign in to apply — your CV goes straight to the employer.'
-          : 'Sign in to keep track of the jobs you apply to.'}
-      </span>
-      <!-- The same phone layout as the job card's gate (JobRow.svelte). -->
-      <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
-        <Button variant="primary" size="sm" onclick={signInFromGate}>Sign in</Button>
-        <Button variant="outline" size="sm" onclick={signUpFromGate}>Sign up</Button>
-        {#if !job.direct_apply}
-          <Button variant="ghost" size="sm" class="col-span-2" onclick={viewWithoutSignIn}>
-            Continue without signing in
-          </Button>
-        {/if}
-      </div>
-    </div>
+    <JobSignInGate
+      directApply={!!job.direct_apply}
+      onsignin={signInFromGate}
+      onsignup={signUpFromGate}
+      oncontinue={viewWithoutSignIn}
+    />
   {/if}
 {/snippet}
 
@@ -587,8 +448,8 @@
      already says what a session costs and what today has left, at the moment of the commit;
      a count in two places is a count that can disagree. -->
 {#snippet tailorCta(size: 'md' | 'lg', className: string)}
-  {#if canTailor}
-    <Button variant="cta" {size} disabled={tailoring} onclick={onTailorClick} class={className}>
+  {#if tailor.canTailor}
+    <Button variant="cta" {size} disabled={tailor.busy} onclick={tailor.start} class={className}>
       Tailor my CV
       <SquarePen class="size-4" aria-hidden="true" />
     </Button>
@@ -805,7 +666,7 @@
         companySlug={job.company_slug}
         companyName={job.company}
         jobSlug={job.public_slug}
-        onTailor={() => void onTailorClick()}
+        onTailor={() => void tailor.start()}
       />
     {/if}
 
@@ -815,7 +676,7 @@
     {/if}
   </header>
 
-  <JobFactsCard {job} {matchAnalysis} {closed} />
+  <JobFactsCard {job} matchAnalysis={tailor.analysis} {closed} />
 
   <div class="relative flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-3">
     <JobPinnedHeader {job} lang={contentLang}>
@@ -831,44 +692,21 @@
 
     <div class="flex items-end justify-between">
       <TabStrip
-        tabs={contentTabs}
-        active={contentTab}
-        onSelect={selectTab}
+        tabs={tabs.tabs}
+        active={tabs.current}
+        onSelect={tabs.select}
         label="Job details"
         {panelId}
         class="min-w-0 flex-1"
       />
       {#if job.company?.trim()}
-        <div class="flex shrink-0 items-center self-stretch border-b border-border lg:gap-x-4 lg:pl-3">
-          {#if !closed}
-            <button
-              type="button"
-              disabled={loadingReferralMessage}
-              onclick={() => void openReferralMessage()}
-              aria-label="Draft referral message"
-              title="Draft a referral message"
-              class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50 lg:min-w-0"
-            >
-              <SquarePen class="size-4 shrink-0 lg:size-3.5" aria-hidden="true" />
-              <span class="hidden lg:inline">Draft referral</span>
-            </button>
-          {/if}
-          <a
-            href={resolve('/jobs/[slug]/people', { slug: job.public_slug })}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            aria-label="Find people at {job.company.trim()} on LinkedIn"
-            title="Find people at {job.company.trim()} on LinkedIn"
-            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground lg:min-w-0"
-          >
-            <span class="hidden lg:inline">Find people</span>
-            <!-- Opens LinkedIn in a new tab: the arrow beside the logo says the reader leaves the site. -->
-            <span class="inline-flex shrink-0 items-center gap-0.5">
-              <ProviderIcon provider="linkedin" class="size-4 lg:size-3.5" />
-              <ExternalLink class="hidden size-2 -translate-y-1 self-start lg:inline" aria-hidden="true" />
-            </span>
-          </a>
-        </div>
+        <JobPeopleLinks
+          slug={job.public_slug}
+          company={job.company.trim()}
+          {closed}
+          loading={loadingReferralMessage}
+          ondraft={() => void openReferralMessage()}
+        />
       {/if}
     </div>
 
@@ -876,58 +714,15 @@
       <span role="alert" class="text-sm text-destructive">Could not open the draft form. Please try again.</span>
     {/if}
 
-    <!-- The three states of one exchange. They sit at the top of the content column rather
-         than beside the CTA that raised them: the question follows a click that opened a
-         NEW TAB, so the reader meets it on returning to this one, and the first thing under
-         the tabs is what a returning eye lands on. It is also the widest slot on the page,
-         which a two-button question needs and the title row — already carrying the CTAs —
-         does not have. They share one slot so that answering "Yes, save" replaces the
-         question in place; split across the page, the confirmation would read as a second,
-         unrelated banner appearing somewhere the reader was not looking. -->
-    {#if showApplyPrompt && !applied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
-      >
-        <span class="text-sm">Did you apply to this job?</span>
-        <div class="flex items-center gap-2">
-          <Button variant="primary" size="sm" onclick={confirmApplied}>Yes, save</Button>
-          <Button variant="ghost" size="sm" onclick={dismissApplyPrompt}>No</Button>
-        </div>
-      </div>
-    {/if}
-
-    {#if justApplied}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
-      >
-        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> Added to your board
-        </span>
-        <a href={resolve('/my/tracking')} class="text-sm font-medium text-brand-strong underline underline-offset-4">
-          View on your board →
-        </a>
-      </div>
-    {/if}
-
-    {#if autoApplyState.kind === 'queued'}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-brand/30 bg-brand-muted px-4 py-3"
-      >
-        <span class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-          <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" /> We're preparing a tailored CV — you'll get a notification
-          to review it.
-        </span>
-        <a
-          href={resolve('/my/tracking/[id]', { id: job.public_slug })}
-          class="text-sm font-medium text-brand-strong underline underline-offset-4"
-        >
-          Track progress →
-        </a>
-      </div>
-    {/if}
-    {#if autoApplyError}
-      <p role="alert" class="text-sm text-destructive">{autoApplyError}</p>
-    {/if}
+    <JobApplyNotices
+      askApplied={showApplyPrompt && !applied}
+      {justApplied}
+      queued={autoApplyState.kind === 'queued'}
+      slug={job.public_slug}
+      error={autoApplyError}
+      onconfirm={confirmApplied}
+      ondismiss={dismissApplyPrompt}
+    />
 
     {#if showDirectApply && DirectApplyDialog}
       <DirectApplyDialog
@@ -937,7 +732,7 @@
         onSent={directAppliedCallback(job)}
         onTailor={() => {
           showDirectApply = false;
-          void onTailorClick();
+          void tailor.start();
         }}
       />
     {/if}
@@ -951,23 +746,27 @@
          waited for, and re-render the description on every switch back. It also keeps
          every panel in the server-rendered HTML, so a crawler reads what a visitor
          would have to click for. -->
-    <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
-      <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
+    <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, tabs.current)}>
+      <div class={tabs.current === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
         <JobPostingBody {job} lang={contentLang} />
       </div>
-      {#if companyWithDetails}
-        <div class={contentTab === 'company' ? 'block' : 'hidden'}>
-          {#key companySlug}
-            <JobCompanyPanel company={companyWithDetails} slug={companySlug} name={job.company || 'this company'} />
+      {#if tabs.companyWithDetails}
+        <div class={tabs.current === 'company' ? 'block' : 'hidden'}>
+          {#key tabs.companySlug}
+            <JobCompanyPanel
+              company={tabs.companyWithDetails}
+              slug={tabs.companySlug}
+              name={job.company || 'this company'}
+            />
           {/key}
         </div>
       {/if}
-      <div class={contentTab === 'application' ? 'block' : 'hidden'}>
+      <div class={tabs.current === 'application' ? 'block' : 'hidden'}>
         <JobApplyForm form={applyForm} />
       </div>
-      <div class={contentTab === 'discussion' ? 'block' : 'hidden'}>
+      <div class={tabs.current === 'discussion' ? 'block' : 'hidden'}>
         {#key job.public_slug}
-          <JobDiscussionPanel slug={job.public_slug} active={contentTab === 'discussion'} />
+          <JobDiscussionPanel slug={job.public_slug} active={tabs.current === 'discussion'} />
         {/key}
       </div>
     </div>
