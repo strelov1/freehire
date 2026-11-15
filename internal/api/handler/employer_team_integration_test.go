@@ -167,4 +167,12 @@ func TestEmployerTeamEndToEnd(t *testing.T) {
 	if status, _ := do(t, fiber.MethodGet, "/api/v1/employer/applications", colleague, ""); status != fiber.StatusNotFound {
 		t.Errorf("a removed colleague's applications = %d, want 404 (no account)", status)
 	}
+	// The link was single-use: now that the colleague acts for no company, it does not let
+	// them back in.
+	if status, body := do(t, fiber.MethodPost, "/api/v1/employer/team/join", colleague, tokenBody); status != fiber.StatusNotFound {
+		t.Errorf("rejoining with the used link = %d %s, want 404", status, body)
+	}
+	if status, _ := do(t, fiber.MethodGet, "/api/v1/employer/applications", colleague, ""); status != fiber.StatusNotFound {
+		t.Errorf("applications after the refused rejoin = %d, want 404", status)
+	}
 }
