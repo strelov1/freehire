@@ -1,16 +1,13 @@
-// Command seed-from-inventory converts an external ATS-company inventory CSV — a
-// `name,slug,url` file such as kalil0321/ats-scrapers' `ats-companies/<provider>.csv`
-// files — into per-provider seed JSON files that cmd/harvest-boards already consumes.
+// Command seed-from-inventory converts an external ATS-company inventory CSV (a
+// `name,slug,url` file) into per-provider seed JSON files that cmd/harvest-boards consumes.
 //
-// Each row's `url` is resolved to a (provider, board) pair via the existing
-// internal/ingest/atsboard.Recognize, the one place freehire's URL-to-board rules live —
-// this tool adds no parsing logic of its own. A row atsboard cannot resolve (a vanity
-// domain, or a custom-domain ATS such as Taleo, SuccessFactors, or Oracle on its own
-// domain) is skipped and counted, never fatal to the run.
+// Each row's `url` is resolved to a (provider, board) pair via
+// internal/ingest/atsboard.Recognize, the one place URL-to-board rules live. A row it
+// cannot resolve (a vanity domain, or a custom-domain ATS) is skipped and counted, never
+// fatal.
 //
-// It makes no network call and needs no database: the conversion is a pure local
-// transform, so its output can be reviewed before ever being handed to
-// cmd/harvest-boards, which is the tool that actually probes and writes to the catalog.
+// It makes no network call and needs no database, so its output can be reviewed before
+// cmd/harvest-boards probes and writes to the catalog.
 //
 // Usage:
 //

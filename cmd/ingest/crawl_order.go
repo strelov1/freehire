@@ -37,13 +37,9 @@ func loadLastRuns(ctx context.Context, q *db.Queries, provider string) (map[last
 // orderOldestRunFirst reorders entries so the boards waited on longest start first: every
 // never-crawled board, then the rest by last_run_at ascending. Ties keep their catalog order.
 //
-// The pipeline starts boards in (roughly) slice order, and a run that hits its deadline abandons the
-// ones still queued. With the catalog's fixed id order those were always the same boards —
-// the newest — so a provider whose run cannot finish never crawled a board added after the
-// cut-off at all: successfactors reached ~320 of each shard's 850 boards per run, and
-// careers.ey.com (9k postings) sat `pending` for eleven days without one attempt. Starting
-// from the stalest board turns the same truncation into a rotation, so every board is
-// reached within a few runs instead of never.
+// The pipeline starts boards in (roughly) slice order and a run that hits its deadline
+// abandons the queued ones. With a fixed id order those were always the newest boards, which
+// never got crawled; starting from the stalest turns the truncation into a rotation.
 //
 // It must run AFTER sources.Config.Shard: a shard is assigned by the order a company first
 // appears, so reordering before sharding would move companies between shards from one run to

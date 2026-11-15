@@ -20,9 +20,8 @@ const opencatsListingPath = "index.php?m=careers&p=showAll"
 var opencatsPostingLink = regexp.MustCompile(`p=showJob`)
 
 // opencatsDiscoveryQueries are the signatures an install leaves in a public scan index. The
-// stock page title is by far the richest (66 hosts against 13 for the URL routing) because
-// administrators move the portal or put it behind a rewrite far more often than they rename
-// the page; the routing queries add the installs that did rename it.
+// stock page title is the richest, since administrators move the portal or rewrite its routing
+// far more often than they rename the page; the routing queries add the installs that did.
 var opencatsDiscoveryQueries = []string{
 	`page.title:"OpenCATS"`,
 	`page.url:"careers/index.php"`,
@@ -38,9 +37,9 @@ func opencatsSearchURL(q string) string {
 // tried. Most installs nest it; a rewritten portal (G4S) serves it at the web root.
 var opencatsMounts = []string{"/careers", ""}
 
-// opencatsProber probes and discovers self-hosted OpenCATS portals. OpenCATS has no vendor
-// API and no tenant catalogue — every install is somebody's own domain — so candidates come
-// from a public index of scanned hosts rather than from a seed list or a platform feed.
+// opencatsProber probes and discovers self-hosted OpenCATS portals. There is no vendor API or
+// tenant catalogue (every install is somebody's own domain), so candidates come from a public
+// index of scanned hosts.
 type opencatsProber struct{}
 
 // probe requests the board's portal listing and counts its postings. An unreachable host, a
@@ -59,9 +58,9 @@ func (opencatsProber) probe(ctx context.Context, c httpClient, board string) (st
 }
 
 // discover unions the signature queries into one candidate host list, then resolves each host
-// to the single board it serves. Resolving here rather than in probe is deliberate: a board is
-// its mount point, so a host emitted at two mounts would namespace one posting under two
-// external ids, and only discovery sees the whole host.
+// to the single board it serves. Resolving here rather than in probe is deliberate: a host
+// emitted at two mounts would namespace one posting under two external ids, and only discovery
+// sees the whole host.
 func (p opencatsProber) discover(ctx context.Context, c httpClient) ([]string, error) {
 	seen := map[string]struct{}{}
 	var hosts []string
@@ -128,10 +127,9 @@ func opencatsListingURL(board string) string {
 }
 
 // opencatsIneligibleSuffixes name hosts that must never enter the board file: commercial CATS
-// shares the URL scheme with its open-source descendant and is already crawled under its own
-// provider — admitting it creates the same posting under two providers, which the
-// (source, external_id) dedup key cannot detect — and the project's own sites are
-// documentation and demos, not an employer's portal.
+// shares the URL scheme and is already crawled under its own provider (admitting it creates the
+// same posting under two providers, which the (source, external_id) key cannot detect), and the
+// project's own sites are documentation and demos.
 var opencatsIneligibleSuffixes = []string{"catsone.com", "opencats.org"}
 
 // opencatsEligibleHost reports whether a discovered host can be a company's portal.
@@ -151,10 +149,9 @@ func opencatsEligibleHost(host string) bool {
 var opencatsTitleSuffix = regexp.MustCompile(`(?i)\s*[-–—|]\s*careers\s*$`)
 
 // opencatsCompanyName proposes a company name from the portal page title, or "" when the
-// install never set one. Deriving a name from the host instead would be indistinguishable
-// from a name the portal actually published — and the name a prober returns is what the
-// corroboration gate tests, so a derived one would gate a board against a token the employer
-// never chose. An unnamed board falls back to the seed's name, then to the board id.
+// install never set one. A name derived from the host would be indistinguishable from one the
+// portal published, and the corroboration gate would test a token the employer never chose. An
+// unnamed board falls back to the seed's name, then to the board id.
 func opencatsCompanyName(root *html.Node, _ string) string {
 	return strings.TrimSpace(opencatsTitleSuffix.ReplaceAllString(pageTitle(root), ""))
 }

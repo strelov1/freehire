@@ -14,11 +14,7 @@ import (
 
 var catalogTenant = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
-// A successful company-scoped listing can lose a company's last posting, while
-// partial, capped, or currently blocked listings cannot close unseen jobs safely.
-// These sources have verified own-posting 404/410 controls. Keep search's unseen
-// withholding until their existing backlogs have been worked off. Gradcracker
-// and Engage retain the adapters' measured request intervals.
+// A successful company-scoped listing can lose a company's last posting, while partial, capped, or currently blocked listings cannot close unseen jobs safely. These sources have verified own-posting 404/410 controls. Keep search's unseen withholding until their backlogs are worked off. Gradcracker and Engage keep the adapters' request intervals.
 func catalogStatusPasses(client *http.Client) []pacedPass {
 	var passes []pacedPass
 	for _, site := range []struct {

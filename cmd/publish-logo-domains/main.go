@@ -1,16 +1,11 @@
 // Command publish-logo-domains writes the company-name-to-domain map the logo proxy
 // consults, then exits.
 //
-// Company logos are requested from logo.freehire.me by NAME, and the upstream that
-// resolves a name answers a confident 200 with a different company's mark often enough to
-// matter. The proxy has accepted a ?domain= since it was written and nothing has ever
-// supplied one, because most of the ~25 call sites that draw a logo — the experience
-// bank, search suggestions, community subjects, the tailored-CV list — never see a
-// company slug and could not look a domain up. Publishing a map the proxy consults fixes
-// every one of them without touching any.
+// Logos are requested from logo.freehire.me by name, and the upstream sometimes answers a
+// confident 200 with a different company's mark. Most call sites never see a company slug and
+// cannot pass ?domain=, so the proxy consults this published map instead.
 //
-// Unset LOGO_DOMAIN_MAP_OUT and this is a no-op that never opens the pool, which is both
-// how the change ships dark and how it is rolled back.
+// With LOGO_DOMAIN_MAP_OUT unset this is a no-op that never opens the pool.
 package main
 
 import (
@@ -25,13 +20,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// outputPath is the binary's own reading of its knob. It exists so a test can assert what
-// THIS worker does with THIS variable rather than re-stating the wiring.
-//
-// os.Getenv rather than a worker.Env helper: internal/platform/worker only wraps the
-// NUMERIC knobs (EnvInt64/EnvInt32), where a set-but-unreadable value must fail the run
-// instead of silently taking a default. A path has no such failure mode — it is used
-// verbatim or it is empty.
+// outputPath is the binary's own reading of its knob, so a test can assert it.
+// os.Getenv rather than a worker.Env helper: those only wrap numeric knobs, where an unreadable
+// value must fail the run; a path is used verbatim or empty.
 func outputPath() string {
 	return strings.TrimSpace(os.Getenv("LOGO_DOMAIN_MAP_OUT"))
 }
@@ -54,8 +45,7 @@ func run() int {
 
 	q := db.New(pool)
 
-	// The websites first: it is the small read, and a catalogue holding none of them
-	// means there is nothing this run could publish however the scan goes.
+	// The small read first: no websites means nothing to publish.
 	websiteRows, err := q.ListCompanyWebsites(ctx)
 	if err != nil {
 		log.Printf("publish-logo-domains: websites: %v", err)
@@ -67,8 +57,7 @@ func run() int {
 	}
 	log.Printf("publish-logo-domains: %d companies carry a website", len(websites))
 
-	// ~53s and a sequential scan of jobs. See the query's own comment for why narrowing
-	// it to the companies above is four times slower.
+	// A sequential scan of jobs; see the query's comment for why narrowing it is slower.
 	started := time.Now()
 	spellingRows, err := q.ListOpenJobCompanySpellings(ctx)
 	if err != nil {
@@ -82,19 +71,16 @@ func run() int {
 	for _, r := range spellingRows {
 		spellings = append(spellings, logodomain.Spelling{Slug: r.CompanySlug, Name: r.Company})
 	}
-	// The companies' own display names are keys too: /companies, the company header and
-	// the company picker ask the proxy with companies.name rather than with a posting's
-	// spelling of it. Reading them costs nothing here — the rows are already in hand.
+	// The companies' own display names are keys too: company pages ask the proxy with
+	// companies.name, not a posting's spelling.
 	for _, r := range websiteRows {
 		spellings = append(spellings, logodomain.Spelling{Slug: r.Slug, Name: r.Name})
 	}
 
 	entries, dropped := logodomain.Build(websites, spellings)
 
-	// A run that would publish an empty map refuses to swap. A catalogue yielding nothing
-	// is a failed measurement, not an empty catalogue — the rule cmd/build-suggestions
-	// already follows — and here the consequence of believing it is every logo on the
-	// site reverting to a name guess at once.
+	// Refuse to swap in an empty map: an empty result is a failed measurement (as in
+	// cmd/build-suggestions), and believing it would revert every logo to a name guess.
 	if len(entries) == 0 {
 		log.Print("publish-logo-domains: refusing to publish an empty map")
 		return 1

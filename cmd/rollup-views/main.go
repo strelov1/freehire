@@ -1,31 +1,26 @@
-// Command rollup-views is the standalone view-count aggregation worker. It counts
-// job views off the request path by reading nginx access logs: a serving request
-// never writes a counter, so the read path stays cheap and cacheable.
+// Command rollup-views is the standalone view-count aggregation worker. It counts job
+// views off the request path from nginx access logs, so a serving request never writes a
+// counter.
 //
-// Each run lists the rotated (non-live) access-log files, and for every file not
-// already applied (tracked by filesystem identity in processed_view_logs) it parses
-// the lines, counts unique daily visitors per job — the SSR page GET /jobs/<slug>
-// (bot-filtered) and the API read GET /api/v1/jobs/<slug> (not) — and applies the
-// per-(day, job) uniques additively into job_daily_views and jobs.view_count. The
-// day is taken from each line's timestamp, so a file spanning midnight is bucketed
-// correctly, and the additive apply lets a day split across two files sum right.
+// Each run lists the rotated (non-live) access-log files; for every file not yet applied
+// (tracked by filesystem identity in processed_view_logs) it counts unique daily visitors
+// per job, from the SSR page GET /jobs/<slug> (bot-filtered) and the API read
+// GET /api/v1/jobs/<slug> (not), and applies the per-(day, job) uniques additively into
+// job_daily_views and jobs.view_count. The day comes from each line's timestamp, so a file
+// spanning midnight is bucketed correctly and a day split across two files sums right.
 //
-// Without --backfill it processes only uncompressed rotated files (the recent ones,
-// a light daily run); with --backfill it also reads the older .gz history to seed
-// the baseline. Either way the per-file cursor makes re-runs idempotent. A file is
-// committed in chunks of applyChunkRows, each moving a resume cursor in the same
-// transaction, so no jobs row stays locked against ingest for the whole file and a run
-// that fails part-way resumes rather than counting twice (see applyChunked). Where no
-// log dir exists (local/dev) it is a clean no-op. It is a run-once-and-exit worker
-// (cron-scheduled daily), exiting non-zero on failure so cron can alert.
+// Without --backfill only uncompressed rotated files are read; --backfill also reads the
+// older .gz history. The per-file cursor makes re-runs idempotent, and a file is committed
+// in chunks of applyChunkRows, each moving a resume cursor in the same transaction (see
+// applyChunked). With no log dir (local/dev) it is a clean no-op. Run-once-and-exit,
+// cron-scheduled daily, non-zero exit on failure.
 //
-// A second pass reads internal/application/agentview's day files under
-// AGENT_VIEW_LOG_DIR (postings served to agents over MCP, OJCP and the agent search)
-// and applies them to job_daily_views.agent_uniques and jobs.view_count.
+// A second pass reads internal/application/agentview's day files under AGENT_VIEW_LOG_DIR
+// (postings served to agents) into job_daily_views.agent_uniques and jobs.view_count.
 //
-// Last, with MEILI_MASTER_KEY set, it writes the new view_count of every job either pass
-// touched straight into the search index (pushViewCounts). The counter is not queued
-// for search-drain: it only backs the "Most viewed" sort.
+// Last, with MEILI_MASTER_KEY set, it writes the new view_count of every touched job
+// straight into the search index (pushViewCounts), not through search-drain: it only
+// backs the "Most viewed" sort.
 package main
 
 import (
@@ -69,9 +64,8 @@ func run() int {
 	dir := envOr("VIEW_LOG_DIR", "/var/log/nginx")
 	base := envOr("VIEW_LOG_BASE", "access.log")
 
-	// A failed nginx pass still fails the run, but only after the agent pass: an unreadable
-	// log directory, or a rotated file that cannot be read, fails again on every run, and
-	// returning here would hold the agent days back for as long as it stays broken.
+	// A failed nginx pass still fails the run, but only after the agent pass: it fails the
+	// same way on every run, and returning here would hold the agent days back.
 	exit := 0
 	files, err := viewlog.RotatedFiles(dir, base)
 	if !*backfill {
@@ -96,8 +90,7 @@ func run() int {
 		}
 	}
 
-	// The agent pass is independent of nginx: no rotated access log is not a reason to
-	// skip the agent days. Unset, the log is not configured and there is nothing to read.
+	// The agent pass is independent of nginx. Unset means the log is not configured.
 	if agentDir := os.Getenv("AGENT_VIEW_LOG_DIR"); agentDir != "" {
 		done := worker.Stage("agent logs")
 		nFiles, nViews, err := processAgent(ctx, pool, agentDir, time.Now())
@@ -129,9 +122,9 @@ func run() int {
 	return exit
 }
 
-// reportFiles reports this pass in files, the unit both figures can share: every file
-// read, and all of them as changed only if the pass applied any view. Reading logs and
-// applying nothing is the case worth seeing; the view count itself is in the log line.
+// reportFiles reports this pass in files, the unit both figures share: every file read,
+// and all of them as changed only if the pass applied any view. Reading logs and applying
+// nothing is the case worth seeing.
 func reportFiles(nFiles, nViews int) {
 	changed := 0
 	if nViews > 0 {
@@ -169,22 +162,18 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 	return nFiles, nViews, nil
 }
 
-// deadlockRetries is how many times a chunk's apply is re-attempted after PostgreSQL
-// breaks a lock cycle by aborting it. Small on purpose: a deadlock clears as soon as
-// the other writer commits, so if three tries in a row lose, something other than
-// ordinary contention is wrong and the run should say so rather than grind.
+// deadlockRetries is how many times a chunk's apply is re-attempted after a deadlock
+// abort. Small on purpose: if three tries lose, something other than ordinary contention
+// is wrong and the run should say so.
 const deadlockRetries = 3
 
-// applyWithRetry runs apply — one chunk's all-or-nothing transaction — re-attempting it
-// when PostgreSQL aborts the transaction to break a deadlock. name labels the file in
-// the log and the error. Both passes (nginx and agent views) go through it.
+// applyWithRetry runs apply, one chunk's all-or-nothing transaction, re-attempting it when
+// PostgreSQL aborts it to break a deadlock. name labels the file in the log and error.
+// Both passes go through it.
 //
-// A deadlock says nothing was wrong with the work — only that two writers wanted the
-// same rows in opposite orders — and apply is all-or-nothing: the chunk's counts
-// and the file cursor's move commit together, so an aborted attempt leaves no
-// partial state and a retry cannot double-count. Treating 40P01 as fatal is what
-// stopped the view rollup for two days in September 2026 while every other worker
-// carried on and nothing looked broken.
+// The chunk's counts and the file cursor's move commit together, so an aborted attempt
+// leaves no partial state and a retry cannot double-count. Treating 40P01 as fatal once
+// stopped the view rollup silently.
 func applyWithRetry(ctx context.Context, name string, apply func() error) error {
 	var err error
 	for attempt := 1; attempt <= deadlockRetries; attempt++ {
@@ -197,9 +186,8 @@ func applyWithRetry(ctx context.Context, name string, apply func() error) error 
 		log.Printf("rollup-views: %s: deadlock on attempt %d/%d, retrying: %v",
 			name, attempt, deadlockRetries, err)
 
-		// Backs off, and jitters, because the writer we lost to is most likely one of
-		// the ingest runs that share this slot — retrying instantly would just re-enter
-		// the same cycle.
+		// Back off with jitter: the writer we lost to is likely an ingest run in this slot,
+		// and an instant retry would re-enter the same cycle.
 		delay := time.Duration(attempt) * 2 * time.Second
 		select {
 		case <-ctx.Done():
@@ -242,28 +230,21 @@ func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog
 	}
 	return applyChunked(ctx, pool, q, sig, filepath.Base(f.Path), params,
 		func(p db.ApplyDailyViewParams) viewKey { return viewKey{jobID: p.JobID, day: p.Day} },
-		// The reported figure is the total: it is what jobs.view_count accrues and what
-		// this worker has always logged.
+		// The reported figure is the total, which is what jobs.view_count accrues.
 		func(p db.ApplyDailyViewParams) int { return int(p.TotalDelta) },
 		func(ctx context.Context, qtx *db.Queries, chunk []db.ApplyDailyViewParams) error {
 			return execBatch(qtx.ApplyDailyView(ctx, chunk))
 		})
 }
 
-// buildParams turns a file's aggregated counts into the batch, in a deterministic
-// order, and reports the total views it carries. Slugs that resolve to no job are
-// dropped.
+// buildParams turns a file's aggregated counts into the batch, in a deterministic order,
+// and reports the total views it carries. Slugs that resolve to no job are dropped.
 //
-// The ORDER is load-bearing rather than tidiness. counts is a map of maps, and Go
-// randomises map iteration, so before this every run took row locks on up to several
-// hundred thousand `jobs` rows in a fresh random order, inside one long transaction,
-// while several ingest runs wrote to the same table beside it. That is a lock cycle
-// waiting to happen, and on 2026-09-05 it happened: 40P01, the run died, and the view
-// rollup stopped for two days without anything else noticing.
-//
-// Ascending job id gives this worker one stable order. Two of its own batches can no
-// longer deadlock each other at all, and against another writer an overlap becomes a
-// wait rather than a cycle.
+// The ORDER is load-bearing. counts is a map of maps and Go randomises map iteration, so
+// an unordered batch takes row locks on up to hundreds of thousands of `jobs` rows in a
+// random order beside concurrent ingest writers: a lock cycle (40P01). Ascending job id
+// gives one stable order, so two of this worker's batches cannot deadlock each other and
+// against another writer an overlap becomes a wait rather than a cycle.
 func buildParams(counts map[string]map[string]viewlog.Counts, ids map[string]int64) ([]db.ApplyDailyViewParams, error) {
 	var params []db.ApplyDailyViewParams
 	for day, perSlug := range counts {

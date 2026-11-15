@@ -8,12 +8,9 @@ import (
 	"github.com/strelov1/freehire/internal/job/ghost"
 )
 
-// report accumulates what a run did, or would do. It exists because the rollout
-// gate is a person reading this output and deciding whether the signal may go live:
-// the known failure mode is staffing and consulting agencies, which legitimately
-// advertise clients' roles absent from their own board, and a bare total cannot
-// show whether they dominate. So the report breaks the verdict down BY COMPANY and
-// prints examples.
+// report accumulates what a run did, or would do. The rollout gate is a person reading this
+// output, and a bare total cannot show whether staffing agencies dominate, so the verdict is
+// broken down BY COMPANY and examples are printed.
 type report struct {
 	apply bool
 
@@ -41,9 +38,8 @@ func (r *report) add(source, slug string, postings []ghost.Posting, res ghost.Cr
 	r.stamped += len(res.Stamp)
 	r.cleared += len(res.Clear)
 	r.skips.Add(res.Skips)
-	// A company we have no board for is one we cannot check at all. Counting it
-	// separately keeps "we found nothing wrong" distinguishable from "we could not
-	// look", which a single skipped total would blur.
+	// A company we have no board for cannot be checked at all; counting it separately keeps
+	// "found nothing wrong" distinguishable from "could not look".
 	if res.Skips.NoBoard > 0 {
 		r.gated++
 	}

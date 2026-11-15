@@ -11,13 +11,10 @@ import (
 )
 
 // hrofficeProber validates an HR Office career site (the <board> of middendelfland.inhroffice.com)
-// by reading the listing the adapter reads, /api/nl/vacancies, and counting its vacancies; the
-// employer is the home page's og:site_name ("Gemeente Midden-Delfland"). It mirrors
-// internal/ingest/sources/hroffice.go, which is unexported.
-//
-// An unknown or switched-off label answers the listing with HTTP 500 and a
-// "MiniJobPortalNotFoundException" body, which is the skip here: a probe only ever asks about
-// candidates, and a live site has never been seen answering 500.
+// by counting the vacancies of the listing the adapter reads, /api/nl/vacancies; the employer is
+// the home page's og:site_name. It mirrors internal/ingest/sources/hroffice.go, which is
+// unexported. An unknown or switched-off label answers the listing with HTTP 500 and a
+// "MiniJobPortalNotFoundException" body, which is the skip: a live site has never answered 500.
 type hrofficeProber struct{}
 
 var hrofficeBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

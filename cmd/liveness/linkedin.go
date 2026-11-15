@@ -13,9 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// LinkedIn's guest search is only a recent slice, so absence is never a removal.
-// The job's own explicit closed notice is evidence even though it returns HTTP 200.
-// A short spike verified this layout; the pace and budget are conservative initial bounds.
+// LinkedIn's guest search is only a recent slice, so absence is never a removal. The job's own explicit closed notice is evidence even though it returns HTTP 200. The pace and budget are conservative initial bounds.
 func linkedInPass(client *http.Client) pacedPass {
 	return pacedPass{
 		source:    "linkedin",
@@ -44,8 +42,7 @@ func linkedInPass(client *http.Client) pacedPass {
 				unknown.refused = true
 				return unknown
 			}
-			// Unlike other providers, 404/410 was not established as authoritative in the
-			// spike. Keep it uncertain until a larger sample supports treating it as gone.
+			// Unlike other providers, 404/410 is not established as authoritative; keep it uncertain until a larger sample supports treating it as gone.
 			if resp.StatusCode != http.StatusOK {
 				return unknown
 			}

@@ -9,8 +9,7 @@ import (
 	"strings"
 )
 
-// A Gupy board is a career-page subdomain (<page>.gupy.io), the key sources.gupy lists by;
-// see that adapter for why it stopped being the numeric companyId.
+// A Gupy board is a career-page subdomain (<page>.gupy.io), the key sources.gupy lists by.
 const (
 	// gupyListURL lists one career page's published postings (mirrors sources.gupyJobsURL,
 	// which is unexported; this tool lives outside the sources package).
@@ -25,9 +24,8 @@ const (
 const (
 	// gupyPageSize is the discovery page size for the portal feed.
 	gupyPageSize = 100
-	// gupyMaxOffset is where the portal feed ends: measured 2026-10-19, offset 9900 still
-	// answers a full page and offset 10000 answers no data at all, so one sweep sees the
-	// newest 10,000 postings and the career pages they name — not every page Gupy hosts.
+	// gupyMaxOffset is where the portal feed ends: offset 9900 still answers a full page and 10000
+	// answers nothing, so one sweep sees the newest 10,000 postings, not every page Gupy hosts.
 	gupyMaxOffset = 10000
 )
 

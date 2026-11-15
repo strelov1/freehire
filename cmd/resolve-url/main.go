@@ -44,11 +44,9 @@ func run() int {
 	defer cleanup()
 	q := db.New(pool)
 
-	// Push each newly-written job straight to the live search index when the engine is
-	// configured (MEILI_MASTER_KEY set), mirroring cmd/ingest — the company page and
-	// /jobs search read from Meili, so without this a resolved job stays invisible there
-	// until the next full reindex. Best-effort inside the importer; absent the key, nil
-	// skips the push.
+	// Push each newly-written job to the live search index when MEILI_MASTER_KEY is set, mirroring
+	// cmd/ingest; otherwise it stays invisible in search until the next full reindex. Best-effort
+	// inside the importer; with no key, nil skips the push.
 	var idx *search.Client
 	if cfg.MeiliKey != "" {
 		idx = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)

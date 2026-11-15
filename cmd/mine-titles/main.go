@@ -3,24 +3,17 @@
 // dictionary term, and, run again after the dictionary grows, shows whether the
 // unclassified group shrank.
 //
-// It is a run-once-and-exit worker and writes nothing. Grouping is by word group
-// rather than by whole title because boards append location, schedule and
-// requisition detail: measured on prod, half the unclassified mass has a title
-// occurring exactly once, so whole-title clustering reached only 6.6% of it. A word
-// group is also the unit the non-tech dictionary accepts, so a reported cluster can
-// be copied into it as an anchored term.
+// It is a run-once-and-exit worker and writes nothing. Grouping is by word group, not whole
+// title, because boards append location, schedule and requisition detail; a word group is also
+// the unit the non-tech dictionary accepts.
 //
-// Two costs to expect. --limit bounds the output, not the work: the whole group-by
-// runs before the final top-N sort, so a small limit costs the same as a large one.
-// And expanding every title into overlapping groups multiplies the rows the
-// aggregate sees, so this is minutes, not seconds, and it spills to temp sort space
-// — fine for an operator tool run a few times per dictionary iteration, and firmly off
-// any request path.
+// --limit bounds the output, not the work: the whole group-by runs before the top-N sort, and
+// overlapping groups multiply the rows, so expect minutes and temp sort space. Operator tool
+// only, never on a request path.
 //
-// The report is a shortlist for a human, not a verdict. The same measurement found
-// roughly a fifth of the top 100 to be technical or IT-relevant phrases that must
-// NOT reach the non-tech dictionary ("systems engineer", "team lead"), and another
-// quarter to be fragments of one verbose employer's titles. Read it before acting.
+// The report is a shortlist for a human, not a verdict: it includes technical phrases that
+// must NOT reach the non-tech dictionary ("systems engineer", "team lead") and fragments of
+// one verbose employer's titles.
 //
 // Usage: go run ./cmd/mine-titles [--limit=100]   (needs DATABASE_URL)
 package main
@@ -76,18 +69,13 @@ func run() int {
 	return 0
 }
 
-// shownSources is how many source names a row prints before the rest are counted
-// off. Groups on prod span up to ninety sources; the names past the first few carry
-// no information the breadth count does not already give.
+// shownSources is how many source names a row prints before the rest are counted off.
 const shownSources = 3
 
-// report writes the clusters as an aligned table in the order given (the query orders
-// them busiest-first): job count, source breadth, the group, then a sample of the
-// sources. Breadth leads because it is the fastest way to tell a real catalogue-wide
-// role from one employer's shredded titles — measured on prod, every genuine role
-// spanned dozens of sources and every fragment one or two. Sources are sorted here
-// rather than trusted from the aggregate, so an unchanged catalogue renders
-// byte-identically between runs and a diff between iterations shows only real movement.
+// report writes the clusters as an aligned table in the order given (busiest first): job
+// count, source breadth, the group, then a sample of sources. Breadth tells a catalogue-wide
+// role from one employer's shredded titles. Sources are sorted here so an unchanged catalogue
+// renders byte-identically between runs.
 func report(w io.Writer, rows []db.ResidualTitleGroupsRow) error {
 	if len(rows) == 0 {
 		_, err := fmt.Fprintln(w, "no unclassified title groups left")

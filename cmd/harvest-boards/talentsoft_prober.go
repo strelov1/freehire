@@ -13,10 +13,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// talentsoftProber validates a Talentsoft career site (the board is its host) by reading page
-// one of the listing the adapter walks, /offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list,
-// which states the site's posting count in #…_Pagination_TotalOffers. It mirrors
-// internal/ingest/sources/talentsoft.go, which is unexported.
+// talentsoftProber validates a Talentsoft career site (the board is its host) by reading page one of
+// the adapter's listing, /offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list, which states the
+// posting count in #…_Pagination_TotalOffers. It mirrors the unexported internal/ingest/sources/talentsoft.go.
 //
 // The employer is the page title's lead ("GEODIS - Résultat de votre recherche (520 offres…)").
 // A site with no open posting renders the platform's own empty result and is reported with a

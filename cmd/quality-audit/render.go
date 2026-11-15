@@ -23,12 +23,10 @@ type snapshot struct {
 
 // render turns a snapshot into the Prometheus text exposition format.
 //
-// Every value is a raw count. The share that counts as "too many dead" or "too few honest" is
-// the alert rule's to decide, and so is the smallest sample worth deciding on — a source whose
-// live + dead is 0 was not measurable this week, and only a rule that reads both counts can
-// tell that apart from a healthy one.
+// Every value is a raw count; thresholds and the smallest worthwhile sample belong to the alert
+// rule (a source whose live + dead is 0 was not measurable, not healthy).
 //
-// The names and labels are a cross-repository contract (the alert rules live in freehire-ops),
+// The names and labels are a cross-repository contract (alert rules live in freehire-ops),
 // which render_test.go pins verbatim.
 func render(s snapshot) string {
 	var b strings.Builder
@@ -64,8 +62,7 @@ func render(s snapshot) string {
 		}
 	}
 
-	// A source with no judgement in the window is absent, not zero: zero confirmed out of zero
-	// sampled is no measurement, and a zero series would read as one.
+	// A source with no judgement in the window is absent, not zero, which would read as a measurement.
 	remote := []struct {
 		name, help string
 		value      func(db.TallyRemoteAuditJudgementsRow) int64

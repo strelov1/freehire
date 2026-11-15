@@ -14,9 +14,8 @@ import (
 	"github.com/strelov1/freehire/internal/search/embedprogress"
 )
 
-// coverageStatementTimeout bounds the coverage scan. It walks every open posting —
-// over a minute on production on 2026-10-19 — and nothing waits on it, but an unbounded
-// one on a bad night would hold this worker, and its unit, open with it.
+// coverageStatementTimeout bounds the coverage scan. It walks every open posting (slow) and nothing
+// waits on it, but an unbounded one would hold this worker and its unit open.
 const coverageStatementTimeout = "10min"
 
 // rebuildEmbedProgress measures embedding coverage and publishes it for the public

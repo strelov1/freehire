@@ -1,12 +1,8 @@
-// Command recount-companies recomputes each company's denormalized state — the
-// open-job count and the facet arrays (regions/countries/domains/company_types/
-// company_sizes) derived from its open jobs — in one set-based pass and exits. The
-// list endpoint reads and filters on these columns (and orders by job_count, most
-// active first) instead of joining jobs on every request. They change both when
-// jobs are ingested and when they are closed (closed_at set by the ingest sweep /
-// liveness worker), so they are maintained by this periodic recompute rather than a
-// write-path trigger — eventually consistent within the cron interval. Idempotent:
-// re-running rewrites only the rows whose state actually changed.
+// Command recount-companies recomputes each company's denormalized state (the open-job count
+// and the facet arrays regions/countries/domains/company_types/company_sizes) in one set-based
+// pass and exits. The list endpoint reads these columns instead of joining jobs per request.
+// They change on ingest and on close, so a periodic recompute maintains them (eventually
+// consistent within the cron interval). Idempotent: only changed rows are rewritten.
 package main
 
 import (
@@ -34,9 +30,8 @@ func run() int {
 	defer cleanup()
 
 	mappingDomains, mappingIndustries := industrytag.DomainIndustryPairs()
-	// The count covers what search holds, so it takes search's unseen rule too: a posting
-	// its source stopped showing is withheld from the index (search.Withheld) and must not
-	// keep its employer at a number the company page contradicts.
+	// The count covers what search holds, so it takes search's unseen rule too: a posting withheld
+	// from the index (search.Withheld) must not inflate its employer's count.
 	var unseenSources []string
 	var unseenSeconds []int64
 	for source, window := range sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow) {
@@ -73,7 +68,7 @@ type uncategorizedLister interface {
 
 // keptUncategorizedIDs pages through the postings the recount's category predicate drops and
 // returns those whose title search keeps anyway (search.TitleKeepsUncategorized), so a
-// company hiring only for such roles is counted and indexed (#4503).
+// company hiring only for such roles is still counted and indexed.
 func keptUncategorizedIDs(ctx context.Context, q uncategorizedLister) ([]int64, error) {
 	var kept []int64
 	var after int64

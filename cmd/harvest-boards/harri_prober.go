@@ -7,14 +7,12 @@ import (
 	"strings"
 )
 
-// harriProber validates a Harri board — a brand's career-page slug — in three cheap requests:
-// the slug lookup that names the brand id, the brand's own basic info for its display name, and
-// a one-row search whose `hits` is the brand tree's open-posting count. It mirrors the requests
-// internal/ingest/sources/harri.go makes, without the per-posting detail fan-out the adapter
-// prober would spend on every candidate (a group's brand lists hundreds of postings).
-//
-// The name is the brand's own ("Brindisa Kitchens"), not a store's, so it is safe to label the
-// board with.
+// harriProber validates a Harri board (a brand's career-page slug) in three cheap requests: the
+// slug lookup naming the brand id, the brand's basic info for its display name, and a one-row
+// search whose `hits` is the brand tree's open-posting count. It mirrors the requests
+// internal/ingest/sources/harri.go makes, minus the per-posting detail fan-out (a group's brand
+// lists hundreds of postings). The name is the brand's own, not a store's, so it is safe as a
+// label.
 type harriProber struct{}
 
 const harriGateway = "https://gateway.harri.com"

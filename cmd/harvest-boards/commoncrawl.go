@@ -18,29 +18,22 @@ import (
 const commonCrawlCollInfoURL = "https://index.commoncrawl.org/collinfo.json"
 
 // commonCrawlSnapshotCount is how many of the most recent snapshots discovery sweeps per
-// run. Common Crawl cuts a new snapshot roughly monthly, and snapshots a few months apart
-// overlap heavily in which companies they've seen, so the marginal new-candidate yield per
-// additional snapshot drops fast while cost (CDX requests) keeps climbing.
+// run. Snapshots a few months apart overlap heavily, so the marginal yield per extra snapshot
+// drops fast while CDX request cost keeps climbing.
 const commonCrawlSnapshotCount = 3
 
-// commonCrawlMaxPages bounds the CDX pages read per snapshot, mirroring gupyMaxOffset's
-// safety-cap pattern: a backstop against a runaway query, not an expected limit.
-//
-// A single host's full result fits in a handful of pages, which is what the first spike
-// measured. A whole-domain wildcard does not: measured live 2026-09-24, Workday's
-// "*.myworkdayjobs.com" spans 22 pages in one snapshot — so at the original 20 this cap
-// would have silently dropped the tail of every Workday sweep while the run still reported
-// success. Raised with headroom rather than tightened to 22, because the figure is the
-// index's and grows with it.
+// commonCrawlMaxPages bounds the CDX pages read per snapshot: a backstop against a runaway
+// query, not an expected limit. A single host fits in a handful of pages, but a whole-domain
+// wildcard such as Workday's "*.myworkdayjobs.com" spans 20+ pages, so a low cap would
+// silently drop the tail of the sweep while the run reported success. It is set with headroom
+// because the index grows.
 const commonCrawlMaxPages = 40
 
 // commonCrawlSlug extracts a candidate board id from a Common Crawl-matched URL: the first
 // non-empty path segment, exactly as crawled. Greenhouse and Ashby both key a board by that
-// segment (boards.greenhouse.io/<slug>/..., jobs.ashbyhq.com/<slug>/...), so no per-provider
-// variant is needed. Case is preserved here rather than folded — both providers' APIs are in
-// fact case-insensitive, but that's handled once, at the dedup layer (see dedupKey on
-// greenhouseProber/ashbyProber in prober.go), not duplicated into every URL this function
-// parses. A URL with no path segments (bare host, or root "/") yields no candidate.
+// segment, so no per-provider variant is needed. Case is preserved: both APIs are
+// case-insensitive, but that is handled once at the dedup layer (dedupKey in prober.go). A URL
+// with no path segments yields no candidate.
 func commonCrawlSlug(rawURL string) (string, bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -55,23 +48,18 @@ func commonCrawlSlug(rawURL string) (string, bool) {
 }
 
 // truncatedButUsable reports whether err is only GetText's size cap and something was read
-// before it tripped — the one shape of fetch failure this sweep can still use.
-//
-// A CDX page is JSON-lines, so every complete record before the cut is independently valid
-// and commonCrawlParsePage drops the partial one; discovery is a best-effort widening of the
-// candidate set, and half a page of real slugs beats none. This is deliberately spelled here
-// rather than left to the transport: everywhere else a truncated body is a wrong answer that
-// looks like a right one, which is why GetText reports the cut at all.
+// before it tripped. A CDX page is JSON-lines, so every complete record before the cut is
+// valid and commonCrawlParsePage drops the partial one; half a page of real slugs beats none
+// for a best-effort discovery. Spelled out here because everywhere else a truncated body is a
+// wrong answer that looks right, which is why GetText reports the cut.
 func truncatedButUsable(body string, err error) bool {
 	var tooLarge *sources.BodyTooLargeError
 	return errors.As(err, &tooLarge) && body != ""
 }
 
 // commonCrawlParsePage extracts candidate slugs from one CDX page response body: JSON-lines,
-// one record per line, each URL sliced to a board id by slugOf. GetText's response-size cap can
-// truncate the last line mid-record; a line that fails to parse (truncated or otherwise
-// malformed) is silently skipped rather than sinking the whole page, since every complete line
-// before it is independently valid JSON.
+// one record per line, each URL sliced to a board id by slugOf. A line that fails to parse (e.g.
+// truncated by GetText's size cap) is skipped rather than sinking the page.
 func commonCrawlParsePage(body string, slugOf func(string) (string, bool)) []string {
 	var slugs []string
 	for _, line := range strings.Split(body, "\n") {
@@ -114,9 +102,8 @@ func commonCrawlSnapshots(ctx context.Context, c httpClient) ([]string, error) {
 	return apis, nil
 }
 
-// commonCrawlPageCount asks one snapshot's CDX index how many pages its full result for
-// urlPattern spans, at the finest page granularity (pageSize=1) so a fetch of any one page
-// stays as small as the index's own block structure allows.
+// commonCrawlPageCount asks one snapshot's CDX index how many pages the full result for
+// urlPattern spans, at the finest granularity (pageSize=1) so each page fetch stays small.
 func commonCrawlPageCount(ctx context.Context, c httpClient, cdxAPI, urlPattern string) (int, error) {
 	var resp struct {
 		Pages int `json:"pages"`
@@ -133,14 +120,11 @@ func commonCrawlPageCount(ctx context.Context, c httpClient, cdxAPI, urlPattern 
 // snapshot whose page count can't be read, or whose every page fails to fetch, is a failed
 // snapshot: it is skipped and logged, and the sweep continues with the remaining snapshots.
 // An error is returned only when every swept snapshot fails.
-//
-// urlPattern is the CDX query's `url=` value in full, glob and all — callers spell their own
-// rather than have one appended here, because the two shapes are not interchangeable. A
-// platform on one host globs its paths ("boards.greenhouse.io/*", or a path prefix like
-// "www.workstream.us/j/*" where the boards do not sit at the host root). A platform that
-// gives each tenant its own subdomain globs the host instead ("*.myworkdayjobs.com") — and
-// that one must carry NO path glob: measured live 2026-09-24, the index answers
-// "*.myworkdayjobs.com/*" with 502 and the same query without the glob with 200.
+// urlPattern is the CDX query's `url=` value in full, glob and all; callers spell their own
+// because the shapes are not interchangeable. A platform on one host globs its paths
+// ("boards.greenhouse.io/*", or a prefix like "www.workstream.us/j/*"). A platform with a
+// subdomain per tenant globs the host instead ("*.myworkdayjobs.com") and must carry NO path
+// glob: the index answers "*.myworkdayjobs.com/*" with 502.
 func commonCrawlCandidates(ctx context.Context, c httpClient, urlPattern string,
 	slugOf func(string) (string, bool)) ([]string, error) {
 	apis, err := commonCrawlSnapshots(ctx, c)

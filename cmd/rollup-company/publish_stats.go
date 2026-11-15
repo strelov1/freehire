@@ -19,8 +19,8 @@ type statsPublication struct{ inserted, updated, deleted int64 }
 // The table is a full recomputation, but almost all of it is the same as yesterday: a
 // (company, day) row changes when that day's added/removed moves, or when an earlier day
 // of the same company does (open is a running total), and the great majority of companies
-// do neither. Deleting and re-copying every row rewrote ~5M rows and both indexes a day
-// for that, so the result is staged and compared by key (company_slug, day) instead:
+// do neither. So rather than delete and re-copy every row, the result is staged and compared by
+// key (company_slug, day):
 //
 //   - a key absent from rows is deleted (a vanished company, a reopened job's old day, a
 //     merged or renamed slug), and an empty rows empties the table, as a full rebuild did;
@@ -29,10 +29,9 @@ type statsPublication struct{ inserted, updated, deleted int64 }
 //   - a key the table lacks is inserted; an identical row is not touched, so its
 //     tuple, xmin and index entries stay as they were.
 //
-// The stage is a temp table dropped at commit: invisible to every other session, and
-// nothing is left behind when the publication rolls back. Its heap and index data are
-// unlogged, so staging 5M rows writes no WAL for them; the temp-table DDL itself still
-// writes catalog (pg_class, pg_attribute, ...) WAL. The update and the insert are separate
+// The stage is a temp table dropped at commit: invisible to other sessions, and nothing is left
+// behind on rollback. Its heap and index data are unlogged (the temp-table DDL still writes catalog
+// WAL). The update and the insert are separate
 // statements on purpose: INSERT ... ON CONFLICT DO UPDATE locks every conflicting row
 // before it evaluates its WHERE, which would write a lock to every unchanged row and
 // defeat the point.

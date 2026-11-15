@@ -14,10 +14,10 @@ import (
 )
 
 // onlyfyProber validates an onlyfy site (the <board> of <board>.onlyfy.jobs) by asking its
-// listing fragment for one row: the fragment's pager states the board's posting count. The
-// listing names no employer, so the first posting's schema.org JobPosting supplies it
-// (hiringOrganization) — without it the catalogue row would be named after the site slug. It
-// mirrors internal/ingest/sources/onlyfy.go, which is unexported.
+// listing fragment for one row: the pager states the posting count. The listing names no
+// employer, so the first posting's schema.org JobPosting (hiringOrganization) supplies it,
+// else the catalogue row would be named after the site slug. It mirrors
+// internal/ingest/sources/onlyfy.go, which is unexported.
 type onlyfyProber struct{}
 
 var (
@@ -34,9 +34,9 @@ func (onlyfyProber) probe(ctx context.Context, c httpClient, board string) (stri
 	site := "https://" + board + ".onlyfy.jobs"
 	root, final, err := onlyfyGetResolved(ctx, c, site+"/candidate/job/ajax_list?display_length=1&page=1&sort=date&sort_dir=DESC")
 	if err == nil && !strings.HasPrefix(final, site+"/") {
-		// A renamed site (and every <board>.jobbase.io) redirects to another site name. That
-		// name is the board; this one would store the same site a second time, so it is a
-		// skip, and the destination stands as a candidate of its own.
+		// A renamed site (and every <board>.jobbase.io) redirects to another site name. That name is the
+		// board; this one would store the same site twice, so it is a skip and the destination stands
+		// as a candidate of its own.
 		return "", 0, nil
 	}
 	if err != nil {

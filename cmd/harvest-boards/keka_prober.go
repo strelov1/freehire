@@ -11,18 +11,14 @@ import (
 // kekaProber validates a Keka career portal (the <board> of minfy.keka.com/careers) by reading
 // the listing the adapter reads (internal/ingest/sources/keka.go, unexported), which carries
 // every open posting in one response.
-//
-// Keka serves every label (its DNS is a wildcard), and a label with no careers portal is neither
-// a DNS failure nor a 404: the API redirects to an HTML page served under HTTP 200 — "Invalid
-// Tenant" for a label no organisation holds, "Forbidden Access" for an organisation that runs
-// Keka's HRMS without its hiring module (measured 2026-10-25: ebay, brisa). The listing is
-// therefore read as text, so those pages can be told apart from an answer the prober does not
-// understand — the first two are a skip, the last is surfaced.
-//
-// The employer name comes from the portal's own careerportalinfo, so harvest-boards stores what
-// the employer calls itself and can check a seed's company claim against it. A guessed label (a
-// company name folded into a subdomain) can land on a different employer, and that check is what
-// turns such a collision into a rejection.
+// Keka serves every label (wildcard DNS), and a label with no careers portal is neither a DNS
+// failure nor a 404: the API redirects to an HTML page under HTTP 200, "Invalid Tenant" for a
+// label no organisation holds, "Forbidden Access" for an organisation without Keka's hiring
+// module. The listing is therefore read as text, so those pages (a skip) can be told apart from
+// an answer the prober does not understand (surfaced).
+// The employer name comes from the portal's careerportalinfo, so a seed's company claim can be
+// checked against it: a guessed label can land on a different employer, and that check turns
+// the collision into a rejection.
 type kekaProber struct{}
 
 var kekaBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

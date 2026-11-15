@@ -4,12 +4,9 @@
 // before atomically swapping it in. Run it on a schedule (e.g. cron); it processes the
 // whole catalogue and exits. Indexing is idempotent (upsert by id), so re-runs are safe.
 //
-// The index carries ONE embedder, and it is `userProvided`: the skill vectors backing
-// the match sort are computed here (internal/dict/skillvec) rather than fetched, so a
-// rebuild still contacts no embedding service. It is not free, though — building the
-// vector index is what makes a rebuild materially slower and larger than it was when
-// the index carried no embedder at all, so this is a run to schedule deliberately
-// rather than one to leave on a tight timer.
+// The index carries ONE `userProvided` embedder: the skill vectors behind the match sort are computed
+// here (internal/dict/skillvec), so a rebuild contacts no embedding service. Building the vector index makes
+// a rebuild materially slower and larger, so schedule it deliberately rather than on a tight timer.
 package main
 
 import (
@@ -36,19 +33,12 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// reindexBatchSize bounds how many jobs are read from Postgres and pushed to
-// Meilisearch per round. When the facet index dropped its model-backed embedder, the
-// per-batch round-trip became the throughput lever, so the batch was sized up from
-// 500 to amortize it (Postgres read and the ~7KB-doc payload are both cheap at this
-// size). The skill vectors added since do not change that: they are computed locally
-// and add bytes to the payload, not a round trip. A const for now; promote to config
-// if it needs tuning.
+// reindexBatchSize bounds how many jobs are read from Postgres and pushed to Meilisearch per round; the
+// per-batch round-trip is the throughput lever. A const for now; promote to config if it needs tuning.
 const reindexBatchSize = 2000
 
-// progressInterval is how often reindex emits a heartbeat with its running totals.
-// A full reindex pushes hundreds of thousands of docs to Meilisearch and otherwise
-// logs only on completion, so the heartbeat distinguishes a slow run from a stalled
-// one (the totals stop advancing).
+// progressInterval is how often reindex emits a heartbeat with its running totals, so a slow run
+// can be told from a stalled one (totals stop advancing).
 const progressInterval = 60 * time.Second
 
 // drainHoldTTL is how long the drain stays paused if this process dies without lifting it.
@@ -79,13 +69,9 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Catalogue-wide index work runs one at a time — full rebuild, marker passes and the
-	// suggestion build all take this same lock. The schedule cannot keep them apart on its
-	// own: a rebuild took 4.5 hours on 2026-09-15 against clock times laid out when it took
-	// three, so the 06:45, 16:30 and 19:30 jobs land inside one every day. That afternoon
-	// two of them together took the site down. Skipping is right rather than waiting: every
-	// one of these is idempotent and due again soon, while waiting holds a Type=oneshot unit
-	// open for hours and reads as a hang.
+	// Catalogue-wide index work (full rebuild, marker passes, suggestion build) takes this same lock one at a time:
+	// the schedule cannot keep them apart, and overlapping runs have taken the site down. Skip rather than wait:
+	// each is idempotent and due again soon, while waiting holds a Type=oneshot unit open for hours.
 	releaseLock, gotLock, err := worker.HoldHeavyIndexLock(ctx, pool)
 	if err != nil {
 		log.Printf("index lock: %v", err)
@@ -109,42 +95,30 @@ func run() int {
 		return 1
 	}
 
-	// Marker-only mode stops here, before anything Meilisearch-related — see
-	// config.Reindex.DedupOnly for why this can run far more often than a full
-	// Dedup+rebuild invocation.
+	// Marker-only mode stops here, before anything Meilisearch-related; see config.Reindex.DedupOnly.
 	//
-	// It is also the one mode whose exit code can carry the passes' outcome. They are
-	// log-and-continue because "a marker refresh failure must not stop the rebuild that
-	// follows it" — and here there is no rebuild to protect, so a run in which all three
-	// passes failed used to exit 0, indistinguishable from one in which the catalogue
-	// simply had nothing to re-mark. The cancellation line forCompanyBatches assembles
-	// was thrown away with it.
+	// It is also the one mode whose exit code carries the passes' outcome: they are log-and-continue so a
+	// failure cannot stop the rebuild after them, but here there is no rebuild to protect.
 	if rcfg.DedupOnly {
 		return dedupOnlyExit(ctx, q, int(fuzzyWorkers))
 	}
 
-	// Captured before anything else runs (including the duplicate-marker recompute
-	// passes below, which can themselves take minutes under load): a full facet
-	// reindex reads every job's CURRENT content, so any search_outbox row queued
-	// before this instant is provably already reflected in what the scan reads.
-	// Purged after a successful facet-only swap — see the call site near the bottom.
+	// Captured before anything else runs: a full facet reindex reads every job's CURRENT content, so any
+	// search_outbox row queued before this instant is already reflected in the scan. Purged after a successful
+	// facet-only swap (see the call site near the bottom).
 	startedAt := time.Now()
 
-	// Bootstrap owns config + pool, so this required-config check lands just after
-	// the pool opens rather than before it. The connect is cheap and cleanup closes
-	// it on this early return, so the only cost of a missing key is one DB handshake.
+	// Bootstrap owns config + pool, so this required-config check lands just after the pool opens;
+	// cleanup closes it on this early return.
 	if cfg.MeiliKey == "" && !*facetdOnly {
 		log.Print("config: MEILI_MASTER_KEY is required")
 		return 1
 	}
 
-	// No WithEmbed* options: the facet rebuild never embeds anything (that was only ever
-	// true of the removed --semantic pass), so there is nothing here for EMBED_URL/
-	// EMBED_API_KEY/EMBED_CONCURRENCY to configure.
+	// No WithEmbed* options: the facet rebuild never embeds anything.
 	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 
-	// Guard free disk for the swap rebuild up front — BEFORE the expensive recompute —
-	// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
+	// Guard free disk for the swap rebuild up front, BEFORE the recompute, so a refusal is a true no-op.
 	if !*facetdOnly {
 		if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
 			log.Printf("reindex: %v", err)
@@ -152,18 +126,15 @@ func run() int {
 		}
 	}
 
-	// The duplicate-marker passes run only when asked for (REINDEX_DEDUP=1) — see
-	// config.Reindex.Dedup for why they are no longer part of every rebuild. Without
-	// them the rebuild still collapses reposts; it just uses the markers the last
-	// dedup invocation left, which is what "eventually consistent" already meant.
+	// The duplicate-marker passes run only when asked for (REINDEX_DEDUP=1; see config.Reindex.Dedup). Otherwise
+	// the rebuild uses the markers the last dedup invocation left.
 	if rcfg.Dedup {
 		done := worker.Stage("duplicate markers")
 		refreshDuplicateMarkers(ctx, q, int(fuzzyWorkers))
 		done()
 	}
 
-	// Only the open, canonical, public rows: splitJobs would drop every other row anyway,
-	// and reading them was most of the rebuild's cost (see ListIndexableJobsByIDAfter).
+	// Only the open, canonical, public rows: splitJobs would drop every other row anyway (see ListIndexableJobsByIDAfter).
 	reader := worker.NewIndexableScanReader(q)
 	done := worker.Stage("reality lookup")
 	var lookup realityLookup
@@ -188,11 +159,9 @@ func run() int {
 	}
 	done()
 
-	// Builds a fresh index and atomically swaps it in — transiently a second full copy
-	// of the index (disk already guarded up front, before the recompute).
-	// Only from here does the rebuild write to Meilisearch, so only from here does it compete
-	// with the drain, whose pushes re-merge the whole index. Everything above reads Postgres:
-	// pausing the drain from the start kept new jobs and alerts waiting about 6 hours for nothing.
+	// Builds a fresh index and atomically swaps it in, transiently a second full copy of the index (disk is guarded up front).
+	// Only from here does the rebuild write to Meilisearch, so only from here does it compete with the drain,
+	// whose pushes re-merge the whole index; everything above reads Postgres.
 	releaseDrain := func() {}
 	if !*facetdOnly {
 		release, err := worker.HoldPause(ctx, cfg.RedisURL, worker.SearchDrainJob, drainHoldTTL)
@@ -237,8 +206,7 @@ func run() int {
 		}
 	}
 
-	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves
-	// those rows for the next cycle rather than failing this run.
+	// Best-effort: the reindex already succeeded, so a purge failure just leaves those rows for the next cycle.
 	if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgtype.Timestamptz{Time: startedAt, Valid: true}); err != nil {
 		log.Printf("reindex: purge stale search_outbox entries: %v", err)
 	} else if n > 0 {
@@ -247,30 +215,9 @@ func run() int {
 	return 0
 }
 
-// refreshDuplicateMarkers runs the three duplicate-marker passes in the order they
-// depend on: role clusters first (so ATS reposts collapse to their canon), then
-// aggregator suppression (so an aggregator copy of an already-collapsed ATS posting
-// drops out), then the fuzzy collapse (which only ever claims what the exact passes
-// did not).
-//
-// Every pass is best-effort and logs rather than fails: a hiccup in a marker refresh
-// must not stop the rebuild that follows it, which also owns index settings and
-// compaction. Each is done per company in short transactions — never a table-wide
-// lock that would stall the ingest.
-//
-// It returns how many of the three passes failed, so a caller with no rebuild behind it
-// can still say so in its exit code. The full-rebuild callers ignore it, which is the
-// best-effort rule above, unchanged; REINDEX_DEDUP_ONLY does not, because in that mode
-// these three passes ARE the run.
-// dedupOnlyExit is the whole of the marker-only mode: the three passes, and their outcome
-// as an exit code.
-//
-// It is a function rather than two lines inside run() so that the second half can be
-// tested at all. run() needs a pool, a config and a Meilisearch client before it reaches
-// the branch, so a test asserting on the exit code has to go through this seam — and
-// without one, re-introducing the swallowed outcome (`refreshDuplicateMarkers(ctx, q);
-// return 0`) leaves every test in this package green, which is how it shipped that way
-// the first time.
+// dedupOnlyExit is the whole of the marker-only mode: the three passes, and their outcome as an exit code.
+// It is a function so a test can assert the exit code without run()'s pool, config and Meilisearch client;
+// otherwise re-introducing a swallowed outcome (`refreshDuplicateMarkers(ctx, q); return 0`) would keep every test green.
 func dedupOnlyExit(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
 	// Riding the marker-only schedule, which runs several times a day: without it a posting
 	// that only aged would reach search at a full rebuild, and those no longer run on a timer.
@@ -284,6 +231,15 @@ func dedupOnlyExit(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
 	return worker.ExitCode(failed, 0)
 }
 
+// refreshDuplicateMarkers runs the three duplicate-marker passes in dependency order: role clusters first
+// (ATS reposts collapse to their canon), then aggregator suppression, then the fuzzy collapse (which only
+// claims what the exact passes did not).
+//
+// Every pass is best-effort and logs rather than fails, so a marker hiccup cannot stop the rebuild after it.
+// Each runs per company in short transactions, never a table-wide lock that would stall ingest.
+//
+// It returns how many passes failed. Full-rebuild callers ignore it; REINDEX_DEDUP_ONLY does not, since
+// there these passes ARE the run.
 func refreshDuplicateMarkers(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
 	failed := 0
 
@@ -311,38 +267,29 @@ func refreshDuplicateMarkers(ctx context.Context, q *db.Queries, fuzzyWorkers in
 	return failed
 }
 
-// rebuilder builds a brand-new index out of band and atomically swaps it into
-// production. A full reindex uses it instead of mutating the live index in place:
-// Prepare creates a fresh, empty rebuild index; Push streams document batches into
-// it WITHOUT waiting per batch (so Meilisearch auto-batches them — the throughput
-// lever); Promote waits for the pushes to finish, swaps the rebuild index over the
-// live one in a single atomic step, and drops the old one. Search keeps serving the
-// old index untouched until the swap, and merges stay cheap because the rebuild
-// index grows from empty rather than re-merging into a full one.
+// rebuilder builds a brand-new index out of band and atomically swaps it into production. Prepare creates a
+// fresh, empty index; Push streams batches into it WITHOUT waiting per batch (so Meilisearch auto-batches
+// them); Promote waits for the pushes, swaps it over the live one atomically and drops the old one. Search
+// serves the old index until the swap, and merges stay cheap because the new index grows from empty.
 type rebuilder interface {
 	Prepare(ctx context.Context) error
 	Push(ctx context.Context, docs []search.JobDocument) error
 	Promote(ctx context.Context) error
-	// Cleanup drops a half-built rebuild index. reindexFull defers it so a run that
-	// aborts before Promote's swap-and-drop does not leave an orphan index eating disk.
+	// Cleanup drops a half-built rebuild index; reindexFull defers it so an aborted run leaves no orphan eating disk.
 	Cleanup(ctx context.Context) error
 }
 
-// reindexFull rebuilds the index from scratch and swaps it in. It streams ONLY
-// open jobs into the fresh index — closed jobs are simply absent (the rebuild
-// index never held them, so unlike the in-place path there is nothing to delete).
-// fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
-// run cannot be skipped or repeated.
+// reindexFull rebuilds the index from scratch and swaps it in. It streams ONLY open jobs into the fresh index;
+// closed jobs are simply absent. fetch pages by keyset (id > last seen) so rows inserted or re-ordered
+// during the run cannot be skipped or repeated.
 func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
 
-	// Promote ends the happy path by swapping the rebuild index in and dropping the old
-	// one; any earlier return is an abort that leaves the half-built rebuild index behind.
-	// Drop it in a defer so an aborted run never orphans an index that eats disk until the
-	// next run's Prepare clears it. Best-effort on a cancellation-immune context so it can
-	// still reach Meilisearch when the abort was the parent ctx being cancelled.
+	// Promote ends the happy path by swapping and dropping the old index; any earlier return is an abort that
+	// leaves the half-built rebuild index behind. Drop it in a defer, best-effort on a cancellation-immune
+	// context so it still reaches Meilisearch when the abort was the parent ctx being cancelled.
 	promoted := false
 	defer func() {
 		if promoted {
@@ -367,12 +314,8 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 	return indexed, skipped, nil
 }
 
-// streamOpenDocs pages the reindex feed by keyset and pushes each batch's open-job
-// documents through push, returning the running indexed/skipped totals. Its own
-// function (rather than inlined into reindexFull) mostly for historical reasons — it
-// used to also back an in-place semantic rehydration path that shared this loop and
-// differed only in the per-batch sink; that path is gone (see openspec/changes/
-// drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
+// streamOpenDocs pages the reindex feed by keyset and pushes each batch's open-job documents through push,
+// returning the running indexed/skipped totals.
 //
 // forms supplies each batch's application-form question counts in one query per batch;
 // nil writes none.
@@ -397,9 +340,8 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
-			// Asked for the whole page, including the jobs splitJobs dropped: filtering first
-			// would mean deciding indexability twice. A job with no captured form is absent
-			// from the map and its document carries no count — unknown, not short.
+			// Asked for the whole page, including jobs splitJobs dropped, to avoid deciding indexability twice.
+			// A job with no captured form is absent from the map: its document carries no count (unknown, not short).
 			questions, err := applyform.QuestionCounts(ctx, forms, pageIDs(jobs))
 			if err != nil {
 				return int(indexed.Load()), skipped, err
@@ -413,9 +355,8 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 			indexed.Add(int64(len(docs)))
 		}
 
-		// Keyset progress is the exhaustion signal: ResilientPage advances lastID
-		// past a skipped (corrupted) row, so a short page from the degrade path does
-		// not end the scan early the way a "< batchSize" check would.
+		// Keyset progress is the exhaustion signal: ResilientPage advances lastID past a skipped (corrupted)
+		// row, so a short page from the degrade path does not end the scan early.
 		if lastID == afterID {
 			break
 		}
@@ -439,35 +380,23 @@ func pageIDs(jobs []db.Job) []int64 {
 // to (1, 1) everywhere (used by tests that do not exercise clustering).
 type realityLookup func(companySlug, fingerprint string) (repost, mass int)
 
-// closureGeoLookup returns the union of countries, regions, cities, and metros across every open row
-// a searchable row REPRESENTS — its duplicate closure — so the row's search document can be
-// widened beyond its own geography. Keyed by job id, not by (company_slug, role_fingerprint):
-// the two dedup passes that suppress rows leave them with fingerprints their canon does not
-// share, so a fingerprint key could never reach them (issue #2225).
+// closureGeoLookup returns the union of countries, regions, cities, and metros across every open row a
+// searchable row REPRESENTS (its duplicate closure), so its document can be widened beyond its own geography.
+// Keyed by job id, not (company_slug, role_fingerprint): the dedup passes that suppress rows leave them with
+// fingerprints their canon does not share.
 //
 // A miss (the row represents nobody) yields a zero ClosureGeo — a no-op widening. A nil lookup skips
 // widening entirely (tests that do not exercise clustering).
 type closureGeoLookup func(ownerID int64) jobview.ClosureGeo
 
 // companyBatchSize bounds how many companies one RecomputeRoleDuplicatesForCompanies /
-// SuppressAggregatorDuplicatesForCompanies call covers. Measured on prod (2026-08-06):
-// one round trip per company — 236,923 distinct open companies, 94,410 of them with an
-// open aggregator posting — made the aggregator-suppression pass alone run for hours
-// under ordinary host load and get stuck (systemd auto-restarted it, redoing the same
-// hours of work) with the reindex never reaching the point of actually pushing to
-// Meili. 500 keeps each statement's WHERE ... = ANY(...) small enough to stay a cheap
-// index probe (see migration 0076's functional index) while cutting round trips by
-// ~500x; it is not tuned beyond "clearly fixes the incident," so revisit if a future
-// measurement suggests a better number.
+// SuppressAggregatorDuplicatesForCompanies call covers. One round trip per company made the passes run for
+// hours; 500 keeps each WHERE ... = ANY(...) a cheap index probe (migration 0076) while cutting round trips ~500x.
 const companyBatchSize = 500
 
-// recomputeRoleDuplicates refreshes jobs.duplicate_of in batches of companies,
-// returning the total rows re-marked. Batching (not one UPDATE per company, and not one
-// UPDATE for the whole catalogue) balances two costs: an unbatched per-company call
-// pays a full network/planning round trip per company (see companyBatchSize), while a
-// single whole-catalogue UPDATE would hold its lock window across the entire jobs
-// table instead of one bounded slice at a time, risking a stall of concurrent ingest
-// writes. Best-effort like every batch here (see forCompanyBatches).
+// recomputeRoleDuplicates refreshes jobs.duplicate_of in batches of companies, returning the total rows
+// re-marked. Batching avoids both a round trip per company (see companyBatchSize) and one whole-catalogue
+// UPDATE whose lock window would stall concurrent ingest writes. Best-effort like every batch here.
 func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	companies, err := q.CompaniesWithRoleClusters(ctx)
 	if err != nil {
@@ -476,14 +405,11 @@ func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) 
 	return forCompanyBatches(ctx, companies, q.RecomputeRoleDuplicatesForCompanies)
 }
 
-// suppressAggregatorDuplicates marks each open aggregator posting that duplicates a
-// first-party ATS posting (same company, normalized title, compatible country) as a
-// duplicate of that ATS row, processed in batches of companies. Returns the total rows
-// re-marked. The aggregator set comes from the taxonomy registry's aggregator()
-// markers, so it is the same set here as on the ingest host: a keyed adapter whose
-// credential lives only where the crawl runs must still be classified, or its copies of
-// an ATS posting go unsuppressed. Best-effort and lock-scoped exactly like
-// recomputeRoleDuplicates.
+// suppressAggregatorDuplicates marks each open aggregator posting that duplicates a first-party ATS posting
+// (same company, normalized title, compatible country) as a duplicate of that row, in batches of companies,
+// returning the total rows re-marked. The aggregator set comes from the taxonomy registry's aggregator()
+// markers so it is the same here as on the ingest host: a keyed adapter whose credential lives only where the
+// crawl runs must still be classified. Best-effort and lock-scoped like recomputeRoleDuplicates.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	aggregators := sources.AggregatorProviders(sources.Taxonomy())
 	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
@@ -498,20 +424,13 @@ func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, er
 	})
 }
 
-// foldCompanySlugs applies the `replace(slug, '-', ”)` fold the aggregator
-// suppression compares on, so the query receives an already-folded array instead of
-// folding a subquery itself.
+// foldCompanySlugs applies the `replace(slug, '-', ”)` fold the aggregator suppression compares on, so the
+// query receives an already-folded array.
 //
-// It exists for the planner, not for correctness. Folding inside the SQL meant the
-// driving predicate read `= ANY(SELECT replace(c,'-',”) FROM unnest($1))`, and a
-// subquery carries no size estimate — the planner assumed 200 rows and drove each
-// batch off the source index, scanning ~927k aggregator rows per batch of 500
-// companies (271s each on prod, ~23h for the pass, against a 12h unit timeout it
-// never survived). As a bare array parameter the same batch takes 0.65s.
+// It exists for the planner: folding in a SQL subquery carries no size estimate and made each batch scan the
+// source index (271s per batch); a bare array parameter takes under a second.
 //
-// Duplicates are left in: a fold can collide ("cfo-insights" and "cfoinsights" both
-// fold to "cfoinsights"), and that collision is the POINT — those rows must match.
-// Deduplicating here would change nothing for the query and cost an allocation.
+// Duplicates are left in on purpose: a fold can collide ("cfo-insights", "cfoinsights") and those rows must match.
 func foldCompanySlugs(slugs []string) []string {
 	folded := make([]string, len(slugs))
 	for i, s := range slugs {
@@ -520,15 +439,10 @@ func foldCompanySlugs(slugs []string) []string {
 	return folded
 }
 
-// forCompanyBatches runs fn once per companyBatchSize-sized slice of companies, summing
-// the rows it reports re-marked. Batches are independent, so one failure (e.g. a
-// statement timeout on an unusually large batch) must not starve the rest — it is
-// counted and skipped, and any failure turns the pass's result into an aggregate error
-// (the caller treats the whole pass as best-effort and continues with the prior
-// markers). This is coarser fault isolation than the one-call-per-company version it
-// replaced (a bad batch now costs up to companyBatchSize companies their update, not
-// just one), a deliberate trade against the hours a full per-company loop cost at
-// catalogue scale — see companyBatchSize.
+// forCompanyBatches runs fn once per companyBatchSize-sized slice of companies, summing the rows it reports
+// re-marked. Batches are independent, so one failure (e.g. a statement timeout) is counted and skipped and
+// must not starve the rest; any failure turns the result into an aggregate error (the caller is best-effort).
+// Coarser than per-company: a bad batch costs up to companyBatchSize companies their update.
 func forCompanyBatches(ctx context.Context, companies []string, fn func(context.Context, []string) (int64, error)) (int64, error) {
 	var total int64
 	var done, failures int
@@ -536,15 +450,9 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 	for batch := range slices.Chunk(companies, companyBatchSize) {
 		n, err := fn(ctx, batch)
 		if err != nil {
-			// A cancelled context ends the pass instead of counting a failure: the
-			// remaining batches would each fail instantly against the same dead
-			// context, so continuing turns one deadline into hundreds of "failed"
-			// batches. That is not cosmetic — it is what the 2026-08-16 investigation
-			// had to see through: the log said "75 batches failed", which reads as 75
-			// distinct problems rather than one timeout.
-			// `done`, not `failures`: this branch runs BEFORE the failure is counted,
-			// and what a cancellation needs to report is how far the pass got, not how
-			// many batches were already broken.
+			// A cancelled context ends the pass instead of counting a failure: the remaining batches would each fail
+			// instantly against the same dead context and one deadline would read as hundreds of failed batches.
+			// `done`, not `failures`: this runs BEFORE the failure is counted, and a cancellation reports how far it got.
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return total, fmt.Errorf("cancelled after %d completed batches: %w", done, ctxErr)
 			}
@@ -562,35 +470,27 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 	return total, nil
 }
 
-// checkpointEvery is how many companies the finished prefix of a forEachCompany walk must
-// grow by before it is checkpointed again. The run is ended by its unit's SIGTERM, so
-// progress has to be saved along the way; at the pass's measured pace this is a write every
-// minute or two, which is nothing next to the per-company work.
+// checkpointEvery is how many companies the finished prefix of a forEachCompany walk must grow by before it
+// is checkpointed again. The run is ended by its unit's SIGTERM, so progress is saved along the way.
 const checkpointEvery = 1000
 
-// forEachCompany runs fn once per company on `workers` goroutines, summing the rows it
-// reports re-marked. Unlike forCompanyBatches there is no query to batch: its only caller
-// (collapseFuzzyDuplicates, cmd/reindex/fuzzy.go) does real per-company work in Go —
-// fetching titles and descriptions, then fuzzy-comparing them in memory. That work waits
-// on Postgres far more than it computes (measured 2026-10-28: under seven minutes of CPU
-// in a four-hour run), which is why it runs several companies at once. Each company's
-// marker write touches only that company's rows, so the workers never contend.
+// forEachCompany runs fn once per company on `workers` goroutines, summing the rows it reports re-marked.
+// Unlike forCompanyBatches there is no query to batch: its only caller (collapseFuzzyDuplicates) does
+// per-company work in Go that waits on Postgres far more than it computes, hence several at once. Each
+// company's marker write touches only its own rows, so the workers never contend.
 //
 // Companies are independent, so one failure must not starve the rest — it is counted and
 // stepped over, and any failure turns the pass's result into an aggregate error (the
 // caller treats the whole pass as best-effort and continues with the prior markers).
 //
 // A cancelled context ends the walk instead: a company cut off by it is UNFINISHED, not
-// failed, and nothing further is dispatched — otherwise one deadline reads as hundreds of
-// thousands of failures, which is what the 2026-10-28 log said.
+// failed, and nothing further is dispatched, so one deadline does not read as thousands of failures.
 //
-// checkpoint receives the resume point: the last company of the longest FINISHED prefix of
-// companies (a stepped-over failure counts as finished — retrying it is the next cycle's
-// job, and a company that always fails must not pin the walk). Never the newest company
-// finished: with several in flight a later one finishes while an earlier one is still
-// running, and resuming after the later one would skip the earlier one for good — the
-// freehire#2869 trap. It is called from this goroutine only, every checkpointEvery
-// companies of progress and once more at the end if the prefix moved since.
+// checkpoint receives the resume point: the last company of the longest FINISHED prefix (a stepped-over
+// failure counts as finished, so an always-failing company cannot pin the walk). Never the newest company
+// finished: with several in flight a later one can finish before an earlier one, and resuming after it
+// would skip the earlier one for good. Called from this goroutine only, every checkpointEvery companies of
+// progress and once more at the end if the prefix moved.
 func forEachCompany(ctx context.Context, companies []string, workers int, fn func(context.Context, string) (int64, error), checkpoint func(lastFinished string)) (int64, error) {
 	type result struct {
 		i   int
@@ -675,8 +575,7 @@ func withLookupMemory(ctx context.Context, pool *pgxpool.Pool, read func(*db.Que
 	return tx.Commit(ctx)
 }
 
-// buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so the
-// per-job classification during the rebuild is a map read, not N queries.
+// buildRealityLookup precomputes the whole-catalogue role-cluster counts once, so classification is a map read.
 func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, error) {
 	rows, err := q.RoleClusterCountsAll(ctx)
 	if err != nil {
@@ -695,9 +594,8 @@ func buildRealityLookup(ctx context.Context, q *db.Queries) (realityLookup, erro
 }
 
 // buildClosureGeoLookup precomputes the whole-catalogue duplicate-closure geography union once
-// (DuplicateClosureGeoAll returns only rows that represent at least one other open row), so
-// widening each document during the rebuild is a map read, not N queries. A row representing
-// nobody is absent from the map and resolves to a zero ClosureGeo — a no-op widening.
+// (DuplicateClosureGeoAll returns only rows representing at least one other open row). A row representing
+// nobody is absent and resolves to a zero ClosureGeo, a no-op widening.
 func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup, error) {
 	rows, err := q.DuplicateClosureGeoAll(ctx)
 	if err != nil {
@@ -718,23 +616,15 @@ var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 // the index (search.Withheld), resolved once from the same adapter taxonomy.
 var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
 
-// splitJobs partitions a batch from the reindex feed:
-// open, non-private jobs search does not withhold become index documents (each
-// carrying its reality signal, classified against `now` and its cluster counts);
-// closed, private, or withheld jobs become deletions so they leave the index (see
-// search.Withheld and the job-search spec).
+// splitJobs partitions a batch from the reindex feed: open, non-private jobs search does not withhold become
+// index documents (each carrying its reality signal); closed, private, or withheld jobs become deletions.
 func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
-		// A closed job, a non-canonical repost (duplicate_of set), a private job (the
-		// jd-tailor-intake path — visible only to its creator), or one search withholds —
-		// no resolved category, no posting body, or a source that stopped showing it
-		// (search.Withheld) — leaves the index: only the open, non-private, readable,
-		// still-listed canonical row of each role cluster is searchable. Deleting (not
-		// just skipping) removes a row that was indexed before it was closed, demoted,
-		// marked private, or — for a job this run re-evaluates fresh every time — before
-		// it went unseen or this exclusion existed.
+		// A closed job, a non-canonical repost (duplicate_of set), a private job (visible only to its creator), or one
+		// search withholds (search.Withheld) leaves the index. Delete rather than skip, so a row indexed before it
+		// was closed, demoted, made private or went unseen is removed.
 		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate || search.Withheld(j, now, unseenWindows) {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue

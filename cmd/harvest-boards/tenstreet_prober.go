@@ -7,12 +7,10 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// tenstreetProber validates a Tenstreet company id with the one request the crawl starts
-// from: the carrier's Pulse profile, which names the carrier and links every open posting on
-// one unpaginated page. Running the adapter instead would fetch every posting page — a
-// carrier with 357 open postings is 358 requests, some stalling for a minute. Because the
-// list is complete it can also answer the expected-id check. See
-// internal/ingest/sources/tenstreet.go for the board format.
+// tenstreetProber validates a Tenstreet company id with the one request the crawl starts from: the
+// carrier's Pulse profile, which names the carrier and links every open posting on one unpaginated
+// page. Running the adapter would fetch every posting page (357 postings is 358 requests). The list
+// is complete, so it can also answer the expected-id check. Board format: internal/ingest/sources/tenstreet.go.
 type tenstreetProber struct{}
 
 func (tenstreetProber) probe(ctx context.Context, c httpClient, companyID string) (string, int, error) {

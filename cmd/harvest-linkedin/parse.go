@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// card is one posting as the public search listing presents it. The listing already names the
-// employer and links its profile, which is what lets the run drop a company the catalogue
-// already covers before spending a single further request on it.
+// card is one posting as the public search listing presents it. The listing names the employer and
+// links its profile, so a company the catalogue covers is dropped before any further request.
 type card struct {
 	company    string
 	profileURL string
@@ -16,9 +15,8 @@ type card struct {
 }
 
 var (
-	// cardSplitRe is the per-posting anchor the listing repeats. Splitting on it and parsing
-	// each fragment on its own means a markup change to one card costs that posting, not the
-	// page — the failure mode a single whole-page regex has.
+	// cardSplitRe is the per-posting anchor the listing repeats. Parsing each fragment on its own means
+	// a markup change costs one posting, not the page.
 	cardSplitRe = regexp.MustCompile(`data-entity-urn="urn:li:jobPosting:`)
 	fullLinkRe  = regexp.MustCompile(`class="base-card__full-link[^"]*"[^>]*href="([^"]+)"`)
 	titleRe     = regexp.MustCompile(`class="base-search-card__title"[^>]*>([\s\S]*?)</h3>`)
@@ -27,9 +25,8 @@ var (
 	tagRe       = regexp.MustCompile(`<[^>]+>`)
 )
 
-// parseCards extracts the postings from a search listing. A fragment without a title or
-// without an employer profile is dropped rather than guessed at: both are needed downstream,
-// and a card missing them is a card whose markup we no longer understand.
+// parseCards extracts the postings from a search listing. A fragment without a title or employer
+// profile is dropped, not guessed at: both are needed downstream.
 func parseCards(html string) []card {
 	fragments := cardSplitRe.Split(html, -1)
 	if len(fragments) < 2 {
@@ -60,8 +57,7 @@ func parseCards(html string) []card {
 var ldJSONRe = regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`)
 
 // postingExternalID returns the id the posting carries in the employer's OWN applicant tracking
-// system, published in the posting's structured metadata. It is "" when the posting publishes
-// none, which is common and not an error — roughly half of sampled postings carry no id.
+// system, from its structured metadata, or "" when it publishes none (common, not an error).
 //
 // This id is what lets a board slug be guessed and then proven: harvest-boards keeps a guessed
 // board only when the platform reports a live posting carrying exactly this id.
@@ -82,9 +78,8 @@ func postingExternalID(html string) string {
 	return ""
 }
 
-// profileWebsite returns the employer's own website, published as the Organization node's
-// sameAs in the profile's structured metadata. It is "" when the profile publishes none, in
-// which case there is nothing for the resolve step to follow.
+// profileWebsite returns the employer's website (the Organization node's sameAs), or "" when the
+// profile publishes none and resolve has nothing to follow.
 func profileWebsite(html string) string {
 	for _, block := range ldJSONRe.FindAllStringSubmatch(html, -1) {
 		var doc struct {
@@ -115,9 +110,8 @@ func profileWebsite(html string) string {
 	return ""
 }
 
-// scalarString reads a JSON value that is a string, tolerating the array form the same field
-// sometimes takes (sameAs may be one URL or several) by taking the first entry. A number or an
-// object yields "" — those are shapes we do not understand and must not guess at.
+// scalarString reads a JSON string, taking the first entry when the field is an array (sameAs may be
+// one URL or several). Any other shape yields "".
 func scalarString(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""

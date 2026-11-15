@@ -10,22 +10,12 @@ import (
 // publishes a payload of its own would otherwise overwrite the generic last-run gauges.
 const textfileName = "freehire_chronic_boards.prom"
 
-// The safety net's verdict, published so it survives the journal.
+// The safety net's verdict, published so it survives the journal, which rotates inside a day.
 //
-// The unit ships dry-run and its own comment asks a person to read a full closure window's
-// reports before arming it. That instruction could not be followed: the report lived only in
-// the journal, which rotates inside a day, so six days of it were gone before anyone looked —
-// and the single run that did get read offered to close 20,106 jobs, 325 of whose records
-// turned out to be stale case-duplicates of boards crawling normally (freehire#2950). A
-// verdict nobody can re-read is a verdict nobody can check, and this one was one flag away
-// from closing live boards' postings.
+// ARMED is published beside the counts because the same number means "about to be closed" or
+// "reported for review" depending on it.
 //
-// ARMED is published beside the counts because the same 6,637 means "about to be closed" or
-// "reported for review" depending on it, and a dashboard reading only the count cannot tell
-// those apart.
-//
-// The numbers are the ones the log line carries, taken from the same reports, so the durable
-// copy and the readable one can never tell different stories.
+// The numbers are the log line's, from the same reports, so the two copies cannot disagree.
 func render(unreachable, emptyFeed, boardGone closeReport, applyUnreachable, applyEmptyFeed, applyBoardGone bool) string {
 	var b strings.Builder
 

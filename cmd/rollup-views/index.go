@@ -10,9 +10,7 @@ import (
 
 // viewCountChunk is how many documents one index task updates. Meilisearch copies the
 // task context (the whole counts map) for every document it edits, so a task's cost grows
-// with the square of its size: locally 20k documents took 6.4s in chunks of 2k and 15.7s
-// in chunks of 10k. On prod an edit task costs ~5s fixed plus ~2ms a document
-// (2026-11-14), so 2k keeps the fixed part small without the quadratic part.
+// with the square of its size; 2k keeps the fixed per-task cost small without that.
 const viewCountChunk = 2_000
 
 type viewCountSetter interface {

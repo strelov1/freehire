@@ -1,14 +1,12 @@
 // Command seed-adzuna-description-queue queues every existing, eligible Adzuna posting for a
-// full-description fetch and exits. It is the one-off half of a deliberate split: cmd/ingest
-// enqueues newly crawled Adzuna postings as they are written, which only ever reaches rows from
-// here on — the ~21k Adzuna postings already in the catalogue before this feature shipped need a
-// separate pass to queue. This command does only the queueing; cmd/hydrate-adzuna-description
-// (already built for the ongoing case) does the actual fetch-and-store, so the two run paths
-// share one Save/content_hash implementation rather than a backfill duplicating it.
+// full-description fetch and exits. It is the one-off half of a split: cmd/ingest enqueues
+// newly crawled Adzuna postings as they are written, so rows already in the catalogue need
+// this separate pass. It only queues; cmd/hydrate-adzuna-description does the fetch and
+// store, so both paths share one Save/content_hash implementation.
 //
-// Run it once. It pages every source='adzuna' row by keyset and exits; run it again later (e.g.
-// after adding a new Adzuna country board) and it costs nothing on rows already queued or already
-// hydrated — EnqueueAdzunaDescriptionCapture's own gates handle both.
+// Run it once. It pages every source='adzuna' row by keyset and exits; running it again
+// costs nothing on rows already queued or hydrated (EnqueueAdzunaDescriptionCapture's own
+// gates handle both).
 package main
 
 import (

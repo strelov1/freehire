@@ -22,22 +22,18 @@ import (
 )
 
 // defaultChunkSize is how many ids one chunk's id range spans. It reads only the
-// enrichment column's `skills` key, not a wide description, so it can afford a wider
-// span than cmd/backfill-requirements's 5k — sized the same as the other light-column
-// chunked passes (cmd/backfill-slug-folded).
+// enrichment column's `skills` key, not a wide description, so it can afford a wide span.
 const defaultChunkSize = 50_000
 
 // rowsPerChunk bounds how many (id, skill) pairs one statement returns: the LATERAL
 // expansion means a dense id range can carry far more rows than ids, so this is what
-// actually bounds one statement's memory, the same role it plays in
-// cmd/backfill-requirements.
+// actually bounds one statement's memory.
 const rowsPerChunk = 2_000
 
 // defaultTopN is how many ranked candidates the report prints.
 const defaultTopN = 200
 
-// pauseBetweenChunks lets the host breathe between statements, the same courtesy
-// every other chunked one-off tool in this repo pays.
+// pauseBetweenChunks lets the host breathe between statements.
 const pauseBetweenChunks = 200 * time.Millisecond
 
 func main() { worker.Main(run) }
@@ -126,17 +122,12 @@ func run() int {
 // foldSkillCounts tallies one chunk's (id, skill) rows into the running frequency
 // map and returns where the next chunk should start.
 //
-// ListJobSkillsForGapReport is a one-row-per-(job id, skill) LATERAL expansion
-// ordered by id, so a row LIMIT is not guaranteed to land on a job-id boundary —
-// unlike a one-row-per-job chunk query, where "the LIMIT was hit" and "the last
-// row's job is fully read" are the same fact. When the chunk comes back at the
-// limit, the last id seen might have more skills that did not fit, so this holds
-// back that id's rows (they are not tallied yet) and resumes the NEXT chunk AT
-// that same id — re-reading it whole rather than silently losing its tail. The one
-// exception is a chunk made entirely of one id: there is no earlier id to fall back
-// to, so its rows are kept and the loop still moves past it, trading a possible
-// undercount for guaranteed forward progress (holding back would repeat forever if
-// a single job's own skill list alone fills the limit).
+// ListJobSkillsForGapReport is a one-row-per-(job id, skill) LATERAL expansion ordered by id, so a
+// row LIMIT need not land on a job-id boundary. When the chunk comes back at the limit, the last id
+// may have more skills that did not fit, so its rows are held back (not tallied) and the NEXT chunk
+// resumes AT that id, re-reading it whole. Exception: a chunk made entirely of one id has nothing to
+// fall back to, so its rows are kept and the loop moves past it, trading a possible undercount for
+// forward progress (holding back would repeat forever).
 func foldSkillCounts(counts map[string]int, rows []db.ListJobSkillsForGapReportRow, limit int32, rangeEnd int64) int64 {
 	if len(rows) == 0 {
 		return rangeEnd

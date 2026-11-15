@@ -11,16 +11,11 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// countingClient records what the probers deliberately throw away. A prober turns every
-// transport failure into ("", 0, nil) — "no such board" — which is right for a dead host and
-// wrong for a platform that refused to answer. Because the error never reaches probeAll, its
-// all-probes-failed guard can never fire for those probers: they do not fail, they report
-// absence. So the transport is the last place that still knows the difference, and it counts
-// it here.
-//
-// This matters more than it sounds. A harvest run against a rate-limiting platform otherwise
-// ends with a confident "found=N" that is short by an unknown amount, indistinguishable from
-// a run that genuinely found nothing new.
+// countingClient records what the probers deliberately throw away. A prober turns every transport
+// failure into ("", 0, nil), which is right for a dead host and wrong for a platform that refused to
+// answer. That error never reaches probeAll, so its all-probes-failed guard cannot fire; the transport
+// is the last place that knows the difference. Without it, a run against a rate-limiting platform ends
+// with a confident "found=N" that is short by an unknown amount.
 type countingClient struct {
 	inner httpClient
 	mu    sync.Mutex
@@ -34,13 +29,10 @@ func newCountingClient(inner httpClient) *countingClient {
 	return &countingClient{inner: inner}
 }
 
-// record classifies one transport outcome. Only a 429 is a refusal: it is the one status that
-// unambiguously means "the platform is there and is declining". Every other status is the
-// platform answering — a 404, or a 503, which reads like a refusal but is not one. Traffit
-// answers an unknown tenant with 503 and a live board with 200, so counting it turned a run
-// where every candidate was simply absent into "refused=15467, nothing written, exit 1".
-// Anything that is not an HTTP status at all — a timeout, a DNS failure, a closed connection
-// — is a dead host, which is neither refused nor answered.
+// record classifies one transport outcome. Only a 429 is a refusal. Any other status is the platform
+// answering, including a 503: Traffit answers an unknown tenant with 503, and counting it turned an
+// all-absent run into "refused=15467". A non-HTTP failure (timeout, DNS, closed connection) is a dead
+// host, neither refused nor answered.
 func (c *countingClient) record(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -71,9 +63,8 @@ func (c *countingClient) answered() int {
 	return c.answeredN
 }
 
-// refusalsDominated reports whether a run was mostly turned away rather than answered. Such a
-// run is not a harvest that found little; it is a harvest that did not happen, and reporting
-// it as the former is how a truncated board file gets committed.
+// refusalsDominated reports whether a run was mostly turned away rather than answered. Such a run
+// did not happen, and reporting it as a harvest that found little gets a truncated board file committed.
 func refusalsDominated(refused, answered int) bool {
 	return refused > 0 && refused > answered
 }

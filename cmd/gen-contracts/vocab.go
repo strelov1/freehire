@@ -102,9 +102,8 @@ func quoteTS(s string) string {
 //	] as const;
 //	export type StageGroup = (typeof STAGE_GROUPS)[number];
 //
-// An array rather than a map, and in the table's own order rather than sorted: that order IS the
-// board's column order and the funnel's band order. A map would hand the SPA the membership
-// while leaving it to restate the sequence — which is how the copy this replaces came about.
+// An array in the table's own order, not sorted: that order is the board's column order and
+// the funnel's band order.
 func emitStageGroups(groups []userjob.Group) string {
 	var b strings.Builder
 	b.WriteString("export const STAGE_GROUPS = [\n")
@@ -130,11 +129,8 @@ func emitStageGroups(groups []userjob.Group) string {
 //	  …
 //	} as const;
 //
-// Every signal in the vocabulary is present, including the ones implying no stage (empty
-// `stage`), so the reader can say "does not move the stage" from the table rather than from a
-// list of exceptions it would have to keep in step by hand.
-//
-// Keys sorted, like emitMap: the output is committed, and Go iterates maps at random.
+// Every signal is present, including those implying no stage (empty `stage`), so the reader
+// needs no hand-kept exception list. Keys sorted, like emitMap.
 func emitSignalStages(signals []string) string {
 	sorted := append([]string(nil), signals...)
 	sort.Strings(sorted)
@@ -161,13 +157,9 @@ func emitSignalStages(signals []string) string {
 //	export type Collection = (typeof COLLECTIONS)[number];
 //	export type CollectionKind = Collection['kind'];
 //
-// Emitted in registry order, not sorted: that order is the display order on the
-// /collections hub and in the job-search facet.
-//
-// This replaces a hand-kept mirror in web/src/lib/collections.ts. `kind` decides
-// which filter group a tag renders in, so a slug missing from the frontend copy
-// meant a tag that filters but has no pill — a correctness bug rather than stale
-// copy, which is what makes it worth generating.
+// Emitted in registry order, which is the display order on the /collections hub and in the
+// job-search facet. `kind` decides which filter group a tag renders in, so a slug missing from
+// a hand-kept frontend copy would filter without a pill; hence generated.
 func emitCollections(all []collections.Collection) string {
 	var b strings.Builder
 	b.WriteString("export const COLLECTIONS = [\n")

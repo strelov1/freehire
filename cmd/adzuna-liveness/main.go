@@ -1,29 +1,25 @@
-// Command adzuna-liveness closes the postings an aggregator itself has taken down when the crawl
-// cannot settle them — adzuna's and wellfound's. It is a run-once-and-exit worker: for each
-// source, pick a sample of open postings the crawl has stopped listing, ask the source's own
-// page about each, close the ones it says are gone, and exit. (It began with adzuna alone and
-// kept the name: the binary and its crawl-host unit are deployed under it.)
+// Command adzuna-liveness closes postings that an aggregator (adzuna, wellfound) has taken
+// down when the crawl cannot settle them. It is a run-once-and-exit worker: per source, sample
+// open postings the crawl has stopped listing, ask the source's own page about each, and close
+// the ones it says are gone. It began with adzuna alone and kept the name; the binary and its
+// crawl-host unit are deployed under it.
 //
-// Why a worker of its own. Neither existing close can reach these rows. The ingest sweep closes
-// only what a crawl proves unseen.
+// Neither existing close can reach these rows; the ingest sweep closes only what a crawl
+// proves unseen.
 //
-//   - Adzuna's feed is far deeper than the crawl's request budget — 157,782 US it-jobs postings
-//     in 14 days against 750 read per run (2026-10-23) — so most of the open catalogue is unseen
-//     whether it is live or not. cmd/liveness falls back to an age guess for adzuna, and Adzuna
-//     keeps postings far longer than any sane guess: 57% of its live US feed is older than 21
-//     days. Meanwhile a posting it removed stayed open here for weeks.
-//   - Wellfound is crawled as role slices and swept by company, so a posting whose company has
-//     left every slice is never in a run's scope again (job-lifecycle.md (1)). Measured
-//     2026-10-30: 954 open postings of ~380 companies unseen since mid-September, and 20 of 20
-//     sampled answered 410 on Wellfound's own page while every live control answered 200.
+//   - Adzuna's feed is far deeper than the crawl's request budget, so most of the open
+//     catalogue is unseen whether live or not. cmd/liveness falls back to an age guess for
+//     adzuna, and Adzuna keeps postings far longer than any sane guess.
+//   - Wellfound is crawled as role slices and swept by company, so a posting whose company
+//     has left every slice is never in a run's scope again (job-lifecycle.md (1)).
 //
-// The evidence exists for both — the source's page answers 404/410 for a removed posting — but
-// only through the Scrapling fetch service: Adzuna's page sits behind a challenge most requests
-// fail, and Wellfound's answers 403 to any plain request; see classify.
+// The evidence is the source's own page answering 404/410 for a removed posting, reachable
+// only through the Scrapling fetch service: Adzuna's page sits behind a challenge most
+// requests fail, and Wellfound answers 403 to any plain request; see classify.
 //
-// Why not inside cmd/liveness. The Scrapling fetch service runs on the crawl host and listens on
-// loopback there, while cmd/liveness runs on the database host and holds a single-flight
-// advisory lock a second instance would collide with.
+// It is not part of cmd/liveness because the Scrapling service listens on loopback on the
+// crawl host, while cmd/liveness runs on the database host and holds a single-flight advisory
+// lock a second instance would collide with.
 //
 // A run without SCRAPLING_FETCH_URL is a no-op that never opens the pool, which is also the
 // rollback. It exits non-zero only when a verdict could not be written.
@@ -51,14 +47,12 @@ import (
 
 const (
 	// unseenFor is how long the crawl must have stopped listing a posting before it is worth
-	// asking about. Short on purpose: an answer from the source is evidence, not a guess, so
-	// there is no reason to wait out the sweep's 14-day window first — the wait only decides how
-	// much of the sample is spent on postings that are merely below the crawl's reach.
+	// asking about. Short on purpose: the source's answer is evidence, not a guess, so there is
+	// no need to wait out the sweep's 14-day window.
 	unseenFor = 3 * 24 * time.Hour
-	// closeThreshold is 1, where cmd/liveness waits for two expired reads: there the second
-	// read absorbs an employer's site mid-deploy, while a 404/410 here is the source stating
-	// its own posting is gone. A wrong close is also cheap to undo — the crawl reopens a
-	// posting it lists again.
+	// closeThreshold is 1, where cmd/liveness waits for two expired reads: a 404/410 here is the
+	// source stating its own posting is gone, and a wrong close is cheap to undo because the
+	// crawl reopens a posting it lists again.
 	closeThreshold = 1
 	// fetchTimeout bounds one request through the service, rotating-proxy retries included.
 	fetchTimeout = 60 * time.Second
@@ -84,23 +78,21 @@ var routes = []route{
 	{
 		source:  "adzuna",
 		pageURL: func(externalID, _ string) (string, bool) { return detailsURL(externalID) },
-		// About one request in ten gets past Adzuna's challenge (measured 2026-10-23), so 25
-		// answers roughly nine postings in ten; the rest are left for a later run's sample.
+		// About one request in ten gets past Adzuna's challenge, so 25 attempts answer roughly nine
+		// postings in ten; the rest wait for a later run.
 		attempts:    25,
 		concurrency: 5,
 		maxEnv:      "ADZUNA_LIVENESS_MAX_PER_RUN",
-		// At ~0.7 s a request this is roughly an hour's work at the concurrency above.
+		// Roughly an hour's work at the concurrency above.
 		defaultMax: 2000,
 	},
 	{
 		source:  "wellfound",
 		pageURL: wellfoundPageURL,
-		// Wellfound answered all 20 sampled postings on the first request; the retries only
-		// absorb a transient refusal of one exit IP.
+		// Retries only absorb a transient refusal of one exit IP.
 		attempts: 3,
-		// One in flight, like the crawl's own cap (sources.wellfoundMaxInFlight): the exit IP
-		// is shared with the crawl, whose role slices run at the same time, and Wellfound's
-		// edge has punished concurrent requests before.
+		// One in flight, like the crawl's own cap (sources.wellfoundMaxInFlight): the exit IP is
+		// shared with the crawl, and Wellfound's edge punishes concurrent requests.
 		concurrency: 1,
 		maxEnv:      "WELLFOUND_LIVENESS_MAX_PER_RUN",
 		defaultMax:  1000,

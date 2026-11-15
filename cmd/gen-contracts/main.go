@@ -176,9 +176,8 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/coverletter",
 				OutputPath:   coverletterTS,
 				IncludeFiles: []string{"coverletter.go"},
-				// A uuid is a string on the wire. Without the mapping tygo emits `any`, and
-				// `any` in a generated contract is the one thing the generation is for
-				// avoiding — the client would lose the compile error when the shape moves.
+				// A uuid is a string on the wire; without the mapping tygo emits `any`, and the client loses
+				// the compile error when the shape moves.
 				TypeMappings: map[string]string{"uuid.UUID": "string"},
 			},
 			{
@@ -186,13 +185,8 @@ func genStructs() (string, error) {
 				// CardRole). Only card.go: catalogue.go beside it holds the serving
 				// machinery — the snapshot, the Store interface, the filter — none of
 				// which crosses the wire.
-				//
-				// Generated rather than hand-written precisely because of what these types
-				// are FOR. The card is a whitelist deciding what a stranger may see about
-				// a person; a hand-kept copy in types.ts would drift the day somebody adds
-				// a field, and drift here means a client rendering something the
-				// projection stopped sending — or a reviewer reading the copy and
-				// believing it.
+				// Generated rather than hand-written: the card is a whitelist of what a stranger may see
+				// about a person, and a hand-kept copy would drift when a field is added.
 				Path:         "github.com/strelov1/freehire/internal/candidate/talentnetwork",
 				OutputPath:   talentnetworkTS,
 				IncludeFiles: []string{"card.go"},
@@ -201,8 +195,7 @@ func genStructs() (string, error) {
 					// PeriodDate's Go name is Date, which collides with the language's own
 					// global.
 					"perioddate.PeriodDate": "{ year: number; month?: number }",
-					// An RFC3339 timestamp on the wire. Without the mapping tygo emits
-					// `any`, which is the one thing generating a contract is for avoiding.
+					// An RFC3339 timestamp on the wire; without the mapping tygo emits `any`.
 					"time.Time": "string",
 				},
 			},
@@ -213,11 +206,8 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/candidate/resumeextract",
 				OutputPath:   resumeextractTS,
 				IncludeFiles: []string{"structured.go"},
-				// perioddate.PeriodDate is inlined rather than generated as its own type: it
-				// is two fields, shared by this package and cv below, and — unlike every
-				// other TypeMappings entry here — must NOT be named PeriodDate's Go name
-				// (Date) in TypeScript, since that collides with the language's own global
-				// Date.
+				// perioddate.PeriodDate is inlined rather than generated: it is two fields shared by this
+				// package and cv below, and its Go name (Date) would collide with TypeScript's global Date.
 				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
@@ -263,9 +253,8 @@ func genStructs() (string, error) {
 				// The onboarding survey wire shape (Responses). Only survey.go — store.go
 				// and repository.go are server-only.
 				//
-				// The type is `Responses` rather than the `Answers` its Go siblings use
-				// because THIS file is a flat namespace: screeninganswers already exports
-				// an `Answers`, and two packages that never collide in Go collide here.
+				// The type is `Responses`, not `Answers`: screeninganswers already exports `Answers`, and this
+				// file is one flat namespace.
 				Path:         "github.com/strelov1/freehire/internal/candidate/survey",
 				OutputPath:   surveyTS,
 				IncludeFiles: []string{"survey.go"},
@@ -397,31 +386,24 @@ func skipPreamble(lines []string) int {
 // non-adapter sources set by other writers: "telegram" (the tg-extract worker) and the
 // moderator/bulk-import origins ("workatastartup", "remoteok", "arc"). Stages from
 // userjob; the rest from the enrich controlled vocabularies.
-//
-// An origin that started as a manual/bulk-import name can later gain a registered
-// adapter (e.g. remoteok), so it appears in both the hardcoded prefix and
-// FilterableProviders — dedup to keep SOURCE_VALUES a set. A duplicate value
-// otherwise reaches the SPA's keyed Source facet and throws each_key_duplicate.
+// A manual/bulk-import origin can later gain a registered adapter (e.g. remoteok), so it
+// appears in both the hardcoded prefix and FilterableProviders; dedup keeps SOURCE_VALUES a
+// set, since a duplicate throws each_key_duplicate in the SPA.
 func genVocab() string {
 	source := dedup(append([]string{"telegram", "workatastartup", "remoteok", "arc"}, sources.FilterableProviders()...))
 
 	var b strings.Builder
 	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
 	b.WriteString(emitVocab("Stage", "STAGE_VALUES", userjob.Stages))
-	// The ledger's event kinds. Generated for the reason the mail signals are: the panel and
-	// the calendar each render a label per kind, and a kind added in Go but missing from the
-	// SPA's map rendered as a blank row with every test green.
+	// The ledger's event kinds, generated so a kind added in Go cannot render as a blank row in
+	// the SPA's label map.
 	b.WriteString(emitVocab("ApplicationEventKind", "APPLICATION_EVENT_KINDS", appevent.Kinds))
-	// The ledger's event sources, generated for a reason the kinds alone do not cover: the
-	// activity grid counts a `stage_set` only when the CANDIDATE made it, which is a question
-	// about the source, not the kind. Without this vocabulary that rule is a list kept by hand,
-	// and a source added in Go would silently stop counting a candidate's action with every
-	// test green — the failure the kinds were generated to prevent, one field over.
+	// The ledger's event sources: the activity grid counts a `stage_set` only when the candidate
+	// made it, a rule about the source, and a hand-kept list would silently stop counting a new
+	// source.
 	b.WriteString(emitVocab("ApplicationEventSource", "APPLICATION_EVENT_SOURCES", appevent.Sources))
-	// The stage's human label and the group it belongs to, generated for the same reason the
-	// mail signals are: the board, the funnel, the drawer's selector and the home page each kept
-	// their own copy, and three of the four disagreed about what to call a settled application.
-	// Built from Stages so a stage cannot reach the SPA labelled but ungrouped.
+	// The stage's human label and group, built from Stages so a stage cannot reach the SPA
+	// labelled but ungrouped.
 	stageLabels := make(map[string]string, len(userjob.Stages))
 	for _, s := range userjob.Stages {
 		stageLabels[s] = userjob.Label(s)
@@ -441,11 +423,8 @@ func genVocab() string {
 	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", vocab.RelocationValues))
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
-	// Not a dictionary but a wire vocabulary all the same: the Talent Network catalogue's
-	// filter params. Generated because the API and the filter panes are in different
-	// languages, and a param the panes offer but the API does not read is invisible — the
-	// API reports it as ignored and WIDENS, so the visitor is shown more candidates than
-	// their own chips claim.
+	// The Talent Network catalogue's filter params: a param the panes offer but the API does not
+	// read is reported as ignored and widens the results beyond the visitor's chips.
 	b.WriteString(emitVocab("TalentFacetParam", "TALENT_FACET_PARAMS", talentnetwork.FacetParams()))
 	// The company feedback category vocabulary (internal/engage/companyfeedback), generated
 	// so the review form's category picker can't drift from the DB CHECK constraint.
@@ -488,26 +467,20 @@ func genVocab() string {
 	b.WriteString(emitMap("EngagementLabels", "ENGAGEMENT_LABELS", engagement.Labels()))
 	// The market each term belongs to, so the chips group by it.
 	b.WriteString(emitMap("EngagementMarkets", "ENGAGEMENT_MARKETS", engagement.Markets()))
-	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
-	// with a sharper edge: the job page draws one gauge segment per criterion the payload
-	// says fired, and the rows accounting for them come from the SPA's own list. A
-	// criterion added in Go and missing there coloured a segment above a checklist that
-	// could not explain it — the interface asserting evidence it cannot show, which is the
-	// one thing this feature must never do. Generated, the omission is a type error.
+	// The ghost criterion vocabulary: the job page draws one gauge segment per fired criterion,
+	// and a criterion missing from the SPA's checklist would show a segment nothing can explain.
+	// Generated, the omission is a type error.
 	b.WriteString(emitVocab("GhostCriterion", "GHOST_CRITERION_VALUES", ghost.CriterionCodes[:]))
-	// The classified-mail vocabulary. It is generated rather than retyped because the
-	// inbox renders a label and a badge colour per signal, and a signal added in Go
-	// but missing from the SPA's maps rendered as a blank chip with every test green.
-	// Generated, the omission is a type error instead.
+	// The classified-mail vocabulary: the inbox renders a label and badge colour per signal, so a
+	// signal missing from the SPA's maps would be a blank chip. Generated, the omission is a type
+	// error.
 	b.WriteString(emitVocab("EmailStatusSignal", "EMAIL_STATUS_SIGNAL_VALUES", mailclassify.SignalValues))
 	b.WriteString(emitSignalStages(mailclassify.SignalValues))
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))
-	// Skill slug→display-name catalog. The skills facet is a slug vocabulary, and every
-	// surface showing one to a reader had the same choice to make: print "postgresql" or
-	// invent a prettifier. Generated from the skilltag dictionary that owns the canonical
-	// set, so one spelling serves them all and a new skill cannot arrive unlabelled.
+	// Skill slug→display-name catalog, generated from the skilltag dictionary so every surface
+	// shows one spelling and a new skill cannot arrive unlabelled.
 	b.WriteString(emitMap("SkillLabels", "SKILL_LABELS", skilltag.Labels()))
 	// Facet slug→shorthand-aliases for the picker's search: the same curated terms
 	// used to tag titles, so typing "swe" or "data engineer" finds the specialization

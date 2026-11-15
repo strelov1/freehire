@@ -7,11 +7,9 @@ import (
 	"github.com/strelov1/freehire/internal/application/autoapply"
 )
 
-// assemblerAnswerSource adapts *candidateprofile.Assembler to autoapply.AnswerSource. The
-// assembler is exactly what internal/handler's extension-autofill path already resolves a
-// candidate's profile through (see internal/candidateprofile's package doc) — this worker
-// intentionally reads no other source, so a form asking beyond identity/work-authorization
-// always parks rather than being answered from somewhere the candidate never confirmed.
+// assemblerAnswerSource adapts *candidateprofile.Assembler to autoapply.AnswerSource. This
+// worker reads no other source, so a form asking beyond identity/work-authorization always
+// parks rather than being answered from something the candidate never confirmed.
 type assemblerAnswerSource struct {
 	assembler *candidateprofile.Assembler
 }
@@ -23,7 +21,7 @@ func (a assemblerAnswerSource) Answers(ctx context.Context, userID int64) (map[s
 	if err != nil {
 		return nil, err
 	}
-	// FieldsWithBankedAnswers, not Fields: resolving an application form is the one path
-	// the banked answers belong on. See candidateprofile.Fields for what they are kept off.
+	// FieldsWithBankedAnswers, not Fields: resolving an application form is the one path banked
+	// answers belong on (see candidateprofile.Fields).
 	return profile.FieldsWithBankedAnswers(), nil
 }

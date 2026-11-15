@@ -22,10 +22,8 @@ func main() {
 }
 
 func run() int {
-	// LLM config first, so a misconfigured worker fails before it opens the pool. Its OWN
-	// config: this used to be config.LoadEnrich(), read purely to reach the six LLM values
-	// — which meant a classifier inherited the enrichment worker's ENRICH_* validation and would
-	// have broken if that changed.
+	// LLM config first, so a misconfigured worker fails before it opens the pool. Its own
+	// config, not LoadEnrich, so ENRICH_* validation does not leak in.
 	lcfg := config.LoadLLM()
 	if err := lcfg.Require(); err != nil {
 		log.Printf("config: %v", err)
@@ -54,8 +52,7 @@ func run() int {
 		return 1
 	}
 	log.Printf("classify-mail: done failed=%d dead-lettered=%d", stats.Failed, stats.DeadLettered)
-	// Nothing else reads email_classification_outbox.failed_at, so a queue that dead-letters
-	// every entry was previously visible only in journalctl. The exit code is what the
-	// scheduler sees.
+	// A queue that dead-letters every entry must show up as a non-zero exit; nothing else
+	// reads email_classification_outbox.failed_at.
 	return worker.ExitCode(stats.Failed, stats.DeadLettered)
 }

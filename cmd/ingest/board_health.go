@@ -21,10 +21,8 @@ import (
 
 // boardHealth adapts *db.Queries to pipeline.BoardHealth: it reads a board's cooldown
 // and records each crawl's outcome, applying the backoff policy (pipeline.CooldownFor)
-// to the failure count the DB returns. It also piggybacks the boards table's
-// pending -> active transition on the same success signal (see RecordSuccess) — a
-// board's crawl outcome is the one thing both tables react to, so there is no need for
-// a second place in the pipeline to learn it.
+// to the failure count the DB returns. It also drives the boards table's pending -> active
+// transition from the same success signal (see RecordSuccess).
 type boardHealth struct {
 	q       *db.Queries
 	catalog boardcatalog.Repository
@@ -58,9 +56,8 @@ func (h *boardHealth) Pauses(ctx context.Context, provider, board, region string
 }
 
 // RecordSuccess clears the board's failure state and stamps freshness. It also flips a
-// pending boards row to active on this, its first successful crawl (a no-op — found=false,
-// no error — for a board that is already active, or that has no boards row at all, e.g.
-// one crawled before this migration).
+// pending boards row to active on its first successful crawl (a no-op, found=false, for an
+// active board or one with no boards row).
 //
 // A non-empty fingerprint feeds the quiet-board backoff: the query compares it with the stored
 // one and returns the resulting quiet streak, and an unchanged listing gets the Go-owned pause
@@ -99,15 +96,11 @@ func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region
 // the Go-owned backoff policy: it sets a cooldown only once the count crosses the
 // threshold.
 //
-// SetBoardCooldown is guarded by the same failures value the cooldown was just computed
-// from (a CAS on consecutive_failures), because the pipeline's worker pool can process the
-// same board twice in one run: two concurrent RecordFailure calls can each read a failure
-// count from RecordBoardFailure and then race on the UPDATE below. Without the guard,
-// whichever SetBoardCooldown lands last would win regardless of which failure count is
-// newer — it could apply a stale, shorter cooldown over a fresher, longer one, or clobber a
-// cooldown a concurrent RecordSuccess/ClearProviderCooldowns just cleared. Zero rows
-// affected means a newer writer already moved consecutive_failures past this one's
-// snapshot — expected under the race, not an error, so it is only logged, not returned.
+// SetBoardCooldown is CAS-guarded on the failures value the cooldown was computed from: the
+// worker pool can process one board twice in a run, and without the guard the last writer
+// would win, applying a stale shorter cooldown or clobbering one a concurrent
+// RecordSuccess/ClearProviderCooldowns just cleared. Zero rows affected means a newer writer
+// moved on; that is expected, so it is only logged.
 func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region string, cause error) error {
 	failures, err := h.q.RecordBoardFailure(ctx, db.RecordBoardFailureParams{
 		Provider:  provider,
@@ -163,19 +156,13 @@ func (h *boardHealth) ClearCooldowns(ctx context.Context, provider string) (int,
 
 // unhealthyBoardsCap bounds how many boards the per-run summary names.
 //
-// The list is FLEET-WIDE — it is not filtered to the provider being crawled — and every one of
-// the ~200 hourly ingest units prints it, so the line's cost is its length times the whole
-// fleet's crawl rate. Uncapped, a 7000-board backlog turned that into ~260KB per run and
-// gigabytes of syslog per day, which filled the host's disk far enough that cmd/reindex hit its
-// REINDEX_MIN_FREE_GB floor and refused to rebuild for a week (2026-08-14). Twenty is enough to
-// see what is worst at a glance; board_health answers the rest in SQL, which is what the summary
-// was always a shortcut for.
+// The list is FLEET-WIDE (not filtered to the provider being crawled) and every hourly ingest
+// unit prints it, so its length multiplies by the whole fleet's crawl rate; uncapped it filled
+// the host's disk. Twenty shows what is worst; board_health answers the rest in SQL.
 const unhealthyBoardsCap = 20
 
 // logUnhealthyBoards emits one summary line naming the worst boards currently failing or
-// cooled, and how many there are in total — so an operator sees the ingest fleet's health in
-// the run log without a query. Best-effort: a read error is logged and ignored (it never fails
-// the run).
+// cooled, and how many there are in total. Best-effort: a read error is logged and ignored.
 func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
 	rows, err := q.ListUnhealthyBoards(ctx, unhealthyBoardsCap)
 	if err != nil {
@@ -191,8 +178,7 @@ func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
 
 // unhealthyBoardsSummary renders the summary line's body: each named board as
 // "provider/board[/region](fails=N[,cooled_until=…])", plus how many the cap left out. The
-// count reported is the FULL one, never len(rows) — a capped list that printed its own length
-// would read as "only 20 boards are broken".
+// count reported is the FULL one, never len(rows), or it would read as "only 20 are broken".
 func unhealthyBoardsSummary(rows []db.ListUnhealthyBoardsRow, total int64, now time.Time) string {
 	parts := make([]string, 0, len(rows))
 	for _, r := range rows {
@@ -213,24 +199,19 @@ func unhealthyBoardsSummary(rows []db.ListUnhealthyBoardsRow, total int64, now t
 	return fmt.Sprintf("%d unhealthy board(s): %s", total, strings.Join(parts, " "))
 }
 
-// chronicBoardsCap bounds how many chronic boards the per-run report names, same log-size
-// concern as unhealthyBoardsCap — applied to the strictly smaller chronic subset, since a board
-// only qualifies after chronicBoardWindowDays of unbroken failure, not after a handful.
+// chronicBoardsCap bounds how many chronic boards the per-run report names, for the same
+// log-size reason as unhealthyBoardsCap.
 const chronicBoardsCap = 20
 
 // chronicBoardWindowDaysDefault is how long a board must have gone without a successful crawl
-// before the per-run report calls it chronic (see ingest-board-health spec) — deliberately far
-// above the sweep's ~24h cooldown ceiling, so a board merely backing off from a recent run of
-// failures is never mistaken for one that has proven itself broken. CHRONIC_BOARD_WINDOW_DAYS
-// overrides it without a deploy.
+// to be called chronic, far above the sweep's ~24h cooldown ceiling so a board merely backing
+// off is never mistaken for a broken one. CHRONIC_BOARD_WINDOW_DAYS overrides it.
 const chronicBoardWindowDaysDefault int32 = 30
 
-// logChronicBoards emits one summary line naming the worst chronic boards — those that have
-// gone the reporting window without a single successful crawl, as opposed to merely cooling
-// down from a recent run of failures (openspec change close-chronically-unreachable-boards,
-// issue #2017). Distinct from logUnhealthyBoards's line so a curator can tell "still within an
-// ordinary backoff" apart from "has not worked in over a month and needs a decision". Best-
-// effort, like its sibling: a read or config error is logged and ignored, never fails the run.
+// logChronicBoards emits one summary line naming the worst chronic boards: those with no
+// successful crawl in the reporting window, as opposed to merely cooling down. A separate line
+// from logUnhealthyBoards so a curator can tell ordinary backoff from "needs a decision".
+// Best-effort: a read or config error is logged and ignored.
 func logChronicBoards(ctx context.Context, q *db.Queries) {
 	days, err := worker.EnvInt32("CHRONIC_BOARD_WINDOW_DAYS", chronicBoardWindowDaysDefault)
 	if err != nil {
@@ -252,14 +233,11 @@ func logChronicBoards(ctx context.Context, q *db.Queries) {
 }
 
 // chronicBoardsSummary renders the chronic-board line: each named board as
-// "provider/board[/region](days=N)" — or just "provider(days=N)" for a boardless provider's
-// own record — where N is days since the board's evidence anchor: last_success_at for a board
-// that has succeeded at least once, first_seen_at for one that never has (see
-// ingest-board-health spec). The region matters here specifically: a board name repeated
-// across regions (e.g. Adzuna's "it-jobs" once per country) can be chronic in one and healthy
-// in another, and without the region a curator reading this line cannot tell which — the exact
-// ambiguity cmd/close-chronic-boards refuses to act on (isRegionAmbiguous). Same
-// region-appending and cap/total convention as unhealthyBoardsSummary.
+// "provider/board[/region](days=N)" (or "provider(days=N)" for a boardless provider) where N
+// is days since last_success_at, or first_seen_at for a board that never succeeded. The
+// region matters: a board name repeated across regions (Adzuna's "it-jobs") can be chronic in
+// one and healthy in another, the ambiguity cmd/close-chronic-boards refuses to act on
+// (isRegionAmbiguous). Same cap/total convention as unhealthyBoardsSummary.
 func chronicBoardsSummary(rows []db.ListChronicBoardsRow, total int64, now time.Time) string {
 	parts := make([]string, 0, len(rows))
 	for _, r := range rows {

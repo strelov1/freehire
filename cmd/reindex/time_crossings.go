@@ -16,22 +16,19 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// timeCrossingsPass names this pass's row in marker_pass_cursors. Its value is the RFC 3339
-// instant the last run covered up to, not a company: see migration 0241.
+// timeCrossingsPass names this pass's row in marker_pass_cursors. Its value is the RFC 3339 instant
+// the last run covered up to, not a company (migration 0241).
 const timeCrossingsPass = "search-time-crossings"
 
 // timeCrossingsOverlap is how far each run reaches back into the window the last one covered.
-// The enqueue skips a job whose entry is already queued, and a drain wave holding that entry
-// may have built its document just before the crossing; the wave then deletes the entry and
-// the crossing is lost. A wave holds an entry for at most its lease (SEARCH_DRAIN_LEASE_SECONDS,
-// 900s on fsn), so a crossing lost that way happened within that long before the run, and an
-// hour of overlap re-queues it on the next run. The overlap's only cost is a second, skipped
-// insert for whatever crossed in that hour.
+// The enqueue skips a job whose entry is already queued, and a drain wave holding that entry may have built
+// its document just before the crossing, then deleted the entry, losing the crossing. A wave holds an entry
+// for at most its lease (SEARCH_DRAIN_LEASE_SECONDS), so an hour of overlap re-queues it; the only cost
+// is a second, skipped insert.
 const timeCrossingsOverlap = time.Hour
 
 // firstTimeCrossingsBand is how far back the very first run looks, when no cursor exists.
-// Until this pass shipped, the daily full rebuild re-derived every document, so a day is
-// what that rebuild last left uncovered.
+// A day is what the daily full rebuild last left uncovered.
 const firstTimeCrossingsBand = 24 * time.Hour
 
 type timeCrossingsStore interface {

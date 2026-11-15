@@ -45,12 +45,8 @@ const (
 	skillHistoryRetentionWeeks = 26
 	// defaultMinRoleSkillSample is the smallest number of a role's postings a skill
 	// must appear in to be published in that role's distribution. Unlike the floors
-	// above it is overridable per run (ROLE_SKILL_MIN_SAMPLE), because its correct
-	// value is not yet known: the rollup is new, and the intended way to set it is to
-	// read the first production run's output. A floor guessed in advance has already
-	// gone wrong once here — cmd/social-digest shipped at 10, which selected exactly
-	// one posting in a day and had to be lowered to 3 — and there it took a deploy to
-	// correct. Fold it back into a constant once a value has proven itself.
+	// above it is overridable per run (ROLE_SKILL_MIN_SAMPLE), because its correct value is not
+	// yet known: set it from a production run's output. Fold it back into a constant once proven.
 	defaultMinRoleSkillSample = 5
 )
 
@@ -119,13 +115,10 @@ func publish(ctx context.Context, redisURL, meiliURL, meiliKey string, q, writer
 		log.Printf("rollup-stats: telegram channel count unavailable, publishing without it: %v", err)
 	}
 
-	// Same tolerance as the channel count: no MEILI_MASTER_KEY, or an unreachable
-	// Meilisearch, costs this one figure rather than the snapshot. Unlike
-	// cmd/rollup-facets, Meilisearch is not this worker's job — the rollups above are —
-	// so a missing key is not fatal here. Unlike the channel count, though, a failure
-	// here keeps the PREVIOUSLY published figure (resolveUniqueOpenJobs) rather than
-	// falling back to zero: a bare zero would misrepresent a transient outage as "no
-	// unique jobs," which is a worse-labelled number than a slightly stale real one.
+	// Same tolerance as the channel count: no MEILI_MASTER_KEY, or an unreachable Meilisearch, costs
+	// this one figure, not the snapshot (Meilisearch is not this worker's job, unlike cmd/rollup-facets).
+	// A failure keeps the PREVIOUSLY published figure (resolveUniqueOpenJobs), not zero: a bare zero would
+	// misrepresent a transient outage as "no unique jobs".
 	previous := catalogstats.Load(ctx, c, q).UniqueOpenJobs
 	unique := previous
 	if meiliKey == "" {

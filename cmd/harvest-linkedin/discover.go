@@ -13,19 +13,17 @@ import (
 )
 
 const (
-	// defaultJobAge bounds a query to recently-posted jobs. The point of searching at all is to
-	// find employers hiring NOW, and a wider window mostly re-surfaces companies an earlier run
-	// already proposed.
+	// defaultJobAge bounds a query to recently-posted jobs: the aim is employers hiring NOW, and a wider
+	// window mostly re-surfaces companies already proposed.
 	defaultJobAge = 7
-	// defaultPages is deliberately one. Pages are the multiplier on a run's request count, so
-	// widening coverage is an explicit per-query decision rather than a default.
+	// defaultPages is deliberately one: pages multiply the request count, so wider coverage is a
+	// per-query decision.
 	defaultPages = 1
 	// pageSize is the listing's fixed page size, which drives the `start` offset.
 	pageSize = 10
 )
 
-// searchBase is the public, unauthenticated job-search listing. It needs no credentials and
-// serves this project's own User-Agent.
+// searchBase is the public, unauthenticated job-search listing.
 const searchBase = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 
 // query is one entry of the worklist: what to search for, and where.
@@ -36,8 +34,8 @@ type query struct {
 	Pages    int    `yaml:"pages"`
 }
 
-// loadQueries reads the worklist, applying the bounded defaults. A query naming no market is a
-// usage error: an unbounded market is what turns a bounded harvest into an unbounded crawl.
+// loadQueries reads the worklist, applying the bounded defaults. A query naming no market is a usage
+// error: an unbounded market turns a bounded harvest into an unbounded crawl.
 func loadQueries(path string) ([]query, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -79,8 +77,8 @@ func searchURL(q query, page int) string {
 	return searchBase + "?" + params.Encode()
 }
 
-// candidate is one hiring company, in the shape `harvest-ats resolve` consumes. The json tags
-// match its companySite, so the output of this command is that command's input verbatim.
+// candidate is one hiring company, in the shape `harvest-ats resolve` consumes; the json tags match
+// its companySite.
 type candidate struct {
 	Name       string `json:"name"`
 	Website    string `json:"website"`
@@ -88,9 +86,8 @@ type candidate struct {
 	ExternalID string `json:"external_id,omitempty"`
 }
 
-// stats is what a run needs to judge itself: how many queries ran and how many came back with
-// nothing. A query that succeeds but yields no postings is indistinguishable from a blocked or
-// re-templated one, so the counts — not the candidate list — decide whether the run failed.
+// stats is what a run needs to judge itself. A query that succeeds with no postings looks like a
+// blocked or re-templated one, so these counts, not the candidate list, decide whether the run failed.
 type stats struct {
 	totalQueries int
 	emptyQueries int
@@ -100,17 +97,16 @@ type stats struct {
 // none of them with a posting.
 func (s stats) everyQueryEmpty() bool { return s.totalQueries > 0 && s.emptyQueries == s.totalQueries }
 
-// fetcher retrieves a URL's body. Injected so a run can be exercised without network.
+// fetcher retrieves a URL's body; injected so tests need no network.
 type fetcher func(ctx context.Context, url string) (string, error)
 
 // discover turns the query worklist into the candidate companies behind its postings.
 //
-// The listing already names the employer and links its profile, so both the collapse of many
-// postings to one employer and the catalogue filter happen on the listing alone — a company we
-// already have, or have already seen this run, costs no further request. Each surviving
-// employer then costs two: its posting (for the ATS-native id) and its profile (for the
-// website). A candidate with no website is dropped, since the resolve step has nothing to
-// follow; a candidate whose posting fetch fails keeps its place without an id.
+// The listing names the employer and links its profile, so collapsing postings to one employer and
+// the catalogue filter happen on the listing alone: a known or already-seen company costs no further
+// request. Each survivor costs two: its posting (ATS-native id) and its profile (website). A candidate
+// with no website is dropped, since resolve has nothing to follow; one whose posting fetch fails keeps
+// its place without an id.
 func discover(ctx context.Context, fetch fetcher, queries []query, existing map[string]bool) ([]candidate, stats, error) {
 	var (
 		out  []candidate
@@ -142,8 +138,8 @@ func discover(ctx context.Context, fetch fetcher, queries []query, existing map[
 	return out, st, nil
 }
 
-// searchCards pages one query, stopping early at the first page that yields nothing (the
-// listing has run out). A page that fails to fetch is logged and skipped.
+// searchCards pages one query, stopping at the first empty page. A page that fails to fetch is
+// logged and skipped.
 func searchCards(ctx context.Context, fetch fetcher, q query) []card {
 	var all []card
 	for page := 1; page <= q.Pages; page++ {

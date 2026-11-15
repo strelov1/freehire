@@ -1,14 +1,10 @@
-// Command reindex-companies rebuilds the Meilisearch companies index from Postgres.
-// It streams every hiring company (job_count > 0) into a fresh index and atomically
-// swaps it in (see search.CompanyRebuild), then exits — run it on a schedule (cron),
-// and never stacked with the jobs reindex on the same host: Meilisearch runs one
-// serial task queue, so the second rebuild queues behind the first and looks like a
-// hang, and a swap transiently holds both the old and new index (~2x that index's
-// disk). Building this index never touches the jobs index, so jobs search cannot
-// regress.
+// Command reindex-companies rebuilds the Meilisearch companies index from Postgres. It streams
+// every hiring company (job_count > 0) into a fresh index and atomically swaps it in (see
+// search.CompanyRebuild), then exits. Run it on a schedule, never stacked with the jobs reindex:
+// Meilisearch has one serial task queue (the second rebuild looks like a hang) and a swap
+// transiently holds about twice the index's disk. It never touches the jobs index.
 //
-// Indexing is a full swap-rebuild: the live index keeps serving until the single
-// atomic swap, and re-runs are safe (the rebuild index always starts empty).
+// The live index keeps serving until the swap, and re-runs are safe (the rebuild index starts empty).
 package main
 
 import (
@@ -21,9 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// reindexBatchSize bounds how many companies are read from Postgres and pushed to
-// Meilisearch per keyset round. Companies are a small, slow-moving directory, so a
-// modest batch amortizes the round-trip without holding much in memory.
+// reindexBatchSize bounds how many companies are read and pushed per keyset round.
 const reindexBatchSize = 2000
 
 func main() { worker.Main(run) }
@@ -36,16 +30,13 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Bootstrap owns config + pool, so the required-config check lands just after the
-	// pool opens; the connect is cheap and cleanup closes it on this early return.
+	// Bootstrap owns config and pool, so this check runs after the pool opens.
 	if cfg.MeiliKey == "" {
 		log.Print("config: MEILI_MASTER_KEY is required")
 		return 1
 	}
 
-	// A rebuild-and-swap on the companies index, on the same single Meilisearch task queue
-	// the jobs rebuild uses — the two must never overlap, and a swap holds roughly twice the
-	// index's disk while it happens.
+	// Shares Meilisearch's single task queue with the jobs rebuild; the two must never overlap.
 	releaseLock, gotLock, err := worker.HoldHeavyIndexLock(ctx, pool)
 	if err != nil {
 		log.Printf("index lock: %v", err)
@@ -69,8 +60,7 @@ func run() int {
 	return 0
 }
 
-// companyReader pages hiring companies by keyset, so reindexCompanies' scan loop is
-// unit-testable with a fake in place of the Postgres-backed queriesReader.
+// companyReader pages hiring companies by keyset; a fake stands in for it in tests.
 type companyReader interface {
 	Page(ctx context.Context, afterSlug string, limit int32) ([]db.Company, error)
 }
@@ -85,33 +75,27 @@ func (r *queriesReader) Page(ctx context.Context, afterSlug string, limit int32)
 	})
 }
 
-// companyRebuilder is the subset of search.CompanyRebuild the reindex drives — a
-// fresh-index build session that swaps into production atomically on Promote.
+// companyRebuilder is the subset of search.CompanyRebuild the reindex drives; Promote swaps atomically.
 type companyRebuilder interface {
 	Prepare(ctx context.Context) error
 	Push(ctx context.Context, docs []search.CompanyDocument) error
 	Promote(ctx context.Context) error
-	// Cleanup drops a half-built rebuild index. reindexCompanies defers it so a run
-	// that aborts before Promote's swap-and-drop does not leave an orphan index.
+	// Cleanup drops a half-built rebuild index left by an aborted run.
 	Cleanup(ctx context.Context) error
 }
 
 // reindexCompanies streams every hiring company into a fresh index and swaps it in.
-// It pages by keyset (slug > last seen), so rows inserted or re-ordered mid-run are
-// neither skipped nor repeated, mapping each row through search.FromCompany. A short
-// page (fewer than batchSize) ends the scan. Prepare/Promote bracket the stream so an
-// emptied catalogue still swaps in a clean, empty index rather than leaving a stale one.
+// It pages by keyset (slug > last seen) so rows inserted mid-run are neither skipped nor
+// repeated; a short page ends the scan. Prepare/Promote bracket the stream so an emptied
+// catalogue still swaps in a clean, empty index.
 func reindexCompanies(ctx context.Context, r companyReader, b companyRebuilder, batchSize int32) (int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, err
 	}
 
-	// Promote ends the happy path by swapping the rebuild index in and dropping the old
-	// one; any earlier return is an abort that leaves the half-built rebuild index
-	// behind. Drop it in a defer (mirrors the jobs reindexFull) so an aborted run never
-	// orphans an index that eats disk until the next run's Prepare clears it.
-	// Best-effort on a cancellation-immune context so it can still reach Meilisearch
-	// when the abort was the parent ctx being cancelled.
+	// Any return before Promote leaves a half-built index; drop it in a defer (as the jobs
+	// reindexFull does). Best-effort, on a cancellation-immune context so it still reaches
+	// Meilisearch when the parent ctx was cancelled.
 	promoted := false
 	defer func() {
 		if promoted {

@@ -1,19 +1,9 @@
 // Command linkedin-token-refresh keeps the daily digest's LinkedIn credential alive. Schedule
 // it once a day.
 //
-// LinkedIn access tokens last 60 days. When the application is entitled to a programmatic
-// refresh token this worker exchanges it for a fresh one a fortnight before expiry and nobody
-// notices; when it is not — the expected case outside the Marketing Developer Platform — it
-// cannot renew anything, and its job is instead to say so while there is still a fortnight to
-// act. Both paths matter: a channel that stops publishing because its credential quietly died
-// is indistinguishable from a quiet day.
+// LinkedIn access tokens last 60 days. When the application is entitled to a programmatic refresh token this worker exchanges it for a fresh one a fortnight before expiry. When it is not (the expected case outside the Marketing Developer Platform) it cannot renew anything and instead warns while a fortnight remains.
 //
-// HOW THE WARNING IS SEEN. Not through a red unit: this fleet already runs ~37 permanently
-// failing ingest units, so a non-zero exit repeated daily for two weeks teaches an operator to
-// ignore exactly the thing it is trying to say. It publishes a gauge instead — the seconds
-// left on the credential — which an alert rule can read and which describes the situation
-// continuously rather than as a boolean. A non-zero exit is reserved for the credential being
-// ALREADY dead, where the channel is broken now rather than soon.
+// The warning is not a red unit: a non-zero exit repeated daily teaches an operator to ignore it. It publishes a gauge of seconds left on the credential for an alert rule to read. A non-zero exit is reserved for a credential that is ALREADY dead.
 //
 // Needs DATABASE_URL and the four LINKEDIN_* values; without them it is a no-op that never
 // opens the pool, which is how this ships before the channel is configured. PROM_TEXTFILE_DIR
@@ -34,16 +24,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// textfileName is the node_exporter collector file this worker owns. One file per worker, so a
-// run that fails to publish cannot blank another worker's series.
+// textfileName is the node_exporter collector file this worker owns. One file per worker, so a failed publish cannot blank another worker's series.
 const textfileName = "freehire_social_token.prom"
 
 func main() { worker.Main(run) }
 
 func run() int {
-	// Gated before Bootstrap: an unconfigured deployment has no credential to renew and must
-	// not open a pool to discover that. The predicate is config's, so this worker and
-	// cmd/social-digest cannot disagree about whether the channel exists.
+	// Gated before Bootstrap: an unconfigured deployment has no credential to renew. The predicate is config's, so this worker and cmd/social-digest agree on whether the channel exists.
 	cfg := config.Load()
 	if !cfg.LinkedInDigestConfigured() {
 		log.Print("linkedin-token-refresh: the LinkedIn channel is not configured, nothing to renew")
@@ -93,9 +80,7 @@ func run() int {
 	}
 }
 
-// publish writes the gauges an alert rule reads. Best-effort by design: failing to publish a
-// measurement must not fail the renewal that already happened, and the next run overwrites the
-// file wholesale anyway.
+// publish writes the gauges an alert rule reads. Best-effort: a failed publish must not fail a renewal that already happened, and the next run overwrites the file.
 func publish(o linkedinauth.Outcome) {
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" {
@@ -106,15 +91,9 @@ func publish(o linkedinauth.Outcome) {
 	}
 }
 
-// render is the published contract. Seconds-remaining rather than an expiry timestamp, because
-// an alert asks "how long have we got" and a rule written against an absolute time has to
-// subtract the clock itself — in a query language where that is easy to get wrong once and
-// then trust forever.
+// render is the published contract. It emits seconds remaining rather than an expiry timestamp, so an alert rule needs no clock arithmetic.
 //
-// A missing credential publishes a NEGATIVE remaining time rather than zero or nothing at all.
-// Nothing at all would make an unsigned-in channel look identical to a broken exporter, and
-// zero would look like a credential that expired this instant. Both hide the state that
-// actually needs a person.
+// A missing credential publishes a NEGATIVE remaining time: nothing at all would look like a broken exporter, and zero like a credential that expired this instant.
 func render(o linkedinauth.Outcome, now time.Time) string {
 	var b strings.Builder
 	b.WriteString("# HELP freehire_social_token_expires_in_seconds Seconds until a social channel's stored access token expires; negative when none is stored.\n")

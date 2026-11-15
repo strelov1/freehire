@@ -22,17 +22,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// defaultChunkSize is how many ids one chunk's id range spans. This query GROUPs BY
-// title with no row LIMIT (see ListTitlesForClassifyDrift's comment) — the range
-// width alone bounds one statement's cost — so it stays as wide as the other
-// light-column chunked passes (cmd/backfill-slug-folded).
+// defaultChunkSize is how many ids one chunk's id range spans. The query GROUPs BY title with no
+// row LIMIT (see ListTitlesForClassifyDrift), so the range width alone bounds one statement's cost.
 const defaultChunkSize = 50_000
 
 // defaultTopN is how many ranked candidates each of the two report sections prints.
 const defaultTopN = 200
 
-// pauseBetweenChunks lets the host breathe between statements, the same courtesy
-// every other chunked one-off tool in this repo pays.
+// pauseBetweenChunks lets the host breathe between statements.
 const pauseBetweenChunks = 200 * time.Millisecond
 
 func main() { worker.Main(run) }
@@ -125,11 +122,9 @@ func run() int {
 }
 
 // mergeTitleClassifications folds one chunk's per-title rows into the running
-// accumulator, keyed by title. A title already present has its count summed across
-// chunks — the same title can appear in more than one id range, since grouping
-// happens per chunk, not across the whole table — and keeps whichever
-// enrichment seniority/category pair it already has: both chunks describe the same
-// title, so the first one seen is as representative as any other.
+// accumulator, keyed by title. A title already present has its count summed (grouping happens
+// per chunk, so a title can span id ranges) and keeps the enrichment seniority/category pair
+// it already has: the first one seen is as representative as any other.
 func mergeTitleClassifications(acc map[string]*dictgap.TitleClassification, rows []db.ListTitlesForClassifyDriftRow) {
 	for _, r := range rows {
 		if existing, ok := acc[r.Title]; ok {

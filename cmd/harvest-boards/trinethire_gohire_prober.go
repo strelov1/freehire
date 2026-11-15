@@ -10,14 +10,12 @@ import (
 )
 
 // trinethireProber probes a TriNet Hire company (board = the "<id>-<slug>" path segment). The
-// listing is one server-rendered table with no JSON behind it, so liveness is judged the way
-// the ingest adapter reads the same page: a live board links at least one posting. The page's
-// <title> is "Careers at <employer>", the platform's own rendering of the company name, so it
-// names the employer for the corroboration gate.
+// listing is a server-rendered table with no JSON, so liveness is judged like the adapter: a live
+// board links ≥1 posting. The <title> "Careers at <employer>" names the employer for the gate.
 type trinethireProber struct{}
 
-// dedupKey folds the name slug off, so two spellings of one company id are probed once — the
-// same fold the catalogue applies on insert (sources.BoardDedupeKey).
+// dedupKey folds the name slug off, so two spellings of one company id are probed once (the same
+// fold as sources.BoardDedupeKey on insert).
 func (trinethireProber) dedupKey(board string) string { return foldedBoard("trinethire", board) }
 
 // trinethireJobPattern is a posting link on the listing: /companies/<board>/jobs/<numeric id>-…
@@ -35,10 +33,10 @@ func (trinethireProber) probe(ctx context.Context, c httpClient, board string) (
 	return strings.TrimSpace(strings.TrimPrefix(pageTitle(root), "Careers at ")), n, nil
 }
 
-// gohireProber probes a GoHire career site (board = the "<slug>-<code>" path segment) by its
-// first listing page: a live site links at least one posting card. The <title> is "Jobs at
-// <employer>". GoHire meters a request quota (~400, then 429s that outlast the run), so
-// harvest it with -pace 0.1 and no more candidates than the quota holds (see sources/gohire.go).
+// gohireProber probes a GoHire career site (board = the "<slug>-<code>" path segment) by its first
+// listing page: a live site links ≥1 posting card; the <title> is "Jobs at <employer>". GoHire meters
+// a request quota (~400, then 429s that outlast the run): harvest with -pace 0.1 and no more
+// candidates than the quota holds (see sources/gohire.go).
 type gohireProber struct{}
 
 // dedupKey folds onto the site code, so two slugs in front of one site are probed once and the

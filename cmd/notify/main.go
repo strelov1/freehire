@@ -1,22 +1,15 @@
-// Command notify is the standalone filter-subscription notification worker. One
-// run first delivers opted-in inbox digests, independently of search, then does
-// a MATCH→DELIVER pass: it re-runs each distinct saved-search
-// query against the search index, records new matches in the dedup ledger, then
-// delivers each subscription's pending matches as one digest over the channel it
-// was subscribed on (Telegram, email, push, and/or webhook). Run it on a
-// schedule (e.g. cron); it processes a bounded batch and exits. It exits
-// non-zero when the run had delivery failures so cron can alert.
+// Command notify is the standalone filter-subscription notification worker. One run first
+// delivers opted-in inbox digests, independently of search, then does a match-then-deliver
+// pass: it re-runs each distinct saved-search query against the search index, records new
+// matches in the dedup ledger, and delivers each subscription's pending matches as one digest
+// over its channel (Telegram, email, push, webhook). Run it on a schedule; it processes a
+// bounded batch and exits non-zero on delivery failures so cron can alert.
 //
-// Matching itself is optional: with the search backend unconfigured, the worker
-// logs that matching is disabled; inbox digests still run. Scheduling it before
-// the feature is set up does not raise false alarms. Telegram and email are
-// each registered conditionally on their own server credential (bot token /
-// SES region+from address); push and webhook need none (Expo's relay holds
-// the APNs/FCM credential on its own side; a webhook POSTs to a URL the
-// account itself supplies) and are therefore always registered. A
-// subscription on a channel that is not configured this run — or, for push, a
-// user with no registered device, or for webhook, an account with no enabled
-// destination — is soft-skipped, so one channel can run without the others.
+// With the search backend unconfigured, matching is disabled and inbox digests still run.
+// Telegram and email are registered only when their server credential is set (bot token /
+// SES region and from address); push and webhook need none and are always registered. A
+// subscription on a channel not configured this run (or a push user with no device, or a
+// webhook account with no enabled destination) is soft-skipped.
 package main
 
 import (
@@ -51,11 +44,9 @@ func run() int {
 	queries := db.New(pool)
 	var inboxSender emailnotify.Sender
 
-	// Register every configured delivery channel; the Router dispatches each
-	// subscription to its channel and soft-skips one that is not configured.
-	// Push and webhook need no server credential (see each package's doc), so
-	// both are always registered — a per-recipient soft-skip (no registered
-	// device, no enabled destination) is handled inside recipient() instead.
+	// Register every configured delivery channel; the Router soft-skips an unconfigured one.
+	// Push and webhook need no server credential, so they are always registered; their
+	// per-recipient soft-skips are handled inside recipient().
 	pushStore := pushnotify.NewQueriesStore(queries)
 	router := notify.Router{
 		notify.ChannelPush:    notify.NewPushNotifier(queries, pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore)),
@@ -65,13 +56,11 @@ func run() int {
 		router[notify.ChannelTelegram] = telegramnotify.NewNotifier(telegramnotify.NewClient(cfg.TelegramBotToken), cfg.FrontendOrigin)
 	}
 	if emailnotify.EmailHeld(ctx, cfg.RedisURL, "notify") {
-		// A class hold withholds email only: the channel soft-skips, its items stay
-		// pending with no attempt counted, and the other channels still deliver.
+		// A class hold withholds email only: items stay pending, no attempt counted.
 		log.Printf("notify: email channel held by a mail pause key, skipping it this run")
 	} else if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
-		// A failure to build the SES client disables only the email channel — the
-		// email subscriptions soft-skip and retry next pass, while any other
-		// configured channel still delivers this run (channels are independent).
+		// A failure to build the SES client disables only the email channel; its subscriptions
+		// soft-skip and retry next pass.
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("notify: email channel disabled: %v", err)
 		} else {
@@ -109,10 +98,8 @@ func run() int {
 		log.Printf("notify: %v", err)
 		return 1
 	}
-	// A single failed saved-search query is isolated by design and must not fail the
-	// pass that served the rest. Every one of them failing is not that case — it means
-	// the index or its credential is gone — and it produced no failure count at all
-	// before Stats.FailedQueries existed, so the run exited 0 having matched nothing.
+	// One failed saved-search query is isolated and must not fail the pass; every query
+	// failing means the index or its credential is gone.
 	if stats.MatchingCollapsed() {
 		log.Printf("notify: all %d saved-search queries failed — nothing was matched this pass", stats.Queries)
 		return 1

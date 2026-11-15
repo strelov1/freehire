@@ -30,9 +30,8 @@ func run() int {
 		return 1
 	}
 
-	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
-	// set, wires tracing (source "enrich"). flush drains buffered traces at run end
-	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
+	// llm.NewClient builds the client and, when LANGFUSE_* are set, wires tracing (source
+	// "enrich"). flush drains buffered traces at run end.
 	client, flush, err := llm.NewClient(ecfg.Settings(ecfg.Model), "enrich")
 	if err != nil {
 		log.Printf("llm: %v", err)
@@ -72,14 +71,12 @@ func run() int {
 		UpstreamGraceDays: ecfg.UpstreamGraceDays,
 	})
 	worker.ReportWork(int64(stats.Enriched+stats.Failed+stats.DeadLettered), int64(stats.Enriched))
-	// A stop is not a failure: this drain runs for days, so every deploy ends it with a
-	// SIGTERM, and reading that as an error marked a healthy run as failed. Whatever it
-	// left claimed goes back to the queue when its lease expires.
+	// A stop is not a failure: the drain runs for days, so every deploy ends it with SIGTERM.
+	// Whatever it left claimed returns to the queue when its lease expires.
 	//
-	// The tallies cannot decide this. The stop itself fails every entry in flight, and
-	// over days a drain always collects some real failures too, so ExitCode would call
-	// every stopped run a failure, which is the false alarm this avoids. They are logged
-	// instead. A different error surfacing during the stop still fails the run.
+	// The tallies cannot decide this: the stop fails every entry in flight, and a long drain
+	// collects real failures too, so ExitCode would flag every stopped run. They are logged
+	// instead. A different error during the stop still fails the run.
 	if ctx.Err() != nil && (err == nil || errors.Is(err, context.Canceled)) {
 		log.Printf("enrich: stopped: enriched=%d failed=%d dead_lettered=%d: %v", stats.Enriched, stats.Failed, stats.DeadLettered, ctx.Err())
 		return 0

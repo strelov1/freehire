@@ -3,14 +3,9 @@
 // internal/dict/classify.IsTech and no category from classify.Parse — by how many
 // publishable postings carry them.
 //
-// It is the third report beside cmd/report-skill-gaps and cmd/report-classify-drift,
-// and it sees what neither of those can. Both of them mine LLM enrichment output, and
-// enrichment is gated on is_tech IS TRUE — so a title no dictionary places is never
-// enriched, has no model opinion recorded against it, and can never appear in a drift
-// report (which compares against that opinion) or a skill-gap report (which mines it).
-// Measured on prod 2026-09-23, that blind spot held 2,232,773 open canonical postings,
-// 71,314 of them on titles reading as software or IT outright; acting on one hand-made
-// sample of it returned ~110 terms to the tech-title dictionary.
+// It sees what cmd/report-skill-gaps and cmd/report-classify-drift cannot: both mine LLM enrichment,
+// which is gated on is_tech IS TRUE, so a title no dictionary places is never enriched and never
+// appears in either.
 //
 // It writes nothing — no database row, no dictionary source file — and is on no timer.
 // A curator runs it, reads the ranked list, and decides by hand what belongs in
@@ -42,24 +37,16 @@ import (
 // title with no row LIMIT (see ListTitlesForUnclassifiedReport), so the range width
 // alone bounds one statement's cost.
 //
-// NOT the 50,000 cmd/report-classify-drift uses, and the first run of this report is
-// what settled that. The id sequence is far sparser than the row count: measured on
-// prod 2026-09-23, 12.7M rows spread over a max id of 1,620,699,741, i.e. about 8
-// rows per thousand ids. At 50,000 the walk is 32,414 chunks, most of them empty,
-// and the run projected to ~3.5 hours — nearly all of it the 200ms courtesy pause
-// between statements rather than any work. At 2,000,000 the same report finished in
-// 25 minutes, and each chunk still averages only ~15k rows, so the statement stays
-// cheap. The knob a run can move is the chunk; what it cannot move is a default
-// that makes the first run look broken.
+// Much wider than cmd/report-classify-drift's 50,000: the id sequence is far sparser than the row
+// count (about 8 rows per thousand ids), so small chunks are mostly empty and the run is dominated
+// by the courtesy pause between statements.
 const defaultChunkSize = 2_000_000
 
-// defaultTopN is how many ranked candidates the report prints. The catalogue holds
-// over 1.5M distinct unrecognised titles, so the cap is what makes the output
-// readable at all; raise it through the env knob when curating in depth.
+// defaultTopN is how many ranked candidates the report prints. There are far too many distinct
+// unrecognised titles to print, so the cap keeps output readable; raise it through the env knob.
 const defaultTopN = 500
 
-// pauseBetweenChunks lets the host breathe between statements, the same courtesy
-// every other chunked one-off tool in this repo pays.
+// pauseBetweenChunks lets the host breathe between statements.
 const pauseBetweenChunks = 200 * time.Millisecond
 
 func main() { worker.Main(run) }
@@ -93,13 +80,9 @@ func run() int {
 		return 0
 	}
 
-	// No resume knob, deliberately, and this is the one place where copying
-	// cmd/report-classify-drift would have been wrong. The ranking is over counts
-	// accumulated across the WHOLE span: starting at a later id leaves the
-	// accumulator empty for everything before it, so a title carried by postings on
-	// both sides of the cursor is undercounted and the top-N describes a suffix of
-	// the catalogue while looking exactly like a report on all of it. A read-only
-	// report can simply be run again; a plausible wrong number cannot be spotted.
+	// No resume knob, deliberately: the ranking is over counts accumulated across the WHOLE span, so
+	// starting at a later id undercounts titles on both sides of the cursor and the top-N describes a
+	// suffix of the catalogue while looking like the whole. A read-only report can simply be rerun.
 	from := bounds.MinID
 	log.Printf("report-unclassified-titles: ids %d..%d, chunk=%d", bounds.MinID, bounds.MaxID, step)
 
@@ -150,8 +133,7 @@ func run() int {
 
 // mergeTitleCounts folds one chunk's per-title rows into the running accumulator.
 // Grouping happens per chunk, not across the whole table, so the same title arrives
-// once per id range it appears in and the counts are summed — a report ranking a
-// title by its largest chunk would rank the wrong things first.
+// once per id range it appears in and the counts are summed.
 func mergeTitleCounts(acc map[string]int, rows []db.ListTitlesForUnclassifiedReportRow) {
 	for _, r := range rows {
 		acc[r.Title] += int(r.JobCount)
@@ -159,9 +141,8 @@ func mergeTitleCounts(acc map[string]int, rows []db.ListTitlesForUnclassifiedRep
 }
 
 // writeReport prints the top n candidates as a tab-separated count/title table,
-// highest count first (dictgap.UnclassifiedTitles already sorts them). Count first
-// so the output pipes into sort, cut and grep — the tools a curator actually reads a
-// list this long with.
+// highest count first (dictgap.UnclassifiedTitles already sorts them). Count first so the output
+// pipes into sort, cut and grep.
 func writeReport(w io.Writer, candidates []dictgap.TitleCount, n int) error {
 	if n < len(candidates) {
 		candidates = candidates[:n]

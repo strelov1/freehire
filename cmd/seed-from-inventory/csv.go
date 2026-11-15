@@ -15,11 +15,9 @@ type inventoryRow struct {
 	URL  string
 }
 
-// requiredInventoryColumns are the header columns parseInventory must find. Order in the
-// input file does not matter, extra columns are ignored, and each is looked up by name.
-// "slug" is deliberately absent here: it is never read downstream (see inventoryRow's doc
-// comment), so an inventory that carries no slug column of its own (e.g. Phenom's) must
-// still parse.
+// requiredInventoryColumns are the header columns parseInventory must find, looked up by
+// name in any order; extra columns are ignored. "slug" is deliberately absent: it is never
+// read downstream, so an inventory without one (e.g. Phenom's) must still parse.
 var requiredInventoryColumns = []string{"name", "url"}
 
 // parseInventory reads a `name,slug,url` CSV into rows — "slug" is optional. It returns an

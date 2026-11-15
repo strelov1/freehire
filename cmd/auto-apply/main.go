@@ -1,8 +1,7 @@
 // Command auto-apply drains auto_apply_queue: for each queued (candidate, job) attempt it
-// resolves the candidate's known profile answers against the job's live application form,
-// through internal/atsapply's headless browser, and submits only when every required
-// question is answered. What populates the queue is out of scope for this worker — see
-// openspec/changes/auto-apply-worker/design.md — it only ever drains what is already there.
+// resolves the candidate's known profile answers against the job's live application form
+// through internal/atsapply's headless browser, and submits only when every required question
+// is answered. What fills the queue is out of scope; it only drains what is there.
 //
 // It exits non-zero when the run had any failures or dead letters, so cron can alert.
 package main
@@ -47,12 +46,9 @@ func run() int {
 
 	acfg := config.LoadAutoApply()
 
-	// blobStore is nil when S3_* is unconfigured, and that is fine here: résumé attachment
-	// (openspec/changes/auto-apply-tailored-resume) renders the approved tailored CV
-	// on demand through the Typst renderer and never touches object storage — the only
-	// résumé-adjacent read this worker makes elsewhere is candidateprofile's Structured(),
-	// which reads the parsed structure from Postgres (resume.Store.Structured reads only
-	// its repo). S3_* stays optional here.
+	// blobStore is nil when S3_* is unconfigured, and that is fine: CV attachment renders the
+	// approved tailored CV on demand through Typst, and candidateprofile's Structured() reads
+	// only Postgres.
 	blobStore, err := blobstore.New(blobstore.Config{
 		Endpoint:  cfg.S3Endpoint,
 		Bucket:    cfg.S3Bucket,
@@ -68,33 +64,27 @@ func run() int {
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
 	resumeStore := resume.New(blobStore, resume.NewQueriesRepository(queries))
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries, pool))
-	// The candidate's accumulating bank of screening-question answers — the same store
-	// internal/api/handler wires into its own assembler, so a banked answer reaches a form
-	// field here, the worker that actually fills and submits forms, and not only the UI's
-	// preview read.
+	// The candidate's bank of screening-question answers, the same store internal/api/handler
+	// wires into its assembler, so a banked answer reaches the form this worker actually fills.
 	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
-	// The same five sources, in the same precedence order, internal/handler's
-	// extension-autofill path already resolves a candidate's profile through — see
+	// The same five sources, in the same precedence order, as the extension-autofill path; see
 	// internal/candidateprofile's package doc for why this must be the one Assembler.
 	answers := assemblerAnswerSource{
 		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank).
 			WithProfileLocation(userprofile.New(userprofile.NewQueriesRepository(queries))),
 	}
 
-	// Question drafting (openspec/changes/auto-apply-llm-drafting) is optional: an
-	// unconfigured LLM degrades to no drafting, the same convention llm.NewClient gives
-	// every other feature — every field either resolves deterministically or parks,
-	// exactly as it did before this capability existed.
+	// Question drafting is optional: an unconfigured LLM degrades to no drafting, so every field
+	// either resolves deterministically or parks.
 	llmClient, llmFlush, err := llm.NewClient(cfg.Settings(cfg.Model), "auto-apply")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1
 	}
 	defer llmFlush()
-	// The gateway's administrative API mints the per-candidate credential a draft call
-	// spends under (llmkey.Bind, called per attempt in internal/atsapply.Client.resolve).
-	// Nil-safe: an unconfigured admin API just means every draft call spends on the
-	// service credential instead, still tagged.
+	// The gateway's admin API mints the per-candidate credential a draft call spends under
+	// (llmkey.Bind in internal/atsapply.Client.resolve). Nil-safe: without it, draft calls spend
+	// on the service credential, still tagged.
 	llmKeys := llmkey.New(llmkey.Config{
 		BaseURL:       cfg.LLMAdminURL,
 		AdminUsername: cfg.LLMAdminUsername,
@@ -108,26 +98,19 @@ func run() int {
 	atoms := experience.NewStore(experience.NewQueriesRepository(queries))
 	letters := coverletter.NewStore(coverletter.NewQueriesRepository(queries))
 
-	// cvRenderer is nil when no typst binary is configured (config.resolveTypstBin), the
-	// same nil-safe gating internal/api/handler's PDF-download endpoint uses. A résumé file
-	// field then simply cannot be filled — Client.attachApprovedResume degrades that to a
-	// park, the same outcome an unresolved field already produces, never a crash.
-	//
-	// Left as the untyped nil interface rather than the nil *TypstRenderer directly: a nil
-	// concrete pointer assigned into the cv.Renderer INTERFACE parameter is not a nil
-	// interface (boundRunner's own comment in internal/api/handler/assistant.go documents
-	// the same trap), so Client's own `c.renderer == nil` check would never see it as
-	// unconfigured and would panic on the first call instead.
+	// cvRenderer is nil when no typst binary is configured (config.resolveTypstBin); a CV file
+	// field then parks (Client.attachApprovedResume) instead of crashing. Kept as an untyped nil
+	// interface: a nil *TypstRenderer assigned into the cv.Renderer interface is not a nil
+	// interface, so Client's `c.renderer == nil` check would miss it and panic.
 	var cvRenderer cv.Renderer
 	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
 		cvRenderer = r
 	}
 
-	// The same HTTP client internal/applyform's own capture worker uses: the Greenhouse/Ashby
-	// endpoints internal/atsapply reuses via applyform.Fetchers are the platforms' own public
-	// job-board APIs, so the crawl's user agent, timeouts and size caps are exactly right here
-	// too. Every request egresses through the proxy, so the host's address is never the one a
-	// platform sees behind a candidate's application (sources.NewFormClientFromEnv).
+	// The same HTTP client as internal/applyform's capture worker: the Greenhouse/Ashby endpoints
+	// reused via applyform.Fetchers are public job-board APIs, so the crawl's user agent,
+	// timeouts and size caps fit. Requests egress through the proxy so the host's address is
+	// never the one a platform sees (sources.NewFormClientFromEnv).
 	formClient, proxied, err := sources.NewFormClientFromEnv()
 	if err != nil {
 		log.Printf("auto-apply: %v", err)
@@ -136,23 +119,18 @@ func run() int {
 	if !proxied {
 		log.Printf("auto-apply: WARNING no SOURCES_ROTATING_PROXY_URL or SOURCES_PROXY_URL — application forms are fetched from this host's own address")
 	}
-	// Drafting asks the plan, per attempt, whether the candidate is still on a paid plan
-	// before it spends a model call for them (atsapply.Client.resolve). Only the tier is
-	// read, so the allowance figures this store is built with play no part here.
+	// Drafting checks the plan per attempt that the candidate is still on a paid plan before
+	// spending a model call (atsapply.Client.resolve). Only the tier is read, so the allowance
+	// figures play no part.
 	entitlement := plan.NewStore(queries, pool, plan.ConfigFromEnv())
 	sidecar := atsapply.NewClient(formClient, llmClient, llmKeyResolver, cfg.TypesafeAPIKey, atoms, letters, cvStore, cvRenderer, entitlement)
-	// Stored-form fallback (openspec/changes/atsapply-recruitee-stored-schema): lets a
-	// provider with no live schema fetcher (today: Recruitee) reach field resolution
-	// instead of parking before it ever runs, by reading the form cmd/capture-apply-form
-	// (or, for Recruitee, the ingest crawl itself) already captured into apply_forms. The
-	// same reader NewPreviewClient below already uses for its own, differently-ordered
-	// purpose — see fetchSchema's own comment for why Client does NOT mirror
-	// PreviewClient's storage-first order.
+	// Stored-form fallback: a provider with no live schema fetcher (today Recruitee) reaches
+	// field resolution by reading the form already captured into apply_forms. Client does not
+	// mirror PreviewClient's storage-first order; see fetchSchema.
 	sidecar = sidecar.WithStoredFormReader(&dbApplyFormReader{q: queries})
-	// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): empty key
-	// leaves sidecar exactly as it was before this capability existed — Ashby/Workable/
-	// Recruitee still park with reasonSubmissionNotImplemented. Its own enforce flag and
-	// cost caps are read directly by internal/api/atsapply, not threaded through here.
+	// browser-use fallback: an empty key leaves Ashby/Workable/Recruitee parking with
+	// reasonSubmissionNotImplemented. Its enforce flag and cost caps are read by
+	// internal/api/atsapply, not threaded through here.
 	if acfg.BrowserUseAPIKey != "" {
 		buClient := browseruse.New(acfg.BrowserUseAPIKey, "", nil)
 		sidecar = sidecar.WithBrowserUse(atsapply.NewBrowserUseExecutor(buClient))
@@ -181,14 +159,11 @@ func run() int {
 		return 1
 	}
 
-	// The second, independent claim pass this same run makes (openspec/changes/
-	// auto-apply-review-tracking): resolves the answer preview for entries a tailoring run
-	// already produced a CV for, reusing this worker's own browser dependency rather than
-	// giving cmd/auto-apply-orchestrate one it was deliberately built without (design.md).
-	// previewSidecar shares no state with sidecar above — separate LLM/CV dependencies it
-	// never touches (no drafting, no résumé rendering) — but the same transport and the
-	// same stored-form reader, so a non-Greenhouse preview costs a Postgres read, not a
-	// second network fetch of what cmd/capture-apply-form already persisted.
+	// Second, independent claim pass: resolves the answer preview for entries a tailoring run
+	// already produced a CV for, reusing this worker's browser dependency (cmd/auto-apply-
+	// orchestrate is built without one). previewSidecar shares no state with sidecar and uses the
+	// same stored-form reader, so a non-Greenhouse preview costs a Postgres read, not a second
+	// fetch.
 	previewSidecar := atsapply.NewPreviewClient(formClient, &dbApplyFormReader{q: queries})
 	previewStats, err := autoapply.RunPreviews(ctx, store, answers, previewSidecar, autoapply.RunOptions{
 		BatchSize:    acfg.BatchSize,
@@ -206,17 +181,16 @@ func run() int {
 	log.Printf("auto-apply done: applied=%d blocked=%d failed=%d dead_lettered=%d; previews resolved=%d parked=%d failed=%d dead_lettered=%d",
 		stats.Applied, stats.Blocked, stats.Failed, stats.DeadLettered,
 		previewStats.Resolved, previewStats.Parked, previewStats.Failed, previewStats.DeadLettered)
-	// Deliberately not worker.ExitCode: see autoapply.RunStats.Degraded (and
-	// PreviewStats.Degraded, the same reasoning) for why a parked attempt is not a fault
-	// this worker's exit code should alert on.
+	// Deliberately not worker.ExitCode: a parked attempt is not a fault to alert on (see
+	// autoapply.RunStats.Degraded and PreviewStats.Degraded).
 	if stats.Degraded() || previewStats.Degraded() {
 		return 1
 	}
 	return 0
 }
 
-// staleTailoringSeconds is how long an attempt with no tailored CV may go without any
-// history before it is given up on. Far above one orchestrator run (12 minutes, see
-// internal/application/autoapplyorchestrate's hireRequestTimeout) and Inngest's own step
-// retries on top of it, so only an attempt nothing is working on any more crosses it.
+// staleTailoringSeconds is how long an attempt with no tailored CV may go without history
+// before it is given up on. Far above one orchestrator run (12 minutes, hireRequestTimeout in
+// internal/application/autoapplyorchestrate) plus Inngest's step retries, so only an abandoned
+// attempt crosses it.
 const staleTailoringSeconds = 6 * 60 * 60

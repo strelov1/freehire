@@ -11,10 +11,8 @@ func render(drift []string) string {
 	)
 }
 
-// gauge writes one HELP/TYPE/value trio. Both are required because the textfile
-// collector SKIPS a file it cannot parse: a malformed payload is not a loud failure,
-// it is a metric that quietly stops existing — which reads exactly like a healthy
-// silence.
+// gauge writes one HELP/TYPE/value trio. Both are required because the textfile collector
+// skips a file it cannot parse: a malformed payload is a metric that quietly stops existing.
 func gauge(name, help string, value int) string {
 	return fmt.Sprintf("# HELP %s %s\n# TYPE %s gauge\n%s %d\n", name, help, name, name, value)
 }

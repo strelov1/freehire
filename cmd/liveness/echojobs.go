@@ -10,17 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// echojobsJobURL is echojobs.io's own per-posting detail page — already used live for
-// description backfill (see internal/ingest/sources/echojobs.go). Unlike jobs.url for this source (the
-// employer's own ATS link — Workday, Greenhouse, and others, with wildly variable per-company
-// reliability across a ~330k-posting catalogue), this is the single site echojobs.io itself, and
-// a removed posting answers with a plain 404 rather than whatever the employer's own ATS
-// happens to do.
-//
-// echojobs.io retired its public JSON detail API (/api/jobs/%s, which used to answer a removed
-// posting with a distinguishable {"error":"job fetch failed"} body) around 2026-08-13; this now
-// hits the site's server-rendered job page instead, whose plain HTTP status is the liveness
-// signal.
+// echojobsJobURL is echojobs.io's own per-posting detail page (also used for description backfill, see internal/ingest/sources/echojobs.go). Unlike jobs.url for this source (the employer's own ATS link, with wildly variable reliability), this is one site that answers a removed posting with a plain 404. The public JSON detail API was retired, so the server-rendered page's HTTP status is the liveness signal.
 const echojobsJobURL = "https://echojobs.io/job/%s"
 
 // checkEchoJobsLive queries echojobs.io's own job page for one posting's slug (its ExternalID,
@@ -36,12 +26,7 @@ func trimEchoJobsHandle(externalID string) string {
 	return strings.TrimPrefix(externalID, ":")
 }
 
-// checkEchoJobsLiveAt is checkEchoJobsLive with the job URL template as a parameter (already-
-// stripped slug), so a test can point it at a stub server. The page's plain HTTP status is the
-// liveness signal: 200 means still listed, 404 or 410 means removed (the same pair the shared
-// liveness.Classify treats as "gone" — see internal/job/liveness/liveness.go); anything else is
-// Uncertain, the same under-closing-biased default every other adapter's liveness check falls
-// back to.
+// checkEchoJobsLiveAt is checkEchoJobsLive with the job URL template as a parameter (already-stripped slug), so a test can point it at a stub server. 200 means still listed, 404 or 410 means removed (as in liveness.Classify); anything else is Uncertain, the under-closing-biased default.
 func checkEchoJobsLiveAt(ctx context.Context, client *http.Client, jobURLTemplate, slug string) (liveness.Verdict, string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(jobURLTemplate, slug), nil)
 	if err != nil {

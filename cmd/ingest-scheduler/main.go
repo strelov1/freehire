@@ -1,20 +1,13 @@
 // Command ingest-scheduler decides which provider crawls next and starts it.
 //
-// It replaces freehire-ops' provision/host2/gen-ingest-timers.sh and the ~279 static systemd units that
-// script materialised. Those units named each provider a SECOND time, in a filename, and
-// nothing reconciled that name against the boards table — so a provider could be crawled
-// under a name no adapter answered to (habr_career, silent for a day) or kept crawling
-// after its last board was retired (careerspage, empty since 18 July). Here the unit name
-// is built from the same row that selects the boards, so there is no second spelling left
-// to drift.
+// The unit name is built from the same boards row that selects the boards, so the provider
+// name has no second spelling to drift from the catalog.
 //
 // Run it once a minute. It claims what is due within the fleet's free capacity, starts each
-// run as a transient systemd unit, and exits — a one-shot like every other worker in cmd/,
-// so it cannot stack on itself and a crash costs one minute rather than the fleet.
+// run as a transient systemd unit, and exits, so it cannot stack on itself.
 //
-// It ships in SHADOW MODE: without INGEST_SCHEDULER_APPLY=1 it reports what it would have
-// launched and launches nothing, so the first deployment cannot disturb a fleet the static
-// timers still drive.
+// SHADOW MODE: without INGEST_SCHEDULER_APPLY=1 it reports what it would have launched and
+// launches nothing.
 package main
 
 import (
@@ -45,13 +38,10 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Single-flight across PROCESSES, not just across timer firings. The fleet's
-	// concurrency cap is a check-then-act pair — count what is in flight, then claim
-	// `cap - that` — and two overlapping invocations would each read zero and each claim
-	// the whole cap, running 2x the ceiling the host is tuned for. `Type=oneshot` stops the
-	// timer stacking on itself but says nothing about a hand-run invocation beside it, and
-	// the flock semaphore this replaces WAS atomic. A run that cannot take the lock exits
-	// cleanly: the next minute's tick loses nothing, because all state is in the database.
+	// Single-flight across PROCESSES: the concurrency cap is check-then-act (count in flight,
+	// claim `cap - that`), so two overlapping runs would each claim the whole cap. Type=oneshot
+	// does not stop a hand-run invocation. A run that cannot take the lock exits cleanly; all
+	// state is in the database.
 	lockConn, err := pool.Acquire(ctx)
 	if err != nil {
 		log.Printf("acquire lock connection: %v", err)
@@ -82,8 +72,7 @@ func run() int {
 		HeavyCap: cfg.HeavyCap,
 		Grace:    cfg.Grace,
 		Apply:    cfg.Apply,
-		// The crawls it launches are the `ingest` binary, so it is that job's switch that
-		// decides whether launching one would do anything.
+		// The launched crawls are the `ingest` binary, so that job's switch decides.
 		Paused: func(ctx context.Context) bool {
 			return worker.Paused(ctx, config.Load().RedisURL, "ingest")
 		},
@@ -96,9 +85,8 @@ func run() int {
 		return 1
 	}
 
-	// A run that could not be started is a real failure and must reach cron's alerting.
-	// A refused provider key is too: it means the catalog holds a provider nothing can
-	// crawl, which is precisely the condition that used to be silent.
+	// A run that could not start must reach cron's alerting. So must a refused provider key:
+	// the catalog holds a provider nothing can crawl.
 	if len(result.Failed) > 0 || len(result.Refused) > 0 {
 		return 1
 	}
@@ -119,12 +107,8 @@ func report(r ingestsched.TickResult, apply bool) {
 		len(r.WouldLaunch), len(r.Disabled), len(r.Unmanaged), len(r.Refused), len(r.Failed),
 		r.Saturated, r.Paused, r.Heavy.Cap, r.Light.Cap)
 
-	// A pool budgeted ZERO slots launches nothing, for ever, while every other figure on
-	// the line above reads healthy — launched=0 looks like "nothing was due" and
-	// saturated stays false, because one empty pool is not fleet saturation. That is how
-	// the light pool sat at zero for three days in September 2026. Say it in words: the
-	// two caps are printed above so the arithmetic is checkable, and this line names the
-	// consequence so nobody has to do the arithmetic to notice.
+	// A pool with ZERO slots launches nothing while the line above reads healthy: launched=0
+	// looks like "nothing was due" and saturated stays false. Say it in words.
 	if r.Heavy.Cap == 0 {
 		log.Printf("scheduler: HEAVY POOL STARVED — 0 of %d slots reserved for it; no sharded provider can be launched. Raise INGEST_SCHEDULER_HEAVY_CAP or INGEST_SCHEDULER_CAP",
 			r.Heavy.Cap+r.Light.Cap)
@@ -155,8 +139,7 @@ func report(r ingestsched.TickResult, apply bool) {
 	for _, s := range r.Disabled {
 		log.Printf("scheduler: disabled %s: %s", s.Provider, s.Reason)
 	}
-	// Unmanaged is one line, not one per provider: during cutover it holds ~226 names and
-	// printing each would bury everything above it every single minute.
+	// Unmanaged is one line, not one per provider: printing each would bury the rest every minute.
 	if len(r.Unmanaged) > 0 {
 		log.Printf("scheduler: %d providers still owned by their static timer: %s",
 			len(r.Unmanaged), strings.Join(r.Unmanaged, " "))

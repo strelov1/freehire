@@ -9,42 +9,35 @@ import (
 	"golang.org/x/net/html"
 )
 
-// workstreamProber validates a Workstream board — an employer's eight-hex career-site id — by
-// counting the postings its positions listing links. It also discovers its own candidates: the
-// platform publishes no directory of career sites, its sitemap.xml is the marketing site's and
-// carries no "/j/" URL at all, so Common Crawl's record of the pages it has visited is the only
-// enumeration there is.
+// workstreamProber validates a Workstream board (an employer's eight-hex career-site id) by counting
+// the postings its positions listing links. It discovers its own candidates: the platform has no
+// directory and its sitemap.xml carries no "/j/" URL, so Common Crawl is the only enumeration.
 //
-// It reports the employer name the site titles itself with, which is the name the board file
-// then carries. That is safe to gate on here in a way it is not on a name-less platform: the
-// title is the account's own display name, not a heading a tenant typed.
+// It reports the employer name the site titles itself with, which is safe to gate on: the title is
+// the account's own display name, not a heading a tenant typed.
 type workstreamProber struct{}
 
-// workstreamJobHost is the path prefix Workstream serves career sites under — a path, not a
-// bare host, because the marketing site owns the same domain's root.
+// workstreamJobHost is the path prefix career sites are served under (a path, not a bare host,
+// because the marketing site owns the domain's root).
 const workstreamJobHost = "www.workstream.us/j"
 
-// workstreamBoardID matches a board id: the eight lower-case hex characters a canonical career
-// site URL opens with. Common Crawl also surfaces the legacy "/j/<employer-slug>" spelling that
-// 301-redirects onto one of these; those are dropped rather than followed, because resolving
-// them costs a request each and measured live they yielded 4 boards the hex ids did not already
-// carry, against 63 redirects to chase.
+// workstreamBoardID matches a board id: the eight lower-case hex characters a canonical career site
+// URL opens with. The legacy "/j/<employer-slug>" spelling 301-redirects to one of these and is
+// dropped: resolving it costs a request each and found only 4 boards against 63 redirects.
 var workstreamBoardID = regexp.MustCompile(`^[0-9a-f]{8}$`)
 
 // workstreamPositionLink matches a posting permalink's path, mirroring the adapter's own rule
 // (internal/ingest/sources/workstream.go): "/j/<board>/<brand>/<store>/<title>-<id>".
 var workstreamPositionLink = regexp.MustCompile(`^/j/[0-9a-f]{8}/[^/]+/[^/]+/[^/]+-([0-9a-f]{8})$`)
 
-// workstreamSearchBase captures the positions-listing URL a career-site page states for itself.
-// An employer running exactly one brand redirects "/j/<board>/positions" to that brand's root,
-// which lists LOCATIONS — so the count has to come from wherever this variable points, not from
-// whatever the redirect happened to land on.
+// workstreamSearchBase captures the positions-listing URL a career-site page states for itself. A
+// single-brand employer redirects "/j/<board>/positions" to a brand root that lists LOCATIONS, so the
+// count must come from wherever this variable points.
 var workstreamSearchBase = regexp.MustCompile(`var searchBaseUrl = '([^']+)'`)
 
-// workstreamTitleSuffix is what a career site appends to the employer's name in its <title>
-// ("FineCasual Careers and Jobs"). Only its opening is matched, because the site TRUNCATES a
-// long title mid-suffix ("Good Charlie's Oyster Bar & Seafood Kitchen Careers and...") and
-// trimming the whole phrase leaves that debris in the employer name the board file then carries.
+// workstreamTitleSuffix is what a career site appends to the employer's name in its <title>. Only
+// its opening is matched, because a long title is TRUNCATED mid-suffix and trimming the whole phrase
+// would leave debris in the employer name.
 const workstreamTitleSuffix = " Careers and"
 
 // discover enumerates candidate boards from Common Crawl's index of www.workstream.us/j/*,
@@ -53,9 +46,8 @@ func (workstreamProber) discover(ctx context.Context, c httpClient) ([]string, e
 	return commonCrawlCandidates(ctx, c, workstreamJobHost+"/*", workstreamCandidate)
 }
 
-// workstreamCandidate slices a crawled career-site URL to its board id — the segment after
-// "/j/" — reporting ok=false for anything that is not one (the legacy slug spelling, the
-// "/j/share" and "/j/css" service paths, a bare "/j/").
+// workstreamCandidate slices a crawled career-site URL to its board id (the segment after "/j/"),
+// reporting ok=false for anything else (legacy slug spelling, "/j/share", "/j/css", a bare "/j/").
 func workstreamCandidate(rawURL string) (string, bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -68,10 +60,9 @@ func workstreamCandidate(rawURL string) (string, bool) {
 	return parts[1], true
 }
 
-// probe counts the postings on the board's first listing page. It is one page, not the whole
-// board: liveness is what the harvest needs and one page settles it, and paging a frontline
-// employer's whole board would spend hundreds of requests against a platform that meters by
-// rate. So the count reported is a floor, not a total.
+// probe counts the postings on the board's first listing page only: one page settles liveness, and
+// paging a whole frontline board would spend hundreds of requests on a rate-metered platform. The
+// count is a floor, not a total.
 func (workstreamProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	root, err := c.GetHTML(ctx, "https://"+workstreamJobHost+"/"+board+"/positions")
 	if err != nil {

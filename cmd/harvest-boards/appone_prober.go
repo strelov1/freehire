@@ -19,16 +19,15 @@ const (
 // by, which also names the employer — so the corroboration gate has a name to stand on.
 //
 // Its seeds may be POSTING links rather than slugs: an apply.appone.com/job/<id> URL names no
-// portal, and the only place the portal appears is the posting's own API record
-// (jobPortalUrl), so such a seed is resolved with one request before it can be a candidate at
-// all (see resolveSeed).
+// portal, which appears only in the posting's API record (jobPortalUrl), so such a seed is
+// resolved with one request first (see resolveSeed).
 type apponeProber struct{}
 
 // apponePostingPath is a posting link's path: /job/<24-hex id>.
 var apponePostingPath = regexp.MustCompile(`^/job/([0-9a-f]{24})/?$`)
 
 // dedupKey folds a portal slug to lower case: the platform answers "QCRP" and "qcrp" with the
-// same portal (verified live 2026-10-20).
+// same portal.
 func (apponeProber) dedupKey(board string) string { return strings.ToLower(board) }
 
 func (apponeProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
@@ -39,9 +38,9 @@ func (apponeProber) probe(ctx context.Context, c httpClient, slug string) (strin
 		} `json:"jobPosts"`
 	}
 	if err := c.GetJSON(ctx, apponePortalAPI+url.PathEscape(slug), &resp); err != nil {
-		// An unknown portal is a 404 and simply not a board. Anything else — the platform's
-		// edge answers a stray 403 to a share of requests (see sources/appone.go) — is
-		// surfaced, so a refused probe is counted rather than mistaken for a dead board.
+		// An unknown portal is a 404 and simply not a board. Anything else (the platform's edge
+		// answers a stray 403 to some requests, see sources/appone.go) is surfaced, so a refused
+		// probe is counted rather than mistaken for a dead board.
 		if boardGone(err) {
 			return "", 0, nil
 		}
@@ -52,10 +51,9 @@ func (apponeProber) probe(ctx context.Context, c httpClient, slug string) (strin
 
 // resolveSeed turns a seed token into a portal slug. A posting link costs one request for the
 // portal its record names; a portal link is read offline; a bare token is taken as a slug. It
-// returns "" for a token that names no portal — a closed posting (404), a posting published
-// without a portal (jobPortalUrl empty, 2 of 40 sampled), or a URL on any other host, which
-// includes the legacy AppOne product's MainInfoReq.asp links: they carry a search-screen id no
-// public listing is keyed by.
+// returns "" for a token that names no portal: a closed posting (404), a posting published
+// without a portal (jobPortalUrl empty), or a URL on any other host, including the legacy
+// MainInfoReq.asp links, whose search-screen id no public listing is keyed by.
 func (apponeProber) resolveSeed(ctx context.Context, c httpClient, token string) (string, error) {
 	token = strings.TrimSpace(token)
 	u, err := url.Parse(token)

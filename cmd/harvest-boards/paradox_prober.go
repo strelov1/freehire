@@ -7,15 +7,12 @@ import (
 )
 
 // paradoxProber validates a Paradox board ("<host>/<site>") by asking the site's public job
-// list how many postings it has. It mirrors the listing request of
-// internal/ingest/sources/paradox.go, which is unexported (this tool lives outside that
-// package), and costs one request per candidate: total_jobs counts the whole site whatever
-// the page size, so a one-row page settles liveness, where the adapter fallback would hydrate
-// every posting.
-//
-// It reports no employer name, so the seed's own supplies it. The platform's own name is the
-// BRAND ("Burger King", "Wingstop"), while a site usually belongs to one franchisee ("Vibe
-// Restaurants" runs Wingstop161), so wiring it in would reject live boards on the name gate.
+// list how many postings it has, one request per candidate. It mirrors the listing request of
+// internal/ingest/sources/paradox.go, which is unexported. total_jobs counts the whole site
+// whatever the page size, so a one-row page settles liveness, where the adapter fallback would
+// hydrate every posting. It reports no employer name: the platform's is the BRAND ("Wingstop")
+// while a site usually belongs to one franchisee, so using it would reject live boards on the
+// name gate; the seed's supplies it.
 type paradoxProber struct{}
 
 func (paradoxProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {

@@ -31,9 +31,9 @@ type assigned struct {
 	fuaID int // noFUA when the place lies in no FUA
 }
 
-// noFUA marks a place that lies in no functional urban area. Such places are still
-// written: the loader needs them to see that a bare name is shared with a place in
-// no metro ("Jackson" is Jackson MS, in no FUA, as well as Jackson NJ, in one).
+// noFUA marks a place in no functional urban area. Such places are still written: the loader
+// needs them to see that a bare name is shared with a place in no metro ("Jackson" is Jackson
+// MS, in no FUA, as well as Jackson NJ).
 const noFUA = -1
 
 // assign returns, for each place, the FUA of ITS country containing it (FUAs are

@@ -11,13 +11,12 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// talentstormProber validates a talentstorm career site (the <board> of advades.talentstorm.de)
-// by reading the offer list the adapter reads, which carries every published offer. It mirrors
-// internal/ingest/sources/talentstorm.go, which is unexported. The API names no company; the
-// employer is the label of the workplace an offer marks as headquarters (advades GmbH), which
-// 2026-10-25's sites mostly carry. The API answers an unknown label 401, the same as a request
-// naming no Origin, so a 401 is surfaced as a probe failure rather than skipped: a run where the
-// API stopped honouring the Origin would otherwise read as every candidate being absent.
+// talentstormProber validates a talentstorm career site (the <board> of advades.talentstorm.de) by
+// reading the offer list the adapter reads, which carries every published offer. It mirrors the
+// unexported internal/ingest/sources/talentstorm.go. The API names no company; the employer is the
+// label of the workplace an offer marks as headquarters. An unknown label answers 401, the same as a
+// request with no Origin, so a 401 is surfaced as a probe failure: otherwise an API that stopped
+// honouring Origin would read as every candidate being absent.
 type talentstormProber struct{}
 
 var talentstormBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

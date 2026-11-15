@@ -3,9 +3,7 @@
 // cal-sync and gmail-sync.
 //
 // It stores only bounds: no title, no attendee, no identifier. The slot engine
-// (internal/engage/mentorship) already reads this table when it builds a mentor's
-// offerable slots — it has since migration 0145 — and this worker is the sync that table
-// was always waiting on.
+// (internal/engage/mentorship) reads this table when it builds a mentor's offerable slots.
 //
 // Gated on config: without the Google OAuth client and GMAIL_TOKEN_KEY it exits cleanly,
 // and with them it still does nothing until a mentor grants busy-sync's own consent. Best
@@ -49,9 +47,8 @@ func run() int {
 	store := busysync.NewDBStore(db.New(pool), pool)
 
 	if err := busysync.NewWorker(store, cipher, busysync.ReaderFactoryFor(connector)).RunOnce(ctx); err != nil {
-		// Not a fatal error in the sense of "nothing worked" — RunOnce is best-effort per
-		// mentor and reports how many failed. Exiting non-zero is how cron learns: a run
-		// that swallowed a revoked grant looks exactly like a run with nothing to do.
+		// RunOnce is best-effort per mentor and reports how many failed. Exit non-zero so cron
+		// learns: a run that swallowed a revoked grant looks like one with nothing to do.
 		log.Printf("mentor-busy-sync: %v", err)
 		return 1
 	}

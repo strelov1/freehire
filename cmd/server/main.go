@@ -123,22 +123,14 @@ func runServer(cfg config.Settings) error {
 		AppName:      "hire",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
-		// Buffer for reading the request head (request line + all headers). Fiber's
-		// 4KB default is too small for our largest legitimate GET: a filter feed
-		// carrying dozens of facets (a "use my whole profile" search is 70+ skills)
-		// puts a ~1.3KB query string in BOTH the request line AND the same-page
-		// Referer, and on top of that ride the auth cookie and Chrome's sec-ch-ua
-		// client hints — together over 4KB, so fasthttp rejected the request with a
-		// 431 before it ever reached a handler (the feed then showed "Failed to load
-		// jobs"). 16KB comfortably fits even an unusually broad filter set.
+		// Buffer for the request head. Fiber's 4KB default is too small for our largest legitimate GET:
+		// a broad filter feed puts a ~1.3KB query in both the request line and the Referer, plus the
+		// auth cookie and client hints, and fasthttp rejected it with 431. 16KB fits.
 		ReadBufferSize: 16 * 1024,
-		// Cap request bodies at 8MB: résumé PDF uploads are the largest write (design-heavy
-		// CVs run past 1MB), and Fiber's BodyLimit is global — there is no per-route limit —
-		// so this ceiling applies to every endpoint. Keep it as tight as the résumé path
-		// allows to bound a memory-amplification body. The web client rejects oversize
-		// résumés up front so users get a clear message instead of a raw 413. Seam: if the
-		// broad ceiling ever matters, add a Content-Length guard middleware on the non-upload
-		// routes rather than lowering this.
+		// Cap request bodies at 8MB: CV PDF uploads are the largest write (design-heavy ones pass 1MB)
+		// and Fiber's BodyLimit is global, so this ceiling applies to every endpoint. The web client
+		// rejects oversize CVs up front. Seam: if the broad ceiling ever matters, add a Content-Length
+		// guard on the non-upload routes rather than lowering this.
 		BodyLimit: 8 * 1024 * 1024,
 		// Wrapped so an error-derived response is counted with the status actually sent:
 		// Fiber renders errors here, after the middleware chain has unwound, so the counter
@@ -156,28 +148,20 @@ func runServer(cfg config.Settings) error {
 	app.Use(observability.HTTPMetrics())
 	app.Use(observability.RequestIDs())
 
-	// Report the panic while its stack is available and mark it so RenderError
-	// cannot report it a second time. The callback preserves the no-stderr-stack
-	// behavior.
+	// Report the panic while its stack is available and mark it so RenderError cannot report it a
+	// second time. The callback preserves the no-stderr-stack behavior.
 	app.Use(recovermiddleware.New(recovermiddleware.Config{
 		EnableStackTrace:  true,
 		StackTraceHandler: handler.ReportPanic,
 	}))
-	// The request log goes to journald and on into /var/log/syslog, never to a terminal, so
-	// Fiber's default colours are ANSI escapes written into a file nobody reads in a terminal.
-	// They were ~28% of syslog's lines on prod, where the API's per-request log is ~71% of a
-	// file that reaches 3.9 GB a week — on a host whose facet reindex refuses to run below a
-	// 70 GiB free-space floor it clears by about 1 GiB. They also make the log ungreppable.
+	// The request log goes to journald and syslog, never a terminal, so Fiber's default ANSI
+	// colours are noise in a file and make it ungreppable.
 	app.Use(logger.New(logger.Config{DisableColors: true,
 		Format: "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error} | request_id=${locals:diagnostics.request_id}\n",
 	}))
 
-	// Search is optional: without a Meilisearch key the client stays nil and the
-	// search endpoint reports 503, leaving the rest of the API fully functional. No
-	// WithEmbed* options: the HTTP server's search client only ever runs plain
-	// keyword/facet queries — nothing reachable from it embeds via TEI (the CV-embedding
-	// write path and the Meili semantic index it fed were both removed, see
-	// openspec/changes/drop-hybrid-search-pgvector-similar).
+	// Search is optional: without a Meilisearch key the client stays nil and the search endpoint
+	// reports 503. No WithEmbed* options: this server only runs plain keyword/facet queries.
 	var searchClient *search.Client
 	// suggestSvc answers the search box's completions. It carries an in-process
 	// recognition set — the phrases a visitor may have already typed — which is why it
@@ -236,12 +220,8 @@ func runServer(cfg config.Settings) error {
 	}
 	defer assistantFlush()
 
-	// The AI filter runs on its own model too, for the opposite reason to the
-	// assistant's: the task is trivial — sort one sentence into named fields — but a
-	// person is watching a spinner while it happens, so latency is the whole quality
-	// bar. Measured against this gateway on the real prompt and schema, a small fast
-	// model answers in ~2.3s where the shared one takes ~4s and spikes, at the same
-	// accuracy. Unset falls back to LLM_MODEL.
+	// The AI filter runs on its own small, fast model: the task is trivial and a person is watching
+	// a spinner, so latency is the quality bar. Unset falls back to LLM_MODEL.
 	intentLLM, intentFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.SearchIntentModel, cfg.Model)), "search-intent")
 	if err != nil {
 		return fmt.Errorf("llm (search intent): %w", err)
@@ -265,25 +245,18 @@ func runServer(cfg config.Settings) error {
 	}
 	defer supportFlush()
 
-	// Dictation runs on the same gateway and the same key as the two clients above —
-	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
-	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
-	// when the gateway is unset, which the composer reads as "no microphone here".
+	// Dictation uses the same gateway and key (/audio/transcriptions). Nil when the gateway is
+	// unset, which the composer reads as "no microphone here".
 	speechClient := speech.New(cfg.BaseURL, cfg.APIKey, cfg.STTModel)
 
-	// Voice mode's Realtime credential rides the same gateway and key as the clients
-	// above — the litellm proxy already fronts OpenAI's /v1/realtime/client_secrets
-	// the same way it fronts /audio/transcriptions, so nothing new to configure here
-	// either. Nil when the gateway or REALTIME_MODEL is unset, which the interview
-	// session view reads as "no voice mode here".
+	// Voice mode's Realtime credential rides the same gateway and key (litellm fronts
+	// /v1/realtime/client_secrets). Nil when the gateway or REALTIME_MODEL is unset, which the
+	// interview session view reads as "no voice mode here".
 	realtimeClient := realtime.New(cfg.BaseURL, cfg.APIKey, cfg.RealtimeModel)
 
-	// The gateway's administrative API, which mints the per-user credential each
-	// account's model calls are spent under. Nil when unconfigured, and that is an
-	// ordinary deployment rather than a degraded one: every call then goes out on
-	// LLM_API_KEY exactly as it did before this existed. It is deliberately a separate
-	// endpoint and credential from inference — administration is served under /api, and
-	// the administrator that mints keys has no business on a chat request.
+	// The gateway's administrative API, which mints the per-user credential each account's model
+	// calls are spent under. Nil when unconfigured, an ordinary deployment: every call then goes
+	// out on LLM_API_KEY. A separate endpoint and credential from inference on purpose.
 	llmKeys := llmkey.New(llmkey.Config{
 		BaseURL:       cfg.LLMAdminURL,
 		AdminUsername: cfg.LLMAdminUsername,
@@ -332,18 +305,15 @@ func runServer(cfg config.Settings) error {
 	// than inline in the handler registration.
 	planConfig := plan.ConfigFromEnv()
 
-	// The homepage's live "recently added jobs" feed: an in-process poller drains
-	// recent_feed_outbox (populated by cmd/ingest) and publishes grouped entries to
-	// a Broadcaster the SSE handler subscribes to. Always on — unlike Search/Blob/LLM
-	// above, it needs no external credential, just the pool every other route already
-	// has. See openspec/changes/add-homepage-recent-jobs-feed.
+	// The homepage's live recently-added feed: an in-process poller drains recent_feed_outbox
+	// (filled by cmd/ingest) into a Broadcaster the SSE handler subscribes to. Always on; it needs
+	// no external credential.
 	recentFeedBroadcaster := recentfeed.NewBroadcaster(recentFeedRingBufferSize)
 	recentFeedPoller := recentfeed.NewPoller(db.New(pool), recentFeedBroadcaster, recentFeedBatchSize)
 	go recentFeedPoller.Run(ctx, recentFeedPollInterval)
 
-	// The public /embeddings page: samples semantic_outbox's claimable depth (a 4.5ms
-	// index read) and combines it with the coverage snapshot cmd/rollup-stats
-	// publishes. See openspec/changes/embedding-progress-page.
+	// The public /embeddings page: samples semantic_outbox's claimable depth and combines it with
+	// the coverage snapshot cmd/rollup-stats publishes.
 	embedProgress := embedprogress.NewSampler(db.New(pool), cache.NewRedisCache(redisClient), time.Now)
 	go embedProgress.Run(ctx, embedprogress.SampleInterval)
 
@@ -435,9 +405,7 @@ func runServer(cfg config.Settings) error {
 		EmbedProgress:  embedProgress,
 	})
 
-	// Site-status daily history sampler: no MeiliKey-style gate, since it has no
-	// external dependency to gate on (only the database, which is already
-	// required for the server to run at all).
+	// Site-status daily history sampler: needs only the database, so no gate.
 	handler.StartSiteStatusSampler(ctx, pool, db.New(pool), siteStatusSampleInterval)
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.
@@ -446,9 +414,8 @@ func runServer(cfg config.Settings) error {
 	go func() { serveErr <- app.Listen(":" + cfg.Port) }()
 	log.Printf("hire listening on :%s", cfg.Port)
 
-	// Registered here rather than beside the pool's creation because the collector reads
-	// the pool at SCRAPE time: registering it means the /metrics listener below can answer
-	// with the pool's occupancy as of the request, with no sampling goroutine in between.
+	// Registered here because the collector reads the pool at scrape time, so /metrics reports the
+	// pool's occupancy as of the request with no sampling goroutine.
 	prometheus.MustRegister(observability.NewPoolCollector(pool))
 
 	observability.StartMetricsServer(cfg.MetricsPort)
@@ -483,12 +450,9 @@ func runServer(cfg config.Settings) error {
 }
 
 // buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.
-//
-// It returns the INTERFACE, not *discordlink.Service, and that is load-bearing: a nil
-// *Service placed in an interface field is not a nil interface, so the handler's
-// "unconfigured means unmounted" check would read false and the routes would mount onto a
-// service that panics on first use. That is the whole reason this wrapper exists rather than
-// the caller assigning the constructor's result straight into the field.
+// It returns the INTERFACE, not *discordlink.Service: a nil *Service in an interface field is
+// not a nil interface, so the handler's "unconfigured means unmounted" check would mount the
+// routes onto a service that panics on first use.
 func buildDiscordLinker(cfg config.Settings, pool *pgxpool.Pool) handler.DiscordLinker {
 	svc, ok := discordlink.NewFromSettings(cfg, db.New(pool))
 	if !ok {
@@ -514,63 +478,41 @@ func buildGmail(cfg config.Settings) (*gmailsync.Connector, *tokencrypt.Cipher) 
 	return gmailsync.NewConnector(g.ClientID, g.ClientSecret, cfg.FrontendOrigin), cipher
 }
 
-// recentFeedRingBufferSize bounds how many entries a new SSE connection to the
-// homepage's live feed replays as backlog. Small on purpose — it exists so a
-// connection never starts on a visibly empty feed, not to be a scrollable history.
+// recentFeedRingBufferSize bounds the backlog a new SSE connection to the homepage feed
+// replays, so it never starts on a visibly empty feed.
 const recentFeedRingBufferSize = 15
 
-// recentFeedPollInterval is how often the poller drains recent_feed_outbox. A
-// few seconds of latency is an accepted trade for reusing the outbox+poll
-// pattern instead of Postgres LISTEN/NOTIFY or Redis pub/sub — see
-// openspec/changes/add-homepage-recent-jobs-feed/design.md.
+// recentFeedPollInterval is how often the poller drains recent_feed_outbox. A few seconds of
+// latency is accepted over Postgres LISTEN/NOTIFY or Redis pub/sub.
 const recentFeedPollInterval = 10 * time.Second
 
-// recentFeedBatchSize caps one poll tick's claim, so a large burst (e.g. an
-// INGEST_REFETCH_ALL=1 repair run) degrades to "the feed is a tick behind"
-// rather than one tick doing unbounded work.
+// recentFeedBatchSize caps one poll tick's claim, so a burst (e.g. INGEST_REFETCH_ALL=1) leaves
+// the feed a tick behind instead of doing unbounded work.
 const recentFeedBatchSize = 500
 
-// apiStatementTimeout is how long Postgres lets one query on the API server's pool run
-// before cancelling it. The backstop under every handler, for the endpoint whose cost
-// nobody anticipated; the per-endpoint bounds (the pagination window, the limit ceilings)
-// are what should be doing the work, and this is what catches the next one they miss.
-//
-// 30s is chosen from both sides. It is far past what any request path measures — the
-// slowest ordinary queries on this catalogue are the unfiltered company list and the
-// job-facet rollups, seconds at worst on a cold cache — and far short of the minutes a
-// single deep-offset walk held a connection on 2026-09-14, which is the shape it exists to
-// cut. A request cut here answers an error, which is the honest outcome: the alternative is
-// the connection staying held while every other caller queues behind it.
-//
-// The LLM-backed routes are not affected. They spend their time in the model, not in a
-// query; what bounds them is their own per-call timeout beside this one.
+// apiStatementTimeout is how long Postgres lets one query on the API server's pool run before
+// cancelling it. It is the backstop for endpoints whose cost nobody anticipated; the
+// per-endpoint bounds (pagination window, limit ceilings) should do the real work. A cut
+// request answers an error rather than holding a connection while other callers queue.
+// LLM-backed routes are bounded by their own per-call timeout instead.
 const apiStatementTimeout = 30 * time.Second
 
-// siteStatusSampleInterval is how often the /status page's daily history
-// sampler (handler.StartSiteStatusSampler) records the site's current
-// status. Independent of siteErrorWindow's 10-minute rolling window
-// (internal/api/handler): sampling more often than the window changes lets
-// a brief spike inside one window get caught by more than one sample.
+// siteStatusSampleInterval is how often the /status page's daily history sampler
+// (handler.StartSiteStatusSampler) records the site's current status.
 const siteStatusSampleInterval = 5 * time.Minute
 
-// suggestRefreshInterval is how often the completion service reloads the phrases it
-// recognises. The dictionary behind it is rebuilt once a day by
-// cmd/build-suggestions, so this only has to be shorter than that — and a phrase the
-// process has not learned yet is not an error: it simply falls into the fragment,
-// where the index completes it. That is the whole reason a ticker is enough and a
-// build notification is not worth its plumbing.
+// suggestRefreshInterval is how often the completion service reloads the phrases it recognises.
+// cmd/build-suggestions rebuilds the dictionary daily, so this only has to be shorter; a phrase
+// not yet learned falls into the fragment, where the index completes it.
 const suggestRefreshInterval = time.Hour
 
 // apiUsageFlushInterval is how often buffered API request counts are written, and so how
 // many a crash can lose.
 const apiUsageFlushInterval = time.Minute
 
-// startSuggestRefresh keeps the recognition set current in the background.
-//
-// The first load runs inline-ish (in the goroutine, immediately) rather than blocking
-// boot: an unreachable or not-yet-built dictionary must not stop the server from
-// serving everything else. Until it lands, nothing is recognised and every query is
-// one fragment — which is the plain completion behaviour, not a failure.
+// startSuggestRefresh keeps the recognition set current in the background. The first load
+// runs in the goroutine so an unreachable or not-yet-built dictionary never blocks boot; until
+// it lands every query is one fragment (plain completion).
 func startSuggestRefresh(ctx context.Context, svc *suggest.Service) {
 	go func() {
 		t := time.NewTicker(suggestRefreshInterval)
