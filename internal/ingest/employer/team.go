@@ -87,7 +87,8 @@ type TeamRepository interface {
 	// returns ErrTooManyInvitations when a new address would pass maxLive open ones.
 	Invite(ctx context.Context, inv NewInvitation, maxLive int64) (Invitation, error)
 	// Withdraw deletes one of the company's invitations; ErrInvitationNotFound otherwise.
-	Withdraw(ctx context.Context, companySlug string, id int64) error
+	// ErrNotFound when actorID no longer acts for the company, checked under its lock.
+	Withdraw(ctx context.Context, companySlug string, actorID, id int64) error
 	// WithdrawToken deletes the invitation only while it still carries tokenHash.
 	WithdrawToken(ctx context.Context, companySlug string, tokenHash []byte) error
 	// Preview reads the invitation a token hash names; ErrInvitationInvalid when none, or
@@ -99,7 +100,9 @@ type TeamRepository interface {
 	Accept(ctx context.Context, userID int64, tokenHash []byte) error
 	// Remove takes a member out of the company's team and hands the vacancies they
 	// published to the claimant; ErrMemberNotFound when they are not a member of it.
-	Remove(ctx context.Context, companySlug string, memberID int64) error
+	// ErrNotFound when actorID no longer acts for the company, checked under its lock, so a
+	// request queued by a member removed meanwhile changes nothing.
+	Remove(ctx context.Context, companySlug string, actorID, memberID int64) error
 }
 
 // InviteMailer delivers a team invitation. A port like ClaimMailer, exported for the same
@@ -206,7 +209,7 @@ func (s *Service) WithdrawInvitation(ctx context.Context, userID, id int64) erro
 	if err != nil {
 		return err
 	}
-	return s.team.Withdraw(ctx, acc.CompanySlug, id)
+	return s.team.Withdraw(ctx, acc.CompanySlug, userID, id)
 }
 
 // PreviewInvitation says which company a link invites to and at which address, for the
@@ -253,7 +256,7 @@ func (s *Service) RemoveMember(ctx context.Context, userID, memberID int64) erro
 	if memberID == acc.UserID {
 		return fmt.Errorf("%w: the account holder cannot be removed from the team", ErrInvalid)
 	}
-	return s.team.Remove(ctx, acc.CompanySlug, memberID)
+	return s.team.Remove(ctx, acc.CompanySlug, userID, memberID)
 }
 
 // newInvitationToken mints a 256-bit link token and the hash stored for it.

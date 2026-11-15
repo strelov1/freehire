@@ -158,9 +158,10 @@ for the full design record.
   never told. The joiner may accept under any freehire account — their sign-in address does
   not matter, the invited one is what they act under.
 - **Every change to a team runs under the company's lock** (`LockEmployerCompany`, a
-  transaction advisory lock): an invitation (which also rechecks, under the lock, that the
-  inviter still acts for the company), an acceptance (after the joiner's actor lock — always
-  that order) and a removal. So the 20-invitation cap cannot be passed by two invitations at
+  transaction advisory lock): an invitation, a withdrawal and a removal (each rechecking,
+  under the lock, that its actor still acts for the company — `asCompanyActor` — so a request
+  a removed member queued changes nothing), and an acceptance (after the joiner's actor
+  lock — always that order). So the 20-invitation cap cannot be passed by two invitations at
   once, and a member being removed cannot slip an invitation in after the removal withdrew
   theirs. Renewing an invitation bypasses the cap only while it is still live; reviving an
   expired one needs a free slot. A failed letter withdraws its invitation by token

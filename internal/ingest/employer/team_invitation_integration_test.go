@@ -84,11 +84,11 @@ func TestTeam_InvitationCapAndResend(t *testing.T) {
 	if err != nil || len(invs) != 2 {
 		t.Fatalf("Invitations = %+v, %v", invs, err)
 	}
-	if err := f.repo.Withdraw(ctx, "acme", invs[0].ID); err != nil {
+	if err := f.repo.Withdraw(ctx, "acme", f.holder, invs[0].ID); err != nil {
 		t.Errorf("Withdraw: %v", err)
 	}
-	if err := f.repo.Withdraw(ctx, "globex", invs[1].ID); !errors.Is(err, employer.ErrInvitationNotFound) {
-		t.Errorf("another company's Withdraw err = %v, want ErrInvitationNotFound", err)
+	if err := f.repo.Withdraw(ctx, "globex", f.holder, invs[1].ID); !errors.Is(err, employer.ErrNotFound) {
+		t.Errorf("a Withdraw for a company the caller does not act for err = %v, want ErrNotFound", err)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestTeam_RemovalWithdrawsTheMembersInvitations(t *testing.T) {
 	}, 20); err != nil {
 		t.Fatalf("member's Invite: %v", err)
 	}
-	if err := f.repo.Remove(ctx, "acme", member); err != nil {
+	if err := f.repo.Remove(ctx, "acme", f.holder, member); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 	if err := f.repo.Accept(ctx, member, h[:]); !errors.Is(err, employer.ErrInvitationInvalid) {
@@ -141,7 +141,7 @@ func TestTeam_ReviewFixes(t *testing.T) {
 		}
 	})
 
-	t.Run("a removed member can no longer invite", func(t *testing.T) {
+	t.Run("a removed member can no longer invite, withdraw or remove", func(t *testing.T) {
 		member := seedUser(t, f.pool, "m.personal@example.test")
 		if err := inv("m@acme.test", h("m"), f.holder, until, 20); err != nil {
 			t.Fatalf("Invite m: %v", err)
@@ -149,11 +149,33 @@ func TestTeam_ReviewFixes(t *testing.T) {
 		if err := f.repo.Accept(ctx, member, h("m")); err != nil {
 			t.Fatalf("Accept: %v", err)
 		}
-		if err := f.repo.Remove(ctx, "acme", member); err != nil {
+		if err := f.repo.Remove(ctx, "acme", f.holder, member); err != nil {
 			t.Fatalf("Remove: %v", err)
 		}
 		if err := inv("me-again@acme.test", h("me-again"), member, until, 20); !errors.Is(err, employer.ErrNotFound) {
 			t.Errorf("Invite by a removed member err = %v, want ErrNotFound", err)
+		}
+		// A request the member queued before their removal, carried out after it, changes
+		// nothing: the actor is rechecked under the company's lock.
+		colleague := seedUser(t, f.pool, "c.personal@example.test")
+		if err := inv("c@acme.test", h("c"), f.holder, until, 20); err != nil {
+			t.Fatalf("Invite c: %v", err)
+		}
+		if err := f.repo.Accept(ctx, colleague, h("c")); err != nil {
+			t.Fatalf("Accept c: %v", err)
+		}
+		if err := f.repo.Remove(ctx, "acme", member, colleague); !errors.Is(err, employer.ErrNotFound) {
+			t.Errorf("Remove by a removed member err = %v, want ErrNotFound", err)
+		}
+		if _, err := f.repo.GetByUserID(ctx, colleague); err != nil {
+			t.Errorf("the colleague after a removed member's Remove: %v, want still a member", err)
+		}
+		invs, err := f.repo.Invitations(ctx, "acme")
+		if err != nil || len(invs) == 0 {
+			t.Fatalf("Invitations = %v, %v", invs, err)
+		}
+		if err := f.repo.Withdraw(ctx, "acme", member, invs[0].ID); !errors.Is(err, employer.ErrNotFound) {
+			t.Errorf("Withdraw by a removed member err = %v, want ErrNotFound", err)
 		}
 	})
 
@@ -231,7 +253,7 @@ func TestTeam_AnInvitationMakesAMember(t *testing.T) {
 	}
 
 	// Removing the member hands their vacancy to the holder.
-	if err := f.repo.Remove(ctx, "acme", member); err != nil {
+	if err := f.repo.Remove(ctx, "acme", f.holder, member); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 	var createdBy int64
@@ -241,7 +263,7 @@ func TestTeam_AnInvitationMakesAMember(t *testing.T) {
 	if _, err := f.repo.GetByUserID(ctx, member); !errors.Is(err, employer.ErrNotFound) {
 		t.Errorf("removed member's account err = %v, want ErrNotFound", err)
 	}
-	if err := f.repo.Remove(ctx, "acme", f.holder); !errors.Is(err, employer.ErrMemberNotFound) {
+	if err := f.repo.Remove(ctx, "acme", f.holder, f.holder); !errors.Is(err, employer.ErrMemberNotFound) {
 		t.Errorf("removing the holder err = %v, want ErrMemberNotFound", err)
 	}
 }

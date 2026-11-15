@@ -45,14 +45,7 @@ func (r *QueriesRepository) Invitations(ctx context.Context, companySlug string)
 // ErrNotFound when the inviter no longer acts for it.
 func (r *QueriesRepository) Invite(ctx context.Context, inv NewInvitation, maxLive int64) (Invitation, error) {
 	var out Invitation
-	err := r.asCompany(ctx, inv.CompanySlug, func(q *db.Queries) error {
-		acts, err := q.IsCompanyActor(ctx, db.IsCompanyActorParams{CompanySlug: inv.CompanySlug, UserID: inv.InvitedBy})
-		if err != nil {
-			return err
-		}
-		if !acts {
-			return ErrNotFound
-		}
+	err := r.asCompanyActor(ctx, inv.CompanySlug, inv.InvitedBy, func(q *db.Queries) error {
 		row, err := q.UpsertCompanyInvitation(ctx, db.UpsertCompanyInvitationParams{
 			CompanySlug: inv.CompanySlug,
 			Email:       inv.Email,
@@ -97,16 +90,35 @@ func (r *QueriesRepository) asCompany(ctx context.Context, companySlug string, f
 	return tx.Commit(ctx)
 }
 
-// Withdraw deletes one of a company's invitations.
-func (r *QueriesRepository) Withdraw(ctx context.Context, companySlug string, id int64) error {
-	n, err := r.q.DeleteCompanyInvitation(ctx, db.DeleteCompanyInvitationParams{ID: id, CompanySlug: companySlug})
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrInvitationNotFound
-	}
-	return nil
+// asCompanyActor is asCompany for a change made by actorID: under the lock it first checks
+// that actorID still acts for the company (ErrNotFound otherwise), so a removal that
+// committed first is seen.
+func (r *QueriesRepository) asCompanyActor(ctx context.Context, companySlug string, actorID int64, fn func(q *db.Queries) error) error {
+	return r.asCompany(ctx, companySlug, func(q *db.Queries) error {
+		acts, err := q.IsCompanyActor(ctx, db.IsCompanyActorParams{CompanySlug: companySlug, UserID: actorID})
+		if err != nil {
+			return err
+		}
+		if !acts {
+			return ErrNotFound
+		}
+		return fn(q)
+	})
+}
+
+// Withdraw deletes one of a company's invitations, under the company's lock and only while
+// actorID still acts for it.
+func (r *QueriesRepository) Withdraw(ctx context.Context, companySlug string, actorID, id int64) error {
+	return r.asCompanyActor(ctx, companySlug, actorID, func(q *db.Queries) error {
+		n, err := q.DeleteCompanyInvitation(ctx, db.DeleteCompanyInvitationParams{ID: id, CompanySlug: companySlug})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrInvitationNotFound
+		}
+		return nil
+	})
 }
 
 // Preview reads the live invitation a token names.
@@ -146,9 +158,11 @@ func (r *QueriesRepository) Accept(ctx context.Context, userID int64, tokenHash 
 }
 
 // Remove takes a member out of a company's team, handing their vacancies to the claimant and
-// withdrawing their invitations, under the company's team lock.
-func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, memberID int64) error {
-	return r.asCompany(ctx, companySlug, func(q *db.Queries) error {
+// withdrawing their invitations, under the company's team lock and only while actorID still
+// acts for the company — a removal of actorID that committed first leaves their queued
+// requests changing nothing.
+func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, actorID, memberID int64) error {
+	return r.asCompanyActor(ctx, companySlug, actorID, func(q *db.Queries) error {
 		n, err := q.RemoveCompanyMember(ctx, db.RemoveCompanyMemberParams{MemberID: memberID, CompanySlug: companySlug})
 		if err != nil {
 			return err

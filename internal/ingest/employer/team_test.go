@@ -56,7 +56,7 @@ func (f *fakeTeam) Invite(_ context.Context, inv NewInvitation, maxLive int64) (
 	return Invitation{ID: f.nextID, Email: inv.Email, ExpiresAt: inv.ExpiresAt}, nil
 }
 
-func (f *fakeTeam) Withdraw(_ context.Context, _ string, id int64) error {
+func (f *fakeTeam) Withdraw(_ context.Context, _ string, _, id int64) error {
 	for h, i := range f.ids {
 		if i == id {
 			delete(f.invitations, h)
@@ -92,7 +92,7 @@ func (f *fakeTeam) Accept(_ context.Context, userID int64, hash []byte) error {
 	return nil
 }
 
-func (f *fakeTeam) Remove(_ context.Context, _ string, memberID int64) error {
+func (f *fakeTeam) Remove(_ context.Context, _ string, _, memberID int64) error {
 	for i, m := range f.members {
 		if m.UserID == memberID && !m.Holder {
 			f.members = append(f.members[:i], f.members[i+1:]...)
