@@ -10,18 +10,12 @@ import {
   canonicalQuery,
   savedSearchQuery,
   queryNarrows,
-  signOf,
-  facetSetSign,
-  facetCycle,
-  facetPick,
-  facetToggleSign,
-  facetAdd,
-  facetRemove,
   appliesWorkModeRemoteAnywhere,
   workModeRemoteLabel,
   type FacetState,
   type JobFilters,
 } from './facetModel';
+import { signOf, facetSetSign, facetCycle, facetPick, facetToggleSign, facetAdd, facetRemove } from './facetSign';
 import { withQuery, withSkills } from './facetModelTestUtils';
 import { must } from './utils';
 

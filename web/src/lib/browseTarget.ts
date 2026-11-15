@@ -13,7 +13,8 @@
 // this half is testable without a SvelteKit runtime.
 
 import type { ApplyPlan } from './apiSuggestions';
-import { emptyFacet, emptyFilters, facetSetSign, filtersToParams } from './facetModel';
+import { emptyFacet, emptyFilters, filtersToParams } from './facetModel';
+import { facetSetSign } from './facetSign';
 import type { Suggestion } from './suggestions';
 
 /** The feed query string a pick opens, or '' when the pick named nothing.

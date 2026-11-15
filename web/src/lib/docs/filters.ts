@@ -12,7 +12,8 @@
 // FILTER_MODIFIERS rather than per row (the per-facet AND/OR toggle in facets.ts
 // is a SPA UI choice, not an API limit).
 
-import { COMPANY_FACETS, FACETS } from '../facets';
+import { FACETS } from '../facets';
+import { COMPANY_FACETS } from '../directoryFacets';
 
 /** One documented filter parameter. */
 export interface FilterRow {

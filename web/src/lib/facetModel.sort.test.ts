@@ -1,16 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  emptyFilters,
-  filtersToParams,
-  filtersFromParams,
-  activeFilterCount,
-  savedSearchQuery,
-  defaultSortFor,
-  effectiveSort,
-  matchSortNeedsSkills,
-  sortOptionsFor,
-  selectedSortFor,
-} from './facetModel';
+import { emptyFilters, filtersToParams, filtersFromParams, activeFilterCount, savedSearchQuery } from './facetModel';
+import { defaultSortFor, effectiveSort, matchSortNeedsSkills, sortOptionsFor, selectedSortFor } from './jobSort';
 import { withQuery, withSkills } from './facetModelTestUtils';
 import { must } from './utils';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMPANY_FACETS } from './facets';
+import { COMPANY_FACETS } from './directoryFacets';
 import { COMPANY_RAIL_GROUPS } from './filterSections';
 
 describe('company filter rail groups', () => {

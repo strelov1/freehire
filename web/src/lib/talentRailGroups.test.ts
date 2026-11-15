@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TALENT_FACETS } from './facets';
+import { TALENT_FACETS } from './directoryFacets';
 import { TALENT_RAIL_GROUPS } from './filterSections';
 import { TALENT_FACET_PARAMS } from './generated/contracts';
 

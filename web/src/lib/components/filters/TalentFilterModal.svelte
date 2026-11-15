@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
-  import { TALENT_FACETS } from '#lib/facets.js';
+  import { TALENT_FACETS } from '#lib/directoryFacets.js';
   import { railFacetSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import type { TalentFilterStore } from '#lib/talentFilters.js';
   import { YEAR_THRESHOLDS } from '#lib/talentFacetModel.js';
