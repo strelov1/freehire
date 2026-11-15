@@ -37,6 +37,7 @@ import "./plan.tsp";
 import "./direct-apply.tsp";
 import "./jobs.tsp";
 import "./change-webhooks.tsp";
+import "./catalogue.tsp";
 import "./job-wire.tsp";
 import "./companies.tsp";
 import "./search.tsp";

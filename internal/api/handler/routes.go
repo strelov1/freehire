@@ -122,6 +122,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.communityHandlers.register(api, mw, contract)
 
 	h.planHandlers.register(api, mw, contract)
+	h.catalogueHandlers.register(api, mw, contract)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	h.billingHandlers.register(api, mw, contract)
 	// Mounted whatever billing is doing: sharing an invite link is not a purchase.
