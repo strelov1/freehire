@@ -199,7 +199,9 @@
   const cvLine = $derived.by(() => {
     if (!parse) return undefined;
     if (!parse.structured_available) return 'We read your skills and level; the rest of the CV did not come through.';
-    return [parse.headline, parse.country ? countryLabel(parse.country) : ''].filter(Boolean).join(' · ') || undefined;
+    return (
+      [parse.headline, parse.country ? countryLabel(parse.country) : ''].filter(Boolean).join('\u00a0· ') || undefined
+    );
   });
 
   // ---- the questions ----
@@ -459,14 +461,25 @@
           }}
           ondrop={onDrop}
           class={[
-            'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+            'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:px-6 sm:py-10',
             dragActive ? 'border-brand bg-brand-muted' : 'border-border',
           ]}
         >
-          <p class="text-sm font-medium">Drop your CV here, or</p>
+          <p class="text-sm font-medium pointer-coarse:hidden">Drop your CV here, or</p>
           <Button variant="primary" onclick={() => fileInput?.click()}>Choose a PDF</Button>
-          <p class="text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
+          <p class="text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB}&nbsp;MB.</p>
         </div>
+        {#if dropError}
+          <div class="flex flex-col gap-2 text-sm" role="alert">
+            <p class="text-destructive">{dropError}</p>
+            {#if limited && !isAuthenticated()}
+              <p class="text-muted-foreground">Signed in, there is no daily limit — sign in and drop it again.</p>
+              <Button variant="outline" size="sm" class="self-start" href={signinUrl({ returnTo: here })}>
+                Sign in or create an account
+              </Button>
+            {/if}
+          </div>
+        {/if}
         {#if isAuthenticated()}
           <button
             type="button"
@@ -487,17 +500,6 @@
             ><!-- eslint-enable svelte/no-navigation-without-resolve -->
           </p>
         {/if}
-        {#if dropError}
-          <div class="flex flex-col gap-2 text-sm" role="alert">
-            <p class="text-destructive">{dropError}</p>
-            {#if limited && !isAuthenticated()}
-              <p class="text-muted-foreground">Signed in, there is no daily limit — sign in and drop it again.</p>
-              <Button variant="outline" size="sm" class="self-start" href={signinUrl({ returnTo: here })}>
-                Sign in or create an account
-              </Button>
-            {/if}
-          </div>
-        {/if}
       </FlowStep>
     {:else}
       <FlowStep icon={UserRound} title={cvTitle} subtitle={cvLine} state={parse ? 'done' : 'working'}>
@@ -512,7 +514,8 @@
                 <span>{companiesLine(parse.companies)}</span>
               {/if}
               {#if parse.total_years > 0}
-                {#if parse.companies.length > 0}<span aria-hidden="true">·</span>{/if}
+                <!-- Hidden on a phone, where the years wrap to their own line and the dot would trail. -->
+                {#if parse.companies.length > 0}<span class="hidden sm:inline" aria-hidden="true">·</span>{/if}
                 <span class="font-medium text-foreground"
                   >{parse.total_years} {parse.total_years === 1 ? 'year' : 'years'} of experience</span
                 >
@@ -542,7 +545,7 @@
           <FlowStep
             icon={MessageCircleQuestionMark}
             title="What you're looking for"
-            subtitle={chips.join(' · ') || 'No preferences — the whole catalogue.'}
+            subtitle={chips.join('\u00a0· ') || 'No preferences — the whole catalogue.'}
             state="done"
           >
             {#if searchError && phase === 'questions'}

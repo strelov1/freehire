@@ -22,12 +22,19 @@
   } = $props();
 </script>
 
-<section class="flex gap-4 border-t border-dashed border-border py-5 first:border-t-0 first:pt-0 last:pb-0">
-  <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-muted text-brand-strong">
-    <Icon class="size-5" />
+<!-- On a phone the icon sits beside the title only and the content takes the full width; a
+     40px column beside every step would truncate the job titles and squeeze the lists. The
+     column dissolves there (`contents`), so its header and content wrap around the icon. -->
+<section
+  class="flex flex-wrap gap-3 border-t border-dashed border-border py-5 first:border-t-0 first:pt-0 last:pb-0 sm:flex-nowrap sm:gap-4"
+>
+  <span
+    class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-muted text-brand-strong sm:size-10 sm:rounded-xl"
+  >
+    <Icon class="size-4 sm:size-5" />
   </span>
-  <div class="flex min-w-0 flex-1 flex-col gap-3">
-    <div class="flex items-start gap-3">
+  <div class="contents sm:flex sm:min-w-0 sm:flex-1 sm:flex-col sm:gap-3">
+    <div class="flex min-w-0 flex-1 items-start gap-3 sm:flex-none">
       <div class="min-w-0 flex-1">
         <h2 class="text-base font-semibold tracking-tight text-balance">{title}</h2>
         {#if subtitle}
@@ -41,6 +48,10 @@
         <LoaderCircle class="size-5 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
       {/if}
     </div>
-    {@render children?.()}
+    {#if children}
+      <div class="flex w-full min-w-0 flex-col gap-3 empty:hidden">
+        {@render children()}
+      </div>
+    {/if}
   </div>
 </section>
