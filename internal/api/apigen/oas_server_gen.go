@@ -625,6 +625,13 @@ type Handler interface {
 	//
 	// GET /auth/me
 	GetAuthMe(ctx context.Context) (*GetAuthMeOK, error)
+	// GetAutoApplyList implements getAutoApplyList operation.
+	//
+	// Lists the caller's live automatic applications and confirmed submissions from the last 30 days,
+	// newest activity first. Internal diagnostic errors are omitted.
+	//
+	// GET /me/auto-apply
+	GetAutoApplyList(ctx context.Context) (*GetAutoApplyListOK, error)
 	// GetAutofillProfile implements getAutofillProfile operation.
 	//
 	// Projected from your CV header, with the account email as a fallback — what the extension writes

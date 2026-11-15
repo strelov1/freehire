@@ -21,7 +21,7 @@ is a broken invariant, and the full touch now fails instead of silently observin
 
 Release B moves all observation writers to activity, with explicit returns that never expand the base row's legacy columns. New inserts preserve body hydration semantics. Before C, drain every process naming legacy columns and inspect private operations code, host scripts and dashboards.
 
-Release C drops the legacy bridge before dropping the three columns. Its migration runs before the code flip, so B binaries must already be compatible with the contracted schema. No shadow schema directory or bidirectional bridge is introduced. Rollback to a legacy reader requires resynchronizing its columns from activity first.
+Release C drops the legacy bridge before dropping the three columns. Its migration runs before the code flip, so B binaries must already be compatible with the contracted schema. No shadow schema directory or bidirectional bridge is introduced. After C, rollback is restricted to B-compatible binaries. Restoring a legacy binary requires a separate additive migration reintroducing and synchronizing its columns, not an ordinary color flip.
 
 ## Schema and backfill
 
@@ -60,3 +60,36 @@ The same synthetic runs added about 9–13% logical buffers to several aggregate
 Legacy observations acquire `jobs` before the bridge writes `job_activity`. Adding a foreign key directly takes the child table lock first, which can deadlock with those writers. Migration `0259_job_activity_foreign_key_lock_order.sql` sorts after the completed copy and before immutable `0260`; it takes the parent lock before adding the not-valid constraint. `0260` retains its completeness check and skips an existing constraint; `0261` performs orphan cleanup and validation. Completeness remains a gate before validation and binary cutover, even if the not-valid constraint was already created. Keep the parent lock inside the missing-constraint branch so environments that already have the FK do not block writers unnecessarily.
 
 The copied data is independently recorded before FK publication. A failed FK attempt therefore retries the remaining migrations without repeating the copy. The parent DDL lock still obeys the runner's five-second lock timeout; check conflicting maintenance before the normal release.
+
+## Contract implementation and runtime evidence
+
+The additive reader rollout and writer restoration (#4580) are deployed. The
+writer release passed its isolated +12/+25 checks against its actual preceding
+release, before a later compatible deployment. The OCR workflow timed out twice;
+those incomplete reviews are not approvals. The user merged #4580 after the other
+completed reviews and checks.
+
+A bounded natural sample observed activity timestamps advancing for 18 of 1500
+public postings while jobs xmin/xmax/ctid, content hash and activity state version
+remained unchanged for all 18. In separate pre/post traffic windows, WAL per open
+touch was 5568.4/323.1 bytes and per unchanged refresh 6265.2/420.5 bytes. These
+include different FPI/checkpoint, workload and cache conditions; they are observed
+window results, not a controlled estimate, daily savings or a speedup guarantee.
+Table HOT ratios are mixed-workload aggregates, not caller attribution.
+
+The contract migration replaces the insert function, removes the legacy bridge
+and drops the three jobs columns without rewriting the heap. It requires the
+validated activity FK and preserves existing activity values. Historical
+backfill, bridge and FK-lock-order tests restore the immutable release A trigger
+bodies in disposable test databases; current writer/fence tests use contracted
+fixtures. The generated-SQL rehearsal applies the actual cleanup file and keeps
+its exact dead-query allow-list and deliberately stale-column control.
+
+Before deployment, inspect module-aware executable revisions on both hosts,
+private operations consumers and manual SQL. Preserve provider exclusions and
+quality pauses. The resumed derive runs a B-compatible binary, but its initial
+full snapshot transaction must finish before contract DDL. Check fresh locks,
+backup/maintenance, invalid indexes, global pause and incidents through the
+normal deploy preflight; do not cancel scans or pause the fleet to force a slot.
+The newer jobs change-feed migration observes lifecycle columns only and does
+not depend on the removed activity columns.

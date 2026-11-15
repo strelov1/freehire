@@ -631,7 +631,9 @@
                               ? 'font-medium text-foreground/90'
                               : 'font-semibold text-foreground'}"
                           >
-                            {m.from_name || m.from_addr}
+                            {m.direction === 'outgoing'
+                              ? `${s.sent} · ${m.to_addrs || m.from_addr}`
+                              : m.from_name || m.from_addr}
                           </span>
                           <span class="shrink-0 text-[11px] text-muted-foreground"
                             >{timeAgo(m.received_at, locale())}</span
@@ -703,6 +705,7 @@
                         <span aria-hidden="true">·</span>
                         <span class="truncate">{msg.from_addr}</span>
                       {/if}
+                      {#if msg.direction === 'outgoing'}<span>{s.sent}</span>{/if}
                       <span class="ml-auto shrink-0">{timeAgo(msg.received_at, locale())}</span>
                     </div>
                   </div>
@@ -717,9 +720,15 @@
                   </button>
                 </div>
 
+                {#if msg.to_addrs}<div class="mt-2 break-words text-xs text-muted-foreground">
+                    {s.to}: {msg.to_addrs}
+                  </div>{/if}
+                {#if msg.cc_addrs}<div class="mt-1 break-words text-xs text-muted-foreground">
+                    {s.cc}: {msg.cc_addrs}
+                  </div>{/if}
                 {@const linkState = inboxLinkState(msg, lastUnlinked)}
                 <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                  <StatusChip signal={msg.status_signal} />
+                  {#if msg.direction !== 'outgoing'}<StatusChip signal={msg.status_signal} />{/if}
                   {#if linkState === 'linked' && msg.linked_slug}
                     <a
                       href={resolve('/my/tracking/[id]', { id: msg.linked_slug })}

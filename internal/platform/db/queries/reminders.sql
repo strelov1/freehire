@@ -12,12 +12,13 @@ SELECT * FROM notification_settings WHERE user_id = $1;
 -- the stored row.
 INSERT INTO notification_settings (
     user_id, enabled, channels, digest_frequency, digest_time, digest_interval_hours,
-    quiet_hours_start, quiet_hours_end, updated_at
+    quiet_hours_start, quiet_hours_end, inbox_digest_enabled, inbox_digest_enabled_at, updated_at
 )
 VALUES (
     sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(channels), sqlc.arg(digest_frequency),
     sqlc.arg(digest_time), sqlc.arg(digest_interval_hours), sqlc.arg(quiet_hours_start),
-    sqlc.arg(quiet_hours_end), now()
+    sqlc.arg(quiet_hours_end), sqlc.arg(inbox_digest_enabled),
+    CASE WHEN sqlc.arg(inbox_digest_enabled)::bool THEN now() ELSE NULL END, now()
 )
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
@@ -27,6 +28,9 @@ ON CONFLICT (user_id) DO UPDATE
       digest_interval_hours = EXCLUDED.digest_interval_hours,
       quiet_hours_start  = EXCLUDED.quiet_hours_start,
       quiet_hours_end    = EXCLUDED.quiet_hours_end,
+      inbox_digest_enabled_at = CASE WHEN EXCLUDED.inbox_digest_enabled AND NOT notification_settings.inbox_digest_enabled
+                                     THEN now() ELSE notification_settings.inbox_digest_enabled_at END,
+      inbox_digest_enabled = EXCLUDED.inbox_digest_enabled,
       updated_at         = now()
 RETURNING *;
 

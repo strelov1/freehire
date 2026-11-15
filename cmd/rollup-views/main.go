@@ -22,6 +22,10 @@
 // A second pass reads internal/application/agentview's day files under
 // AGENT_VIEW_LOG_DIR (postings served to agents over MCP, OJCP and the agent search)
 // and applies them to job_daily_views.agent_uniques and jobs.view_count.
+//
+// Last, with MEILI_MASTER_KEY set, it writes the new view_count of every job either pass
+// touched straight into the search index (pushViewCounts). The counter is not queued
+// for search-drain: it only backs the "Most viewed" sort.
 package main
 
 import (
@@ -46,6 +50,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 	"github.com/strelov1/freehire/internal/platform/worker"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 func main() { worker.Main(run) }
@@ -54,7 +59,7 @@ func run() int {
 	backfill := flag.Bool("backfill", false, "also process older .gz history, not just the recent uncompressed rotated files")
 	flag.Parse()
 
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
@@ -100,9 +105,26 @@ func run() int {
 		reportFiles(nFiles, nViews)
 		if err != nil {
 			log.Printf("agent views: %v", err)
-			return 1
+			exit = 1
+		} else {
+			log.Printf("rollup-views: agent views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 		}
-		log.Printf("rollup-views: agent views: processed %d file(s), applied %d view(s)", nFiles, nViews)
+	}
+
+	// Runs even after a failed pass: the chunks that did commit moved view_count too.
+	// shortcut: a failed push is not retried; those documents keep their old figure until
+	// the job is viewed again or the drain rewrites it. Persist the pending ids if the
+	// "Most viewed" sort ever needs to be exact.
+	if len(touchedJobs) > 0 && cfg.MeiliKey != "" {
+		done := worker.Stage("search view counts")
+		n, err := pushViewCounts(ctx, db.New(pool), search.NewClient(cfg.MeiliURL, cfg.MeiliKey), touchedJobs)
+		done()
+		if err != nil {
+			log.Printf("search view counts: wrote %d of %d: %v", n, len(touchedJobs), err)
+			exit = 1
+		} else {
+			log.Printf("rollup-views: wrote view_count of %d job(s) to the search index", n)
+		}
 	}
 	return exit
 }

@@ -147,7 +147,7 @@ SELECT a.id AS application_id,
            '{}'
        )::text[] AS ical_uids
   FROM applications a
-  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id
+  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id AND em.direction = 'incoming'
  WHERE a.user_id = $1
  GROUP BY a.id, a.company_slug, a.role_title
  ORDER BY a.id

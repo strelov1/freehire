@@ -167,3 +167,32 @@ it('keeps a history load failure stable until the user retries', async () => {
   expect(await screen.findByText('Для этой заявки пока нет записей.')).toBeTruthy();
   expect(getTrackedApplication).toHaveBeenCalledTimes(2);
 });
+
+it('retries a failed auto-apply deep link instead of leaving a blank panel', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  expect(await screen.findByText('offline')).toBeTruthy();
+  getTrackedApplication.mockResolvedValueOnce({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'tailoring', queue_id: 1 },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Прогресс' }).getAttribute('aria-selected')).toBe('true'));
+  expect(screen.queryByText('offline')).toBeNull();
+});
+
+it('leaves the progress tab when an auto-apply deep link no longer has an attempt', async () => {
+  getTrackedApplication.mockResolvedValueOnce({ job, emails: [], events: [] });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true'));
+  expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
+});
+
+it('opens Application for a removed posting even when the deep link requests Progress', () => {
+  render(JobDrawer, { ...props({ job: null }), initialTab: 'auto_apply' });
+  expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});

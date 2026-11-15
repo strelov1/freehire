@@ -1895,6 +1895,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/auto-apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your automatic applications
+         * @description Lists the caller's live automatic applications and confirmed submissions from the last 30 days, newest activity first. Internal diagnostic errors are omitted.
+         */
+        get: operations["getAutoApplyList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/auto-apply/{queueId}/review": {
         parameters: {
             query?: never;
@@ -6102,6 +6122,27 @@ export interface components {
         AutoApplyDecision: {
             decision: string;
         };
+        AutoApplyList: {
+            attempts: components["schemas"]["AutoApplyListItem"][];
+        };
+        /** @description One of the caller's automatic applications. */
+        AutoApplyListItem: {
+            /** @description Public vacancy slug, also the posting-backed Tracking row identifier. */
+            job_slug: string;
+            title: string;
+            company: string;
+            status: components["schemas"]["AutoApplyListStatus"];
+            /**
+             * Format: date-time
+             * @description Most recent recorded transition, or enqueue time for older attempts.
+             */
+            last_activity_at: string;
+        };
+        /**
+         * @description A live attempt status, or a confirmed submission whose queue entry was retired.
+         * @enum {string}
+         */
+        AutoApplyListStatus: "tailoring" | "pending_review" | "approved" | "blocked" | "declined" | "failed" | "tailor_failed" | "submitted";
         /** @description One resolved question and answer in an auto-apply answer preview. */
         AutoApplyPreviewField: {
             label: string;
@@ -7432,6 +7473,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             source: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7447,6 +7491,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7491,6 +7539,10 @@ export interface components {
             id: number;
             source: string;
             external_id: string;
+            direction?: string;
+            to_addrs?: string;
+            cc_addrs?: string;
+            thread_id?: string;
             from_addr: string;
             from_name: string;
             subject: string;
@@ -7595,6 +7647,12 @@ export interface components {
              * @description Source-stated last application day, inclusive. Absent when the source states no deadline.
              */
             application_deadline?: string;
+            /**
+             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
+             *     Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+             *     between employers.
+             */
+            team?: string;
             /** @description True for a hand-curated posting rather than an automated crawl. */
             manually_added?: boolean;
             /**
@@ -8326,6 +8384,8 @@ export interface components {
             meta: components["schemas"]["NotificationListMeta"];
         };
         NotificationSettings: {
+            /** @description Opt-in daily summary of classified hiring mail. Uses digest_time. */
+            inbox_digest_enabled: boolean;
             enabled: boolean;
             channels: string[];
             digest_frequency: string;
@@ -8338,6 +8398,8 @@ export interface components {
         };
         /** @description Every field is read as its zero value when left out. Times are `HH:MM`. */
         NotificationSettingsUpdate: {
+            /** @description Omitted or null preserves the current inbox digest choice. */
+            inbox_digest_enabled?: boolean | null;
             /** @description Turn notifications on or off. */
             enabled?: boolean | null;
             /**
@@ -14421,6 +14483,44 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AccountAttributionResult"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAutoApplyList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "attempts": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["AutoApplyList"];
                     };
                 };
             };

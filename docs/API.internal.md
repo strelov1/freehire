@@ -652,6 +652,7 @@ An enabled rule needs a valid channel. Session cookie only.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `inbox_digest_enabled` | boolean \| null | no | Omitted or null preserves the current inbox digest choice. |
 | `enabled` | boolean \| null | no | Turn notifications on or off. |
 | `channels` | string[] \| null | no | Delivery channels: `email`, `telegram`, `push`. Adding `push` needs a device the mobile app has registered (409 otherwise). |
 | `digest_frequency` | string \| null | no |  |

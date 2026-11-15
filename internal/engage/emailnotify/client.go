@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/platform/mailmeta"
 )
 
 // Compile-time guarantee that Client is a Sender.
@@ -49,8 +50,10 @@ type Message struct {
 	From    string
 	To      string
 	Subject string
-	HTML    string
-	Text    string
+	// NotificationKind identifies product summaries that inbound readers must not re-ingest.
+	NotificationKind string
+	HTML             string
+	Text             string
 
 	// Group classifies the mail and decides whether it needs a way out. It has no
 	// usable zero value on purpose: an unset Group is refused, so classifying is not
@@ -257,7 +260,7 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 					Html: &types.Content{Data: aws.String(m.HTML)},
 					Text: &types.Content{Data: aws.String(m.Text)},
 				},
-				Headers: m.unsubscribeHeaders(),
+				Headers: m.headers(),
 			},
 		},
 	}
@@ -281,4 +284,12 @@ func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
 	if m.Variant != "" {
 		in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("variant"), Value: aws.String(m.Variant)})
 	}
+}
+
+func (m Message) headers() []types.MessageHeader {
+	headers := m.unsubscribeHeaders()
+	if m.NotificationKind != "" {
+		headers = append(headers, types.MessageHeader{Name: aws.String("Auto-Submitted"), Value: aws.String("auto-generated")}, types.MessageHeader{Name: aws.String(mailmeta.NotificationHeader), Value: aws.String(m.NotificationKind)})
+	}
+	return headers
 }

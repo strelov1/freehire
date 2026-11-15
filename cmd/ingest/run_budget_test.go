@@ -92,3 +92,20 @@ func TestSweepContextOutlivesTheCrawl(t *testing.T) {
 		t.Errorf("sweep deadline = %v (set=%v), want within the reserve", d, ok)
 	}
 }
+
+// The writes after the fetches get five minutes of the crawl, less on a short one, and nothing
+// when the crawl has no deadline.
+func TestWriteReserveIsAShareOfTheCrawl(t *testing.T) {
+	for _, c := range []struct {
+		b    runBudget
+		want time.Duration
+	}{
+		{runBudget{timeout: 3000 * time.Second, reserve: 600 * time.Second}, 5 * time.Minute},
+		{runBudget{timeout: 20 * time.Minute, reserve: 10 * time.Minute}, 150 * time.Second},
+		{runBudget{reserve: 600 * time.Second}, 0},
+	} {
+		if got := c.b.writeReserve(); got != c.want {
+			t.Errorf("%+v: writeReserve = %v, want %v", c.b, got, c.want)
+		}
+	}
+}

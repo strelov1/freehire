@@ -87,6 +87,7 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
+	inboxDigestSample,
 	discordInviteSample,
 	interviewBuddiesSample,
 	welcomeSample,

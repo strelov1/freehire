@@ -6,13 +6,14 @@
   import { resolve } from '$app/paths';
   import { CircleAlert, Search, X as XIcon } from '@lucide/svelte';
   import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
-  import { api } from '#lib/api.js';
+  import { api, ApiError } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { UrlSyncedState, syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import type { MyJob } from '#lib/types.js';
+  import { trackingItem } from '#lib/trackingItem.js';
   import {
     BOARD_COLUMNS,
     columnOf,
@@ -49,9 +50,17 @@
   // keeping one owner is what stops them drifting apart.
   let {
     initialId,
+    initialItem,
+    initialAutoApply = false,
     initial,
     view = 'board',
-  }: { initialId?: string; initial?: MyJob[]; view?: 'board' | 'list' } = $props();
+  }: {
+    initialItem?: MyJob;
+    initialAutoApply?: boolean;
+    initialId?: string;
+    initial?: MyJob[];
+    view?: 'board' | 'list';
+  } = $props();
   let openedInitial = false;
 
   const s = $derived(t(messages, locale()));
@@ -82,7 +91,7 @@
   let drawerInHistory = false;
   // Set while the drawer is the one a deep link (/my/tracking/[id]) opened, so closing
   // it can swap that URL for the board's own instead of leaving it in the address bar.
-  let onDeepLink = false;
+  let onDeepLink = $state(false);
   // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
   // the card's silence badge and closes back to the board.
   let followUpItem = $state.raw<BoardItem | null>(null);
@@ -123,23 +132,43 @@
     // built. A slug that isn't on the board — one the user has neither saved nor
     // tracked — just leaves the board showing.
     if (initialId && !openedInitial) {
-      openedInitial = true;
-      const found = Object.values(next)
+      const found = Object.values(columns)
         .flat()
         .find((i) => i.id === initialId);
-      if (found) {
-        openItem = found;
-        pendingOutcome = false;
-        onDeepLink = true;
-      }
+      if (found) openInitial(found);
     }
+  }
+
+  function openInitial(item: MyJob) {
+    if (openedInitial || item.id !== initialId || columnOf(item) === null) return;
+    openedInitial = true;
+    openItem = item;
+    pendingOutcome = false;
+    onDeepLink = true;
   }
 
   async function load() {
     status = 'loading';
     try {
       const slice = await api.listMyJobs('board', 500, 0, { compact: true });
-      build(slice.items);
+      let rows = slice.items;
+      const target = openItem;
+      if (target?.job && !rows.some((row) => row.id === target.id)) {
+        try {
+          const application = await api.getTrackedApplication(target.job.public_slug);
+          rows = [...rows, trackingItem(target.id, application)];
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }
+      }
+      build(rows);
+      if (target && openItem?.id === target.id) {
+        const fresh = Object.values(columns)
+          .flat()
+          .find((row) => row.id === target.id);
+        if (fresh) openItem = fresh;
+        else closeDrawer();
+      }
     } catch {
       status = 'error';
     }
@@ -149,8 +178,19 @@
   // server load). `initial` is fixed for this mount (drawer open/close is pushState,
   // not a reload), so capture its presence once and only bootstrap a client fetch
   // when the caller gave us none.
-  const preloaded = !!initial;
-  if (initial) build(initial);
+  const preloaded = untrack(() => !!initial);
+  untrack(() => {
+    if (initial) build(initial);
+    else if (initialItem) {
+      const col = columnOf(initialItem);
+      if (col) {
+        columns[col] = [{ ...initialItem }];
+        cardCol[initialItem.id] = col;
+        const target = columns[col][0];
+        if (target) openInitial(target);
+      }
+    }
+  });
 
   $effect(() => {
     if (!preloaded && isAuthenticated()) void load();
@@ -763,6 +803,7 @@
   {#key openItem.id}
     {@const item = openItem}
     <JobDrawer
+      initialTab={onDeepLink && initialAutoApply ? 'auto_apply' : 'application'}
       {item}
       {pendingOutcome}
       onsetstage={setStage}

@@ -146,4 +146,25 @@ describe('JobSourceRow', () => {
 
     expect(avoidSource).toHaveBeenCalledWith('whatjobs');
   });
+
+  it('treats a stored regional avoid as the brand avoided, and undo clears it', async () => {
+    // Before markets were folded this control saved the regional key itself.
+    profileStoreMock.profile = { excluded_sources: ['whatjobs-uk', 'whatjobs'] };
+    render(JobSourceRow, { ...props, source: 'whatjobs-de' });
+
+    await fireEvent.click(screen.getByRole('button', { name: /Stop avoiding this source/ }));
+
+    expect(unavoidSource).toHaveBeenCalledWith('whatjobs-uk');
+    expect(unavoidSource).toHaveBeenCalledWith('whatjobs');
+  });
+
+  it('does not call the brand avoided when only one market is', async () => {
+    // The search hides whatjobs-uk alone for that entry, so "avoided" would be untrue.
+    profileStoreMock.profile = { excluded_sources: ['whatjobs-uk'] };
+    render(JobSourceRow, { ...props, source: 'whatjobs-de' });
+
+    await fireEvent.click(screen.getByRole('button', { name: /^Avoid this source/ }));
+
+    expect(avoidSource).toHaveBeenCalledWith('whatjobs');
+  });
 });

@@ -223,6 +223,7 @@ func All(c HTTPClient) map[string]Source {
 		// companies that host their application there instead of on an ATS of their own.
 		NewSpeedrun(c),
 		// Multi-company aggregators (boardless): one global feed, company per posting.
+		NewLinkedIn(c),
 		NewTecla(c),
 		NewTeamex(c),
 		NewTopco(c),

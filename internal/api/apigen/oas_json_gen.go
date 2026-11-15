@@ -5477,6 +5477,326 @@ func (s *AutoApplyDecision) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
+func (s *AutoApplyList) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *AutoApplyList) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("attempts")
+		e.ArrStart()
+		for _, elem := range s.Attempts {
+			elem.Encode(e)
+		}
+		e.ArrEnd()
+	}
+}
+
+var jsonFieldsNameOfAutoApplyList = [1]string{
+	0: "attempts",
+}
+
+// Decode decodes AutoApplyList from json.
+func (s *AutoApplyList) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode AutoApplyList to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "attempts":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				s.Attempts = make([]AutoApplyListItem, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem AutoApplyListItem
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.Attempts = append(s.Attempts, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"attempts\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode AutoApplyList")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfAutoApplyList) {
+					name = jsonFieldsNameOfAutoApplyList[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *AutoApplyList) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *AutoApplyList) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *AutoApplyListItem) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *AutoApplyListItem) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("job_slug")
+		e.Str(s.JobSlug)
+	}
+	{
+		e.FieldStart("title")
+		e.Str(s.Title)
+	}
+	{
+		e.FieldStart("company")
+		e.Str(s.Company)
+	}
+	{
+		e.FieldStart("status")
+		s.Status.Encode(e)
+	}
+	{
+		e.FieldStart("last_activity_at")
+		json.EncodeTimeFormat(e, s.LastActivityAt, "2006-01-02T15:04:05.999999999Z07:00")
+	}
+}
+
+var jsonFieldsNameOfAutoApplyListItem = [5]string{
+	0: "job_slug",
+	1: "title",
+	2: "company",
+	3: "status",
+	4: "last_activity_at",
+}
+
+// Decode decodes AutoApplyListItem from json.
+func (s *AutoApplyListItem) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode AutoApplyListItem to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "job_slug":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.JobSlug = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"job_slug\"")
+			}
+		case "title":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Title = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"title\"")
+			}
+		case "company":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.Company = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company\"")
+			}
+		case "status":
+			requiredBitSet[0] |= 1 << 3
+			if err := func() error {
+				if err := s.Status.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"status\"")
+			}
+		case "last_activity_at":
+			requiredBitSet[0] |= 1 << 4
+			if err := func() error {
+				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
+				s.LastActivityAt = v
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"last_activity_at\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode AutoApplyListItem")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00011111,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfAutoApplyListItem) {
+					name = jsonFieldsNameOfAutoApplyListItem[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *AutoApplyListItem) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *AutoApplyListItem) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes AutoApplyListStatus as json.
+func (s AutoApplyListStatus) Encode(e *jx.Encoder) {
+	e.Str(string(s))
+}
+
+// Decode decodes AutoApplyListStatus from json.
+func (s *AutoApplyListStatus) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode AutoApplyListStatus to nil")
+	}
+	v, err := d.StrBytes()
+	if err != nil {
+		return err
+	}
+	// Try to use constant string.
+	switch AutoApplyListStatus(v) {
+	case AutoApplyListStatusTailoring:
+		*s = AutoApplyListStatusTailoring
+	case AutoApplyListStatusPendingReview:
+		*s = AutoApplyListStatusPendingReview
+	case AutoApplyListStatusApproved:
+		*s = AutoApplyListStatusApproved
+	case AutoApplyListStatusBlocked:
+		*s = AutoApplyListStatusBlocked
+	case AutoApplyListStatusDeclined:
+		*s = AutoApplyListStatusDeclined
+	case AutoApplyListStatusFailed:
+		*s = AutoApplyListStatusFailed
+	case AutoApplyListStatusTailorFailed:
+		*s = AutoApplyListStatusTailorFailed
+	case AutoApplyListStatusSubmitted:
+		*s = AutoApplyListStatusSubmitted
+	default:
+		*s = AutoApplyListStatus(v)
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s AutoApplyListStatus) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *AutoApplyListStatus) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *AutoApplyPreviewField) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -32864,6 +33184,100 @@ func (s *GetAuthMeOK) UnmarshalJSON(data []byte) error {
 }
 
 // Encode implements json.Marshaler.
+func (s *GetAutoApplyListOK) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *GetAutoApplyListOK) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("data")
+		s.Data.Encode(e)
+	}
+}
+
+var jsonFieldsNameOfGetAutoApplyListOK = [1]string{
+	0: "data",
+}
+
+// Decode decodes GetAutoApplyListOK from json.
+func (s *GetAutoApplyListOK) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode GetAutoApplyListOK to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "data":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				if err := s.Data.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"data\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode GetAutoApplyListOK")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000001,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfGetAutoApplyListOK) {
+					name = jsonFieldsNameOfGetAutoApplyListOK[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *GetAutoApplyListOK) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *GetAutoApplyListOK) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *GetAutofillProfileOK) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -38674,6 +39088,24 @@ func (s *InboxApplicationEmail) encodeFields(e *jx.Encoder) {
 		e.Str(s.Source)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -38707,16 +39139,19 @@ func (s *InboxApplicationEmail) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxApplicationEmail = [9]string{
-	0: "id",
-	1: "source",
-	2: "from_addr",
-	3: "from_name",
-	4: "subject",
-	5: "status_signal",
-	6: "link_source",
-	7: "received_at",
-	8: "read",
+var jsonFieldsNameOfInboxApplicationEmail = [12]string{
+	0:  "id",
+	1:  "source",
+	2:  "direction",
+	3:  "to_addrs",
+	4:  "cc_addrs",
+	5:  "from_addr",
+	6:  "from_name",
+	7:  "subject",
+	8:  "status_signal",
+	9:  "link_source",
+	10: "received_at",
+	11: "read",
 }
 
 // Decode decodes InboxApplicationEmail from json.
@@ -38752,8 +39187,38 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"source\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -38765,7 +39230,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -38777,7 +39242,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -38809,7 +39274,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"link_source\"")
 			}
 		case "received_at":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -38821,7 +39286,7 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -38842,8 +39307,8 @@ func (s *InboxApplicationEmail) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
-		0b10011111,
-		0b00000001,
+		0b11100011,
+		0b00001100,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -38911,6 +39376,30 @@ func (s *InboxEmail) encodeFields(e *jx.Encoder) {
 		e.Str(s.ExternalID)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
+		if s.ThreadID.Set {
+			e.FieldStart("thread_id")
+			s.ThreadID.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -38976,23 +39465,27 @@ func (s *InboxEmail) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxEmail = [16]string{
+var jsonFieldsNameOfInboxEmail = [20]string{
 	0:  "id",
 	1:  "source",
 	2:  "external_id",
-	3:  "from_addr",
-	4:  "from_name",
-	5:  "subject",
-	6:  "body_text",
-	7:  "body_html",
-	8:  "received_at",
-	9:  "read",
-	10: "status_signal",
-	11: "link_source",
-	12: "linked_slug",
-	13: "linked_company",
-	14: "suggested_slug",
-	15: "suggested_company",
+	3:  "direction",
+	4:  "to_addrs",
+	5:  "cc_addrs",
+	6:  "thread_id",
+	7:  "from_addr",
+	8:  "from_name",
+	9:  "subject",
+	10: "body_text",
+	11: "body_html",
+	12: "received_at",
+	13: "read",
+	14: "status_signal",
+	15: "link_source",
+	16: "linked_slug",
+	17: "linked_company",
+	18: "suggested_slug",
+	19: "suggested_company",
 }
 
 // Decode decodes InboxEmail from json.
@@ -39000,7 +39493,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode InboxEmail to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [3]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -39040,8 +39533,48 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"external_id\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
+		case "thread_id":
+			if err := func() error {
+				s.ThreadID.Reset()
+				if err := s.ThreadID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"thread_id\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -39053,7 +39586,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -39065,7 +39598,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -39077,7 +39610,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"subject\"")
 			}
 		case "body_text":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.BodyText = string(v)
@@ -39089,7 +39622,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_text\"")
 			}
 		case "body_html":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				v, err := d.Str()
 				s.BodyHTML = string(v)
@@ -39101,7 +39634,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_html\"")
 			}
 		case "received_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -39113,7 +39646,7 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 5
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -39193,9 +39726,10 @@ func (s *InboxEmail) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b11111111,
-		0b00000011,
+	for i, mask := range [3]uint8{
+		0b10000111,
+		0b00111111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -39535,6 +40069,30 @@ func (s *InboxMessage) encodeFields(e *jx.Encoder) {
 		e.Str(s.ExternalID)
 	}
 	{
+		if s.Direction.Set {
+			e.FieldStart("direction")
+			s.Direction.Encode(e)
+		}
+	}
+	{
+		if s.ToAddrs.Set {
+			e.FieldStart("to_addrs")
+			s.ToAddrs.Encode(e)
+		}
+	}
+	{
+		if s.CcAddrs.Set {
+			e.FieldStart("cc_addrs")
+			s.CcAddrs.Encode(e)
+		}
+	}
+	{
+		if s.ThreadID.Set {
+			e.FieldStart("thread_id")
+			s.ThreadID.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("from_addr")
 		e.Str(s.FromAddr)
 	}
@@ -39602,23 +40160,27 @@ func (s *InboxMessage) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfInboxMessage = [16]string{
+var jsonFieldsNameOfInboxMessage = [20]string{
 	0:  "id",
 	1:  "source",
 	2:  "external_id",
-	3:  "from_addr",
-	4:  "from_name",
-	5:  "subject",
-	6:  "snippet",
-	7:  "body_text",
-	8:  "received_at",
-	9:  "read",
-	10: "status_signal",
-	11: "link_source",
-	12: "linked_slug",
-	13: "linked_company",
-	14: "suggested_slug",
-	15: "suggested_company",
+	3:  "direction",
+	4:  "to_addrs",
+	5:  "cc_addrs",
+	6:  "thread_id",
+	7:  "from_addr",
+	8:  "from_name",
+	9:  "subject",
+	10: "snippet",
+	11: "body_text",
+	12: "received_at",
+	13: "read",
+	14: "status_signal",
+	15: "link_source",
+	16: "linked_slug",
+	17: "linked_company",
+	18: "suggested_slug",
+	19: "suggested_company",
 }
 
 // Decode decodes InboxMessage from json.
@@ -39626,7 +40188,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode InboxMessage to nil")
 	}
-	var requiredBitSet [2]uint8
+	var requiredBitSet [3]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
@@ -39666,8 +40228,48 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"external_id\"")
 			}
+		case "direction":
+			if err := func() error {
+				s.Direction.Reset()
+				if err := s.Direction.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"direction\"")
+			}
+		case "to_addrs":
+			if err := func() error {
+				s.ToAddrs.Reset()
+				if err := s.ToAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"to_addrs\"")
+			}
+		case "cc_addrs":
+			if err := func() error {
+				s.CcAddrs.Reset()
+				if err := s.CcAddrs.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"cc_addrs\"")
+			}
+		case "thread_id":
+			if err := func() error {
+				s.ThreadID.Reset()
+				if err := s.ThreadID.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"thread_id\"")
+			}
 		case "from_addr":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Str()
 				s.FromAddr = string(v)
@@ -39679,7 +40281,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_addr\"")
 			}
 		case "from_name":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				v, err := d.Str()
 				s.FromName = string(v)
@@ -39691,7 +40293,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"from_name\"")
 			}
 		case "subject":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.Subject = string(v)
@@ -39703,7 +40305,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"subject\"")
 			}
 		case "snippet":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.Snippet = string(v)
@@ -39725,7 +40327,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body_text\"")
 			}
 		case "received_at":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 4
 			if err := func() error {
 				v, err := json.DecodeTimeFormat(d, "2006-01-02T15:04:05.999999999Z07:00")
 				s.ReceivedAt = v
@@ -39737,7 +40339,7 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"received_at\"")
 			}
 		case "read":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 5
 			if err := func() error {
 				v, err := d.Bool()
 				s.Read = bool(v)
@@ -39817,9 +40419,10 @@ func (s *InboxMessage) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [2]uint8{
-		0b01111111,
-		0b00000011,
+	for i, mask := range [3]uint8{
+		0b10000111,
+		0b00110111,
+		0b00000000,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -55740,6 +56343,10 @@ func (s *NotificationSettings) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("inbox_digest_enabled")
+		e.Bool(s.InboxDigestEnabled)
+	}
+	{
 		e.FieldStart("enabled")
 		e.Bool(s.Enabled)
 	}
@@ -55773,14 +56380,15 @@ func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfNotificationSettings = [7]string{
-	0: "enabled",
-	1: "channels",
-	2: "digest_frequency",
-	3: "digest_time",
-	4: "digest_interval_hours",
-	5: "quiet_hours_start",
-	6: "quiet_hours_end",
+var jsonFieldsNameOfNotificationSettings = [8]string{
+	0: "inbox_digest_enabled",
+	1: "enabled",
+	2: "channels",
+	3: "digest_frequency",
+	4: "digest_time",
+	5: "digest_interval_hours",
+	6: "quiet_hours_start",
+	7: "quiet_hours_end",
 }
 
 // Decode decodes NotificationSettings from json.
@@ -55792,8 +56400,20 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "enabled":
+		case "inbox_digest_enabled":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Bool()
+				s.InboxDigestEnabled = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"inbox_digest_enabled\"")
+			}
+		case "enabled":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Bool()
 				s.Enabled = bool(v)
@@ -55805,7 +56425,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"enabled\"")
 			}
 		case "channels":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				s.Channels = make([]string, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
@@ -55825,7 +56445,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"channels\"")
 			}
 		case "digest_frequency":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				v, err := d.Str()
 				s.DigestFrequency = string(v)
@@ -55837,7 +56457,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_frequency\"")
 			}
 		case "digest_time":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				if err := s.DigestTime.Decode(d); err != nil {
 					return err
@@ -55847,7 +56467,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_time\"")
 			}
 		case "digest_interval_hours":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Int64()
 				s.DigestIntervalHours = int64(v)
@@ -55859,7 +56479,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_interval_hours\"")
 			}
 		case "quiet_hours_start":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				if err := s.QuietHoursStart.Decode(d); err != nil {
 					return err
@@ -55869,7 +56489,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"quiet_hours_start\"")
 			}
 		case "quiet_hours_end":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				if err := s.QuietHoursEnd.Decode(d); err != nil {
 					return err
@@ -55888,7 +56508,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b01111111,
+		0b11111111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -55944,6 +56564,12 @@ func (s *NotificationSettingsUpdate) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *NotificationSettingsUpdate) encodeFields(e *jx.Encoder) {
 	{
+		if s.InboxDigestEnabled.Set {
+			e.FieldStart("inbox_digest_enabled")
+			s.InboxDigestEnabled.Encode(e)
+		}
+	}
+	{
 		if s.Enabled.Set {
 			e.FieldStart("enabled")
 			s.Enabled.Encode(e)
@@ -55987,14 +56613,15 @@ func (s *NotificationSettingsUpdate) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfNotificationSettingsUpdate = [7]string{
-	0: "enabled",
-	1: "channels",
-	2: "digest_frequency",
-	3: "digest_time",
-	4: "digest_interval_hours",
-	5: "quiet_hours_start",
-	6: "quiet_hours_end",
+var jsonFieldsNameOfNotificationSettingsUpdate = [8]string{
+	0: "inbox_digest_enabled",
+	1: "enabled",
+	2: "channels",
+	3: "digest_frequency",
+	4: "digest_time",
+	5: "digest_interval_hours",
+	6: "quiet_hours_start",
+	7: "quiet_hours_end",
 }
 
 // Decode decodes NotificationSettingsUpdate from json.
@@ -56005,6 +56632,16 @@ func (s *NotificationSettingsUpdate) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "inbox_digest_enabled":
+			if err := func() error {
+				s.InboxDigestEnabled.Reset()
+				if err := s.InboxDigestEnabled.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"inbox_digest_enabled\"")
+			}
 		case "enabled":
 			if err := func() error {
 				s.Enabled.Reset()

@@ -186,13 +186,6 @@ type Settings struct {
 	// interview session view offering no voice mode.
 	RealtimeModel string
 
-	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
-	// mask PII out of CV text before it reaches the LLM (internal/candidate/pii). Optional here, but
-	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
-	// them entirely (no CV is sent to the LLM) rather than leaking PII — enforced at the
-	// call site, not here.
-	PIIFilterURL string
-
 	// S3 backs résumé storage (internal/platform/blobstore). Optional and provider-agnostic:
 	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
 	// freehire-ops owns those. All four must be set to enable storage; any empty field
@@ -463,8 +456,6 @@ func Load() Settings {
 		STTModel: os.Getenv("STT_MODEL"),
 
 		RealtimeModel: os.Getenv("REALTIME_MODEL"),
-
-		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),

@@ -23,6 +23,7 @@ type stubReminderRepo struct {
 	settings reminder.Settings
 	upserts  int
 	cancels  int
+	paid     bool
 }
 
 func (r *stubReminderRepo) GetSettings(context.Context, int64) (reminder.Settings, error) {
@@ -233,5 +234,52 @@ func TestUpdateNotificationSettings_RejectsDailyWithoutDigestTime(t *testing.T) 
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateNotificationSettings_PreservesOmittedInboxConsent(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, InboxDigestEnabled: true, DigestFrequency: "interval", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"interval","digest_time":null}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if !repo.settings.InboxDigestEnabled || repo.settings.DigestTime == nil || *repo.settings.DigestTime != 9*time.Hour {
+		t.Fatalf("legacy save changed inbox consent/time: %+v", repo.settings)
+	}
+}
+
+func TestUpdateNotificationSettings_ExplicitInboxOptOut(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, InboxDigestEnabled: true, DigestFrequency: "daily", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"daily","digest_time":"09:00","inbox_digest_enabled":false}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if repo.settings.InboxDigestEnabled {
+		t.Fatal("explicit inbox opt-out was ignored")
+	}
+}
+
+func (r *stubReminderRepo) HasPaidPlan(context.Context, int64) (bool, error) { return r.paid, nil }
+
+func TestInboxDigestEnableRequiresPaidTier(t *testing.T) {
+	for _, paid := range []bool{false, true} {
+		app, iss, repo := remindersApp(reminder.Settings{})
+		repo.paid = paid
+		token, _ := iss.Issue(7, testTokenVersion)
+		resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"daily","digest_time":"09:00","inbox_digest_enabled":true}`)
+		want := fiber.StatusPaymentRequired
+		if paid {
+			want = fiber.StatusOK
+		}
+		if resp.StatusCode != want {
+			t.Fatalf("paid=%v status=%d want=%d", paid, resp.StatusCode, want)
+		}
+		resp.Body.Close()
 	}
 }

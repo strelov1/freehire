@@ -94,7 +94,15 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        ns.quiet_hours_end AS quiet_hours_end,
        a.stage,
        (a.user_id IS NOT NULL)::bool AS application_exists,
-       GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
+       -- The same last-activity rule ListFollowUpCandidates matched on, employer moves
+       -- included, so the re-check before send reaches the verdict MATCH did.
+       GREATEST(a.applied_at, mail.newest_mail_at,
+                (SELECT max(ev.occurred_at)
+                   FROM application_events ev
+                  WHERE ev.application_id = a.id
+                    AND ev.kind = 'stage_set'
+                    AND ev.source = 'employer'
+                    AND ev.retracted_at IS NULL))::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
        mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,
@@ -112,7 +120,7 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = n.user_id
        AND (e.job_id = n.job_id OR e.suggested_job_id = n.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 WHERE n.id = $1
 `
@@ -329,7 +337,7 @@ LEFT JOIN LATERAL (
       FROM emails e
      WHERE e.user_id = a.user_id
        AND (e.job_id = a.job_id OR e.suggested_job_id = a.job_id)
-       AND e.deleted_at IS NULL
+       AND e.deleted_at IS NULL AND e.direction = 'incoming'
 ) mail ON true
 LEFT JOIN LATERAL (
     SELECT max(ev.occurred_at) AS newest_move_at

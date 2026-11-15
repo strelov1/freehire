@@ -360,3 +360,33 @@ op deleteJobAutoApply(@path slug: string): Data<AutoApplyCancelled> | Problem;
 @post
 op postAutoApplyReview(@path queueId: string, @body body: AutoApplyReviewRequest):
   Data<AutoApplyDecision> | Problem;
+
+/** A live attempt status, or a confirmed submission whose queue entry was retired. */
+enum AutoApplyListStatus {
+  ...AutoApplyReviewStatus,
+  submitted,
+}
+
+/** One of the caller's automatic applications. */
+model AutoApplyListItem {
+  /** Public vacancy slug, also the posting-backed Tracking row identifier. */
+  job_slug: string;
+  title: string;
+  company: string;
+  status: AutoApplyListStatus;
+  /** Most recent recorded transition, or enqueue time for older attempts. */
+  last_activity_at: utcDateTime;
+}
+
+model AutoApplyList {
+  attempts: AutoApplyListItem[];
+}
+
+/** Lists the caller's live automatic applications and confirmed submissions from the last 30 days, newest activity first. Internal diagnostic errors are omitted. */
+@summary("List your automatic applications")
+@opExample(#{returnType: #{data: #{attempts: #[]}}})
+@useAuth(SessionOrKey)
+@tag("Auto-apply")
+@route("/me/auto-apply")
+@get
+op getAutoApplyList(): Data<AutoApplyList> | Problem;

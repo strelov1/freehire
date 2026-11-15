@@ -32,13 +32,18 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		t.Helper()
 		_, err := pool.Exec(ctx, `
 			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-			                  company_slug_folded, last_seen_at, closed_at)
+			                  company_slug_folded, closed_at)
 			VALUES ($1, $2, 'https://x.test/'||$2, 'Engineer', $2, 'Co', $3,
-			        replace($3, '-', ''), $4,
-			        CASE WHEN $5::bool THEN now() ELSE NULL END)`,
-			source, externalID, slug, lastSeen, closed)
+			        replace($3, '-', ''),
+			        CASE WHEN $4::bool THEN now() ELSE NULL END)`,
+			source, externalID, slug, closed)
 		if err != nil {
 			t.Fatalf("seed %s: %v", externalID, err)
+		}
+		// When it was last seen is the posting's activity row, created with the job.
+		if _, err := pool.Exec(ctx, `UPDATE job_activity a SET last_seen_at = $3 FROM jobs j
+			WHERE a.job_id = j.id AND j.source = $1 AND j.external_id = $2`, source, externalID, lastSeen); err != nil {
+			t.Fatalf("stamp %s: %v", externalID, err)
 		}
 	}
 
@@ -68,9 +73,9 @@ func TestCompaniesWithFreshNonAggregatorCoverage(t *testing.T) {
 		t.Helper()
 		_, err := pool.Exec(ctx, `
 			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-			                  company_slug_folded, last_seen_at, is_private)
+			                  company_slug_folded, is_private)
 			VALUES ('weblink', $1, 'https://x.test/'||$1, 'Engineer', $1, 'Co', $2,
-			        replace($2, '-', ''), now(), true)`, externalID, slug)
+			        replace($2, '-', ''), true)`, externalID, slug)
 		if err != nil {
 			t.Fatalf("seed private %s: %v", externalID, err)
 		}
@@ -186,8 +191,8 @@ func TestCompaniesWithFreshNonAggregatorCoverageByCountry(t *testing.T) {
 		t.Helper()
 		_, err := pool.Exec(ctx, `
 			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug,
-			                  company_slug_folded, last_seen_at, countries)
-			VALUES ('workday', $1, 'https://x.test/'||$1, 'Engineer', $1, 'Co', $2, $2, now(), $3)`,
+			                  company_slug_folded, countries)
+			VALUES ('workday', $1, 'https://x.test/'||$1, 'Engineer', $1, 'Co', $2, $2, $3)`,
 			externalID, slug, countries)
 		if err != nil {
 			t.Fatalf("seed %s: %v", externalID, err)
