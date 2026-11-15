@@ -39,7 +39,8 @@ type Store interface {
 	UpsertEmail(ctx context.Context, e StoredEmail) error
 	SetSynced(ctx context.Context, userID, cursorUnix, sentCursor int64) error
 	ListThreadIDs(ctx context.Context, userID int64) ([]string, error)
-	// StoredMessages returns which of ids are already stored for the user, keyed by id.
+	// StoredMessages returns which of ids are already stored for the user, keyed by id. A legacy
+	// row a fetch would still repair (stored before recipients were recorded) is not reported.
 	StoredMessages(ctx context.Context, userID int64, ids []string) (map[string]StoredRef, error)
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }

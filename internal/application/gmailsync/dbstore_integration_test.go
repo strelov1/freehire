@@ -24,16 +24,18 @@ func TestStoredMessagesReportsOnlyTheUsersStoredIDs(t *testing.T) {
 	}
 	at := time.Unix(1_700_000_000, 0).UTC()
 	for _, e := range []StoredEmail{
-		{UserID: owner, Message: Message{ID: "in", ThreadID: "t1", ReceivedAt: at, Direction: DirectionIncoming}},
-		{UserID: owner, Message: Message{ID: "out", ThreadID: "t2", ReceivedAt: at, Direction: DirectionOutgoing}},
-		{UserID: other, Message: Message{ID: "theirs", ThreadID: "t3", ReceivedAt: at}},
+		{UserID: owner, Message: Message{ID: "in", ThreadID: "t1", ToAddrs: "owner@example.test", ReceivedAt: at, Direction: DirectionIncoming}},
+		{UserID: owner, Message: Message{ID: "out", ThreadID: "t2", ToAddrs: "hr@example.test", ReceivedAt: at, Direction: DirectionOutgoing}},
+		// Stored before recipients were recorded: a fetch repairs it, so it is not reported.
+		{UserID: owner, Message: Message{ID: "legacy", ThreadID: "t4", ReceivedAt: at}},
+		{UserID: other, Message: Message{ID: "theirs", ThreadID: "t3", ToAddrs: "other@example.test", ReceivedAt: at}},
 	} {
 		if err := store.UpsertEmail(ctx, e); err != nil {
 			t.Fatalf("UpsertEmail: %v", err)
 		}
 	}
 
-	got, err := store.StoredMessages(ctx, owner, []string{"in", "out", "theirs", "missing"})
+	got, err := store.StoredMessages(ctx, owner, []string{"in", "out", "legacy", "theirs", "missing"})
 	if err != nil {
 		t.Fatalf("StoredMessages: %v", err)
 	}

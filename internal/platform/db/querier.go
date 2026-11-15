@@ -5473,7 +5473,9 @@ type Querier interface {
 	ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error)
 	// Which of a wave's message ids are already stored, so a sync throttled part-way resumes
 	// where the last run stopped instead of re-fetching the same head and hitting the limit
-	// again. Deleted rows count as stored: the upsert would not resurrect them anyway.
+	// again. Deleted rows count as stored: the upsert would not resurrect them anyway. Rows
+	// with no recipients predate 0267_gmail_outgoing and are left out: re-fetching them is
+	// what repairs a legacy sent reply stored as incoming.
 	ListStoredGmailMessages(ctx context.Context, arg ListStoredGmailMessagesParams) ([]ListStoredGmailMessagesRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,

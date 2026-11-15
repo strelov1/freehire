@@ -63,7 +63,8 @@ func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
 	return f.knownThreads, nil
 }
 
-// StoredMessages answers from what this fake has upserted, as the real store does.
+// StoredMessages answers from what this fake has upserted, leaving out rows with no recipients
+// (legacy rows a fetch repairs), as the real store does.
 func (f *fakeStore) StoredMessages(_ context.Context, _ int64, ids []string) (map[string]StoredRef, error) {
 	want := make(map[string]bool, len(ids))
 	for _, id := range ids {
@@ -71,7 +72,7 @@ func (f *fakeStore) StoredMessages(_ context.Context, _ int64, ids []string) (ma
 	}
 	out := make(map[string]StoredRef)
 	for _, e := range f.upserted {
-		if want[e.Message.ID] {
+		if want[e.Message.ID] && e.Message.ToAddrs != "" {
 			out[e.Message.ID] = StoredRef{ThreadID: e.Message.ThreadID, ReceivedAt: e.Message.ReceivedAt, Incoming: e.Message.Direction != DirectionOutgoing}
 		}
 	}
@@ -556,9 +557,9 @@ func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.
 	reader := &fakeReader{
 		ids: []string{"m3", "m2", "m1"},
 		byID: map[string]Message{
-			"m1": {ID: "m1", ThreadID: "t1", Subject: "Thanks for applying", ReceivedAt: t1},
-			"m2": {ID: "m2", ThreadID: "t2", Subject: "Thanks for applying", ReceivedAt: t2},
-			"m3": {ID: "m3", ThreadID: "t3", Subject: "Thanks for applying", ReceivedAt: t3},
+			"m1": {ID: "m1", ThreadID: "t1", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t1},
+			"m2": {ID: "m2", ThreadID: "t2", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t2},
+			"m3": {ID: "m3", ThreadID: "t3", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t3},
 		},
 		getErrIDs: map[string]error{"m2": throttle},
 	}
@@ -587,5 +588,32 @@ func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.
 	}
 	if store.syncedCursor != t3.Unix() {
 		t.Errorf("cursor = %d, want %d: a skipped stored message still counts toward the watermark", store.syncedCursor, t3.Unix())
+	}
+}
+
+// A row stored before recipients were recorded may be a sent reply saved as incoming; the
+// fetch is what repairs it, so a legacy row is fetched again rather than skipped.
+func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	legacy := Message{ID: "m1", ThreadID: "t1", FromAddr: "u@gmail.com", ReceivedAt: time.Unix(1_700_000_100, 0)}
+	store := &fakeStore{
+		conns:    []Connection{{UserID: 7, Email: "u@gmail.com"}},
+		encToken: enc,
+		upserted: []StoredEmail{{UserID: 7, Message: legacy}},
+	}
+	repaired := legacy
+	repaired.ToAddrs, repaired.Direction = "hr@acme.test", DirectionOutgoing
+	reader := &fakeReader{ids: []string{"m1"}, byID: map[string]Message{"m1": repaired}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	if _, err := w.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(reader.gets) != 1 || reader.gets[0] != "m1" {
+		t.Fatalf("gets = %v, want the legacy m1 fetched again", reader.gets)
+	}
+	if last := store.upserted[len(store.upserted)-1].Message; last.Direction != DirectionOutgoing {
+		t.Errorf("re-stored m1 direction = %q, want outgoing", last.Direction)
 	}
 }
