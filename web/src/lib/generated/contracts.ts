@@ -1061,6 +1061,70 @@ export interface Education {
 }
 
 /**
+ * MetaResponse is GET /me/resume: storage flags, parse status, the candidate's owned
+ * overrides and the composed structured résumé.
+ */
+export interface MetaResponse {
+  enabled: boolean;
+  present: boolean;
+  uploaded_at: string | null;
+  structured: Structured | null;
+  structure_pending: boolean;
+  parse_status?: string;
+  parse_detail?: string;
+  /**
+   * Contacts is the wire name for historical/API-stability reasons; the Go/DB concept
+   * underneath is resume.Owned, which now also carries headline/summary/languages/
+   * certifications — see Owned.
+   */
+  contacts?: Owned;
+}
+/**
+ * Owned is everything about a candidate's résumé that the CANDIDATE edited directly, rather
+ * than what resume_structured last re-derived from an upload. It is the one owned-overlay
+ * mechanism for the whole profile, not identity alone: a re-upload regenerates
+ * headline/summary/languages/certifications/education as wholesale as email/phone.
+ * Deliberately NOT here: Skills (userprofile.Profile.Skills, a CV-independent resource) and
+ * Experience/Projects (the experience bank, provenance-tracked). Education stays a flat overlay.
+ * Persisted as one JSON blob on users.candidate_contacts; the column keeps its original name.
+ */
+export interface Owned {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  links?: string[];
+  headline?: string;
+  summary?: string;
+  languages?: string[];
+  certifications?: string[];
+  education?: Education[];
+  /**
+   * TotalYears is the candidate's own years of experience: a re-upload recomputes the
+   * extracted figure wholesale, so a correction must survive. The onboarding wizard saves
+   * whatever the candidate leaves in the field.
+   */
+  total_years?: number /* int */;
+  /**
+   * The five body fields above are owned per field (see ApplyBody); a non-empty value implies
+   * ownership. A cleared field has no value left to signal it, so an explicit save carries its
+   * own *Set flag, true even while the value is "". Sanitize only turns these on, never off, so
+   * an explicit clear survives it. Identity fields need no flag: they are overlaid as one
+   * IdentityEmpty()-gated block.
+   */
+  headline_set?: boolean;
+  summary_set?: boolean;
+  languages_set?: boolean;
+  certifications_set?: boolean;
+  education_set?: boolean;
+  /**
+   * TotalYearsSet is the same explicit-clear signal for a numeric field: zero is a legitimate
+   * answer ("less than a year"), and without the flag the CV's own figure would replace it.
+   */
+  total_years_set?: boolean;
+}
+
+/**
  * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is fixed
  * because the panel must render each value. Nothing is coerced: an unrecognised status is
  * reported back to the model with the valid ones named, so it can correct itself.

@@ -27,7 +27,7 @@ const resume = (patch: Partial<ResumeMeta> = {}): ResumeMeta => ({
   present: true,
   uploaded_at: null,
   structured: null,
-  contacts: null,
+  structure_pending: false,
   ...patch,
 });
 

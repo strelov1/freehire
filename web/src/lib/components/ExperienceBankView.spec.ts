@@ -76,6 +76,7 @@ const bankWithOneJob: ExperienceBank = {
 const resumeOk: ResumeMeta = {
   enabled: true,
   present: true,
+  structure_pending: false,
   uploaded_at: '2026-10-01T00:00:00Z',
   structured: null,
   parse_status: 'ok',
@@ -167,6 +168,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
+      structure_pending: false,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -189,6 +191,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: false,
+      structure_pending: false,
       uploaded_at: null,
       structured: null,
     } satisfies ResumeMeta);
@@ -203,6 +206,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
+      structure_pending: false,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -222,6 +226,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
+      structure_pending: false,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -238,6 +243,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getResume.mockResolvedValue({
         enabled: true,
         present: true,
+        structure_pending: false,
         uploaded_at: '2026-10-01T00:00:00Z',
         structured: null,
         parse_status: 'ok',
@@ -261,6 +267,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
+      structure_pending: false,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -277,6 +284,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getResume.mockResolvedValue({
         enabled: true,
         present: true,
+        structure_pending: false,
         uploaded_at: '2026-10-01T00:00:00Z',
         structured: null,
         parse_status: 'pending',

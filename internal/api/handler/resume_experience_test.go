@@ -176,7 +176,7 @@ func TestGetResumeProvisionalContactsThroughAStaleWindow(t *testing.T) {
 	defer resp.Body.Close()
 
 	var body struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -221,7 +221,7 @@ func TestGetResumeOwnedContactsOverlayCurrentExtract(t *testing.T) {
 	defer resp.Body.Close()
 
 	var body struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -262,7 +262,7 @@ func TestGetResumeCurrentStructureKeepsSemanticSections(t *testing.T) {
 	defer resp.Body.Close()
 
 	var body struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -297,7 +297,7 @@ func TestGetResumeServesBankProjects(t *testing.T) {
 	defer resp.Body.Close()
 
 	var body struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -333,7 +333,7 @@ func TestGetResumeServesPlacelessHighlights(t *testing.T) {
 	defer resp.Body.Close()
 
 	var body struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
