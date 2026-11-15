@@ -8,11 +8,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// localsAutoApplySystemCaller marks a request as authenticated by the shared auto-apply
-// orchestrator secret (openspec/changes/auto-apply-inngest-orchestration) rather than by
-// proving ownership of the entry it names. It is a request-scoped flag, not a
-// auth.LocalsUserID: this caller's user id comes from the queue entry itself
-// (resolveAutoApplyEntry), never from who it authenticated as.
+// localsAutoApplySystemCaller marks a request as authenticated by the shared orchestrator
+// secret rather than by owning the entry it names. A flag, not an auth.LocalsUserID: the
+// user id comes from the queue entry (resolveAutoApplyEntry), never from the credential.
 const localsAutoApplySystemCaller = "auto_apply.system_caller"
 
 // isAutoApplySystemCaller reports whether this request authenticated via the shared
@@ -35,10 +33,8 @@ func autoApplyOrchestratorGate(secret string, humanAuth fiber.Handler) fiber.Han
 	}
 }
 
-// autoApplyBearerToken extracts an `Authorization: Bearer <token>` credential. A small
-// local copy of the same parsing auth.bearerToken already does (unexported there, and Go
-// has no way to share an unexported helper across packages) — this package has no other
-// caller for it.
+// autoApplyBearerToken extracts an `Authorization: Bearer <token>` credential; a local copy
+// of the unexported auth.bearerToken.
 func autoApplyBearerToken(c *fiber.Ctx) (string, bool) {
 	const prefix = "Bearer "
 	h := c.Get(fiber.HeaderAuthorization)

@@ -6,37 +6,31 @@ import (
 	"fmt"
 )
 
-// ChannelEmail delivers a digest as an email (via AWS SES); the email-channel
-// sibling of ChannelTelegram.
+// ChannelEmail delivers a digest as an email.
 const ChannelEmail = "email"
 
 // ErrChannelNotConfigured is returned by Router.Send when a subscription's channel
-// has no registered notifier (e.g. the email channel while SES is unconfigured).
-// The delivery loop treats it as a soft-skip — the matches stay pending and no
-// failed attempt is counted — rather than a delivery failure to dead-letter.
+// has no registered notifier (e.g. email while unconfigured). The delivery loop
+// soft-skips it: the matches stay pending and no failed attempt is counted.
 var ErrChannelNotConfigured = errors.New("notify: channel not configured")
 
-// ErrRecipientGone is returned by a Notifier whose channel has learned, from the
-// send itself, that this recipient will not accept messages again — the Telegram
-// bot was blocked or removed, and the chat is permanently closed to us.
+// ErrRecipientGone is returned by a Notifier that learned from the send itself that
+// this recipient will not accept messages again (e.g. the Telegram bot was blocked).
 //
-// Distinct from ErrChannelNotConfigured, which is about the channel being absent
-// for everyone, though the delivery loop treats both as a soft-skip. What it adds
-// is a side effect: the engine forgets the link before skipping, so the recipient
-// stops being deliverable at all rather than failing once per digest forever.
+// Unlike ErrChannelNotConfigured, which is absent for everyone, the engine also
+// forgets the link before soft-skipping, so the recipient stops being deliverable
+// instead of failing on every digest.
 //
-// A channel-level sentinel rather than the transport's own: internal/engage/telegramnotify
-// imports this package for Digest, so it cannot be imported back. telegramnotify.SendToChat
-// translates a 403 into it, and the nudge and reminder engines alias it.
+// It is a channel-level sentinel because internal/engage/telegramnotify imports this
+// package and cannot be imported back; telegramnotify.SendToChat translates a 403
+// into it, and the nudge and reminder engines alias it.
 var ErrRecipientGone = errors.New("notify: recipient will not accept messages")
 
-// Router is a Notifier that dispatches a digest to the per-channel notifier
-// registered for the subscription's channel, so the matching engine stays
-// channel-agnostic (it depends only on Notifier). A channel with no registered
+// Router is a Notifier that dispatches to the notifier registered for the
+// subscription's channel, keeping the engine channel-agnostic. A channel with no
 // notifier yields ErrChannelNotConfigured.
 type Router map[string]Notifier
 
-// Compile-time guarantee that Router satisfies the channel abstraction it muxes.
 var _ Notifier = (Router)(nil)
 
 // Send routes to the notifier registered for channel, or returns

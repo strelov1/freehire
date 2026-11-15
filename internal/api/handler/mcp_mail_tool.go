@@ -26,10 +26,10 @@ const (
 	unreadMailMax     = 25
 )
 
-// Rune caps for the sender-written free text: long enough for any real display name and
-// subject, short enough that neither can carry a paragraph of instructions. The address is
-// not capped: it is the one header a reader checks a display name against, and a cap on a
-// joined "Name <addr>" would let a long spoofed name push the real address out of view.
+// Rune caps for the sender-written free text: long enough for a real display name and
+// subject, too short to carry a paragraph of instructions. The address is not capped: it is
+// what a reader checks a display name against, and a cap on "Name <addr>" would let a long
+// spoofed name push the real address out of view.
 const (
 	unreadMailNameRunes    = 80
 	unreadMailSubjectRunes = 200
@@ -62,14 +62,13 @@ type unreadMailResult struct {
 }
 
 // unreadMailTool is the account MCP server's view of the inbox: who wrote, about what, and
-// which tracked job it belongs to — the headers of unread application mail and nothing an
-// agent could act on. It is not the assistant's inbox_search: that returns snippets, bodies on
-// request and message ids for the write tools, to a model whose system prompt calls mail
-// untrusted and which has no outbound tool. A third-party MCP client has neither guarantee,
-// so this tool returns no body, no snippet and no id, and the write tools are not served.
+// which tracked job it belongs to. It is not the assistant's inbox_search, which returns
+// snippets, bodies and message ids to a model whose prompt treats mail as untrusted and which
+// has no outbound tool. A third-party MCP client has neither guarantee, so this returns no
+// body, snippet or id, and the write tools are not served.
 //
-// Like inbox_search it reads through inbox.Service.Search, which cannot mark a message read:
-// read_at means a human saw it. No model is called.
+// Like inbox_search it reads through inbox.Service.Search, which cannot mark a message read
+// (read_at means a human saw it). No model is called.
 func (h *assistantHandlers) unreadMailTool(origin string) assistant.Tool {
 	return assistant.Tool{
 		Name:   unreadMailToolName,

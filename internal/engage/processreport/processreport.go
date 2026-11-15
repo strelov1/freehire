@@ -1,29 +1,20 @@
-// Package processreport owns candidate-reported facts about how a company hires.
-// Today there is exactly one: that the employer screens with an AI interviewer.
+// Package processreport owns candidate-reported facts about how a company hires. Today
+// there is one: the employer screens with an AI interviewer.
 //
-// It differs from its two neighbours in what it stores, and the differences are the
-// reason it is not either of them. internal/engage/report files a complaint about a
-// POSTING and hands it to a moderator whose only lever is closing that posting —
-// which answers "a bot interviewed me" with something nobody asked for.
-// internal/engage/companyfeedback files a 1-5 star REVIEW with free text, one row per
-// (user, company, category) — a star forces a judgement where this needs a fact, and
-// its uniqueness bound would mean a user who already reviewed the compensation could
-// never report the interviewer.
+// It is neither internal/engage/report (a complaint about a POSTING, whose only lever is
+// closing it) nor internal/engage/companyfeedback (a 1-5 star REVIEW, unique per (user,
+// company, category), so a user who reviewed compensation could never report the
+// interviewer).
 //
-// What this stores is a countable claim: one row per (user, company, kind), no rating,
-// no text, nothing to elaborate. Because a claim is either true of an employer or not,
-// ONE reporter is enough to surface it — unlike the ghost signal's contributor gate,
-// which exists because one person's silence may be bad luck rather than evidence. The
-// count travels with the label everywhere it is shown, so a reader can weigh one
-// report against forty.
+// It stores a countable claim: one row per (user, company, kind), no rating, no text. A
+// claim is either true of an employer or not, so ONE reporter is enough to surface it; the
+// count travels with the label so a reader can weigh one report against forty.
 //
-// The evidence is COMPANY-scoped although it is filed from a job page. An AI
-// interviewer is a property of the employer's process; filed per posting the signal
-// would never reach useful coverage, since one employer in this catalogue has 203 open
-// postings and each would need its own reporter before its own card showed anything.
+// The evidence is COMPANY-scoped although filed from a job page: an AI interviewer is a
+// property of the employer's process, and per posting it would never reach useful coverage.
 //
-// A write and the affected company's counter recompute run in one pgx transaction, so
-// a reader never sees the label without the count that qualifies it.
+// A write and the company's counter recompute run in one pgx transaction, so a reader never
+// sees the label without the count that qualifies it.
 package processreport
 
 import (
@@ -92,10 +83,8 @@ func (s *Service) File(ctx context.Context, userID int64, slug, kind string) (in
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
-	// Take the company row's lock so a concurrent report on the same company
-	// serializes with the recompute below — LockCompanyForVote locks the companies
-	// row and knows nothing about votes, so it is reused rather than duplicated, the
-	// same call companyfeedback makes.
+	// Lock the company row so a concurrent report on it serializes with the recompute below
+	// (the same call companyfeedback makes).
 	if err := q.LockCompanyForVote(ctx, slug); err != nil {
 		return 0, err
 	}
@@ -103,9 +92,8 @@ func (s *Service) File(ctx context.Context, userID int64, slug, kind string) (in
 	if _, err := q.FileCompanyProcessReport(ctx, db.FileCompanyProcessReportParams{
 		UserID: userID, CompanySlug: slug, Kind: kind,
 	}); err != nil {
-		// The ON CONFLICT branch is guarded on retracted_at IS NOT NULL, so an
-		// already-live report updates nothing and returns no row. That absence IS the
-		// duplicate answer; it costs no second read.
+		// ON CONFLICT is guarded on retracted_at IS NOT NULL, so an already-live report returns
+		// no row: that absence is the duplicate answer.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, ErrAlreadyReported
 		}
@@ -181,10 +169,8 @@ func (s *Service) Retract(ctx context.Context, userID int64, slug, kind string) 
 }
 
 // Mine returns the kinds the caller currently has live against a company (possibly
-// empty). The write surface needs it to open in the right state — without it a
-// returning reader cannot be shown that they already reported, and the only way to
-// find out would be to file and be refused. ErrCompanyNotFound for a bad slug, checked
-// first so it is never confused with "you have not reported anything".
+// empty), so the write surface opens in the right state. ErrCompanyNotFound for a bad slug,
+// checked first.
 func (s *Service) Mine(ctx context.Context, userID int64, slug string) ([]string, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
 		return nil, err
@@ -201,10 +187,8 @@ func (s *Service) Mine(ctx context.Context, userID int64, slug string) ([]string
 	return kinds, nil
 }
 
-// requireCompany reports ErrCompanyNotFound for a slug naming no company — the cheap
-// existence check that returns a clean 404 before the transaction opens, since the FK
-// would otherwise surface a bad slug as an opaque constraint violation (the same
-// reasoning as companyfeedback.Service.requireCompany and vote's).
+// requireCompany returns ErrCompanyNotFound for an unknown slug, for a clean 404 before
+// the transaction opens (the FK would otherwise surface an opaque constraint violation).
 func (s *Service) requireCompany(ctx context.Context, slug string) error {
 	ok, err := s.q.CompanySlugExists(ctx, slug)
 	if err != nil {

@@ -42,13 +42,10 @@ func sessionView(s assistant.Session) sessionResponse {
 	}
 }
 
-// assistantSessionID parses the :id route param. A session id is a UUID, so
-// anything else cannot name a session at all — report it as missing rather than as
-// a bad request, keeping "not yours" and "not a session" one indistinguishable
-// answer.
-// cvIDString renders a tailoring session's CV binding for the wire. A CV id is a
-// UUID the client treats as opaque, so it travels as a string like the session's
-// own id.
+// assistantSessionID parses the :id route param. A non-UUID cannot name a session, so it is
+// reported as missing, not as a bad request: "not yours" and "not a session" look the same.
+// cvIDString renders a tailoring session's CV binding for the wire as an opaque string, like
+// the session's own id.
 func cvIDString(id *uuid.UUID) *string {
 	if id == nil {
 		return nil
@@ -66,13 +63,10 @@ func parseAssistantSessionID(raw string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// CreateAssistantSession starts a new unbound conversation for the caller — a general
-// chat, the experience interviewer with `?preset=profile`, or a browsing session held
-// from the extension's side panel with `?preset=browse`.
-//
-// Only the presets that bind to NOTHING can be minted here. A tailoring session is
-// created by the tailoring bootstrap, which knows the CV and the vacancy to bind; letting
-// this endpoint name that preset would produce a session whose tools point at nothing.
+// CreateAssistantSession starts a new unbound conversation: a general chat, the experience
+// interviewer (`?preset=profile`) or a browsing session from the side panel (`?preset=browse`).
+// Only presets that bind to NOTHING can be minted here; a tailoring session is created by the
+// tailoring bootstrap, which knows the CV and vacancy to bind.
 func (h *assistantHandlers) CreateAssistantSession(ctx context.Context, req apigen.OptAssistantSessionRequest, params apigen.CreateAssistantSessionParams) (apigen.CreateAssistantSessionRes, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -93,9 +87,8 @@ func (h *assistantHandlers) CreateAssistantSession(ctx context.Context, req apig
 		return nil, fiber.NewError(fiber.StatusBadRequest, "request_id requires search_query")
 	}
 
-	// The creatable presets that bind to something all bind to the same thing: an
-	// application. The client may name the vacancy because that binding is one the caller
-	// already owns, and the server checks it rather than taking their word for it.
+	// The creatable presets that bind to something all bind to an application. The client may name
+	// the vacancy; the server checks it instead of taking their word.
 	var jobID *int64
 	var vacancy db.Job
 	if bindsToApplication(preset) {
@@ -131,10 +124,8 @@ func (h *assistantHandlers) CreateAssistantSession(ctx context.Context, req apig
 	if err != nil {
 		return nil, err
 	}
-	// Name it after its vacancy now, while we hold it. A session is otherwise named from
-	// its first user message — which for these presets is the server's own brief,
-	// identical every time, so every such session in the rail would carry the same string
-	// and none would say which interview it was.
+	// Name it after its vacancy now: otherwise it is named from the first user message, which for
+	// these presets is the server's own identical brief, so every session in the rail would read the same.
 	if label := applicationSessionLabel(preset, vacancy); label != "" {
 		if err := h.store.LabelSession(ctx, sess.ID, sess.UserID, label); err != nil {
 			log.Printf("assistant: could not name %s session %s: %v", preset, sess.ID, err)
@@ -174,17 +165,11 @@ func assistantSessionOK(s assistant.Session) (apigen.CreateAssistantSessionRes, 
 	return &apigen.CreateAssistantSessionOK{Data: view}, nil
 }
 
-// creatablePreset resolves the preset a client asked for. Naming the value it rejected
-// and the ones it accepts matters: this endpoint serves the web app and the extension
-// both, and a bare 400 leaves a client author guessing.
-//
-// Tailoring is the one preset that cannot be minted here, because its binding is a CV
-// that does not exist yet — the tailoring bootstrap creates both together. A rehearsal
-// and a debrief bind to an application the caller already has, so naming one is safe.
-//
-// The accepted list is a slice rather than a switch's case list because the refusal has
-// to recite it, and a preset added to one and forgotten in the other is a 400 that lies
-// about what the client may ask for.
+// creatablePreset resolves the preset a client asked for. A refusal names the rejected value
+// and the accepted ones, since the web app and the extension both use this endpoint.
+// Tailoring cannot be minted here (its CV does not exist yet); a rehearsal or debrief binds to
+// an application the caller already has. The accepted list is a slice, not a switch, so the
+// refusal recites the same list the check uses.
 var creatablePresets = []string{
 	assistant.PresetChat,
 	assistant.PresetProfile,
@@ -206,22 +191,16 @@ func creatablePreset(asked string) (string, error) {
 			asked, creatablePresets))
 }
 
-// bindsToApplication answers whether a preset is held against one application. Both
-// such presets carry a vacancy and no CV, and both are minted by naming a slug the
-// caller has applied to.
-//
-// The stage is deliberately not part of the answer. A debrief belongs after an
-// interview, but a candidate who sat one and never moved their application's stage is
-// exactly who it is for; where the button appears is the client's judgement, and
-// refusing them here would be a bug wearing a rule's clothes.
+// bindsToApplication answers whether a preset is held against one application: both such
+// presets carry a vacancy and no CV. The stage is deliberately not checked: a candidate who sat
+// an interview and never moved the stage is exactly who a debrief is for.
 func bindsToApplication(preset string) bool {
 	return preset == assistant.PresetInterview || preset == assistant.PresetDebrief || preset == assistant.PresetApply
 }
 
-// applicationSessionLabel names such a session in the rail: what it is, the role, and
-// the company when the posting carries one. Empty for a vacancy with no title, which
-// leaves the ordinary naming-from-the-first-message in place rather than writing a label
-// that says nothing — and empty for any preset that is not bound to an application.
+// applicationSessionLabel names such a session in the rail: the role, plus the company when
+// known. Empty for a vacancy with no title or a preset not bound to an application, which
+// leaves the naming-from-the-first-message in place.
 func applicationSessionLabel(preset string, job db.Job) string {
 	var prefix string
 	switch preset {
@@ -245,12 +224,9 @@ func applicationSessionLabel(preset string, job db.Job) string {
 	return label
 }
 
-// applicationVacancy resolves the `job_id` such a session is asked for, and refuses one
-// the caller has no application against.
-//
-// The application row IS the authorisation: user_jobs holds one per (user, vacancy), so
-// its absence answers "not yours" and "no such thing" with the same 404 — the same way a
-// session the caller does not own is reported as missing.
+// applicationVacancy resolves the `job_id` such a session is asked for and refuses one the
+// caller has no application against. The user_jobs row is the authorisation: its absence
+// answers "not yours" and "no such thing" with the same 404.
 func (h *assistantHandlers) applicationVacancy(ctx context.Context, userID int64, rawSlug string) (db.Job, error) {
 	slug := strings.TrimSpace(rawSlug)
 	if slug == "" {
@@ -347,16 +323,10 @@ func (h *assistantHandlers) DeleteAssistantSession(ctx context.Context, params a
 	return mapAssistantError(h.store.DeleteSession(ctx, id, userID))
 }
 
-// CancelAssistantTurn stops the session's running turn.
-//
-// It exists because stopping used to be a side effect of the transport: the client aborted its
-// read, the next write failed, and the turn was cancelled. That made a deliberate stop
-// indistinguishable from a phone freezing its tab, and the turn paid for the confusion. Now the
-// two are different things, and this is the one that means stop.
-//
-// A session with nothing running is not an error. A client cancels a turn whose end it cannot
-// see; requiring it to first prove the turn is alive would ask it for the one fact it does not
-// have. The ownership check comes first either way, so an id cannot be probed for existence.
+// CancelAssistantTurn stops the session's running turn. It is an explicit stop, distinct from a
+// client dropping its read (a frozen phone tab). A session with nothing running is not an
+// error: a client cancels a turn whose end it cannot see. Ownership is checked first, so an id
+// cannot be probed for existence.
 func (h *assistantHandlers) CancelAssistantTurn(ctx context.Context, params apigen.CancelAssistantTurnParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

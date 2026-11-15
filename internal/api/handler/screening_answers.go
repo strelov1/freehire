@@ -10,11 +10,9 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 )
 
-// screeningAnswersHandlers serves the caller's own screening answers — the six
-// candidate-stated facts (authorized countries, visa sponsorship, desired salary, notice
-// period, willingness to relocate, 18+) that repeat across ATS application forms and no CV
-// can supply. The use case lives in screeninganswers.Store; the handlers translate wire ↔
-// domain and delegate to it.
+// screeningAnswersHandlers serves the caller's own screening answers: the candidate-stated
+// facts (authorized countries, visa sponsorship, desired salary, notice period, relocation,
+// 18+) that repeat across ATS forms and no CV can supply. The logic lives in screeninganswers.Store.
 type screeningAnswersHandlers struct {
 	store *screeninganswers.Store
 }
@@ -24,10 +22,8 @@ func newScreeningAnswersHandlers(store *screeninganswers.Store) *screeningAnswer
 }
 
 func (h *screeningAnswersHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// The screening-answers record is a singleton — one per user, keyed by the
-	// authenticated caller, no id in the path. GET returns the record or null; PUT
-	// partially updates it (a field the body omits keeps its stored value). Same auth
-	// split as /me/profile: the read takes a key, the write is cookie-only.
+	// A per-user singleton, no id in the path; PUT updates partially. Same auth split as
+	// /me/profile: the read takes a key, the write is cookie-only.
 	api.Get("/me/screening-answers", mw.key, contract)
 	api.Put("/me/screening-answers", mw.cookie, contract)
 }
@@ -50,13 +46,10 @@ func (h *screeningAnswersHandlers) GetScreeningAnswers(ctx context.Context) (*ap
 	return &apigen.GetScreeningAnswersOK{Data: apigen.NewNilScreeningAnswers(screeningAnswersOut(answers))}, nil
 }
 
-// UpdateScreeningAnswers partially updates the authenticated user's screening answers: a
-// field the request body carries is validated and stored; a field it omits keeps its
-// stored value; a field named in "clear" is withdrawn back to unstated. A malformed field
-// (an unrecognized country code, a currency that is not a three-letter ISO 4217 code, a
-// period outside the vocabulary, a non-positive salary, a negative notice period), an
-// unknown name in "clear", or a field both stated and cleared is a 400 naming it.
-// Cookie-only.
+// UpdateScreeningAnswers partially updates the caller's screening answers: a field the body
+// carries is validated and stored, an omitted one keeps its value, one named in "clear"
+// returns to unstated. A malformed field, an unknown name in "clear", or a field both stated
+// and cleared is a 400 naming it. Cookie-only.
 func (h *screeningAnswersHandlers) UpdateScreeningAnswers(ctx context.Context, req *apigen.ScreeningAnswersUpdate) (*apigen.UpdateScreeningAnswersOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

@@ -16,7 +16,8 @@
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
   import { markApplied, type FreehireJob, type JobMatch } from '../../lib/freehire';
   import { contributePageUrl, matchPage } from '../../lib/pageMatch';
-  import { scopeToApplication, normalizeLabel } from '../../lib/form';
+  import { scopeToApplication } from '../../lib/form';
+  import { normalizeLabel } from '../../lib/fieldKeys';
   import {
     buildPlan,
     leftAnApplication,

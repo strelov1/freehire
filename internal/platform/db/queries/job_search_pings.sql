@@ -6,7 +6,7 @@
 -- with something other than "other", or is_tech is confidently true). A URL worth
 -- announcing is a URL the site itself claims, and the sitemap claims exactly what the
 -- index holds. The body test is the raw column, not the stripped text the index tests;
--- a body that is only empty markup is the same small residual companies.sql names.
+-- a body that is only empty markup is the same small residual company_facets.sql names.
 --
 -- `technical` picks the tier, and the two tiers partition the gate: true is the
 -- is_tech postings, false is every other posting with a resolved category — the
@@ -116,8 +116,8 @@ WHERE engine = sqlc.arg(engine)
 --
 -- job_count > 0 is the whole eligibility, and it is not a fresh judgement: it is the
 -- same gate that puts a company in the sitemap, derived by cmd/recount-companies from
--- the postings the SEARCH INDEX will hold (see the long argument on that query in
--- companies.sql). So a page announced here is exactly a page the site already claims,
+-- the postings the SEARCH INDEX will hold (see the long argument on RefreshCompanyFacets in
+-- company_facets.sql). So a page announced here is exactly a page the site already claims,
 -- and a company whose last posting drops out of search stops being offered without this
 -- query knowing why.
 --

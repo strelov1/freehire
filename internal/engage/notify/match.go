@@ -17,54 +17,41 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// matchLag is how far before a group's last search its next one keeps paging. A
-// posting reaches the index minutes after its created_at (the search drain runs
-// every minute or two), so a search that stopped exactly at the last one's instant
-// would miss what was created before it and indexed after.
+// matchLag is how far before a group's last search its next one keeps paging: a
+// posting reaches the index minutes after its created_at, so stopping exactly at the
+// last search's instant would miss it.
 const matchLag = time.Hour
 
-// maxMatchPages bounds how far one query pages back in a pass. At MatchLimit 200 it
-// is 10,000 postings — measured 2026-11-05, the busiest daily subscription matched
-// ~4,000 in a day — so it only cuts a query that matches most of the catalogue.
+// maxMatchPages bounds how far one query pages back in a pass; it only cuts a query
+// that matches most of the catalogue.
 const maxMatchPages = 50
 
 // matchGroup is the set of subscriptions one search serves: those sharing a query. A
-// query that reads the subscriber's own company list (`watchlist=true`) means a different
-// set of companies to each person, so it is grouped per person as well and userID names
-// them; for every other query userID is 0 and the group is shared.
+// watchlist query (`watchlist=true`) means different companies to each person, so it is
+// grouped per user and userID names them; otherwise userID is 0.
 type matchGroup struct {
 	query  string
 	userID int64
 }
 
-// match re-runs each distinct saved-search query against the index and records
-// the matching jobs for every subscription on that query. Subscriptions are
-// grouped by their (already-canonical, SPA-serialized) query string, so a query
-// shared by many subscribers costs one search — except a watchlist query, which is
-// one search per subscriber because it resolves to that subscriber's companies. A job is gated against each
-// subscription's start_at, against the subscriber's live excluded_skills (avoid-skills)
-// preference, and against the query's minimum skill match over their live skills, so a
-// subscription never receives a job older than it, carrying a skill its subscriber
-// currently avoids, or below the threshold they saved.
+// match re-runs each distinct saved-search query against the index and records the
+// matching jobs for every subscription on that query. Subscriptions are grouped by
+// their canonical query string, so a shared query costs one search, except a
+// watchlist query, which is one search per subscriber. A job is gated against each
+// subscription's start_at, the subscriber's live excluded_skills, and the query's
+// minimum skill match over their live skills.
 //
-// One failing query is logged, COUNTED and skipped, not fatal — the same isolation as
-// the per-board ingest crawl, which also counts its failed boards rather than only
-// logging them. Without the count a pass in which every query failed printed
-// `queries=53 matched=0 ... failed=0` and exited 0, which is byte-identical to a pass
-// with genuinely nothing new to match; Stats.MatchingCollapsed is what the worker
-// turns that into an exit code with.
+// One failing query is logged, COUNTED and skipped, not fatal. The count matters:
+// Stats.MatchingCollapsed turns a pass where every query failed into an exit code,
+// which would otherwise look identical to a pass with nothing new.
 //
 // A cancelled context ends the stage instead of counting the rest as failures: the
-// remaining queries would each fail instantly against the same dead context, so one
-// SIGTERM would otherwise read as "every saved search is broken". Same reasoning, and
-// the same shape, as forCompanyBatches in cmd/reindex.
+// remaining queries would all fail instantly against the dead context.
 //
-// A query is searched only when one of its subscriptions is due (searchDue): a
-// search whose result cannot be sent this pass is load on the index for nothing.
-// Measured 2026-11-05, every five-minute pass ran ~2,100 searches while an
-// hourly digest can use one an hour, and Meilisearch was the busiest process on
-// the host. A query searched after a gap pages back to its previous search
-// (matchLag, maxMatchPages), so the gap loses nothing.
+// A query is searched only when one of its subscriptions is due (searchDue): a search
+// whose result cannot be sent this pass is load on the index for nothing. A query
+// searched after a gap pages back to its previous search (matchLag, maxMatchPages),
+// so the gap loses nothing.
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	now := r.now()
 	subs, err := r.store.ListActiveSubscriptions(ctx)
@@ -123,14 +110,9 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	}()
 	for key, gsubs := range groups {
 		if err := r.matchQuery(ctx, key, gsubs, skillsByUser, watched[key.userID], stats); err != nil {
-			// `done`, not the failure count: what a cancellation has to report is how
-			// far the stage got, and this branch runs before the failure is counted.
-			//
-			// It STOPS but does not fail, the same rule and for the same reason as the
-			// delivery loop below: an unmatched query is simply matched by the next pass,
-			// so an ordinary `systemctl stop` is not an outage and must not paint the unit
-			// red. Returning an error here would also have skipped Run's summary line —
-			// losing the counters exactly when somebody wants to know how far it got.
+			// Stops but does not fail: the next pass matches what is left, so a plain
+			// `systemctl stop` must not paint the unit red, and returning an error would
+			// skip Run's summary line.
 			if cause := ctx.Err(); cause != nil {
 				log.Printf("notify: matching stopped after %d of %d queries: %v", done, stats.Queries, cause)
 				return nil
@@ -149,13 +131,11 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 
 // pauseUnrunnable pauses every subscription whose saved query the search can no
 // longer honor, and drops its group from this pass. A parse failure repeats on every
-// pass and never delivers: measured 2026-11-05, one subscription with ten OR alternatives
-// had failed every pass for a week while its owner received nothing. New and resumed
-// subscriptions are refused at the door (internal/engage/subscription), so this
-// catches what predates a rule — a query saved before it existed, or one a tightened
-// rule later invalidates. Paused rather than deleted: the owner can fix the search
-// and resume it. A failed pause is logged and retried next pass; the query is not
-// searched either way, since it would fail or silently widen.
+// pass and never delivers. New and resumed subscriptions are refused at the door
+// (internal/engage/subscription), so this catches queries saved before a rule existed
+// or invalidated by a tightened one. Paused rather than deleted so the owner can fix
+// and resume. A failed pause is retried next pass; the query is not searched either
+// way, since it would fail or silently widen.
 func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[matchGroup][]db.ListActiveSubscriptionsRow, stats *Stats) {
 	for key, gsubs := range groups {
 		query := key.query
@@ -182,8 +162,7 @@ func (r *Runner) pauseUnrunnable(ctx context.Context, groups map[matchGroup][]db
 }
 
 // person is who one delivery message goes to: a user on a channel, or a single
-// webhook subscription (a webhook is sent one saved search at a time). It mirrors
-// the grouping ClaimSubscriptionMatches and deliver use.
+// webhook subscription. It mirrors the grouping ClaimSubscriptionMatches and deliver use.
 type person struct {
 	userID  int64
 	channel string
@@ -228,12 +207,9 @@ func oldestSearch(subs []db.ListActiveSubscriptionsRow) time.Time {
 	return oldest
 }
 
-// searchDue reports whether one person's subscriptions must be searched this pass.
-// The rule is "search when a message could go out, and at least once per
-// interval while it could": a posting is then found no later than one interval
-// after it appears and sent in the same pass, which is the latency the interval
-// already promises. Searching between sends only recorded matches earlier — the
-// paging in matchQuery records the same set when the search does run.
+// searchDue reports whether one person's subscriptions must be searched this pass:
+// when a message could go out, and at least once per interval while it could. The
+// paging in matchQuery records the same set whenever the search does run.
 //
 //   - instant: every pass.
 //   - interval: when the interval since the last message has elapsed (the
@@ -288,10 +264,9 @@ type subscriberSkills struct {
 	excluded []string
 }
 
-// skillSetsByUser batch-fetches every distinct subscriber's held and avoided skills in one
-// round trip, keyed by user id — cheaper than fetching per query group or per subscription,
-// since the same subscriber can appear in several groups. A user id with no profile row is
-// simply absent from the result; callers treat that as empty sets.
+// skillSetsByUser fetches every distinct subscriber's held and avoided skills in one
+// round trip, keyed by user id. A user with no profile row is absent; callers treat
+// that as empty sets.
 func (r *Runner) skillSetsByUser(ctx context.Context, subs []db.ListActiveSubscriptionsRow) (map[int64]subscriberSkills, error) {
 	seen := make(map[int64]struct{}, len(subs))
 	userIDs := make([]int64, 0, len(subs))
@@ -316,8 +291,8 @@ func (r *Runner) skillSetsByUser(ctx context.Context, subs []db.ListActiveSubscr
 	return skillsByUser, nil
 }
 
-// watchlists reads the companies each watchlist-alert owner watches, keyed by user id. A
-// user with an empty list is simply absent.
+// watchlists reads the companies each watchlist-alert owner watches, keyed by user id.
+// A user with an empty list is absent.
 func (r *Runner) watchlists(ctx context.Context, userIDs []int64) (map[int64][]string, error) {
 	if len(userIDs) == 0 {
 		return nil, nil
@@ -335,16 +310,14 @@ func (r *Runner) watchlists(ctx context.Context, userIDs []int64) (map[int64][]s
 }
 
 // matchQuery runs one query and records its matches across the subscriptions that
-// share it. For a watchlist group, slugs is its owner's companies and narrows the search to
-// them; with none, nothing can match and no search runs — dropping the filter instead would
-// widen the alert to the whole catalogue.
+// share it. For a watchlist group, slugs is its owner's companies and narrows the
+// search; with none, no search runs, since dropping the filter would widen the alert
+// to the whole catalogue.
 //
-// It reads the newest MatchLimit hits, as it always did, and keeps paging while a
-// full page still reaches back past the group's previous search (less matchLag):
-// a group searched once an hour can match more than one page in that hour.
+// It reads the newest MatchLimit hits and keeps paging while a full page still
+// reaches back past the group's previous search (less matchLag).
 func (r *Runner) matchQuery(ctx context.Context, key matchGroup, subs []db.ListActiveSubscriptionsRow, skillsByUser map[int64]subscriberSkills, slugs []string, stats *Stats) error {
-	// A group with a never-searched subscription reads one page, as a first search
-	// always did.
+	// A group with a never-searched subscription reads one page.
 	since := oldestSearch(subs)
 	vals, _ := url.ParseQuery(key.query)
 	minMatch := minSkillMatch(vals)
@@ -360,7 +333,7 @@ func (r *Runner) matchQuery(ctx context.Context, key matchGroup, subs []db.ListA
 			Query:  vals.Get("q"),
 			Filter: filter,
 			// Freshest first so the bounded window holds the newest matches; the
-			// ledger dedups, so re-scanning the same recent jobs each pass is free.
+			// ledger dedups re-scans.
 			Sort:   []string{"created_at:desc"},
 			Limit:  r.cfg.MatchLimit,
 			Offset: page * r.cfg.MatchLimit,
@@ -386,18 +359,14 @@ func (r *Runner) matchQuery(ctx context.Context, key matchGroup, subs []db.ListA
 // recordHits records one page of a query's hits for every subscription that shares it.
 func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs []db.ListActiveSubscriptionsRow, skillsByUser map[int64]subscriberSkills, minMatch int, stats *Stats) error {
 
-	// Collect every (subscription, job) pair this query's hits produced across every
-	// subscription that shares it, then record the whole batch in one round trip —
-	// a popular query with many subscribers no longer costs one sequential INSERT per
-	// (hit, subscription) pair.
+	// Collect every (subscription, job) pair, then record the batch in one round trip.
 	var subIDs, jobIDs []int64
 	var revisions []int32
 	for _, hit := range hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
-			// Cannot gate against start_at without a date; skip rather than
-			// mis-notify (jobs.created_at is NOT NULL, so this should not happen —
-			// log it so a future index change that drops created_at is detectable).
+			// Cannot gate against start_at without a date; skip rather than mis-notify.
+			// created_at is NOT NULL, so log it to catch an index change that drops it.
 			log.Printf("notify: hit %d has no created_at, skipping", hit.ID)
 			continue
 		}
@@ -406,17 +375,14 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 			if created.Before(s.StartAt.Time) {
 				continue
 			}
-			// Skip a job carrying any skill the subscriber currently avoids. This is
-			// evaluated per (hit, subscriber) pair against the live excluded_skills,
-			// not a value frozen into the saved search's own query string — no extra
-			// search call, since the shared search above already ran once per query.
+			// Skip a job carrying a skill the subscriber currently avoids, checked per
+			// (hit, subscriber) against the live excluded_skills, not the saved query.
 			skills := skillsByUser[s.UserID]
 			if hasAvoidedSkill(hit.Skills, skills.excluded) {
 				continue
 			}
-			// The same per-pair evaluation: the percent depends on who is reading. It runs
-			// after the shared search, so it can only thin the pages that search read, not
-			// reach past them.
+			// Also per pair, since the percent depends on the reader; it can only thin
+			// the pages the shared search read.
 			if !meetsSkillMatch(hit.Skills, skills.held, minMatch) {
 				continue
 			}
@@ -441,12 +407,12 @@ func (r *Runner) recordHits(ctx context.Context, hits []search.JobDocument, subs
 }
 
 // minSkillMatchParam carries the job list's "Minimum skill match" threshold in a saved
-// query. It is no search filter — the percent depends on the reader, so the index cannot
-// answer it, and FilterFromValues does not read it.
+// query. It is no search filter: the percent depends on the reader, so the index
+// cannot answer it.
 const minSkillMatchParam = "min_skill_match"
 
-// minSkillMatch reads the query's threshold; 0 means none. It accepts what the web filter
-// model accepts (1-100), so a value the job list ignores cannot empty a digest.
+// minSkillMatch reads the query's threshold; 0 means none. It accepts what the web
+// filter accepts (1-100), so a value the job list ignores cannot empty a digest.
 func minSkillMatch(vals url.Values) int {
 	n, err := strconv.Atoi(strings.TrimSpace(vals.Get(minSkillMatchParam)))
 	if err != nil || n < 1 || n > 100 {
@@ -468,9 +434,8 @@ func meetsSkillMatch(jobSkills, held []string, minPercent int) bool {
 }
 
 // hasAvoidedSkill reports whether any of a job's skills is in the subscriber's
-// excluded_skills. Both sides come from the same canonical, dict-only skill
-// vocabulary, normalized (lowercased/trimmed) on save, so a case-insensitive exact
-// match is sufficient — no partial or fuzzy matching.
+// excluded_skills. Both sides come from the same normalized skill vocabulary, so a
+// case-insensitive exact match suffices.
 func hasAvoidedSkill(jobSkills, excluded []string) bool {
 	if len(excluded) == 0 {
 		return false

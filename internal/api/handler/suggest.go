@@ -17,9 +17,7 @@ type suggester interface {
 	Suggest(ctx context.Context, query string, limit int) ([]suggest.Suggestion, error)
 }
 
-// The completion list is a shortcut, not a results page: past a handful the rows stop
-// being scannable and stop fitting on a phone. The cap is enforced server-side too, so
-// a caller asking for 500 gets a dropdown's worth rather than a dictionary dump.
+// The completion list is a shortcut, not a results page; the cap is enforced server-side too.
 const (
 	suggestDefaultLimit = 5
 	suggestMaxLimit     = 20
@@ -33,10 +31,8 @@ func (h *suggestHandlers) register(api fiber.Router, contract fiber.Handler) {
 
 // Suggest completes what the visitor is typing.
 //
-// An empty `q` is answered with an empty list rather than a curated one. What an empty
-// box should offer is the filter modal's own category grouping, which lives in the web
-// and is checked there against the category vocabulary at compile time; serving it from
-// here would be a second copy of that order — see suggest.Service.Suggest.
+// An empty `q` gets an empty list: what an empty box offers is the web's own category
+// grouping, and serving it here would duplicate that order (see suggest.Service.Suggest).
 func (h *suggestHandlers) Suggest(ctx context.Context, params apigen.SuggestParams) (*apigen.SuggestOK, error) {
 	if h.suggest == nil {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured")
@@ -46,8 +42,7 @@ func (h *suggestHandlers) Suggest(ctx context.Context, params apigen.SuggestPara
 	if err != nil {
 		return nil, err
 	}
-	// Always an array, never null (the generated encoder writes a nil slice as []): a
-	// client that renders `data.map(...)` should not have to tell "no matches" from "no field".
+	// Always an array, never null, so clients need not tell "no matches" from "no field".
 	out := make([]apigen.Suggestion, len(items))
 	for i, item := range items {
 		parts := make([]apigen.SuggestionPart, len(item.Parts))
@@ -59,9 +54,8 @@ func (h *suggestHandlers) Suggest(ctx context.Context, params apigen.SuggestPara
 	return &apigen.SuggestOK{Data: out, Meta: apigen.SuggestMeta{Count: int64(len(out))}}, nil
 }
 
-// suggestLimit reads the row cap, clamped. An unparseable or out-of-range value falls
-// back to the default rather than failing the request: this endpoint is typed into, and
-// a 400 in the middle of a dropdown is worse than a sensible number of rows.
+// suggestLimit reads the row cap, clamped. An unparseable or out-of-range value falls back
+// to the default: a 400 in the middle of a dropdown is worse than a sensible number of rows.
 func suggestLimit(raw string) int {
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 {

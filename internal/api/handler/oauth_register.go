@@ -34,23 +34,18 @@ type registerClientResponse struct {
 	ResponseTypes           []string `json:"response_types"`
 }
 
-// Bounds on what one unauthenticated registration may store. Most MCP clients
-// send a short product name and one or two callbacks, but Gemini registers more
-// than five at once (its 400 was "may hold at most 5", 71 times in a day), so the
-// URI bound is set well clear of real clients; anything past these is a payload,
-// not a client.
+// Bounds on what one unauthenticated registration may store. Some clients (Gemini) register
+// more than five callbacks, so the URI bound is well clear of real clients; anything past
+// these is a payload, not a client.
 const (
 	maxClientNameLength = 100
 	maxRedirectURIs     = 20
 )
 
-// RegisterOAuthClient implements RFC 7591 dynamic client registration. Public and
-// unauthenticated by design: an MCP client (Claude, Cursor, ChatGPT) self-registers
-// before it has ever talked to a freehire account, so there is no caller to gate
-// on yet. The security boundary is the consent screen a human approves later, not
-// who may mint a client_id here — which is why that screen names the redirect
-// host rather than trusting client_name, and why this handler only bounds the
-// SHAPE of what it stores (ValidateRedirectURI and the size limits).
+// RegisterOAuthClient implements RFC 7591 dynamic client registration. Public by design: an
+// MCP client self-registers before it has an account. The security boundary is the consent
+// screen (which names the redirect host rather than trusting client_name), so this handler
+// only bounds the SHAPE of what it stores (ValidateRedirectURI and the size limits).
 func (h *authHandlers) RegisterOAuthClient(c *fiber.Ctx) error {
 	var in registerClientRequest
 	if err := c.BodyParser(&in); err != nil {

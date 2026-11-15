@@ -17,22 +17,18 @@ import (
 // Compile-time proof that MailNotifier satisfies the seam the use cases depend on.
 var _ ReporterNotifier = (*MailNotifier)(nil)
 
-// MailNotifier emails a reporter what a moderator decided about their report. It renders the
-// three outcomes a reporter can receive — the job was removed, the report was acted on with
-// the listing left up, or nothing changed — because "we reviewed it" alone tells them
-// nothing they could not have assumed from silence.
 // Silencer answers whether an account has turned a group of mail off.
 // *emailprefs.Service satisfies it.
 //
-// This notice has no selection query to gate — a moderator decides, and the mail
-// goes out on that request path — so the check is here rather than in SQL, where
-// every queue-driven sender's gate lives. Without it the footer would advertise an
-// unsubscribe control this mail does not honour, which is worse than not offering
-// one.
+// This notice goes out on the moderator's request path with no selection query to
+// gate it, so the check lives here rather than in SQL. Without it the footer would
+// advertise an unsubscribe control this mail does not honour.
 type Silencer interface {
 	Silenced(ctx context.Context, userID int64, g emailprefs.Group) bool
 }
 
+// MailNotifier emails a reporter what a moderator decided about their report: the
+// job was removed, the report was acted on with the listing left up, or nothing changed.
 type MailNotifier struct {
 	sender   emailnotify.Sender
 	from     string
@@ -56,10 +52,8 @@ func NewMailNotifier(sender emailnotify.Sender, from, baseURL string, links *ema
 	}
 }
 
-// senderFrom puts the product's name on the From header. It is spelled out here
-// rather than imported from emailnotify because this package deliberately does not
-// depend on that one (see EmailSender above) — one duplicated word is cheaper than
-// dragging the AWS dependency graph into moderation.
+// senderFrom puts the product's name on the From header. Duplicated rather than
+// imported from emailnotify to keep the AWS dependency graph out of moderation.
 func senderFrom(address string) string {
 	parsed, err := mail.ParseAddress(address)
 	if err != nil {
@@ -68,9 +62,8 @@ func senderFrom(address string) string {
 	return (&mail.Address{Name: "freehire", Address: parsed.Address}).String()
 }
 
-// maxQuotedDetails bounds how much of the original report is quoted back. The reporter wrote
-// it and knows what it said; the quotation is there to jog their memory, not to reprint an
-// essay.
+// maxQuotedDetails bounds how much of the original report is quoted back, as a
+// reminder rather than a reprint.
 const maxQuotedDetails = 400
 
 // noticeMail is what the templates render from. Lead and Action are prose the outcome
@@ -96,9 +89,8 @@ var noticeHTML = template.Must(mailtpl.Partials().New("notice").Parse(`
 // NotifyDecision renders the outcome and sends it. A transport failure is returned as-is:
 // this type does not decide what a failed notice means, the use case does.
 func (m *MailNotifier) NotifyDecision(ctx context.Context, d Decision) error {
-	// Honour the switch this mail's own footer offers. Returning nil rather than an
-	// error: not sending because somebody asked us not to is a success, and the use
-	// case above records "notified: false", which is the truth.
+	// Honour the footer's unsubscribe switch. Returns nil, not an error: the use
+	// case records "notified: false".
 	if m.silenced != nil && m.silenced.Silenced(ctx, d.UserID, emailprefs.GroupActivity) {
 		return nil
 	}
@@ -155,9 +147,8 @@ func (m *MailNotifier) compose(d Decision) (string, string, noticeMail) {
 	}
 }
 
-// textBody renders the plain-text alternative. It mirrors the HTML rather than sharing a
-// template with it, because the two differ in exactly the places templating makes awkward:
-// no markup, and the link spelled out.
+// textBody renders the plain-text alternative. It mirrors the HTML instead of
+// sharing a template: no markup, and the link spelled out.
 func textBody(m noticeMail) string {
 	var b strings.Builder
 	b.WriteString(m.Lead)
@@ -172,10 +163,9 @@ func textBody(m noticeMail) string {
 	return b.String()
 }
 
-// truncate cuts s to at most n bytes, marking the cut so the reader can tell their report
-// was quoted in part. The cut lands on a rune boundary: a report written in Cyrillic or CJK
-// has multi-byte runes and often no spaces to back off to, and half a rune is invalid UTF-8
-// that renders as a replacement character in the reader's mail client.
+// truncate cuts s to at most n bytes, marking the cut. The cut lands on a rune
+// boundary: Cyrillic or CJK text has multi-byte runes and often no spaces, and half
+// a rune is invalid UTF-8.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

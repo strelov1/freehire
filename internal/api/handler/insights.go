@@ -33,11 +33,9 @@ import (
 const (
 	insightsDefaultLimit = 20
 	insightsMaxLimit     = 200
-	// roleSkillTopN caps a single role's skill distribution. Separate from the `limit`
-	// above, which bounds how many ROLES a ranking returns: one knob serving both meant
-	// ?limit=1 silently asked for a one-skill distribution, and meta.limit could not tell
-	// the caller which of the two it had just set. Production roles publish 150-800
-	// skills each (measured 2026-09-18), so a cap is needed whatever the caller asks.
+	// roleSkillTopN caps a single role's skill distribution. It is separate from `limit`
+	// (how many ROLES a ranking returns) so ?limit=1 does not shrink the distribution.
+	// Roles publish hundreds of skills each, so a cap is needed regardless.
 	roleSkillTopN = 40
 	// companiesDefaultMinOpen floors the leaderboard's current open-count by default,
 	// so a company whose whole board just appeared/vanished (an ingest artifact) does
@@ -215,9 +213,8 @@ func (h *statsHandlers) InsightsRoles(ctx context.Context, params apigen.Insight
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	// A seniority spanning every category is not a role — "senior" alone names no
-	// population whose skill distribution means anything — so it is refused rather
-	// than silently answered with a ranking.
+	// A seniority spanning every category is not a role, so it is refused rather than
+	// answered with a ranking.
 	if seniority != "" && category == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "seniority requires category")
 	}
@@ -238,9 +235,8 @@ func (h *statsHandlers) InsightsRoles(ctx context.Context, params apigen.Insight
 		Meta: apigen.RolesMeta{Country: country, Category: category, Seniority: seniority, Sort: sort, Limit: int64(limit)},
 	}}
 	if seniority != "" {
-		// insights_role_stats is keyed by (category, seniority, country), so a named role
-		// matches at most one row. The loop is over "however many came back" rather than
-		// an assumption about that being one.
+		// insights_role_stats is keyed by (category, seniority, country): at most one row
+		// matches a named role, but the loop does not assume it.
 		var carriesCoverage bool
 		for i := range data {
 			if err := h.attachRoleSkills(ctx, &data[i]); err != nil {
@@ -250,30 +246,22 @@ func (h *statsHandlers) InsightsRoles(ctx context.Context, params apigen.Insight
 				carriesCoverage = true
 			}
 		}
-		// A coverage overlay is one caller's own answer. The sibling insights routes are
-		// happily shared-cacheable and the SPA sets s-maxage on them, so this must say
-		// otherwise explicitly — a shared cache holding one visitor's coverage would
-		// serve it to the next.
-		//
-		// The condition is what the BODY carries, not whether the caller is signed in.
-		// Those two agree on the ordinary path and part company when the overlay is
-		// skipped (a failed profile read), where re-deriving from the session would mark
-		// a response private that holds nothing private.
+		// A coverage overlay is one caller's own answer, while the sibling routes are
+		// shared-cacheable (the SPA sets s-maxage), so say private explicitly.
+		// Key on what the BODY carries, not on being signed in: a skipped overlay
+		// (failed profile read) holds nothing private.
 		if carriesCoverage {
 			out.CacheControl = apigen.NewOptString("private, no-store")
 		}
-		// The distribution is country-agnostic by design (the rollup does not cross a
-		// third axis), while open_count and growth above ARE country-scoped. Saying so
-		// is the difference between a caller reading a national figure and assuming one.
+		// The distribution is country-agnostic (the rollup has no third axis), while
+		// open_count and growth above are country-scoped.
 		out.Response.Meta.SkillsGeographyScoped = apigen.NewOptBool(false)
 	}
 	return out, nil
 }
 
 // attachRoleSkills fills one role's distribution and the denominator its shares divide
-// by. A role with no sample row has no skill-bearing postings, which is a real answer —
-// an empty distribution over a sample of zero — not an error, so the missing row is read
-// as zero rather than propagated.
+// by. A role with no sample row has no skill-bearing postings: read as zero, not an error.
 func (h *statsHandlers) attachRoleSkills(ctx context.Context, role *apigen.RoleInsight) error {
 	sample, err := h.queries.GetInsightsRoleSkillSample(ctx, db.GetInsightsRoleSkillSampleParams{
 		Category: role.Category, Seniority: role.Seniority,
@@ -300,14 +288,11 @@ func (h *statsHandlers) attachRoleSkills(ctx context.Context, role *apigen.RoleI
 }
 
 // skillShare is the one place the denominator rule lives: a skill's count over the
-// role's SKILL-BEARING postings, never over its open count. Measured 2026-09-18, 11% of
-// the eligible postings carry no tagged skill, so dividing by the open count would fold
-// our own tagging gap into every published share — and because that gap differs per
-// role, two roles' shares would stop being comparable.
+// role's SKILL-BEARING postings, never its open count. Untagged postings would fold our
+// tagging gap into every share and make roles incomparable.
 //
-// A sample of zero yields zero rather than a division by it. That combination cannot
-// arise from real data (a skill counted implies a posting carrying it), so the guard is
-// against the rollups being out of step, not against a case the catalogue produces.
+// A sample of zero yields zero rather than a division by it; real data cannot produce
+// that, so the guard is against the rollups being out of step.
 func skillShare(count, sample int32) float64 {
 	if sample <= 0 {
 		return 0
@@ -319,17 +304,13 @@ func skillShare(count, sample int32) float64 {
 // skills. Anonymous callers get nothing here and are never refused — the aggregate half
 // of this answer is public.
 //
-// It reuses internal/candidate/jobmatch unchanged rather than classifying the skills
-// again: a visitor will compare this page's coverage against a job page's, and two
-// matchers would eventually disagree about what counts as an adjacent skill.
+// It reuses internal/candidate/jobmatch so this page and a job page agree on what
+// counts as an adjacent skill.
 //
-// Best-effort, like the sibling signed-in overlays on the public job and company reads:
-// a profile lookup that fails leaves the coverage absent rather than failing a read that
-// is perfectly serviceable without it.
+// Best-effort: a failed profile lookup leaves the coverage absent rather than failing
+// the read.
 //
-// Returns whether a section was attached, which is what the caller's Cache-Control
-// decision reads — so the header describes the body rather than re-deriving the same
-// answer from the session and disagreeing with it on the skipped path.
+// Returns whether a section was attached; the caller's Cache-Control reads it.
 func (h *statsHandlers) attachRoleCoverage(ctx context.Context, role *apigen.RoleInsight) bool {
 	userID, ok := auth.UserIDFromContext(ctx)
 	if !ok || role.Skills == nil {
@@ -339,10 +320,8 @@ func (h *statsHandlers) attachRoleCoverage(ctx context.Context, role *apigen.Rol
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return false
 	}
-	// A caller with no profile row, or one holding no skills, still gets a coverage
-	// section — reporting zero held. An ABSENT section means "not signed in", and a
-	// client cannot tell that apart from "signed in and holding nothing" if the two
-	// share a representation.
+	// No profile row or no skills still yields a section reporting zero held: an ABSENT
+	// section must keep meaning "not signed in".
 	ranked := make([]string, len(role.Skills))
 	for i, s := range role.Skills {
 		ranked[i] = s.Skill
@@ -390,8 +369,8 @@ func (h *statsHandlers) InsightsCompanies(ctx context.Context, params apigen.Ins
 }
 
 // roleCountriesDefaultColumns / roleCountriesMaxColumns bound how many countries the
-// role × country grid spans. The cap is about the payload (each column adds up to one
-// cell per category, ~50), not about cost: the rollup is a few thousand rows.
+// role × country grid spans. The cap bounds the payload (a column adds up to one cell
+// per category), not cost.
 const (
 	roleCountriesDefaultColumns = 10
 	roleCountriesMaxColumns     = 25

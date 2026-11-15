@@ -15,11 +15,9 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// talentCatalogHandlers serves the PUBLIC Talent Network catalogue: the filtered list of
-// members, one member's card, and — when a member has uploaded one — a heavily blurred
-// rendering of their photo. All three are unauthenticated by design — the catalogue is
-// the front door of the feature, and a signed-out visitor is exactly who it is for — so
-// none of the routes take any auth middleware.
+// talentCatalogHandlers serves the PUBLIC Talent Network catalogue: the filtered member list,
+// one member's card, and a heavily blurred photo when uploaded. All are unauthenticated by
+// design (signed-out visitors are the audience), so no route takes auth middleware.
 type talentCatalogHandlers struct {
 	catalogue *talentnetwork.Catalogue
 	photos    *headshot.Store
@@ -30,22 +28,16 @@ func newTalentCatalogHandlers(catalogue *talentnetwork.Catalogue, photos *headsh
 }
 
 func (h *talentCatalogHandlers) register(api fiber.Router, contract fiber.Handler) {
-	// The handlers below implement the contract (typespec/talent.tsp). The generated
-	// router matches /talent/facets before /talent/{handle} on its own, so the order here
-	// no longer matters.
+	// Contract: typespec/talent.tsp. Route order does not matter; the generated router matches /talent/facets first.
 	api.Get("/talent", contract)
 	api.Get("/talent/facets", contract)
 	api.Get("/talent/:handle", contract)
 	api.Get("/talent/:handle/photo", contract)
 }
 
-// GetTalentFacets serves how many members stand behind each filter value, for the
-// filter the caller currently has.
-//
-// It is what makes the open vocabularies usable: skills are thousands of canonicals, and
-// a control offering them without counts cannot tell a value nobody carries from one
-// whose members have all left. Same query vocabulary as the list, same unread-param
-// report.
+// GetTalentFacets serves how many members stand behind each filter value, for the caller's
+// current filter. Counts make the open vocabularies (thousands of skills) usable. Same query
+// vocabulary and unread-param report as the list.
 func (h *talentCatalogHandlers) GetTalentFacets(ctx context.Context, _ apigen.GetTalentFacetsParams) (*apigen.GetTalentFacetsOK, error) {
 	vals := contractQuery(ctx)
 	q, unreadable := talentnetwork.QueryFromValues(vals)
@@ -87,22 +79,14 @@ func (h *talentCatalogHandlers) GetTalentMember(ctx context.Context, params apig
 	member, err := h.catalogue.ByHandle(ctx, params.Handle)
 	if err != nil {
 		if errors.Is(err, talentnetwork.ErrNotFound) {
-			// The one 404 every way of being absent produces — gone, stale, never
-			// existed, not even a handle. Distinguishing them would turn this route
-			// into a way of asking whether an account exists.
+			// One 404 for every way of being absent: distinguishing them would reveal whether an account exists.
 			return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 		}
 		return nil, err
 	}
 
-	// A card is a person, and a cache of one outlives their decision to leave.
-	//
-	// `private`, not `public`, even though the response carries no session and no
-	// personal data in the ordinary sense: `public` is the directive that authorises a
-	// SHARED cache — a CDN, a corporate proxy — to hold and re-serve it. This route
-	// promises that leaving takes effect on the next request, and an intermediary
-	// holding a departed member's card for a minute is exactly that promise broken by
-	// somebody we cannot ask to stop.
+	// `private`, not `public`: `public` lets a SHARED cache (CDN, corporate proxy) re-serve the
+	// card, and leaving must take effect on the next request.
 	return &apigen.GetTalentMemberOKHeaders{
 		CacheControl: talentCacheControl,
 		XRobotsTag:   "noindex",
@@ -113,12 +97,9 @@ func (h *talentCatalogHandlers) GetTalentMember(ctx context.Context, params apig
 // talentCacheControl is the one caching rule both per-member routes answer with.
 const talentCacheControl = "private, max-age=60"
 
-// GetTalentPhoto serves a member's photo, blurred to the point of being unrecognisable —
-// never the stored original, which no public route ever serves. Every reason the route
-// might not have an image to serve — the handle is not a current member, the member has
-// no headshot uploaded, or headshot storage is unavailable — answers identically, the
-// same 404 GetTalentMember gives a handle nobody holds: a caller must not be able to tell
-// "not a member" apart from "a member with no photo" by the shape of the response.
+// GetTalentPhoto serves a member's photo, blurred to be unrecognisable; no public route serves
+// the stored original. Not a member, no headshot, or storage unavailable all answer with the
+// same 404 as GetTalentMember, so a caller cannot tell "not a member" from "no photo".
 func (h *talentCatalogHandlers) GetTalentPhoto(ctx context.Context, params apigen.GetTalentPhotoParams) (*apigen.GetTalentPhotoOKHeaders, error) {
 	userID, err := h.catalogue.HeadshotOwner(ctx, params.Handle)
 	if err != nil {
@@ -130,14 +111,9 @@ func (h *talentCatalogHandlers) GetTalentPhoto(ctx context.Context, params apige
 
 	data, err := h.photos.Get(ctx, userID)
 	if err != nil {
-		// ErrNotStored (no headshot) and ErrStorageDisabled (storage unconfigured) both
-		// collapse into the same 404 a non-member gets — never the 501 the OWNER's own
-		// /me/photo/image route uses, which would tell a public caller storage is down
-		// as a fact distinct from "this member has no photo". Anything ELSE (a DB or
-		// blob-store fault) falls through to the ordinary error path instead of joining
-		// that same silent 404: collapsing those too would make a real outage
-		// indistinguishable from "no headshot" in every log and every alert, the same
-		// error-swallowing photo.go's mapPhotoError deliberately avoids.
+		// ErrNotStored and ErrStorageDisabled collapse into the non-member 404, not the 501 the
+		// owner's /me/photo/image uses, which would reveal storage is down. Any other fault
+		// (DB, blob store) keeps the ordinary error path so an outage stays visible in logs and alerts.
 		if errors.Is(err, headshot.ErrNotStored) || errors.Is(err, headshot.ErrStorageDisabled) {
 			return nil, fiber.NewError(fiber.StatusNotFound, "not found")
 		}
@@ -148,8 +124,7 @@ func (h *talentCatalogHandlers) GetTalentPhoto(ctx context.Context, params apige
 	if err != nil {
 		return nil, err
 	}
-	// Same reasoning as GetTalentMember's Cache-Control: private, so a shared cache never
-	// outlives a member's decision to leave.
+	// Private for the same reason as GetTalentMember.
 	return &apigen.GetTalentPhotoOKHeaders{
 		CacheControl: talentCacheControl,
 		XRobotsTag:   "noindex",
@@ -157,17 +132,12 @@ func (h *talentCatalogHandlers) GetTalentPhoto(ctx context.Context, params apige
 	}, nil
 }
 
-// ignoredTalentParams reports what this listing did not read: the params it does not
-// recognise at all, plus the ones it recognises but could not READ (`min_years=lots`).
+// ignoredTalentParams reports what this listing did not read: unknown params plus recognised
+// ones it could not READ (`min_years=lots`). One report, because the cap and ordering must
+// cover both; appending after SortAndCap would exceed the bound.
 //
-// Both belong in one report because both have the same consequence — the answer is wider
-// than the caller asked for — and one report because the cap and the ordering have to
-// cover the two together. Appending after SortAndCap would push the total past the bound
-// that exists to enforce it.
-//
-// The vocabulary is talentnetwork's, not search's. Passing these facets to
-// search.UnknownParams as `alsoKnown` would additionally accept every job-search facet
-// on an endpoint that reads none of them, and report nothing when one arrives.
+// The vocabulary is talentnetwork's, not search's: passing these facets to search.UnknownParams
+// as `alsoKnown` would accept every job-search facet here and report none.
 func ignoredTalentParams(vals url.Values, unreadable []string) []search.UnknownParam {
 	ignored := search.UnknownParamsAgainst(vals, talentnetwork.KnownParams())
 	for _, param := range unreadable {
@@ -176,9 +146,7 @@ func ignoredTalentParams(vals url.Values, unreadable []string) []search.UnknownP
 	return search.SortAndCap(ignored)
 }
 
-// talentMemberOut is a catalogue member in its wire shape. Every field the card's JSON
-// tags omit when empty is left unset here for the same reason, so the answer keeps the
-// shape it had before the contract.
+// talentMemberOut is a catalogue member in its wire shape; fields empty on the card are left unset.
 func talentMemberOut(m talentnetwork.CatalogueMember) apigen.TalentMember {
 	return apigen.TalentMember{
 		Handle:          m.Handle,

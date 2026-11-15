@@ -19,17 +19,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// mcpAccountTools is the in-app assistant's discovery and tracking tools, less
-// the one that only works inside our own client, plus job alerts, dictionary suggestions,
-// auto-apply, and the interview-buddy and mock-interview tools (cookie-only over REST, so
-// grant-only here).
+// mcpAccountTools is the in-app assistant's discovery and tracking tools, less the one that
+// only works inside our own client, plus job alerts, dictionary suggestions, auto-apply, and
+// the interview-buddy and mock-interview tools (cookie-only over REST, so grant-only here).
 //
-// present_jobs draws vacancy cards in freehire's chat UI and returns a bare
-// receipt of slugs; its description tells the model that it is the ONLY way a
-// vacancy reaches the screen and to never write a job link. In Claude or ChatGPT
-// there is no card renderer, so a model obeying that description shows the
-// person nothing at all. Without the tool, the model writes the links
-// search_jobs already hands it.
+// present_jobs is left out: it draws cards in freehire's chat UI and its description says it
+// is the only way a vacancy reaches the screen, so in Claude or ChatGPT (no card renderer) a
+// model obeying it would show nothing. Without it the model writes the links search_jobs gives.
 func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.Tool {
 	all := append(mcpKeyTools(assistants, origin), assistants.autoApplyMCPTools()...)
 	// Dictionary suggestions are cookie-only over REST; keep the corresponding
@@ -43,15 +39,13 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 	return append(all, assistants.problemMCPTools()...)
 }
 
-// mcpKeyTools is what the same server offers a full-scope API key: everything an
-// OAuth grant gets except cookie-only actions (auto-apply, dictionary suggestions, problem
-// reports and interview buddies).
+// mcpKeyTools is what the same server offers a full-scope API key: everything an OAuth grant
+// gets except cookie-only actions (auto-apply, dictionary suggestions, problem reports and
+// interview buddies).
 //
-// A key reaches this server so the local MCP package (freehire-mcp), which holds a
-// key and no grant, can manage job alerts through these tools rather than through
-// a second implementation of them. Auto-apply stays with the grant: it sends real
-// applications in the person's name, and over REST it has never been open to a key
-// (its routes are cookie-only), so arriving here is not a reason to widen it.
+// A key reaches this server so the local freehire-mcp package, which holds a key and no
+// grant, can manage job alerts without a second implementation. Auto-apply stays with the
+// grant: it sends real applications in the person's name and has never been open to a key.
 func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool {
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
 	all = append(all, assistants.reportMCPTools()...)
@@ -61,8 +55,8 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	// Read-only, and GET /me/plan is open to a key over REST.
 	all = append(all, assistants.planMCPTool(origin))
 	// An MCP client keeps every result in its context, so it gets the bounded facets.
-	// search_jobs, get_job and get_company stay in the list only so the instructions and
-	// prompts see them as served; the catalogue's own tools answer those names.
+	// search_jobs, get_job and get_company are listed only so the instructions and prompts see
+	// them as served; the catalogue's own tools answer those names.
 	for i, t := range all {
 		if t.Name == "facets" {
 			all[i] = assistants.facets(false)
@@ -78,22 +72,18 @@ const localsMCPViaKey = "mcpAccount.viaKey"
 // localsMCPUserID carries the validated identity to Fiber consumers such as agentViews.
 const localsMCPUserID = "mcp.userID"
 
-// mcpAuthenticate resolves the Authorization: Bearer token to a user id and stamps it
-// onto the request as mcpapp.AccountUserIDHeader, overwriting whatever a caller sent
-// there — nothing downstream of this middleware ever sees an unvalidated value. The token
-// is an OAuth grant's or, failing that, a full-scope API key's — the mirror of
-// apiKeys.AuthenticateAPIKey, which lets a grant into every REST route a key may use. A
-// narrow (cv) key is a 403: the credential is real, it is simply not allowed here. A
-// missing or unrecognized token is a routine 401 (never reported, per this package's Error
-// Convention); any other failure resolving it — a database error, not an unknown token — is
-// returned bare so the fall-through renders a 500 AND reports it, instead of being folded
-// into the same "invalid token" answer a real caller mistake gets.
+// mcpAuthenticate resolves the Authorization: Bearer token to a user id and stamps it onto
+// the request as mcpapp.AccountUserIDHeader, overwriting whatever a caller sent, so nothing
+// downstream sees an unvalidated value. The token is an OAuth grant's or, failing that, a
+// full-scope API key's (the mirror of apiKeys.AuthenticateAPIKey). A narrow (cv) key is a
+// 403. A missing or unrecognized token is a routine 401 (never reported); any other failure
+// resolving it, such as a database error, is returned bare so it renders a 500 and is
+// reported rather than folded into "invalid token".
 //
 // There is no anonymous session. Every 401 carries a WWW-Authenticate challenge naming the
-// protected-resource metadata, and that 401 on the FIRST request is the MCP authorization
-// spec's only signal that a server needs sign-in: Claude.ai, Grok, Cursor and the CLIs open
-// sign-in from it while a connector is being added and never later. A server that answers
-// an unauthenticated initialize 200 is, to them, a server without sign-in.
+// protected-resource metadata, and the 401 on the first request is the MCP authorization
+// spec's only signal that sign-in is needed: Claude.ai, Grok, Cursor and the CLIs open
+// sign-in from it while a connector is being added, and never later.
 func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
 	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + mcpapp.ResourceMetadataPath + `"`
 	return func(c *fiber.Ctx) error {
@@ -108,10 +98,9 @@ func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
-		// The grant lookup itself refuses a grant bound to another resource (it matches
-		// on the endpoint path), so a wrong-resource token reads as unknown here:
-		// no last_used_at touch, and the same invalid_token answer (RFC 6750) as any
-		// other refused token, after the API-key branch finds nothing either.
+		// The grant lookup refuses a grant bound to another resource (it matches on the endpoint
+		// path), so a wrong-resource token reads as unknown here: no last_used_at touch, and the
+		// same invalid_token answer as any other refused token.
 		grant, err := assistants.queries.AuthenticateOAuthGrant(c.Context(), db.AuthenticateOAuthGrantParams{
 			AccessTokenHash: oauth2server.HashToken(token),
 			Endpoint:        pgconv.Text(oauth2server.MCPResourcePath),

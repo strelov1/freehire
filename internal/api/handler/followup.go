@@ -18,9 +18,8 @@ import (
 
 // GetApplicationFollowUp assembles a follow-up draft for a silent application.
 //
-// The gate is the same verdict the board's badge renders: a draft is offered only where
-// silence.StateFor says `silent`, so the offer and the badge cannot disagree about which
-// applications qualify. Nothing here sends mail — the draft is handed to the candidate.
+// The gate is the verdict the board's badge renders (silence.StateFor says `silent`),
+// so the offer and the badge cannot disagree. Nothing here sends mail.
 func (h *inboxHandlers) GetApplicationFollowUp(ctx context.Context, params apigen.GetApplicationFollowUpParams) (*apigen.GetApplicationFollowUpOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -59,10 +58,9 @@ func (h *inboxHandlers) GetApplicationFollowUp(ctx context.Context, params apige
 }
 
 // RecordApplicationFollowUp records that the candidate chased. It does NOT touch the silence
-// derivation: last activity is when the OTHER side moved, and a chase is not a reply (see the
-// column comment in 0059). Idempotent — a double click overwrites the timestamp, and the
-// ledger event it writes is suppressed within the hour for the same reason: a resubmit is
-// seconds apart, a genuine second chase days apart.
+// derivation: last activity is when the OTHER side moved, and a chase is not a reply.
+// Idempotent: a double click overwrites the timestamp, and the ledger event is suppressed
+// within the hour.
 func (h *inboxHandlers) RecordApplicationFollowUp(ctx context.Context, params apigen.RecordApplicationFollowUpParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -81,9 +79,8 @@ func (h *inboxHandlers) RecordApplicationFollowUp(ctx context.Context, params ap
 	return nil
 }
 
-// newestSender returns the address and display name of the most recent mail linked to the
-// application, or empty strings when nobody ever wrote — which is the normal case for an
-// application that went unanswered, and why the draft is issued without a recipient.
+// newestSender returns the address and name of the most recent incoming mail linked to the
+// application, or empty strings when nobody wrote (the draft then has no recipient).
 func (h *inboxHandlers) newestSender(ctx context.Context, userID, jobID int64) (addr, name string) {
 	rows, err := h.queries.ListJobEmails(ctx, db.ListJobEmailsParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
@@ -99,9 +96,8 @@ func (h *inboxHandlers) newestSender(ctx context.Context, userID, jobID int64) (
 	return "", ""
 }
 
-// cachedStrength reads one concrete strength from the cached fit analysis — text the analysis
-// derived from the candidate's own CV. No analysis, or one naming none, yields "" and the draft
-// simply omits the line: this is the only source, so the draft cannot invent a claim.
+// cachedStrength reads one strength from the cached fit analysis, which derives it from the
+// candidate's own CV. None yields "" and the draft omits the line, so it cannot invent a claim.
 func (h *inboxHandlers) cachedStrength(ctx context.Context, userID, jobID int64) string {
 	row, err := h.queries.GetUserJobAnalysis(ctx,
 		db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})

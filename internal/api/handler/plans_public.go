@@ -10,11 +10,8 @@ import (
 	"github.com/strelov1/freehire/internal/identity/billing"
 )
 
-// plansHandlers serve the public plan comparison: what each plan allows, and what buying
-// costs.
-//
-// It is PUBLIC and unauthenticated, because a pricing page that requires an account cannot
-// do the one job a pricing page has.
+// plansHandlers serve the public plan comparison: what each plan allows and what buying
+// costs. PUBLIC and unauthenticated, since a pricing page behind an account cannot do its job.
 type plansHandlers struct {
 	plans   plan.Config
 	billing *billing.Service
@@ -30,16 +27,13 @@ func (h *plansHandlers) register(api fiber.Router, contract fiber.Handler) {
 
 // GetPlans returns what each plan allows and what Pro costs.
 //
-// The allowances come from the SAME configuration the metering path reads. Hard-coding them
-// into the page would create a second source of truth about what a plan gives, and it would
-// drift the first time a number moved — silently, and in the most expensive place: a
-// promise on a pricing page is one a customer can hold us to.
+// Allowances come from the SAME configuration the metering path reads; hard-coding them would
+// add a second source of truth that drifts, on a pricing page a customer can hold us to.
 //
-// Each tier gets its own entry rather than a `free_daily` plus `pro_unlimited` pair: auto-apply
-// is where pro stopped being unlimited, and the pair had no way to say so. The field names are
-// the allowance's (`limit`, `unlimited`), so a page reads one vocabulary for both. `enforced`
-// names the features whose ceiling refuses today; a page claiming more would sell a limit
-// nobody meets.
+// Each tier gets its own entry rather than a `free_daily`/`pro_unlimited` pair, since
+// auto-apply is where pro stopped being unlimited. Field names are the allowance's (`limit`,
+// `unlimited`). `enforced` names the features whose ceiling refuses today; claiming more
+// would sell a limit nobody meets.
 func (h *plansHandlers) GetPlans(ctx context.Context) (*apigen.GetPlansOK, error) {
 	out := apigen.Plans{
 		Features: make([]apigen.PlanFeature, 0, len(plan.AllFeatures())),

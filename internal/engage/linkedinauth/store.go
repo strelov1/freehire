@@ -12,9 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// PostgresStore is the Store backed by the generated queries. It holds no rules about expiry —
-// those all live in renew.go, where they can be read in one screen and tested without a
-// database.
+// PostgresStore is the Store backed by the generated queries. Expiry rules live in renew.go.
 type PostgresStore struct {
 	q *db.Queries
 }
@@ -27,8 +25,7 @@ func NewPostgresStore(q *db.Queries) *PostgresStore {
 func (s *PostgresStore) Load(ctx context.Context) (Token, bool, error) {
 	row, err := s.q.GetSocialToken(ctx, Channel)
 	if err != nil {
-		// No row means the channel has never been signed in. A state, not a failure: it is how
-		// this feature ships and what disabling it looks like.
+		// No row means never signed in (or disabled), not a failure.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Token{}, false, nil
 		}
@@ -69,14 +66,12 @@ func (s *PostgresStore) Renew(ctx context.Context, previous string, t Token) (bo
 	return n > 0, nil
 }
 
-// AccessToken returns the stored token if it is usable right now, and says exactly why not
-// otherwise. This is what socialdigest's LinkedIn publisher calls on every publish.
+// AccessToken returns the stored token if usable now, and says why not otherwise.
+// socialdigest's LinkedIn publisher calls it on every publish.
 //
-// The expiry is checked HERE rather than left to LinkedIn's 401, because the two failures need
-// different words: an expired credential is somebody's job to fix and says so, while a 401 on
-// a live token is LinkedIn revoking us and means something else entirely. Reading the token
-// per publish rather than caching it also means a renewal that landed an hour ago is picked up
-// without a restart — this is one row read once a day, so there is nothing to save.
+// Expiry is checked here rather than left to LinkedIn's 401, since an expired credential
+// needs a sign-in while a 401 on a live token means LinkedIn revoked us. The token is read
+// per publish so a fresh renewal is picked up without a restart.
 func (s *PostgresStore) AccessToken(ctx context.Context) (string, error) {
 	tok, ok, err := s.Load(ctx)
 	if err != nil {
@@ -92,17 +87,15 @@ func (s *PostgresStore) AccessToken(ctx context.Context) (string, error) {
 	return tok.AccessToken, nil
 }
 
-// The two ways a publish can fail before it is attempted. Exported so a caller can tell "this
-// channel was never turned on" from "this channel is broken" — the first is a clean skip, the
-// second is a run that must exit non-zero.
+// The two ways a publish can fail before it is attempted. Exported so a caller can tell
+// "never turned on" (a clean skip) from "broken" (must exit non-zero).
 var (
 	ErrNoCredential      = errors.New("linkedinauth: no stored credential")
 	ErrCredentialExpired = errors.New("linkedinauth: stored credential has expired")
 )
 
-// pgTime maps a zero time to SQL NULL. The zero value is how this package spells "LinkedIn did
-// not give us one", and writing it as year 1 would make an absent refresh token read as one
-// that expired two millennia ago — the same warning, for the wrong reason.
+// pgTime maps a zero time to SQL NULL; year 1 would make an absent refresh token read as
+// long expired.
 func pgTime(t time.Time) pgtype.Timestamptz {
 	if t.IsZero() {
 		return pgtype.Timestamptz{}

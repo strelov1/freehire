@@ -94,19 +94,15 @@ var (
 	ErrContactTooLong = errors.New("referral: contact is too long")
 )
 
-// Free-text length bounds (the content-field convention: report.maxDetailsLen,
-// companyfeedback.maxBodyRunes), applied where sibling packages already cap their
-// equivalent user-supplied text — this package had been the gap.
+// Free-text length bounds, matching the caps sibling packages apply to their
+// user-supplied text (report.maxDetailsLen, companyfeedback.maxBodyRunes).
 const (
 	// maxNoteLen bounds a request's free-text note.
 	maxNoteLen = 5000
-	// maxContactLen bounds ContactTelegram and ContactEmail — generous for either shape
-	// (a Telegram handle/t.me link or an email address, RFC 5321's own 254-byte cap)
-	// while still bounding what a request can carry.
+	// maxContactLen bounds ContactTelegram and ContactEmail (RFC 5321's own 254-byte cap).
 	maxContactLen = 254
-	// maxLinkedInURLLen bounds LinkedInURL (on both OfferInput and RequestInput, via
-	// validLinkedInURL below) — generous for a real linkedin.com/in/<handle> URL,
-	// including a country subdomain and a trailing query/fragment, while still bounded.
+	// maxLinkedInURLLen bounds LinkedInURL, with room for a country subdomain and a trailing
+	// query/fragment.
 	maxLinkedInURLLen = 500
 )
 
@@ -271,19 +267,16 @@ func (s *Service) GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool,
 }
 
 // WithdrawOffer lets a member stop being a referrer: it hard-deletes their own offer,
-// owner-scoped by userID. A missing offer or one owned by someone else returns
-// ErrOfferNotFound. Deleting frees the (user, company) slot so they can offer again later.
+// owner-scoped by userID. A missing or foreign offer returns ErrOfferNotFound. Deleting
+// frees the (user, company) slot.
 //
-// The offer's proof CV is erased with it, and that is not housekeeping. The offer row is the
-// only thing that names the object: accountdelete finds a member's stored objects by reading
-// these rows (see its BlobKeys), so a row deleted on its own leaves a CV in the bucket that
-// nothing can reach again — not a later withdrawal, not the member's own account deletion.
+// The offer's proof CV is erased with it: the row is the only thing that names the object
+// (accountdelete finds a member's objects through these rows, see its BlobKeys), so
+// deleting the row alone would orphan a CV nothing can reach.
 //
-// The object goes BEFORE the row, the order accountdelete uses and for its reason: if the
-// object cannot be erased the offer stands, so the member simply retries, whereas deleting
-// the row first would strand the object with no key left to find it by. The read that learns
-// the key is also what enforces ownership, so a non-owner never reaches another member's
-// proof. Object deletes are idempotent, so a retry after a partial run is safe.
+// The object goes BEFORE the row, as in accountdelete: if the erase fails the offer stands
+// and the member retries. The read that learns the key also enforces ownership. Object
+// deletes are idempotent, so a retry is safe.
 func (s *Service) WithdrawOffer(ctx context.Context, offerID uuid.UUID, userID int64) error {
 	offer, ok, err := s.repo.GetOffer(ctx, offerID)
 	if err != nil {
@@ -358,10 +351,10 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 		return Request{}, err
 	}
 	// The attached CV must be one the seeker has AND one that fits the request: tailored for
-	// its vacancy, or for a vacancy at its company. A built cv_id comes from the client, so
-	// its FK guarantees existence, not ownership or fit — anything else is an invalid choice
-	// (not a distinct error) so the response never leaks that a foreign CV exists. An
-	// original attachment requires a stored résumé, else it would serve nothing.
+	// its vacancy, or for a vacancy at its company. A built cv_id comes from the client, so its
+	// FK guarantees existence, not ownership or fit. Anything else is an invalid choice (not a
+	// distinct error) so the response never leaks that a foreign CV exists. An original needs a
+	// stored résumé.
 	switch in.CVKind {
 	case CVBuilt:
 		fitting, err := s.repo.ReferralCVs(ctx, in.SeekerUserID, in.CompanySlug, in.JobID)

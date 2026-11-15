@@ -23,8 +23,7 @@ type jobMatchResponse struct {
 // certifications, work authorization, location/work-mode) as advisory warnings —
 // never hiding or downranking the job. Deterministic, no LLM. Cookie or API key; an
 // unknown slug is a 404 (pgx.ErrNoRows via the central handler) and a caller without
-// a profile is a 404 (profileError). The SPA only calls this once the viewer is
-// signed in with a non-empty profile, so the not-found paths are defensive.
+// a profile is a 404 (profileError).
 func (h *matchHandlers) GetJobMatch(ctx context.Context, params apigen.GetJobMatchParams) (*apigen.GetJobMatchOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

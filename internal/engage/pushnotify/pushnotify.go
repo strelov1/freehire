@@ -1,18 +1,11 @@
-// Package pushnotify sends mobile push notifications through the Expo Push
-// API. No APNs/FCM credentials are needed — Expo's relay handles both
-// platforms from one token format, keyed to the app's own Expo project. This
-// is intentionally a bare send path: retry/backoff belongs to whichever
-// notification engine eventually adopts push as a channel, matching how
-// email-notify and telegram-notify also carry no retry logic of their own.
+// Package pushnotify sends mobile push notifications through the Expo Push API. No
+// APNs/FCM credentials are needed: Expo's relay handles both from one token format. It is a
+// bare send path; retry/backoff belongs to whichever engine adopts push as a channel.
 //
-// Expo's API is two stages, not one. Send's immediate response is a
-// per-message TICKET, not a final delivery outcome — a token already known
-// dead (from an earlier attempt) can show up as DeviceNotRegistered right
-// away, but a token that just went dead for the first time (app freshly
-// uninstalled, permission freshly revoked) is invisible until Expo has
-// actually attempted delivery through APNs/FCM, which is only answered
-// later via getReceipts. Send enqueues every successfully-sent ticket for a
-// later CheckReceipts pass instead of assuming the ticket is the final word.
+// Expo's API is two stages. Send's immediate response is a per-message TICKET, not a
+// delivery outcome: a token that just went dead is invisible until Expo attempts delivery,
+// which is only answered later via getReceipts. Send enqueues every successful ticket for a
+// later CheckReceipts pass.
 package pushnotify
 
 import (
@@ -30,12 +23,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// ErrTokenPruned is returned by Send when the token turned out to be dead
-// and was removed instead of anything being delivered. A caller that only
-// checks err != nil would treat this the same as a real failure, which is
-// wrong for something like a self-test push endpoint — "your push arrived"
-// and "the token you just registered was already dead" are different
-// outcomes a caller may need to tell apart. Check with errors.Is.
+// ErrTokenPruned is returned by Send when the token turned out dead and was removed
+// instead of anything being delivered. Callers that must tell this apart from a real
+// failure check it with errors.Is.
 var ErrTokenPruned = errors.New("pushnotify: token pruned, not delivered")
 
 // defaultExpoPushURL and defaultExpoReceiptsURL are Expo's two endpoints.
@@ -65,10 +55,8 @@ const receiptMinAgeMinutes = 15
 // single request at 1000 ids; this stays well under that.
 const receiptBatchSize = 100
 
-// receiptRetention is how long Expo keeps a receipt. A ticket still unanswered past it
-// never will be, and the claim is oldest-first, so keeping it would let such tickets
-// fill every batch and starve the fresh ones queued behind them — which is how the
-// first 66 tickets, queued 2026-08-12 while no worker ran, sat at the head of the queue.
+// receiptRetention is how long Expo keeps a receipt. A ticket unanswered past it never
+// will be; the claim is oldest-first, so keeping it would starve fresh tickets.
 const receiptRetention = 24 * time.Hour
 
 // Notifier sends one push message to a device token.
@@ -106,13 +94,10 @@ type TicketStore interface {
 	DeletePushTickets(ctx context.Context, ids []int64) error
 }
 
-// SendToDevices sends one title/body/data message to every token, aggregating
-// the per-device outcomes into a single result for a caller that has one
-// recipient with several devices (unlike Telegram/email, which have exactly one
-// destination). It reports success — nil — as long as at least one device
-// received the message; a token pruned as dead is not itself a failure, but if
-// every device ends up pruned or erroring (including the degenerate case of no
-// tokens at all), the caller has nothing delivered and gets an error back.
+// SendToDevices sends one title/body/data message to every token, for a recipient with
+// several devices. It returns nil if at least one device received the message; a pruned
+// token is not itself a failure, but if every device is pruned or erroring (or there are no
+// tokens) the caller gets an error.
 func SendToDevices(ctx context.Context, notifier Notifier, tokens []string, title, body string, data map[string]string) error {
 	var sent int
 	var lastErr error
@@ -260,12 +245,10 @@ type expoReceiptsResponse struct {
 // DeviceNotRegistered, and removes every checked ticket from the outbox
 // regardless of outcome. Intended to run on a schedule (cmd/push-receipts).
 //
-// The deletion is deliberate (openspec/changes/push-notification-infra, Decision 3) and
-// the receipt is the only copy of the answer, so what is NOT observed here is lost for
-// good. Every outcome is therefore counted and every unhappy one logged with the status
-// and error Expo gave: a run that delivered nothing used to be indistinguishable in the
-// log from one that delivered everything, and a systematically failing push — a bad
-// credential, a payload Expo rejects — produced no trace anywhere at all.
+// The deletion is deliberate and the receipt is the only copy of the answer, so every
+// outcome is counted and every unhappy one logged with the status and error Expo gave;
+// otherwise a systematically failing push (bad credential, rejected payload) leaves no
+// trace.
 func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 	due, err := n.tickets.ClaimDuePushTickets(ctx, receiptMinAgeMinutes, receiptBatchSize)
 	if err != nil {
@@ -286,11 +269,9 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 
 	processed := make([]int64, 0, len(due))
 	var pruneErrs []error
-	// The six outcomes below must add up to the batch. pruneFailed is one of them for that
-	// reason and not only for its own sake: without it a batch whose prune failed reports
-	// checked=2 over counters totalling one, and a reader cannot tell whether a ticket was
-	// dropped or a counter was forgotten. The error is returned as well, but a run that
-	// retries the same failure every pass is a shape only the aggregate shows.
+	// The six outcomes below must add up to the batch; pruneFailed is one so a failed prune
+	// does not leave the counters totalling less than checked. The error is returned too, but a
+	// prune that fails every pass only shows in the aggregate.
 	var delivered, pruned, pruneFailed, rejected, unanswered, expired int
 	for _, t := range due {
 		r, ok := receipts[t.TicketID]
@@ -302,23 +283,17 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 			continue
 		}
 		if !ok {
-			// No answer yet (or Expo no longer recognizes the id) — this is
-			// not "checked, resolved", so the ticket stays queued rather
-			// than losing its only detection window. The next scheduled
-			// pass claims it again; no special retry bookkeeping needed
-			// since it's already past the minimum age.
+			// No answer yet (or Expo no longer recognizes the id): the ticket stays queued for the
+			// next pass.
 			unanswered++
 			continue
 		}
 		switch {
 		case r.Details.Error == deviceNotRegistered:
 			if err := n.pruner.PruneDeadPushToken(ctx, t.Token); err != nil {
-				// Keep going rather than returning here: an earlier ticket in
-				// this same batch may already be fully resolved, and bailing
-				// out now would discard that work by never reaching the
-				// DeletePushTickets call below. This ticket itself is left
-				// out of processed, so it stays queued and the prune is
-				// retried on the next scheduled pass.
+				// Keep going rather than returning: earlier tickets in this batch may be resolved, and
+				// bailing out would skip DeletePushTickets. This ticket is left out of processed, so it
+				// stays queued and the prune is retried next pass.
 				pruneErrs = append(pruneErrs, fmt.Errorf("prune dead token: %w", err))
 				pruneFailed++
 				continue
@@ -327,10 +302,8 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 		case r.Status == receiptStatusOK:
 			delivered++
 		default:
-			// The only place this answer is ever readable. It is not actionable per
-			// ticket — there is nothing to retry and the token is still good — but a
-			// repeated code across a whole batch is how a broken payload or credential
-			// announces itself.
+			// Not actionable per ticket, but a repeated code across a batch is how a broken payload
+			// or credential announces itself.
 			rejected++
 			log.Printf("pushnotify: receipt %s: status=%q error=%q message=%q",
 				t.TicketID, r.Status, r.Details.Error, r.Message)
@@ -359,10 +332,8 @@ func (n *ExpoNotifier) getReceipts(ctx context.Context, ticketIDs []string) (map
 	return out.Data, nil
 }
 
-// postJSON POSTs payload as JSON to url and decodes the JSON response into
-// out. Shared by Send and getReceipts — Expo's two endpoints differ only in
-// URL, request shape, and response shape, not in how the HTTP round trip
-// itself is done.
+// postJSON POSTs payload as JSON to url and decodes the JSON response into out. Shared
+// by Send and getReceipts.
 func (n *ExpoNotifier) postJSON(ctx context.Context, url string, payload, out any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

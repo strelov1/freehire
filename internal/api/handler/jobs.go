@@ -35,8 +35,7 @@ type jobsHandlers struct {
 	queries    *db.Queries
 	moderation *moderation.Service
 	// postings canonicalises the URL /jobs/find is asked about. Its zero value is the
-	// offline rewrite, so a caller that hands over no client keeps every lookup that
-	// does not need one.
+	// offline rewrite only.
 	postings sources.PostingURLResolver
 	// cache and estimator resolve the list's meta.total: the published
 	// catalogue-scale snapshot when there is one, the approximate estimate when there
@@ -71,15 +70,12 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 }
 
 // ListJobs returns a page of jobs using limit/offset pagination. Jobs are
-// served in the shared jobview wire shape (public_slug, no internal id) — the
-// same shape the detail and search endpoints use. The page rides the partial
-// index jobs_open_created_idx (no full-table sort) and meta.total comes from the
-// precomputed catalogue-scale snapshot (see openJobTotal), so neither query scans
-// the whole open-job set at catalogue scale.
+// served in the shared jobview wire shape (public_slug, no internal id). The page rides
+// the partial index jobs_open_created_idx and meta.total comes from the precomputed
+// snapshot (see openJobTotal), so neither query scans the open-job set.
 //
-// It reads no filter at all, which is exactly why it reports: a caller who sends
-// `?countries=de` here gets the whole catalogue back, and without meta.ignored_params
-// that reads as a real answer about Germany (see ignoredListJobsParams).
+// It reads no filter at all, so it reports ignored params: `?countries=de` would
+// otherwise read as a real answer about Germany (see ignoredListJobsParams).
 func (h *jobsHandlers) ListJobs(ctx context.Context, _ apigen.ListJobsParams) (*apigen.ListJobsOK, error) {
 	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
 	if err != nil {
@@ -119,13 +115,10 @@ var listJobsParams = []string{"limit", "offset"}
 
 // ignoredListJobsParams reports the query params this listing did not read.
 //
-// It deliberately does not go through ignoredParams. That report is built from the
-// SEARCH filter's vocabulary, so it would call `countries=de` legitimate on an endpoint
-// that has never looked at a facet — and a filter silently widening to the whole
-// catalogue is the one thing the report exists to prevent. Nothing is suggested for the
-// same reason: a near miss to a facet name is no help when every facet name is equally
-// ignored here. Reported rather than refused, like everywhere else — an old link
-// carrying a retired param must keep working.
+// It deliberately does not go through ignoredParams, whose SEARCH-filter vocabulary would
+// call `countries=de` legitimate on an endpoint that never reads a facet. No suggestions
+// either: every facet name is equally ignored here. Reported, not refused, so old links
+// with a retired param keep working.
 func ignoredListJobsParams(query url.Values) []search.UnknownParam {
 	var out []search.UnknownParam
 	for param := range query {
@@ -141,9 +134,7 @@ func ignoredListJobsParams(query url.Values) []search.UnknownParam {
 // openJobTotal resolves the list's meta.total: the exact count from the published
 // snapshot, or the approximate estimate when none is available.
 //
-// It cannot fail. The page of jobs is this endpoint's actual payload, and losing it to a
-// 500 because a count was unavailable — which is what the previous EstimateOpenJobs call
-// did — trades the whole response for one number.
+// It cannot fail: the page of jobs is the payload, and a missing count must not cost it.
 func (h *jobsHandlers) openJobTotal(ctx context.Context) int64 {
 	return catalogstats.Load(ctx, h.cache, h.estimator).OpenJobs
 }
@@ -168,8 +159,8 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 	}
 
 	// Widen the geography with the reposts this posting stands for, the same union its
-	// search document carries — otherwise a role found under 129 countries names one on
-	// its own page (#3646). Best-effort: a failed lookup leaves the row's own geography.
+	// search document carries, so a role found under many countries does not name one on
+	// its own page. Best-effort: a failed lookup leaves the row's own geography.
 	if rows, err := h.queries.DuplicateClosureGeoFor(ctx, []int64{job.ID}); err == nil {
 		for _, g := range rows {
 			view.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
@@ -190,10 +181,8 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 	reality := jobview.ClassifyReality(job, now, int(repost), int(mass))
 	view.Reality = &reality
 
-	// The ghost signal reads the reality class as one of its four criteria, so it is
-	// derived here rather than recomputed. Best-effort like the rest of this block: an
-	// evidence-lookup failure leaves the signal off the response instead of failing the
-	// job read, and the honest direction for a missing lookup is to say nothing.
+	// The ghost signal takes the reality class as a criterion, so it is derived here rather
+	// than recomputed. Best-effort: an evidence-lookup failure leaves the signal off.
 	view.Ghost = jobview.ClassifyGhost(jobview.GhostInput{
 		Now:          now,
 		Closed:       job.ClosedAt.Valid,
@@ -227,12 +216,9 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		}
 	}
 
-	// Caller's own auto-apply status for this job (openspec/changes/auto-apply-submit-trigger),
-	// same caller-scoped, signed-in-only overlay as MyVote above. No row is the common
-	// case (nil, omitted) and is not logged as an error; a real lookup failure also
-	// degrades to nil rather than failing the whole job read. Scoped to the same sources
-	// the enqueue endpoint accepts (autoApplyEnqueueSources) — so every other job's read
-	// skips a query that could only ever come back empty.
+	// Caller's own auto-apply status, a signed-in-only overlay like MyVote above. No row is
+	// the common case (nil, not logged); a lookup failure also degrades to nil. Scoped to
+	// autoApplyEnqueueSources so other jobs skip a query that could only come back empty.
 	if userID, ok := auth.UserIDFromContext(ctx); ok && autoApplyEnqueueSources[job.Source] {
 		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
@@ -254,12 +240,10 @@ func (h *jobsHandlers) ghostEvidence(ctx context.Context, jobID int64) ghost.Evi
 	return ghostEvidenceFor(ctx, h.queries, []int64{jobID})[jobID]
 }
 
-// attachGhostToRows attaches the ghost signal to a page served from Postgres, where
-// the rows are already in hand — so the closed state and the absence stamp come
-// straight off them, and only the outcome evidence needs a lookup.
+// attachGhostToRows attaches the ghost signal to a page served from Postgres: the closed
+// state and absence stamp come off the rows, only the outcome evidence needs a lookup.
 //
-// Best-effort throughout: a failed lookup leaves the signal off those cards. A list
-// must not fail because an optional badge could not be computed.
+// Best-effort: a failed lookup leaves the signal off, never failing the list.
 func (h *jobsHandlers) attachGhostToRows(ctx context.Context, rows []db.Job, views []jobview.Job) {
 	if len(rows) == 0 {
 		return
@@ -273,8 +257,8 @@ func (h *jobsHandlers) attachGhostToRows(ctx context.Context, rows []db.Job, vie
 
 	now := time.Now()
 	for i, r := range rows {
-		// A lookup miss is a singleton cluster (counts 1) — the same default the
-		// per-row query degrades to, and what the bulk query deliberately omits.
+		// A miss is a singleton cluster (counts 1), the per-row query's default; the bulk
+		// query omits it deliberately.
 		repost, mass := 1, 1
 		if cnt, ok := clusters[clusterKey{r.CompanySlug, r.RoleFingerprint.String}]; ok {
 			repost, mass = cnt.repost, cnt.mass
@@ -302,8 +286,7 @@ type clusterKey struct {
 type clusterCount struct{ repost, mass int }
 
 // roleClusterCounts resolves the repost/mass-posting counts for a page of rows in one
-// query. The per-card alternative would issue a query per card on a public list
-// endpoint; this is the same lookup the reindex builds, scoped to the page.
+// query rather than one per card; it is the reindex's lookup scoped to the page.
 func (h *jobsHandlers) roleClusterCounts(ctx context.Context, rows []db.Job) map[clusterKey]clusterCount {
 	slugs := make([]string, 0, len(rows))
 	prints := make([]string, 0, len(rows))

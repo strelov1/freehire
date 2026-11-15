@@ -14,8 +14,8 @@ import (
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
-// The shape of every mock interview (design D2). Constants rather than columns: a peer
-// mock has one shape, and per-member tuning is a mentor feature.
+// The shape of every mock interview. Constants rather than columns: a peer mock has one shape, and
+// per-member tuning is a mentor feature.
 const (
 	// MockDuration is how long a mock runs. The participants swap roles halfway themselves.
 	MockDuration = 60 * time.Minute

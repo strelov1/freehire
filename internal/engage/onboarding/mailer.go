@@ -1,15 +1,6 @@
-// Package onboarding sends the founder's signup sequence: seven mails over a new
-// account's first days, written in the first person and inviting a reply.
-//
-// It is deliberately unlike the other mail features in this codebase. A digest or a
-// nudge is a machine reporting a fact; these are a person introducing himself, and
-// the whole point is the reply that comes back. That shapes two decisions the rest
-// of the mail stack does not share:
-//
-//   - the mails carry a Reply-To pointing at a human inbox, not the send address;
-//   - the copy lives here as prose rather than being assembled from data, because
-//     there is no data — every recipient gets the same letters.
-//
+// Package onboarding sends the founder's signup sequence: seven first-person mails over a
+// new account's first days, with a Reply-To pointing at a human inbox. The copy lives here
+// as prose because every recipient gets the same letters.
 // The sequence is: welcome (immediately), advanced_search (day 3, everyone),
 // no_alert (day 6, only if the account never created an alert), extension (day 8,
 // everyone), open_source (day 10, everyone), tailor (day 12, only accounts not on a
@@ -43,16 +34,12 @@ const (
 	StepBuddies        Step = "buddies"
 )
 
-// Links the sequence points at. They are constants rather than configuration
-// because they are part of the copy: the mails talk about *this* repository, and a
-// deployment that pointed them elsewhere would be lying. The Discord invite is the
-// shell's (mailtpl.DiscordURL) — every mail's footer already carries it, and a
-// second copy here is a link that can disagree with itself.
+// Links the sequence points at. Constants, not configuration: they are part of the copy.
+// The Discord invite is the shell's (mailtpl.DiscordURL) so it cannot disagree with the footer's.
 const (
 	repoURL = "https://github.com/strelov1/freehire"
-	// storeURL is the extension's listing. It is the Chrome Web Store's own id — the
-	// one thing in this file that cannot be re-derived if it is wrong, since a
-	// mistyped id is a live page for somebody else's extension rather than a 404.
+	// storeURL is the extension's Chrome Web Store listing. A mistyped id is a live page for
+	// somebody else's extension, not a 404.
 	storeURL    = "https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj"
 	firefoxURL  = "https://addons.mozilla.org/firefox/addon/freehire/"
 	linkedInURL = "https://www.linkedin.com/in/istrelov/"
@@ -68,10 +55,8 @@ type Mailer struct {
 	links   *emailprefs.Links
 }
 
-// NewMailer builds a Mailer. `from` is the verified sending address; `replyTo` is
-// the human inbox that answers — without it these mails ask for a reply that would
-// land in an unattended mailbox, so a blank value is a configuration error the
-// caller is expected to catch, not something this type papers over.
+// NewMailer builds a Mailer. from is the verified sending address; replyTo is the human
+// inbox that answers. A blank replyTo is a configuration error the caller must catch.
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
@@ -84,9 +69,8 @@ func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *
 	}
 }
 
-// senderName is what the recipient's message list shows. These letters are from a
-// person and say so in the first line, so the sender reads as one too — "freehire"
-// would set up a reply to a company that no one intends to answer.
+// senderName is what the recipient's message list shows: a person, since the letters are
+// first-person.
 const senderName = "Ilya from freehire"
 
 // Send delivers one step to one recipient.
@@ -111,9 +95,7 @@ type rendered struct {
 	subject, html, text string
 }
 
-// content is what the body templates render from: every URL a letter points at,
-// whether it is built from the site origin (and so cannot be baked into the prose)
-// or is one of the fixed outward links this package holds as constants.
+// content is what the body templates render from: every URL a letter points at.
 type content struct {
 	AlertsURL         string
 	AdvancedSearchURL string

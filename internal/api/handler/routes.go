@@ -43,9 +43,8 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Before jobsH for the same reason searchH is: /ojcp/v1/jobs/:slug is a literal path,
 	// not a slug.
 	h.ojcp.register(api, mw)
-	// The MCP server (freehire#3114): bearer-gated by an MCP OAuth grant or a full-scope
-	// key, reusing assistantH's own tool set so this surface and the in-app assistant can
-	// never disagree about what a tool does.
+	// The MCP server: bearer-gated by an MCP OAuth grant or a full-scope key, reusing the
+	// assistant's tool set so the two surfaces cannot disagree about a tool.
 	mountMCP(api, h.assistantHandlers, h.mcpapp)
 	h.jobsHandlers.register(api, mw, contract)
 	h.companiesHandlers.register(api, mw, contract)
@@ -66,12 +65,10 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// same snapshot statsH.CatalogScale serves.
 	h.og.register(api)
 
-	// Per-user job interactions, tracking reads, and reminder controls
-	// (see trackingHandlers). The interaction writes precede the vote routes,
-	// mirroring the previous registration order.
+	// Per-user job interactions, tracking reads, and reminder controls (see trackingHandlers).
+	// The interaction writes precede the vote routes.
 	h.trackingHandlers.register(api, mw, contract)
-	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
-	// segment under /me/tracking — see the comment on its register.
+	// The ledger's dated read, behind the tracking calendar; its own namespace, not under /me/tracking.
 	h.timelineHandlers.register(api, mw, contract)
 	h.voteHandlers.register(api, mw, contract)
 	h.companyWatchHandlers.register(api, mw, contract)
@@ -87,11 +84,9 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
 	h.answerBankHandlers.register(api, mw, contract)
 	h.agentPermissionHandlers.register(api, mw, contract)
-	// The browser-tool wire: a harness on one end, the caller's browser extension
-	// on the other, exchanging raw tool frames. Both ends authenticate with the
-	// session JWT (Bearer for a server-side harness, the subprotocol for the
-	// extension, which can set no headers); the relay routes strictly within one
-	// user's channel. See internal/ai/browsertools.
+	// The browser-tool wire between a harness and the caller's extension. Both ends authenticate
+	// with the session JWT (Bearer for the harness, the subprotocol for the extension, which can
+	// set no headers); the relay stays within one user's channel. See internal/ai/browsertools.
 	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
 
 	// Public job submissions + review queue (see submissionHandlers).
@@ -129,8 +124,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.planHandlers.register(api, mw, contract)
 	// Mounts nothing when billing is unconfigured — see billingHandlers.register.
 	h.billingHandlers.register(api, mw, contract)
-	// Mounted whatever billing is doing: sharing an invite link and counting who came is
-	// not a purchase, and a deployment that sells nothing can still have a referral page.
+	// Mounted whatever billing is doing: sharing an invite link is not a purchase.
 	h.promoHandlers.register(api, mw, contract)
 	h.plansHandlers.register(api, contract)
 	h.usageHandlers.register(api, mw, contract)
@@ -172,6 +166,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Filter subscriptions (see subscriptionHandlers).
 	h.subscriptionHandlers.register(api, mw, contract)
 	h.webhook.register(api, mw)
+	h.changeWebhookHandlers.register(api, mw, contract)
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	h.telegram.register(api, mw)
@@ -184,26 +179,20 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 // mountAppRoutes mounts what sits on the app itself rather than under /api/v1: the CORS
 // policy, the health check and the public side of CV link tracing.
 func (a *API) mountAppRoutes(app *fiber.App, cfg Config, queries *db.Queries) {
-	// Allow the canonical frontend origin plus every served domain's https apex,
-	// so a cross-origin (non-credentialed) read works from either domain during a
-	// migration. Same-origin app traffic never triggers CORS; this only covers the
-	// dev Vite origin and genuine cross-origin callers.
-	// auth.BrowserOrigins is the ONE place this pair is turned into origins — the
-	// request-origin gate on session routes (requireSameOrigin) accepts a browser
-	// request's Origin/Referer only when it names a member of the same list, so the
-	// two policies cannot drift apart.
+	// Allow the canonical frontend origin plus every served domain's https apex for
+	// non-credentialed cross-origin reads. auth.BrowserOrigins is the ONE place this list is
+	// built: the session routes' request-origin gate (requireSameOrigin) uses it too, so the
+	// two policies cannot drift.
 	allowOrigins := strings.Join(auth.BrowserOrigins(cfg.FrontendOrigin, cfg.CookieDomains, cfg.ServedHosts...), ",")
 	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
 
 	app.Get("/health", a.Health)
 
-	// The public side of CV link tracing. It sits beside /health rather than under /api/v1
-	// because it lives inside a PDF a recruiter opens by hand: "freehire.me/cv/acme-x7abc" is a
-	// URL a person may read off a hover tooltip, and "/api/v1/..." would not be.
+	// The public side of CV link tracing. It sits beside /health, not under /api/v1, because
+	// the URL lives inside a PDF a recruiter reads off a hover tooltip.
 	//
-	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
-	// and excluded, and a leaked API key must not be able to attribute or hide one.
-	//
+	// Optional cookie auth, never a key: it lets a candidate's own click be recognised and
+	// excluded, and a leaked API key must not be able to attribute or hide one.
 	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
 	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 }

@@ -9,14 +9,11 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// citySearchLimit bounds a single /geo/cities response, matching the cap the other
-// remote-search facets (company, subindustry) already apply to their result lists.
+// citySearchLimit bounds a single /geo/cities response.
 const citySearchLimit = 20
 
-// geoHandlers serves public geography reference reads — currently just city search,
-// backing the profile's base-city and relocation-cities autocomplete. Unauthenticated,
-// like the other public facet/reference endpoints (company subindustries): this is
-// dictionary data, not anything user-scoped.
+// geoHandlers serves public geography reference reads (city autocomplete). Unauthenticated:
+// it is dictionary data, not user-scoped.
 type geoHandlers struct{}
 
 func newGeoHandlers() *geoHandlers {

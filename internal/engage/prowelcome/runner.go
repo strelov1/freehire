@@ -10,9 +10,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Store is the slice of the database this feature reads and writes. Declared here
-// rather than taking *db.Queries so the runner can be tested without Postgres — the
-// same reasoning onboarding.Store gives.
+// Store is the slice of the database this feature reads and writes, declared here so the
+// runner can be tested without Postgres.
 type Store interface {
 	ListNewlyPayingUsersMissingWelcomeEmail(ctx context.Context, maxRows int32) ([]db.ListNewlyPayingUsersMissingWelcomeEmailRow, error)
 	SetProWelcomeSent(ctx context.Context, id int64) (int64, error)
@@ -31,8 +30,7 @@ type Runner struct {
 	maxRows int32
 }
 
-// New builds a Runner. maxRows bounds one pass — see cmd/pro-welcome-mail's own doc for
-// the env var that sets it.
+// New builds a Runner. maxRows bounds one pass.
 func New(store Store, m mailer, maxRows int32) *Runner {
 	return &Runner{store: store, mailer: m, maxRows: maxRows}
 }
@@ -44,12 +42,10 @@ type Stats struct {
 
 // Run welcomes every candidate the store hands back.
 //
-// A failed candidate listing aborts the pass — that is a broken query or a broken
-// database, and continuing would only produce more of the same error. A single failed
-// *send*, by contrast, is counted and stepped over: leaving pro_welcome_sent_at unset is
-// what lets a later run retry it, per the pro-welcome-email spec's "sending fails" scenario
-// — the opposite of onboarding's own deliver, which burns the slot on a failed send
-// because that sequence is a courtesy, not a payment confirmation.
+// A failed candidate listing aborts the pass. A single failed *send* is counted and
+// stepped over: leaving pro_welcome_sent_at unset lets a later run retry it, unlike
+// onboarding's deliver, which burns the slot because that sequence is a courtesy, not a
+// payment confirmation.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	var stats Stats
 
@@ -72,9 +68,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 			continue
 		}
 		if _, err := r.store.SetProWelcomeSent(ctx, row.ID); err != nil {
-			// The mail went out but the claim failed to record. Log loudly: the next
-			// run resends rather than silently losing this account's welcome — a
-			// harmless duplicate is the one visible symptom this can produce.
+			// The mail went out but the claim failed to record. Log loudly: the next run resends (a
+			// harmless duplicate) rather than losing the welcome.
 			stats.Failed++
 			log.Printf("prowelcome: user %d welcomed but pro_welcome_sent_at not stamped (will resend): %v", row.ID, err)
 			continue

@@ -26,11 +26,9 @@ import (
 	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
-// Config is the dependency bundle Register wires onto the app: the DB pool, the
-// single browser origin allowed cross-origin
-// (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
-// cookie flag (CookieSecure), the enabled OAuth providers, and the optional
-// search client (nil disables search).
+// Config is the dependency bundle Register wires onto the app: the DB pool, the single browser origin allowed
+// cross-origin (FrontendOrigin), token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only cookie flag (CookieSecure),
+// the enabled OAuth providers, and the optional search client (nil disables search).
 type Config struct {
 	Pool *pgxpool.Pool
 	// AgentViews receives the postings served to agents (internal/application/agentview).
@@ -39,10 +37,8 @@ type Config struct {
 	// APIUsage counts each account's Bearer-authenticated API requests per day
 	// (internal/identity/apiusage). Optional: nil counts nothing.
 	APIUsage *apiusage.Counter
-	// Cache holds values that are expensive to compute and identical for every
-	// caller — today the catalogue-scale snapshot (internal/ingest/catalogstats). Optional:
-	// nil degrades the figures it backs to their approximations, exactly as an
-	// unreachable backend does.
+	// Cache holds values that are expensive to compute and identical for every caller, today the catalogue-scale snapshot
+	// (internal/ingest/catalogstats). Optional: nil degrades the figures to their approximations, as an unreachable backend does.
 	Cache                   cache.Cache
 	FrontendOrigin          string
 	AuthIntrospectionSecret string
@@ -57,13 +53,10 @@ type Config struct {
 	AppleNative             *appleauth.Client
 	AppleGrantKeys          *appleauth.KeyRing
 	Search                  *search.Client
-	// Suggest answers the search box's completions from the dictionary index
-	// (cmd/build-suggestions writes it). Nil disables /suggest with a 503, the same
-	// shape as an unconfigured search — the rest of the site is unaffected, and the
-	// box falls back to offering nothing rather than to erroring.
+	// Suggest answers the search box's completions from the dictionary index (cmd/build-suggestions writes it).
+	// Nil disables /suggest with a 503; the rest of the site is unaffected and the box offers nothing.
 	Suggest *suggest.Service
-	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage: résumé
-	// upload only extracts skills in-request (no regression).
+	// Blob backs résumé storage (internal/platform/blobstore). Nil disables storage; upload only extracts skills in-request.
 	Blob blobstore.Store
 	// DirectApplyDailyLimit caps how many on-site applications one candidate sends per UTC
 	// day (config.LoadDirectApplyDailyLimit, read and validated in cmd/server).
@@ -82,9 +75,8 @@ type Config struct {
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
-	// AssistantLLM backs the in-app agent. It is a separate client because the agent
-	// runs on its own model (ASSISTANT_MODEL) — chosen for tool calling and context
-	// size rather than for cheap JSON extraction. Nil disables new turns.
+	// AssistantLLM backs the in-app agent, a separate client because it runs on its own model (ASSISTANT_MODEL), chosen for
+	// tool calling and context size. Nil disables new turns.
 	AssistantLLM *llm.Client
 	// SearchIntentLLM backs the AI filter. Separate for latency, not capability — see
 	// config.SearchIntentModel.
@@ -108,9 +100,8 @@ type Config struct {
 	// AssistantMaxPrompt bounds the rune length of one user message. Zero falls
 	// back to the handler default (8000).
 	AssistantMaxPrompt int
-	// LLMKeys mints the per-user gateway credential each account's model calls are
-	// spent under. Nil is the deployment that does not attribute spend: every call goes
-	// out on the service credential exactly as it did before, and no behaviour changes.
+	// LLMKeys mints the per-user gateway credential each account's model calls are spent under. Nil means spend is not
+	// attributed: every call goes out on the service credential.
 	LLMKeys *llmkey.Client
 	// Speech transcribes dictated audio for the composer. Nil is the deployment with
 	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
@@ -145,10 +136,8 @@ type Config struct {
 	// Plan carries what each plan allows per day, per feature, and whether a refusal is
 	// enforced yet. Every metered AI surface draws on it.
 	Plan plan.Config
-	// Billing connects the Pro subscription at the payment provider to users.pro_until,
-	// which is what Plan then reads. Optional and off by default: with no provider
-	// credentials the billing routes are not mounted at all, so a deployment that never
-	// configures it cannot tell they exist.
+	// Billing connects the Pro subscription at the payment provider to users.pro_until, which Plan reads. Optional and off
+	// by default: with no provider credentials the billing routes are not mounted at all.
 	Billing billing.Config
 	// AWSRegion + NotifyEmailFrom enable the SES email channel for referral pings, reusing
 	// the notify worker's config. Both must be set; either empty leaves referral pings
@@ -162,23 +151,16 @@ type Config struct {
 	// ServedHosts are the exact hostnames honoured as an OAuth redirect origin.
 	// Empty defaults to the frontend origin's own host.
 	ServedHosts []string
-	// AutoApplyOrchestratorSecret is the shared, static credential
-	// cmd/auto-apply-orchestrate presents to authenticate itself (not any particular
-	// candidate) on POST /me/auto-apply/:queueId/{tailor,review} — see
-	// openspec/changes/auto-apply-inngest-orchestration/design.md. Empty disables the
-	// path entirely: the two routes then behave exactly as they did under plain
-	// cookie/API-key auth, with no fallback.
+	// AutoApplyOrchestratorSecret is the shared static credential cmd/auto-apply-orchestrate presents to authenticate itself
+	// (not any candidate) on POST /me/auto-apply/:queueId/{tailor,review}. Empty disables that path: the routes use plain
+	// cookie/API-key auth with no fallback.
 	AutoApplyOrchestratorSecret string
-	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort
-	// event publish (auto-apply/review.decided) at the self-hosted Inngest server. Either
-	// empty disables the publish entirely — the review decision itself is still recorded,
-	// exactly as it is today.
+	// InngestEventAPIURL and InngestEventKey point PostAutoApplyReview's best-effort event publish (auto-apply/review.decided)
+	// at the self-hosted Inngest server. Either empty disables the publish; the review decision is still recorded.
 	InngestEventAPIURL string
 	InngestEventKey    string
-	// RecentJobsFeed backs the homepage's live "recently added jobs" SSE feed
-	// (internal/job/recentfeed). cmd/server owns the Poller that publishes into it;
-	// this handler only subscribes. Nil disables the route with a 503 rather than
-	// serving a feed that will never receive anything.
+	// RecentJobsFeed backs the homepage's live "recently added jobs" SSE feed (internal/job/recentfeed). cmd/server owns the
+	// Poller; this handler only subscribes. Nil disables the route with a 503.
 	RecentJobsFeed *recentfeed.Broadcaster
 	// EmbedProgress backs the public /embeddings page's figures and stream
 	// (internal/search/embedprogress). cmd/server owns the Sampler's tick; this handler

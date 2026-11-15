@@ -27,10 +27,8 @@ var errStreamPanic = errors.New("the stream panicked")
 
 // StreamCVCoverLetter drafts the letter over Server-Sent Events.
 //
-// This exists because the POST cannot work. The chain is three model calls in series and takes
-// minutes; a proxy holding a silent response gives up at sixty seconds, so every draft reached
-// the candidate as a 504 from the edge while the server was still working. The fit chain
-// streams for exactly this reason, and a letter is the same shape of work.
+// This exists because the POST cannot work: the chain is three model calls in series, and a proxy closes
+// a silent response at sixty seconds.
 //
 // Events: `stage` as each step opens and closes, then either `letter` with the finished draft
 // and its resolved evidence, or `stream_error` with a sentence to render. The stream always
@@ -74,11 +72,8 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 			stream.event("stream_error", letterErrorEvent{Error: letterFailureMessage(errStreamPanic)})
 		})
 
-		// Stage events fire only at the boundaries between model calls, so between one stage
-		// closing and the next opening the socket is silent for a whole call — measured at up
-		// to the client's 90s per-call timeout, against a 60s proxy. The first byte alone does
-		// not save the stream; the heartbeat is what carries it across each silent stage. Both
-		// SSE endpoints share the interval for that reason.
+		// Stage events fire only between model calls, and one call can outlast a 60s proxy timeout, so the
+		// heartbeat carries the socket across each silent stage. Both SSE endpoints share the interval.
 		stopHeartbeat := stream.keepalive(sseKeepalive)
 		defer stopHeartbeat()
 

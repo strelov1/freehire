@@ -27,43 +27,36 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// assistantHandlers is the in-app agent. It owns the conversation store and the
-// turn runner, and reaches the other feature handlers for the services its tools
-// call — the assistant is a facade over the same use cases the HTTP surface
-// exposes, so it must not grow a second copy of any of them.
+// assistantHandlers is the in-app agent. It owns the conversation store and the turn runner and
+// reaches the other feature handlers for the services its tools call. It is a facade over the
+// same use cases the HTTP surface exposes, so it must not grow a second copy of any of them.
 type assistantHandlers struct {
 	store  *assistant.Store
 	runner *assistant.Runner
 
-	// llm is the agent's own client, kept beside the runner so a turn can be re-bound
-	// to the caller's gateway credential. The runner holds it as an interface and
-	// cannot be asked for it back.
+	// llm is the agent's own client, kept beside the runner so a turn can be re-bound to the
+	// caller's gateway credential (the runner holds it as an interface).
 	llm *llm.Client
-	// keys resolves the credential a turn spends under. Nil in a deployment that does
-	// not attribute spend, which every path treats as "spend on the service credential".
+	// keys resolves the credential a turn spends under. Nil means spend on the service credential.
 	keys *llmkey.Resolver
 	// maxPrompt is the rune ceiling on one user message (ASSISTANT_MAX_PROMPT).
 	maxPrompt int
 
-	// turns are the turns running right now, so a cancel request can reach one that is
-	// streaming on a goroutine no request owns any more, and so a session keeps to one turn
-	// at a time. Its zero value works; see assistant_turns.go.
+	// turns are the turns running now, so a cancel can reach a turn streaming on a goroutine no
+	// request owns, and a session keeps to one turn at a time. Zero value works; see assistant_turns.go.
 	turns turnRegistry
 
 	queries *db.Queries
-	// fit reads the cached fit analysis the tailoring and interview tools ground on. Held
-	// directly rather than reached for through the CV handlers: these are use cases, and a
-	// tool must not depend on which HTTP surface happens to assemble them.
+	// fit reads the cached fit analysis the tailoring and interview tools ground on. Held directly,
+	// not via the CV handlers: tools must not depend on which HTTP surface assembles it.
 	fit *fitanalysis.Service
-	// jobs serves the vacancy a tool is about — one row by id, the same narrow read the CV
-	// surface takes.
+	// jobs serves the vacancy a tool is about: one row by id, the same narrow read the CV surface takes.
 	jobs     jobReader
 	search   *searchHandlers
 	resume   *resumeHandlers
 	tracking *trackingHandlers
-	// reports files a job report for report_job. Set by Register to the SAME handler that
-	// serves POST /jobs/:slug/reports, so the two paths cannot drift. Nil-safe: the tool
-	// refuses rather than panics.
+	// reports files a job report for report_job. Set by Register to the SAME handler that serves
+	// POST /jobs/:slug/reports, so the paths cannot drift. Nil-safe: the tool refuses.
 	reports    *reportHandlers
 	dictionary *dictionaryHandlers
 	problems   *problemreport.Service
@@ -71,75 +64,61 @@ type assistantHandlers struct {
 	// server (buddy_mcp_tools.go). Set by Register to the handler behind the cookie routes.
 	buddies *buddyHandlers
 	cv      *cvHandlers
-	// profile backs the get_profile tool. Reusing the profile handlers rather than the
-	// services underneath keeps the tool and GET /me/profile on one assembly, so the
-	// agent cannot drift from what the profile page shows.
+	// profile backs the get_profile tool. Reusing the profile handlers keeps the tool and
+	// GET /me/profile on one assembly.
 	profile *profileHandlers
 	// letter serves cover_letter_draft. It is the SAME store, chain and bank the HTTP endpoint
-	// holds, which is what stops the chat path and the button path from drifting into two
-	// different letters for one pair. The bank is deliberately NOT reviewableResume's
-	// file-only structure: a letter speaks for the candidate, where the ATS report judges
-	// their document. Nil-safe.
+	// holds, so chat and button cannot draft different letters for one pair. The bank is
+	// deliberately NOT reviewableResume's file-only structure: a letter speaks for the candidate,
+	// where the ATS report judges their document. Nil-safe.
 	letter coverLetterDeps
 	// experience backs the bank tools, which every preset offers.
 	experience experienceBankTools
-	// screeningAnswers backs screening_answers_set, which every preset offers for the
-	// same reason the bank tools do: a candidate states their notice period or salary
-	// expectation whenever it comes up, not on a schedule.
+	// screeningAnswers backs screening_answers_set, offered by every preset: a candidate states
+	// their notice period or salary expectation whenever it comes up.
 	screeningAnswers *screeninganswers.Store
-	// answerBank backs the signed-in MCP server's answer-bank tools — the same store
-	// /me/answer-bank serves, so an answer an agent saves is the one the worker sends.
+	// answerBank backs the signed-in MCP server's answer-bank tools: the store /me/answer-bank
+	// serves, so an answer an agent saves is the one the worker sends.
 	answerBank *answerbank.Store
-	// mail backs the inbox tools, which only the general chat preset offers. The
-	// tools reach through it to inbox.Service — the same use cases /me/inbox and
-	// /me/emails render, so a rule cannot hold for one reader and not the other.
+	// mail backs the inbox tools, offered only by the general chat preset. They reach inbox.Service,
+	// the use cases /me/inbox and /me/emails render, so a rule holds for both readers.
 	mail *inboxHandlers
-	// browserTools backs read_current_page in a browsing session. It is the same hub
-	// the agentic autofill drives, so the assistant is a second in-process harness on
-	// the user's channel rather than a second wire to their browser.
+	// browserTools backs read_current_page in a browsing session: the hub the agentic autofill
+	// drives, so the assistant is a second in-process harness on the user's channel.
 	browserTools *browsertools.Hub
-	// stages and invitation back the context a rehearsal and a debrief share. They are
-	// the two narrow reads the application-bound presets need and no other preset does:
-	// which stage the application is at, and what the employer said when they invited
-	// the candidate.
+	// stages and invitation back the context a rehearsal and a debrief share: the application's
+	// stage, and what the employer said when they invited the candidate.
 	stages     applicationReader
 	invitation invitationReader
 
-	// plans meters a turn against the caller's plan. Nil leaves every turn unmetered,
-	// which is what a fixture exercising an adjacent surface gets — production always
-	// wires one.
+	// plans meters a turn against the caller's plan. Nil leaves turns unmetered (test fixtures);
+	// production always wires one.
 	plans *plan.Store
 
 	// support is the support agent's own wiring: its model, its runner and the mail a
 	// handover goes out on. The zero value is the unconfigured deployment.
 	support supportDeps
 
-	// realtime mints voice-mode's short-lived OpenAI Realtime API credentials. Nil in
-	// a deployment with no Realtime gateway configured, following internal/ai/speech's
-	// convention: the mint endpoint answers 501 and the interview session view offers
-	// no voice mode, rather than the composer discovering the absence on first use.
+	// realtime mints voice-mode's short-lived OpenAI Realtime credentials. Nil without a Realtime
+	// gateway (internal/ai/speech's convention): the mint endpoint answers 501 and the interview
+	// view offers no voice mode.
 	realtime realtimeMinter
 
-	// events best-effort publishes auto-apply/review.decided so a paused
-	// cmd/auto-apply-orchestrate run resumes (openspec/changes/auto-apply-inngest-orchestration).
-	// Nil is the unconfigured deployment: PostAutoApplyReview then publishes nothing,
-	// exactly as it did before this existed.
+	// events best-effort publishes auto-apply/review.decided so a paused cmd/auto-apply-orchestrate
+	// run resumes. Nil publishes nothing.
 	events autoApplyEventPublisher
 
-	// extractPDFText reads an attached PDF's text — the résumé upload's own extractor,
-	// held as a function so a test need not shell out to pdftotext.
+	// extractPDFText reads an attached PDF's text (the résumé upload's extractor), a function so a
+	// test need not shell out to pdftotext.
 	extractPDFText func([]byte) (string, error)
 }
 
-// assistantModels names the model client the assistant runs on and the resolver that
-// bills it.
+// assistantModels names the model client the assistant runs on and the resolver that bills it.
 type assistantModels struct {
-	// Agent is the model the turn loop runs on. Nil leaves the runner nil: old
-	// conversations stay readable and a new turn reports the assistant as unavailable,
-	// rather than the whole surface disappearing.
+	// Agent is the model the turn loop runs on. Nil leaves the runner nil: old conversations stay
+	// readable and a new turn reports the assistant as unavailable.
 	Agent *llm.Client
-	// Keys names the caller on the gateway. Nil is ordinary rather than degraded: every
-	// turn then spends on the service credential, exactly as it did before attribution.
+	// Keys names the caller on the gateway. Nil is ordinary: turns spend on the service credential.
 	Keys      *llmkey.Resolver
 	MaxSteps  int
 	MaxPrompt int
@@ -186,15 +165,13 @@ func newAssistantHandlers(
 		extractPDFText:   resume.ExtractPDFText,
 		support:          supportDeps{prices: prices},
 	}
-	// The fit reads come from the service, not from whichever handler happens to hold it:
-	// a tool that grounds on the cached analysis must not break because the CV surface was
-	// reshaped.
+	// The fit reads come from the service, not from whichever handler holds it, so reshaping the
+	// CV surface cannot break a tool that grounds on the cached analysis.
 	if cvH != nil {
 		h.fit = cvH.fit
 	}
-	// The rehearsal reads the invitation through the mail service, not through the store:
-	// the guarantee that this read leaves read_at alone is inbox's, and reaching past it
-	// would put a second reader outside that rule.
+	// The rehearsal reads the invitation through the mail service: that read leaving read_at alone
+	// is inbox's guarantee, and bypassing it would put a second reader outside the rule.
 	if mail != nil {
 		h.invitation = mail.inbox
 	}
@@ -210,30 +187,24 @@ func newAssistantHandlers(
 	return h
 }
 
-// register mounts the assistant. A browser drives it, but not always the web app:
-// the extension's side panel holds conversations too, and it cannot send hire's
-// httpOnly cookie across origins — so the gate is `key`, which resolves the cookie,
-// the session JWT the connect flow minted, or a full-scope API key to one user.
-// Authentication is the whole gate: every signed-in user reaches the assistant. The
-// beta-tester restriction that used to sit here was written when the agent ran on the
-// candidate's own machine, and did not survive the move in-process. A turn is both
-// attributed — it spends on the caller's own gateway credential, tagged with its preset —
-// and now BOUNDED: it draws on the caller's plan before the stream opens, and a spent
-// allowance is a 402. Measured over three August weeks, the assistant was 99.4% of model
-// spend and the only surface charging nothing for it.
+// register mounts the assistant. The extension's side panel holds conversations too and cannot
+// send the httpOnly cookie across origins, so the gate is `key`, which resolves the cookie, the
+// connect-flow session JWT, or a full-scope API key to one user. Every signed-in user reaches
+// the assistant. A turn is attributed (the caller's own gateway credential, tagged with its
+// preset) and bounded: it draws on the caller's plan before the stream opens, and a spent
+// allowance is a 402.
 func (h *assistantHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	api.Post("/assistant/sessions", mw.key, contract)
 	api.Get("/assistant/sessions", mw.key, contract)
 	api.Get("/assistant/sessions/:id", mw.key, contract)
 	api.Delete("/assistant/sessions/:id", mw.key, contract)
 	api.Post("/assistant/sessions/:id/messages", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantMessage)
-	// Read a PDF to attach to the next message. No model call, so no paidAI gate: it only
-	// extracts, and the turn that carries the text is what is metered.
+	// Read a PDF to attach to the next message. No model call, so no paidAI gate: the turn that
+	// carries the text is what is metered.
 	api.Post("/assistant/attachments", mw.key, h.PostAssistantAttachment)
 	api.Post("/assistant/sessions/:id/cancel", mw.key, contract)
-	// Buy this tailoring session another ceiling's worth of turns. Separate from starting
-	// a session because it is a distinct decision the candidate makes with what they know
-	// now — they have seen the work so far and are choosing to spend more of the day on it.
+	// Buy this tailoring session another ceiling's worth of turns. Separate from starting a
+	// session: a distinct decision the candidate makes after seeing the work so far.
 	api.Post("/assistant/sessions/:id/extend", mw.key, contract)
 	api.Post("/assistant/sessions/:id/opening", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantOpening)
 	api.Post("/assistant/sessions/:id/sync", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantSync)
@@ -248,34 +219,28 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware, contract f
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, mw.paidAI(plan.FeatureTailor), h.PostAssistantAutopilot)
 
-	// The external auto-apply pipeline's own two endpoints (openspec/changes/
-	// auto-apply-tailored-resume) — API key or cookie, never a session id from the caller.
-	// See auto_apply_tailor.go's own doc comment for why these are not variants of
-	// /autopilot above.
+	// The external auto-apply pipeline's own two endpoints: API key or cookie, never a session id
+	// from the caller. See auto_apply_tailor.go for why these are not variants of /autopilot.
 	api.Get("/me/auto-apply", mw.key, contract)
 	api.Post("/me/auto-apply/:queueId/tailor", mw.autoApplyGate, h.PostAutoApplyTailor)
 	api.Post("/me/auto-apply/:queueId/review", mw.autoApplyGate, contract)
 
-	// The candidate-facing trigger for the sequence above (openspec/changes/
-	// auto-apply-submit-trigger) — cookie-only, never mw.key or mw.autoApplyGate: see
-	// auto_apply_enqueue.go's own doc comment for why.
+	// The candidate-facing trigger for the sequence above: cookie-only, never mw.key or
+	// mw.autoApplyGate (see auto_apply_enqueue.go).
 	api.Post("/jobs/:slug/auto-apply", mw.cookie, mw.paidAI(plan.FeatureAutoApply), contract)
-	// Retry and cancel an existing attempt (openspec/changes/auto-apply-over-mcp). Cookie-only
-	// like the start route: the one other door is the signed-in MCP server, behind the
-	// account's agents_may_apply switch, and an API key would be a third that skips it.
+	// Retry and cancel an existing attempt. Cookie-only like the start route: the one other door
+	// is the signed-in MCP server behind agents_may_apply, and an API key would skip it.
 	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, contract)
 	api.Delete("/jobs/:slug/auto-apply", mw.cookie, contract)
 }
 
-// defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is
-// unset. The agent's context is finite and a pasted job board is not a question.
+// defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is unset.
 const defaultAssistantMaxPrompt = 8000
 
-// PostAssistantMessage runs one turn and streams it as SSE. Every frame the loop
-// produces — the recorded prompt, answer and reasoning deltas, each tool call and
-// its result, the token usage, and exactly one terminal result — is written as a
-// named event. A write failure means only that this reader stopped reading: the turn runs to
-// its own end regardless, and stopping it is a separate request (see CancelAssistantTurn).
+// PostAssistantMessage runs one turn and streams it as SSE, each loop frame (prompt, answer and
+// reasoning deltas, tool calls and results, token usage, one terminal result) as a named event.
+// A write failure only means this reader stopped: the turn runs to its own end, and stopping it
+// is a separate request (see CancelAssistantTurn).
 func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -296,9 +261,8 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 }
 
 // PostAssistantRetry resumes a session after a model/transport failure without recording
-// another user message. Re-posting the same prompt would leave two copies in the
-// transcript and in the model's context; Continue keeps the history as it is (healing
-// any dangling tool_use from the interrupted turn) and runs the loop again.
+// another user message: re-posting would duplicate the prompt in the transcript and the model's
+// context. Continue keeps the history (healing a dangling tool_use) and runs the loop again.
 func (h *assistantHandlers) PostAssistantRetry(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -311,8 +275,8 @@ func (h *assistantHandlers) PostAssistantRetry(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Asked of the role, not of the text: a message that was only an attached document has
-	// no text and is still something to retry.
+	// Asked of the role, not the text: a message that was only an attached document has no text
+	// and is still something to retry.
 	if !slices.ContainsFunc(transcript, func(m assistant.Message) bool { return m.Role == assistant.RoleUser }) {
 		return fiber.NewError(fiber.StatusConflict, "nothing to retry — send a message first")
 	}
@@ -337,13 +301,12 @@ func lastUserText(transcript []assistant.Message) string {
 	return ""
 }
 
-// streamTurn runs one turn and writes it to the response as SSE. It is shared by every
-// entry point that starts a turn, so the stream's shape — the headers, the cleared write
-// deadline and the keepalive — is written once.
+// streamTurn runs one turn and writes it to the response as SSE. Every entry point that starts
+// a turn shares it, so the stream's shape (headers, cleared write deadline, keepalive) is
+// written once.
 //
-// The prompt and the turn's bounds are the caller's arguments rather than the request's
-// body: an unattended run's brief and its raised ceiling are ours to choose, and a ceiling
-// a client can set is not a bound.
+// The prompt and the turn's bounds are arguments, not the request's body: a ceiling a client
+// can set is not a bound.
 func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, prompt string, docs []assistant.Attachment, turn assistant.TurnConfig) error {
 	return h.streamSSE(c, sess, h.meterTurn, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
 		return runner.RunWithAttachments(ctx, sess, reg, system, prompt, docs, turn, emit)
@@ -371,10 +334,8 @@ func (h *assistantHandlers) streamContinue(c *fiber.Ctx, sess assistant.Session,
 	})
 }
 
-// userLanguage reads the caller's preferred interface language for the turn's system
-// prompt (see assistant.SystemPrompt). Best-effort: a lookup failure falls back to
-// "en" rather than failing the turn — the language directive is worth getting right,
-// not worth a 500 over.
+// userLanguage reads the caller's preferred interface language for the turn's system prompt
+// (see assistant.SystemPrompt). Best-effort: a lookup failure falls back to "en".
 func (h *assistantHandlers) userLanguage(ctx context.Context, userID int64) string {
 	lang, err := h.queries.GetUserLanguage(ctx, userID)
 	if err != nil {
@@ -385,17 +346,12 @@ func (h *assistantHandlers) userLanguage(ctx context.Context, userID int64) stri
 }
 
 // effectivePreset resolves the preset a turn actually runs under. A browse session's
-// one distinguishing tool, read_current_page, only works over the extension's own
-// connection (internal/ai/browsertools.Hub is keyed by user id, not session id, so ANY
-// turn of the caller's could otherwise reach a browser they never opened on this
-// surface) — reached any other way, the session must run as an ordinary chat.
+// read_current_page only works over the extension's own connection (browsertools.Hub is keyed
+// by user id, not session id), so reached any other way the session must run as an ordinary chat.
 //
-// This is called ONCE, before either the prompt or the registry is built, and both
-// are built from its answer rather than from sess.Preset directly. Deciding the same
-// question twice — once for the prompt, once for the tools — is exactly what
-// assistant.NormalizePreset's own doc comment warns against: the two could disagree,
-// and a model told to always open by calling a tool it was never given just reports
-// "unknown tool" instead of running the plain chat it degraded to.
+// Called ONCE, before the prompt and the registry are built, and both use its answer: deciding
+// twice could disagree (assistant.NormalizePreset's doc), and a model told to open with a tool it
+// was never given just reports "unknown tool".
 func effectivePreset(preset string, asExtension bool) string {
 	if assistant.NormalizePreset(preset) == assistant.PresetBrowse && !asExtension {
 		return assistant.PresetChat
@@ -418,16 +374,15 @@ func (h *assistantHandlers) streamSSE(
 	turnSess := sess
 	turnSess.Preset = effectivePreset(sess.Preset, asExtension)
 
-	// One batch per turn. Every CV edit the agent makes in this turn is filed under it, so
-	// the history can group them and "undo the run" is undoing a batch — which is what
-	// retires the single pre-run snapshot and the edge two concurrent runs used to create.
+	// One batch per turn: every CV edit the agent makes is filed under it, so history can group
+	// them and "undo the run" undoes a batch.
 	registry := h.registry(turnSess, uuid.New())
 	language := h.userLanguage(c.Context(), sess.UserID)
 	system := assistant.SystemPrompt(turnSess.Preset, language)
 	if turnSess.SearchContext != nil {
 		run := start
-		// Called after acquiring the session's turn slot: a preceding turn may have
-		// saved new preferences while this request was queued.
+		// Called after acquiring the session's turn slot: a preceding turn may have saved new
+		// preferences while this request was queued.
 		start = func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, _ string, emit func(assistant.Event)) error {
 			fresh, err := h.store.Session(ctx, sess.ID, sess.UserID)
 			if err != nil {
@@ -442,27 +397,19 @@ func (h *assistantHandlers) streamSSE(
 		}
 	}
 
-	// Tagged from turnSess, not sess: a demoted browse turn spends like a chat turn — no
-	// page tool, the chat prompt — so it must be billed as one. Tagging it "browse" would
-	// pollute that preset's cost bucket with turns that never touched its one distinguishing
-	// tool, defeating the reason the tag exists (AGENTS.md: "the preset is what makes them
-	// comparable").
+	// Tagged from turnSess, not sess: a demoted browse turn spends like a chat turn, so billing it
+	// "browse" would pollute that preset's cost bucket.
 	turnRunner, err := h.boundRunner(c.UserContext(), turnSess)
 	if err != nil {
 		return err
 	}
 
-	// Metered BEFORE the headers go out. A refusal has to be a real status: an error frame
-	// inside a stream that already answered 200 is invisible to anything checking status
-	// codes, and the SPA would render an empty answer where an upgrade prompt belongs.
+	// Metered BEFORE the headers go out: a refusal has to be a real status, since an error frame
+	// inside a stream that already answered 200 is invisible to status checks. Charged against
+	// turnSess, not sess, for the same reason as the spend tag.
 	//
-	// Charged against turnSess, not sess, for the same reason the spend tag is: a browse
-	// turn demoted to chat IS a chat turn, and it must draw on the allowance it actually
-	// spends against.
-	//
-	// A session that cannot take another message is refused before it is metered. claim below
-	// remains the guard; this read only keeps a busy conversation from being reported as an
-	// exhausted allowance.
+	// A session that cannot take another message is refused before it is metered, so a busy
+	// conversation is not reported as an exhausted allowance. claim below remains the guard.
 	if h.turns.full(sess.ID) {
 		return fiber.NewError(fiber.StatusConflict, errTurnQueueFull.Error())
 	}
@@ -473,53 +420,40 @@ func (h *assistantHandlers) streamSSE(
 
 	sseHeaders(c)
 
-	// The server's write timeout would kill this long-lived stream mid-turn, so the SSE
-	// response carries its own, bounded deadline instead (captured while the request ctx
-	// is valid; used inside the writer, which runs after this handler returns).
+	// The server's write timeout would kill this long-lived stream, so the SSE response carries its
+	// own bounded deadline (captured while the request ctx is valid; used inside the writer).
 	conn := c.Context().Conn()
 
-	// The turn runs on its own cancellable context: the request's own is released the moment
-	// this handler returns, long before the turn ends. It is created HERE rather than inside
-	// the writer so the session's slot is taken while the request can still be answered — a
-	// slot taken after the handler returned could not refuse anything.
+	// The turn runs on its own cancellable context: the request's is released when this handler
+	// returns. Created HERE, not in the writer, so the session's slot is taken while the request
+	// can still be refused.
 	//
-	// Detached from the request's user context rather than from context.Background, so the
-	// mark the paid-AI gate left on it travels into the turn: a tool that makes a model call
-	// of its own (the cover-letter draft) binds through the same fail-closed check as the
-	// turn did. WithoutCancel because the turn must outlive the request it started in.
+	// Detached via WithoutCancel (not context.Background) so the paid-AI gate's mark travels into
+	// the turn: a tool making its own model call (cover-letter draft) hits the same fail-closed check.
 	ctx, cancel := context.WithCancel(context.WithoutCancel(c.UserContext()))
 	slot, waiter, err := h.turns.claim(sess.ID, cancel)
 	if err != nil {
 		cancel()
-		// The charge was taken before the headers, which is the only place a refusal can
-		// still be a status — but this turn never reaches the runner, so it owes the
-		// allowance back. A 409 that also costs a message is the accounting refusing work
-		// it declined to do.
+		// The charge was taken before the headers (the only place a refusal can still be a status),
+		// but this turn never reaches the runner, so it owes the allowance back.
 		h.releaseTurn(turnSess, charge)
 		return fiber.NewError(fiber.StatusConflict, err.Error())
 	}
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		// sseStream owns the write protocol both SSE endpoints need: it serializes the
-		// heartbeat goroutine against the event callback (bufio.Writer is not safe for
-		// concurrent use) and re-arms the write deadline before EVERY write. Per-write
-		// rather than once up front because fasthttp runs this stream writer on its own
-		// goroutine while the serving goroutine arms the server's WriteTimeout, so a single
-		// set races with it and loses about half the time — the turn then dies at exactly
-		// ten seconds, mid-answer, for no reason the user can see. Bounded rather than
-		// cleared because a cleared deadline is forever: a reader that stopped reading
-		// would block the write, and with it this goroutine, for the life of the process.
+		// sseStream owns the write protocol both SSE endpoints need: it serializes the heartbeat
+		// goroutine against the event callback (bufio.Writer is not safe for concurrent use) and
+		// re-arms the write deadline before EVERY write. Per-write because fasthttp runs this writer
+		// on its own goroutine while the serving goroutine arms the server's WriteTimeout, so a single
+		// set races and the turn dies at ten seconds. Bounded, not cleared: a reader that stopped
+		// reading would block this goroutine forever.
 		stream := newSSEStream(w, conn, sseWriteTimeout)
 
-		// Registered first so it unwinds last: the turn's slot, its allowance and the
-		// heartbeat are released by the defers below, and the client must not be told the
-		// turn is over while the session still holds it.
+		// Registered first so it unwinds last: the slot, allowance and heartbeat are released by the
+		// defers below, and the client must not be told the turn is over while the session holds it.
 		//
-		// The frame says StopError, exactly what Runner.fail emits — a panic ended the
-		// turn without an answer, which is a failure and not a cancellation, and the
-		// client's error branch is the one that ends the turn and offers the retry route
-		// (POST /assistant/sessions/:id/retry) rather than leaving the composer queued
-		// behind a turn nothing will finish.
+		// The frame says StopError, as Runner.fail emits: a panic is a failure, not a cancellation, and
+		// the client's error branch offers the retry route (POST /assistant/sessions/:id/retry).
 		defer recoverStream("assistant: turn", func() {
 			stream.event(string(assistant.EventResult),
 				assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopError, IsError: true})
@@ -527,27 +461,20 @@ func (h *assistantHandlers) streamSSE(
 
 		defer cancel()
 
-		// One byte immediately, before anything this turn might wait on. Until something is
-		// written, fasthttp holds the response line and the headers in its buffer, so "the
-		// stream is open" is true here and not yet true on the wire — and a proxy times out
-		// an upstream that has sent nothing, however busy it is. The heartbeat below cannot
-		// cover this: its first comment is a whole interval away. A comment rather than an
-		// event because EventSource ignores it — this says nothing to the client, it only
-		// makes the connection real.
+		// One byte immediately, before anything this turn might wait on: until something is written,
+		// fasthttp buffers the response line and headers, and a proxy times out an upstream that has
+		// sent nothing. The heartbeat cannot cover this (its first comment is an interval away). A
+		// comment, not an event, because EventSource ignores it.
 		stream.comment("open")
 
-		// The heartbeat starts BEFORE the queue wait, not after it: a queued message can wait
-		// up to a minute, and an idle connection is exactly what a proxy in front of us
-		// collects. Waiting in silence would lose the connection at roughly the same moment
-		// the wait was about to pay off.
+		// The heartbeat starts BEFORE the queue wait: a queued message can wait up to a minute, and a
+		// proxy collects an idle connection.
 		stopHeartbeat := stream.keepalive(sseKeepalive)
 		defer stopHeartbeat()
 
-		// A message that arrived while the session was busy waits here rather than running
-		// beside the turn in flight — two turns of one tailoring session would edit one CV
-		// from two conversations that cannot see each other. The client is told it is
-		// waiting, because a stream that goes quiet for a minute is indistinguishable from
-		// one that broke.
+		// A message that arrived while the session was busy waits here rather than running beside the
+		// turn in flight (two turns of one tailoring session would edit one CV from two conversations).
+		// The client is told it is waiting, since a minute of silence looks like a broken stream.
 		if waiter != nil {
 			stream.event(string(assistant.EventQueued), assistant.Event{Kind: assistant.EventQueued})
 
@@ -555,13 +482,10 @@ func (h *assistantHandlers) streamSSE(
 			slot, err = waiter.enter(waitCtx, cancel)
 			giveUp()
 			if err != nil {
-				// The wait is over and this turn never started, so it gives back what it
-				// took — a queued message that timed out behind another turn has produced
-				// nothing, and that is exactly what the reservation exists to undo.
+				// The wait is over and this turn never started, so it gives back what it took.
 				h.releaseTurn(turnSess, charge)
 
-				// Every stream owes its client one terminal event; without it the client
-				// waits for a turn that is not coming.
+				// Every stream owes its client one terminal event, or it waits for a turn that is not coming.
 				stream.event(string(assistant.EventResult),
 					assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopCancelled})
 				return
@@ -574,32 +498,26 @@ func (h *assistantHandlers) streamSSE(
 			turnCtx = withPersonInBrowser(ctx)
 		}
 		err = start(turnCtx, turnRunner, registry, system, func(e assistant.Event) {
-			// A write that fails means THIS reader is not listening: a phone froze its tab,
-			// a tunnel dropped, a laptop slept. It does not mean the work should stop, and
-			// treating it that way threw away live runs — a tailoring pass lost its report
-			// after twenty-five committed edits because a tab went to the background.
-			//
-			// So the event is simply not delivered. The turn runs to its own end under the
-			// bounds it already has (the step cap and the model timeout), the transcript is
-			// persisted either way, and a client that comes back reads it from the session.
-			// Stopping a turn is now something a caller ASKS for, through the cancel route.
+			// A failed write means THIS reader is not listening (frozen tab, dropped tunnel), not that
+			// the work should stop: stopping threw away live runs. The event is not delivered, the turn
+			// runs to its own end under its bounds (step cap, model timeout), the transcript is persisted
+			// either way, and a returning client reads it from the session. Stopping a turn is something a
+			// caller ASKS for, through the cancel route.
 			stream.event(string(e.Kind), e)
 		})
 		if err != nil {
-			// The turn produced nothing the candidate can use, so it gives back what it
-			// took. A model or transport failure is ours, not theirs, and charging for an
-			// answer that never arrived is the one outcome the reservation exists to avoid.
+			// The turn produced nothing usable, so it gives back what it took: a model or transport
+			// failure is ours, and charging for an answer that never arrived is what the reservation avoids.
 			h.releaseTurn(turnSess, charge)
 
-			// Nothing to continue is a client mistake (empty session), not a turn fault —
-			// surface it as a conflict on the still-open stream rather than error-report noise.
+			// Nothing to continue is a client mistake (empty session), not a turn fault: surface it as a
+			// conflict on the open stream rather than error-report noise.
 			if errors.Is(err, assistant.ErrNothingToContinue) {
 				return
 			}
-			// The loop has already emitted its terminal error event; this is for us —
-			// and for the exception log, which would otherwise never learn of it: this handler
-			// returned nil long before the turn ran, so RenderError never sees the
-			// failure and the access log keeps the 200 the stream opened with.
+			// The loop already emitted its terminal error event; this is for the exception log, which
+			// would never learn of it: this handler returned nil long ago, so RenderError never sees the
+			// failure and the access log keeps the 200.
 			log.Printf("assistant: turn failed session=%s: %v", sess.ID, err)
 			reportStreamFault(err)
 		}
@@ -607,22 +525,20 @@ func (h *assistantHandlers) streamSSE(
 	return nil
 }
 
-// boundRunner returns the runner for one turn, spending under the session owner's own
-// gateway credential.
+// boundRunner returns the runner for one turn, spending under the session owner's own gateway
+// credential.
 //
-// The turn is tagged with the preset as well as the feature: a rehearsal, an unattended
-// tailoring pass and a question cost wildly different amounts, and the gateway files one
-// spend row per tag, so the preset is what makes them comparable. It resolves before the
-// stream opens — minting is a network call, and making it after the headers are out would
-// stall a stream the client is already reading.
+// The turn is tagged with the preset as well as the feature: rehearsal, unattended tailoring and
+// a question cost wildly different amounts, and the gateway files one spend row per tag. It
+// resolves before the stream opens, since minting is a network call that would stall a stream
+// already being read.
 //
-// The nil check is load-bearing and is not the same as letting Runner.With see a nil. A
-// nil *llm.Client assigned into the Model INTERFACE is not a nil interface, so the runner
-// would believe it has a model and dereference it on the first round. That is a panic in
-// the stream goroutine, after the response has already begun.
+// The nil check is load-bearing: a nil *llm.Client assigned into the Model INTERFACE is not a
+// nil interface, so the runner would dereference it on the first round, panicking in the stream
+// goroutine after the response began.
 //
-// It goes through the user-call binding like every other model call, so it fails closed on
-// a context the paid-AI gate did not mark — and the error comes back before any stream opens.
+// It goes through the user-call binding, so it fails closed on a context the paid-AI gate did
+// not mark, before any stream opens.
 func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Session) (*assistant.Runner, error) {
 	if sess.Preset == assistant.PresetSupport {
 		return h.boundSupportRunner(ctx, sess)
@@ -637,29 +553,27 @@ func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Sess
 	return h.runner.With(bound), nil
 }
 
-// binding is this surface's model client and credential resolver as the one user-call
-// binding every handler spends through (user_llm.go). They are held as two fields because
-// the assistant needs the bare client too; the binding is assembled where it is used so the
-// assistant cannot reach llmkey around the paid check.
+// binding is this surface's model client and credential resolver as the one user-call binding
+// every handler spends through (user_llm.go). Two fields because the assistant also needs the
+// bare client; assembling it where used keeps the assistant from reaching llmkey around the paid check.
 func (h *assistantHandlers) binding() llmBinding { return llmBinding{client: h.llm, keys: h.keys} }
 
-// The opening briefs. Like the autopilot's they are short on method and only say which
-// conversation this is: how to open — read the context, name the vacancy, ask the first
-// question — is in each preset's system prompt, stated once.
+// The opening briefs. Short on method: they only say which conversation this is, since how to
+// open (read the context, name the vacancy, ask the first question) is in each preset's system
+// prompt.
 //
-// They exist because a turn does not begin until a message arrives, and the candidate has
-// nothing to type. They opened this from an application; asking them to introduce their
-// own interview would be the questionnaire the assistant is supposed to save them.
+// They exist because a turn does not begin until a message arrives and the candidate has nothing
+// to type; asking them to introduce their own interview would be the questionnaire the assistant
+// is meant to save them.
 const (
 	rehearsalOpeningBrief = "Let's rehearse this interview. Read the context and tell me what you see, " +
 		"then ask me which round to run."
 	debriefOpeningBrief = "I've just had this interview. Read the context, then ask me what I was asked."
 )
 
-// openingBriefFor answers with the brief an application-bound preset opens under, and
-// with the empty string for a preset that opens under none. The empty answer is what
-// PostAssistantOpening refuses on, so the set of presets that can speak first is stated
-// once rather than as a condition there and a constant here.
+// openingBriefFor returns the brief an application-bound preset opens under, "" for a preset
+// that opens under none. PostAssistantOpening refuses on "", so the set of presets that can speak
+// first is stated once.
 func openingBriefFor(preset string) string {
 	switch preset {
 	case assistant.PresetInterview:
@@ -671,12 +585,11 @@ func openingBriefFor(preset string) string {
 	}
 }
 
-// PostAssistantOpening speaks first in a rehearsal or a debrief, streaming one ordinary
-// turn under a server-side brief.
+// PostAssistantOpening speaks first in a rehearsal or a debrief, streaming one ordinary turn
+// under a server-side brief.
 //
-// It refuses a session whose opening has already been answered. The opening is the first
-// turn of a conversation, and a reload that re-ran it would restart the interview over
-// whatever the candidate had already said.
+// It refuses a session whose opening was already answered: a reload that re-ran it would restart
+// the interview over what the candidate already said.
 func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -685,9 +598,8 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	if h.runner == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	// The vacancy as well as the preset: the context tool is registered only for a
-	// session that carries one, so an unbound session would open on a tool it does not
-	// have.
+	// The vacancy as well as the preset: the context tool is registered only for a session that
+	// carries one, so an unbound session would open on a tool it does not have.
 	brief := openingBriefFor(sess.Preset)
 	if brief == "" || sess.JobID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation does not open by itself")
@@ -696,11 +608,9 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// An ANSWERED opening, not any transcript at all. The runner records the brief before
-	// it calls the model, so a turn that dies upstream — a 502 from the proxy is an
-	// ordinary event — leaves exactly one message behind. Refusing on that would put the
-	// session in a state it can never leave: a conversation holding one line the
-	// candidate did not write, no opening, and no way to retry.
+	// An ANSWERED opening, not any transcript: the runner records the brief before calling the
+	// model, so a turn that dies upstream leaves one message behind. Refusing on that would strand
+	// the session with a line the candidate did not write and no way to retry.
 	for _, m := range transcript {
 		if m.Role == assistant.RoleAssistant {
 			return fiber.NewError(fiber.StatusConflict, "this conversation has already started")
@@ -734,9 +644,8 @@ func (h *assistantHandlers) ownedSessionByID(ctx context.Context, rawID string) 
 	return sess, nil
 }
 
-// mapAssistantError renders a store failure as HTTP. A session the caller does not
-// own is a 404, exactly like one that never existed — the two must stay
-// indistinguishable or the ids become probeable.
+// mapAssistantError renders a store failure as HTTP. A session the caller does not own is a
+// 404, indistinguishable from one that never existed, or the ids become probeable.
 func mapAssistantError(err error) error {
 	if errors.Is(err, assistant.ErrNotFound) {
 		return errSessionNotFound

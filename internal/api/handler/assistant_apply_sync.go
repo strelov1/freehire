@@ -14,16 +14,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// PostAssistantSync catches an apply conversation up on its application (openspec/changes/
-// auto-apply-chat). The client calls it when the chat opens and periodically while it stays
-// open. When the attempt has events the conversation has not narrated, it streams one turn
-// over them; when it has none it answers 204 and the model is never asked.
+// PostAssistantSync catches an apply conversation up on its application. The client calls it
+// when the chat opens and periodically while it stays open. With un-narrated events it streams
+// one turn over them; with none it answers 204 and the model is never asked.
 //
-// The turn's input is a status note, not a message from the candidate, so it is not charged
-// to their assistant allowance — they did not ask for it, and it is bounded by the attempt's
-// own handful of events. The cursor moves only after the turn finished, so a narration that
-// failed is narrated again by the next sync instead of being skipped. A backlog longer than a
-// page is narrated a page per sync.
+// The turn's input is a status note, not a candidate message, so it is not charged to their
+// assistant allowance. The cursor moves only after the turn finished, so a failed narration is
+// retried by the next sync. A backlog longer than a page is narrated a page per sync.
 func (h *assistantHandlers) PostAssistantSync(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -35,8 +32,8 @@ func (h *assistantHandlers) PostAssistantSync(c *fiber.Ctx) error {
 	if h.runner == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	// A cheap look first, so a sync with nothing new answers 204 without taking the
-	// session's turn slot — which is what every fifteen-second check of a quiet application is.
+	// A cheap look first, so a sync with nothing new answers 204 without taking the session's
+	// turn slot.
 	ctx := c.Context()
 	if _, unseen, err := h.unnarrated(ctx, sess); err != nil {
 		return err
@@ -44,9 +41,8 @@ func (h *assistantHandlers) PostAssistantSync(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 	return h.streamSSE(c, sess, unmetered, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
-		// Read again now that the slot is ours: a sync that queued behind another turn — a
-		// second tab's sync, the candidate's own reply — must narrate what is unseen NOW, not
-		// what was unseen when it arrived, or it narrates the same events twice.
+		// Read again now that the slot is ours: a sync that queued behind another turn must
+		// narrate what is unseen now, or it narrates the same events twice.
 		cursor, unseen, err := h.unnarrated(ctx, sess)
 		if err != nil {
 			return err
@@ -93,9 +89,8 @@ func unmetered(*fiber.Ctx, assistant.Session) (turnCharge, bool, error) {
 	return turnCharge{}, false, nil
 }
 
-// applyStatusNote is what the model is told: the events since it last spoke, and where the
-// attempt stands now — the same view auto_apply_get returns, so the open questions it is to
-// list arrive with the note rather than after a tool call.
+// applyStatusNote is what the model is told: the events since it last spoke and where the
+// attempt stands now (the auto_apply_get view), so open questions arrive with the note.
 func (h *assistantHandlers) applyStatusNote(ctx context.Context, userID, jobID int64, events []db.ListAutoApplyEventsAfterRow) (string, error) {
 	var b strings.Builder
 	b.WriteString("Since you last spoke to the candidate, the application's history recorded:\n")

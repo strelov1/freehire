@@ -28,11 +28,9 @@ func (h *inboxHandlers) mailboxAddress(ctx context.Context, userID int64) (addre
 		return "", false, err
 	}
 	if !hasName {
-		// A mailbox row exists but the account has no username yet. Not possible
-		// via a fresh claim (mailbox.GetOrCreate resolves the username before
-		// enrolling), but real for the deploy window before
-		// cmd/backfill-username-from-mailbox has visited a pre-existing legacy
-		// row. Report no address rather than have a read allocate one.
+		// A mailbox row without a username: impossible via a fresh claim (GetOrCreate
+		// resolves the username first) but real for legacy rows not yet visited by
+		// cmd/backfill-username-from-mailbox. Report no address rather than allocate on a read.
 		return "", false, nil
 	}
 	return name + "@" + h.mailDomain, true, nil

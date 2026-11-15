@@ -6,10 +6,8 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 )
 
-// body parses the letter's markup with the shell's sign-off appended, the same shape
-// internal/engage/onboarding's copy.go uses — this letter is one of that sequence's
-// family (personal, first-person, Reply-To a human inbox), just triggered by a payment
-// rather than by a day offset from signup.
+// body parses the letter's markup with the shell's sign-off appended, like
+// internal/engage/onboarding's copy.go.
 var body = template.Must(mailtpl.Partials().New("pro-welcome").Parse(`
 {{template "p" "Hi — I'm Ilya, I built freehire. Thank you for subscribing, and congratulations on being one of freehire's earliest paying members!"}}
 {{template "lead" (printf "You're now on %s, running through %s." .TierLabel .UntilLabel)}}

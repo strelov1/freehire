@@ -126,6 +126,44 @@ The feed keeps the full history and nothing is deleted from it, so a `cursor` yo
 
 A posting counts as listed while it is open, canonical (not a duplicate of another posting) and public. A posting that stops being listed is a `closed` change whose `closed_reason` is the close reason, or `duplicate` when it became a duplicate of another posting, or `private`; one that is listed again is `reopened`.
 
+### Change webhooks
+
+Instead of polling the feed you can have it pushed. `POST /me/change-webhooks` subscribes a URL (with an `api` or `api_data` plan); the answer carries the signing `secret`, **once**. A subscription can ask for only some companies (`company_slugs`) and some kinds of change (`kinds`), and receives changes made from about the time it was created (a change from the moment just before can arrive once; `seq` dedupes it). It reads the same feed as `GET /jobs/changes`, in the same order, and the same postings.
+
+A delivery is a `POST` with a JSON body and these headers:
+
+| Header | Value |
+|---|---|
+| `X-Freehire-Timestamp` | Unix seconds when it was signed. |
+| `X-Freehire-Signature` | `v1=` plus the hex HMAC-SHA256, keyed by your secret, of the timestamp, a `.`, and the raw body. |
+| `X-Freehire-Delivery` | An id, the same for a retry of the same batch. |
+| `X-Freehire-Event` | `job.changes`, or `webhook.test` for a test. |
+
+```json
+{"id": "7-4821-90210", "type": "job.changes", "changes": [
+  {"public_slug": "senior-go-engineer-acme-1a2b", "company_slug": "acme", "seq": 98765, "kind": "closed", "at": "2026-06-20T04:10:00Z", "closed_reason": "unseen"}
+]}
+```
+
+`changes` is a batch of up to 100, oldest first, each shaped like a feed change plus `company_slug`. Apply a change only when its `seq` is greater than the last one you applied for that `public_slug` (this also drops a repeat). `opened` and `reopened` mean fetch the posting with `GET /jobs/{slug}`; `closed` means delist it.
+
+Verify before you trust a body: recompute the HMAC over the timestamp header, `.` and the **raw** body bytes (not re-serialised JSON), compare in constant time, and refuse a timestamp more than 5 minutes from your clock. In Go:
+
+```go
+func verify(secret, ts, sig string, body []byte) bool {
+	n, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil || math.Abs(time.Since(time.Unix(n, 0)).Seconds()) > 300 {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	fmt.Fprintf(mac, "%s.", ts)
+	mac.Write(body)
+	return hmac.Equal([]byte("v1="+hex.EncodeToString(mac.Sum(nil))), []byte(sig))
+}
+```
+
+Answer any `2xx` to accept a batch. Anything else, a timeout (10 seconds) or a redirect counts as a failure: the same batch is sent again after 30 seconds, doubling up to an hour. Delivery is at least once, so expect repeats and dedupe on `seq`. After 25 failures in a row, or at once on a `410 Gone`, the subscription is disabled (`disabled_at` and `disabled_reason` in the list); delete it and create it again to resume, from the changes made then. Plan for the feed instead if you need what happened meanwhile. While your plan has lapsed, deliveries pause and pick up where they stopped once it is renewed.
+
 ## Authentication model
 
 Browser clients authenticate with an `HttpOnly` session cookie set on sign-in (same-origin; the SPA cannot read it). Non-browser clients use a personal API key as `Authorization: Bearer <token>`.

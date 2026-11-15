@@ -36,7 +36,7 @@ func run() int {
 	bucket := os.Getenv("MAIL_INBOUND_BUCKET")
 	if domain == "" || region == "" || queueURL == "" {
 		log.Print("mail-ingest: not configured (MAILBOX_DOMAIN / AWS_REGION / MAIL_INBOUND_QUEUE_URL) — nothing to do")
-		return 0
+		return worker.Skip("MAILBOX_DOMAIN+AWS_REGION+MAIL_INBOUND_QUEUE_URL")
 	}
 
 	src, err := mailingest.NewSESSource(ctx, region, queueURL, bucket)

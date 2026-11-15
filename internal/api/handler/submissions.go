@@ -17,24 +17,20 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// submissionHandlers serves the public job-submission queue: any authenticated
-// user submits a vacancy for review and reads their own queue; the review actions
-// are moderator-gated. Approval mints a live job by delegating to moderation.
-// Prefill reuses the same importer the paste-a-link contribution flow resolves
-// through, but never writes — see PrefillSubmission.
+// submissionHandlers serves the public job-submission queue: any authenticated user submits
+// a vacancy and reads their own queue; the review actions are moderator-gated. Approval
+// mints a live job via moderation. Prefill reuses the paste-a-link importer but never writes.
 type submissionHandlers struct {
 	submission *submission.Service
 	importer   *linkimport.Importer
-	// queries and postings answer "is this vacancy already in the catalogue" through the
-	// same catalogSlugForURL every other link-accepting surface uses — see
-	// CreateSubmission. Zero-value postings = the offline rewrite only.
+	// queries and postings answer "is this vacancy already in the catalogue" via
+	// catalogSlugForURL. Zero-value postings = the offline rewrite only.
 	queries  *db.Queries
 	postings sources.PostingURLResolver
 }
 
 func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *moderation.Service, importer *linkimport.Importer, postings sources.PostingURLResolver) *submissionHandlers {
-	// Submission approval mints through the same moderation service, so derivation,
-	// dedup, and the enrichment enqueue are reused rather than duplicated.
+	// Approval mints through moderation, reusing derivation, dedup and the enrichment enqueue.
 	return &submissionHandlers{
 		submission: submission.New(submission.NewQueriesRepository(queries, pool), moderation),
 		importer:   importer,
@@ -44,11 +40,8 @@ func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *
 }
 
 func (h *submissionHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Public job submissions: any authenticated user submits a vacancy for review
-	// (cookie or API key) and reads their own queue; the review actions (the pending
-	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
-	// path CreateJob uses — so an approved submission is indistinguishable from a
-	// hand-curated one.
+	// Submit and read own queue: cookie or API key. Pending queue, approve and reject are
+	// moderator-gated. Approval takes the CreateJob path, so it equals a hand-curated job.
 	api.Post("/submissions", mw.key, contract)
 	api.Post("/submissions/prefill", mw.key, contract)
 	api.Get("/me/submissions", mw.key, contract)
@@ -57,11 +50,8 @@ func (h *submissionHandlers) register(api fiber.Router, mw middleware, contract 
 	api.Post("/submissions/:id/reject", mw.key, mw.moderator, contract)
 }
 
-// withStructured copies the submission's structured facets onto the response — the shared
-// tail of all three mappers, which build the same-named fields from the embedded Submission.
-// The submitter_email is set only on the moderator queue and submitted_by is never sent
-// (ownership, internal). The content fields mirror the submit body so a user can see
-// exactly what they sent.
+// withStructured copies the submission's structured facets onto the response (shared tail of
+// the three mappers). submitter_email is set only on the moderator queue; submitted_by is never sent.
 func withStructured(resp apigen.Submission, s submission.Submission) apigen.Submission {
 	resp.Skills = nilIfEmpty(s.Skills)
 	resp.Regions = nilIfEmpty(s.Regions)
@@ -127,8 +117,7 @@ func toMySubmissionResponse(r submission.UserSubmission) apigen.Submission {
 }
 
 // submissionError maps the submission sentinels onto HTTP statuses. moderation.ErrInvalid
-// (raised by the shared content validation) carries a user-facing 400 message; the rest
-// map to not-found / conflict. Anything else falls through to RenderError as a 500.
+// carries a user-facing 400 message; anything unmapped falls through as a 500.
 func submissionError(err error) error {
 	switch {
 	case errors.Is(err, submission.ErrSubmissionNotFound):
@@ -146,9 +135,8 @@ func submissionError(err error) error {
 	}
 }
 
-// submissionInput maps the submit body onto the moderation create input. A field the body
-// left out, or sent as null, is the zero value, as it was when the body decoded into plain
-// fields; the service then refuses a missing required one with its own message.
+// submissionInput maps the submit body onto the moderation create input. An omitted or null
+// field is the zero value; the service refuses a missing required one.
 func submissionInput(in *apigen.SubmissionRequest) (moderation.CreateInput, error) {
 	var postedAt *time.Time
 	if v := in.PostedAt.Value; v != "" {
@@ -180,12 +168,10 @@ func submissionInput(in *apigen.SubmissionRequest) (moderation.CreateInput, erro
 	}, nil
 }
 
-// CreateSubmission queues a user-contributed vacancy for moderation. Authenticated by
-// cookie or API key; the content is validated by the service (a bad body is a 400 before
-// any write), and a duplicate pending URL is a 409. So is a URL the catalogue already
-// carries: the moderator could only reject it, and approving it by mistake would mint a
-// second row under source "manual" that the ingest dedup passes do not collapse.
-// Returns the pending submission with 201.
+// CreateSubmission queues a user-contributed vacancy for moderation (cookie or API key). A bad
+// body is a 400 before any write; a duplicate pending URL is a 409, and so is a URL the
+// catalogue already carries, since approving it would mint a second "manual" row that ingest
+// dedup does not collapse. Returns the pending submission with 201.
 func (h *submissionHandlers) CreateSubmission(ctx context.Context, req *apigen.SubmissionRequest) (*apigen.CreateSubmissionCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -212,17 +198,12 @@ func (h *submissionHandlers) CreateSubmission(ctx context.Context, req *apigen.S
 	return &apigen.CreateSubmissionCreated{Data: toSubmissionResponse(sub)}, nil
 }
 
-// PrefillSubmission parses a job URL through the same destination-recognition registry
-// the paste-a-link contribution flow resolves through (internal/ingest/linksource), but writes
-// nothing — no job, no submission, no credit reward, no enrichment enqueue, no search push.
-// What it answers is for the submitter to review and edit before submitting, never
-// persisted, never awarded a credit. Skills is included only when the platform states it in
-// a STRUCTURED field (sources.Job.Skills; most adapters leave it empty, since freehire's own
-// skilltag dictionary over the description usually does better than a source page's own
-// tagging). Cities has no structured source equivalent and is never included.
-// A URL the catalogue already carries answers with ExistingJobSlug and nothing else. An
-// unrecognized URL, or one that is not a single vacancy page, is not an error: it responds
-// 200 with every field empty, and the submitter keeps typing.
+// PrefillSubmission parses a job URL through the paste-a-link registry
+// (internal/ingest/linksource) and writes nothing: no job, submission, credit, enrichment or
+// search push. Skills is included only when the platform states it in a STRUCTURED field
+// (sources.Job.Skills); Cities is never included. A URL the catalogue already carries answers
+// with ExistingJobSlug only. An unrecognized URL, or one that is not a single vacancy page,
+// is not an error: 200 with every field empty.
 func (h *submissionHandlers) PrefillSubmission(ctx context.Context, req *apigen.PrefillRequest) (*apigen.PrefillSubmissionOK, error) {
 	if _, err := requireUserIDFromContext(ctx); err != nil {
 		return nil, err
@@ -254,8 +235,7 @@ func (h *submissionHandlers) PrefillSubmission(ctx context.Context, req *apigen.
 	}}, nil
 }
 
-// ListMySubmissions returns the caller's own submissions with their status and any
-// rejection reason. Scoped to the authenticated user, so it never reveals another user's.
+// ListMySubmissions returns the caller's own submissions with status and any rejection reason.
 func (h *submissionHandlers) ListMySubmissions(ctx context.Context) (*apigen.ListMySubmissionsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -273,8 +253,7 @@ func (h *submissionHandlers) ListMySubmissions(ctx context.Context) (*apigen.Lis
 	return &apigen.ListMySubmissionsOK{Data: out}, nil
 }
 
-// ListPendingSubmissions returns the moderator review queue (with submitter emails). The
-// route is role-gated, so reaching this handler already implies a moderator.
+// ListPendingSubmissions returns the moderator review queue (with submitter emails); role-gated.
 func (h *submissionHandlers) ListPendingSubmissions(ctx context.Context) (*apigen.ListPendingSubmissionsOK, error) {
 	rows, err := h.submission.ListPending(ctx)
 	if err != nil {
@@ -307,11 +286,9 @@ func (h *submissionHandlers) ApproveSubmission(ctx context.Context, params apige
 }
 
 // RejectSubmission marks a pending submission rejected with an optional reason. Role-gated.
-// The body is optional (reason is blank without it). With block_domain set, the submission
-// URL's host also goes on the submission-domain blocklist and every other pending
-// submission on that host is rejected in the same action (see submission.Service.Reject);
-// the response is only the target submission — the frontend re-reads the queue to see any
-// bulk-rejected siblings.
+// With block_domain set, the URL's host goes on the blocklist and every other pending
+// submission on that host is rejected too (see submission.Service.Reject); the response is
+// only the target submission.
 func (h *submissionHandlers) RejectSubmission(ctx context.Context, req apigen.OptRejectSubmissionRequest, params apigen.RejectSubmissionParams) (*apigen.RejectSubmissionOK, error) {
 	reviewerID, err := requireUserIDFromContext(ctx)
 	if err != nil {

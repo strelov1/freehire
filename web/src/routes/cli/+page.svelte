@@ -3,7 +3,8 @@
   import { CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
   import CliView from '#lib/components/CliView.svelte';
   import Seo from '#lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, cliApplicationJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { cliApplicationJsonLd } from '#lib/seoAppJsonLd.js';
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/cli`);

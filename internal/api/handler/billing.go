@@ -14,18 +14,12 @@ import (
 	"github.com/strelov1/freehire/internal/identity/promo"
 )
 
-// billingHandlers serve the two ends of the Pro subscription: where a candidate goes to
-// buy it, and where the provider tells us what happened.
-//
-// Neither route exists when billing is unconfigured — see register. That is deliberate and
-// it is what makes this code safe to ship in a public repository: a deployment that never
-// sets the credentials cannot tell the endpoints are there.
+// billingHandlers serve the Pro subscription: where a candidate buys it and where the provider reports back.
+// Neither route exists when billing is unconfigured (see register), so a deployment without credentials cannot be probed.
 type billingHandlers struct {
 	billing *billing.Service
 	store   *billing.RevenueCat
-	// promo decides what discount the buyer is owed. Held here rather than imported by
-	// billing, because a discount is a reason to buy and billing's scope is the
-	// subscription itself — the two packages meet in this handler and nowhere else.
+	// promo decides the buyer's discount. Held here, not in billing: a discount is a reason to buy, not part of the subscription.
 	promo *promo.Service
 }
 
@@ -33,13 +27,8 @@ func newBillingHandlers(svc *billing.Service, store *billing.RevenueCat, discoun
 	return &billingHandlers{billing: svc, store: store, promo: discounts}
 }
 
-// webhookProvider is the part of a billing provider a webhook route needs, and it is all the
-// route needs: verify a delivery, record it, apply it, or give up on it.
-//
-// The route is identical for both providers because everything that differs between them —
-// the header name, the signature window, the envelope, how an account is addressed — is
-// already answered behind billing's own seam. Writing it twice would give two copies of the
-// one rule that must not drift: acknowledge what is STORED, never what is applied.
+// webhookProvider is what a webhook route needs from a provider: verify, record, apply, or give up on a delivery.
+// Both providers share one route so the rule that must not drift lives once: acknowledge what is STORED, never what is applied.
 type webhookProvider interface {
 	Enabled() bool
 	SignatureHeader() string
@@ -49,35 +38,23 @@ type webhookProvider interface {
 	MarkProcessed(ctx context.Context, rowID int64) error
 }
 
-// register mounts the billing routes, or mounts nothing at all.
-//
-// Not registering is the whole of the "disabled" behaviour. A route that exists and
-// answers 404 from inside the handler is a route an attacker can still probe for timing
-// and shape; a route that was never mounted is indistinguishable from a build without
-// this file. It also means no handler here has to remember the check.
+// register mounts the billing routes, or nothing at all. A route never mounted is indistinguishable from a build
+// without it; a handler answering 404 can still be probed for timing and shape.
 func (h *billingHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// The two providers mount independently. A deployment that sells only on the web is a
-	// legitimate one, and so is one that sells only in the apps — an `if !stripe { return }`
-	// covering both would make the second impossible and would say so nowhere.
+	// The two providers mount independently: a deployment may sell only on the web or only in the apps.
 	h.registerStore(api, mw, contract)
 
 	if !h.billing.Enabled() {
 		return
 	}
-	// The only unauthenticated POST here. It is authenticated by the provider's HMAC
-	// signature instead of by a session — see billing.verifySignature — which is why the
-	// verification happens before anything is read out of the body.
+	// The only unauthenticated POST here: authenticated by the provider's HMAC (billing.verifySignature),
+	// verified before anything is read out of the body.
 	api.Post("/billing/stripe/webhook", webhookFor(h.billing))
-	// Cookie only. A checkout link decides who gets charged, so it is minted for a browser
-	// session and never for an API key, in the same spirit as key management itself.
+	// Cookie only: a checkout link decides who gets charged, so it is never minted for an API key.
 	api.Get("/billing/checkout", mw.cookie, contract)
-	// Where the caller cancels or changes their card. Cookie-only for the same reason as
-	// checkout, and its own route rather than a field on /me/plan because it is a call to
-	// the provider — the plan surface must stay readable when the provider is not.
+	// Cookie only, like checkout. Its own route, not a field on /me/plan, so the plan surface keeps answering when the provider is down.
 	api.Get("/billing/manage", mw.cookie, contract)
-	// What the caller is paying and what has been taken. Read through to the provider, so
-	// it is its own route rather than a field on /me/plan — that surface must keep answering
-	// when the provider does not.
+	// Read through to the provider; its own route for the same reason as manage.
 	api.Get("/billing/subscription", mw.cookie, contract)
 	api.Get("/billing/attempts", mw.cookie, contract)
 }
@@ -108,43 +85,24 @@ func (h *billingHandlers) GetBillingAttempts(ctx context.Context) (*apigen.Billi
 	return &apigen.BillingAttemptsHeaders{CacheControl: "no-store", Response: apigen.BillingAttempts{Data: data}}, nil
 }
 
-// applyTimeout bounds the inline attempt to bring the user's plan up to date.
-//
-// The provider allows 60 seconds before it disconnects and schedules a retry, and it
-// advises acknowledging first and deferring the work. We do the work inline anyway,
-// bounded well inside that budget, because a candidate who has just paid should see Pro on
-// the next page rather than at the top of the hour — and failing this is free: the event
-// is already recorded and cmd/billing-sync will finish the job.
+// applyTimeout bounds the inline attempt to bring the plan up to date, so a just-paid candidate sees Pro at once.
+// Well inside the provider's 60s budget; failing is free: the event is recorded and cmd/billing-sync finishes it.
 const applyTimeout = 10 * time.Second
 
-// Webhook receives a provider event.
-//
-// The order is the contract. Verify, record, acknowledge, then apply:
-//
+// Webhook receives a provider event. The order is the contract: verify, record, acknowledge, then apply.
 //   - a delivery that does not verify is refused and nothing is written;
-//   - a delivery we cannot RECORD is not acknowledged, because a 200 is a claim that the
-//     event is stored and claiming that falsely is the one way to lose it for good;
-//   - a delivery we cannot APPLY is still acknowledged, because it IS stored, and the
-//     reconciler owns what happens next.
+//   - one we cannot RECORD is not acknowledged: a 200 claims the event is stored;
+//   - one we cannot APPLY is still acknowledged: it IS stored and the reconciler owns it.
 func webhookFor(p webhookProvider) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// c.Request().Body() and NOT c.Ctx.Body(), which is neither raw nor safe here.
-		//
-		// Fiber's Body() reads Content-Encoding and DECOMPRESSES, chaining up to three layers
-		// (gzip, deflate, brotli). Two consequences, and the second is the reason this route
-		// cannot use it. The HMAC covers the bytes the provider sent, so a body that arrived
-		// encoded would be verified against something else entirely. And the decompression
-		// happens BEFORE any authentication — the server's 8MB BodyLimit bounds the wire body,
-		// not what it expands to, so on the one unauthenticated POST in the app a few compressed
-		// megabytes become an unbounded allocation. fasthttp's Body() is the bytes as received.
+		// c.Request().Body(), not c.Ctx.Body(): Fiber's Body() decompresses (gzip/deflate/brotli) before authentication, so the
+		// HMAC would cover the wrong bytes and a small compressed body could expand unbounded on this unauthenticated POST
+		// (BodyLimit bounds only the wire body).
 		event, err := p.Accept(c.Request().Body(), c.Get(p.SignatureHeader()), time.Now())
 		if err != nil {
 			log.Printf("billing: refusing a webhook delivery: %v", err)
-			// A delivery that does not VERIFY is refused with 401 and the provider gives up on
-			// it, which is right: nothing proves it came from them. A delivery that verifies but
-			// does not PARSE is a 400 — retrying it can only produce the same bytes, and an
-			// endpoint that answers a permanent failure with a retryable status is how the
-			// provider decides the endpoint is broken and disables it.
+			// Unverified: 401, nothing proves it came from the provider. Unparseable: 400, a retry yields the same bytes,
+			// and a retryable status for a permanent failure is how a provider decides to disable the endpoint.
 			if !errors.Is(err, billing.ErrBadSignature) {
 				return fiber.NewError(fiber.StatusBadRequest, "malformed webhook payload")
 			}
@@ -157,8 +115,7 @@ func webhookFor(p webhookProvider) fiber.Handler {
 			return fiber.NewError(fiber.StatusInternalServerError, "could not record the event")
 		}
 		if !recorded {
-			// A redelivery. The provider retries anything it did not get a 200 for and reuses
-			// the event id, so this is the normal case rather than an anomaly.
+			// A redelivery: the provider reuses the event id on retry, so this is the normal case.
 			return c.JSON(fiber.Map{"data": fiber.Map{"status": "duplicate"}})
 		}
 
@@ -178,10 +135,8 @@ func applyNow(c *fiber.Ctx, p webhookProvider, rowID int64, event billing.Event)
 		return
 	}
 
-	// An event nobody can ever attribute — one about something we do not meter, or an
-	// object created outside this integration. Stamping it processed keeps it out of the
-	// reconciler's queue forever rather than leaving a row that fails every hour until
-	// someone reads the logs.
+	// An event nobody can attribute (unmetered, or created outside this integration): stamp it processed
+	// so it never sits in the reconciler's queue.
 	if errors.Is(err, billing.ErrUnknownSubscriber) || errors.Is(err, billing.ErrNoSubscription) {
 		log.Printf("billing: event %s (%s) names no account we meter — recorded, not applied", event.ID, event.Type)
 		if markErr := p.MarkProcessed(ctx, rowID); markErr != nil {
@@ -193,11 +148,8 @@ func applyNow(c *fiber.Ctx, p webhookProvider, rowID int64, event billing.Event)
 	log.Printf("billing: event %s recorded but not applied, leaving it for the reconciler: %v", event.ID, err)
 }
 
-// Checkout returns where this caller buys Pro.
-//
-// The identifier in the URL is taken from the session, never from the request. It decides
-// who gets charged and who becomes Pro, and a value the browser composes is a value the
-// browser can change.
+// Checkout returns where this caller buys Pro. The identifier comes from the session, never the request:
+// it decides who gets charged.
 func (h *billingHandlers) GetBillingCheckout(ctx context.Context, params apigen.GetBillingCheckoutParams) (*apigen.GetBillingCheckoutOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -221,28 +173,17 @@ func (h *billingHandlers) GetBillingCheckout(ctx context.Context, params apigen.
 	}
 	return &apigen.GetBillingCheckoutOK{Data: apigen.BillingCheckout{
 		URL: url,
-		// Which offer was actually APPLIED — not merely offered — so the page can say so
-		// rather than leaving the buyer to work it out from the amount on the provider's
-		// page. Empty when there was none, including when a tier change modified an existing
-		// subscription in place rather than opening a checkout: that path never applies one.
+		// Which offer was APPLIED, not merely offered. Empty when none, including a tier change that modified
+		// a subscription in place.
 		DiscountPercent: int64(applied.PercentOff),
 		DiscountSource:  applied.Label,
 	}}, nil
 }
 
 // discountFor reads the ONE discount this checkout may carry, and writes nothing.
-//
-// This route is a GET, so it must have no side effects — and `SameSite=Lax` is exactly why
-// that is a security rule here rather than a stylistic one: the session cookie IS sent on a
-// cross-site top-level navigation, so any page linking here would act as this visitor. An
-// earlier draft redeemed a code from the query string on this path, which meant a link
-// could burn somebody's one lifetime redemption. Redeeming now lives on its own POST
-// (`/me/promo/redeem`) and is durable, so what reaches here is only what the account
-// already holds.
-//
-// It cannot fail the checkout either. A discount somebody was offered but that we could not
-// read is not a reason to refuse them the purchase, so a failure is logged and the sale
-// goes ahead at list price.
+// This GET must stay side-effect free: SameSite=Lax sends the session cookie on cross-site navigation, so a link here
+// could burn the visitor's one lifetime redemption. Redeeming is the POST /me/promo/redeem.
+// A read failure is logged and the sale goes ahead at list price.
 func (h *billingHandlers) discountFor(ctx context.Context, userID int64) billing.Discount {
 	if h.promo == nil {
 		return billing.Discount{}
@@ -263,12 +204,8 @@ func (h *billingHandlers) discountFor(ctx context.Context, userID int64) billing
 	}
 }
 
-// Subscription returns what the caller is paying and what has been charged.
-//
-// 404 when there is no subscription — the ordinary state for a free account, and the
-// surface renders nothing rather than an error. The money is read from the provider on
-// every request rather than mirrored here: a receipt list that has quietly missed a refund
-// is worse than no receipt list.
+// Subscription returns what the caller is paying and has been charged. 404 when there is none (the free-account norm).
+// Money is read from the provider each time, not mirrored: a receipt list that missed a refund is worse than none.
 func (h *billingHandlers) GetBillingSubscription(ctx context.Context) (*apigen.GetBillingSubscriptionOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -303,13 +240,9 @@ func (h *billingHandlers) GetBillingSubscription(ctx context.Context) (*apigen.G
 	return &apigen.GetBillingSubscriptionOK{Data: data}, nil
 }
 
-// Manage returns the provider's own page where this subscriber changes their card or
-// cancels.
-//
-// Deleting a freehire account does NOT cancel a subscription, and the delete surface says
-// so and links here. The destination is generated by the provider per visit — we never
-// compose it, because a page we wrote would be one more thing that can disagree with what
-// actually happened to the money.
+// Manage returns the provider's page where the subscriber changes their card or cancels.
+// Deleting a freehire account does NOT cancel a subscription; the delete surface links here.
+// The URL is generated by the provider per visit, never composed here.
 func (h *billingHandlers) GetBillingManage(ctx context.Context) (*apigen.GetBillingManageOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -329,10 +262,8 @@ func (h *billingHandlers) GetBillingManage(ctx context.Context) (*apigen.GetBill
 	return &apigen.GetBillingManageOK{Data: apigen.BillingUrl{URL: url}}, nil
 }
 
-// billingAbsent is the state where there is honestly nothing to show: billing or checkout
-// is not configured, or the account has no subscription. Anything else — the provider
-// down, a query failing — is a fault, answered 500 and reported rather than passed off as
-// "no subscription" to somebody who is paying.
+// billingAbsent is the state with nothing to show: billing unconfigured or no subscription. Anything else,
+// such as the provider down, is a fault: 500 and reported, not passed off as "no subscription".
 func billingAbsent(err error) bool {
 	return errors.Is(err, billing.ErrNoSubscription) || errors.Is(err, billing.ErrDisabled) || errors.Is(err, billing.ErrNoCheckout)
 }

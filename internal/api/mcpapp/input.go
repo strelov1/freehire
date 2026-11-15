@@ -11,8 +11,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// Page bounds. A model asking for five hundred results would spend the whole turn's context
-// on a list nobody reads, and ten is what a person scans in a chat before asking to narrow.
+// Page bounds: a huge page would spend the turn's context on a list nobody reads.
 const (
 	defaultPageSize = 10
 	maxPageSize     = 50
@@ -20,54 +19,46 @@ const (
 
 // The tool inputs.
 //
-// /jobs/search accepts around fifty parameters. All fifty do not belong here: this schema
-// sits in front of the model on every turn, and most of that vocabulary is machinery a
-// person never says out loud (`skills_mode`, `role_type_exclude`, `open_within_days`).
-// What is published is the subset someone actually asks for in a sentence; the rest stays
-// reachable over REST and the OpenAPI document.
+// /jobs/search accepts far more parameters than belong here: this schema sits in front of
+// the model on every turn, so only the subset someone asks for in a sentence is published;
+// the rest stays on REST and the OpenAPI document.
 //
-// Every field is optional. A filter the caller omits must not become a filter on the zero
-// value — that is how an unspoken preference turns into a silently narrowed answer.
+// Every field is optional. An omitted filter must not become a filter on the zero value,
+// which would silently narrow the answer.
 
 // SearchInput is search_jobs' input.
 type SearchInput struct {
-	// The operators are listed here because a model only writes what the schema tells it
-	// exists; the engine has understood them since freehire#3270.
+	// The operators are listed because a model only writes what the schema says exists.
 	Query string `json:"query,omitempty" jsonschema:"free text, matched against title, company, location and the start of the description (not the full text, so details such as equity or visa may be missing from the match). Use few, specific words. Operators: double quotes require every quoted word in any order (not a phrase); -word excludes; uppercase OR between terms matches any alternative (at most 5), e.g. golang OR rust; title: at the start of an alternative matches it in the title only, e.g. title:\"product owner\" OR title:produktchef"`
 
 	Countries stringList `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes, e.g. DE, BR"`
 	Cities    stringList `json:"cities,omitempty"`
-	// WorkMode is a list rather than a flag because "remote or hybrid" is a thing people
-	// ask for and a boolean cannot express it.
+	// WorkMode is a list because "remote or hybrid" cannot be a boolean.
 	WorkMode stringList `json:"work_mode,omitempty" jsonschema:"any of remote, hybrid, onsite"`
-	// Regions are where the role can be done FROM, which is what a remote candidate asks
-	// ("remote, LATAM"). They union with countries and cities, as on the website. The list is
-	// the whole of vocab.RegionValues, held there by a test like seniority's.
+	// Regions are where the role can be done FROM ("remote, LATAM"). They union with countries
+	// and cities, as on the website. The list is the whole of vocab.RegionValues, held by a test.
 	Regions stringList `json:"regions,omitempty" jsonschema:"any of global, north_america, latam, eu, uk, mena, africa, apac, cis"`
 
 	// The listed values are the WHOLE of vocab.SeniorityValues, held there by
 	// TestSeniorityDescriptionNamesEveryLevel. It is a description, not an enum, so a level
-	// missing from it is still accepted — and invisible to the agent reading the schema,
-	// which is how `c_level` went unaskable here.
+	// missing from it is still accepted but invisible to the agent reading the schema.
 	Seniority stringList `json:"seniority,omitempty" jsonschema:"any of intern, junior, middle, senior, lead, staff, principal, c_level"`
 	Category  stringList `json:"category,omitempty" jsonschema:"role family, e.g. backend, frontend, devops, data"`
 	Skills    stringList `json:"skills,omitempty" jsonschema:"technologies, e.g. go, kubernetes, react"`
-	// RequireAllSkills turns skills from "any of" into "all of" — "Go AND Kubernetes" is a
-	// different question from "Go OR Kubernetes", and a person means one of them.
+	// RequireAllSkills turns skills from "any of" into "all of".
 	RequireAllSkills bool       `json:"require_all_skills,omitempty" jsonschema:"true: every listed skill must be present, not just one"`
 	ExcludeSkills    stringList `json:"exclude_skills,omitempty" jsonschema:"technologies the posting must not ask for, e.g. php"`
 	EmploymentType   stringList `json:"employment_type,omitempty" jsonschema:"any of full_time, part_time, contract, internship"`
 	// Engagement is the contract form, which employment_type cannot tell apart: a contract
-	// role may be freelance B2B or a fixed-term employment contract (agent report, 2026-11-05).
+	// role may be freelance B2B or a fixed-term employment contract.
 	Engagement stringList `json:"engagement,omitempty" jsonschema:"contract form, e.g. b2b, c2c, ir35_outside, uop"`
 
-	// SalaryMin is a floor, expressed in SalaryCurrency. A floor without a currency is
-	// ambiguous across a catalogue holding both, so the two travel together.
+	// SalaryMin is a floor in SalaryCurrency; without a currency it is ambiguous, so the two travel together.
 	SalaryMin      int    `json:"salary_min,omitempty"`
 	SalaryCurrency string `json:"salary_currency,omitempty" jsonschema:"ISO 4217 code, e.g. USD"`
 
-	// VisaSponsorship is a POINTER because false and absent differ: false means "sponsorship
-	// is not needed", which is not a filter at all, while absent means nothing was said.
+	// VisaSponsorship is a POINTER because false and absent differ: false is not a filter at
+	// all, absent means nothing was said.
 	VisaSponsorship *bool      `json:"visa_sponsorship,omitempty"`
 	EnglishLevel    stringList `json:"english_level,omitempty" jsonschema:"CEFR levels, e.g. B2, C1"`
 	Relocation      stringList `json:"relocation,omitempty" jsonschema:"any of supported (the employer helps you move), required (the role needs you to move), not_supported"`
@@ -78,8 +69,7 @@ type SearchInput struct {
 
 	PostedWithinDays int `json:"posted_within_days,omitempty"`
 
-	// Semantic is a POINTER for the reason VisaSponsorship is: absent and false both mean
-	// the ordinary keyword search, and only true asks for anything.
+	// Semantic is a POINTER like VisaSponsorship: absent and false both mean keyword search.
 	Semantic *bool `json:"semantic,omitempty" jsonschema:"currently not available: a request that sets it is answered by keywords and its semantic field says unavailable"`
 
 	Limit  int `json:"limit,omitempty" jsonschema:"results per page"`
@@ -89,9 +79,8 @@ type SearchInput struct {
 // WantsSemantic reports whether the caller asked for semantic search.
 func (in SearchInput) WantsSemantic() bool { return in.Semantic != nil && *in.Semantic }
 
-// CompanySearchInput is search_companies' input. It is deliberately smaller than the job
-// one: an employer has far fewer facets worth asking about, and a wide schema here would
-// cost tokens on every turn to answer questions nobody puts to it.
+// CompanySearchInput is search_companies' input, deliberately smaller than the job one to
+// save schema tokens on every turn.
 type CompanySearchInput struct {
 	Query     string     `json:"query,omitempty" jsonschema:"free text, matched against the employer's name"`
 	Countries stringList `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes the employer hires in"`
@@ -99,9 +88,8 @@ type CompanySearchInput struct {
 	Offset    int        `json:"offset,omitempty"`
 }
 
-// JobDetailInput and CompanyDetailInput are the two single-item reads. They exist as named
-// types because the SDK derives a tool's input schema from the Go type, so the field name
-// and its description are part of the published contract.
+// JobDetailInput and the other named inputs below are separate types because the SDK derives
+// a tool's input schema from the Go type: field names and descriptions are the published contract.
 type JobDetailInput struct {
 	Slug string `json:"slug" jsonschema:"the posting's identifier, as carried by a search result's slug"`
 }
@@ -139,13 +127,10 @@ type CompanyDetailInput struct {
 
 // QueryValues renders the input as the query the search core already reads.
 //
-// It builds url.Values and hands them to search.FilterFromValues rather than assembling a
-// filter itself — the same path the REST handlers and the OJCP transport take. That is what
-// makes "this tool searches the same catalogue the website does" a fact about the code
-// instead of a claim: there is no second filter builder that could disagree.
+// It builds url.Values for search.FilterFromValues, the same path the REST handlers and the
+// OJCP transport take, so there is no second filter builder that could disagree.
 //
-// A field the caller left unset writes NO parameter. The distinction matters more than it
-// looks: a zero written out is an unspoken preference turned into a silent narrowing.
+// A field the caller left unset writes NO parameter: a written zero would silently narrow.
 func (in SearchInput) QueryValues() url.Values {
 	v := url.Values{}
 	setNonEmpty(v, "q", in.Query)
@@ -154,9 +139,8 @@ func (in SearchInput) QueryValues() url.Values {
 	setList(v, "company_slug", in.CompanySlugs)
 	setList(v, "company_slug_exclude", in.ExcludeCompanySlugs)
 	setList(v, "source", in.Sources)
-	// The closed-vocabulary facets come from the one table that also decides what
-	// Unsupported reports, so what is SENT and what is REPORTED cannot disagree about a
-	// value, and a new facet joins both by being written once.
+	// The one table also decides what Unsupported reports, so what is SENT and what is
+	// REPORTED cannot disagree about a value.
 	for _, facet := range checkedFacets {
 		setList(v, facet.param, keepKnown(facet.param, facet.values(in)))
 	}
@@ -183,10 +167,7 @@ func (in CompanySearchInput) QueryValues() url.Values {
 	return v
 }
 
-// Unsupported names the filter values a company search cannot honour, the same way the job
-// one does. It was missing here at first, which is the shape of gap worth noticing: the
-// company tool is smaller, so it got less thought, and "answers zero and says nothing" is
-// exactly as wrong on four fields as on fifteen.
+// Unsupported names the filter values a company search cannot honour, as the job search does.
 func (in CompanySearchInput) Unsupported() []string {
 	return unsupportedCountries(in.Countries)
 }
@@ -204,9 +185,7 @@ func page(limit, offset int) (int, int) {
 	return limit, max(offset, 0)
 }
 
-// setList writes a facet as the comma-separated form the search core splits. Values are
-// joined rather than repeated only because one parameter reads more plainly in a log; the
-// core accepts either.
+// setList writes a facet as the comma-separated form the search core splits.
 func setList(v url.Values, param string, values []string) {
 	kept := make([]string, 0, len(values))
 	for _, value := range values {
@@ -231,10 +210,9 @@ func setPositive(v url.Values, param string, value int) {
 	}
 }
 
-// stringList is a list filter that also accepts a single bare value. Models routinely send a
-// one-item list as a string (work_mode: "remote"), and schema validation refused the whole
-// call: on 2026-11-04 that was every failed search_jobs call in an hour. stringListSchema
-// publishes both shapes, so the SDK validates before UnmarshalJSON sees either.
+// stringList is a list filter that also accepts a single bare value: models routinely send a
+// one-item list as a string (work_mode: "remote"). stringListSchema publishes both shapes, so
+// the SDK's validation lets either through to UnmarshalJSON.
 type stringList []string
 
 func (l *stringList) UnmarshalJSON(data []byte) error {

@@ -8,7 +8,7 @@
  * them silently would have the agent answer them for everyone else.
  */
 
-import { matchFieldKey, normalizeLabel } from './form';
+import { matchFieldKey, normalizeLabel } from './fieldKeys';
 import type { FramedField } from './protocol';
 
 /** One answer the panel offers to save. */

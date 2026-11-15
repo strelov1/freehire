@@ -18,32 +18,22 @@ var _ Notifier = (*MailNotifier)(nil)
 // MailNotifier delivers the three transactional messages a booking produces, each to both
 // parties, each rendered in THAT recipient's own timezone.
 //
-// The two-zone rendering is the whole reason this is not one template with one time in
-// it. A mentor in Berlin and a seeker in Tokyo are looking at the same instant and will
-// never agree on what to call it; a message naming one of the two, or naming UTC, makes
-// at least one of them do arithmetic to find out when their meeting is. Getting that
-// wrong is not a cosmetic failure — it is somebody missing the session.
+// Each party sees the time in their own zone, never the other's or UTC, so nobody does
+// arithmetic to find their meeting.
 //
-// These messages deliberately bypass the account-level notification rule. See the
-// notification-settings delta: the rule governs what the SYSTEM originates about a user's
-// activity, not a commitment the user made themselves and which a second person is
-// holding an hour for.
-//
-// That same argument is why they are emailprefs.GroupEssential and carry no unsubscribe
-// link. A booking confirmation is transactional — CAN-SPAM exempts exactly this, and an
-// unsubscribe control on it would be an offer we cannot honour, since cancelling the mail
-// does not cancel the appointment. Someone who wants out cancels the session.
+// These messages deliberately bypass the account-level notification rule, which governs
+// what the system originates, not a commitment a second person is holding an hour for.
+// For the same reason they are emailprefs.GroupEssential and carry no unsubscribe link:
+// they are transactional, and unsubscribing would not cancel the appointment.
 type MailNotifier struct {
 	sender emailnotify.Sender
 	from   string
-	// cabinetURL is where a recipient goes to see or cancel the session. Every message
-	// carries it, because the alternative to a link is a reply nobody reads.
+	// cabinetURL is where a recipient goes to see or cancel the session.
 	cabinetURL string
 }
 
-// NewMailNotifier builds a MailNotifier. A nil sender is a deployment with no mail
-// transport — the caller passes nil to Config.Notifier instead, and nothing here is
-// reached.
+// NewMailNotifier builds a MailNotifier. With no mail transport the caller passes a nil
+// Config.Notifier instead.
 func NewMailNotifier(sender emailnotify.Sender, from, cabinetURL string) *MailNotifier {
 	return &MailNotifier{sender: sender, from: from, cabinetURL: cabinetURL}
 }
@@ -67,9 +57,8 @@ func (n *MailNotifier) BookingConfirmed(ctx context.Context, b Booking) error {
 	})
 }
 
-// BookingCancelled tells both parties it is off. The invitation is re-issued as a
-// CANCEL carrying the same UID, which is what removes the event from a calendar rather
-// than leaving a meeting nobody will attend sitting in it.
+// BookingCancelled tells both parties it is off. The invitation is re-issued as a CANCEL
+// with the same UID, which removes the event from their calendar.
 func (n *MailNotifier) BookingCancelled(ctx context.Context, b Booking, by CancelledBy, reason string) error {
 	cancelled := b
 	cancelled.Status = BookingCancelled
@@ -95,9 +84,8 @@ func (n *MailNotifier) BookingCancelled(ctx context.Context, b Booking, by Cance
 	})
 }
 
-// BookingReminder nudges both parties before the session. No invitation is attached: they
-// already have one, and a second REQUEST with the same UID is at best noise and at worst
-// a duplicate event.
+// BookingReminder nudges both parties before the session. No invitation is attached: a
+// second REQUEST with the same UID is noise or a duplicate event.
 func (n *MailNotifier) BookingReminder(ctx context.Context, b Booking, before time.Duration) error {
 	return n.deliverToBoth(ctx, b, func(r recipient) message {
 		return message{
@@ -199,12 +187,9 @@ func (n *MailNotifier) renderText(m message, b Booking) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderWhen states the session in one recipient's zone, naming the zone.
-//
-// A zone that does not load falls back to UTC AND SAYS SO, rather than to the other
-// party's — the same rule the slot engine follows, and for the same reason: a time
-// labelled with a zone that is not the reader's is undetectably wrong, while a time
-// labelled UTC is merely inconvenient.
+// renderWhen states the session in one recipient's zone, naming the zone. A zone that does
+// not load falls back to UTC and says so, never to the other party's: a time labelled
+// with the wrong zone is undetectably wrong.
 func renderWhen(b Booking, zoneName string) string {
 	zone, err := time.LoadLocation(zoneName)
 	if err != nil || zoneName == "" {

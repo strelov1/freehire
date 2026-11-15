@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/survey"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
+	"github.com/strelov1/freehire/internal/engage/changehook"
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
@@ -58,11 +59,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Register wires all routes onto the application from cfg. Auth is same-origin
-// only: the SPA reaches the API under one origin (a dev Vite proxy mirrors the
-// production reverse proxy), so the cookie rides along with no CORS. The CORS
-// allowlist is not credentialed — it only permits non-credentialed cross-origin
-// reads of the public endpoints.
+// Register wires all routes onto the application from cfg. Auth is same-origin only, so
+// the cookie rides along with no CORS; the CORS allowlist is not credentialed and permits
+// only cross-origin reads of the public endpoints.
 func Register(app *fiber.App, cfg Config) {
 	queries := db.New(cfg.Pool)
 	a := &API{
@@ -78,17 +77,15 @@ func Register(app *fiber.App, cfg Config) {
 	app.Get("/internal/auth/introspect", newAuthIntrospection(queries, a.issuer, cfg.AuthIntrospectionSecret))
 
 	authH := newConfiguredAuthHandlers(cfg, queries, a.issuer)
-	// Moderation is shared by the jobs surface and the submission queue, so it is built
-	// here rather than inside whichever of the two is constructed first.
+	// Shared by the jobs surface and the submission queue, so built here.
 	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version))
-	// One SSRF-guarded client for everything that fetches a user-supplied page: the imports
-	// below dial through it, it backs the ingest registry board coverage reads a vacancy
-	// through (so an import and a crawl of the same board share transport and rate limits),
-	// and the posting-URL resolver asks an ATS which posting an apply link is through it too.
+	// One SSRF-guarded client for everything that fetches a user-supplied page: imports,
+	// the ingest registry's board coverage reads (so an import and a crawl of one board share
+	// transport and rate limits) and the posting-URL resolver.
 	ingestClient := sources.NewClient()
-	// Turning a link into the posting it is: offline for nearly every ATS, one platform call
-	// for the shapes that hide the posting behind a second id (see sources.PostingURLResolver).
-	// Shared by /jobs/find and the link intake, which must agree on what a page is.
+	// Turns a link into the posting it is: offline for nearly every ATS, one platform call
+	// for shapes that hide the posting behind a second id. Shared by /jobs/find and the link
+	// intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
 	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
@@ -104,146 +101,116 @@ func Register(app *fiber.App, cfg Config) {
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	companyWatchH := newCompanyWatchHandlers(queries)
 	communityH := newCommunityHandlers(queries)
-	// Feedback reuses communityH's persona minting (via the communityPersonas
-	// adapter) so a user's pseudonym stays the same one discussion threads show,
-	// which is why it is constructed after communityH rather than alongside it.
+	// Feedback reuses communityH's persona minting (via communityPersonas) so a pseudonym
+	// matches the one discussion threads show; hence constructed after communityH.
 	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool))
 	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}))
-	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
-	// network fallback (boardresolve) that fetches a company careers page and detects an
-	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
+	// Contributions detect the ATS board from the URL alone (network-free), with a network
+	// fallback (boardresolve) that finds an ATS embedded in a company careers page.
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
 	ghostReportsH := newGhostReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	webhookH := newWebhookHandlers(queries, webhooknotify.NewNotifier())
+	changeWebhookH := newChangeWebhookHandlers(queries, changehook.NewSender())
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
-	// The candidate's own screening answers (visa, salary, notice period, relocation, …) —
-	// a distinct singleton from profileSvc above (search/targeting preferences, a
-	// different lifecycle; see internal/ingest/screeninganswers/AGENTS.md).
+	// The candidate's own screening answers (visa, salary, notice period, relocation, ...),
+	// distinct from profileSvc's search preferences (see internal/ingest/screeninganswers/AGENTS.md).
 	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries, cfg.Pool))
 	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
-	// The candidate's accumulating bank of screening-question answers (internal/candidate/
-	// answerbank) — a third, distinct store from screeningAnswersSvc's six typed facts: this
-	// one takes the open-ended remainder, keyed by the question's own topic rather than a
-	// fixed field. Fed into the autofill assembler below so a banked answer can fill a form
-	// field the deterministic rules never anticipated.
+	// The accumulating bank of open-ended screening-question answers, keyed by the question's
+	// topic: a third store, distinct from screeningAnswersSvc's typed facts. Feeds the autofill
+	// assembler below.
 	answerBank := answerbank.NewStore(answerbank.NewQueriesRepository(queries))
-	// The bank's own list/save/delete routes over the same store, so what autofill reads
-	// and what the review screen edits are never two copies.
+	// The bank's own routes over the same store, so autofill and the review screen never see two copies.
 	answerBankH := &answerBankHandlers{bank: answerBank}
-	// The onboarding survey: the candidate's own segmentation answers, and the marker
-	// saying they have been through the wizard. A third singleton beside the two above,
-	// and deliberately so — these answers describe the candidate to us alone, where
-	// profileSvc is the search filter and screeningAnswersSvc is what an employer sees.
+	// The onboarding survey: segmentation answers plus the wizard-done marker. Distinct from
+	// profileSvc (search filter) and screeningAnswersSvc (what an employer sees): these
+	// describe the candidate to us alone.
 	surveyH := newSurveyHandlers(survey.New(survey.NewQueriesRepository(queries)), queries)
-	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
-	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
-	// The pool serialises one user's uploads, so add_cv's first-CV check holds.
+	// CV storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service, so
+	// upload/verdict paths degrade to in-request parsing. The pool serialises one user's
+	// uploads, so add_cv's first-CV check holds.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries).WithUploadLocks(cfg.Pool))
-	// The headshot rides the same bucket and the same nil-degradation: no Blob means the
-	// photo endpoints 501 while the photo-bearing CV templates still render a placeholder.
+	// The headshot rides the same bucket and nil-degradation: no Blob means the photo
+	// endpoints 501 while photo CV templates render a placeholder.
 	photoStore := headshot.New(cfg.Blob, headshot.NewQueriesRepository(queries))
-	// The profile read serves the structured résumé beside the profile, so it needs the
-	// résumé store — hence constructed after it.
+	// The profile read serves the structured CV beside the profile, so it follows resumeStore.
 	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
-	// Personal skill-demand trend: the caller's own profile skills joined against the
-	// weekly insights_skill_history snapshots cmd/rollup-stats writes (see
-	// me_market_pulse.go). Reuses profileSvc rather than a second userprofile.Service.
+	// Personal skill-demand trend: the caller's profile skills against the weekly
+	// insights_skill_history snapshots (see me_market_pulse.go).
 	marketPulseH := newMarketPulseHandlers(profileSvc, queries)
-	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
-	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
+	// The Talent Network visibility toggle is a singleton on `users`, not part of profileHandlers.
 	talentNetworkH := newTalentNetworkHandlers(queries)
-	// The public catalogue. One Catalogue per process, holding the snapshot every
-	// request is served from — constructing one per request would read the whole
-	// membership per request, which is the outage the snapshot exists to avoid.
-	//
-	// A one-minute TTL: long enough that a burst of visitors costs one read, short
-	// enough that somebody who just joined sees themselves listed while still looking at
-	// the page that said they would be. Leaving takes effect immediately regardless —
-	// the card route re-reads the database rather than the snapshot.
+	// The public catalogue. One Catalogue per process: it holds the snapshot every request is
+	// served from, and one per request would read the whole membership each time. The
+	// one-minute TTL lets someone who just joined see themselves listed; leaving takes effect
+	// immediately because the card route re-reads the database.
 	talentCatalogH := newTalentCatalogHandlers(talentnetwork.NewCatalogue(queries, time.Minute, time.Now), photoStore)
-	// One bank for the whole surface. It is stateless over the shared queries, but the
-	// single value is what keeps the evidence gate from being anyone's to attach later:
-	// the CV editor is constructed with it below, not handed it by the assistant.
-	// SetProfileSkills folds every atom this bank ever writes into the owner's search
-	// profile, so a skill proven in the bank reaches job filters without a manual step.
+	// One bank for the whole surface. The single value keeps the evidence gate from being
+	// attachable later: the CV editor takes it below, the assistant does not hand it over.
+	// SetProfileSkills folds every written atom into the owner's search profile.
 	bank := experience.NewStore(experience.NewQueriesRepository(queries)).SetProfileSkills(profileSvc)
 	experienceH := newExperienceHandlers(bank).withRequireContext(queries)
-	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
-	// or not the LLM is configured.
+	// Nil-safe: NewAnalyzer(nil) is a no-op, so the ATS report works without an LLM.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
-	// The fit analysis shares the same LLM client but with a longer per-call timeout:
-	// its reasoning model is slow (tens of seconds per stage), so the default would time
-	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
+	// The fit analysis uses the same LLM client with a longer per-call timeout: its reasoning
+	// model takes tens of seconds per stage. A nil client stays nil (Analyze is a no-op).
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	structuredExtractor := resumeextract.NewExtractor(cmp.Or(cfg.ResumeExtractLLM, cfg.LLM).WithTimeout(resumeExtractLLMTimeout))
 	plans := plan.NewStore(queries, cfg.Pool, cfg.Plan)
-	// Imports fetch a user-supplied page, so they dial through ingestClient (built above,
-	// where the comment on it is). cfg.Search may be nil (no engine configured), which only
-	// skips the index push.
+	// Imports fetch a user-supplied page, so they dial through ingestClient. A nil cfg.Search
+	// only skips the index push.
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, queries, importer, postingURLs)
-	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
-	// a second parsing registry — see submissionHandlers.PrefillSubmission.
+	// Prefill reuses the SAME importer (its non-writing Resolve half); see submissionHandlers.PrefillSubmission.
 	submissionsH := newSubmissionHandlers(queries, cfg.Pool, moderationSvc, importer, postingURLs)
-	// jd-tailor-intake reuses the SAME importer as the contribution flow (shared SSRF-guarded
-	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
-	// branch, and internal/job/privatejob for its generic-scrape/pasted-text branch.
+	// jd-tailor-intake reuses the contribution importer (shared SSRF-guarded transport) for its
+	// recognized-ATS branch, and internal/job/privatejob for the generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
 	billingSvc := billing.New(cfg.Billing, queries)
-	// The store provider reads its own environment rather than taking configuration from
-	// cfg: it is enabled, disabled and credentialed independently of Stripe, and threading it
-	// through the handler config would tie the two together for no reason but symmetry.
+	// The store provider reads its own environment: it is enabled and credentialed
+	// independently of Stripe.
 	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
-	// Discounts read their own environment for the same reason the store provider does: an
-	// invite link works whether or not anything is for sale, and the reward ceiling is an
-	// operational bound rather than a piece of handler configuration.
+	// Discounts read their own environment too: an invite link works whether or not anything
+	// is for sale, and the reward ceiling is operational.
 	promoSvc := promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv())
 	billingH := newBillingHandlers(billingSvc, storeSvc, promoSvc)
 	promoH := newPromoHandlers(promoSvc)
-	// Both registration paths attribute a new account to whoever's link brought it. Set
-	// here rather than passed to a constructor that already takes ten arguments.
+	// Both registration paths attribute a new account to the inviting link; set here because
+	// the constructor already takes ten arguments.
 	authH.withInvites(promoSvc)
-	// Public: a pricing page that needs an account cannot do a pricing page's job.
+	// Public: a pricing page that needs an account cannot do its job.
 	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	fitSvc := fitanalysis.New(queries, meterOrNil(plans), matchAnalyzer)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, fitSvc, plans)
-	// The CV store is shared: the CV surface owns the write path, referrals render from it
-	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
-	// services here rather than inside whichever feature happened to need one first.
+	// The CV store is shared: the CV surface owns the write path, referrals render from it and
+	// autofill reads the base CV's contact header from it.
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
-	// The conversation store is shared the same way: the assistant runs turns in it and the
-	// tailoring bootstrap mints a session in it. Built here, both are handed the same one —
-	// which is what lets the CV handlers take it as an argument instead of being patched
-	// with it after the assistant exists.
+	// The conversation store is shared: the assistant runs turns in it and the tailoring
+	// bootstrap mints a session in it. Both get the same one.
 	assistantStore := assistant.NewStore(queries)
-	// The renderer is shared with referrals, and is enabled only when a typst binary was
-	// resolved. Assign only a NON-NIL renderer: a typed-nil satisfies cv.Renderer and would
-	// defeat the 501 gate that answers when rendering is off.
+	// The renderer is shared with referrals and enabled only when a typst binary was resolved.
+	// Assign only a NON-NIL renderer: a typed nil would defeat the 501 gate.
 	var cvRenderer cv.Renderer
 	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
 		cvRenderer = r
 	}
-	// Who each model call is spent as. One resolver serves every per-user surface, so the
-	// account a call is attributed to is decided in one place rather than per feature. A nil
-	// gateway client leaves it inert and every call on the service credential.
+	// Who each model call is spent as: one resolver for every per-user surface. A nil gateway
+	// client leaves it inert and every call on the service credential.
 	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
-	// Same repository the tracking surface uses: tailor bootstrap places the vacancy on
-	// the Kanban so a pursued role is not invisible under Activity → Saved alone.
+	// Same repository as the tracking surface: tailor bootstrap places the vacancy on the Kanban.
 	trackingJobs := trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, cfg.Pool)}
-	// One store, one chain, one bank, shared by the endpoint and by cover_letter_draft - which
-	// is what stops the button path and the chat path from writing two different letters for
-	// one pair. Built here, before either handler, so both take it through their constructor.
+	// One store, chain and bank shared by the endpoint and cover_letter_draft, so the button
+	// and chat paths cannot write two different letters for one pair.
 	letterDeps := coverLetterDeps{
 		letters: coverletter.NewStore(coverletter.NewQueriesRepository(queries)),
 		chain:   coverletter.NewAnalyzer(cfg.LLM),
 		bank:    bank,
 	}
-	// How a CV is rendered when its owner sends it somewhere — the CV page's download and an
-	// on-site application share it.
+	// How a CV is rendered when its owner sends it somewhere (CV download, on-site application).
 	cvPDF := newOwnedCVPDF(queries, cvStore, cvRenderer, photoStore, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cvPDF, cfg.TracerLinkSalt, cfg.FrontendOrigin, resumeStore, photoStore, plans, matchH, bankGate{bank: bank}, trackingJobs, letterDeps, !cfg.CVEditAllowBulletTruncation)
 
@@ -252,33 +219,27 @@ func Register(app *fiber.App, cfg Config) {
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
-	// The pull direction is wired only where there is a model to ask. Left nil, its endpoint
-	// reports the feature off — the same way an unconfigured deployment reports every other
-	// model-backed surface off, rather than failing at the first press.
+	// The pull direction is wired only where there is a model to ask; left nil, its endpoint
+	// reports the feature off.
 	if cfg.LLM != nil {
-		// The mailbox factory is present only where a Gmail client and a token cipher both
-		// are — the same condition cmd/gmail-sync checks. Absent, every caller falls back to
-		// stored mail, which is the path that shipped first.
+		// The mailbox factory exists only where a Gmail client and token cipher both do (the
+		// cmd/gmail-sync condition); otherwise callers fall back to stored mail.
 		inboxH = inboxH.withRecall(
 			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
 			llmBinding{client: cfg.LLM, keys: llmKeys},
 			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
 	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
-	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
-	// to erase there, which must not stop a member from leaving.
-	// The gateway credential is the third external system erasure spans, after object
-	// storage and Google. It is attached below, once the resolver exists.
+	// unconfigured and the revoker is nil when Gmail is, and neither may stop a member from
+	// leaving. The gateway credential is the third external system; attached below.
 	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant).
 		WithAppleGrants(authH.mobileAuth.ReleaseAppleGrantsForDeletion)
 	authH.withAccountDeletion(accountDeletion, queries)
-	// Assign only when configured: a nil *search.Client wrapped in the searcher
-	// interface would be a non-nil interface and defeat the nil check.
+	// Assign only when configured: a nil *search.Client in an interface is non-nil and defeats the nil check.
 	var jobSearch searcher
 	var facets facetCounter
 	var companySearch companySearcher
-	// Both sitemaps page an index, so they are wired here rather than beside the
-	// Postgres-backed handlers above.
+	// Both sitemaps page an index, so they are wired here.
 	var sitemapJobs, sitemapCompanies sitemapLister
 	var sitemapFreshJobs freshSitemapLister
 	if cfg.Search != nil {
@@ -292,16 +253,14 @@ func Register(app *fiber.App, cfg Config) {
 	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies, sitemapFreshJobs)
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	searchH.agentViews = cfg.AgentViews
-	// The OJCP read surface. It shares the search backend and the store with the handlers
-	// above rather than holding its own: an agent's question and a browser's must reach the
-	// same catalogue, or the two answers drift.
+	// The OJCP read surface shares the search backend and store, so an agent's question and a
+	// browser's reach the same catalogue.
 	ojcpH := newOJCPHandlers(jobSearch, queries, cfg.FrontendOrigin, atsapply.SubmittableProviders())
 	ojcpH.signer = cfg.OJCPSigner
 	ojcpH.agentViews = cfg.AgentViews
-	// The ChatGPT app's MCP surface. A SECOND MCP server beside the OJCP one, over the same
-	// search backend and the same store: that one renders a foreign schema for agents which
-	// branch on error codes, this one renders ours for a language model reading prose. They
-	// share everything below the projection, so they cannot disagree about the catalogue.
+	// The ChatGPT app's MCP surface: a SECOND MCP server beside OJCP, over the same search
+	// backend and store. OJCP renders a foreign schema for agents that branch on error codes;
+	// this one renders ours for a model reading prose.
 	mcpappH := newMCPAppHandlers(
 		jobSearch,
 		companySearch,
@@ -311,23 +270,20 @@ func Register(app *fiber.App, cfg Config) {
 	mcpappH.facets = facets
 	mcpappH.cache = cfg.Cache
 	mcpappH.agentViews = cfg.AgentViews
-	// The completion dictionary. Left nil when search is unconfigured — same reason as
-	// jobSearch above: a nil *suggest.Service wrapped in the interface would be a
-	// non-nil interface, and the handler's "not configured" check would pass straight
-	// into a nil dereference.
+	// The completion dictionary. Left nil when search is unconfigured: a nil *suggest.Service
+	// in the interface would pass the handler's "not configured" check and then dereference nil.
 	suggestH := &suggestHandlers{}
 	if cfg.Suggest != nil {
 		suggestH.suggest = cfg.Suggest
 	}
-	// The AI filter reads the same saved profile the assistant does, so a profile-seeded
-	// search and a profile-aware conversation cannot disagree about what it says.
+	// Reads the same saved profile as the assistant, so a profile-seeded search and a
+	// profile-aware conversation agree.
 	intentH := newIntentHandlers(llmBinding{client: cmp.Or(cfg.SearchIntentLLM, cfg.LLM), keys: llmKeys})
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
 	// One reminder service, handed to tracking as its Reminders port and kept by the tracking
 	// handlers for the notification-settings endpoints. Save/unsave/apply schedule and cancel
-	// inside the tracking service, so every caller of it — the tracking routes, the in-app
-	// assistant, the mail reconstruction, an on-site application — gets the same side effect.
+	// inside tracking, so every caller gets the same side effect.
 	reminders := reminder.New(reminder.NewQueriesRepository(queries))
 	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool), jobtracking.WithReminders(reminders))
 	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
@@ -340,26 +296,22 @@ func Register(app *fiber.App, cfg Config) {
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
-	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
-	// interface would be a non-nil interface, and the handler's "no gateway here"
-	// check would pass straight into a nil dereference.
+	// Same nil-interface trap as jobSearch: assign only when non-nil, or the handler's "no
+	// gateway here" check passes into a nil dereference.
 	var stt transcriber
 	if cfg.Speech != nil {
 		stt = cfg.Speech
 	}
 	speechH := newSpeechHandlers(stt, plans)
-	// The in-app agent is a facade over the feature handlers above: its tools call
-	// the same services their endpoints do, so a tool result and the API can never
-	// disagree. The tailoring bootstrap mints its conversations through the same
-	// store, which is why the CV handlers get it back. It also takes the browser-tool
-	// hub, which a browsing session reads the caller's open page through.
+	// The in-app agent is a facade over the feature handlers above: its tools call the same
+	// services as their endpoints, so a tool result and the API cannot disagree. The tailoring
+	// bootstrap mints conversations through the same store. It also takes the browser-tool hub.
 	dictionaryH := &dictionaryHandlers{queries: queries}
 	assistantH := newAssistantHandlers(
 		queries,
 		assistantModels{
-			// Its own per-call timeout for the same reason the fit analysis has one, and
-			// nil-safe the same way: a turn's rounds are slower than a one-shot extraction,
-			// and here a call cut short takes the whole run with it.
+			// Its own per-call timeout: a turn's rounds are slower than a one-shot extraction, and
+			// a call cut short takes the whole run with it. Nil-safe like the fit analysis.
 			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
@@ -379,8 +331,8 @@ func Register(app *fiber.App, cfg Config) {
 		letterDeps,
 		billingSvc.PublicPrices,
 	)
-	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
-	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
+	// Same nil-interface trap as stt: assign only when cfg.Realtime is non-nil, or "no voice
+	// mode" becomes a panic on the first mint.
 	if cfg.Realtime != nil {
 		assistantH.realtime = cfg.Realtime
 	}
@@ -397,37 +349,30 @@ func Register(app *fiber.App, cfg Config) {
 	assistantH.reports = reportsH
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
-	// The autofill planner is one cheap structured call per run, so it travels on the
-	// shared client's default timeout. The contact block it plans over comes from the base
-	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
+	// The autofill planner is one cheap structured call per run, so it keeps the shared
+	// client's default timeout. Its contact block comes from the base CV, then the structured
+	// CV (see autofillHandlers.autofillProfile).
 	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys}, cfg.TypesafeAPIKey)
 	autofillH.profiles.WithProfileLocation(profileSvc)
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
-	// Referral notifications reuse the SES email transport (email is always present) and
-	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
-	// concrete pointer never hides behind a non-nil interface (see the search note above);
-	// a referrer with no reachable channel still sees the request in-cabinet.
+	// Referral notifications reuse the SES transport and the Telegram bot when linked. Each
+	// channel is wrapped only when configured (typed-nil trap, see above); a referrer with no
+	// reachable channel still sees the request in-cabinet.
 	var referralEmail emailnotify.Sender
-	// mailLinks signs the unsubscribe URL every non-essential mail carries. One
-	// instance for every sender the API composes, so the token in a footer is the
-	// same shape wherever it was minted.
+	// mailLinks signs the unsubscribe URL every non-essential mail carries; one instance for
+	// every API sender keeps footer tokens the same shape.
 	mailLinks := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
-	// mailPrefs both serves the preference routes and answers "has this account
-	// turned that group off" for the two senders with no selection query to gate —
-	// the report notice and the referral ping, which go out on a request path. One
-	// instance, so the switch the footer offers and the switch the sender consults
-	// are the same switch.
+	// mailPrefs serves the preference routes and answers "has this account turned that group
+	// off" for the report notice and referral ping, which have no selection query to gate.
+	// One instance, so the footer switch and the sender's check are the same switch.
 	mailPrefs := emailprefs.NewService(queries, cfg.JWTSecret)
-	// The same client, held as its CONCRETE type as well, because mentorship is
-	// composed separately below. A typed nil must not hide behind a non-nil interface
-	// here either, which is why this is its own pointer rather than a type assertion
-	// on referralEmail.
+	// The same client as its CONCRETE type, because mentorship is composed separately below;
+	// its own pointer rather than a type assertion on referralEmail (typed-nil trap).
 	var mailClient *emailnotify.Client
-	// employerH is constructed unconditionally below (its routes register either way, like
-	// authH's), but the employer.Service inside it needs a claim mailer that is only
-	// buildable once an SES client exists — hence this forward declaration.
+	// employerH is constructed unconditionally (its routes register either way), but its
+	// employer.Service needs a claim mailer that exists only once an SES client does.
 	var employerClaimMailer *emailnotify.AuthMailer
 	if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
 		if ec, err := emailnotify.NewClient(context.Background(), cfg.AWSRegion); err != nil {
@@ -435,28 +380,22 @@ func Register(app *fiber.App, cfg Config) {
 		} else {
 			referralEmail = ec
 			mailClient = ec
-			// The same AuthMailer instance carries the account mails (verification and
-			// password reset) AND the employer-claim work-email code — one SES client,
-			// one mailer, three mail purposes. Without it the accounts service keeps
-			// registering and authenticating (only the code-backed flows report 503), and
-			// employer.Service.Claim reports employer.ErrMailUnavailable up front, before
-			// reserving a company slug it could never mail a code for.
+			// One AuthMailer carries the account mails (verification, password reset) AND the
+			// employer-claim code. Without it the accounts service still registers and
+			// authenticates (code-backed flows 503), and employer.Service.Claim reports
+			// ErrMailUnavailable before reserving a company slug it could not mail a code for.
 			employerClaimMailer = emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
 			authH.accounts.WithCodes(accounts.NewQueriesCodeStore(queries, cfg.Pool), employerClaimMailer)
-			// And it tells a reporter what a moderator decided about their report.
-			// Without it the queue still decides reports — each decision simply
-			// reports that nobody was notified.
+			// Also tells a reporter what a moderator decided; without it each decision reports
+			// that nobody was notified.
 			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin, mailLinks, mailPrefs))
 		}
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
-	// employer.Service reuses authH.accounts as its codeIssuer (the same *accounts.Service
-	// pointer WithCodes configures above, whichever branch ran). employer.ClaimMailer is a
-	// properly NIL INTERFACE when employerClaimMailer is nil, not a non-nil interface
-	// wrapping a nil pointer — assigning the *emailnotify.AuthMailer var directly here
-	// would be the typed-nil footgun ClaimMailer's own doc comment warns about, since
-	// Service.Claim's "is a mailer configured" check tests the interface, not the pointer.
+	// employer.Service reuses authH.accounts as its codeIssuer (the pointer WithCodes
+	// configured above). employerMailer must be a NIL INTERFACE when employerClaimMailer is
+	// nil: Service.Claim tests the interface, so a typed nil would pass its check.
 	if mailClient != nil && cfg.SupportReplyTo != "" {
 		assistantH.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
 	}
@@ -473,8 +412,8 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
 	employerH := newEmployerHandlers(queries, employerSvc)
-	// Applying on freehire needs both a CV renderer and a mail transport; without either an
-	// application could be recorded but never delivered, so the routes answer 501 instead.
+	// Applying on freehire needs a CV renderer and a mail transport; without either the
+	// routes answer 501 rather than record an application that is never delivered.
 	directApplyH := &directApplyHandlers{}
 	var applicationMailer *emailnotify.ApplicationMailer
 	if mailClient != nil {
@@ -524,11 +463,10 @@ func Register(app *fiber.App, cfg Config) {
 	// Before any /api/v1 route: it hands them the rewritten request (signed_in_door.go).
 	mountSignedInDoor(app, mw.key)
 
-	// The email preference centre. Its three public routes are unauthenticated on
-	// purpose — a person holding one of our mails must be able to turn it off
-	// without an account — so the signed token in the link stands in for a session.
-	// The two /me routes beside them are the same switches for a caller the cookie
-	// already identified.
+	// The email preference centre. Its three public routes are unauthenticated on purpose: a
+	// person holding one of our mails must be able to turn it off without an account, so the
+	// signed token stands in for a session. The two /me routes are the same switches for a
+	// cookie-authenticated caller.
 	emailPrefsH := newEmailPrefsHandlers(mailPrefs)
 	agentPermissionsH := &agentPermissionHandlers{queries: queries}
 	userModerationH := newUserModerationHandlers(queries)
@@ -562,6 +500,7 @@ func Register(app *fiber.App, cfg Config) {
 		ghostReportHandlers:          ghostReportsH,
 		talentNetworkHandlers:        talentNetworkH,
 		answerBankHandlers:           answerBankH,
+		changeWebhookHandlers:        changeWebhookH,
 		userModerationHandlers:       userModerationH,
 		companyProcessReportHandlers: companyProcessReportH,
 		contributionHandlers:         contributionsH,

@@ -16,42 +16,39 @@ import (
 // The wire entry for one source on the /sources page is apigen.SourceEntry.
 //
 // Like the provider entries beside it, it is sanitized BY CONSTRUCTION: there is no field
-// for a board identifier, a crawl error, or a specific posting URL, so none of them can
-// leak by somebody forgetting to omit one.
+// for a board identifier, a crawl error, or a specific posting URL, so none can leak by
+// being forgotten.
 //
 // The two optional blocks are optional for different reasons, and both absences are real
-// answers rather than missing data:
+// answers:
 //
 //   - Jobs is null when the snapshot has never been taken for this source. Its figures
-//     must not degrade to zeros, which would state on a public page that a live source
-//     carries nothing.
-//   - Health is null when the source has no board_health record at all — which is the
-//     normal state for a source that is not a crawl adapter (an extraction pipeline, a
-//     manual intake). Deriving a status from no evidence would publish a verdict about
-//     something nothing measured.
+// must not degrade to zeros, which would state publicly that a live source carries
+// nothing.
+//   - Health is null when the source has no board_health record, the normal state for a
+// non-crawl source (an extraction pipeline, a manual intake). Deriving a status from no
+// evidence would publish a verdict nothing measured.
 //
-// Adapter is whether the source is a crawl adapter at all. Kind no longer answers it: the
-// Telegram pipeline is social and employer-published vacancies are company, yet neither
-// has a board to crawl, so a missing health record means "nothing to crawl" for them and
-// "not crawled yet" for an adapter.
+// Adapter is whether the source is a crawl adapter at all; Kind cannot answer it (Telegram
+// is social and employer-published vacancies are company, yet neither has a board). A
+// missing health record means "nothing to crawl" for them and "not crawled yet" for an
+// adapter.
 //
-// There is no logo field. A source's brand mark is resolved client-side from its DISPLAY
-// NAME, which the SPA already owns. Publishing a host was tried and served the WRONG
-// brand: an ATS posting's URL is usually on the employer's own domain, so the sample taken
-// for greenhouse was bankrate.com and the one for successfactors was a staffing agency's.
+// There is no logo field: a brand mark is resolved client-side from the DISPLAY NAME. A
+// host sample served the WRONG brand, since an ATS posting's URL is usually on the
+// employer's own domain.
 //
-// Jobs.Browsable is the de-duplicated count Meilisearch holds: what /jobs?source=<key>
-// actually shows, and therefore the figure the page displays. Null (never zero) when
-// Meilisearch could not be measured. Open is the raw count of open postings, duplicates
-// included — the denominator the overlap figures are arithmetic on.
+// Jobs.Browsable is the de-duplicated count Meilisearch holds (what /jobs?source=<key>
+// shows, so the figure the page displays); null, never zero, when Meilisearch could not be
+// measured. Open is the raw count of open postings, duplicates included, the denominator
+// the overlap figures are arithmetic on.
 //
 // ATSMatched and ATSUnmatched are carried for AGGREGATORS ONLY. "Unmatched" means the
-// dedup pass found no first-party ATS posting to pair this one with. That is the absence
-// of evidence, not evidence of absence — the fuzzy and role passes both miss — so the field
-// is not called `exclusive`, here or on the page. They are omitted entirely for other kinds
-// rather than sent as zeros: the aggregator-suppression pass only ever marks an aggregator
-// row, so a first-party ATS source's 0 is arithmetic, and published it would read as
-// "fully exclusive".
+// dedup pass found no first-party ATS posting to pair with: absence of evidence, not
+// evidence of absence (the fuzzy and role passes both miss), so the field is not called
+// `exclusive`. They are omitted for other kinds rather than sent as zeros, because only
+// aggregator rows are ever marked, and a first-party source's 0 would read as "fully
+// exclusive".
 
 // Sources serves the public source catalogue the /sources page renders: every source the
 // catalogue is built from, with what it currently holds and how its crawl is doing.
@@ -90,11 +87,10 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 		bySnapshot[r.Source] = r
 	}
 
-	// The same Union the rollup builds its snapshot from, so the endpoint and the worker can
-	// never disagree about which sources exist. It is re-derived here rather than trusted
-	// from the snapshot alone because the snapshot may not have run yet, and a page that
-	// lists nothing until a cron fires is worse than one that lists every adapter with
-	// absent figures.
+	// The same Union the rollup builds its snapshot from, so the endpoint and the worker agree
+	// on which sources exist. Re-derived here rather than taken from the snapshot, which may
+	// not have run yet: listing every adapter with absent figures beats listing nothing until
+	// a cron fires.
 	adapters := make([]string, 0, len(reg))
 	for name := range reg {
 		adapters = append(adapters, vocab.SourceFamilyOf(name))

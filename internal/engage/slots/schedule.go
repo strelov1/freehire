@@ -6,15 +6,11 @@ import (
 	"time"
 )
 
-// The sentinels the schedule value types raise. Each carries its HTTP mapping here, in
-// the manner of internal/engage/referral: the handler's error switch is the only place
-// that maps them, and a sentinel without a mapping is a sentinel nobody can answer.
+// The sentinels the schedule value types raise, each with its HTTP mapping; the
+// handler's error switch is the only place that maps them.
 //
-// 422 rather than 400 throughout, and the distinction is not pedantry: 400 is a request
-// the server could not read, and every one of these arrived on a body that parsed
-// perfectly. What is wrong is what the VALUES say — a weekday of 9, a span that runs
-// backwards — and a client told "bad request" looks for a malformed payload it will not
-// find.
+// 422 rather than 400: the body parsed fine, and what is wrong is what the VALUES say
+// (a weekday of 9, a span that runs backwards).
 var (
 	// ErrInvalidTimeOfDay → 422. A stored availability time outside 00:00–24:00.
 	ErrInvalidTimeOfDay = errors.New("slots: not a time of day")
@@ -30,21 +26,18 @@ var (
 )
 
 // minutesInADay is the exclusive upper bound on a wall-clock minute and the inclusive
-// upper bound on a TimeOfDay: 24:00 is a valid END of a day and not a valid start of
-// anything, which is what lets a mentor be available "until midnight" without an
-// availability row spilling onto the next date.
+// upper bound on a TimeOfDay: 24:00 is a valid END of a day, so a rule can run "until
+// midnight" without spilling onto the next date.
 const minutesInADay = 24 * 60
 
-// weekdayUnset is what a dated rule's weekday reads as. time.Weekday's zero value is
-// Sunday, a real day, so a rule cannot use the zero value to mean "no weekday" — the
-// sentinel is out of range instead, and NewWeeklyRule refuses it like any other.
+// weekdayUnset is a dated rule's weekday. The zero value is Sunday, so the sentinel
+// is out of range instead, and NewWeeklyRule refuses it.
 const weekdayUnset = time.Weekday(-1)
 
-// TimeOfDay is a wall-clock time carrying no date and no zone, the shape a mentor's
-// availability is stored in. It is resolved into an instant only against a date AND the
-// mentor's own IANA zone — see resolve in slots.go. Minutes, not seconds: a mentor
-// states hours, a TIME column stores what we put in it, and admitting seconds would
-// invite a slot grid that no wall clock lands on.
+// TimeOfDay is a wall-clock time with no date and no zone, the shape a mentor's
+// availability is stored in. It becomes an instant only against a date AND the
+// mentor's IANA zone (see resolve). Minutes, not seconds: seconds would invite a slot
+// grid no wall clock lands on.
 type TimeOfDay struct {
 	minutes int
 }
@@ -62,16 +55,14 @@ func NewTimeOfDay(hour, minute int) (TimeOfDay, error) {
 	return TimeOfDay{minutes: total}, nil
 }
 
-// Minutes is the time as minutes since midnight, which is how the slot engine adds it
-// to a date.
+// Minutes is the time as minutes since midnight.
 func (t TimeOfDay) Minutes() int { return t.minutes }
 
-// String renders the 24-hour clock, so a test failure reads as a time.
+// String renders the 24-hour clock.
 func (t TimeOfDay) String() string { return fmt.Sprintf("%02d:%02d", t.minutes/60, t.minutes%60) }
 
 // Date is a calendar date with no time and no zone: the date a dated rule names. It is
-// not a time.Time, because a time.Time is an instant and an instant needs a zone —
-// exactly the conflation this package must not make.
+// not a time.Time, which is an instant and needs a zone.
 type Date struct {
 	year  int
 	month time.Month
@@ -92,25 +83,22 @@ func NewDate(year int, month time.Month, day int) (Date, error) {
 // Parts is the date as its three components, for building an instant in a zone.
 func (d Date) Parts() (int, time.Month, int) { return d.year, d.month, d.day }
 
-// String renders ISO-8601, so a test failure reads as a date.
+// String renders ISO-8601.
 func (d Date) String() string { return fmt.Sprintf("%04d-%02d-%02d", d.year, int(d.month), d.day) }
 
 // next is the following calendar date.
 //
-// The arithmetic goes through UTC deliberately, and this is not a detail. Doing it in a
-// real zone means asking for a midnight, and three live zones — America/Santiago,
-// America/Havana, Atlantic/Azores — move their clocks AT midnight, so once a year that
-// midnight does not exist. Go normalises such a time BACKWARDS, to 23:00 on the previous
-// date, and a cursor built that way stops advancing: the walk spins forever on an
-// unauthenticated endpoint. UTC has no transitions, so every midnight in it is real.
+// The arithmetic goes through UTC on purpose. In America/Santiago, America/Havana and
+// Atlantic/Azores the clocks move AT midnight, so once a year that midnight does not
+// exist; Go normalises it backwards to 23:00 of the previous date, the cursor stops
+// advancing, and the walk spins forever on an unauthenticated endpoint.
 func (d Date) next() Date {
 	at := time.Date(d.year, d.month, d.day+1, 0, 0, 0, 0, time.UTC)
 	return Date{year: at.Year(), month: at.Month(), day: at.Day()}
 }
 
-// after reports whether this date falls later than the other. Compared component-wise
-// rather than as instants, because a date is not an instant and turning it into one is
-// what the zone hazard above lives in.
+// after reports whether this date falls later than the other, compared component-wise
+// to avoid the zone hazard described on next.
 func (d Date) after(other Date) bool {
 	if d.year != other.year {
 		return d.year > other.year
@@ -121,9 +109,8 @@ func (d Date) after(other Date) bool {
 	return d.day > other.day
 }
 
-// Weekday is the day of the week this date falls on. Read in UTC for the reason next
-// gives: the weekday of a calendar date is the same in every zone, and asking a real
-// zone for it would mean naming a wall-clock time that might not exist.
+// Weekday is the day of the week this date falls on. Read in UTC for the reason given
+// on next; a date's weekday is the same in every zone.
 func (d Date) Weekday() time.Weekday {
 	return time.Date(d.year, d.month, d.day, 0, 0, 0, 0, time.UTC).Weekday()
 }
@@ -133,12 +120,10 @@ func (d Date) Weekday() time.Weekday {
 // weekly rules say for it.
 //
 // The fields are unexported and the two constructors are the only way in, so a rule
-// carrying both a weekday and a date — the row the database CHECK rejects — cannot be
-// built here at all.
+// with both a weekday and a date (which the database CHECK rejects) cannot be built.
 type Rule struct {
-	// id is the stored row's identifier, and is zero for a rule the caller just built.
-	// The cabinet needs it to delete one override without touching the rest, and a rule
-	// returned without it is a rule the UI can render and never remove.
+	// id is the stored row's identifier, zero for a rule just built. The cabinet needs
+	// it to delete one override without touching the rest.
 	id      int64
 	dated   bool
 	weekday time.Weekday
@@ -150,16 +135,14 @@ type Rule struct {
 // ID is the stored row's identifier, or zero for a rule that has not been read from one.
 func (r Rule) ID() int64 { return r.id }
 
-// WithID labels a rule with the row it came from. Only a repository calls it: an id is
-// something storage knows and a caller cannot invent.
+// WithID labels a rule with the row it came from. Only a repository calls it.
 func (r Rule) WithID(id int64) Rule {
 	r.id = id
 	return r
 }
 
-// NewWeeklyRule builds a recurring rule. Its span must be non-empty: a weekly row
-// saying "Tuesday, 18:00 to 18:00" states nothing, and only a dated override is allowed
-// to be empty — there, emptiness is the point.
+// NewWeeklyRule builds a recurring rule. Its span must be non-empty; only a dated
+// override may be empty.
 func NewWeeklyRule(weekday time.Weekday, start, end TimeOfDay) (Rule, error) {
 	if weekday < time.Sunday || weekday > time.Saturday {
 		return Rule{}, fmt.Errorf("%w: %d", ErrInvalidWeekday, int(weekday))
@@ -170,9 +153,8 @@ func NewWeeklyRule(weekday time.Weekday, start, end TimeOfDay) (Rule, error) {
 	return Rule{weekday: weekday, start: start, end: end}, nil
 }
 
-// NewDatedRule builds a rule for one calendar date. An EMPTY span is deliberately
-// legal: it is how a mentor closes a day, displacing that date's weekly rules with
-// nothing. A backwards span is not.
+// NewDatedRule builds a rule for one calendar date. An EMPTY span is legal: it closes
+// the day. A backwards span is not.
 func NewDatedRule(date Date, start, end TimeOfDay) (Rule, error) {
 	if end.minutes < start.minutes {
 		return Rule{}, fmt.Errorf("%w: dated %s–%s", ErrInvalidSpan, start, end)
@@ -200,15 +182,13 @@ func (r Rule) Start() TimeOfDay { return r.start }
 func (r Rule) End() TimeOfDay { return r.end }
 
 // SessionParams is what a mentor's one session offers and what bounds when it may be
-// booked. It is passed to the slot engine rather than read from a mentor, which is the
-// seam that lets a per-session-type row take its place later without the engine
-// changing shape.
+// booked. It is passed to the engine rather than read from a mentor, so a
+// per-session-type row can replace it later.
 type SessionParams struct {
 	// Duration is how long one session runs.
 	Duration time.Duration
-	// BufferBefore is the gap required before a session starts, and BufferAfter the gap
-	// after one ends. Both apply between two sessions, so the gap the engine requires
-	// between them is their sum.
+	// BufferBefore and BufferAfter are the gaps required around a session; between two
+	// sessions the required gap is their sum.
 	BufferBefore time.Duration
 	BufferAfter  time.Duration
 	// MinimumNotice is how far ahead of now the earliest offerable slot begins.
@@ -217,15 +197,12 @@ type SessionParams struct {
 	Horizon time.Duration
 }
 
-// Validate reports whether the figures can yield a slot. Zero buffers and zero notice
-// are ordinary choices; a zero duration or horizon is not — the first makes a mentor
-// bookable for no time, the second bookable in no window.
+// Validate reports whether the figures can yield a slot. Zero buffers and notice are
+// ordinary; a zero duration or horizon is not.
 //
-// A method rather than a New- constructor, unlike every other type in this file: those
-// have unexported fields and cannot be built without one, while these are plain figures
-// a caller assembles directly. A constructor here would only echo back what it was
-// given, and a caller who ignored the returned copy would be running unvalidated
-// parameters that looked checked.
+// A method, not a constructor: these are plain figures a caller assembles directly,
+// and a constructor's returned copy could be ignored, leaving unvalidated parameters
+// that look checked.
 func (p SessionParams) Validate() error {
 	switch {
 	case p.Duration <= 0:
@@ -237,9 +214,8 @@ func (p SessionParams) Validate() error {
 	case p.MinimumNotice < 0:
 		return fmt.Errorf("%w: notice %v", ErrInvalidSessionParams, p.MinimumNotice)
 	}
-	// Availability is stored to the minute, so a session measured finer than that could
-	// never start on a boundary the schedule produces. Rounding it silently would move
-	// hours the mentor stated; refusing it says so.
+	// Availability is stored to the minute, so a finer session could never start on a
+	// schedule boundary. Refuse rather than silently round the mentor's hours.
 	for _, d := range []time.Duration{p.Duration, p.BufferBefore, p.BufferAfter} {
 		if d%time.Minute != 0 {
 			return fmt.Errorf("%w: %v is not whole minutes", ErrInvalidSessionParams, d)
@@ -248,9 +224,8 @@ func (p SessionParams) Validate() error {
 	return nil
 }
 
-// Interval is a half-open span of absolute time, [Start, End). Half-open is what makes
-// back-to-back sessions legal: 18:00–19:00 and 19:00–20:00 do not overlap, and the
-// database EXCLUDE constraint uses the same bounds so Go and Postgres agree on it.
+// Interval is a half-open span of absolute time, [Start, End), so back-to-back
+// sessions do not overlap. The database EXCLUDE constraint uses the same bounds.
 type Interval struct {
 	Start time.Time
 	End   time.Time
@@ -261,7 +236,6 @@ func (i Interval) Overlaps(other Interval) bool {
 	return i.Start.Before(other.End) && other.Start.Before(i.End)
 }
 
-// IsEmpty reports whether the interval holds no time at all. An empty interval survives
-// the expansion of a closing override just long enough to displace that date's weekly
-// rules, and is dropped before slicing.
+// IsEmpty reports whether the interval holds no time. An empty interval from a closing
+// override displaces that date's weekly rules and is dropped before slicing.
 func (i Interval) IsEmpty() bool { return !i.End.After(i.Start) }

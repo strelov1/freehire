@@ -2,14 +2,13 @@
 // conversations of a kind between accounts, the request-and-accept step, messages and read
 // cursors, account-wide blocks, reports to moderators and the unread-notice worker.
 //
-// Every participant speaks as a PERSONA: one account has several (its real self, an
-// anonymous buddy handle, later a mentor or an employer), and the other side of a
-// conversation is drawn from the persona it speaks as there, never from the account. A
-// feature plugs in twice: as a Persona, which draws and names the accounts speaking as it,
-// and as a Kind, which words the notices of its conversations. Who may start a
-// conversation is the feature's own rule (its service checks it, then calls Start); the
-// core enforces only what holds everywhere: participation, blocks, the pair key, message
-// length. The core never imports a feature. See AGENTS.md beside this file.
+// Every participant speaks as a PERSONA: one account has several (its real self, an anonymous
+// buddy handle, ...), and the other side of a conversation is drawn from the persona it speaks
+// as there, never from the account. A feature plugs in twice: as a Persona, which draws and
+// names the accounts speaking as it, and as a Kind, which words its notices. Who may start a
+// conversation is the feature's own rule (its service checks it, then calls Start); the core
+// enforces only what holds everywhere: participation, blocks, the pair key, message length.
+// The core never imports a feature. See AGENTS.md beside this file.
 package messaging
 
 import (

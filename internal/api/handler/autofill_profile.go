@@ -14,10 +14,9 @@ import (
 // autofillHandlers serves the contact block the browser extension fills application forms
 // with, both as a plain read and as an agent-driven run over the caller's own browser.
 //
-// It holds the profile assembler (internal/api/candidateprofile — the same one cmd/auto-apply
-// resolves an application form against, so a value a person sees in a form and a value an
-// automated attempt resolves against can never diverge), the browser-tool hub the agent run
-// drives the caller's page through, and the model binding that run plans on.
+// It holds the profile assembler (internal/api/candidateprofile, shared with cmd/auto-apply
+// so a person's form values and an automated attempt's never diverge), the browser-tool hub
+// the agent run drives, and the model binding it plans on.
 type autofillHandlers struct {
 	profiles *candidateprofile.Assembler
 	// browserTools is shared with /tools/ws and the assistant — the hub is per-process and
@@ -27,8 +26,7 @@ type autofillHandlers struct {
 	// reports the feature is off and the deterministic read still works.
 	llm llmBinding
 	// typesafeAPIKey backs the Jev provider for Choose (autofillagent.JevPlanner). Empty
-	// disables it outright: Choose then answers through the LLM exactly as it did before
-	// this setting existed. See TYPESAFE_API_KEY in internal/platform/config.
+	// disables it and Choose answers through the LLM. See TYPESAFE_API_KEY in internal/platform/config.
 	typesafeAPIKey string
 }
 

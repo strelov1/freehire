@@ -11,17 +11,10 @@ import (
 	"github.com/strelov1/freehire/internal/api/apigen"
 )
 
-// PostAssistantExtend buys a tailoring session another ceiling's worth of turns, spending
-// one of the day's tailoring sessions to do it.
-//
-// It is a separate decision from starting a session, and deliberately an explicit one: the
-// candidate has seen what the session produced so far and is choosing to spend more of
-// today on this vacancy rather than on another. Extending silently when the ceiling was
-// reached would spend their day for them.
-//
-// Extending is idempotent under a double click. Two simultaneous requests read the same
-// ceiling count and attempt the same next reference; the ledger's index admits one and
-// reports the other as already charged, so the race costs one session, not two.
+// PostAssistantExtend buys a tailoring session another ceiling's worth of turns, spending one of the
+// day's tailoring sessions. Deliberately an explicit decision: extending silently at the ceiling would
+// spend the candidate's day for them. Idempotent under a double click: simultaneous requests attempt
+// the same next reference, the ledger's index admits one and reports the other as already charged.
 func (h *assistantHandlers) PostAssistantExtend(ctx context.Context, params apigen.PostAssistantExtendParams) (apigen.PostAssistantExtendRes, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -38,8 +31,8 @@ func (h *assistantHandlers) PostAssistantExtend(ctx context.Context, params apig
 	if sess.Preset == assistant.PresetSupport {
 		return nil, errSessionNotFound
 	}
-	// Only a tailoring session has a ceiling to extend. Every other preset is bounded by
-	// the daily assistant allowance, which nothing can top up — a day is a day.
+	// Only a tailoring session has a ceiling to extend; every other preset is bounded by the daily
+	// assistant allowance, which nothing can top up.
 	if sess.Preset != assistant.PresetTailor {
 		return nil, fiber.NewError(fiber.StatusConflict, "only a CV editing session can be extended")
 	}

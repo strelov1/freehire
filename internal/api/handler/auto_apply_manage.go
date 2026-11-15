@@ -12,10 +12,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// Retry and cancel for an auto-apply attempt (openspec/changes/auto-apply-over-mcp). Both are
-// addressed by the job's slug, like the start route beside them: a queue id dies on submission
-// and on cancel, while (caller, job) is the queue's own unique key and is what both the
-// tracker drawer and an agent already hold.
+// Retry and cancel for an auto-apply attempt. Both are addressed by the job's slug, like the
+// start route: a queue id dies on submission and cancel, while (caller, job) is the queue's
+// unique key and what the tracker drawer and agents hold.
 
 // autoApplyNoAttemptMessage answers a retry or cancel for a job the caller has no attempt on.
 const autoApplyNoAttemptMessage = "there is no auto-apply attempt for this job"

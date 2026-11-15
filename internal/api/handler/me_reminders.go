@@ -13,13 +13,10 @@ import (
 	"github.com/strelov1/freehire/internal/engage/reminder"
 )
 
-// notificationSettingsOut is the public shape of the account's shared
-// notification rule (saved-job reminders + both lifecycle nudges), plus the
-// delivery-timing controls (digest frequency/time/interval, quiet hours). It carries no
-// user_id (the caller is the user) and always emits channels as an array so the
-// SPA can bind checkboxes without a null guard. Times are "HH:MM" strings (null
-// when unset), matching an HTML time input and readable without a client-side
-// duration library.
+// notificationSettingsOut is the public shape of the account's shared notification rule
+// (saved-job reminders + both lifecycle nudges) plus delivery timing (digest
+// frequency/time/interval, quiet hours). No user_id; channels is always an array so the SPA
+// can bind checkboxes without a null guard. Times are "HH:MM" strings, null when unset.
 func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
 	ch := s.Channels
 	if ch == nil {
@@ -64,10 +61,10 @@ func parseHHMM(s *string) (*time.Duration, error) {
 	return &d, nil
 }
 
-// reminderError maps the reminder sentinels onto HTTP statuses: a bad channel, an
-// enabled rule with no channels, an invalid frequency, a daily rule missing its
-// digest time, an interval out of bounds, or a one-sided quiet-hours window are all 400s; push added with no
-// device to reach is a 409. Anything else falls through to a 500.
+// reminderError maps the reminder sentinels onto HTTP: a bad channel, an enabled rule with
+// no channels, an invalid frequency, a daily rule missing its digest time, an out-of-bounds
+// interval or a one-sided quiet-hours window are 400s; push with no device to reach is a
+// 409. Anything else is a 500.
 func reminderError(err error) error {
 	switch {
 	case errors.Is(err, plan.ErrPaymentRequired):
@@ -94,8 +91,8 @@ func reminderError(err error) error {
 	}
 }
 
-// GetNotificationSettings returns the caller's notification rule (the
-// opt-out-by-default default when never set). Cookie-only (RequireAuth), owner-scoped.
+// GetNotificationSettings returns the caller's notification rule (the opt-out-by-default
+// default when never set). Cookie-only, owner-scoped.
 func (h *trackingHandlers) GetNotificationSettings(ctx context.Context) (*apigen.GetNotificationSettingsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -108,9 +105,9 @@ func (h *trackingHandlers) GetNotificationSettings(ctx context.Context) (*apigen
 	return &apigen.GetNotificationSettingsOK{Data: notificationSettingsOut(s)}, nil
 }
 
-// UpdateNotificationSettings validates and stores the caller's rule. An enabled
-// rule needs at least one valid channel. Cookie-only. An omitted digest_interval_hours
-// reads as the default, so a client that predates the field keeps working.
+// UpdateNotificationSettings validates and stores the caller's rule. An enabled rule needs
+// at least one valid channel. An omitted digest_interval_hours reads as the default.
+// Cookie-only.
 func (h *trackingHandlers) UpdateNotificationSettings(ctx context.Context, req *apigen.NotificationSettingsUpdate) (*apigen.UpdateNotificationSettingsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

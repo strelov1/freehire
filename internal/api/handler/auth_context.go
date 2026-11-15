@@ -31,10 +31,9 @@ func externalCaller(secret string) fiber.Handler {
 }
 
 // countAPIUsage counts a request toward its account's API usage when the gateway
-// attributed it to an account (externalCaller) and it carries a Bearer credential, so a
-// signed-in visitor browsing the site is never counted. The status is read after the
-// chain: an error the error handler has not rendered yet is counted by its code, and a
-// panic (recovered further out) as a 500.
+// attributed it (externalCaller) and it carries a Bearer credential, so a signed-in
+// visitor browsing the site is never counted. The status is read after the chain: an
+// unrendered error counts by its code, a panic as a 500.
 func countAPIUsage(counter *apiusage.Counter) fiber.Handler {
 	return func(c *fiber.Ctx) (err error) {
 		userID, _ := c.Locals(localsExternalCallerID).(int64)

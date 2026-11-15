@@ -1,12 +1,9 @@
 // Package realtime mints short-lived OpenAI Realtime API client secrets through the
 // same OpenAI-compatible gateway internal/platform/llm and internal/ai/speech already use.
 //
-// It is deliberately not part of internal/platform/llm: that package is built on langchaingo,
-// which models chat completions and has no speech-to-speech surface. What it shares
-// with internal/ai/speech is the gateway — the same base URL and key serve
-// /chat/completions, /audio/transcriptions, and /realtime/client_secrets alike — so a
-// deployment configures one credential and names three models, not three credentials.
-// The HTTP half of that is internal/platform/aigateway, shared with internal/ai/speech.
+// It is not part of internal/platform/llm, which is built on langchaingo and has no
+// speech-to-speech surface. It shares the gateway with internal/ai/speech: one base URL and
+// key serve chat, transcription and realtime, via internal/platform/aigateway.
 package realtime
 
 import (
@@ -20,18 +17,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/aigateway"
 )
 
-// ErrUpstream is what every failure on the gateway's side wraps: a refusal, a fault,
-// an answer we cannot read. Callers render it as a 502 — the caller of the API did
-// nothing wrong, and the remedy is not theirs.
+// ErrUpstream is what every failure on the gateway's side wraps: a refusal, a fault, an
+// unreadable answer. Callers render it as a 502.
 var ErrUpstream = errors.New("realtime gateway")
 
-// requestTimeout bounds minting one client secret. It is a single small JSON
-// round-trip, not the call itself, so it stays short.
+// requestTimeout bounds minting one client secret (a single small round-trip).
 const requestTimeout = 15 * time.Second
 
-// maxResponse bounds what is read back. A client secret is a short token plus a
-// little session metadata; a gateway that answers with something enormous is
-// misbehaving rather than verbose.
+// maxResponse bounds what is read back; a client secret is a short token.
 const maxResponse = 1 << 16
 
 // Client mints Realtime API client secrets through one gateway.
@@ -41,9 +34,8 @@ type Client struct {
 
 // New builds a client, or returns nil when the gateway is not configured.
 //
-// Nil is the "this deployment has no voice mode" answer, following internal/ai/speech:
-// the handler asks whether it has a client and renders 501 when it does not, which the
-// SPA reads as a surface that does not exist here rather than as a fault.
+// Nil means this deployment has no voice mode (as in internal/ai/speech): the handler
+// renders 501, which the SPA reads as an absent surface rather than a fault.
 func New(baseURL, apiKey, model string) *Client {
 	gw := aigateway.New(aigateway.Config{
 		BaseURL:     baseURL,
@@ -59,17 +51,12 @@ func New(baseURL, apiKey, model string) *Client {
 	return &Client{gw: gw}
 }
 
-// mintRequest is the client_secrets request body: a realtime session naming its
-// model and carrying instructions the way a system prompt carries them for a text
-// turn.
+// mintRequest is the client_secrets request body: a realtime session naming its model and
+// carrying instructions like a system prompt.
 //
-// audio.input is not optional in practice, even though the gateway accepts a
-// request without it: input transcription is off by default, so a caller who omits
-// it gets a working call whose OWN side never appears as text anywhere — a spike
-// that shipped this omission produced a call the candidate could hear but never see
-// themselves in. turnDetection matters for the same reason from the other
-// direction: an unset value falls back to whatever default the model picks, not
-// necessarily the responsiveness this deployment wants.
+// audio.input is required in practice though the gateway accepts its absence: input
+// transcription is off by default, so the caller's own side would never appear as text.
+// turnDetection is set because an unset value falls back to the model's default.
 type mintRequest struct {
 	Session struct {
 		Type         string `json:"type"`
@@ -89,31 +76,22 @@ type mintRequest struct {
 }
 
 // turnDetectionType and transcriptionModel are fixed rather than configurable.
-// server_vad (its own default timing, not overridden here) is chosen over the
-// semantic_vad the spike used because semantic_vad is explicitly variable-latency
-// by design — it waits LONGER when uncertain a turn ended — the opposite of what a
-// snappy rehearsal call wants. gpt-realtime-whisper is this deployment's model
-// family's own transcription model, not a second credential to configure.
+// server_vad is chosen over semantic_vad, which waits longer when unsure a turn ended: the
+// opposite of what a snappy rehearsal call wants.
 const (
 	turnDetectionType  = "server_vad"
 	transcriptionModel = "gpt-realtime-whisper"
 )
 
-// Model names which Realtime model the client secret is minted for. The WebRTC SDP
-// exchange names the model on its URL, and the caller has no other way to learn
-// which one this deployment is configured with — hardcoding it in the browser would
-// drift silently from REALTIME_MODEL the moment ops changes it.
+// Model names which Realtime model the client secret is minted for. The WebRTC SDP exchange
+// names it on its URL, so the browser must learn it here rather than hardcode it.
 func (c *Client) Model() string {
 	return c.gw.Model()
 }
 
-// CallsURL is where the browser POSTs its WebRTC SDP offer — at THIS gateway, never
-// at api.openai.com directly. The value MintClientSecret returns is not a raw OpenAI
-// ephemeral key: it is this gateway's own wrapped token (a real upstream key
-// encrypted inside it, alongside routing metadata), redeemable only at this
-// gateway's matching /realtime/calls, which decrypts it and forwards to OpenAI on
-// the caller's behalf. Sent to OpenAI directly, it looks like a malformed API key,
-// because it is not one.
+// CallsURL is where the browser POSTs its WebRTC SDP offer: this gateway, never
+// api.openai.com. The MintClientSecret value is the gateway's own wrapped token (an
+// encrypted upstream key plus routing metadata), redeemable only at its /realtime/calls.
 func (c *Client) CallsURL() string {
 	return c.gw.URL("/realtime/calls")
 }

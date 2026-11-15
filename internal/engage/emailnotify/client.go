@@ -25,11 +25,9 @@ var _ Sender = (*Client)(nil)
 // ErrNoWayOut reports a mail that can be turned off but carries no link to turn it
 // off with. It is refused rather than sent.
 //
-// This is the choke point the whole change hangs on. Every mail this product sends —
-// whether it renders through internal/application/mailtpl or builds its own HTML, as
-// internal/engage/mentorship does — passes through one Send, so a mail with no way
-// out cannot ship no matter which path built it. A guard over the shared template
-// would have missed the hand-built ones entirely while looking like coverage.
+// This is the choke point: every mail, whether rendered through
+// internal/application/mailtpl or hand-built (internal/engage/mentorship), passes
+// one Send, so a mail with no way out cannot ship from any path.
 var ErrNoWayOut = errors.New("emailnotify: a silenceable mail with no unsubscribe URL")
 
 // sesAPI is the slice of the SES v2 client the Client uses, so tests inject a fake
@@ -39,13 +37,8 @@ type sesAPI interface {
 	GetConfigurationSet(ctx context.Context, in *sesv2.GetConfigurationSetInput, optFns ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error)
 }
 
-// Message is one email. It replaced three near-identical send methods — plain,
-// with-reply-to, and with-attachments — which had between them started to enumerate
-// the combinations of their optional parts. A fourth for unsubscribe headers would
-// have been the point where that stopped being a smell and became a matrix.
-//
-// The six same-typed positional strings those methods took are also a signature in
-// which From and To can be swapped without the compiler noticing.
+// Message is one email. A struct rather than positional strings, in which From
+// and To could be swapped without the compiler noticing.
 type Message struct {
 	From    string
 	To      string
@@ -56,8 +49,7 @@ type Message struct {
 	Text             string
 
 	// Group classifies the mail and decides whether it needs a way out. It has no
-	// usable zero value on purpose: an unset Group is refused, so classifying is not
-	// something a new sender can forget to do.
+	// usable zero value on purpose: an unset Group is refused.
 	Group emailprefs.Group
 
 	// UnsubscribeURL is where this recipient turns this group off. Required when
@@ -65,22 +57,17 @@ type Message struct {
 	// password-reset mail is an offer we cannot honour.
 	UnsubscribeURL string
 
-	// ReplyTo routes replies somewhere other than the sending address. Empty sends
-	// no header at all, which is what an automated mail wants: replies to a digest
-	// belong nowhere. The founder sequence and campaigns set it, because they ask a
-	// question and the sending address is a no-reply feeding the mail parser — an
-	// actual reply landing there would be read by a robot looking for interview
-	// invitations.
+	// ReplyTo routes replies away from the sending address. Empty sends no header,
+	// which an automated mail wants. Mail that asks a question sets it: the sending
+	// address is a no-reply feeding the mail parser.
 	ReplyTo string
 
-	// Attachments switch SES from its simple path to a raw RFC 5322 message. Almost
-	// every mail is body-only; today only a mentorship calendar invitation is not.
+	// Attachments switch SES from its simple path to a raw RFC 5322 message.
 	Attachments []Attachment
 
-	// Campaign names the letter for engagement tracking. Empty, as on anything a person
-	// is waiting for, the mail goes out with no rewritten links. Set
-	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
-	// '_', '-' and '.'.
+	// Campaign names the letter for engagement tracking. Empty (anything a person is
+	// waiting for) goes out with no rewritten links. SES restricts tag values to
+	// ASCII letters, digits, '_', '-' and '.'.
 	Campaign string
 	// Variant is the side of a split test the letter belongs to. Empty outside one.
 	Variant string
@@ -95,9 +82,8 @@ func (m Message) validate() error {
 		return fmt.Errorf("emailnotify: %s mail to %s: %w", m.Group, m.To, ErrNoWayOut)
 	case !emailprefs.Silenceable(m.Group) && m.UnsubscribeURL != "":
 		return fmt.Errorf("emailnotify: %s mail to %s carries an unsubscribe URL it cannot honour", m.Group, m.To)
-	// The footer saying who wrote and why, with the way out, must reach the reader in
-	// both parts: SES Trust & Safety refused our appeal partly because the mail was hard
-	// to attribute, and a sender building its own body can drop it without noticing.
+	// The footer (who wrote and why, with the way out) must reach the reader in both
+	// parts; a sender building its own body could drop it unnoticed.
 	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.Text, emailprefs.TextFooter(m.UnsubscribeURL)):
 		return fmt.Errorf("emailnotify: %s mail to %s: text part lacks emailprefs.TextFooter: %w", m.Group, m.To, ErrNoWayOut)
 	case emailprefs.Silenceable(m.Group) && !strings.Contains(m.HTML, html.EscapeString(m.UnsubscribeURL)):
@@ -106,9 +92,8 @@ func (m Message) validate() error {
 	return nil
 }
 
-// withSenderName gives a bare From address the product's name, so no mail shows up in
-// a message list as just "notifications". A From that already names someone (the
-// founder sequence's "Ilya from freehire") is kept.
+// withSenderName gives a bare From address the product's name. A From that
+// already names someone is kept.
 func withSenderName(from string) string {
 	if a, err := mail.ParseAddress(from); err == nil && a.Name == "" {
 		return From(productName, from)
@@ -117,13 +102,9 @@ func withSenderName(from string) string {
 }
 
 // unsubscribeHeaders is the RFC 8058 pair, or nothing for mail that cannot be
-// silenced. Built here rather than by each sender so the format has one author: a
-// List-Unsubscribe that Gmail declines to parse fails silently, and it would fail
-// once per sender that spelled it itself.
-//
-// No `mailto:` alternative. It is optional, one-click is what Gmail and Yahoo
-// actually require of a bulk sender, and an advertised address that bounces is
-// worse than an absent one.
+// silenced. Built here so the format has one author. No `mailto:` alternative:
+// one-click is what Gmail and Yahoo require, and an advertised address that
+// bounces is worse than none.
 func (m Message) unsubscribeHeaders() []types.MessageHeader {
 	if m.UnsubscribeURL == "" {
 		return nil
@@ -134,8 +115,7 @@ func (m Message) unsubscribeHeaders() []types.MessageHeader {
 	}
 }
 
-// Client is the AWS SES v2 email transport. It is a thin adapter over SendEmail —
-// the render logic it serves lives in the callers and is covered by their tests.
+// Client is the AWS SES v2 email transport, a thin adapter over SendEmail.
 type Client struct {
 	ses sesAPI
 	// trackingSet is the SES configuration set that publishes engagement events. Empty
@@ -156,8 +136,8 @@ func (c *Client) WithEngagementTracking(configurationSet string) *Client {
 	return &out
 }
 
-// trackingCheckTimeout bounds CheckEngagementTracking: the workers calling it have no deadline
-// of their own, and a stalled check must not hold up everything else they deliver.
+// trackingCheckTimeout bounds CheckEngagementTracking, whose callers have no
+// deadline of their own.
 const trackingCheckTimeout = 10 * time.Second
 
 // CheckEngagementTracking reports whether SES will send through the configuration set. A send
@@ -180,18 +160,15 @@ func (c *Client) CheckEngagementTracking(ctx context.Context) error {
 	return nil
 }
 
-// NewClient builds a Client from AWS config resolved via the default chain
-// (SSO / IAM role / env). With SMTP_URL set it sends through that relay instead
-// and SES is never called — credentials never come from app config, matching the
-// apply service's inbound SES adapter.
+// NewClient builds a Client from AWS config resolved via the default chain. With
+// SMTP_URL set it sends through that relay and SES is never called.
 func NewClient(ctx context.Context, region string) (*Client, error) {
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("emailnotify: aws config: %w", err)
 	}
 	c := &Client{ses: sesv2.NewFromConfig(cfg)}
-	// Read here rather than threaded through config so every worker that builds a
-	// Client follows the switch without a change of its own.
+	// Read here so every worker that builds a Client follows the switch.
 	if raw := os.Getenv("SMTP_URL"); raw != "" {
 		if c.relay, err = parseSMTPURL(raw); err != nil {
 			return nil, err
@@ -237,9 +214,8 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	return nil
 }
 
-// input picks the SES shape. A message with attachments goes out as a raw RFC 5322
-// message we assemble ourselves; everything else uses the simple path, which SES
-// bills and validates differently.
+// input picks the SES shape: a message with attachments goes out as a raw
+// RFC 5322 message, everything else uses the simple path.
 func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	if len(m.Attachments) > 0 {
 		raw, err := buildRawMessage(m)
@@ -270,10 +246,10 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	return in, nil
 }
 
-// track tags every mail with its group, so a bounce or complaint the identity's default
-// configuration set reports says which kind of mail drew it. A campaign's mail is also
-// routed through the engagement set and tagged with the campaign, which is all the event
-// consumer (internal/engage/emailevents) learns about the letter.
+// track tags every mail with its group, so a bounce or complaint from the
+// identity's default configuration set says which kind of mail drew it. A
+// campaign's mail is also routed through the engagement set and tagged with the
+// campaign (all internal/engage/emailevents learns about the letter).
 func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
 	in.EmailTags = []types.MessageTag{{Name: aws.String("group"), Value: aws.String(string(m.Group))}}
 	if c.trackingSet == "" || m.Campaign == "" {

@@ -51,6 +51,7 @@ type contractHandlers struct {
 	*companyRelationHandlers
 	*reportHandlers
 	*answerBankHandlers
+	*changeWebhookHandlers
 	*userModerationHandlers
 	*companyProcessReportHandlers
 	*contributionHandlers

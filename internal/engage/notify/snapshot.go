@@ -8,9 +8,8 @@ import (
 // SnapshotJob is one entry of user_notifications.jobs: the {title, company, slug}
 // shape migration 0091 defined and /my/notifications/[id]/jobs renders.
 //
-// It lives here, in the package that already owns the channel vocabulary, because
-// all three notification engines write that column and ONE page reads it. Three
-// private copies of the shape would each be right until one of them changed.
+// It lives here because all three notification engines write that column and one
+// page reads it.
 type SnapshotJob struct {
 	Title   string `json:"title"`
 	Company string `json:"company"`
@@ -18,8 +17,8 @@ type SnapshotJob struct {
 }
 
 // JobsSnapshot marshals the job list a multi-job notification records for its own
-// page. It applies no bound: the caller's batch is capped before it is ever sent,
-// so what was delivered and what the record holds cannot disagree.
+// page. It applies no bound: the caller's batch is capped before it is sent, so the
+// delivery and the record cannot disagree.
 func JobsSnapshot(jobs []SnapshotJob) json.RawMessage {
 	raw, err := json.Marshal(jobs)
 	if err != nil {

@@ -8,16 +8,13 @@ import (
 )
 
 // nextHints are the follow-up sentences a search_jobs and a get_job result carry in their
-// `next` field. Agents pick tools from the person's request and follow hints in results, so
-// this is where a person who only searches hears that freehire does more.
+// `next` field, where a person who only searches learns freehire does more.
 //
-// One short sentence each, and the same text for every call of a session: the result is
-// replayed into the model's context every turn, so it is stated once per response, never
-// per job, and never grows with the result.
+// One short sentence each, stated once per response (never per job): the result is replayed
+// into the model's context every turn.
 type nextHints struct{ search, job string }
 
-// signedInNext names only the follow-ups among the tools this session is actually served:
-// an API key has no auto-apply, so its hint does not offer it.
+// signedInNext names only follow-ups for tools this session is served (an API key has no auto-apply).
 func signedInNext(tools []assistant.Tool) nextHints {
 	served := func(name string) bool {
 		return slices.ContainsFunc(tools, func(t assistant.Tool) bool { return t.Name == name })

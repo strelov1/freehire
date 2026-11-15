@@ -21,10 +21,9 @@ const (
 	// minMatchScanBatch is how many postings one index read takes. A posting is a heavy
 	// document (a description preview), so a read is kept small enough to answer quickly.
 	minMatchScanBatch = 250
-	// minMatchScanDepth bounds how far into the ranking one request reads. It is a
-	// conservative default, not a measurement: how deep a typical threshold must go on
-	// production data is still to be measured. It stays well inside maxPageWindow, the
-	// deepest offset the index is asked for.
+	// minMatchScanDepth bounds how far into the ranking one request reads. A fixed default,
+	// not tuned to real thresholds; it stays well inside maxPageWindow, the deepest offset the
+	// index is asked for.
 	minMatchScanDepth = 2000
 )
 
@@ -37,9 +36,8 @@ type skillMatchFilter struct {
 
 // skillMatchFilterFor honours the param for a signed-in caller with recognised skills
 // under sort=match only. Everything else falls back to the unfiltered search and says so
-// rather than refusing a shared link: under another ordering the matching postings are
-// scattered through the catalogue and the read could not stop early, so the browser keeps
-// trimming the page it holds there.
+// rather than refusing a shared link: under another ordering the matches are scattered
+// through the catalogue and the read could not stop early.
 func (h *searchHandlers) skillMatchFilterFor(ctx context.Context, userID int64, vals url.Values) (*skillMatchFilter, bool) {
 	if !vals.Has(minSkillMatchParam) {
 		return nil, false

@@ -7,16 +7,13 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// SwipeDeck returns a batch of open jobs for the swipe triage deck. It runs the
-// same Meilisearch query as SearchJobs (same facets, free-text q, and sort) so
-// the deck's ranking matches the list, then excludes the caller's already-judged
-// jobs (saved or dismissed) via a server-built `id NOT IN [...]` filter. It is
-// authenticated (both swipe actions are per-user); the response is the standard
-// list envelope of job views, batched via limit/offset for prefetch.
+// SwipeDeck returns a batch of open jobs for the swipe triage deck. It runs the same
+// Meilisearch query as SearchJobs so the ranking matches the list, then excludes the caller's
+// already-judged (saved or dismissed) jobs via an `id NOT IN [...]` filter. Authenticated;
+// batched via limit/offset.
 //
-// It reads the full search vocabulary, so it reports the same way /jobs/search does:
-// buildSearchFilter drops a param no filter reads, and a deck silently widened to the
-// whole catalogue looks exactly like a deck that was narrowed and found a lot.
+// It reports ignored params like /jobs/search: a deck silently widened to the whole
+// catalogue looks like a deck that was narrowed and found a lot.
 func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	if h.search == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -39,9 +36,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
 		Filter: withExcludedIDs(buildSearchFilter(queryValues(c)), excluded),
-		// false: the deck sends no match vector. It is an obvious candidate for the
-		// match sort — it is already authenticated — but ordering the deck is its own
-		// product decision, so it keeps attribute sorting until that is made.
+		// false: the deck sends no match vector and keeps attribute sorting (match-sorting it is a product decision).
 		Sort:   searchSortValues(queryValues(c), false),
 		Limit:  limit,
 		Offset: offset,
@@ -57,10 +52,9 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(queryValues(c), searchParams), ignoredJobValues(queryValues(c)))
 }
 
-// withExcludedIDs adds an `id NOT IN [...]` group to the facet filter so the
-// search skips the caller's already-seen jobs (the swipe deck, and /jobs/search's
-// hide_seen). base is buildSearchFilter's result — either a [][]string of facet
-// groups or nil. An empty exclusion set leaves the filter untouched.
+// withExcludedIDs adds an `id NOT IN [...]` group to the facet filter so the search skips
+// already-seen jobs (the swipe deck, and /jobs/search's hide_seen). base is
+// buildSearchFilter's result, [][]string or nil. An empty set leaves the filter untouched.
 func withExcludedIDs(base any, excluded []int64) any {
 	return withFilterGroup(base, search.NotIn("id", excluded))
 }

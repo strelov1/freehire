@@ -8,8 +8,7 @@ import "strings"
 const privacyConsentKey = "privacy_consent"
 
 // privacyConsentIDs are the platform ids that name the consent field outright. Workable's
-// labelless `gdpr` boolean was on 23,835 captured forms on 2026-10-25, required on every one,
-// and carries no label for privacyTerms to read.
+// `gdpr` boolean is required and carries no label for privacyTerms to read.
 var privacyConsentIDs = map[string]bool{"gdpr": true}
 
 // privacyTerms name an employer's privacy / personal-data terms, in the languages the
@@ -30,11 +29,10 @@ var privacyTerms = []string{
 }
 
 // notPrivacyConsentTerms are what a privacy-worded field is ABOUT when it is not the
-// condition of applying. Each is measured on the captured forms of 2026-10-25, where they
-// share the page — and often the label — with the real consent:
+// condition of applying. They share the page, and often the label, with the real consent:
 //   - keeping the candidate's data for, or contacting them about, FUTURE openings (Lever's
-//     "Yes, <company> can contact me about future job opportunities ... Privacy policy",
-//     on ~10k forms) — a talent pool the candidate joins only by choice;
+//     "Yes, <company> can contact me about future job opportunities ... Privacy policy"), a
+//     talent pool the candidate joins only by choice;
 //   - SMS, text and marketing messages, which cite the privacy policy they are sent under;
 //   - a background or criminal-record check, which cites the screening company's own
 //     privacy address;

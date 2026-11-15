@@ -122,11 +122,8 @@ func (h *cvHandlers) DraftCVCoverLetter(ctx context.Context, params apigen.Draft
 		case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 			return nil, fiber.NewError(fiber.StatusConflict, letterFailureMessage(err))
 		case err != nil:
-			// Handed to the shared mapper rather than flattened here. It already knows the
-			// states this path meets — fitanalysis.ErrNoAnalysis is a 409 saying "run the fit
-			// analysis first", and errors.go says outright that the status is decided there
-			// rather than at each call site. Flattening every failure into 502 turned that
-			// answer into a Bad Gateway on production, on the majority of vacancies.
+			// Handed to the shared mapper, which already knows the states this path meets
+			// (fitanalysis.ErrNoAnalysis is a 409 "run the fit analysis first"); flattening to 502 would hide them.
 			return nil, err
 		default:
 			// The LLM is unconfigured. Nothing was spent and nothing was written.

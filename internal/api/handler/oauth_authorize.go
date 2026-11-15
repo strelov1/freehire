@@ -17,9 +17,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// authorizationCodeTTL is how long a code is redeemable before the token
-// exchange must have happened. Ten minutes matches the window other OAuth
-// servers use for a human-paced consent click, not a machine-paced retry.
+// authorizationCodeTTL is how long a code is redeemable; ten minutes fits a human-paced
+// consent click.
 const authorizationCodeTTL = 10 * time.Minute
 
 // authorizeParams is the subset of RFC 6749/PKCE query params this server reads.
@@ -50,10 +49,8 @@ func parseAuthorizeParams(responseType, clientID, redirectURI, state, challenge,
 	return authorizeParams{ClientID: clientID, RedirectURI: redirectURI, State: state, CodeChallenge: challenge, CodeChallengeMethod: method}, nil
 }
 
-// resolveAuthorizeClient looks up the named client and checks redirect_uri
-// against its registered list — the one pair of checks both the GET consent
-// screen and the POST decision must make before trusting anything else in the
-// request, so neither duplicates it.
+// resolveAuthorizeClient looks up the client and checks redirect_uri against its
+// registered list, the checks both the GET consent screen and the POST decision make first.
 func (h *authHandlers) resolveAuthorizeClient(ctx context.Context, params authorizeParams) (db.OauthClient, error) {
 	client, err := h.queries.GetOAuthClient(ctx, params.ClientID)
 	if err != nil {
@@ -81,11 +78,9 @@ func redirectToClient(c *fiber.Ctx, redirectURI string, vals url.Values) error {
 	return c.Redirect(loc.String(), fiber.StatusFound)
 }
 
-// resolveAuthorizeResource validates the optional RFC 8707 `resource` once the
-// client and redirect_uri are trusted. An unknown resource is answered the way
-// RFC 6749 4.1.2.1 says an authorize error is, by redirecting invalid_target to
-// the client — which is why this runs after resolveAuthorizeClient: before it,
-// the redirect_uri is not safe to send anything to.
+// resolveAuthorizeResource validates the optional RFC 8707 `resource`. An unknown one
+// redirects invalid_target to the client (RFC 6749 4.1.2.1), so it runs after
+// resolveAuthorizeClient: before that the redirect_uri is untrusted.
 func (h *authHandlers) resolveAuthorizeResource(c *fiber.Ctx, params *authorizeParams, values [][]byte) (done bool, err error) {
 	resource, err := oauth2server.CanonicalResource(h.frontendOrigin, bytesToStrings(values))
 	if err != nil {
@@ -100,10 +95,9 @@ func (h *authHandlers) resolveAuthorizeResource(c *fiber.Ctx, params *authorizeP
 }
 
 // isURLEncodedForm reports whether the body is application/x-www-form-urlencoded.
-// The OAuth endpoints read `resource` from the urlencoded args, but every other
-// field through FormValue, which also accepts multipart: a multipart body would
-// therefore bind nothing and still succeed. RFC 6749 4.1.3 requires urlencoded
-// at /token, and the consent form posts it, so anything else is refused.
+// `resource` is read from urlencoded args but other fields via FormValue, which also accepts
+// multipart, so a multipart body would bind nothing yet succeed. RFC 6749 4.1.3 requires
+// urlencoded at /token.
 func isURLEncodedForm(c *fiber.Ctx) bool {
 	mediaType, _, _ := strings.Cut(c.Get(fiber.HeaderContentType), ";")
 	return strings.EqualFold(strings.TrimSpace(mediaType), fiber.MIMEApplicationForm)
@@ -154,17 +148,12 @@ func (h *authHandlers) OAuthAuthorize(c *fiber.Ctx) error {
 	return c.SendString(page)
 }
 
-// OAuthAuthorizeSubmit acts on the consent decision. On approval it mints a
-// single-use authorization code and 302s it back to the client's redirect_uri in
-// the query string (not a fragment — a native app's loopback listener reads a
-// 302's query, it cannot run JavaScript against a fragment). Mounted on
-// optionalCookie, not RequireAuth — same reasoning as ExtensionConnectSubmit:
-// a session can lapse between the consent screen and this decision, and a bare
-// 401 there would render into the client's browser instead of restarting the
-// sign-in round trip. requireUserID below does the real gating: no session
-// means no approval, same as RequireAuth would enforce, just with a redirect
-// instead of a 401. A leaked API key still cannot approve a grant — a key
-// alone never satisfies requireUserID's cookie check.
+// OAuthAuthorizeSubmit acts on the consent decision. On approval it mints a single-use code
+// and 302s it to the client's redirect_uri in the query string (a native loopback listener
+// cannot read a fragment). Mounted on optionalCookie, not RequireAuth, like
+// ExtensionConnectSubmit: a session can lapse after the consent screen, and a bare 401
+// would render in the client's browser. requireUserID does the gating (cookie only, so a
+// leaked API key cannot approve).
 func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if !isURLEncodedForm(c) {
 		return fiber.NewError(fiber.StatusBadRequest, "the consent decision must be application/x-www-form-urlencoded")
@@ -192,13 +181,10 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Redirect(h.oauthSignInURL(params), fiber.StatusFound)
 	}
-	// Bind the code to the generation the approving SESSION carries — the tv
-	// claim the auth middleware already validated against the account on the way
-	// in — never a fresh read of users.token_version. A revocation that lands
-	// between that validation and this insert leaves the code bound to the dead
-	// generation, so it dies with the sessions that bump revokes instead of
-	// capturing the new one. Read via SessionVersion rather than re-parsing:
-	// Parse is what issued the id this handler acts on, and the two must agree.
+	// Bind the code to the generation the approving SESSION carries (the tv claim the
+	// middleware validated), never a fresh read of users.token_version: a revocation between
+	// validation and insert then kills the code with the old sessions. Read via SessionVersion,
+	// since Parse issued the id this handler acts on.
 	version, err := auth.SessionVersion(c)
 	if err != nil {
 		return fmt.Errorf("read session generation for user %d: %w", userID, err)
@@ -251,11 +237,9 @@ func (h *authHandlers) oauthSignInURL(params authorizeParams) string {
 	return strings.TrimSuffix(h.frontendOrigin, "/") + "/signin?" + q.Encode()
 }
 
-// redirectDestination names, for a person, where approving sends the code. It is
-// the one thing on the consent screen a registrant cannot choose freely —
-// client_name is any string, so a client calling itself "Claude" is stopped only
-// by the screen also saying "attacker.example.com". The URI was validated at
-// registration and matched at authorize, so it parses.
+// redirectDestination names, for a person, where approving sends the code. client_name is
+// any string, so a client calling itself "Claude" is stopped only by the screen also
+// showing the host. The URI was validated at registration, so it parses.
 func redirectDestination(redirectURI string) string {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
@@ -299,9 +283,8 @@ func oauthConsentPage(clientName, email, origin string, params authorizeParams) 
 	})
 }
 
-// resourceURI turns the bound resource PATH back into the absolute URI authorize accepts. The
-// sign-in detour and the consent form both send it back to authorize; a bare path there was
-// refused as invalid_target, failing every connector sign-in.
+// resourceURI turns the bound resource PATH back into the absolute URI authorize accepts;
+// a bare path was refused as invalid_target.
 func resourceURI(origin, path string) string {
 	return strings.TrimSuffix(origin, "/") + path
 }

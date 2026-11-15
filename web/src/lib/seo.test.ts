@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  articleJsonLd,
   collectionHeading,
   collectionPageJsonLd,
   companyListItems,
@@ -16,6 +15,7 @@ import {
   metaDescription,
   organizationJsonLd,
 } from './seo';
+import { articleJsonLd } from './seoAppJsonLd';
 import { companyLogoUrl } from './logo';
 import type { PostMeta } from './blog';
 import type { Company, Job, JobCard } from './types';

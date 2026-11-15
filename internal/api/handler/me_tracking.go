@@ -15,19 +15,16 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// ListTrackedJobs returns the authenticated user's job interactions joined with the
-// jobs, most recently touched first, narrowed by ?filter=all|viewed|saved|applied|board
-// (default all; viewed is the view-only subset — neither saved nor applied;
-// board is the Kanban view — jobs with saved_at, applied_at, or stage set).
-// meta carries total/limit/offset for the active filter plus the per-filter
-// counts for the tab badges — which is also why this writes its own envelope
-// instead of the shared list envelope. Closed jobs stay listed: a user's history must not
-// shrink when a posting closes.
+// ListTrackedJobs returns the caller's job interactions joined with the jobs, most recently
+// touched first, narrowed by ?filter=all|viewed|saved|applied|board (default all; viewed is
+// neither saved nor applied; board is jobs with saved_at, applied_at, or stage set). meta
+// carries total/limit/offset for the filter plus per-filter counts for the tab badges, so it
+// writes its own envelope. Closed jobs stay listed: history must not shrink when a posting
+// closes.
 //
-// ?compact=1 is the Kanban board's read: each card carries its identity and tag row
-// only (no blurb, skills or collections) and no ghost signal, since the board draws
-// none of them. That drops the ghost pass's three queries and its Meilisearch round
-// trip, and on a 500-card board ~40% of the bytes.
+// ?compact=1 is the Kanban board's read: identity and tag row only (no blurb, skills,
+// collections or ghost signal), which skips the ghost pass's queries and Meilisearch round
+// trip.
 func (h *trackingHandlers) ListTrackedJobs(ctx context.Context, params apigen.ListTrackedJobsParams) (*apigen.TrackedJobPage, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -43,18 +40,16 @@ func (h *trackingHandlers) ListTrackedJobs(ctx context.Context, params apigen.Li
 	if err != nil {
 		return nil, trackingError(err)
 	}
-	// The ghost signal is set on each card in place, so it is attached before the cards are
-	// written out.
+	// The ghost signal is set on each card in place, so attach it before writing the cards.
 	if detail == jobtracking.CardFull {
 		h.attachGhostToTrackedCards(ctx, listing.Items)
 	}
 
-	// One clock for the whole page: silence is derived against now(), and two rows
-	// read a moment apart must not disagree about what "now" was.
+	// One clock for the whole page: silence is derived against now(), and rows must agree on it.
 	now := time.Now()
 	items := make([]apigen.TrackedJob, 0, len(listing.Items))
 	for _, it := range listing.Items {
-		// The card travels as the jobview wire shape, exactly as it marshals.
+		// The card travels as the jobview wire shape.
 		job, err := json.Marshal(it.Job)
 		if err != nil {
 			return nil, err
@@ -108,16 +103,12 @@ func (h *trackingHandlers) ListTrackedJobs(ctx context.Context, params apigen.Li
 }
 
 // attachGhostToTrackedCards attaches each tracked job's ghost signal to its already-built
-// card, mutating tracked[i].Job in place — the same *jobview.Card pointer ListTrackedJobs
-// already copied into its own myJobResponse items, so no second pass over items is needed.
+// card, mutating tracked[i].Job in place (the same *jobview.Card pointer already copied into
+// myJobResponse items). Best-effort like ghostEvidenceFor/attachGhost: a lookup failure
+// leaves the signal off rather than failing the read.
 //
-// Best-effort throughout, the same discipline ghostEvidenceFor/attachGhost already
-// establish for the other two listings: a lookup failure leaves every affected card's
-// ghost signal off rather than failing the whole tracking read.
-//
-// The reality class comes from Meilisearch, never recomputed from a job's description —
-// this listing's own query deliberately never reads one (TestMeasureBoardLoad), and
-// jobview.ClassifyReality needs it. See openspec/changes/tracker-ghost-badge.
+// The reality class comes from Meilisearch, never recomputed from a description: this
+// listing's query deliberately never reads one (TestMeasureBoardLoad).
 func (h *trackingHandlers) attachGhostToTrackedCards(ctx context.Context, tracked []jobtracking.TrackedJob) {
 	if h.search == nil || h.queries == nil {
 		return
@@ -143,9 +134,8 @@ func (h *trackingHandlers) attachGhostToTrackedCards(ctx context.Context, tracke
 	}
 	evidence := ghostEvidenceFor(ctx, h.queries, ids)
 
-	// A Search failure degrades to an empty reality map rather than returning early: the
-	// ghost signal may still fire off ATS-absence or outcome evidence alone, and losing
-	// those too over one degraded input would throw away more than the failure itself did.
+	// A Search failure degrades to an empty reality map rather than returning early: the ghost
+	// signal may still fire from ATS-absence or outcome evidence alone.
 	reality := make(map[int64]string, len(ids))
 	if res, err := h.search.Search(ctx, search.SearchParams{Filter: search.In("id", ids), Limit: len(ids)}); err != nil {
 		logGhostLookup(ctx, "tracker reality class", len(ids), err)
@@ -174,11 +164,9 @@ func (h *trackingHandlers) attachGhostToTrackedCards(ctx context.Context, tracke
 	}
 }
 
-// TrackingPipeline returns the authenticated caller's application-pipeline snapshot:
-// the total application count and the count at each stage of the vocabulary, aggregated
-// server-side over all of the caller's applications. The SPA Pipeline tab groups those
-// stages with the generated STAGE_GROUPS to draw the Sankey, and derives the
-// interview/offer rate cards from the same counts.
+// TrackingPipeline returns the caller's application-pipeline snapshot: the total count and
+// the count at each stage, aggregated server-side. The SPA groups the stages with the
+// generated STAGE_GROUPS to draw the Sankey and derives the rate cards.
 func (h *trackingHandlers) TrackingPipeline(ctx context.Context) (*apigen.TrackingPipelineOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -200,12 +188,10 @@ func (h *trackingHandlers) TrackingPipeline(ctx context.Context) (*apigen.Tracki
 	return &apigen.TrackingPipelineOK{Data: out}, nil
 }
 
-// ListViewedSlugs returns the set of public job slugs the authenticated caller
-// has interacted with (every user_jobs row counts as viewed). The SPA reads this
-// to dim already-seen cards in the browse list and search results without
-// authenticating the public job-read path — viewed state is cross-referenced
-// client-side, never joined into ListJobs/SearchJobs. The response is a flat
-// {"data": [slug, ...]} list scoped to the caller.
+// ListViewedSlugs returns the public job slugs the caller has interacted with (every
+// user_jobs row counts as viewed). The SPA dims already-seen cards with it; viewed state is
+// cross-referenced client-side, never joined into the public ListJobs/SearchJobs. Response:
+// {"data": [slug, ...]}.
 func (h *trackingHandlers) ListViewedSlugs(ctx context.Context) (*apigen.ListViewedSlugsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -220,12 +206,8 @@ func (h *trackingHandlers) ListViewedSlugs(ctx context.Context) (*apigen.ListVie
 	return &apigen.ListViewedSlugsOK{Data: slugs}, nil
 }
 
-// ListSavedSlugs returns the set of public job slugs the authenticated caller has
-// saved (bookmarked). The SPA reads this to render the save toggle as filled on
-// already-saved cards in the browse list and search results without
-// authenticating the public job-read path — saved state is cross-referenced
-// client-side, never joined into ListJobs/SearchJobs. The response is a flat
-// {"data": [slug, ...]} list scoped to the caller.
+// ListSavedSlugs returns the public job slugs the caller has saved (bookmarked), cross-
+// referenced client-side like ListViewedSlugs. Response: {"data": [slug, ...]}.
 func (h *trackingHandlers) ListSavedSlugs(ctx context.Context) (*apigen.ListSavedSlugsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -240,11 +222,8 @@ func (h *trackingHandlers) ListSavedSlugs(ctx context.Context) (*apigen.ListSave
 	return &apigen.ListSavedSlugsOK{Data: slugs}, nil
 }
 
-// ListDismissedSlugs returns the set of public job slugs the authenticated caller
-// has hidden (dismissed). The SPA reads this to exclude hidden jobs from the
-// browse feed client-side, mirroring ListSavedSlugs — dismissed state is
-// cross-referenced client-side, never joined into ListJobs/SearchJobs. The
-// response is a flat {"data": [slug, ...]} list scoped to the caller.
+// ListDismissedSlugs returns the public job slugs the caller has hidden (dismissed), so the
+// SPA can exclude them from the browse feed, mirroring ListSavedSlugs.
 func (h *trackingHandlers) ListDismissedSlugs(ctx context.Context) (*apigen.ListDismissedSlugsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -259,11 +238,9 @@ func (h *trackingHandlers) ListDismissedSlugs(ctx context.Context) (*apigen.List
 	return &apigen.ListDismissedSlugsOK{Data: slugs}, nil
 }
 
-// ListAppliedCompanySlugs returns the company slugs of the employers the authenticated
-// caller has applied to. The SPA reads this once to mark "you already applied to this
-// company" on catalogue cards and the job page, cross-referencing each posting's
-// company_slug client-side — the public job reads stay unauthenticated and cacheable,
-// the same arrangement as the viewed and saved sets. Response: {"data": ["acme", ...]}.
+// ListAppliedCompanySlugs returns the company slugs of the employers the caller has applied
+// to, cross-referenced client-side so public job reads stay unauthenticated and cacheable.
+// Response: {"data": ["acme", ...]}.
 func (h *trackingHandlers) ListAppliedCompanySlugs(ctx context.Context) (*apigen.ListAppliedCompanySlugsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

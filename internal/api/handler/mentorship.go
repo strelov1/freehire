@@ -19,9 +19,8 @@ import (
 // slots, the seeker's bookings, the mentor's own cabinet, and the moderation queue.
 type mentorshipHandlers struct {
 	mentorship *mentorship.Service
-	// photos is nil-safe (headshot.Store.Enabled() reports false on a nil receiver), so
-	// an unconfigured object store degrades GetMentorPhoto to "not found" rather than a
-	// server error.
+	// photos is nil-safe (headshot.Store.Enabled() is false on a nil receiver), so an
+	// unconfigured object store makes GetMentorPhoto "not found", not a server error.
 	photos *headshot.Store
 }
 
@@ -69,26 +68,21 @@ func (h *mentorshipHandlers) registerPublic(api fiber.Router, mw middleware, con
 }
 
 // toMentorResponse renders a profile for the PUBLIC. The meeting link is deliberately
-// absent: it is a live room, and publishing it lets anybody who reads the directory walk
-// into somebody else's session. A booked seeker gets it on their booking.
-//
-// user_id is not in it: it is ownership, internal, and nothing public needs it. Name is
-// what makes this a person rather than a role — a directory of headlines is the anonymous
-// referral pool with extra steps.
+// absent: it is a live room, and publishing it lets anyone walk into someone else's session.
+// A booked seeker gets it on their booking. user_id is internal and omitted; Name stays, so
+// the directory lists people rather than headlines.
 func toMentorResponse(p mentorship.Profile) apigen.MentorshipMentor {
 	return apigen.MentorshipMentor{
 		Slug: p.Slug, Name: p.DisplayName,
 		CompanySlug: p.CompanySlug, CompanyName: p.CompanyName,
 		Headline: p.Headline, Bio: p.Bio, Topics: p.Topics, Languages: p.Languages,
 		Timezone: p.Timezone,
-		// What a seeker is booking, so it belongs on the card as well as the profile: an
-		// hour and twenty minutes are different offers.
+		// What a seeker is booking belongs on the card too: an hour and 20 minutes differ.
 		SessionMinutes: int64(p.Session.Duration / time.Minute),
 		RatingCount:    p.RatingCount, RatingAvg: p.RatingAvg,
-		// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
-		// publicly (see GetMentorPhoto). Present in every view: the directory card needs it
-		// to decide whether to render an avatar at all. Seniority is the platform's own
-		// closed vocabulary (vocab.SeniorityValues), absent when the mentor left it unset.
+		// ShowPhoto is the mentor's own opt-in to serve their stored CV headshot publicly (see
+		// GetMentorPhoto); the card needs it to decide whether to render an avatar. Seniority
+		// is the platform's closed vocabulary (vocab.SeniorityValues), absent when unset.
 		ShowPhoto: p.ShowPhoto, Seniority: optString(p.Seniority),
 	}
 }
@@ -104,9 +98,8 @@ func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipOwnMentor {
 		RatingCount: m.RatingCount, RatingAvg: m.RatingAvg, ShowPhoto: m.ShowPhoto, Seniority: m.Seniority,
 		Status: m.Status, Paused: m.Paused, CreatedAt: m.CreatedAt,
 		MeetingURL: optString(p.MeetingURL),
-		// The parameters the cabinet edits, for the OWNER alone. Read back so a mentor
-		// correcting one field re-submits what they actually chose rather than this
-		// endpoint's defaults. A zero buffer is a real setting, so these are always sent.
+		// The parameters the cabinet edits, for the OWNER alone, read back so a correction
+		// re-submits what the mentor chose. A zero buffer is real, so these are always sent.
 		BufferBeforeMinutes: int64(p.Session.BufferBefore / time.Minute),
 		BufferAfterMinutes:  int64(p.Session.BufferAfter / time.Minute),
 		NoticeMinutes:       int64(p.Session.MinimumNotice / time.Minute),
@@ -114,16 +107,9 @@ func toOwnMentorResponse(p mentorship.Profile) apigen.MentorshipOwnMentor {
 	}
 }
 
-// toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner
-// sees except the meeting link.
-//
-// The link is a live room, and deciding whether somebody may mentor does not require the
-// address of the room they meet in. A moderator is trusted, which is exactly why this is
-// worth being deliberate about: the reason they hold no link is that they have no use for
-// one, not that they are suspected of anything.
-//
-// created_at is when the profile was submitted — moderator and owner views only. A
-// visitor deciding whether to book has no use for it.
+// toModeratorMentorResponse is the profile as a MODERATOR sees it: everything the owner sees
+// except the meeting link, which approving a mentor does not require. created_at (when the
+// profile was submitted) appears only in the moderator and owner views.
 func toModeratorMentorResponse(p mentorship.Profile) apigen.MentorshipModeratedMentor {
 	m := toMentorResponse(p)
 	return apigen.MentorshipModeratedMentor{
@@ -160,10 +146,9 @@ func (h *mentorshipHandlers) ListMentors(ctx context.Context, params apigen.List
 		out = append(out, toMentorResponse(p))
 	}
 
-	// The dropped-filter rule: an endpoint whose answer WIDENS when it does not understand
-	// a parameter says which ones it did not read. Refusing them instead would break a
-	// shared link carrying a retired facet; staying silent is what let a mistyped filter
-	// pass for a search.
+	// The dropped-filter rule: an endpoint whose answer WIDENS on a parameter it does not
+	// understand names it. Refusing would break shared links carrying a retired facet;
+	// silence let a mistyped filter pass for a search.
 	return &apigen.MentorshipDirectoryPage{
 		Data: out,
 		Meta: apigen.MentorshipDirectoryMeta{Count: int64(len(out)), IgnoredParams: unknownMentorParams(query)},
@@ -180,10 +165,9 @@ func lenientInt32(raw string) int32 {
 	return int32(n)
 }
 
-// knownMentorParams is the directory's whole vocabulary. A filter added to
-// DirectoryFilter and forgotten here is reported as ignored while in fact being applied,
-// which is the confusing direction; one removed there and left here is applied silently,
-// which is the dangerous one. They change together.
+// knownMentorParams is the directory's whole vocabulary. A filter added to DirectoryFilter
+// and forgotten here is reported as ignored while applied; one removed there and left here
+// is applied silently (the dangerous one). Change them together.
 var knownMentorParams = map[string]bool{
 	"company": true, "topic": true, "language": true, "limit": true,
 	"seniority": true, "q": true, "no_reviews": true,
@@ -199,8 +183,8 @@ func unknownMentorParams(query map[string][]string) []string {
 	return out
 }
 
-// GetMentor serves one public profile. An unpublished one answers 404 — the service reads
-// through a query whose predicate makes it absent rather than filtered.
+// GetMentor serves one public profile. An unpublished one is 404: the service reads through
+// a query whose predicate makes it absent.
 func (h *mentorshipHandlers) GetMentor(ctx context.Context, params apigen.GetMentorParams) (*apigen.GetMentorOK, error) {
 	profile, err := h.mentorship.PublicProfile(ctx, params.Slug)
 	if err != nil {
@@ -209,18 +193,14 @@ func (h *mentorshipHandlers) GetMentor(ctx context.Context, params apigen.GetMen
 	return &apigen.GetMentorOK{Data: toMentorResponse(profile)}, nil
 }
 
-// errMentorPhotoNotFound is what every reason a mentor's public photo may not be served
-// collapses to: not opted in, no stored headshot, or storage unconfigured. They are
-// deliberately indistinguishable from outside — a response that told them apart would
-// leak whether an opted-out mentor has a CV photo at all, the narrower version of the
-// privacy concern the opt-in itself exists to address.
+// errMentorPhotoNotFound is what every reason a public photo may not be served collapses to
+// (not opted in, no stored headshot, storage unconfigured), so the response cannot leak
+// whether an opted-out mentor has a CV photo.
 var errMentorPhotoNotFound = errors.New("mentor photo not available")
 
-// mentorPhoto resolves an already-public mentor's photo bytes, given their opt-in and
-// the account's stored headshot. It does not itself resolve the profile or check
-// publication status — GetMentorPhoto reuses PublicProfile for that, the same
-// resolution and predicate GetMentor uses, so the two routes cannot drift on what
-// "publicly readable" means.
+// mentorPhoto resolves an already-public mentor's photo bytes from their opt-in and the
+// account's stored headshot. It does not check publication: GetMentorPhoto reuses
+// PublicProfile for that, the same predicate as GetMentor.
 func mentorPhoto(ctx context.Context, profile mentorship.Profile, photos *headshot.Store) ([]byte, error) {
 	if !profile.ShowPhoto {
 		return nil, errMentorPhotoNotFound
@@ -247,12 +227,9 @@ func (h *mentorshipHandlers) GetMentorPhoto(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
-// GetPendingMentorPhoto lets a moderator preview a still-pending mentor's opted-in
-// photo — the same bytes GetMentorPhoto would serve once approved, but resolved by the
-// row id a moderator already reads off the queue rather than by slug, and unconditional
-// on status: ProfileForModeration carries no publication predicate, because the
-// mw.moderator gate in front of this route is the access control, not a second copy of
-// the public one.
+// GetPendingMentorPhoto lets a moderator preview a pending mentor's opted-in photo, resolved
+// by the row id off the queue and unconditional on status: ProfileForModeration has no
+// publication predicate because the mw.moderator gate is the access control.
 func (h *mentorshipHandlers) GetPendingMentorPhoto(c *fiber.Ctx) error {
 	id, err := c.ParamsInt("id")
 	if err != nil {
@@ -270,12 +247,9 @@ func (h *mentorshipHandlers) GetPendingMentorPhoto(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
-// slotResponse is one offerable hour.
-//
-// It carries the absolute instant AND the local wall clock AND the UTC offset. All three,
-// deliberately: the instant is what gets booked, the wall clock is what a person reads,
-// and the offset is the only thing that distinguishes the two slots that share a label on
-// the autumn daylight-saving transition — see the mentor-availability spec.
+// slotResponse is one offerable hour: the absolute instant (what gets booked), the local
+// wall clock (what a person reads) and the UTC offset, which alone tells apart the two slots
+// sharing a label on the autumn daylight-saving transition.
 type slotResponse struct {
 	StartsAt   time.Time `json:"starts_at"`
 	EndsAt     time.Time `json:"ends_at"`
@@ -291,8 +265,8 @@ func (h *mentorshipHandlers) GetMentorSlots(ctx context.Context, params apigen.G
 		return nil, err
 	}
 
-	// Through the cache: this is the one public endpoint here that computes per request,
-	// and it faces a crawler-heavy host.
+	// Through the cache: the one public endpoint here that computes per request, on a
+	// crawler-heavy host.
 	result, err := h.mentorship.CachedMentorSlots(ctx, params.Slug, from, to, params.Timezone.Value)
 	if err != nil {
 		return nil, mentorshipError(err)
@@ -305,9 +279,8 @@ func (h *mentorshipHandlers) GetMentorSlots(ctx context.Context, params apigen.G
 		})
 	}
 
-	// The zone is echoed because it may NOT be the one that was asked for: an
-	// unrecognised name falls back to UTC, and a client that does not know which zone it
-	// was answered in cannot tell a correct time from a wrong one.
+	// The zone is echoed because it may differ from the one asked for (an unrecognised name
+	// falls back to UTC), and the client could not otherwise tell a wrong time from a right one.
 	return &apigen.MentorshipSlotsPage{
 		Data: out,
 		Meta: apigen.MentorshipTimezoneMeta{Timezone: result.Zone, Count: int64(len(out))},
@@ -331,9 +304,8 @@ func slotResponses(ivs []slots.Interval) []slotResponse {
 	return out
 }
 
-// maxSlotWindowDays bounds how much a single request may ask to have computed. The
-// horizon already bounds what can be OFFERED; this bounds the WORK, which is a different
-// question on a crawler-heavy public endpoint.
+// maxSlotWindowDays bounds the WORK one request may ask for; the horizon already bounds
+// what can be OFFERED. It matters on a crawler-heavy public endpoint.
 const maxSlotWindowDays = 62
 
 // slotWindowOf reads the requested window from the raw from and to values, defaulting
@@ -384,9 +356,8 @@ func offsetLabel(seconds int) string {
 	return sign + time.Unix(0, 0).UTC().Add(time.Duration(seconds)*time.Second).Format("15:04")
 }
 
-// mentorshipError is the ONE place this feature's domain errors become HTTP statuses.
-// Each sentinel's mapping is recorded beside its declaration in the domain package; this
-// switch is where those comments become true.
+// mentorshipError is the ONE place this feature's domain errors become HTTP statuses; each
+// sentinel's mapping is recorded beside its declaration in the domain package.
 func mentorshipError(err error) error {
 	switch {
 	case errors.Is(err, mentorship.ErrNotAuthenticated):
@@ -415,9 +386,8 @@ func mentorshipError(err error) error {
 	case errors.Is(err, mentorship.ErrProfileNotWithdrawn):
 		return fiber.NewError(fiber.StatusConflict, "this profile is not withdrawn")
 	case errors.Is(err, mentorship.ErrSlotUnavailable):
-		// One status for every ordinary way a booking fails to land — taken, withdrawn,
-		// inside the notice period, past the horizon, or a lost race. They are one event
-		// to the seeker, and splitting them would tell a stranger which.
+		// One status for every ordinary way a booking fails to land (taken, withdrawn, inside
+		// the notice period, past the horizon, lost race), so a stranger cannot tell which.
 		return fiber.NewError(fiber.StatusConflict, "that time is no longer available")
 	case errors.Is(err, mentorship.ErrBookingNotCancellable):
 		return fiber.NewError(fiber.StatusConflict, "this session can no longer be cancelled")
@@ -431,9 +401,8 @@ func mentorshipError(err error) error {
 	}
 }
 
-// bookingIDParam reads the session id from the path. A malformed one is 404 rather than
-// 400: an id that cannot exist and one that does not are the same answer, and the
-// distinction would only help somebody probing.
+// bookingIDParam reads the session id from the path. A malformed one is 404, not 400: it
+// answers the same as an id that does not exist, and the distinction would only help probing.
 func bookingIDParam(raw string) (uuid.UUID, error) {
 	id, err := uuid.Parse(raw)
 	if err != nil {

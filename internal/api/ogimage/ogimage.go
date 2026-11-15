@@ -1,13 +1,10 @@
 // Package ogimage renders the fixed-layout Open Graph preview card used by pages
 // that carry no page-specific card of their own (currently /open and /about):
 // the freehire wordmark, a heading and tagline, and a strip of catalogue-scale
-// figures. 1200x630, matching the size the site's other cards (rendered
-// separately in web/src/lib/server/og, for jobs/companies/blog posts) already
-// use.
+// figures. 1200x630, like the site's other cards (web/src/lib/server/og).
 //
-// This package takes a plain Stats value rather than a catalogstats.Result, so
-// it stays testable and reusable without importing the snapshot-loading
-// machinery — internal/api/handler is the one place that bridges the two.
+// It takes a plain Stats value rather than a catalogstats.Result to avoid importing
+// the snapshot-loading machinery; internal/api/handler bridges the two.
 package ogimage
 
 import (
@@ -63,8 +60,7 @@ func init() {
 // registry-derived source count, and whether the counts are exact.
 //
 // The exact card quotes UniqueOpenJobs, not OpenJobs: the raw figure counts a
-// posting once per board that carries it, so it reads ~40% higher than the
-// catalogue a visitor following the card can actually browse.
+// posting once per board that carries it, overstating what a visitor can browse.
 type Stats struct {
 	OpenJobs         int64
 	UniqueOpenJobs   int64
@@ -75,13 +71,10 @@ type Stats struct {
 }
 
 // RenderCatalogCard renders the 1200x630 catalogue-scale OG card: the freehire
-// wordmark, heading and tagline, and a strip of catalogue-scale figures drawn
-// from stats.
+// wordmark, heading and tagline, and a strip of figures drawn from stats.
 //
-// When stats is not exact, the companies figure is omitted rather than shown
-// as zero — the degraded snapshot leaves it unset — and the open-jobs figure
-// is marked as an estimate, mirroring how catalogstats itself distinguishes a
-// measurement from a fallback.
+// When stats is not exact, the companies figure is omitted rather than shown as zero
+// and the open-jobs figure is marked as an estimate, as catalogstats does.
 func RenderCatalogCard(heading, tagline string, stats Stats) ([]byte, error) {
 	wordmarkFace, err := newFace(boldFont, 32)
 	if err != nil {
@@ -132,8 +125,7 @@ func RenderCatalogCard(heading, tagline string, stats Stats) ([]byte, error) {
 
 	drawStatStrip(img, numberFace, labelFace, stats)
 
-	// The domain sits on the wordmark's line, not beside the strip: a four-figure
-	// strip runs to the right margin and the two collided.
+	// The domain sits on the wordmark's line: a four-figure strip runs to the right margin.
 	domain := "freehire.me"
 	drawText(img, labelFace, colorMuted, width-marginX-textWidth(labelFace, domain), 96, domain)
 
@@ -209,8 +201,7 @@ func textWidth(f font.Face, s string) int {
 }
 
 // wrapLines greedily wraps s to lines no wider than maxWidth, measured in f.
-// Fixed-content headings/taglines are short enough that this never needs a
-// line cap — the card's vertical layout gives it room.
+// It needs no line cap: the fixed headings and taglines are short.
 func wrapLines(f font.Face, s string, maxWidth int) []string {
 	words := strings.Fields(s)
 	if len(words) == 0 {
@@ -231,9 +222,7 @@ func wrapLines(f font.Face, s string, maxWidth int) []string {
 }
 
 // groupThousands formats n with comma thousands separators, e.g. 3300658 ->
-// "3,300,658". Go's stdlib has no built-in for this, and pulling in
-// golang.org/x/text/message for one formatter would be a heavier dependency
-// than this handful of lines.
+// "3,300,658", avoiding a golang.org/x/text/message dependency for one formatter.
 func groupThousands(n int64) string {
 	s := strconv.FormatInt(n, 10)
 	neg := strings.HasPrefix(s, "-")

@@ -2,15 +2,13 @@ package atsapply
 
 import "github.com/strelov1/freehire/internal/application/autoapply"
 
-// PreviewAnswers runs the same deterministic resolution the real submission starts from
-// (Resolve, not ResolveWithDrafting — drafting is deliberately excluded here, see
-// autoapply.ResolvedPreview's doc comment) and shapes the result for display.
+// PreviewAnswers runs the same deterministic resolution a real submission starts from
+// (Resolve, not ResolveWithDrafting; see autoapply.ResolvedPreview) and shapes it for
+// display.
 //
-// The résumé file field is omitted rather than shown with an empty value: resolveOne
-// leaves Value blank for it deliberately (Client.Submit renders the tailored CV only at
-// submit time), and the drawer surfaces the tailored CV as its own reference alongside
-// this preview, not as a row inside it. Any OTHER file field (a cover letter, for
-// instance) still has no resolution path and is reported like any other pending field.
+// The résumé file field is omitted: resolveOne leaves its Value blank (the tailored CV is
+// rendered only at submit time) and the drawer shows the CV separately. Any other file
+// field (a cover letter) has no resolution path and is reported as pending.
 func PreviewAnswers(fields []MergedField, answers map[string]string, hasApprovedCV bool) autoapply.ResolvedPreview {
 	plan := Resolve(fields, answers, hasApprovedCV)
 	byID := make(map[string]MergedField, len(fields))
@@ -29,10 +27,9 @@ func PreviewAnswers(fields []MergedField, answers map[string]string, hasApproved
 		})
 	}
 
-	// questionText, not a label-or-id expression written out here: what this screen titles a
-	// question is what the candidate answers, and what they answer is banked under that
-	// text's topic — so this and matchBankAnswerKey have to be one function. See
-	// questionText's own comment for what happened when they were two.
+	// questionText, not an inline label-or-id: what this screen titles a question is what the
+	// candidate answers and what is banked under its topic, so this and matchBankAnswerKey
+	// must share one function.
 	for _, u := range plan.Unmapped {
 		f := byID[u.ID]
 		preview.Pending = append(preview.Pending, autoapply.PreviewPending{

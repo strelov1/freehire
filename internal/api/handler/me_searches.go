@@ -23,10 +23,8 @@ func newSavedSearchHandlers(queries *db.Queries) *savedSearchHandlers {
 }
 
 func (h *savedSearchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Saved searches are cookie-only (RequireAuth) like API-key management: they are a
-	// browser convenience (the "My filters" picker), not a scripting primitive. Each
-	// operation is owner-scoped; an id that is not the caller's is a 404. The handlers
-	// below implement the contract (typespec/alerts.tsp).
+	// Cookie-only like API-key management: a browser convenience (the "My filters" picker),
+	// not a scripting primitive. Owner-scoped; an id that is not the caller's is a 404.
 	api.Get("/me/searches", mw.cookie, contract)
 	api.Post("/me/searches", mw.cookie, contract)
 	api.Patch("/me/searches/:id", mw.cookie, contract)
@@ -43,9 +41,8 @@ func setNilDateTime(dst *apigen.NilDateTime, at *time.Time) {
 	dst.SetToNull()
 }
 
-// savedSearchOut maps a stored saved search to its wire shape. user_id is omitted
-// (ownership, internal); query is the canonical search query string the SPA replays
-// into the filter URL.
+// savedSearchOut maps a stored saved search to its wire shape. user_id is omitted; query is
+// the canonical search query string the SPA replays into the filter URL.
 func savedSearchOut(s savedsearch.SavedSearch) apigen.SavedSearch {
 	out := apigen.SavedSearch{ID: s.ID, Name: s.Name, Query: s.Query, DerivedFromProfile: s.DerivedFromProfile}
 	setNilDateTime(&out.CreatedAt, s.CreatedAt)
@@ -53,13 +50,10 @@ func savedSearchOut(s savedsearch.SavedSearch) apigen.SavedSearch {
 	return out
 }
 
-// savedSearchError maps the saved-search sentinels onto HTTP statuses: a bad name is a
-// 400, a duplicate name or the per-user cap is a 409, a missing/non-owned row is a 404.
-// Anything else falls through to RenderError as a 500.
-//
-// Every sentinel the package declares belongs here, and a test walks the list: one left
-// out does not merely render the wrong status, it tells the caller their own mistake was
-// our fault and files a fault report for ordinary traffic.
+// savedSearchError maps the saved-search sentinels onto HTTP: a bad name is a 400, a
+// duplicate name or the per-user cap a 409, a missing/non-owned row a 404. Anything else is a
+// 500. Every sentinel the package declares belongs here (a test walks the list): one left out
+// would blame the caller's own mistake on us and file a fault report for ordinary traffic.
 func savedSearchError(err error) error {
 	switch {
 	case errors.Is(err, savedsearch.ErrInvalidName):
@@ -79,11 +73,9 @@ func savedSearchError(err error) error {
 	}
 }
 
-// CreateSavedSearch stores a named filter snapshot for the authenticated user. Behind
-// RequireAuth (cookie-only): saved searches are a browser feature, not a scripting
-// primitive. A bad name is a 400, a duplicate name or the per-user cap is a 409. The body is
-// a required display name and the canonical search query string (an empty query is the valid
-// "show all" snapshot).
+// CreateSavedSearch stores a named filter snapshot for the caller. Cookie-only. A bad name
+// is a 400, a duplicate name or the per-user cap a 409. An empty query is the valid "show
+// all" snapshot.
 func (h *savedSearchHandlers) CreateSavedSearch(ctx context.Context, req *apigen.SavedSearchCreate) (*apigen.CreateSavedSearchCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -96,8 +88,8 @@ func (h *savedSearchHandlers) CreateSavedSearch(ctx context.Context, req *apigen
 	return &apigen.CreateSavedSearchCreated{Data: savedSearchOut(saved)}, nil
 }
 
-// ListSavedSearches returns the authenticated user's saved searches, most recently updated
-// first. Owner-scoped, so it never reveals another user's. Cookie-only.
+// ListSavedSearches returns the caller's saved searches, most recently updated first.
+// Owner-scoped. Cookie-only.
 func (h *savedSearchHandlers) ListSavedSearches(ctx context.Context) (*apigen.SavedSearchList, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -115,9 +107,8 @@ func (h *savedSearchHandlers) ListSavedSearches(ctx context.Context) (*apigen.Sa
 }
 
 // UpdateSavedSearch overwrites a saved search's name and/or query (partial), scoped to its
-// owner. A missing or non-owned id is a 404; a bad name is a 400; a name collision is a 409.
-// An absent or null field is left unchanged, so a caller can rename, overwrite the filters,
-// or both; an empty (non-null) query is a real "show all" value.
+// owner. A missing or non-owned id is a 404, a bad name a 400, a name collision a 409. An
+// absent or null field is left unchanged; an empty (non-null) query is a real "show all".
 func (h *savedSearchHandlers) UpdateSavedSearch(ctx context.Context, req *apigen.SavedSearchUpdate, params apigen.UpdateSavedSearchParams) (*apigen.UpdateSavedSearchOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -134,8 +125,8 @@ func (h *savedSearchHandlers) UpdateSavedSearch(ctx context.Context, req *apigen
 	return &apigen.UpdateSavedSearchOK{Data: savedSearchOut(saved)}, nil
 }
 
-// DeleteSavedSearch removes one of the authenticated user's saved searches by id.
-// Owner-scoped: an id that does not exist or belongs to another user is a 404. Cookie-only.
+// DeleteSavedSearch removes one of the caller's saved searches by id. A missing or
+// non-owned id is a 404. Cookie-only.
 func (h *savedSearchHandlers) DeleteSavedSearch(ctx context.Context, params apigen.DeleteSavedSearchParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

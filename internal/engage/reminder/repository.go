@@ -23,11 +23,9 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 	return &QueriesRepository{q: q}
 }
 
-// GetSettings returns the caller's rule. A missing row reads as the
-// opt-out-by-default default (enabled, channel email) rather than an error or a
-// disabled rule — see the centralize-lifecycle-notifications change for why: this
-// changes only what "never configured" means, an explicit stored choice (enabled
-// or disabled) is always returned as stored.
+// GetSettings returns the caller's rule. A missing row reads as the default
+// (enabled, channel email), not an error or a disabled rule; an explicit stored
+// choice is returned as stored.
 func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	row, err := r.q.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -55,15 +53,14 @@ func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Sett
 	}, nil
 }
 
-// UpsertSettings creates or replaces the caller's rule.
 // HasPushDevice reports whether the account has a registered push device.
 func (r *QueriesRepository) HasPushDevice(ctx context.Context, userID int64) (bool, error) {
 	return r.q.UserHasPushToken(ctx, userID)
 }
 
-// The digest defaults are applied here as well as in Service.UpdateSettings, since
-// this is the last stop before the column CHECKs: a zero interval must store as the
-// default, not violate digest_interval_hours' bounds.
+// UpsertSettings creates or replaces the caller's rule. Digest defaults are applied
+// here too, as the last stop before the column CHECKs: a zero interval must store
+// as the default, not violate digest_interval_hours' bounds.
 func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error) {
 	freq := s.DigestFrequency
 	digestTime := s.DigestTime
@@ -109,9 +106,8 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 }
 
 // GetScheduleContext reads the account's notification hour and timezone. A NULL in
-// either column, and a timezone name this build's tzdata cannot resolve, are left
-// as nil for the service to read as unconfigured — a stale or misspelled zone name
-// must not stop a save from scheduling anything.
+// either column, or a timezone this build's tzdata cannot resolve, stays nil
+// (unconfigured) so a bad zone name never blocks scheduling.
 func (r *QueriesRepository) GetScheduleContext(ctx context.Context, userID int64) (ScheduleContext, error) {
 	row, err := r.q.GetReminderScheduleContext(ctx, userID)
 	if err != nil {

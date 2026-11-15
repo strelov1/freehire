@@ -2,11 +2,9 @@
 // user holds at most one vote per target; the aggregate up/down counts are a
 // public signal materialized on the job and company rows.
 //
-// A vote write and the affected target's counter recompute run in one pgx
-// transaction, so a reader never sees a vote without its counter. The recompute
-// is a separate statement run after the write — a same-statement CTE would not
-// see the write, since Postgres hides a data-modifying CTE's effect from sibling
-// sub-statements.
+// A vote write and the target's counter recompute run in one pgx transaction. The recompute is
+// a separate statement after the write: a same-statement CTE cannot see the write, since
+// Postgres hides a data-modifying CTE's effect from sibling sub-statements.
 package vote
 
 import (

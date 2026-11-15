@@ -10,10 +10,8 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
-// requireUserID returns the id the auth middleware stored on the request. The
-// middleware (RequireAuth / RequireAuthOrKey) guarantees it for every route it
-// guards; the error branch is a defensive 401 for a handler wired without that
-// middleware.
+// requireUserID returns the id the auth middleware stored on the request. The error
+// branch is a defensive 401 for a handler wired without that middleware.
 func requireUserID(c *fiber.Ctx) (int64, error) {
 	id, ok := auth.UserID(c)
 	if !ok {
@@ -31,10 +29,9 @@ func requireUserIDFromContext(ctx context.Context) (int64, error) {
 	return id, nil
 }
 
-// queryValues parses the raw request query string into url.Values. The handlers
-// parse the raw query (rather than Fiber's key-lowercasing accessors) to preserve
-// key case and repeated values; this centralizes that one idiom. A malformed query
-// yields whatever ParseQuery salvaged, matching the call sites that ignore its error.
+// queryValues parses the raw query string into url.Values, preserving key case and
+// repeated values (unlike Fiber's lowercasing accessors). A malformed query yields what
+// ParseQuery salvaged.
 func queryValues(c *fiber.Ctx) url.Values {
 	vals, _ := url.ParseQuery(string(c.Request().URI().QueryString()))
 	return vals

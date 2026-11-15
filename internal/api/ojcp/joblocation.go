@@ -7,9 +7,8 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
-// Place is OJCP's location block — one schema.org Place, singular. That shape is the whole
-// difficulty of this projection: a posting open across several countries does not have one
-// place, and the standard offers nowhere else to say so.
+// Place is OJCP's location block: one schema.org Place, singular, though a posting can be
+// open across several countries.
 type Place struct {
 	Type    string  `json:"@type,omitempty"`
 	Address Address `json:"address"`
@@ -18,17 +17,14 @@ type Place struct {
 // Address is schema.org's postal address, as OJCP narrows it.
 type Address struct {
 	AddressLocality string `json:"addressLocality,omitempty"`
-	// AddressRegion is a STATE OR PROVINCE. It is deliberately never filled from our own
-	// Regions facet, which holds macro-regions ("europe", "global") — a different kind of
-	// thing entirely. An agent reading addressRegion="europe" would file the posting under
-	// a province by that name.
+	// AddressRegion is a state or province. Never fill it from our Regions facet, which
+	// holds macro-regions ("europe", "global").
 	AddressRegion  string `json:"addressRegion,omitempty"`
 	AddressCountry string `json:"addressCountry,omitempty"`
 }
 
-// Places is jobLocation: the places a posting names. schema.org and the OJCP schema accept
-// one Place or an array of them, and one place is written as a bare object so a consumer
-// built on the singular shape keeps reading every posting that has exactly one.
+// Places is jobLocation: one Place or an array. A single place is written as a bare object
+// so consumers built on the singular shape keep working.
 type Places []Place
 
 // MarshalJSON writes a single Place as an object and anything longer as an array.
@@ -41,22 +37,17 @@ func (p Places) MarshalJSON() ([]byte, error) {
 
 // jobLocationFor states every place the posting names, as precisely as the facets allow.
 //
-// Countries and cities are separate facets, so a city can be paired with a country only
-// when there is one country for it to lie in. With several countries the cities are left
-// out and each country is its own Place: Warsaw paired with DE would be a workplace that
-// does not exist, while the countries alone are still facts. A remote posting states
-// countries only, because there a Place is where the employee may live and work, and a
-// city on it is usually the employer's office.
+// Countries and cities are separate facets, so a city is paired with a country only when
+// there is exactly one country. With several, cities are left out and each country is its
+// own Place (Warsaw paired with DE would be a workplace that does not exist). A remote
+// posting states countries only: a city on it is usually the employer's office.
 func jobLocationFor(j jobview.Job) Places {
 	countries := make([]string, len(j.Countries))
 	for i, country := range j.Countries {
-		// The country facet is served lowercased (jobview.normalizeSet), while
-		// addressCountry is the ISO 3166-1 alpha-2 code, canonically UPPERCASE. An agent
-		// comparing against "DE" or feeding the value to a country library misses every
-		// posting otherwise.
+		// The facet is lowercased (jobview.normalizeSet); addressCountry is canonically
+		// uppercase ISO 3166-1 alpha-2.
 		countries[i] = strings.ToUpper(country)
 	}
-	// With no city to pair, or none that can be paired, each country is its own Place.
 	if j.WorkMode == "remote" || len(countries) > 1 || len(j.Cities) == 0 {
 		var places Places
 		for _, country := range countries {

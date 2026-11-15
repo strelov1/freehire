@@ -8,20 +8,17 @@ import (
 // newMiddleware builds the auth gates every feature surface mounts its routes behind (see
 // the middleware type).
 func (a *API) newMiddleware(cfg Config, plans *plan.Store) middleware {
-	// optionalAuth attaches the caller when signed in (cookie or key) but never
-	// rejects, so these public detail reads can overlay the caller's own vote
-	// (my_vote) while staying open to anonymous visitors.
+	// optionalAuth attaches the caller when signed in but never rejects, so public detail
+	// reads can overlay the caller's my_vote.
 	optionalAuth := auth.OptionalAuth(a.issuer, a.queries, apiKeys{a.queries})
-	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key, so a
-	// script holding a key can drive the same flow as the browser. The public job
-	// reads stay unauthenticated. Jobs are addressed by their public slug; the
-	// handlers resolve it to the internal id before writing user_jobs.
+	// keyAuth (RequireAuthOrKey) accepts the session cookie or an API key. Public job reads
+	// stay unauthenticated; jobs are addressed by public slug and handlers resolve the id.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
 	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
 	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth)
-	// cookieAuth is the single cookie-only gate (RequireAuth) for the
-	// browser-convenience surfaces below — key management, saved searches, the CV
-	// builder, the inbox, subscriptions — where a leaked API key must not act.
+	// cookieAuth (RequireAuth) is the cookie-only gate for browser-convenience surfaces (key
+	// management, saved searches, CV builder, inbox, subscriptions) where a leaked API key
+	// must not act.
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	return middleware{

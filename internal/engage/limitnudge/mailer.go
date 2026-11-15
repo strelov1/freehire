@@ -12,9 +12,8 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// senderName is what the recipient's message list shows — see
-// prowelcome.senderName's own comment: "freehire" would set up a reply to a company
-// no one intends to answer.
+// senderName is what the recipient's message list shows; "freehire" would invite a
+// reply to a company no one answers.
 const senderName = "Ilya from freehire"
 
 // Mailer renders and sends the limit-nudge letter.
@@ -28,9 +27,8 @@ type Mailer struct {
 }
 
 // NewMailer builds a Mailer. `from` is the verified sending address; `replyTo` is the
-// human inbox that answers — see prowelcome.NewMailer's own comment on why a blank
-// value is a configuration error the caller must catch rather than something this
-// type papers over.
+// human inbox that answers. A blank replyTo is a configuration error the caller must
+// catch.
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{

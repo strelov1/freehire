@@ -12,11 +12,9 @@ import (
 
 // gmailMailboxes mints a per-caller view of their connected Gmail for the recall sweep.
 //
-// It is a factory rather than a mailbox because the credential is per user: `For` resolves
-// one caller's grant and answers nil when there is none, which is exactly what the recall
-// service reads as "fall back to stored mail". A caller on a hosted address, or on the
-// bring-your-own-harness tier, therefore keeps today's path without the handler knowing
-// which tier they are.
+// A factory because the credential is per user: `For` answers nil without a grant, which
+// the recall service reads as "fall back to stored mail" (hosted-address and harness
+// callers), so the handler need not know the tier.
 type gmailMailboxes struct {
 	store     *gmailsync.DBStore
 	cipher    *tokencrypt.Cipher
@@ -29,8 +27,7 @@ func newGmailMailboxes(queries *db.Queries, cipher *tokencrypt.Cipher, connector
 
 // For returns the caller's mailbox, or nil when they have no usable Gmail grant.
 //
-// A missing or unreadable credential is nil rather than an error on purpose: it is not a
-// failure, it is a caller the search path does not serve, and the stored path still does.
+// A missing or unreadable credential is nil, not an error: the stored path still serves them.
 func (g *gmailMailboxes) For(ctx context.Context, userID int64) mailrecall.Mailbox {
 	if g == nil || g.connector == nil || g.cipher == nil {
 		return nil
@@ -54,9 +51,8 @@ func (g *gmailMailboxes) For(ctx context.Context, userID int64) mailrecall.Mailb
 	}
 }
 
-// maxSearchResults bounds one search. The recall query is already scoped to one employer
-// inside one window — on production the widest application returned nine — so this is a
-// guard against a pathological employer name, not a page size anybody is expected to hit.
+// maxSearchResults bounds one search. The query is already scoped to one employer and
+// window, so this only guards against a pathological employer name.
 const maxSearchResults = 25
 
 // gmailMailbox is one caller's Gmail, for the length of one request.

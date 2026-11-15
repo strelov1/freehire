@@ -71,11 +71,9 @@ func (h *cvHandlers) DuplicateCV(ctx context.Context, params apigen.DuplicateCVP
 // already bound to it, or a new one under the `base` preset (a CV and no vacancy) — so the
 // tailoring workspace can edit the base with the agent. Cookie-only.
 //
-// It is deliberately NOT behind the paid-AI gate and spends no tailoring session: opening the
-// conversation costs nothing, and a free account still opens the workspace and edits by hand.
-// What the gate guards is a turn, and every message already passes mw.paidAI(FeatureAssistant),
-// which answers an unpaid caller 402 — the upgrade state the chat shows in the tailoring workspace
-// too. 409 for a tailored copy (its conversation is /me/cvs/:id/tailor-session).
+// Deliberately NOT behind the paid-AI gate and spends no tailoring session: opening costs nothing, and
+// every message already passes mw.paidAI(FeatureAssistant). 409 for a tailored copy (its conversation is
+// /me/cvs/:id/tailor-session).
 func (h *cvHandlers) StartBaseSession(ctx context.Context, params apigen.StartBaseSessionParams) (*apigen.StartBaseSessionOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

@@ -19,24 +19,20 @@ type reportHandlers struct {
 }
 
 func newReportHandlers(queries *db.Queries) *reportHandlers {
-	// The report queue uses one QueriesRepository for both persistence and the
-	// job soft-close (it implements report.Repository and report.JobCloser).
+	// One repository serves both report.Repository and report.JobCloser.
 	repo := report.NewQueriesRepository(queries)
 	return &reportHandlers{report: report.New(repo, repo), queries: queries}
 }
 
 func (h *reportHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Job reports: any authenticated user flags a problem with a live vacancy (cookie or
-	// API key), addressed by the job's public slug. The review actions (the pending queue,
-	// resolve, dismiss) are moderator-gated; resolve may soft-close the reported job.
+	// Any authenticated user (cookie or key) may file; the review actions are moderator-gated.
 	api.Post("/jobs/:slug/reports", mw.key, contract)
 	api.Get("/reports", mw.key, mw.moderator, contract)
 	api.Post("/reports/:id/resolve", mw.key, mw.moderator, contract)
 	api.Post("/reports/:id/dismiss", mw.key, mw.moderator, contract)
 }
 
-// toJobReport maps a stored report to its wire shape (no reporter email or job fields).
-// reported_by is never sent (ownership, internal).
+// toJobReport maps a stored report to its wire shape: no reporter email, job fields or reported_by.
 func toJobReport(r report.Report) apigen.JobReport {
 	out := apigen.JobReport{
 		ID:              r.ID,
@@ -78,9 +74,8 @@ func toJobReportDecision(rev report.Review) apigen.JobReport {
 	return out
 }
 
-// reportError maps the report sentinels onto HTTP statuses. report.ErrInvalid carries a
-// user-facing 400 message; the rest map to not-found / conflict. Anything else falls
-// through to RenderError as a 500.
+// reportError maps the report sentinels onto HTTP statuses; report.ErrInvalid carries a
+// user-facing 400 message, anything else falls through as a 500.
 func reportError(err error) error {
 	switch {
 	case errors.Is(err, report.ErrReportNotFound):
@@ -96,10 +91,8 @@ func reportError(err error) error {
 	}
 }
 
-// CreateJobReport files a complaint about the job named by :slug. Authenticated by cookie or
-// API key; the slug is resolved to the internal id (a miss is a 404 via RenderError) before
-// any write, the content is validated by the service (a bad body is a 400), and a second
-// open report of the same job by the same user is a 409. Returns the pending report with 201.
+// CreateJobReport files a complaint about the job named by :slug. A second open report of the
+// same job by the same user is a 409.
 func (h *reportHandlers) CreateJobReport(ctx context.Context, req *apigen.JobReportRequest, params apigen.CreateJobReportParams) (*apigen.CreateJobReportCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -122,8 +115,7 @@ func (h *reportHandlers) CreateJobReport(ctx context.Context, req *apigen.JobRep
 	return &apigen.CreateJobReportCreated{Data: toJobReport(rep)}, nil
 }
 
-// ListPendingJobReports returns the moderator review queue (with reporter email and job
-// slug/title). The route is role-gated, so reaching this handler already implies a moderator.
+// ListPendingJobReports returns the moderator review queue (role-gated at the route).
 func (h *reportHandlers) ListPendingJobReports(ctx context.Context) (*apigen.ListPendingJobReportsOK, error) {
 	rows, err := h.report.ListPending(ctx)
 	if err != nil {
@@ -137,9 +129,7 @@ func (h *reportHandlers) ListPendingJobReports(ctx context.Context) (*apigen.Lis
 }
 
 // ResolveJobReport marks a pending report resolved, optionally soft-closing the reported job.
-// Role-gated. An unknown id is a 404; a report already decided is a 409. The body is
-// optional: close_job and notify_reporter default to false on absence, so a caller that wants
-// the reporter contacted says so explicitly.
+// The body is optional: close_job and notify_reporter default to false.
 func (h *reportHandlers) ResolveJobReport(ctx context.Context, req apigen.OptResolveJobReportRequest, params apigen.ResolveJobReportParams) (*apigen.ResolveJobReportOK, error) {
 	reviewerID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -161,8 +151,7 @@ func (h *reportHandlers) ResolveJobReport(ctx context.Context, req apigen.OptRes
 	return &apigen.ResolveJobReportOK{Data: toJobReportDecision(rev)}, nil
 }
 
-// DismissJobReport marks a pending report dismissed with an optional reason, leaving the job
-// unchanged. Role-gated. The body is optional, so a missing one leaves the reason blank.
+// DismissJobReport marks a pending report dismissed with an optional reason, leaving the job unchanged.
 func (h *reportHandlers) DismissJobReport(ctx context.Context, req apigen.OptDismissJobReportRequest, params apigen.DismissJobReportParams) (*apigen.DismissJobReportOK, error) {
 	reviewerID, err := requireUserIDFromContext(ctx)
 	if err != nil {

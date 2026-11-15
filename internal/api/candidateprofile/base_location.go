@@ -12,27 +12,22 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
 
-// ProfileReader supplies the job-search profile whose "where I am" base backstops a contact
-// block that states no location.
+// ProfileReader supplies the job-search profile whose base location backstops a CV with none.
 type ProfileReader interface {
 	Get(ctx context.Context, userID int64) (userprofile.Profile, error)
 }
 
 // WithProfileLocation adds the job-search profile as the last source of the candidate's
-// location. A CV or résumé that states one still wins: the base is a search preference the
-// candidate set for matching, so it fills the gap rather than overriding what they wrote on
-// their CV.
-//
-// Measured on production 2026-10-25: an approved Workable application parked on its required
-// `address` field for a candidate whose CV carries no location at all, while their profile
-// said Florianópolis, Brazil.
+// location. A location stated on the CV still wins: the base is a search preference, so it
+// fills the gap rather than overriding the CV. Without it a required `address` field
+// parked for a candidate whose CV states no location.
 func (a *Assembler) WithProfileLocation(r ProfileReader) *Assembler {
 	a.profiles = r
 	return a
 }
 
-// baseLocation renders the profile's base as "City, Country", or whichever of the two is
-// stated; empty when there is no profile or no base.
+// baseLocation renders the profile's base as "City, Country" (or whichever is stated);
+// empty when there is no profile or base.
 func (a *Assembler) baseLocation(ctx context.Context, userID int64) (string, error) {
 	if a.profiles == nil {
 		return "", nil
@@ -54,9 +49,8 @@ func (a *Assembler) baseLocation(ctx context.Context, userID int64) (string, err
 	return formatBase(prefs.Base), nil
 }
 
-// formatBase joins the base's city and English country name. A country code the language
-// tables do not know is left out rather than printed raw: "Florianópolis, br" reads as a typo
-// on an application form.
+// formatBase joins the base's city and English country name. An unknown country code is
+// left out rather than printed raw ("Florianópolis, br" reads as a typo).
 func formatBase(b userprofile.BaseLocation) string {
 	parts := make([]string, 0, 2)
 	if city := strings.TrimSpace(b.City); city != "" {

@@ -82,7 +82,7 @@ func run() int {
 
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("onboarding: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 	// A missing reply address is a misconfiguration: these mails ask a direct question, so
 	// sending them with replies going nowhere is a hard stop.

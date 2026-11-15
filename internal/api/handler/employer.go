@@ -32,8 +32,7 @@ type employerHandlers struct {
 	// deployment has no mail transport, since moving an application may email the
 	// candidate. Its routes then answer 501 (employer_applications.go).
 	inbox *directapply.Inbox
-	// adminOnly is built locally rather than added to the shared middleware struct: this
-	// is the only route in the whole API gated on the admin role rather than moderator.
+	// adminOnly lives here, not in the shared middleware: revoke is the only admin-gated route.
 	adminOnly fiber.Handler
 }
 
@@ -46,9 +45,8 @@ func newEmployerHandlers(queries *db.Queries, svc *employer.Service) *employerHa
 }
 
 func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie-only (RequireAuth), not mw.key: this MVP does not open employer actions to
-	// API keys — see design.md's Non-Goals. Every route below requires ActiveAccount
-	// except the claim/confirm/resend trio, which is how an account BECOMES active.
+	// Cookie-only: employer actions are not open to API keys. Every route below requires
+	// ActiveAccount except the claim/confirm/resend trio, which is how an account BECOMES active.
 	api.Post("/employer/claim", mw.cookie, contract)
 	api.Post("/employer/claim/confirm", mw.cookie, contract)
 	api.Post("/employer/claim/resend", mw.cookie, contract)
@@ -73,16 +71,14 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/claims", mw.cookie, mw.moderator, contract)
 	api.Post("/employer/claims/:user_id/approve", mw.cookie, mw.moderator, contract)
 	api.Post("/employer/claims/:user_id/reject", mw.cookie, mw.moderator, contract)
-	// Revocation is an admin action, not a moderator one — see employer-account's spec.
+	// Revocation is an admin action, not a moderator one.
 	api.Post("/employer/claims/:user_id/revoke", mw.cookie, h.adminOnly, contract)
 }
 
-// employerError maps the employer package's sentinels onto HTTP statuses, and the
-// accounts code-flow sentinels ConfirmClaim/Claim can surface too (ConfirmClaim delegates
-// straight to accounts.Service.ConfirmCode; Claim's own ErrMailUnavailable check runs
-// first, but accounts.ErrMailUnavailable is mapped too for completeness — same shape
-// recoveryError uses for /auth/verify). employer.ErrInvalid carries a user-facing message
-// surfaced in the 400 body; anything else falls through to RenderError as a 500.
+// employerError maps the employer package's sentinels, plus the accounts code-flow
+// sentinels ConfirmClaim/Claim can surface (same shape as recoveryError), onto HTTP
+// statuses. employer.ErrInvalid carries a user-facing message for the 400 body; anything
+// else falls through to RenderError as a 500.
 func employerError(err error) error {
 	switch {
 	case errors.Is(err, employer.ErrInvalid):
@@ -126,11 +122,9 @@ func employerError(err error) error {
 	}
 }
 
-// employerAccountOut is the public shape of a company_accounts row. UserID IS included —
-// unlike most ownership ids, this one is the address the moderator/admin action endpoints
-// (approve/reject/revoke) take (:user_id), so the moderator queue needs it back to act on a
-// row at all. It costs nothing on the self-service reads: the caller already knows it is
-// their own, the same way a job's own internal id costs nothing being in jobview.Job.
+// employerAccountOut is the public shape of a company_accounts row. UserID IS included,
+// unlike most ownership ids: the moderator/admin endpoints (approve/reject/revoke) address
+// a row by it. It leaks nothing on self-service reads, where the caller knows it is their own.
 func employerAccountOut(a employer.Account) apigen.EmployerAccount {
 	out := apigen.EmployerAccount{
 		UserID:         a.UserID,
@@ -203,12 +197,10 @@ func (h *employerHandlers) ResendEmployerClaimCode(ctx context.Context) (*apigen
 }
 
 // companyInfoField reads a string key out of a company's company_info JSONB, "" for a
-// missing key, a non-string value, an absent company_info, or unreadable JSON — matching
-// the same never-an-error-just-absent stance internal/ingest/employer's own websiteOf
-// takes. map[string]any (not map[string]string): company_info also carries non-string
-// values under other keys (e.g. a subsidiaries array), and unmarshalling into a
-// string-valued map would fail the WHOLE object — and so read every key as absent,
-// including description/website — the moment any other key in it is not a string.
+// missing key, a non-string value, an absent company_info, or unreadable JSON (like
+// internal/ingest/employer's websiteOf). It decodes into map[string]any because other keys
+// hold non-string values (e.g. subsidiaries), and a map[string]string would fail the WHOLE
+// object and read every key as absent.
 func companyInfoField(raw []byte, key string) string {
 	if len(raw) == 0 {
 		return ""
@@ -221,11 +213,9 @@ func companyInfoField(raw []byte, key string) string {
 	return s
 }
 
-// employerCompanyOut combines the account with its company's curated profile — never the
-// job-derived facets (company_types/company_sizes etc.), which this surface does not expose
-// for editing. found is false when the company has no row yet (a claim on a brand-new company
-// before its first SeedCompanyWebsite/is_reference insert) — the profile fields simply stay
-// unset, same as a company row with every curated field still unset.
+// employerCompanyOut combines the account with its company's curated profile, never the
+// job-derived facets (company_types/company_sizes etc.). found is false when the company
+// has no row yet (a claim on a brand-new company); the profile fields then stay unset.
 func employerCompanyOut(acc employer.Account, company db.Company, found bool) apigen.EmployerCompany {
 	a := employerAccountOut(acc)
 	out := apigen.EmployerCompany{
@@ -253,10 +243,7 @@ func employerCompanyOut(acc employer.Account, company db.Company, found bool) ap
 
 // GetEmployerCompany returns the caller's own account (whatever status it is in) plus their
 // company's current curated profile. Deliberately NOT gated on ActiveAccount, unlike every
-// write in this file: a caller with a pending or revoked claim still needs to read their own
-// status — it is the one read the claim-status page and the dashboard's own "am I active yet"
-// check both need before there is anything to edit. Reads companies directly (no
-// employer-package round trip needed for a plain read).
+// write here: a pending or revoked claim still needs to read its own status.
 func (h *employerHandlers) GetEmployerCompany(ctx context.Context) (*apigen.GetEmployerCompanyOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

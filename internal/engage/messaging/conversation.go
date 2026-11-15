@@ -15,9 +15,8 @@ func normalizeBody(body string, limit int) (string, error) {
 	return body, nil
 }
 
-// Start opens a pending conversation holding the starter's first message, as the
-// starter sees it. Who may start one is the kind's decision, made before calling this;
-// the core refuses only a block between the two and a taken pair key.
+// Start opens a pending conversation holding the starter's first message. Who may start one
+// is the kind's decision, made before calling this; the core refuses only a block or a taken pair key.
 func (s *Service) Start(ctx context.Context, r StartRequest) (Conversation, error) {
 	body, err := normalizeBody(r.Body, MaxMessageRunes)
 	if err != nil {

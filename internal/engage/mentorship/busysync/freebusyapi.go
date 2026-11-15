@@ -12,15 +12,11 @@ import (
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 )
 
-// freeBusyURL reads the mentor's PRIMARY calendar's occupied time only — the same
-// "primary calendar alone" rule calsync's eventsURL follows, and for the same reason: a
-// person's other calendars are subscriptions, shared team diaries and holidays, not
-// their own availability.
+// freeBusyURL reads the mentor's primary calendar only, as calsync does: other calendars
+// are subscriptions, shared diaries and holidays, not their own availability.
 const freeBusyURL = "https://www.googleapis.com/calendar/v3/freeBusy"
 
-// APIReader reads busy time through Google's freeBusy endpoint — bounds only, since that
-// is all this endpoint can return. See the package doc for why that is the point, not a
-// limitation worked around.
+// APIReader reads busy time through Google's freeBusy endpoint (bounds only, by design).
 type APIReader struct {
 	client *http.Client
 }
@@ -29,8 +25,7 @@ type APIReader struct {
 func NewAPIReader(client *http.Client) *APIReader { return &APIReader{client: client} }
 
 // ReaderFactoryFor builds the per-mentor reader factory the sync Worker needs, minting a
-// token-bearing client from each stored refresh token. The Google OAuth plumbing lives in
-// gmailsync's Connector and is not duplicated here.
+// token-bearing client from each stored refresh token via gmailsync's Connector.
 func ReaderFactoryFor(c *gmailsync.Connector) ReaderFactory {
 	return func(ctx context.Context, refreshToken string) FreeBusyReader {
 		return NewAPIReader(c.HTTPClient(ctx, refreshToken))
@@ -52,9 +47,8 @@ type freeBusyPeriod struct {
 	End   string `json:"end"`
 }
 
-// freeBusyError is Google's documented shape for a calendar it could not read —
-// distinct from an HTTP-level failure: the request itself succeeds (200), but a
-// per-calendar error means the busy[] beside it is not a real answer.
+// freeBusyError is Google's shape for a calendar it could not read: the request succeeds
+// (200) but the busy[] beside it is not a real answer.
 type freeBusyError struct {
 	Reason string `json:"reason"`
 }
@@ -66,9 +60,8 @@ type freeBusyResponse struct {
 	} `json:"calendars"`
 }
 
-// ListBusy returns the mentor's busy periods over a window, read from the primary
-// calendar's free/busy state — no title, no attendee, no identifier: the endpoint has
-// nothing else to offer, which is exactly why this worker asks it and not events.list.
+// ListBusy returns the mentor's busy periods over a window from the primary calendar's
+// free/busy state: no title, attendee or identifier.
 func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPeriod, error) {
 	reqBody, err := json.Marshal(freeBusyRequest{
 		TimeMin: from.Format(time.RFC3339),
@@ -89,10 +82,8 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		// The status travels with the error rather than being decided here — see
-		// calsync.APIReader.page for why: gmailsync.RevokedGrant is the one place a
-		// status is read as a revocation, since the flag it sets is shared with every
-		// other Google feature this account may use.
+		// The status travels with the error: gmailsync.RevokedGrant is the one place a status
+		// is read as a revocation (see calsync.APIReader.page).
 		return nil, gmailsync.NewAPIError("calendar: freeBusy", resp)
 	}
 	var body freeBusyResponse
@@ -101,23 +92,18 @@ func (r *APIReader) ListBusy(ctx context.Context, from, to time.Time) ([]BusyPer
 	}
 	primary := body.Calendars["primary"]
 	if len(primary.Errors) > 0 {
-		// A 200 with an empty busy[] here is NOT "nothing is busy" — Google could not
-		// read the calendar at all, and reconciling on it would silently clear every
-		// real conflict already stored. Not a gmailsync.APIError: this is not the grant
-		// saying no (no HTTP status failed), so it must not be read as a revocation —
-		// it is an ordinary per-mentor sync failure, exactly like any other.
+		// A 200 with an empty busy[] is not "nothing is busy": Google could not read the
+		// calendar, and reconciling on it would clear every stored conflict. Not a
+		// gmailsync.APIError, so it is an ordinary sync failure, not a revocation.
 		return nil, fmt.Errorf("calendar: freeBusy could not read the primary calendar: %s", primary.Errors[0].Reason)
 	}
 	out := make([]BusyPeriod, 0, len(primary.Busy))
 	for _, p := range primary.Busy {
 		start, err := time.Parse(time.RFC3339, p.Start)
 		if err != nil {
-			// Every busy period Google documents is a timed instant, never an all-day
-			// date-only shape — unlike calsync's events, which genuinely have both. A
-			// period here that fails to parse is not a known API variant, so it is
-			// dropped rather than failing the whole read (one bad period must not cost
-			// a mentor every other one), but logged: a silently dropped period is a
-			// silently un-blocked slot, and that must leave a trace somewhere.
+			// Busy periods are always timed instants, never date-only. One that fails to parse
+			// is dropped, not fatal (it must not cost the mentor every other period), but
+			// logged: a dropped period is a silently un-blocked slot.
 			log.Printf("mentor-busy-sync: dropping a busy period with an unparseable start %q", p.Start)
 			continue
 		}

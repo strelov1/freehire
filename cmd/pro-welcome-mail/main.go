@@ -38,7 +38,7 @@ func run() int {
 	cfg := config.Load()
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("pro-welcome-mail: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
-		return 0
+		return worker.Skip("AWS_REGION+NOTIFY_EMAIL_FROM")
 	}
 	// A missing reply address is a hard stop, as in cmd/onboarding: this letter asks for a reply.
 	if cfg.OnboardingReplyTo == "" {

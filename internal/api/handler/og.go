@@ -9,16 +9,12 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// ogImageCacheControl matches the header the site's other on-demand OG cards
-// (job/company/blog, rendered in web/src/lib/server/og) already set. The site's
-// front-end CDN respects it, so a repeat request within the hour is an edge hit
-// rather than a re-render.
+// ogImageCacheControl matches the other on-demand OG cards; the CDN respects it, so a
+// repeat request within the hour is an edge hit.
 const ogImageCacheControl = "public, max-age=3600, stale-while-revalidate=86400"
 
-// ogHandlers serves the catalogue-scale OG preview cards for the pages that
-// carry no page-specific card of their own: /open and /about. Both read the
-// same published catalogstats snapshot statsHandlers.CatalogScale serves, so
-// the figures on the card and the figures on the page never disagree.
+// ogHandlers serves the OG cards for /open and /about, reading the same catalogstats
+// snapshot as statsHandlers.CatalogScale so card and page figures agree.
 type ogHandlers struct {
 	cache     cache.Cache
 	estimator catalogstats.Estimator

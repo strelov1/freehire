@@ -205,9 +205,8 @@ func callbackWith(raw, key, value string) (string, error) {
 
 func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	registry, ok := h.oauth.(oauthV2Registry)
-	// `mobileAuth` is checked too because this is no longer reached only by its own
-	// route: the shared sign-in callback hands over to it, and a deployment that has
-	// not configured the attempt store must answer rather than dereference nothing.
+	// mobileAuth is checked too: the shared sign-in callback hands over here, and a
+	// deployment without the attempt store must answer rather than dereference nil.
 	if !ok || h.mobileAuth == nil {
 		return authError(503, "oauth_unavailable", "sign-in unavailable")
 	}
@@ -272,11 +271,9 @@ func (h *authHandlers) oauthV2Fail(c *fiber.Ctx, target string, cause error) err
 	if errors.Is(cause, errAccountSuspended) {
 		code = "account_suspended"
 	}
-	// This leg always redirects rather than returning through RenderError, so
-	// it has to open its own reporting gate: a routine cause (bad state, expired
-	// attempt, provider rejected the code) stays silent, anything else — a DB
-	// error out of the store, the OAuth provider itself being down — is a
-	// genuine fault and must not vanish behind a generic "sign-in failed".
+	// This leg always redirects instead of returning through RenderError, so it opens
+	// its own reporting gate: routine causes (bad state, expired attempt, provider
+	// rejection) stay silent; anything else is a fault and must be reported.
 	if !isExpectedOAuthV2Failure(cause) {
 		reportUnexpected(c, cause)
 	}
