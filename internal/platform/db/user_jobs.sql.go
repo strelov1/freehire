@@ -259,9 +259,10 @@ SELECT a.stage,
        COALESCE((SELECT CASE WHEN e.signal = a.stage THEN e.source END
          FROM application_events e
          WHERE e.application_id = a.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
-           AND e.id > COALESCE((SELECT max(x.id) FROM application_events x
-                                 WHERE x.application_id = a.id AND x.kind = 'applied'
-                                   AND x.retracted_at IS NULL), 0)
+           AND (a.stage IS DISTINCT FROM 'applied'
+                OR e.id > COALESCE((SELECT max(x.id) FROM application_events x
+                                     WHERE x.application_id = a.id AND x.kind = 'applied'
+                                       AND x.retracted_at IS NULL), 0))
          ORDER BY e.id DESC
          LIMIT 1), '')::text AS stage_source
 FROM applications a
@@ -283,11 +284,12 @@ type GetApplicationStageForMirrorRow struct {
 // its stage, and who set that stage last — the source of the most recently WRITTEN live
 // stage_set event, ordered by id, not occurred_at: mail events are dated by the message's
 // received_at, so a stage mail set after the employer's can carry an earlier date. The event
-// counts only if it belongs to the current attempt (written after the newest live 'applied'
-// event — re-applying after clearing progress seeds stage='applied' with no stage_set event,
-// and an older employer event, even one whose signal was 'applied', must not then pass for the
-// author of the candidate's fresh record) and while its signal still IS the live stage (” —
-// nobody known — otherwise, or when there is no event). MirrorEmployerStage compares against
+// counts only while its signal still IS the live stage, and — when that stage is 'applied',
+// the one an apply seeds — only if it was written after the newest live 'applied' event:
+// re-applying after clearing progress seeds 'applied' with no stage_set event, and an older
+// employer event whose signal was 'applied' must not then pass for the author of the
+// candidate's fresh record. An apply that keeps a stage already set (interview stays
+// interview) leaves its author in place. ” — nobody known — otherwise, or with no event. MirrorEmployerStage compares against
 // the same expression. No row: the candidate has no record of this application, took it off their board,
 // or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
 // statement that they are not pursuing it, which an employer's move must not undo.
@@ -837,9 +839,10 @@ WITH moved AS (
       AND COALESCE((SELECT CASE WHEN e.signal = applications.stage THEN e.source END
          FROM application_events e
          WHERE e.application_id = applications.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
-           AND e.id > COALESCE((SELECT max(x.id) FROM application_events x
-                                 WHERE x.application_id = applications.id AND x.kind = 'applied'
-                                   AND x.retracted_at IS NULL), 0)
+           AND (applications.stage IS DISTINCT FROM 'applied'
+                OR e.id > COALESCE((SELECT max(x.id) FROM application_events x
+                                     WHERE x.application_id = applications.id AND x.kind = 'applied'
+                                       AND x.retracted_at IS NULL), 0))
          ORDER BY e.id DESC
          LIMIT 1), '') = $5::text
       AND (applications.stage IS NOT NULL OR applications.applied_at IS NOT NULL)

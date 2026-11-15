@@ -135,6 +135,28 @@ func TestEmployerStagesMirror(t *testing.T) {
 		t.Fatalf("Mirror(preparing) after a re-apply over an employer 'applied' event = %v, %v, stage %q", moved, err, stage())
 	}
 
+	// An apply that keeps the stage the employer set leaves the employer its author: the
+	// employer can still correct it.
+	if _, err := svc.ClearProgress(ctx, userID, "acme-platform"); err != nil {
+		t.Fatalf("ClearProgress: %v", err)
+	}
+	preparing := "preparing"
+	if _, err := svc.Track(ctx, userID, "acme-platform", &preparing, nil, appevent.SourceUser); err != nil {
+		t.Fatalf("Track(preparing): %v", err)
+	}
+	if moved, err := mirror.Mirror(ctx, userID, jobID, "interview"); err != nil || !moved || stage() != "interview" {
+		t.Fatalf("Mirror(interview) over preparing = %v, %v, stage %q", moved, err, stage())
+	}
+	if _, err := svc.MarkApplied(ctx, userID, "acme-platform", appevent.SourceUser); err != nil {
+		t.Fatalf("apply keeping interview: %v", err)
+	}
+	if stage() != "interview" {
+		t.Fatalf("stage after an apply over interview = %q, want it kept", stage())
+	}
+	if moved, err := mirror.Mirror(ctx, userID, jobID, "screening"); err != nil || !moved || stage() != "screening" {
+		t.Fatalf("Mirror(screening) correcting its own stage after an apply kept it = %v, %v, stage %q", moved, err, stage())
+	}
+
 	// A record whose progress the candidate cleared is not revived by the employer.
 	if _, err := svc.ClearProgress(ctx, userID, "acme-platform"); err != nil {
 		t.Fatalf("ClearProgress: %v", err)
