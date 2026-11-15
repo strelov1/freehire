@@ -70,8 +70,93 @@ func TestUserSaidRejectsAQuoteInsideANegatedSentence(t *testing.T) {
 		},
 		{
 			"contraction denial",
-			[]Message{mustUser(t, "I didn't work with Kubernetes at that job")},
+			[]Message{mustUser(t, "I didn't lead the migration to Kubernetes at that job")},
+			"lead the migration to Kubernetes",
+		},
+		{
+			"typographic apostrophe did not",
+			[]Message{mustUser(t, "I didn’t lead the migration to Kubernetes")},
+			"lead the migration to Kubernetes",
+		},
+		{
+			"typographic apostrophe have not",
+			[]Message{mustUser(t, "I haven’t worked with Kubernetes")},
 			"worked with Kubernetes",
+		},
+		{
+			"Russian not",
+			[]Message{mustUser(t, "Я не руководил миграцией на Kubernetes")},
+			"руководил миграцией на Kubernetes",
+		},
+		{
+			"Russian no",
+			[]Message{mustUser(t, "Нет опыта работы с Kubernetes")},
+			"опыта работы с Kubernetes",
+		},
+		{
+			"Russian never",
+			[]Message{mustUser(t, "Я никогда не работал с Kubernetes")},
+			"работал с Kubernetes",
+		},
+		{
+			"Spanish no",
+			[]Message{mustUser(t, "No tengo experiencia con Kubernetes")},
+			"tengo experiencia con Kubernetes",
+		},
+		{
+			"Spanish never",
+			[]Message{mustUser(t, "Nunca trabajé con Kubernetes en producción")},
+			"trabajé con Kubernetes en producción",
+		},
+		{
+			"Portuguese not",
+			[]Message{mustUser(t, "Eu não trabalhei com Kubernetes")},
+			"trabalhei com Kubernetes",
+		},
+		{
+			"Portuguese never",
+			[]Message{mustUser(t, "Nunca trabalhei com Kubernetes em produção")},
+			"trabalhei com Kubernetes em produção",
+		},
+		{
+			"German not",
+			[]Message{mustUser(t, "Ich habe nicht die Migration nach Kubernetes geleitet")},
+			"die Migration nach Kubernetes geleitet",
+		},
+		{
+			"German never",
+			[]Message{mustUser(t, "Ich habe nie mit Kubernetes gearbeitet")},
+			"mit Kubernetes gearbeitet",
+		},
+		{
+			"German none",
+			[]Message{mustUser(t, "Ich habe keine Erfahrung mit Kubernetes")},
+			"Erfahrung mit Kubernetes",
+		},
+		{
+			"French ne",
+			[]Message{mustUser(t, "Je ne travaille avec Kubernetes dans aucun projet")},
+			"travaille avec Kubernetes dans aucun projet",
+		},
+		{
+			"French apostrophe",
+			[]Message{mustUser(t, "Je n’ai jamais travaillé avec Kubernetes en production")},
+			"ai jamais travaillé avec Kubernetes en production",
+		},
+		{
+			"French ASCII apostrophe",
+			[]Message{mustUser(t, "Je n'ai jamais travaillé avec Kubernetes en production")},
+			"ai jamais travaillé avec Kubernetes en production",
+		},
+		{
+			"French pas",
+			[]Message{mustUser(t, "Je travaille pas avec Kubernetes en production")},
+			"avec Kubernetes en production",
+		},
+		{
+			"French never",
+			[]Message{mustUser(t, "Je travaille jamais avec Kubernetes en production")},
+			"avec Kubernetes en production",
 		},
 		{
 			"explicit NOT, case-insensitive",
@@ -118,6 +203,13 @@ func TestUserSaidFindsALaterUnnegatedOccurrenceAfterAnEarlierDenial(t *testing.T
 	}
 	if !UserSaid(transcript, "lead the migration to Kubernetes") {
 		t.Error("a genuine later assertion was rejected because an earlier message denied the same wording")
+	}
+}
+
+func TestUserSaidFindsALaterUnnegatedOccurrenceInTheSameMessage(t *testing.T) {
+	transcript := []Message{mustUser(t, "I did not lead the migration to Kubernetes at Acme. At Globex I did lead the migration to Kubernetes.")}
+	if !UserSaid(transcript, "lead the migration to Kubernetes") {
+		t.Error("a genuine later assertion was rejected because an earlier sentence in the same message denied the same wording")
 	}
 }
 
