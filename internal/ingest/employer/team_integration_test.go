@@ -123,3 +123,31 @@ func TestTeam_AMemberDeletingTheirAccountHandsTheirVacanciesOver(t *testing.T) {
 		t.Errorf("a non-member's vacancy created_by = %v, %v; want NULL as before", createdBy, err)
 	}
 }
+
+func TestTeam_DeletingTheAccountDetachesTheMembersVacancies(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	member := f.member(t, "dev.personal@example.test", "dev@acme.test")
+	f.job(t, "member-vacancy", member)
+
+	// The claimant deletes their freehire account: the company account and its team go.
+	if _, err := f.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, f.holder); err != nil {
+		t.Fatalf("delete claimant: %v", err)
+	}
+	var createdBy *int64
+	if err := f.pool.QueryRow(ctx, `SELECT created_by FROM jobs WHERE public_slug = 'member-vacancy'`).Scan(&createdBy); err != nil || createdBy != nil {
+		t.Fatalf("member's vacancy created_by = %v, %v; want NULL, detached with the account", createdBy, err)
+	}
+
+	// The former member claims another company: the old vacancy does not follow them.
+	if _, err := f.repo.InsertPending(ctx, member, "globex", "Globex", "dev@globex.test"); err != nil {
+		t.Fatalf("former member's claim: %v", err)
+	}
+	if _, err := f.pool.Exec(ctx, `UPDATE company_accounts SET status = 'active' WHERE user_id = $1`, member); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	jobs, _, err := f.repo.ListMine(ctx, member)
+	if err != nil || len(jobs) != 0 {
+		t.Errorf("the new company's vacancies = %d, %v; want none of the old company's", len(jobs), err)
+	}
+}

@@ -150,6 +150,10 @@ for the full design record.
   cascade. Account deletion lives in `identity`, which cannot import this block, so the rule
   lives in the database.
 - **Known limit:** a CLAIMANT deleting their freehire account deletes the company account,
-  and its team and invitations cascade with it; their vacancies stop taking applications, as
-  before teams existed. Handing the account to a member is a product decision not yet made.
+  and its team and invitations cascade with it; its vacancies stop taking applications, as
+  before teams existed. The members' vacancies are detached first (`created_by` NULL, the
+  `company_accounts_detach_team` trigger, 0271), as the claimant's own are by the foreign key —
+  left pointing at a member, they would follow them into the next company they act for, along
+  with their applications and CVs. Handing the account to a member is a product decision not
+  yet made.
 

@@ -11,8 +11,10 @@
 --
 -- CASCADE from company_accounts, which goes when a pending claim is rejected (it cannot have
 -- invited anyone) or when the claimant deletes their freehire account — and then the team and
--- its invitations go with the account, as its vacancies stop taking applications today: there
--- is no hand-over of the account itself to a member (see add-employer-company-team's design).
+-- its invitations go with the account, and its vacancies stop taking applications: there is
+-- no hand-over of the account itself to a member (see add-employer-company-team's design).
+-- Before that cascade, the members' vacancies are detached (company_accounts_detach_team
+-- below), as the claimant's own are by jobs.created_by's SET NULL.
 -- A revoked account keeps its rows, and its members are refused with it, since every
 -- capability checks the account's status.
 CREATE TABLE IF NOT EXISTS public.company_account_members (
@@ -95,3 +97,27 @@ DROP TRIGGER IF EXISTS users_employer_hand_over ON public.users;
 CREATE TRIGGER users_employer_hand_over
     BEFORE DELETE ON public.users
     FOR EACH ROW EXECUTE FUNCTION public.employer_hand_over_member_vacancies();
+
+-- When a company account is deleted (its claimant deleting their freehire account), its
+-- members' vacancies are detached — created_by set NULL, as the claimant's own vacancies are
+-- by the foreign key — BEFORE the membership rows cascade away. Left pointing at the members,
+-- they would follow a former member into any company they later claim or join, and that
+-- company's team (employer_team) would read the old company's vacancies and the applications
+-- and CVs sent to them.
+CREATE OR REPLACE FUNCTION public.employer_detach_team_vacancies() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE public.jobs j
+    SET created_by = NULL
+    FROM public.company_account_members m
+    WHERE m.company_slug = OLD.company_slug
+      AND j.created_by = m.user_id
+      AND j.source = 'employer';
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS company_accounts_detach_team ON public.company_accounts;
+CREATE TRIGGER company_accounts_detach_team
+    BEFORE DELETE ON public.company_accounts
+    FOR EACH ROW EXECUTE FUNCTION public.employer_detach_team_vacancies();
