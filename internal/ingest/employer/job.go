@@ -80,18 +80,17 @@ type Minter interface {
 }
 
 // JobRepository is the persistence contract for an employer's own vacancies, expressed in
-// the job package's domain types.
+// the job package's domain types. "Own" is the company team's (employer_team, migration
+// 0271): every actor-scoped method reaches the vacancies anyone in actorID's team created.
 type JobRepository interface {
-	// Owner reports who created the job at (jobSource, externalID), if any — the
-	// pre-Create check that stops a different employer taking over a posting via a
-	// colliding URL (see ErrURLTaken).
-	Owner(ctx context.Context, externalID string) (createdBy int64, found bool, err error)
-	// BySlug loads a vacancy by its public slug, scoped to actorID's own jobSource-authored
-	// postings; ErrJobNotFound for anything else (missing, another owner's, another
+	// Teammates reports whether otherID is actorID or acts for the same company.
+	Teammates(ctx context.Context, actorID, otherID int64) (bool, error)
+	// BySlug loads a vacancy by its public slug, scoped to the jobSource-authored postings of
+	// actorID's team; ErrJobNotFound for anything else (missing, another company's, another
 	// source's, or private).
 	BySlug(ctx context.Context, actorID int64, slug string) (job.Job, job.Extras, error)
-	// ListMine returns every vacancy actorID has created through this path, newest first —
-	// the dashboard's own list, open and closed both.
+	// ListMine returns every vacancy actorID's team has created through this path, newest
+	// first — the dashboard's own list, open and closed both.
 	ListMine(ctx context.Context, actorID int64) ([]job.Job, []job.Extras, error)
 	// SaveForm stores (replacing) the questions of an on-site vacancy as its apply_forms
 	// row. The vacancy is one this account already owns: a fresh mint, or a BySlug load.
@@ -180,23 +179,13 @@ func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, [
 }
 
 // CreateVacancy publishes a new vacancy for userID's own claimed company, or idempotently
-// updates/reopens it when in.URL already identifies a vacancy this SAME account owns (see
+// updates/reopens it when in.URL already identifies a vacancy of the SAME company team (see
 // employer-job-authoring's "re-creating reopens" requirement — UpsertManualJob's own
 // ON CONFLICT clears closed_at, so no separate reopen path is needed). A URL already owned
-// by a DIFFERENT employer account is refused as ErrURLTaken, never silently overwritten.
-//
-// The pre-check below and the mint that follows are NOT one atomic step — two employer
-// accounts racing to create the same not-yet-existing URL can both pass it, and
-// UpsertManualJob's ON CONFLICT never reassigns created_by, so the loser's write would
-// silently overwrite the winner's content while still returning 201 as if the loser owned
-// the row. The RE-CHECK after Create closes that: whichever request's write actually landed
-// last reads back its own outcome and the other is told the truth (ErrURLTaken) instead of
-// a false success. This does not stop the fleeting overwrite itself — a genuine fix needs
-// the ownership check baked into the upsert's own WHERE clause, which UpsertManualJob
-// cannot carry (moderation deliberately allows ANY moderator to edit ANY manual job) — but
-// it does stop a caller ever being told they own a row that is actually someone else's,
-// which is the failure that matters: every later PATCH/close from that account is scoped by
-// created_by and would otherwise 404 with no explanation.
+// by a DIFFERENT company is refused as ErrURLTaken, never overwritten: the mint sets
+// moderation.CreateInput.Employer, so the ownership check is made inside the upsert
+// itself (its conflict updates only a row of the caller's team). No pre-check races it, and
+// no change of team membership between a check and the write can cross companies.
 func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInput) (job.Job, job.Extras, error) {
 	mode, err := in.ApplyMode.resolve()
 	if err != nil {
@@ -219,25 +208,15 @@ func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInp
 		return job.Job{}, job.Extras{}, fmt.Errorf("%w: url is required", ErrInvalid)
 	}
 
-	owner, found, err := s.jobs.Owner(ctx, in.URL)
-	if err != nil {
-		return job.Job{}, job.Extras{}, err
-	}
-	if found && owner != userID {
+	j, extras, err := s.minter.Create(ctx, userID, in.createInput(userID, acc, in.URL, ""))
+	if errors.Is(err, moderation.ErrOwnedElsewhere) {
 		return job.Job{}, job.Extras{}, ErrURLTaken
 	}
-
-	j, extras, err := s.minter.Create(ctx, userID, in.createInput(acc, in.URL, ""))
+	if errors.Is(err, moderation.ErrNoCompany) {
+		return job.Job{}, job.Extras{}, ErrNotActive
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
-	}
-
-	owner, found, err = s.jobs.Owner(ctx, in.URL)
-	if err != nil {
-		return job.Job{}, job.Extras{}, err
-	}
-	if found && owner != userID {
-		return job.Job{}, job.Extras{}, ErrURLTaken
 	}
 	return j, extras, nil
 }
@@ -257,7 +236,10 @@ func (s *Service) createOnSite(ctx context.Context, userID int64, acc Account, i
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
-	j, extras, err := s.minter.Create(ctx, userID, in.createInput(acc, "", job.DirectApplyPrefix+uuid.NewString()))
+	j, extras, err := s.minter.Create(ctx, userID, in.createInput(userID, acc, "", job.DirectApplyPrefix+uuid.NewString()))
+	if errors.Is(err, moderation.ErrNoCompany) {
+		return job.Job{}, job.Extras{}, ErrNotActive
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -272,8 +254,10 @@ func (s *Service) createOnSite(ctx context.Context, userID int64, acc Account, i
 
 // createInput is the mint request for this account's vacancy: exactly one of url and
 // externalID is set, by the apply mode.
-func (in VacancyInput) createInput(acc Account, url, externalID string) moderation.CreateInput {
+func (in VacancyInput) createInput(actorID int64, acc Account, url, externalID string) moderation.CreateInput {
 	return moderation.CreateInput{
+		// The upsert may update an existing row only if this account's team created it.
+		Employer:    moderation.EmployerOwner{UserID: actorID, CompanySlug: acc.CompanySlug},
 		URL:         url,
 		ExternalID:  externalID,
 		Source:      jobSource,
@@ -446,4 +430,9 @@ func stringOr(p *string, fallback string) string {
 		return *p
 	}
 	return fallback
+}
+
+// Teammates reports whether otherID is userID or acts for the same company.
+func (s *Service) Teammates(ctx context.Context, userID, otherID int64) (bool, error) {
+	return s.jobs.Teammates(ctx, userID, otherID)
 }

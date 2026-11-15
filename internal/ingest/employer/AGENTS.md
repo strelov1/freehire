@@ -50,18 +50,22 @@ for the full design record.
   has no URL: `createOnSite` mints `freehire:<uuid>` through `moderation.CreateInput.ExternalID`
   and `job.IsDirectApply` recognises it everywhere. Its questions are its `apply_forms` row
   (provider `freehire`, built by `applyform.FreehireForm`), replaced through
-  `VacancyPatch.Questions`. The `Owner(url)` race guard below is skipped in that mode — it
+  `VacancyPatch.Questions`. The upsert's owner guard below never fires in that mode — it
   protects a URL two employers could both name, and a UUID is one nobody else can.
-- **`CreateVacancy` guards a real gap in `UpsertManualJob`, not a hypothetical one.** That
-  query's `ON CONFLICT` never checks `created_by`, so reusing `moderation.Service.Create`
-  unguarded would let employer B silently take over employer A's vacancy by resubmitting the
-  same URL under `source='employer'`. The pre-check (`JobRepository.Owner`, backed by the
-  already-existing `GetJobBySourceExternalID`) is what closes it; re-creating under the same
-  URL by the SAME owner is the (deliberate, no-separate-endpoint) reopen path.
+- **`CreateVacancy` guards a real gap in `UpsertManualJob`, inside the upsert itself.** Its
+  `ON CONFLICT` would otherwise let employer B take over employer A's vacancy by resubmitting
+  the same URL under `source='employer'`. The mint sets `moderation.CreateInput.Employer`
+  (the caller and their company), and the conflict then updates only a row created by the caller's company
+  team (`owner_team_of`, employer_team); for another company's row nothing is written and
+  `moderation.ErrOwnedElsewhere` comes back, mapped to `ErrURLTaken`. A pre-check could not do
+  this: two employers racing, or a member changing team between check and write, slipped
+  past the old one. Re-creating under the same URL by the same TEAM is the (deliberate,
+  no-separate-endpoint) reopen path; moderators leave the guard unset and may edit any
+  manual job.
 - **`UpdateVacancy`/`CloseVacancy` cannot reuse moderation's own `Update`/`BySlug`.** Those
   are scoped to "any manually-authored job" (`created_by IS NOT NULL`), correct for trusted
   staff and wrong for a self-service actor. `UpdateEmployerJob`/`CloseEmployerJob` add
-  `created_by = actor_id AND source = 'employer'` to the same shape.
+  `created_by = ANY(ARRAY(SELECT employer_team(actor_id))) AND source = 'employer'` to the same shape.
 - **Facet derivation never touches moderation's private `derive()`.** Both `job.go`'s
   `deriveEmployer` and moderation's own `derive()` are thin wrappers around the same shared,
   exported primitives (`job.New`/`jobderive.Input`) — see
@@ -117,3 +121,48 @@ for the full design record.
   WHOLE object the moment any other key isn't a string, which would silently read
   `description`/`website` as absent too. See `internal/api/handler/employer.go`'s
   `companyInfoField`.
+
+## The company team (migration 0271)
+- **A vacancy belongs to the company team, not to its author.** `employer_team(actor)` (a SQL
+  function in 0271) is everyone who acts for the actor's company — the claimant and the
+  members — and it is the ONE ownership rule: every actor-scoped vacancy query
+  (`jobs_manual.sql`) and every inbox query (`direct_applications.sql`) reads
+  `created_by = ANY(ARRAY(SELECT employer_team(...)))`, and the Go-side checks (`BySlug`,
+  directapply's own-company refusal) ask `EmployerTeamIncludes`; a re-created vacancy is
+  guarded inside the upsert (see `CreateVacancy` above). A new employer capability
+  scoped to "the caller's vacancies" uses it too, never `created_by = actor`.
+- **The claimant's row is still the account.** Its status, moderation, revocation and slug
+  reservation are unchanged, and a revoked account refuses its members with it (they all go
+  through `ActiveAccount`). `GetByUserID` returns the company's `Account` for a member too,
+  with `Member` set and `WorkEmail` the member's OWN address — where their vacancies'
+  applications go and what candidates reply to. `UserID` stays the claimant's: it is the
+  account's address in the moderator/admin routes.
+- **No roles.** Every member acts exactly as the claimant does; the claimant is not a member
+  row. How members join and leave (invitations, removal with its hand-over) is the team
+  service's.
+- **One company per user, across both tables.** `company_account_members.user_id` is the
+  primary key, and a claim refuses a member (`InsertPendingCompanyAccount` writes no row),
+  under the user's `LockEmployerActor` advisory lock (`asActor`), which the team service's
+  acceptance takes too.
+- **A member deleting their freehire account hands their vacancies over too**, by the
+  `users_employer_hand_over` BEFORE DELETE trigger (0271). It must run before the row goes:
+  `jobs.created_by` is ON DELETE SET NULL and that action fires before the member row's own
+  cascade. Account deletion lives in `identity`, which cannot import this block, so the rule
+  lives in the database.
+- **An employer vacancy write holds its author's team rows.** With `CreateInput.Employer`
+  set, moderation's `Create` takes the author's users row, the company-account row and the
+  author's membership row, `FOR KEY SHARE` in its transaction (`LockAuthor`,
+  `LockCompanyAccountBySlug`, `LockActingMembership`) — the order a user deletion takes them
+  (the user, then the account and memberships it cascades to), so the two never deadlock. A removal or account
+  deletion running meanwhile waits for the write to commit, then hands over or detaches the
+  new vacancy too. An author who no longer acts for the company the write was prepared for
+  (removed, the account gone, or moved to another company) is refused
+  (`moderation.ErrNoCompany` → `ErrNotActive`).
+- **Known limit:** a CLAIMANT deleting their freehire account deletes the company account,
+  and its team and invitations cascade with it; its vacancies stop taking applications, as
+  before teams existed. The members' vacancies are detached first (`created_by` NULL, the
+  `company_accounts_detach_team` trigger, 0271), as the claimant's own are by the foreign key —
+  left pointing at a member, they would follow them into the next company they act for, along
+  with their applications and CVs. Handing the account to a member is a product decision not
+  yet made.
+

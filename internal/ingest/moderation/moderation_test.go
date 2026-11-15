@@ -32,7 +32,7 @@ type fakeRepo struct {
 	ret job.Job
 }
 
-func (f *fakeRepo) Create(_ context.Context, fields job.Fields, actorID int64) (job.Job, job.Extras, error) {
+func (f *fakeRepo) Create(_ context.Context, fields job.Fields, actorID int64, _ moderation.EmployerOwner) (job.Job, job.Extras, error) {
 	f.created, f.createActor, f.createCalled = fields, actorID, true
 	return f.ret, job.Extras{}, nil
 }

@@ -18,7 +18,7 @@ WITH closed AS (
         closed_reason = 'employer_closed',
         updated_at    = now()
     WHERE jobs.public_slug = $1
-      AND jobs.created_by = $2::bigint
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team($2::bigint)))
       AND jobs.source = 'employer'
       AND jobs.closed_at IS NULL
     RETURNING jobs.id
@@ -36,7 +36,8 @@ type CloseEmployerJobParams struct {
 }
 
 // Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
-// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+// team's employer-authored posting (created_by in employer_team(actor_id) AND source =
+// 'employer'), never any other
 // job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
 // from a moderator's 'moderated' close — a different actor and a different trust level.
 // WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
@@ -172,13 +173,14 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 const listEmployerJobs = `-- name: ListEmployerJobs :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes, team
 FROM jobs_read
-WHERE created_by = $1::bigint
+WHERE created_by = ANY(ARRAY(SELECT employer_team($1::bigint)))
   AND source = 'employer'
 ORDER BY created_at DESC
 LIMIT 200
 `
 
-// An employer's own dashboard list: every vacancy this actor created through this path,
+// An employer's own dashboard list: every vacancy the actor's company team created through
+// this path (employer_team, migration 0271),
 // newest first, open and closed both (the dashboard shows a closed one with its own badge
 // rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
 // ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
@@ -284,7 +286,7 @@ WITH reopened AS (
         closed_reason = '',
         updated_at    = now()
     WHERE jobs.public_slug = $1
-      AND jobs.created_by = $2::bigint
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team($2::bigint)))
       AND jobs.source = 'employer'
       AND jobs.closed_reason = 'employer_closed'
     RETURNING jobs.id, COALESCE(jobs.posted_at, jobs.created_at) AS posted
@@ -305,8 +307,8 @@ type ReopenEmployerJobParams struct {
 	ActorID    int64  `json:"actor_id"`
 }
 
-// Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
-// source = 'employer'), and ONLY a close that actor made — closed_reason =
+// Undoes CloseEmployerJob: the same scope (created_by in employer_team(actor_id) AND
+// source = 'employer'), and ONLY a close the employer made — closed_reason =
 // 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
 // stays closed; reopening it is not the employer's call. A vacancy taking applications on
 // freehire has no URL to re-create under, so without this its employer could never undo a
@@ -364,7 +366,7 @@ SET title        = $1,
     updated_by   = $31::bigint,
     updated_at   = now()
 WHERE public_slug = $32
-  AND created_by = $33::bigint
+  AND created_by = ANY(ARRAY(SELECT employer_team($33::bigint)))
   AND source = 'employer'
   AND NOT is_private
 RETURNING jobs.id
@@ -407,7 +409,8 @@ type UpdateEmployerJobParams struct {
 }
 
 // The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
-// created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+// created_by is in the actor's company team (employer_team, migration 0271 — not merely IS
+// NOT NULL) AND source = 'employer'. UpdateManualJob's
 // own scope lets any moderator edit any manually-authored job, which is correct for trusted
 // staff and wrong for a self-service employer — see openspec/changes/
 // add-employer-company-accounts/design.md for why this needed its own query rather than a
@@ -718,6 +721,8 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     updated_at   = now()
+WHERE $41::bigint IS NULL
+   OR jobs.created_by = ANY(ARRAY(SELECT employer_team($41::bigint)))
 RETURNING jobs.id
 `
 
@@ -762,6 +767,7 @@ type UpsertManualJobParams struct {
 	RequirementsDerived  []byte             `json:"requirements_derived"`
 	CreatedBy            int64              `json:"created_by"`
 	UpdatedBy            int64              `json:"updated_by"`
+	OwnerTeamOf          pgtype.Int8        `json:"owner_team_of"`
 }
 
 // Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
@@ -777,6 +783,12 @@ type UpsertManualJobParams struct {
 // shows its salary immediately, before any enrichment pass runs (the pass then preserves
 // it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 // (closed_at = NULL) since the moderator is re-asserting it.
+// An employer re-creating a vacancy at an identity that already exists may only update one
+// its own company team created (owner_team_of, employer_team in migration 0271); for
+// somebody else's row the conflict updates nothing and no row comes back. Checked here, in
+// the write itself, so no change of who belongs to which team between a pre-check and this
+// statement can let one company overwrite another's vacancy. NULL for a moderator, who may
+// edit any manual job.
 func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (int64, error) {
 	row := q.db.QueryRow(ctx, upsertManualJob,
 		arg.Source,
@@ -819,6 +831,7 @@ func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams
 		arg.RequirementsDerived,
 		arg.CreatedBy,
 		arg.UpdatedBy,
+		arg.OwnerTeamOf,
 	)
 	var id int64
 	err := row.Scan(&id)

@@ -3,18 +3,13 @@
 -- the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 -- succeeds, and the loser's caller maps the unique violation to a clean conflict — see
 -- pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
--- an account (in any status) also fails here, on the primary-key conflict.
+-- an account (in any status) also fails here, on the primary-key conflict. A user who is a
+-- member of another company's team (migration 0271) is refused too, by writing no row: a user
+-- acts for at most one company.
 INSERT INTO company_accounts (user_id, company_slug, company_name, work_email)
-VALUES (@user_id, @company_slug, @company_name, @work_email)
+SELECT @user_id, @company_slug, @company_name, @work_email
+WHERE NOT EXISTS (SELECT 1 FROM company_account_members m WHERE m.user_id = @user_id)
 RETURNING *;
-
--- name: GetCompanyAccountByUserID :one
--- The one account a user may hold, in whatever status it is in. Every employer-facing
--- capability check reads this and then inspects status itself, rather than a second query
--- per status, since a pending/revoked account needs to be distinguishable in the refusal.
-SELECT *
-FROM company_accounts
-WHERE user_id = @user_id;
 
 -- name: ListPendingCompanyAccounts :many
 -- The moderator review queue: every claim that could not auto-activate (unknown or

@@ -63,9 +63,10 @@ FROM direct_applications
 WHERE job_id = $1 AND user_id = $2;
 
 -- The employer's inbox. Every statement below reaches an application only through the
--- vacancy it was sent to, and only when that vacancy is the employer's own on-site posting
--- (created_by = employer AND source = 'employer') — the same ownership predicate the
--- employer's vacancy writes use (jobs_manual.sql). An application not yet delivered
+-- vacancy it was sent to, and only when that vacancy is an on-site posting of the employer's
+-- company team (created_by in employer_team(employer), migration 0271, AND source =
+-- 'employer') — the same ownership predicate the employer's vacancy writes use
+-- (jobs_manual.sql). An application not yet delivered
 -- (sent_at NULL) is not the employer's to see: they were never sent it, and it may still be
 -- replaced by the candidate's retry. The vacancy is read from the base table, not jobs_read:
 -- these are identity columns, not a posting read.
@@ -80,7 +81,7 @@ SELECT da.id, j.public_slug AS job_slug, j.title AS job_title, u.email AS candid
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
 JOIN users u ON u.id = da.user_id
-WHERE j.created_by = sqlc.arg(employer_id)::bigint
+WHERE j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
   AND (sqlc.narg(job_slug)::text IS NULL OR j.public_slug = sqlc.narg(job_slug)::text)
@@ -96,7 +97,7 @@ LIMIT sqlc.arg(row_limit)::int OFFSET sqlc.arg(row_offset)::int;
 SELECT da.stage, count(*)::bigint AS applications
 FROM direct_applications da
 JOIN jobs j ON j.id = da.job_id
-WHERE j.created_by = sqlc.arg(employer_id)::bigint
+WHERE j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL
   AND (sqlc.narg(job_slug)::text IS NULL OR j.public_slug = sqlc.narg(job_slug)::text)
@@ -110,7 +111,7 @@ FROM direct_application_cvs c
 JOIN direct_applications da ON da.id = c.application_id
 JOIN jobs j ON j.id = da.job_id
 WHERE c.application_id = sqlc.arg(id)
-  AND j.created_by = sqlc.arg(employer_id)::bigint
+  AND j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
   AND j.source = 'employer'
   AND da.sent_at IS NOT NULL;
 
@@ -130,7 +131,7 @@ WITH moved AS (
     FROM jobs j
     WHERE da.id = sqlc.arg(id)
       AND j.id = da.job_id
-      AND j.created_by = sqlc.arg(employer_id)::bigint
+      AND j.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(employer_id)::bigint)))
       AND j.source = 'employer'
       AND da.sent_at IS NOT NULL
     RETURNING da.user_id, da.job_id, (da.stage_changed_at IS NOT DISTINCT FROM now())::boolean AS changed

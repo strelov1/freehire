@@ -837,7 +837,8 @@ type Querier interface {
 	// would show no crawl evidence from its second run on and never sweep its delisted rows.
 	CloseCoveredJobs(ctx context.Context, arg CloseCoveredJobsParams) ([]string, error)
 	// Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
-	// employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+	// team's employer-authored posting (created_by in employer_team(actor_id) AND source =
+	// 'employer'), never any other
 	// job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
 	// from a moderator's 'moderated' close — a different actor and a different trust level.
 	// WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
@@ -2249,6 +2250,9 @@ type Querier interface {
 	// An id matching no open canonical row simply yields no row for that id, which the caller
 	// reads as "no widening".
 	DuplicateClosureGeoFor(ctx context.Context, ownerIds []int64) ([]DuplicateClosureGeoForRow, error)
+	// Whether other is actor or acts for the same company as actor (employer_team, migration
+	// 0271). Every user is their own teammate, so a caller never special-cases itself.
+	EmployerTeamIncludes(ctx context.Context, arg EmployerTeamIncludesParams) (bool, error)
 	// Newest open postings written in the last ten minutes, capped, so cmd/queue-metrics
 	// can ask jobfacts whether a stored employment_type is carried only by boilerplate.
 	//
@@ -2864,10 +2868,15 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
-	// The one account a user may hold, in whatever status it is in. Every employer-facing
-	// capability check reads this and then inspects status itself, rather than a second query
-	// per status, since a pending/revoked account needs to be distinguishable in the refusal.
-	GetCompanyAccountByUserID(ctx context.Context, userID int64) (CompanyAccount, error)
+	// A company account's team: who acts for it
+	// (migration 0271). The claimant stays the account (company_accounts); members act for it.
+	// The account a user acts for, as its claimant or as a member, in whatever status the account
+	// is in. acting_email is the user's own work address — the claimant's work_email, or the one
+	// the member's invitation was sent to — because it is where that user's vacancies'
+	// applications go and what candidates reply to. member tells the two apart. Two primary-key
+	// lookups rather than one OR across a join, which neither key could serve; a user is in at
+	// most one of the two (the writes keep it so), so at most one row comes back.
+	GetCompanyAccountForUser(ctx context.Context, userID int64) (GetCompanyAccountForUserRow, error)
 	// The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
 	// Service.Hide can take LockCompanyForVote before it touches the feedback row —
 	// the same company-then-feedback lock order Upsert/Delete already use, needed to
@@ -3727,7 +3736,9 @@ type Querier interface {
 	// the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 	// succeeds, and the loser's caller maps the unique violation to a clean conflict — see
 	// pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
-	// an account (in any status) also fails here, on the primary-key conflict.
+	// an account (in any status) also fails here, on the primary-key conflict. A user who is a
+	// member of another company's team (migration 0271) is refused too, by writing no row: a user
+	// acts for at most one company.
 	InsertPendingCompanyAccount(ctx context.Context, arg InsertPendingCompanyAccountParams) (CompanyAccount, error)
 	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
 	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
@@ -4639,9 +4650,10 @@ type Querier interface {
 	// two drift.
 	ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error)
 	// The employer's inbox. Every statement below reaches an application only through the
-	// vacancy it was sent to, and only when that vacancy is the employer's own on-site posting
-	// (created_by = employer AND source = 'employer') — the same ownership predicate the
-	// employer's vacancy writes use (jobs_manual.sql). An application not yet delivered
+	// vacancy it was sent to, and only when that vacancy is an on-site posting of the employer's
+	// company team (created_by in employer_team(employer), migration 0271, AND source =
+	// 'employer') — the same ownership predicate the employer's vacancy writes use
+	// (jobs_manual.sql). An application not yet delivered
 	// (sent_at NULL) is not the employer's to see: they were never sent it, and it may still be
 	// replaced by the candidate's retry. The vacancy is read from the base table, not jobs_read:
 	// these are identity columns, not a posting read.
@@ -4649,7 +4661,8 @@ type Querier interface {
 	// one vacancy and one stage — or to the one application `id` names, which is how a single
 	// application is read. Reached through jobs_created_by_idx.
 	ListEmployerApplications(ctx context.Context, arg ListEmployerApplicationsParams) ([]ListEmployerApplicationsRow, error)
-	// An employer's own dashboard list: every vacancy this actor created through this path,
+	// An employer's own dashboard list: every vacancy the actor's company team created through
+	// this path (employer_team, migration 0271),
 	// newest first, open and closed both (the dashboard shows a closed one with its own badge
 	// rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
 	// ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
@@ -5774,8 +5787,19 @@ type Querier interface {
 	// created and how many closed, for the one-off history reconstruction. A full scan: run it
 	// on the analytics replica, never on a request path.
 	ListedJobDailyFlow(ctx context.Context) ([]ListedJobDailyFlowRow, error)
+	// Locks the user's membership row (FOR KEY SHARE) and names its company. A vacancy write
+	// takes it so that removing the member — or deleting their company account, which cascades
+	// here — waits for the write to commit, and then hands over or detaches the new vacancy
+	// too. No row: the user is no member (the claimant, or nobody).
+	LockActingMembership(ctx context.Context, userID int64) (string, error)
 	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
 	LockAssistantSessionCreation(ctx context.Context, userID int64) error
+	// Locks the author's users row (FOR KEY SHARE) for an employer vacancy write, before the
+	// company and membership rows: deleting the user takes that row first and then cascades to
+	// the company account and memberships, so the write takes the three in the same order and
+	// the two serialise instead of deadlocking (the write's created_by foreign-key check would
+	// otherwise wait on the user row while holding the account row). No row: the user is gone.
+	LockAuthor(ctx context.Context, userID int64) (int64, error)
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
 	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
 	// booking holding its share lock makes this wait until the mock is committed, and
@@ -5789,6 +5813,11 @@ type Querier interface {
 	// it started with even after waiting on a row lock, so the eligibility check has to be a
 	// LATER statement to see a leave or block that committed while this one waited.
 	LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error
+	// Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
+	// waits for an in-flight vacancy write of its team. Taken BEFORE LockActingMembership, the
+	// order the account's deletion takes the two. Returns the claimant. No row: the account is
+	// gone.
+	LockCompanyAccountBySlug(ctx context.Context, companySlug string) (int64, error)
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
@@ -5808,6 +5837,11 @@ type Querier interface {
 	// letter goes out after the move's transaction commits and must still be inside the lock;
 	// the caller releases it with UnlockDirectApplication on the same connection.
 	LockDirectApplication(ctx context.Context, id int64) error
+	// Serialises the two writes that make a user act for a company — a claim and an invitation's
+	// acceptance — for one user. Each refuses a user the other table already holds, but two
+	// concurrent statements would each check a snapshot without the other's row; taken first in
+	// the same transaction, this lock makes the second write's check see the first's commit.
+	LockEmployerActor(ctx context.Context, userID int64) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -7191,8 +7225,8 @@ type Querier interface {
 	// so only the new first message is unread. The read cursors are taken from the snapshot
 	// before the new message is inserted. No row means closed-without-block did not hold.
 	ReopenConversation(ctx context.Context, arg ReopenConversationParams) (ReopenConversationRow, error)
-	// Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
-	// source = 'employer'), and ONLY a close that actor made — closed_reason =
+	// Undoes CloseEmployerJob: the same scope (created_by in employer_team(actor_id) AND
+	// source = 'employer'), and ONLY a close the employer made — closed_reason =
 	// 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
 	// stays closed; reopening it is not the employer's call. A vacancy taking applications on
 	// freehire has no URL to re-create under, so without this its employer could never undo a
@@ -8323,7 +8357,8 @@ type Querier interface {
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
 	// The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
-	// created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+	// created_by is in the actor's company team (employer_team, migration 0271 — not merely IS
+	// NOT NULL) AND source = 'employer'. UpdateManualJob's
 	// own scope lets any moderator edit any manually-authored job, which is correct for trusted
 	// staff and wrong for a self-service employer — see openspec/changes/
 	// add-employer-company-accounts/design.md for why this needed its own query rather than a
@@ -8673,6 +8708,12 @@ type Querier interface {
 	// shows its salary immediately, before any enrichment pass runs (the pass then preserves
 	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 	// (closed_at = NULL) since the moderator is re-asserting it.
+	// An employer re-creating a vacancy at an identity that already exists may only update one
+	// its own company team created (owner_team_of, employer_team in migration 0271); for
+	// somebody else's row the conflict updates nothing and no row comes back. Checked here, in
+	// the write itself, so no change of who belongs to which team between a pre-check and this
+	// statement can let one company overwrite another's vacancy. NULL for a moderator, who may
+	// edit any manual job.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (int64, error)
 	// One row per synced busy interval, source fixed to 'google_calendar' (the only writer
 	// of this source). external_id is not Google's — a free/busy period carries no
