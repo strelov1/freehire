@@ -88,3 +88,7 @@ func TestReferralMessageRejectsInvalidRequests(t *testing.T) {
 		})
 	}
 }
+
+func (emptyReferralBank) ListEmployments(context.Context, int64) ([]experience.Employment, error) {
+	return nil, nil
+}

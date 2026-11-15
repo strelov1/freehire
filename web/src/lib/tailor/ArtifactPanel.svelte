@@ -321,7 +321,7 @@
     {:else if tab === 'letter'}
       <!-- An artefact, not a measurement: this tab carries no score and no delta, because there
            is no baseline a letter could be read against. -->
-      <CoverLetter {cvId} />
+      {#key cvId}<CoverLetter {cvId} />{/key}
     {:else if !job}
       <!-- Base mode renders only the history above; nothing here can be reached without a vacancy. -->
     {:else if tab === 'jd'}

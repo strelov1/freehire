@@ -589,14 +589,23 @@ type ConversationReport struct {
 }
 
 type CoverLetter struct {
-	UserID       int64              `json:"user_id"`
-	JobID        int64              `json:"job_id"`
-	Body         string             `json:"body"`
-	CitedAtomIds []pgtype.UUID      `json:"cited_atom_ids"`
-	Language     string             `json:"language"`
-	Model        string             `json:"model"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	UserID              int64              `json:"user_id"`
+	JobID               int64              `json:"job_id"`
+	Body                string             `json:"body"`
+	CitedAtomIds        []pgtype.UUID      `json:"cited_atom_ids"`
+	Language            string             `json:"language"`
+	Model               string             `json:"model"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	EvidenceRevision    int64              `json:"evidence_revision"`
+	EvidenceFingerprint string             `json:"evidence_fingerprint"`
+}
+
+type CoverLetterEvidence struct {
+	UserID   int64         `json:"user_id"`
+	JobID    int64         `json:"job_id"`
+	Revision int64         `json:"revision"`
+	AtomIds  []pgtype.UUID `json:"atom_ids"`
 }
 
 type CreditBalance struct {

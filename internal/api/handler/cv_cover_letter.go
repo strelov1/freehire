@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
+	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -17,9 +18,11 @@ import (
 // an error. Stale rides alongside rather than hiding the letter: a letter written by a retired
 // model is still the letter the candidate may already have sent.
 type coverLetterResponse struct {
-	Present bool                `json:"present"`
-	Stale   bool                `json:"stale,omitempty"`
-	Letter  *coverletter.Letter `json:"letter,omitempty"`
+	EvidenceBlocked bool                `json:"evidence_blocked,omitempty"`
+	EvidenceChanged bool                `json:"evidence_changed,omitempty"`
+	Present         bool                `json:"present"`
+	Stale           bool                `json:"stale,omitempty"`
+	Letter          *coverletter.Letter `json:"letter,omitempty"`
 	// Cited is the letter's evidence with the claims already resolved, so the surface never
 	// has to look an id up — and so it cannot forget to.
 	Cited []citedAtom `json:"cited,omitempty"`
@@ -33,6 +36,12 @@ func (r coverLetterResponse) contract() (apigen.CvCoverLetter, error) {
 	out := apigen.CvCoverLetter{Present: r.Present, Model: optString(r.Model)}
 	if r.Stale {
 		out.Stale = apigen.NewOptBool(true)
+	}
+	if r.EvidenceBlocked {
+		out.EvidenceBlocked = apigen.NewOptBool(true)
+	}
+	if r.EvidenceChanged {
+		out.EvidenceChanged = apigen.NewOptBool(true)
 	}
 	var err error
 	if r.Letter != nil {
@@ -65,16 +74,29 @@ func (h *cvHandlers) GetCVCoverLetter(ctx context.Context, params apigen.GetCVCo
 	if err != nil {
 		return nil, err
 	}
-	if stored == nil {
-		return &apigen.GetCVCoverLetterOK{Data: apigen.CvCoverLetter{}}, nil
+	selection, err := h.letter.letters.GetSelection(ctx, userID, jobID)
+	if err != nil {
+		return nil, err
 	}
-	// Staleness is measured against the vacancy's language, not the caller's profile — the
-	// employer reads this letter.
+	var bank []experience.Atom
+	blocked := false
+	if selection != nil {
+		bank, err = h.letter.bank.ListAtoms(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		_, e := coverletter.ResolveSelection(selection.AtomIDs, bank)
+		blocked = e != nil
+	}
+	if stored == nil {
+		return &apigen.GetCVCoverLetterOK{Data: apigen.CvCoverLetter{EvidenceBlocked: apigen.NewOptBool(blocked)}}, nil
+	}
 	job, err := h.jobReader.GetJob(ctx, jobID)
 	if err != nil {
 		return nil, err
 	}
 	out, err := coverLetterResponse{
+		EvidenceBlocked: blocked, EvidenceChanged: stored.EvidenceChanged(selection, bank),
 		Present: true,
 		Stale:   stored.Stale(h.letter.chain.ModelID(), job.PostingLanguage),
 		Letter:  &stored.Letter,
@@ -102,6 +124,10 @@ func (h *cvHandlers) DraftCVCoverLetter(ctx context.Context, params apigen.Draft
 		return nil, err
 	}
 
+	prepared, err := drafter.prepare(ctx, userID, jobID)
+	if err != nil {
+		return nil, mapLetterSelectionError(err)
+	}
 	attempt := letterAttempt(ctx, h.letter.letters, userID, jobID)
 	charge, refused, decision := chargeLetter(ctx, h.plans, userID, jobID, attempt)
 	if refused {
@@ -113,7 +139,7 @@ func (h *cvHandlers) DraftCVCoverLetter(ctx context.Context, params apigen.Draft
 		releaseLetterCharge(h.plans, userID, charge)
 		return nil, err
 	}
-	letter, err := drafter.draft(ctx, caller, userID, jobID, bandOf(params.Band.Value))
+	letter, err := drafter.draft(ctx, caller, userID, jobID, bandOf(params.Band.Value), prepared)
 	if err != nil || letter == nil {
 		// Every failing path gives the charge back, so it is given back once here rather than
 		// in each branch — a candidate must never pay for a letter they did not get.

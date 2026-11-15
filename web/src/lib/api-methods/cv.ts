@@ -2,6 +2,7 @@ import type { Http } from '../api-core';
 import type { PhotoMeta } from '../types';
 import type {
   CoverLetterView,
+  CoverLetterEvidenceView,
   CvAppearanceDefaults,
   CvAtsDelta,
   CvBaseItem,
@@ -109,6 +110,21 @@ export function cvApi({ call, requestData, baseUrl }: Http) {
 
   /** The stored cover letter for the vacancy a tailored CV was written for. Never calls a
    *  model and consumes no allowance: `present: false` means the pair was never drafted. */
+  async function getCoverLetterEvidence(id: string): Promise<CoverLetterEvidenceView> {
+    return requestData<CoverLetterEvidenceView>(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter/evidence`);
+  }
+
+  async function saveCoverLetterEvidence(
+    id: string,
+    revision: number,
+    atom_ids: string[],
+  ): Promise<{ revision: number; atom_ids: string[] }> {
+    return requestData(
+      `/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter/evidence`,
+      jsonBody('PUT', { revision, atom_ids }),
+    );
+  }
+
   async function getCoverLetter(id: string): Promise<CoverLetterView> {
     return requestData<CoverLetterView>(`/api/v1/me/cvs/${encodeURIComponent(id)}/cover-letter`);
   }
@@ -241,6 +257,8 @@ export function cvApi({ call, requestData, baseUrl }: Http) {
     setCvSession,
     getCv,
     getCoverLetter,
+    getCoverLetterEvidence,
+    saveCoverLetterEvidence,
     listCvRevisions,
     undoCvRevision,
     undoCvRevisionRun,

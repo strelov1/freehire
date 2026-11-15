@@ -27,20 +27,24 @@ func (r queriesRepository) Get(ctx context.Context, userID, jobID int64) (Stored
 			Cited:    fromPgUUIDs(row.CitedAtomIds),
 			Language: row.Language,
 		},
-		Model:     row.Model,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
+		EvidenceRevision:    row.EvidenceRevision,
+		EvidenceFingerprint: row.EvidenceFingerprint,
+		Model:               row.Model,
+		CreatedAt:           row.CreatedAt.Time,
+		UpdatedAt:           row.UpdatedAt.Time,
 	}, nil
 }
 
 func (r queriesRepository) Upsert(ctx context.Context, userID, jobID int64, s Stored) error {
 	return r.q.UpsertCoverLetter(ctx, db.UpsertCoverLetterParams{
-		UserID:       userID,
-		JobID:        jobID,
-		Body:         s.Body,
-		CitedAtomIds: toPgUUIDs(s.Cited),
-		Language:     s.Language,
-		Model:        s.Model,
+		UserID:              userID,
+		JobID:               jobID,
+		Body:                s.Body,
+		CitedAtomIds:        toPgUUIDs(s.Cited),
+		Language:            s.Language,
+		Model:               s.Model,
+		EvidenceRevision:    s.EvidenceRevision,
+		EvidenceFingerprint: s.EvidenceFingerprint,
 	})
 }
 
@@ -65,4 +69,18 @@ func fromPgUUIDs(ids []pgtype.UUID) []uuid.UUID {
 		out = append(out, uuid.UUID(id.Bytes))
 	}
 	return out
+}
+
+func (r queriesRepository) GetSelection(ctx context.Context, userID, jobID int64) (Selection, error) {
+	row, err := r.q.GetCoverLetterEvidence(ctx, db.GetCoverLetterEvidenceParams{UserID: userID, JobID: jobID})
+	return Selection{Revision: row.Revision, AtomIDs: fromPgUUIDs(row.AtomIds)}, err
+}
+
+func (r queriesRepository) SaveSelection(ctx context.Context, userID, jobID, revision int64, ids []uuid.UUID) (Selection, error) {
+	if revision == 0 {
+		row, err := r.q.SaveCoverLetterEvidence(ctx, db.SaveCoverLetterEvidenceParams{UserID: userID, JobID: jobID, ExpectedRevision: revision, AtomIds: toPgUUIDs(ids)})
+		return Selection{Revision: row.Revision, AtomIDs: fromPgUUIDs(row.AtomIds)}, err
+	}
+	row, err := r.q.UpdateCoverLetterEvidence(ctx, db.UpdateCoverLetterEvidenceParams{UserID: userID, JobID: jobID, ExpectedRevision: revision, AtomIds: toPgUUIDs(ids)})
+	return Selection{Revision: row.Revision, AtomIDs: fromPgUUIDs(row.AtomIds)}, err
 }

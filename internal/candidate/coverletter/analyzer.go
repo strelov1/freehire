@@ -27,7 +27,7 @@ const (
 	maxPostingRunes = 6000
 	// maxAtomsOffered caps how much of the bank one selection stage sees. Retrieval ranks
 	// before this, so the cut falls on the weakest evidence.
-	maxAtomsOffered = 30
+	maxAtomsOffered = MaxSelectedAtoms
 )
 
 // Input is everything the chain needs. The vacancy arrives as a projection rather than a job

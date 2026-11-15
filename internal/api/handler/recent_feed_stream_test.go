@@ -91,6 +91,9 @@ func TestRecentFeedStream_ReplaysBacklogThenLivePublish(t *testing.T) {
 	})
 
 	live := readSSEFrame(t, reader)
+	for strings.Contains(live, "event: ping") {
+		live = readSSEFrame(t, reader)
+	}
 	if !strings.Contains(live, "event: job") || !strings.Contains(live, "Staff Frontend Engineer") {
 		t.Fatalf("second frame = %q, want the newly published entry", live)
 	}

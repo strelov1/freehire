@@ -82,7 +82,7 @@ func postJSON(t *testing.T, app *fiber.App, path, body string) int {
 	t.Helper()
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, path, strings.NewReader(body))
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, 5000)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}

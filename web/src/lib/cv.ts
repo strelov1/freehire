@@ -44,7 +44,19 @@ export interface CvAppearanceDefaults {
 /** The cover-letter surface's read shape. `present: false` is a pair never drafted — an empty
  *  state, not an error. `stale` reports that the model or the vacancy's language moved since;
  *  the letter stays readable, because it may already have been sent. */
+export interface CoverLetterEvidenceView {
+  employment_labels?: Record<string, string>;
+  revision: number;
+  explicit: boolean;
+  atom_ids: string[];
+  suggested_ids: string[];
+  available: import('./wire-types/experience').ExperienceAtom[];
+  invalid_ids: string[];
+}
+
 export interface CoverLetterView {
+  evidence_changed?: boolean;
+  evidence_blocked?: boolean;
   present: boolean;
   stale?: boolean;
   letter?: Letter;

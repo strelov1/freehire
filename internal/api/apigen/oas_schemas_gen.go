@@ -7689,11 +7689,23 @@ func (s *CvBaseSession) SetSessionID(val string) {
 // A stored cover letter; `present` is false, with no letter, when none was drafted.
 // Ref: #/components/schemas/CvCoverLetter
 type CvCoverLetter struct {
-	Present bool      `json:"present"`
-	Stale   OptBool   `json:"stale"`
-	Letter  jx.Raw    `json:"letter"`
-	Cited   jx.Raw    `json:"cited"`
-	Model   OptString `json:"model"`
+	EvidenceBlocked OptBool   `json:"evidence_blocked"`
+	EvidenceChanged OptBool   `json:"evidence_changed"`
+	Present         bool      `json:"present"`
+	Stale           OptBool   `json:"stale"`
+	Letter          jx.Raw    `json:"letter"`
+	Cited           jx.Raw    `json:"cited"`
+	Model           OptString `json:"model"`
+}
+
+// GetEvidenceBlocked returns the value of EvidenceBlocked.
+func (s *CvCoverLetter) GetEvidenceBlocked() OptBool {
+	return s.EvidenceBlocked
+}
+
+// GetEvidenceChanged returns the value of EvidenceChanged.
+func (s *CvCoverLetter) GetEvidenceChanged() OptBool {
+	return s.EvidenceChanged
 }
 
 // GetPresent returns the value of Present.
@@ -7719,6 +7731,16 @@ func (s *CvCoverLetter) GetCited() jx.Raw {
 // GetModel returns the value of Model.
 func (s *CvCoverLetter) GetModel() OptString {
 	return s.Model
+}
+
+// SetEvidenceBlocked sets the value of EvidenceBlocked.
+func (s *CvCoverLetter) SetEvidenceBlocked(val OptBool) {
+	s.EvidenceBlocked = val
+}
+
+// SetEvidenceChanged sets the value of EvidenceChanged.
+func (s *CvCoverLetter) SetEvidenceChanged(val OptBool) {
+	s.EvidenceChanged = val
 }
 
 // SetPresent sets the value of Present.
@@ -11971,6 +11993,21 @@ func (s *GetCVAppearanceDefaultsOK) GetData() CvAppearanceDefaultsResult {
 
 // SetData sets the value of Data.
 func (s *GetCVAppearanceDefaultsOK) SetData(val CvAppearanceDefaultsResult) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetCVCoverLetterEvidenceOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetCVCoverLetterEvidenceOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetCVCoverLetterEvidenceOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -25728,6 +25765,21 @@ func (s *SaveBankedAnswerOK) GetData() Saved {
 
 // SetData sets the value of Data.
 func (s *SaveBankedAnswerOK) SetData(val Saved) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type SaveCVCoverLetterEvidenceOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SaveCVCoverLetterEvidenceOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SaveCVCoverLetterEvidenceOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
