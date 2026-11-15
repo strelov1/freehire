@@ -13,22 +13,18 @@ import (
 )
 
 var (
-	// ErrNotLinked means the account has no binding. A state, not a failure: every caller
-	// reports it as "not connected" rather than as an error.
+	// ErrNotLinked means the account has no binding. A state, not a failure.
 	ErrNotLinked = errors.New("discordlink: account is not linked")
 
-	// ErrAlreadyLinkedElsewhere means another freehire account already holds that Discord
-	// account. Refused rather than reassigned: reassigning would silently take a paying
-	// subscriber's access away and hand it to whoever asked last.
+	// ErrAlreadyLinkedElsewhere means another account already holds that Discord
+	// account. Refused, not reassigned: reassigning would silently take a paying
+	// subscriber's access.
 	ErrAlreadyLinkedElsewhere = errors.New("discordlink: that Discord account is linked to another freehire account")
 )
 
-// Candidate is one binding as reconciliation sees it: who it is on both sides, what we
-// believe about the role, and the entitlement columns that decide it.
-//
-// It carries the raw instants rather than a resolved tier because resolving one is a
-// DECISION and this is a row. The service resolves it against its own clock, so a test can
-// move time without moving the database.
+// Candidate is one binding as reconciliation sees it. It carries the raw
+// entitlement instants rather than a resolved tier: the service resolves them
+// against its own clock, so tests can move time without moving the database.
 type Candidate struct {
 	UserID        int64
 	DiscordUserID string
@@ -37,9 +33,7 @@ type Candidate struct {
 	UltraUntil    time.Time
 }
 
-// Store is the persistence this service needs. Narrow on purpose: it is the consumer that
-// declares it, so the sqlc-backed implementation can grow without widening what the service
-// is allowed to do.
+// Store is the persistence this service needs, declared narrow by its consumer.
 type Store interface {
 	Link(ctx context.Context, userID int64, discordUserID string) (Link, error)
 	Get(ctx context.Context, userID int64) (Link, error)
@@ -74,14 +68,10 @@ func NewService(store Store, discord Discord, now func() time.Time) *Service {
 	return &Service{store: store, discord: discord, now: now}
 }
 
-// NewFromSettings builds the production service, reporting false when the feature is not
-// configured. Both entrypoints — the server's route wiring and cmd/discord-sync — go through
-// it, so they cannot drift apart about which credentials the client gets or which clock it
-// reads.
-//
-// It returns a CONCRETE *Service and a separate bool rather than a nil interface, because a
-// nil *Service assigned into an interface field is not a nil interface: the caller that
-// stores this behind one has to see the bool to know there is nothing there.
+// NewFromSettings builds the production service, reporting false when the feature
+// is not configured. The server and cmd/discord-sync both use it so they cannot
+// drift on credentials or clock. It returns a concrete *Service plus a bool
+// because a nil *Service in an interface field is not a nil interface.
 func NewFromSettings(cfg config.Settings, q *db.Queries) (*Service, bool) {
 	if !cfg.DiscordPaidAccessConfigured() {
 		return nil, false
@@ -104,12 +94,10 @@ func (s *Service) Status(ctx context.Context, userID int64) (Link, error) {
 	return s.store.Get(ctx, userID)
 }
 
-// Link completes the OAuth flow: exchange the code, learn who they are on Discord, record
-// the binding, put them on the server, and grant the role if they pay.
-//
-// The binding is recorded BEFORE anything is done on Discord. A process that dies in the
-// middle then leaves a link that the next reconciliation finishes, rather than a role or a
-// membership that nothing in our database knows about.
+// Link completes the OAuth flow: exchange the code, learn who they are on
+// Discord, record the binding, put them on the server, and grant the role if
+// they pay. The binding is recorded BEFORE anything is done on Discord, so a
+// crash leaves a link the next reconciliation finishes, not an unknown role.
 func (s *Service) Link(ctx context.Context, userID int64, code, redirectURI string) (Link, error) {
 	token, err := s.discord.ExchangeCode(ctx, code, redirectURI)
 	if err != nil {
@@ -146,13 +134,10 @@ func (s *Service) Link(ctx context.Context, userID int64, code, redirectURI stri
 	return link, nil
 }
 
-// Unlink revokes the role and removes the binding.
-//
-// The binding goes even when the revoke fails, and that order is the point: a user must
-// always be able to undo a link they made. An orphaned role is an operator's problem, found
-// in the log; a link that cannot be removed is the user's problem, every time they open the
-// page. Membership of the server is left alone — we invited them, and eviction is a
-// moderation act rather than a billing one.
+// Unlink revokes the role and removes the binding. The binding goes even when
+// the revoke fails: a user must always be able to undo a link, and an orphaned
+// role is an operator problem found in the log. Server membership is left alone;
+// eviction is moderation, not billing.
 func (s *Service) Unlink(ctx context.Context, userID int64) error {
 	link, err := s.store.Get(ctx, userID)
 	if errors.Is(err, ErrNotLinked) {
@@ -180,11 +165,9 @@ type Stats struct {
 	Failed   int
 }
 
-// Sync reconciles up to limit bindings.
-//
-// A per-account failure is counted and stepped over, never returned: one broken account must
-// not cost everybody else their hourly reconciliation. Only a failure to READ the page — we
-// cannot tell what to do at all — aborts.
+// Sync reconciles up to limit bindings. A per-account failure is counted and
+// stepped over so one broken account does not cost everyone their hourly
+// reconciliation; only a failure to READ the page aborts.
 func (s *Service) Sync(ctx context.Context, limit int32) (Stats, error) {
 	candidates, err := s.store.ListToSync(ctx, limit)
 	if err != nil {
@@ -206,11 +189,9 @@ func (s *Service) Sync(ctx context.Context, limit int32) (Stats, error) {
 			log.Printf("discordlink: %s for user %d failed: %v", action, c.UserID, err)
 		}
 
-		// EVERY path stamps the row, including the one that did nothing and the one that
-		// failed: the stamp is what moves a binding to the back of the reconciliation queue,
-		// and a row left unstamped pins the front of it and starves everybody behind the
-		// per-run bound. What differs is the value — a failure records the row as it stood,
-		// so the next run tries again.
+		// EVERY path stamps the row, including no-ops and failures: the stamp moves a
+		// binding to the back of the queue, and an unstamped row pins the front and
+		// starves the rest. A failure records the row as it stood so the next run retries.
 		if err := s.store.SetRoleGranted(ctx, c.UserID, granted); err != nil {
 			log.Printf("discordlink: stamping user %d failed: %v", c.UserID, err)
 			failed = true
@@ -229,11 +210,9 @@ func (s *Service) Sync(ctx context.Context, limit int32) (Stats, error) {
 	return stats, nil
 }
 
-// moveRole performs one action on Discord and reports what the stored record should now say.
-//
-// ErrUnknownMember is not a failure: the person has left the server, so the role is not held,
-// which is exactly what recording "not granted" says. Any other error leaves the record as it
-// stood, so the next run tries the same thing again.
+// moveRole performs one action on Discord and reports what the stored record
+// should now say. ErrUnknownMember is not a failure: the person left, so the
+// role is not held. Any other error leaves the record as it stood for a retry.
 func (s *Service) moveRole(ctx context.Context, c Candidate, action Action) (bool, error) {
 	var err error
 	switch action {

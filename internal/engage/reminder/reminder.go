@@ -1,11 +1,7 @@
 // Package reminder is the saved-job reminder use case: each save schedules a
-// one-shot nudge, at a fixed delay, to come back before the vacancy goes stale —
-// gated by the shared notification_settings rule (also read by internal/engage/nudge).
-// It owns the schedule/cancel decisions; the firing engine (Runner, in this
-// package) reads the same job_reminders ledger and delivers due reminders. This
-// mirrors internal/engage/subscription (the HTTP-facing use case) + internal/engage/notify (the
-// delivery worker), kept in one package because a reminder is a single small
-// concept.
+// one-shot nudge at a fixed delay, gated by the shared notification_settings rule
+// (also read by internal/engage/nudge). It owns the schedule/cancel decisions; the
+// Runner in this package delivers due reminders from the job_reminders ledger.
 package reminder
 
 import (
@@ -19,16 +15,13 @@ import (
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
-// DefaultDelayDays is the fixed delay every saved job schedules at. It is no
-// longer configurable — see the centralize-lifecycle-notifications change: the
-// per-job/per-account delay choice was removed as unused surface (a production
-// usage check found no account other than the developer's had ever touched it).
+// DefaultDelayDays is the fixed delay every saved job schedules at. It is not
+// configurable.
 const DefaultDelayDays = 3
 
 // DefaultNotificationHour is the local time of day a reminder fires for an account
-// that has never chosen one. Reminders are rounded forward to this hour so that
-// everything saved on one day becomes due in a single worker pass and goes out as
-// one message — see the aggregate-reminder-and-nudge-digests change.
+// that has never chosen one. Reminders are rounded forward to this hour so a day's
+// saves become due in one worker pass and go out as one message.
 const DefaultNotificationHour = 9 * time.Hour
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -57,12 +50,11 @@ var (
 	ErrIncompleteQuietHours = errors.New("reminder: quiet hours needs both a start and an end")
 )
 
-// Settings is the account-level notification rule, shared with the internal/engage/nudge
-// engine (see notification_settings). An absent stored row reads as the
-// opt-out-by-default default: enabled, channel email, an hourly interval digest.
-// DigestFrequency/DigestTime/DigestIntervalHours govern only internal/engage/notify's
-// saved-search digests; QuietHoursStart/End defer
-// delivery across all three notification engines — see internal/application/deliverywindow.
+// Settings is the account-level notification rule, shared with the nudge engine
+// (see notification_settings). An absent stored row reads as the default: enabled,
+// channel email, a daily digest. DigestFrequency/DigestTime/DigestIntervalHours
+// govern only notify's saved-search digests; QuietHoursStart/End defer delivery
+// across all three engines (internal/application/deliverywindow).
 type Settings struct {
 	Enabled            bool
 	InboxDigestEnabled bool
@@ -77,10 +69,8 @@ type Settings struct {
 	QuietHoursEnd       *time.Duration
 }
 
-// ScheduleContext is when an account wants to hear from us: the daily notification
-// hour and the timezone that hour is read in. Both are optional, and a nil is the
-// unconfigured state rather than a zero — midnight is a choosable hour, so it
-// cannot double as "never chose one".
+// ScheduleContext is the account's daily notification hour and the timezone it is
+// read in. Nil means unconfigured, not zero: midnight is a choosable hour.
 type ScheduleContext struct {
 	NotificationHour *time.Duration
 	Location         *time.Location
@@ -94,9 +84,8 @@ func (c ScheduleContext) hour() time.Duration {
 	return *c.NotificationHour
 }
 
-// location is the account's timezone, or UTC when unset — the same fallback
-// internal/application/deliverywindow applies to quiet hours, so the two timing
-// rules agree about who has no timezone.
+// location is the account's timezone, or UTC when unset, matching
+// internal/application/deliverywindow.
 func (c ScheduleContext) location() *time.Location {
 	if c.Location == nil {
 		return time.UTC
@@ -133,11 +122,11 @@ func (s *Service) GetSettings(ctx context.Context, userID int64) (Settings, erro
 	return s.repo.GetSettings(ctx, userID)
 }
 
-// UpdateSettings validates and stores the caller's rule. An enabled rule must have
-// at least one valid channel. DigestFrequency (empty reads as "daily" at the default time) must be
-// one of notify.Frequency*; "daily" requires a DigestTime, and "interval" an
-// interval within notify's bounds (zero reads as the default). QuietHoursStart/End must be
-// set together or not at all — a one-sided window has no meaning.
+// UpdateSettings validates and stores the caller's rule. An enabled rule needs at
+// least one valid channel. DigestFrequency (empty reads as daily at the default
+// time) must be one of notify.Frequency*; daily requires a DigestTime, interval an
+// interval within notify's bounds (zero reads as the default). QuietHoursStart/End
+// are set together or not at all.
 func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings) (Settings, error) {
 	for _, c := range in.Channels {
 		if !notify.ValidChannel(c) {
@@ -191,12 +180,10 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	return s.repo.UpsertSettings(ctx, userID, in)
 }
 
-// resolveIntervalHours decides the interval to store. The value sent is read only
-// when the rule uses the interval: there it is stored, or refused when out of
-// range. Otherwise — another frequency, or the field omitted (zero, from a client
-// that predates it, on what is a full-replacement write) — the account's stored
-// interval is kept, so a save that is not about the interval cannot reset a
-// chosen six hours to one.
+// resolveIntervalHours decides the interval to store. The sent value is read only
+// in interval mode (stored, or refused when out of range). Otherwise, including an
+// omitted field on a full-replacement write, the stored interval is kept so an
+// unrelated save cannot reset it.
 func (s *Service) resolveIntervalHours(ctx context.Context, userID int64, in Settings) (int, error) {
 	h := in.DigestIntervalHours
 	if in.DigestFrequency == notify.FrequencyInterval && h != 0 {
@@ -240,8 +227,7 @@ func (s *Service) checkPushDevice(ctx context.Context, userID int64, channels []
 
 // ScheduleOnSave decides the reminder for a just-saved job: scheduled at the fixed
 // DefaultDelayDays when the account's shared notification rule is enabled, skipped
-// entirely otherwise. There is no per-job override any more — the shared rule is
-// the only control.
+// otherwise. There is no per-job override.
 func (s *Service) ScheduleOnSave(ctx context.Context, userID, jobID int64) error {
 	settings, err := s.repo.GetSettings(ctx, userID)
 	if err != nil {
@@ -250,9 +236,7 @@ func (s *Service) ScheduleOnSave(ctx context.Context, userID, jobID int64) error
 	if !settings.Enabled {
 		return nil
 	}
-	// An enabled rule always has channels (UpdateSettings enforces it, and the
-	// never-configured default already includes email); the fallback is a
-	// defensive backstop, not a reachable path.
+	// Defensive backstop: an enabled rule always has channels.
 	channels := settings.Channels
 	if len(channels) == 0 {
 		channels = []string{notify.ChannelEmail}
@@ -271,9 +255,8 @@ func (s *Service) Cancel(ctx context.Context, userID, jobID int64) error {
 }
 
 // fireAt is the deadline `delayDays` out from now, rounded forward to the
-// account's notification hour. The rounding is what makes a day's saves arrive as
-// one message: two reminders scheduled hours apart land on the same instant, so
-// one worker pass claims both and the engine groups them.
+// account's notification hour so a day's saves land on the same instant and are
+// grouped into one message.
 func (s *Service) fireAt(ctx context.Context, userID int64, delayDays int) (time.Time, error) {
 	deadline := s.now().Add(time.Duration(delayDays) * 24 * time.Hour)
 	sc, err := s.repo.GetScheduleContext(ctx, userID)
@@ -287,9 +270,8 @@ func (s *Service) fireAt(ctx context.Context, userID int64, delayDays int) (time
 // after `after` — never earlier, so rounding cannot pull a reminder in ahead of its
 // delay.
 //
-// Built by naming the hour to time.Date rather than by adding `hour` to local
-// midnight: on the two days a year the offset moves, midnight+18h is 17:00 or
-// 19:00, and the account asked for 18:00 on its own clock.
+// Built via time.Date, not local midnight + `hour`, which is off by an hour on DST
+// change days.
 func nextNotificationHour(after time.Time, hour time.Duration, loc *time.Location) time.Time {
 	y, mo, d := after.In(loc).Date()
 	h := int(hour / time.Hour)

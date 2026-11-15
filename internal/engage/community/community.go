@@ -1,12 +1,9 @@
-// Package community is the anonymous discussion-thread use case: a signed-in user
-// starts a topic attached to a subject (a company or a vacancy) and any signed-in
-// user replies. Authors are shown only through a stable pseudonymous persona — the
-// real user_id is the private key the handle hides behind, used for moderation but
-// never sent to a client.
+// Package community is the anonymous discussion-thread use case: a signed-in user starts a topic on
+// a subject (a company or a vacancy) and any signed-in user replies. Authors show only as a stable
+// pseudonymous persona; the real user_id is used for moderation and never sent to a client.
 //
-// The subject is polymorphic: (SubjectType, subject_ref) where subject_ref is the
-// subject's public slug. The primitive is deliberately decoupled from what it
-// attaches to, so a future subject type plugs in without reshaping this package.
+// The subject is polymorphic: (SubjectType, subject_ref) with subject_ref the public slug, so a new
+// subject type plugs in without reshaping this package.
 // Persistence is a Repository; subject existence is a SubjectChecker.
 package community
 
@@ -77,19 +74,15 @@ type Thread struct {
 	CreatedAt    time.Time
 }
 
-// ThreadWithSubject is a Thread carrying its subject's display name — the read model
-// of the cross-subject feed, where a row must name the subject it hangs off. A thread
-// stores only the subject's slug and no FK to it, so the names are resolved on read.
+// ThreadWithSubject is a Thread carrying its subject's display name, for the cross-subject feed.
+// A thread stores only the subject's slug, so names are resolved on read.
 //
-// Deliberately NOT fields on Thread: that type is a faithful image of a threads row,
-// and a subject-scoped listing (where the subject is already known from the request)
-// would return it with these always empty. One type meaning two things is how "the
-// field is blank but shouldn't be" gets shipped.
+// Deliberately not fields on Thread: that type mirrors a threads row, and a subject-scoped listing
+// would return them always empty.
 //
-// SubjectTitle is the vacancy's title or the company's name; SubjectCompany is the
-// employer in both cases, which is also the key the logo proxy resolves by. Both are
-// empty when the subject no longer exists — the load-bearing signal for "unresolved",
-// which a client renders as the stored slug rather than dropping the row.
+// SubjectTitle is the vacancy's title or the company's name; SubjectCompany is the employer in both
+// cases (also the logo proxy's key). Both are empty when the subject no longer exists, which a client
+// renders as the stored slug rather than dropping the row.
 type ThreadWithSubject struct {
 	Thread
 	SubjectTitle   string

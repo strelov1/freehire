@@ -1,7 +1,7 @@
 // Package changehook pushes the job change feed (job_changes, GET /api/v1/jobs/changes) to
 // the HTTPS endpoints of API customers: signed, batched, at-least-once deliveries driven by a
-// persisted per-subscription position in the feed. The subscription rows are change_webhooks
-// (migration 0264); cmd/changes-webhook runs the delivery loop.
+// persisted per-subscription position in the feed. The subscription rows are change_webhooks;
+// cmd/changes-webhook runs the delivery loop.
 //
 // It is separate from webhooknotify and notify, which deliver saved-search digests to one
 // unsigned URL per account on that engine's own retry rules.

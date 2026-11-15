@@ -22,13 +22,10 @@ var ErrInvalidToken = errors.New("telegramnotify: invalid or expired link token"
 // for another purpose with the same secret cannot pass here.
 const linkTokenPurpose = "tg-link"
 
-// LinkTokens mints and verifies the short, stateless token a user carries into the
-// bot via the t.me deep link. The encoding is deliberately NOT a JWT: Telegram's
-// deep-link `start` parameter allows only 1–64 chars from [A-Za-z0-9_-], which a
-// JWT (dotted, ~200 chars) violates. This token is a base64url(payload‖MAC) blob
-// of ~43 chars using exactly that alphabet, so it survives the deep link intact.
-// The payload is 8-byte user id + 8-byte expiry unix, followed by a MAC truncated to
-// 16 bytes (128 bits — ample for a short-lived token, and keeps the token small).
+// LinkTokens mints and verifies the short, stateless token a user carries into the bot via the
+// t.me deep link. Not a JWT: the deep-link `start` parameter allows only 1–64 chars from
+// [A-Za-z0-9_-]. The token is base64url(payload‖MAC): an 8-byte user id and 8-byte expiry unix,
+// then a MAC truncated to 16 bytes.
 type LinkTokens struct {
 	secret  []byte
 	purpose string

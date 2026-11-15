@@ -11,9 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// PostgresRepository is the Repository backed by the generated queries. It holds no
-// rules — the day guard, the floor, the cap and the quarantine window all live in the
-// package above it, where they can be read and changed without a database.
+// PostgresRepository is the Repository backed by the generated queries. It holds no rules;
+// the day guard, floor, cap and quarantine window live in the package above.
 type PostgresRepository struct {
 	q *db.Queries
 }
@@ -28,8 +27,7 @@ func (r *PostgresRepository) LatestViewDay(ctx context.Context) (time.Time, bool
 	if err != nil {
 		return time.Time{}, false, err
 	}
-	// max() over an empty table is SQL NULL, which arrives as an invalid Date. That is
-	// "the rollup has produced nothing", not "the newest day is the zero time".
+	// max() over an empty table is NULL (an invalid Date): the rollup produced nothing.
 	if !d.Valid {
 		return time.Time{}, false, nil
 	}
@@ -51,14 +49,9 @@ func (r *PostgresRepository) TopPageViewed(ctx context.Context, day time.Time, l
 	return out, nil
 }
 
-// postingFromRow turns one stored row into something publishable.
-//
-// The HTML entities are unescaped here, at the one boundary where stored text becomes
-// text we are about to show, rather than in each publisher. Titles arrive from source
-// feeds carrying them — "Senior Specialist- Learning Design &amp; Capacity" is a real
-// row that would have gone out with the "&amp;" in it — and every channel would
-// otherwise have to remember this separately, which is the kind of thing exactly one
-// of them eventually forgets.
+// postingFromRow turns one stored row into something publishable. HTML entities are unescaped
+// here, once, because source feeds deliver titles like "Learning Design &amp; Capacity" and no
+// publisher should have to remember it.
 func postingFromRow(row db.TopPageViewedJobsForDayRow) Posting {
 	return Posting{
 		JobID:       row.ID,

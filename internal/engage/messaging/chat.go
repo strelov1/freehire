@@ -20,9 +20,8 @@ func (s *Service) Send(ctx context.Context, userID, conversationID int64, body s
 	return messageFor(userID, row), nil
 }
 
-// Messages reads a conversation's messages after the given id, oldest first. It is open to
-// every participant in every status, so a closed conversation's history stays readable,
-// and it marks nothing read: that is MarkRead's job.
+// Messages reads a conversation's messages after the given id, oldest first. Open to every
+// participant in every status, so closed history stays readable. It marks nothing read: see MarkRead.
 func (s *Service) Messages(ctx context.Context, userID, conversationID, after int64, limit int) ([]Message, error) {
 	_, ok, err := s.repo.ConversationFor(ctx, userID, conversationID)
 	if err != nil {

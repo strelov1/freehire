@@ -6,8 +6,8 @@
 // cmd/cv-lifecycle-mail is the only caller. The letters are the founder's (a human
 // Reply-To, first person), optional (they obey the news-email switch and the shared
 // one-letter-a-day claim in internal/engage/maildaily) and measured: a stable tenth of
-// accounts is enrolled and never mailed, so the effect on paying can be read against
-// people who got nothing. AGENTS.md has the rules and the reports.
+// accounts is enrolled and never mailed, as a holdout to read the effect on paying
+// against. AGENTS.md has the rules and the reports.
 package cvlifecycle
 
 import (
@@ -40,9 +40,8 @@ const (
 // Steps is the CV sequence in order, the letters that run on day offsets from the upload.
 var Steps = []Step{StepATS, StepPotential, StepOffer}
 
-// passOrder is the order a pass sends in. The paywall letter goes first: the account's one
-// letter of the day is taken by whoever reaches it first, and the paywall letter is the
-// timely one, so it wins the day over a CV letter that would otherwise wait for tomorrow.
+// passOrder is the order a pass sends in. The paywall letter goes first so it wins
+// the account's one letter of the day over a CV letter that can wait.
 var passOrder = append([]Step{StepPaywall}, Steps...)
 
 // Campaign names the letter in SES engagement tracking.
@@ -177,8 +176,8 @@ func New(store Store, composer Composer, sender Sender, cfg Config) (*Runner, er
 }
 
 // Run does one pass: observe who started paying, enroll new accounts, retire the ones that
-// unsubscribed, then send each due letter, the paywall letter first. A failing bookkeeping statement aborts the pass,
-// since sending on top of an unknown enrollment state is how a paying user gets an offer.
+// unsubscribed, then send each due letter, the paywall letter first. A failing bookkeeping
+// statement aborts the pass: sending on an unknown enrollment state could offer a paying user a discount.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	stats := newStats()
 	if err := r.bookkeep(ctx, &stats); err != nil {

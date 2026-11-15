@@ -27,15 +27,13 @@ type Store interface {
 
 // Config bounds one pass.
 type Config struct {
-	// WindowDays is how far back a candidate scan looks. It is the safety rail on
-	// the whole feature: the sequence was added long after the user table filled up,
-	// and without a window the first run would greet every account ever created.
+	// WindowDays is how far back a candidate scan looks. It is the safety rail: without a
+	// window the first run would greet every account ever created.
 	WindowDays int32
-	// AdvancedSearchAfterDays, NoAlertAfterDays, ExtensionAfterDays,
-	// OpenSourceAfterDays, TailorAfterDays and BuddiesAfterDays are how long an account
-	// must have existed (since the welcome greeting) before those steps are eligible. They must strictly increase — Run
-	// iterates the steps in that order, and a later step racing ahead of an earlier one
-	// is what the pacing exists to prevent.
+	// AdvancedSearchAfterDays, NoAlertAfterDays, ExtensionAfterDays, OpenSourceAfterDays,
+	// TailorAfterDays and BuddiesAfterDays are how long an account must have existed (since the
+	// welcome greeting) before those steps are eligible. They must strictly increase: Run
+	// iterates the steps in that order.
 	AdvancedSearchAfterDays int32
 	NoAlertAfterDays        int32
 	ExtensionAfterDays      int32
@@ -44,14 +42,12 @@ type Config struct {
 	// BuddiesAfterDays is the interview-buddies letter's delay, on the same clock
 	// and under the same strictly-increasing rule as the steps above.
 	BuddiesAfterDays int32
-	// BuddiesWindowDays is the buddies step's own window, used instead of WindowDays.
-	// The letter goes out on day 14, which the shared 14-day window never reaches.
-	// Widening the shared window instead would hand every earlier step accounts aged
-	// 14-21 days that never got it: the tailor letter shipped after those accounts
-	// aged out, so all of them would receive it at once, as would any late welcome.
+	// BuddiesWindowDays is the buddies step's own window, used instead of WindowDays: the
+	// letter goes out on day 14, which the shared 14-day window never reaches. Widening the
+	// shared window would hand every earlier step accounts aged 14-21 days that never got it.
 	BuddiesWindowDays int32
-	// MaxPerStep caps one pass per step. A cap is what keeps a backlog — or a bug
-	// in the candidate query — from becoming one enormous send.
+	// MaxPerStep caps one pass per step, so a backlog or a bad candidate query cannot become
+	// one enormous send.
 	MaxPerStep int32
 }
 
@@ -95,12 +91,8 @@ type Stats struct {
 	Deferred map[Step]int
 }
 
-// Run sends every eligible mail in every step.
-//
-// A step whose candidate query fails aborts the pass — that is a broken query or a
-// broken database, and continuing would only produce more of the same error. A
-// single failed *send*, by contrast, is recorded and stepped over: one bad address
-// must not stop the other 199 people in the batch.
+// Run sends every eligible mail in every step. A failed candidate query aborts the pass;
+// a single failed send is recorded and stepped over.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	stats := Stats{Sent: map[Step]int{}, Failed: map[Step]int{}, Deferred: map[Step]int{}}
 
@@ -259,20 +251,15 @@ const (
 // ledger row.
 //
 // The claim comes first (maildaily): an account that already got another optional letter
-// today is deferred — nothing is sent and nothing is recorded, so the step is simply a
-// candidate again tomorrow. A claim that cannot be recorded counts as a failure and sends
-// nothing, since an unrecorded claim cannot bound anything.
+// today is deferred, with nothing sent or recorded. A claim that cannot be recorded counts
+// as a failure and sends nothing.
 //
-// A failure of one address burns the (user, step) pair: the ledger is written with
-// the error. Retrying an address that SES just rejected is how a sending domain
-// accumulates bounces, and the sequence is a courtesy — not worth risking
-// deliverability for every other mail the product sends. Re-arming is a manual DELETE.
-// The daily claim is released all the same, so the failed attempt does not cost the
-// account another sender's letter today.
+// A failure of one address burns the (user, step) pair: the ledger is written with the
+// error, because retrying an address SES just rejected accumulates bounces. Re-arming is a
+// manual DELETE. The daily claim is released all the same.
 //
-// An account-level refusal (emailnotify.ErrSendingPaused) is the opposite case and
-// writes no row: nothing was judged about this address, so burning its slot would
-// lose the mail for good just because SES was paused. The next pass finds it again.
+// An account-level refusal (emailnotify.ErrSendingPaused) writes no row, so the next pass
+// finds the step again.
 func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) outcome {
 	claim, ok, err := r.claims.Take(ctx, rec.userID)
 	if err != nil {
@@ -301,9 +288,8 @@ func (r *Runner) deliver(ctx context.Context, step Step, rec recipient) outcome 
 		Step:   string(step),
 		Error:  errText,
 	}); err != nil {
-		// The mail went out but the ledger did not record it. Log loudly: the next
-		// pass will send it again, and a duplicate greeting is the one visible
-		// symptom this feature can produce.
+		// The mail went out but the ledger did not record it: log loudly, since the next pass
+		// will send a duplicate greeting.
 		log.Printf("onboarding: recording %s for user %d failed (mail may repeat): %v", step, rec.userID, err)
 	}
 	if sendErr != nil {

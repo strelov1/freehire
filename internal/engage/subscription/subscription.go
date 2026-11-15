@@ -21,23 +21,16 @@ import (
 var (
 	// ErrInvalidChannel is an unsupported delivery channel (mapped to 400).
 	ErrInvalidChannel = errors.New("subscription: unsupported channel")
-	// ErrUnfilteredSearch is a subscription to a saved search that carries no filter
-	// (mapped to 400). Saving an unfiltered board is legitimate — it is the "show all"
-	// view — but SUBSCRIBING to one asks to be notified about every posting in the
-	// catalogue, which is never what anyone means. On prod 2026-09-04 one such
-	// subscription held 248k undelivered matches and, through a claim that ordered by
-	// subscription id, starved every subscription created after it.
+	// ErrUnfilteredSearch is a subscription to a saved search that carries no filter (mapped to
+	// 400). Saving an unfiltered board is fine, but subscribing to one means an alert for every
+	// posting in the catalogue, which floods the delivery queue.
 	//
-	// "Carries no filter" is decided by search.Narrows, not by the query string being
-	// blank: a retired facet or a mistyped param is a non-empty string that the matcher
-	// reads as no filter at all, which is the same 248k digest arriving through a query
-	// that looks specific.
+	// "No filter" is decided by search.Narrows, not by a blank query string: a retired facet or
+	// mistyped param is non-empty yet reads as no filter to the matcher.
 	ErrUnfilteredSearch = errors.New("subscription: saved search has no filter")
-	// ErrNoPushDevice is a push subscription for an account with no registered
-	// device (mapped to 409). Push reaches nothing else, so such a subscription only
-	// queues matches that can never leave — on prod 2026-10-21, 49 accounts held one
-	// and none had a device, with 820k matches piled up behind them. Registering a
-	// device is the mobile app's job; the web cannot satisfy this on its own.
+	// ErrNoPushDevice is a push subscription for an account with no registered device (mapped to
+	// 409). Such a subscription only queues matches that can never leave. Registering a device
+	// is the mobile app's job.
 	ErrNoPushDevice = errors.New("subscription: no registered push device")
 	// ErrSavedSearchNotFound is a saved_search_id that is missing or not the
 	// caller's (mapped to 404).
@@ -49,20 +42,15 @@ var (
 	ErrNotFound = errors.New("subscription: not found")
 )
 
-// Supported delivery channels. The values live once in internal/engage/notify (the
-// delivery-channel vocabulary shared with the routing worker); these aliases keep
-// them addressable from the HTTP-facing use case. The schema (channel + destination
-// columns and the UNIQUE (saved_search, channel) constraint) accommodates both
-// without a migration; the notify worker routes each channel to its Notifier.
+// Supported delivery channels. The values live in internal/engage/notify (the vocabulary shared
+// with the routing worker); these aliases keep them addressable here.
 const (
 	ChannelTelegram = notify.ChannelTelegram
 	ChannelEmail    = notify.ChannelEmail
 )
 
-// Subscription is a stored filter subscription: the package domain type, decoupled from
-// the generated db row. The internal columns (user_id, the destination and start_at
-// cursor) are dropped — they are never on the wire — while created_at is kept as *time.Time
-// because the handler serializes it.
+// Subscription is a stored filter subscription, decoupled from the generated db row. Internal
+// columns (user_id, destination, start_at) are dropped as they are never on the wire.
 type Subscription struct {
 	ID            int64
 	SavedSearchID int64
@@ -71,29 +59,25 @@ type Subscription struct {
 	CreatedAt     *time.Time
 }
 
-// SubscriptionListItem is a subscription joined to its saved search's display name, so the
-// "My subscriptions" view can label each toggle, and its stored query, so a surface that
-// cannot render the filter panel (the signed-in MCP server) can say what it selects.
+// SubscriptionListItem is a subscription joined to its saved search's name (to label each
+// toggle) and stored query (for surfaces that cannot render the filter panel, like MCP).
 type SubscriptionListItem struct {
 	Subscription
 	SavedSearchName  string
 	SavedSearchQuery string
 }
 
-// Repository is the persistence contract, user-scoped. Create maps a unique
-// violation to ErrDuplicate and a missing/non-owned saved search to
-// ErrSavedSearchNotFound; SetActive maps a missing owner-scoped row to ErrNotFound;
-// Delete maps "no row affected" to ErrNotFound. Implementations map the generated db
-// rows to Subscription/SubscriptionListItem, so the use case never sees db.*.
+// Repository is the persistence contract, user-scoped. Create maps a unique violation to
+// ErrDuplicate and a missing/non-owned saved search to ErrSavedSearchNotFound; SetActive and
+// Delete map a missing owner-scoped row to ErrNotFound.
 type Repository interface {
 	List(ctx context.Context, userID int64) ([]SubscriptionListItem, error)
 	Create(ctx context.Context, userID, savedSearchID int64, channel string) (Subscription, error)
-	// SavedSearchQuery returns the owner-scoped saved search's stored query string, so
-	// the use case can refuse to subscribe to an unfiltered one. A missing or non-owned
-	// id surfaces as ErrSavedSearchNotFound, like Create.
+	// SavedSearchQuery returns the owner-scoped saved search's stored query, so an unfiltered
+	// one can be refused. A missing or non-owned id is ErrSavedSearchNotFound, like Create.
 	SavedSearchQuery(ctx context.Context, userID, savedSearchID int64) (string, error)
-	// HasPushDevice reports whether the account has at least one registered push
-	// device, the precondition for subscribing on the push channel.
+	// HasPushDevice reports whether the account has a registered push device, required for the
+	// push channel.
 	HasPushDevice(ctx context.Context, userID int64) (bool, error)
 	// Target returns an owner-scoped subscription's channel and saved-search query, so a
 	// resume can re-apply the gates. A missing or non-owned id surfaces as ErrNotFound.
@@ -117,20 +101,14 @@ func (s *Service) List(ctx context.Context, userID int64) ([]SubscriptionListIte
 	return s.repo.List(ctx, userID)
 }
 
-// Create subscribes one of the user's saved searches to a channel. The channel is
-// validated against the allowlist; the destination is left NULL for both channels
-// (the recipient is resolved live at delivery — the linked chat for telegram, the
-// account email for email). Ownership of the saved search is enforced in SQL (a
-// non-owned id surfaces as ErrSavedSearchNotFound).
+// Create subscribes one of the user's saved searches to a channel. The channel is validated
+// against the allowlist; the destination stays NULL (the recipient is resolved at delivery).
+// Ownership of the saved search is enforced in SQL.
 //
-// The saved search is put through the same reading the delivery worker gives it
-// (internal/engage/notify's matchQuery: parse the stored query, take `q` and
-// search.FilterFromValues), so "this narrows nothing" is decided by the vocabulary
-// that will actually run rather than by the string being blank. The gate lives here
-// and NOT in that worker: the handful of existing subscriptions to everything are a
-// deliberately kept decision (140eedbd), and refusing them at delivery would drop
-// mail people already receive. (They were deleted by hand on 2026-10-21; the gate
-// stays here so a future change to the vocabulary is still refused at the door.)
+// The saved search is read the way the delivery worker reads it (internal/engage/notify's
+// matchQuery), so "narrows nothing" is judged by the vocabulary that will actually run. The
+// gate lives here, not in that worker, so that refusing at delivery never drops mail people
+// already receive.
 func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, channel string) (Subscription, error) {
 	if !notify.ValidChannel(channel) {
 		return Subscription{}, ErrInvalidChannel
@@ -145,18 +123,14 @@ func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, chann
 	return s.repo.Create(ctx, userID, savedSearchID, channel)
 }
 
-// admit applies the gates a subscription must pass to be active: a query the
-// matcher can run and that narrows the catalogue, and a channel that can reach the
-// account. Create and a resume share it, so a paused subscription that could never
-// deliver cannot be switched back on either.
+// admit applies the gates a subscription must pass to be active: a query the matcher can run
+// and that narrows the catalogue, and a channel that can reach the account. Create and resume
+// share it.
 func (s *Service) admit(ctx context.Context, userID int64, query, channel string) error {
-	// The parse error is dropped exactly as the matcher drops it: url.ParseQuery still
-	// returns every pair it could read, and the question here is what the matcher would
-	// make of this query, not whether it is well-formed. A query nothing survives parses
-	// to nothing, which Narrows already refuses.
+	// The parse error is dropped as the matcher drops it: ParseQuery still returns every pair it
+	// could read, and a query nothing survives is refused by Narrows.
 	vals, _ := url.ParseQuery(query)
-	// A saved search may predate syntax validation. Refuse a new subscription when
-	// the matcher would reject its query rather than promising an alert it cannot send.
+	// A saved search may predate syntax validation; refuse what the matcher would reject.
 	if _, err := search.ParseQuery(vals.Get("q")); err != nil {
 		return err
 	}
@@ -178,9 +152,8 @@ func (s *Service) admit(ctx context.Context, userID int64, query, channel string
 	return nil
 }
 
-// SetActive pauses or resumes a subscription, scoped to its owner. A resume passes
-// the same gates as a new subscription: the matching worker pauses one whose query
-// it cannot run, and switching it back on unchanged would only fail every pass again.
+// SetActive pauses or resumes a subscription, scoped to its owner. A resume passes the same
+// gates as a new subscription, since the worker pauses one whose query it cannot run.
 func (s *Service) SetActive(ctx context.Context, userID, id int64, active bool) (Subscription, error) {
 	if active {
 		channel, query, err := s.repo.Target(ctx, userID, id)

@@ -16,14 +16,12 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// deliver leases a batch of pending matches, groups them by subscription and the
-// subscriptions by recipient, and sends one message per person and channel, carrying
-// a digest per subscription. On success the included matches are marked
-// notified; on failure the delivery bookkeeping retries/dead-letters them. A subscription
-// that is not deliverable now (quiet hours, a daily digest not due, Telegram unlinked) is
-// never leased (deliverableSubscriptions); one that became undeliverable after the lease
-// has its claim released so it is retried promptly rather than waiting out the lease.
-// Stale matches are expired first, so nothing stale is ever claimed.
+// deliver leases a batch of pending matches, groups them by subscription and recipient, and
+// sends one message per person and channel with a digest per subscription. Sent matches are
+// marked notified; failures go to the retry/dead-letter bookkeeping. A subscription not
+// deliverable now (quiet hours, daily digest not due, Telegram unlinked) is never leased
+// (deliverableSubscriptions); one that became undeliverable after the lease has its claim
+// released. Stale matches are expired first, so nothing stale is claimed.
 func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	expired, err := r.expireStale(ctx)
 	stats.Expired += expired
@@ -31,10 +29,9 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 		return fmt.Errorf("expire stale matches: %w", err)
 	}
 
-	// One digest's worth per subscription, so a pass serves every subscription that has
-	// anything pending rather than the lowest ids only. Floored like the batch size it
-	// sits beside: a zero here is LIMIT 0 in the LATERAL, which claims nothing and
-	// reports no error — the whole worker would go quietly idle.
+	// One digest's worth per subscription, so a pass serves every subscription with anything
+	// pending, not the lowest ids only. Floored like the batch size: zero is LIMIT 0 in the LATERAL,
+	// which claims nothing, reports no error and idles the whole worker.
 	perSubscription := int32(r.cfg.SnapshotCap)
 	if perSubscription < 1 {
 		perSubscription = 1
@@ -56,8 +53,7 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 		return err
 	}
 
-	// Group the claimed matches by subscription so each becomes one digest, and the
-	// subscriptions by recipient so each person gets one message per channel.
+	// Group claimed matches by subscription (one digest each) and by recipient (one message per channel).
 	claims := make(map[int64]*subscriptionClaim)
 	messages := make(map[messageKey][]int64)
 	order := make([]messageKey, 0)
@@ -79,11 +75,9 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	}
 
 	for i, key := range order {
-		// A cancelled run stops here rather than walking the rest of the claimed
-		// messages: each would fail instantly against the same dead context and be
-		// counted a delivery failure, so one SIGTERM would report as an outage across
-		// every recipient. Their claims simply expire and the next pass retries them,
-		// which is what the lease is for.
+		// A cancelled run stops here: every remaining message would fail against the same dead context
+		// and count as a delivery failure, so one SIGTERM would look like an outage. Their claims expire
+		// and the next pass retries them.
 		if ctx.Err() != nil {
 			log.Printf("notify: delivery stopped after %d of %d claimed messages: %v", i, len(order), ctx.Err())
 			return nil
@@ -124,18 +118,15 @@ const (
 	holdNoRecipient
 )
 
-// deliveryHold is the one definition of whether a message to this person on this channel
-// can go out at now, and where to. deliver asks it BEFORE leasing any match, so a held
-// message costs no writes, and deliverMessage asks it again after the lease for the
-// races between the two.
+// deliveryHold is the one definition of whether a message to this person on this channel can go
+// out at now, and where to. deliver asks it BEFORE leasing, so a held message costs no writes;
+// deliverMessage asks again after the lease for the races between the two.
 //
-// A `daily` subscription waits for its own configured time and is exempt from quiet
-// hours — a chosen digest time is itself the user's preference. Everything else defers
-// to quiet hours: `instant`, and `interval` (the default), whose elapsed-interval gate
-// stays in ClaimSubscriptionMatches. personLastSent is when this person was last mailed
-// on this channel, across ALL their alerts on it: a sent message stamps every
-// subscription it carried, and a new alert must wait for tomorrow's digest rather than
-// send its own.
+// A `daily` subscription waits for its own configured time and is exempt from quiet hours.
+// `instant` and `interval` (the default) defer to quiet hours; interval's elapsed-interval gate
+// stays in ClaimSubscriptionMatches. personLastSent is when this person was last mailed on this
+// channel across ALL their alerts: a sent message stamps every subscription it carried, and a new
+// alert waits for tomorrow's digest rather than sending its own.
 func deliveryHold(now time.Time, info db.GetSubscriptionForDeliveryRow, personLastSent pgtype.Timestamptz) (dest string, h hold) {
 	tz := info.Timezone.String
 	if info.DigestFrequency == FrequencyDaily {
@@ -152,9 +143,8 @@ func deliveryHold(now time.Time, info db.GetSubscriptionForDeliveryRow, personLa
 	return dest, holdNone
 }
 
-// deliverableSubscriptions lists the subscriptions with pending matches whose message
-// can go out now, so only they are leased. Stats count each held message once, as
-// deliverMessage did when it was the one releasing the lease.
+// deliverableSubscriptions lists the subscriptions with pending matches whose message can go out
+// now, so only they are leased. Stats count each held message once.
 func (r *Runner) deliverableSubscriptions(ctx context.Context, stats *Stats) ([]int64, error) {
 	rows, err := r.store.ListDeliveryCandidates(ctx)
 	if err != nil {
@@ -194,9 +184,8 @@ type part struct {
 	digest Digest
 	// covered is how many pending matches the digest counts without carrying.
 	covered int
-	// createdRow says whether THIS delivery wrote the digest's notification-centre
-	// row or joined one another channel of the same saved search had written; only
-	// the creator may withdraw it.
+	// createdRow says whether THIS delivery wrote the digest's notification-centre row or joined
+	// one another channel had written; only the creator may withdraw it.
 	createdRow bool
 }
 
@@ -210,10 +199,9 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 	for _, subID := range subIDs {
 		info, err := r.store.GetSubscriptionForDelivery(ctx, subID)
 		if err != nil {
-			// Counted, not merely logged. This digest did not go out and nothing burned an
-			// attempt toward the dead-letter limit, so the only trace it leaves is the exit
-			// code — and a pass that failed to read every subscription it claimed used to
-			// print `delivered=0 failed=0` and exit 0, which reads as an idle queue.
+			// Counted, not merely logged: this digest did not go out and burned no attempt, so otherwise
+			// the only trace is the exit code, and a pass that failed to read every claimed subscription
+			// would exit 0 and look like an idle queue.
 			log.Printf("notify: load subscription %d for delivery: %v", subID, err)
 			r.release(ctx, subID, claims[subID].jobIDs)
 			stats.Failed++
@@ -233,9 +221,8 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 		}
 	}
 
-	// The same gate deliver ran before claiming (deliveryHold), repeated here because the
-	// world moves between the two: quiet hours can begin, a Telegram chat can be unlinked.
-	// A message that is not due yet normally never reaches this point.
+	// The same gate deliver ran before claiming, repeated because the world moves between the two:
+	// quiet hours can begin, a Telegram chat can be unlinked.
 	stamped := info.DigestFrequency != FrequencyInstant
 	dest, h := deliveryHold(r.now(), info, parts[0].claim.personLastSent)
 	switch h {
@@ -262,19 +249,15 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 			stats.Failed++
 			continue
 		}
-		// The claim took the newest SnapshotCap matches. Anything pending behind it is
-		// COUNTED by this digest rather than re-queued for a later one: re-queuing is what
-		// left a busy `daily` subscription mailing the same backlog, oldest first, weeks
-		// behind. The count is read before the send so the message can state it.
+		// The claim took the newest SnapshotCap matches. Anything pending behind it is COUNTED by this
+		// digest, not re-queued: re-queuing left a busy `daily` subscription mailing the same backlog
+		// for weeks. The count is read before the send so the message can state it.
 		p.covered = r.countCovered(ctx, p.subID, p.claim)
 		p.digest = buildDigest(p.info.SavedSearchName, jobs, p.covered)
 		p.digest.SearchQuery = p.info.SavedSearchQuery
-		// Record the in-app notification BEFORE sending, so the digest can carry its
-		// own row's id and each channel's "and N more" tail can link to the page
-		// that lists the full match set. A recording failure is not a delivery
-		// failure — the digest goes out with a zero id and the tail falls back to a
-		// generic destination. The notification centre keeps one row per saved
-		// search, so a bundled message still links each section to its own page.
+		// Record the in-app notification BEFORE sending, so the digest carries its row's id and each
+		// channel's "and N more" tail can link to the full match set. A recording failure is not a
+		// delivery failure: the digest goes out with a zero id and a generic tail.
 		p.digest.NotificationID, p.createdRow = r.recordNotification(ctx, p.info, p.digest, p.claim.jobIDs)
 		ready = append(ready, p)
 	}
@@ -289,61 +272,38 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 	}
 
 	if err := r.notifier.Send(ctx, info.Channel, dest, msg); err != nil {
-		// Withdraw on EVERY send error, including an ambiguous one (a timeout may
-		// mean the mail went out and only the acknowledgement was lost). Keeping
-		// the row on ambiguous errors would leave one behind per attempt, and the
-		// matches stay pending either way — so a channel outage would fill the
-		// history with up to MaxAttempts rows per digest nobody received, which is
-		// the failure this ordering exists to avoid. The cost of withdrawing is
-		// narrower: a mail that did slip out links to a page that 404s.
+		// Withdraw on EVERY send error, including an ambiguous one (a timeout may mean the mail went
+		// out): keeping the row would leave one per attempt, up to MaxAttempts per digest nobody
+		// received. The cost is that a mail that did slip out links to a 404.
 		//
-		// Only when THIS delivery created the row. A saved search on three channels
-		// records the event once, and withdrawing it because the third channel failed
-		// would erase the history of the two digests that did arrive — the matches
-		// that failed stay pending and the retry finds the row still there.
+		// Only when THIS delivery created the row: withdrawing a row shared with channels that did
+		// deliver would erase their history. Failed matches stay pending and the retry finds the row.
 		//
-		// The gate is AUTHORSHIP, not "has anybody delivered this yet", and the two
-		// differ only when a second notify process is running: deliver() is one
-		// sequential goroutine, so within a pass the creator sends before any joiner
-		// records. Across two overlapping passes a joiner can send successfully and
-		// the creator then withdraw underneath it, leaving a delivered digest with
-		// no history row.
-		//
-		// That ONE ordering is the remaining gap, and it is not the one the
-		// post-send record below closes: a joiner that read a live id has nothing to
-		// notice, because the row is removed after it has finished. Closing it needs
-		// per-event delivery state for "has anybody delivered" to read, which this
-		// engine does not keep; systemd will not stack this unit on itself, so
-		// reaching it takes a hand-run pass overlapping the timer's.
+		// The gate is authorship, not "has anybody delivered", and the two differ only across two
+		// overlapping notify processes (deliver() is sequential within a pass): a joiner can send, then
+		// the creator withdraw, leaving a delivered digest with no history row. That gap is open:
+		// closing it needs per-event delivery state this engine lacks, and reaching it takes a hand-run
+		// pass overlapping the timer's, since systemd will not stack the unit.
 		for _, p := range parts {
 			if p.createdRow {
 				r.withdrawNotification(ctx, p.subID, p.digest.NotificationID)
 			}
 		}
-		// A channel with no registered notifier (e.g. email while SES is
-		// unconfigured) is not a delivery failure: soft-skip so the matches stay
-		// pending for a pass once the channel is provisioned, without burning an
-		// attempt toward the dead-letter limit.
+		// A channel with no registered notifier (e.g. email unconfigured) is not a delivery failure:
+		// soft-skip, so matches stay pending without burning an attempt.
 		if errors.Is(err, ErrChannelNotConfigured) {
 			releaseAll()
 			stats.SoftSkips++
 			return
 		}
-		// The recipient is gone for good — a blocked/removed Telegram bot, or (per
-		// webhooknotify's own mapping) a webhook destination that answered 410
-		// Gone — and no retry reaches it again. Forget the recipient for whichever
-		// channel reported it and soft-skip: the subscription survives (relinking
-		// Telegram, or re-enabling the webhook, resumes it) while every other
-		// delivery to that same recipient, in this worker and (for Telegram) in
-		// remind/nudge alike, now reads as "not linked"/"disabled" and soft-skips
-		// too.
+		// The recipient is gone for good (a blocked/removed Telegram bot, or a webhook that answered
+		// 410 Gone): forget it for whichever channel reported it and soft-skip. The subscription
+		// survives (relinking or re-enabling resumes it) and every other delivery to that recipient
+		// reads as not linked/disabled. Without this, one gone recipient failed a digest per pass
+		// forever and turned the run's exit code red.
 		//
-		// Without this one blocked/gone recipient failed a digest per pass forever,
-		// and the exit code that failure produces turned the whole run red — which
-		// is how a stranger's choice to mute a bot, or retire an endpoint, became a
-		// worker in a failed state. This must dispatch on info.Channel: an
-		// unconditional unlinkTelegram here would disable a user's Telegram link
-		// over an unrelated webhook's 410.
+		// Must dispatch on info.Channel: an unconditional unlinkTelegram would disable a user's
+		// Telegram over an unrelated webhook's 410.
 		if errors.Is(err, ErrRecipientGone) {
 			r.forgetRecipient(ctx, parts[0].subID, info, err)
 			releaseAll()
@@ -351,11 +311,9 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 			return
 		}
 		log.Printf("notify: deliver subscriptions %v: %v", subIDsOf(parts), err)
-		// A webhook failure that is NOT a 410 (handled above) still counts toward
-		// the destination's own auto-disable threshold — see recordWebhookFailure
-		// — because subscription_matches.attempts resets with every new match,
-		// so a destination that is simply dead would otherwise fail one match
-		// per pass forever instead of being disabled once.
+		// A non-410 webhook failure still counts toward the destination's auto-disable threshold (see
+		// recordWebhookFailure): subscription_matches.attempts resets with every new match, so a dead
+		// destination would otherwise fail one match per pass forever.
 		if info.Channel == ChannelWebhook {
 			r.recordWebhookFailure(ctx, parts[0].subID, info.UserID, err)
 		}
@@ -389,18 +347,10 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 // finalize records one delivered digest (deliverMessage's success half): its history row, its matches, and the
 // subscription's last-sent stamp.
 func (r *Runner) finalize(ctx context.Context, p *part, stamped bool) {
-	// The digest went out. If it is carrying a zero id, nothing in the history
-	// names it yet: either the pre-send write failed, or it conflicted with a row
-	// that was then withdrawn before this channel could read it. Record it now.
-	//
-	// This is the ONE place the ordering can be after the send, because the id is
-	// no longer needed for anything — the message is gone, its tail already fell
-	// back to the generic destination. What is left to get right is only whether
-	// the history admits a digest the person actually received, and it must.
-	//
-	// Safe to attempt blindly: the dedup key makes a redundant insert a no-op, so
-	// a first write that in fact succeeded and only lost its answer cannot become
-	// a second row here.
+	// The digest went out. A zero id means nothing in the history names it yet (the pre-send write
+	// failed, or conflicted with a row withdrawn before this channel could read it). Record it now:
+	// the id is no longer needed, and the history must admit a digest the person received. Safe to
+	// attempt blindly: the dedup key makes a redundant insert a no-op.
 	if p.digest.NotificationID == 0 {
 		r.recordNotification(ctx, p.info, p.digest, p.claim.jobIDs)
 	}
@@ -440,14 +390,11 @@ func subIDsOf(parts []*part) []int64 {
 	return ids
 }
 
-// recordNotification writes the digest's in-app notification-center row and
-// returns its id, or zero if the write failed. A failure is a degraded read-side
-// feature (and a tail that falls back to a generic destination), never a reason
-// to hold back a digest that is otherwise ready to send.
+// recordNotification writes the digest's in-app notification-center row and returns its id, or
+// zero if the write failed: a degraded read side, never a reason to hold back the send.
 //
-// created reports whether this delivery WROTE the row, as opposed to joining one
-// another channel of the same saved search had already written. The notification
-// centre holds one row per EVENT, so only the writer may withdraw it.
+// created reports whether this delivery WROTE the row rather than joining one another channel
+// had written. The centre holds one row per EVENT, so only the writer may withdraw it.
 func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscriptionForDeliveryRow, d Digest, jobIDs []int64) (id int64, created bool) {
 	title, body, slug := renderDigest(d)
 	if d.Overflowed() {
@@ -476,39 +423,28 @@ func (r *Runner) recordNotification(ctx context.Context, info db.GetSubscription
 		log.Printf("notify: record notification for subscription %d: %v", info.ID, err)
 		return 0, false
 	}
-	// No row inserted: another channel of this same saved search already
-	// recorded this event. Link this channel's message at that row rather than
-	// adding a second indistinguishable one to the history (freehire#3020).
+	// No row inserted: another channel of this saved search already recorded this event. Link this
+	// channel's message at that row instead of adding a duplicate to the history.
 	id, err = r.store.GetNotificationIDByDedupKey(ctx, db.GetNotificationIDByDedupKeyParams{
 		UserID:   info.UserID,
 		DedupKey: dedupKey,
 	})
 	if err != nil {
-		// The row was withdrawn between the two statements, which takes a SECOND
-		// notify process: deliver() walks its subscriptions sequentially in one
-		// goroutine, so within a pass the creator has finished sending (and
-		// withdrawing) before this channel records at all. systemd will not start
-		// a `Type=oneshot` unit while the first is active, so the way to reach
-		// here is a hand-run pass overlapping the timer's.
-		//
-		// The send then goes out with a zero id and its tail falls back to a
-		// generic destination — that much is unavoidable, the message has to be
-		// built before it can be sent. What is NOT left to chance is the history:
-		// deliverMessage records again after a successful send precisely because of
-		// this branch. Resurrecting a row another worker withdrew is the right
-		// answer here and only here — that worker withdrew it because ITS OWN send
-		// failed, which says nothing about this one, and the person reading the
-		// history did receive this digest.
+		// The row was withdrawn between the two statements, which takes a SECOND notify process
+		// (deliver() is sequential and systemd will not start a oneshot unit while the first is active),
+		// i.e. a hand-run pass overlapping the timer's. The send goes out with a zero id and a generic
+		// tail; deliverMessage records again after a successful send because of this branch.
+		// Resurrecting a row another worker withdrew is right here: it withdrew because ITS send
+		// failed, and this digest was received.
 		log.Printf("notify: read deduped notification for subscription %d: %v", info.ID, err)
 		return 0, false
 	}
 	return id, false
 }
 
-// withdrawNotification removes the row recordNotification wrote for a digest
-// that then failed to send. A failure here leaves one history row describing a
-// digest nobody received — logged, and strictly better than the alternative
-// reading of the same window, which would be to drop a delivery that succeeded.
+// withdrawNotification removes the row recordNotification wrote for a digest that then failed to
+// send. A failure here is logged and leaves one history row for an undelivered digest, which
+// beats dropping a delivery that succeeded.
 func (r *Runner) withdrawNotification(ctx context.Context, subID, id int64) {
 	if id == 0 {
 		return
@@ -518,12 +454,9 @@ func (r *Runner) withdrawNotification(ctx context.Context, subID, id int64) {
 	}
 }
 
-// unlinkTelegram forgets the user's Telegram chat after a send reported it
-// permanently closed, and says so in the log — this is a visible change to the
-// user's settings made without them asking, so it should not happen silently.
-//
-// A failure to unlink is logged and nothing more: the digest is soft-skipped
-// either way, and the next pass will meet the same 403 and try again.
+// unlinkTelegram forgets the user's Telegram chat after a send reported it permanently closed,
+// and logs it: a visible settings change the user did not make. A failure to unlink is logged
+// only; the digest is soft-skipped either way and the next pass meets the same 403.
 func (r *Runner) unlinkTelegram(ctx context.Context, subID, userID int64, cause error) {
 	rows, err := r.store.DeleteTelegramLink(ctx, userID)
 	if err != nil {
@@ -551,10 +484,8 @@ func (r *Runner) forgetRecipient(ctx context.Context, subID int64, info db.GetSu
 	}
 }
 
-// disableWebhook turns off a user's webhook destination after a send reported
-// it permanently gone (an HTTP 410) — the webhook channel's counterpart to
-// unlinkTelegram, and, like it, a visible change to the user's settings made
-// without them asking, so it should not happen silently.
+// disableWebhook turns off a user's webhook after a send reported it permanently gone (HTTP
+// 410): the counterpart of unlinkTelegram, and likewise a visible settings change, so it is logged.
 func (r *Runner) disableWebhook(ctx context.Context, subID, userID int64, cause error) {
 	rows, err := r.store.DisableWebhookConfig(ctx, userID)
 	if err != nil {
@@ -569,11 +500,8 @@ func (r *Runner) disableWebhook(ctx context.Context, subID, userID int64, cause 
 	log.Printf("notify: disabled webhook for user %d after subscription %d: %v", userID, subID, cause)
 }
 
-// recordWebhookFailure counts a non-410 webhook send failure toward the
-// destination's auto-disable threshold and logs when that crosses it — the
-// non-410 counterpart to disableWebhook, reached from the generic failure
-// branch rather than the ErrRecipientGone one since the destination never
-// said it was gone, it just keeps failing.
+// recordWebhookFailure counts a non-410 webhook failure toward the destination's auto-disable
+// threshold and logs when it crosses it. The destination never said it was gone; it keeps failing.
 func (r *Runner) recordWebhookFailure(ctx context.Context, subID, userID int64, cause error) {
 	row, err := r.store.RecordWebhookDeliveryFailure(ctx, db.RecordWebhookDeliveryFailureParams{
 		UserID:      userID,
@@ -600,9 +528,8 @@ func (r *Runner) release(ctx context.Context, subID int64, jobIDs []int64) {
 	}
 }
 
-// expireBatch bounds one ExpireStaleSubscriptionMatches statement. The first pass
-// after deploy meets a backlog of tens of thousands; batching keeps it a run of
-// short statements instead of one long one holding row locks on a busy host.
+// expireBatch bounds one ExpireStaleSubscriptionMatches statement, so a large backlog is a run
+// of short statements instead of one long one holding row locks.
 const expireBatch = 5000
 
 // expireStale takes every stale match out of the pending set, one bounded batch at

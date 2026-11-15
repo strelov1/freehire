@@ -1,10 +1,9 @@
 // Package ga4mp reports a sign-up to Google Analytics 4 from the server, through the
 // Measurement Protocol.
 //
-// The browser used to send `sign_up` itself. It now hands the server the client and
-// session ids it already holds and the server sends the event, so the sign-up reaches
-// GA whether or not the tab survived the OAuth redirect. The browser must NOT send it
-// as well: GA4 has no event-level dedup, so both would count the account twice.
+// The browser hands the server the client and session ids and the server sends the
+// event, so it survives a tab lost in the OAuth redirect. The browser must NOT send
+// it too: GA4 has no event-level dedup, so the account would count twice.
 //
 // Consent: a client id exists only for a visitor who accepted analytics cookies, and
 // nothing is sent without one. This package never mints an id of its own.
@@ -95,9 +94,8 @@ func (c *Client) SignUp(ctx context.Context, clientID, sessionID, method string)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		// A *url.Error carries the full request URL, and this URL carries the API
-		// secret in its query string. Keep only the cause, or the secret reaches every
-		// log line the caller writes.
+		// A *url.Error carries the request URL, whose query holds the API secret; keep
+		// only the cause so the secret never reaches logs.
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
 			err = urlErr.Err

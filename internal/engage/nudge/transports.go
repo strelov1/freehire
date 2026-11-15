@@ -15,22 +15,17 @@ import (
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
 
-// senderName is the display name on these mails: they are the product speaking,
-// not a person, so a message list should say so.
+// senderName is the display name on these mails: the product, not a person.
 const senderName = "freehire"
 
-// Compile-time proof the transports satisfy the engine's Notifier seam.
 var (
 	_ Notifier = (*TelegramNotifier)(nil)
 	_ Notifier = (*EmailNotifier)(nil)
 )
 
-// TelegramNotifier delivers a nudge as a Telegram HTML message, reusing the
-// telegramnotify Bot API client. Every link stays on-platform: the tracking board
-// for kinds about the application (follow-up, interview-prep), the job's own page
-// for job-closed — there is nothing left to track on the board for a listing that
-// just closed, but the posting itself (and whatever the candidate captured from it)
-// is still worth a look.
+// TelegramNotifier delivers a nudge as a Telegram HTML message. Every link stays
+// on-platform: the tracking board for application kinds, the job's own page for
+// job-closed (nothing is left to track for a closed listing).
 type TelegramNotifier struct {
 	client *telegramnotify.Client
 	origin string
@@ -43,10 +38,8 @@ func NewTelegramNotifier(client *telegramnotify.Client, origin string) *Telegram
 }
 
 // Send renders the nudge and posts it to the chat encoded in dest. The channel
-// argument is ignored — this notifier only serves the telegram channel.
-// A 403 is translated to ErrRecipientGone, this engine's vocabulary for a chat
-// permanently closed to us, so the runner unlinks it instead of retrying a send
-// that cannot land. Same translation the digest and reminder notifiers do.
+// argument is ignored. A 403 is translated to ErrRecipientGone so the runner unlinks
+// the chat instead of retrying a send that cannot land.
 func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
 	if len(ms) == 0 {
 		return nil
@@ -54,10 +47,9 @@ func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest, kind string
 	return n.client.SendToChat(ctx, dest, n.render(kind, ms))
 }
 
-// render builds the HTML body: one nudge keeps the sentence it has always been,
-// several become a headline and a list bounded twice — by notify.ListLimit for
-// readability, and by Telegram's own MaxMessageLen, because an oversized body is
-// rejected deterministically and every retry re-fails.
+// render builds the HTML body: one nudge is a sentence, several are a headline and
+// a list bounded by notify.ListLimit and by Telegram's MaxMessageLen (an oversized
+// body is rejected deterministically, so every retry would re-fail).
 func (n *TelegramNotifier) render(kind string, ms []Message) string {
 	if len(ms) == 1 {
 		return n.renderOne(ms[0])
@@ -86,8 +78,8 @@ func (n *TelegramNotifier) render(kind string, ms []Message) string {
 	return b.String()
 }
 
-// batchHeadline is the one line that says what this batch is about. It is escaped
-// nowhere because it holds no source data — only a count.
+// batchHeadline is the one line saying what this batch is about. It holds only a
+// count, so nothing is escaped.
 func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
 	switch kind {
 	case KindFollowUp:
@@ -133,10 +125,9 @@ func (n *TelegramNotifier) batchURL(kind string) string {
 	return n.origin + path
 }
 
-// batchDestination is the one place that decides where a batch of `kind` leads and
-// what the action is called. Most kinds are about applications, so the tracking
-// board; job-closed has nothing left to track, so the saved list. Both channels read
-// it, so the mail's button and the bot's tail can never point different ways.
+// batchDestination decides where a batch of `kind` leads and what the action is
+// called: the tracking board, or the saved list for job-closed. Both channels read
+// it, so they never point different ways.
 func batchDestination(kind string) (path, label string) {
 	if kind == KindJobClosed {
 		return "/my/activity", "Open your saved jobs"
@@ -144,9 +135,8 @@ func batchDestination(kind string) (path, label string) {
 	return "/my/tracking", "Open your tracking board"
 }
 
-// renderOne is the single-nudge body, kept as its own function per kind because a
-// batch of one must render identically to a real single-message send — never a
-// one-item batch headline — regardless of how each kind's own wording evolves.
+// renderOne is the single-nudge body; a batch of one must render as a real single
+// message, never as a one-item batch headline.
 func (n *TelegramNotifier) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
@@ -181,8 +171,8 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 	}
 }
 
-// EmailNotifier delivers a nudge as an email, reusing the emailnotify SES
-// transport. Like the Telegram notifier, its links stay on-platform.
+// EmailNotifier delivers a nudge as an email. Like the Telegram notifier, its links
+// stay on-platform.
 type EmailNotifier struct {
 	sender emailnotify.Sender
 	from   string
@@ -237,10 +227,8 @@ type batchBody struct {
 	CTA  string
 }
 
-// batchTemplate is the list body every kind's batch shares: the jobs, the one
-// sentence saying what happened to them, and a single call to action. The kinds
-// differ in copy, not in layout, so one template serves all three — unlike the
-// single-nudge blocks above, whose lead sentences sit inside the markup.
+// batchTemplate is the list body every kind's batch shares: the jobs, one lead
+// sentence and a single call to action. The kinds differ in copy, not layout.
 var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
   {{range $i, $job := .Jobs}}
@@ -334,7 +322,7 @@ func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, l
 }
 
 // batchCTA is the mail's single action, per batchDestination, tagged with an email
-// UTM source so the channel's traffic is attributable.
+// UTM source.
 func (n *EmailNotifier) batchCTA(kind string) (url, label string) {
 	path, label := batchDestination(kind)
 	return n.origin + path + "?utm_source=email", label
@@ -346,11 +334,8 @@ func (n *EmailNotifier) jobURL(m Message) string {
 }
 
 // nudgeBody is what the body templates render from. Job carries the source data,
-// escaped in context by html/template.
-//
-// Job.URL is the job's own page — what the row links to — while URL is where the
-// call to action sends the reader, usually the tracking board. They differ because
-// the nudge is about the application, not the listing.
+// escaped in context by html/template. Job.URL is the job's own page, while URL is
+// where the call to action leads, usually the tracking board.
 type nudgeBody struct {
 	Job        mailtpl.Job
 	DaysSilent int
@@ -358,9 +343,8 @@ type nudgeBody struct {
 	CTA        string
 }
 
-// bodies holds one block per nudge kind, selected by name in render. Each renders
-// the lead sentence and the call to action; the heading and the chrome around them
-// belong to the shell.
+// bodies holds one block per nudge kind, selected by name in render; the heading
+// and chrome belong to the shell.
 var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 {{define "followup"}}{{template "job-row" .Job}}
 <div style="height:18px;"></div>
@@ -402,11 +386,9 @@ func (n *EmailNotifier) render(m Message, unsubscribe string) (subject, htmlBody
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
 	applicationURL := n.origin + "/my/tracking/" + m.Slug + "?utm_source=email"
 
-	// block names the body template; head and pre are the shell's heading and the
-	// inbox preview line.
+	// block names the body template; head and pre are the heading and inbox preview.
 	var block, head, pre string
-	// Most nudges are about the application, so the tracking board is the default
-	// destination; job-closed overrides it, having nothing left to track.
+	// The tracking board is the default destination; job-closed overrides it.
 	data := nudgeBody{
 		Job:        mailtpl.NewJob(m.JobTitle, m.Company, "", jobURL),
 		DaysSilent: m.DaysSilent,

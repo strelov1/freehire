@@ -11,16 +11,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// PostgresStore is the Store backed by the generated queries. It holds no rules: who
-// warrants the role and what reconciliation owes a binding are decided above it, where they
-// can be read and tested without a database.
+// PostgresStore is the Store backed by the generated queries. It holds no rules;
+// those are decided above it, testable without a database.
 type PostgresStore struct {
 	q *db.Queries
 }
 
-// The two implementations the service is actually wired to. Asserted here so a signature
-// that drifts fails at build time in this package, rather than at the composition root with
-// an error that names neither side clearly.
+// Asserted so a drifting signature fails to build here, not at the composition
+// root.
 var (
 	_ Store   = (*PostgresStore)(nil)
 	_ Discord = (*Client)(nil)
@@ -36,10 +34,9 @@ func (s *PostgresStore) Link(ctx context.Context, userID int64, discordUserID st
 		UserID: userID, DiscordUserID: discordUserID,
 	})
 	if err != nil {
-		// The only unique index this statement can violate is the one on
-		// discord_links.discord_user_id — the primary key is conflict-handled in the
-		// statement itself — so a unique violation means exactly one thing: another
-		// freehire account already holds that Discord account.
+		// The only unique index this statement can violate is on
+		// discord_links.discord_user_id (the primary key is conflict-handled in the
+		// statement), so a violation means another account holds that Discord account.
 		if pgerr.IsUniqueViolation(err) {
 			return Link{}, ErrAlreadyLinkedElsewhere
 		}
@@ -90,12 +87,9 @@ func (s *PostgresStore) ListToSync(ctx context.Context, limit int32) ([]Candidat
 		out = append(out, Candidate{
 			UserID:        row.UserID,
 			DiscordUserID: row.DiscordUserID,
-			// A NULL role_granted_at is "the role is not held"; the instant itself is only
-			// ever read for the operator's benefit.
+			// A NULL role_granted_at means the role is not held.
 			RoleGranted: row.RoleGrantedAt.Valid,
-			// A NULL entitlement becomes the zero time, which TierOf reads as "not after
-			// now" — free. That is the same answer, reached without a second nullable type
-			// travelling up into the decision.
+			// A NULL entitlement becomes the zero time, which TierOf reads as free.
 			ProUntil:   row.ProUntil.Time,
 			UltraUntil: row.UltraUntil.Time,
 		})
@@ -103,11 +97,9 @@ func (s *PostgresStore) ListToSync(ctx context.Context, limit int32) ([]Candidat
 	return out, nil
 }
 
-// SetRoleGranted records whether the role is held and that the binding was just examined.
-//
-// It passes the fact, not an instant: the statement decides when, so a role that was already
-// granted keeps the instant it was granted at instead of having it pushed forward by every
-// hourly pass. See the query's own comment.
+// SetRoleGranted records whether the role is held and that the binding was just
+// examined. It passes the fact, not an instant: the statement decides when, so
+// an already-granted role keeps its original instant.
 func (s *PostgresStore) SetRoleGranted(ctx context.Context, userID int64, granted bool) error {
 	return s.q.SetDiscordRoleGranted(ctx, db.SetDiscordRoleGrantedParams{
 		UserID: userID, Granted: granted,

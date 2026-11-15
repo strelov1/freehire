@@ -3,8 +3,7 @@
 // their own IANA zone, expanded per date, with busy time subtracted, cut into sessions
 // and filtered by the notice period and the horizon.
 //
-// It is a pure function of its inputs — no database, no clock, no owner id — which is what
-// makes the daylight-saving and boundary cases testable without Postgres, and what lets a
-// listed window and the re-derivation a booking runs agree. It moved here unchanged from
-// internal/engage/mentorship, whose AGENTS.md still states the rules a change here keeps.
+// It is a pure function of its inputs (no database, no clock, no owner id), so DST and
+// boundary cases test without Postgres and a listed window agrees with the booking's
+// re-derivation. internal/engage/mentorship's AGENTS.md states the rules a change here keeps.
 package slots

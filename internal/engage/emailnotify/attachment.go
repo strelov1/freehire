@@ -14,33 +14,27 @@ import (
 type Attachment struct {
 	// Filename is what the recipient's client shows and saves it as.
 	Filename string
-	// ContentType is the full MIME type INCLUDING its parameters — for a calendar
-	// invitation that means `text/calendar; charset=utf-8; method=REQUEST`, because a
-	// client decides whether to render an "add to calendar" button from the method
-	// parameter and treats the part as a plain file without it.
+	// ContentType is the full MIME type including parameters. A calendar invite
+	// needs `text/calendar; charset=utf-8; method=REQUEST`: clients decide whether to
+	// show "add to calendar" from the method parameter.
 	ContentType string
 	Content     []byte
 }
 
-// buildRawMessage assembles the RFC 5322 message SES sends verbatim, for a message
-// carrying files.
+// buildRawMessage assembles the RFC 5322 message SES sends verbatim, for a
+// message carrying files.
 //
-// The structure is multipart/mixed wrapping a multipart/alternative body plus one part
-// per attachment. That nesting is not decoration: putting the text and HTML alternatives
-// directly under mixed makes a client show BOTH — the plain text and then the rendered
-// HTML, one after the other — because parts of a mixed message are all displayed, while
-// alternatives are a choice between equivalents.
+// Structure is multipart/mixed wrapping a multipart/alternative body plus one
+// part per attachment. Putting text and HTML directly under mixed makes clients
+// show both, since all mixed parts are displayed.
 //
-// Content is base64-encoded regardless of type. A calendar invitation is text and would
-// survive quoted-printable, but base64 is what keeps a long unfolded line, a CRLF, or a
-// non-ASCII name from being rewritten in transit — and a rewritten `.ics` is one no
-// client will parse.
+// Content is always base64: it keeps long lines, CRLFs and non-ASCII names from
+// being rewritten in transit, which would break an `.ics`.
 func buildRawMessage(m Message) ([]byte, error) {
 	var buf bytes.Buffer
 	mixed := multipart.NewWriter(&buf)
 
-	// The subject is encoded rather than written raw: a header is ASCII, and a non-ASCII
-	// subject line reaching a server unencoded is either rejected or mangled.
+	// Encode the subject: a non-ASCII header is rejected or mangled unencoded.
 	headers := []string{
 		"From: " + m.From,
 		"To: " + m.To,
@@ -52,9 +46,8 @@ func buildRawMessage(m Message) ([]byte, error) {
 	if m.ReplyTo != "" {
 		headers = append(headers, "Reply-To: "+m.ReplyTo)
 	}
-	// The same pair the simple path sends, spelled once in headers and
-	// rendered into wire form here. A raw message is assembled by hand, so this is
-	// the one place the two paths could have drifted apart.
+	// The same pair the simple path sends, spelled once in headers; the one place
+	// the two paths could drift.
 	for _, h := range m.headers() {
 		headers = append(headers, *h.Name+": "+*h.Value)
 	}
@@ -125,9 +118,8 @@ func writeAttachment(mixed *multipart.Writer, a Attachment) error {
 	return writeBase64(w, a.Content)
 }
 
-// maxBase64Line is RFC 2045's limit on an encoded line. Longer lines are legal to
-// produce and routinely mangled by intermediate servers, which for an attachment means a
-// file that no longer decodes.
+// maxBase64Line is RFC 2045's limit on an encoded line; longer lines get
+// mangled by intermediate servers and the file stops decoding.
 const maxBase64Line = 76
 
 func writeBase64(w interface{ Write([]byte) (int, error) }, content []byte) error {

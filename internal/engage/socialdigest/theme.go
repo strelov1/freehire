@@ -5,21 +5,18 @@ import (
 	"time"
 )
 
-// Theme is one of the tops the daily post rotates through. Every theme ranks the same
-// way, on page_uniques under the same editorial rules: it narrows which postings compete,
-// never what "top" means, so a heading can always say "most viewed".
+// Theme is one of the tops the daily post rotates through. Every theme ranks on page_uniques
+// under the same rules and only narrows which postings compete, so a heading can always say
+// "most viewed".
 type Theme struct {
-	// Heading starts the post's title. It has to stay true of every item the list can
-	// hold, because it goes out under our own name.
+	// Heading starts the post's title and must stay true of every item the list can hold.
 	Heading string
 	// Keep decides whether a posting competes. Nil keeps everything.
 	Keep func(Posting) bool
 }
 
-// The tops. Each reads one column the candidate query already returns and states
-// something a reader can check against the posting. Salary is absent on purpose: it has
-// four producers that only the job view folds together, and a list titled for it would
-// need that fold here.
+// The tops. Each reads one column the candidate query already returns. Salary is absent on
+// purpose: it has four producers that only the job view folds together.
 var (
 	ThemeMostViewed = Theme{Heading: "Most viewed"}
 	themeRemote     = Theme{
@@ -38,14 +35,8 @@ var (
 
 var dataAICategories = []string{"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering"}
 
-// ThemeFor names the top a digest day runs. It is a function of the day alone, with no
-// state, so every channel and every retry or -day replay of one day agrees on it, and the
-// ledger needs no new column.
-//
-// The rotation adds no posts: it is still one post a day per channel. What keeps it from
-// reading as spam is the rules that already hold across themes, above all the quarantine,
-// so a posting that led Tuesday's remote list cannot lead Wednesday's. The plain list keeps
-// most of the week because it is the only one that speaks to everybody.
+// ThemeFor names the top a digest day runs. It depends on the day alone, so every channel,
+// retry and -day replay agrees and the ledger needs no new column.
 func ThemeFor(day time.Time) Theme {
 	switch truncateDay(day).Weekday() {
 	case time.Tuesday:
@@ -59,9 +50,9 @@ func ThemeFor(day time.Time) Theme {
 	}
 }
 
-// SelectThemed builds the day's list for its theme, falling back to the plain list when
-// the theme cannot fill MinThemeItems. It returns the theme it actually used, because the
-// heading must describe the list that goes out and not the one the calendar asked for.
+// SelectThemed builds the day's list for its theme, falling back to the plain list when the
+// theme cannot fill MinThemeItems. It returns the theme actually used, since the heading must
+// describe the list that goes out.
 func SelectThemed(theme Theme, candidates []Posting, quarantined map[int64]bool) (Theme, []Posting) {
 	if theme.Keep != nil {
 		kept := make([]Posting, 0, len(candidates))

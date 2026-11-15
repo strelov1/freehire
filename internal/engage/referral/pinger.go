@@ -29,11 +29,9 @@ type TelegramSender interface {
 // Compile-time proof that ChannelPinger satisfies Pinger.
 var _ Pinger = (*ChannelPinger)(nil)
 
-// ChannelPinger is the production Pinger: it emails every referrer (email is always
-// present) and additionally messages Telegram when the referrer linked it. The notice is
-// deliberately minimal — "you have a new referral request" plus a link to the cabinet inbox,
-// where the seeker's contact and CV live behind authorization — so nothing leaks over the
-// channel itself.
+// ChannelPinger is the production Pinger: it emails every referrer and additionally
+// messages Telegram when linked. The notice is deliberately minimal, so nothing leaks over
+// the channel itself.
 // Silencer answers whether an account has turned a group of mail off.
 // *emailprefs.Service satisfies it.
 //
@@ -86,10 +84,8 @@ func (p *ChannelPinger) PingReferrer(ctx context.Context, r Recipient, cabinetUR
 		// caught by the golden previews.
 		_ = requestHTML.Execute(&content, cabinetURL)
 
-		// GroupActivity, not GroupNews. A referral request is somebody asking THIS
-		// person for something, arriving because they offered to be asked — filing it
-		// with campaigns would mean declining our product news silently switches off
-		// the marketplace they signed up for.
+		// GroupActivity, not GroupNews: a referral request is somebody asking THIS person for
+		// something, so declining product news must not switch it off.
 		unsubscribe, err := p.links.For(r.UserID, emailprefs.GroupActivity)
 		if err != nil {
 			return fmt.Errorf("referral: unsubscribe link for user %d: %w", r.UserID, err)
