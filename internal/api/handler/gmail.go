@@ -264,13 +264,17 @@ func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 			return refresh, scopes, err
 		},
 		persist: func(ctx context.Context, userID int64, enc string, scopes []string) error {
-			// Scopes ride in the same statement as the token: cal-sync selects
-			// connections by their recorded scopes, and a separate write would let a
-			// concurrent calendar connect pair its token with this grant's scopes.
-			return h.queries.UpsertGmailConnection(ctx, db.UpsertGmailConnectionParams{
-				UserID: userID, Email: email, RefreshTokenEnc: enc, Scopes: scopes,
-			})
+			return h.saveGmailGrant(ctx, userID, email, enc, scopes)
 		},
+	})
+}
+
+// saveGmailGrant stores a mail grant. Scopes ride in the same statement as the token:
+// cal-sync selects connections by their recorded scopes, and a separate write would let a
+// concurrent calendar connect pair its token with this grant's scopes.
+func (h *inboxHandlers) saveGmailGrant(ctx context.Context, userID int64, email, enc string, scopes []string) error {
+	return h.queries.UpsertGmailConnection(ctx, db.UpsertGmailConnectionParams{
+		UserID: userID, Email: email, RefreshTokenEnc: enc, Scopes: scopes,
 	})
 }
 
