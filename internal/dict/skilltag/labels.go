@@ -29,6 +29,10 @@ import (
 // Everything else is deliberately absent: "data-engineering" → "Data Engineering" needs
 // no curation, and listing it here would only be one more line to keep true.
 var displayNames = map[string]string{
+	"dotnet-maui":     ".NET MAUI",
+	"sop-development": "SOP Development",
+	"pos-terminals":   "POS Terminals",
+	"cctv":            "CCTV",
 	// Industrial maintenance: acronyms and module names.
 	"sap-pm":                           "SAP PM",
 	"reliability-centered-maintenance": "Reliability-Centered Maintenance (RCM)",

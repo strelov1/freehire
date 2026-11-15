@@ -227,6 +227,8 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware, contract fiber.Ha
 	// never agreed to spend. The assistant tool reaches the same write over a key-bearing
 	// session, which is not a hole: a session is the account holder's own, and its turn is
 	// metered before this one is.
+	api.Get("/me/cvs/:id/cover-letter/evidence", mw.key, contract)
+	api.Put("/me/cvs/:id/cover-letter/evidence", mw.cookie, contract)
 	api.Get("/me/cvs/:id/cover-letter", mw.key, contract)
 	api.Post("/me/cvs/:id/cover-letter", mw.cookie, mw.paidAI(plan.FeatureCoverLetter), contract)
 	// The streaming twin of that POST, and what the workspace actually calls. The chain is

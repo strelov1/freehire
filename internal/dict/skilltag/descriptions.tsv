@@ -1145,3 +1145,18 @@ tanium	Tanium is an endpoint management and security platform that inventories, 
 ninjaone	NinjaOne is a remote monitoring and management platform that IT teams use to patch, monitor and support Windows, macOS and Linux devices.
 workspace-one	Workspace ONE (formerly AirWatch, now Omnissa) is a unified endpoint management platform for enrolling and managing laptops and mobile devices.
 windows-autopilot	Windows Autopilot is Microsoft's service for provisioning new Windows devices straight from the vendor into an Intune-managed configuration.
+dotnet-maui	.NET MAUI: A .NET framework for building native mobile and desktop applications from a shared codebase.
+sourcegraph	Sourcegraph: A code search and navigation platform for exploring software repositories.
+lightroom	Lightroom: An Adobe application for organizing and editing photographs.
+etix	Etix: A ticketing platform for managing event ticket sales and admission.
+design-tokens	Design Tokens: Named design values used to share colors, spacing, typography and other visual properties across interfaces.
+figma-plugins	Figma Plugins: Extensions that automate tasks or add capabilities within Figma.
+monorepo	Monorepo: A repository strategy that keeps multiple projects or packages in one version-controlled repository.
+system-integration	System Integration: Connecting software systems so they exchange data and work together.
+data-reconciliation	Data Reconciliation: Comparing records across sources to identify and resolve discrepancies.
+sop-development	SOP Development: Writing and maintaining standard operating procedures for repeatable work.
+event-ticketing	Event Ticketing: Managing the sale, distribution and validation of tickets for events.
+box-office-management	Box Office Management: Managing ticket sales, customer service and reporting for a venue or event box office.
+pos-terminals	POS Terminals: Devices used to accept payments and record transactions at the point of sale.
+cctv	CCTV: Video surveillance systems used to monitor and record activity at a site.
+structured-cabling	Structured Cabling: Installing and maintaining standardized cabling infrastructure for data and telecommunications networks.

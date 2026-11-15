@@ -1,7 +1,7 @@
 # Candidate-controlled evidence for an application
 
 Date: 2026-11-15
-Status: Draft for review
+Status: Accepted; implementation covers the first increment
 
 ## Problem
 

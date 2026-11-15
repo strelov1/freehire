@@ -2951,6 +2951,7 @@ type Querier interface {
 	// language stamp is checked against the VACANCY, not the caller's profile, unlike
 	// GetUserJobAnalysis.
 	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
+	GetCoverLetterEvidence(ctx context.Context, arg GetCoverLetterEvidenceParams) (GetCoverLetterEvidenceRow, error)
 	// One candidate's application to one vacancy, if any — whether it reached the employer is
 	// sent_at, whether a delivery is in flight is a sending_at younger than the claim's two
 	// minutes. Read by the apply form ("already applied") and by Apply to tell the three
@@ -6732,10 +6733,6 @@ type Querier interface {
 	// Count a failed attempt for a whole claimed batch (one facetd write serves them all),
 	// releasing the lease so a later run retries, and dead-lettering entries that reach the max.
 	RecordFacetdOutboxFailure(ctx context.Context, arg RecordFacetdOutboxFailureParams) (int64, error)
-	// Record what a grant covers, as the provider reported it. Replacing rather than unioning,
-	// for the reason above: a list that only grows cannot express a scope the candidate took
-	// away. An empty list means the exchange did not say, and keeps what we held.
-	RecordGrantScopes(ctx context.Context, arg RecordGrantScopesParams) error
 	// Record that this posting was announced to this engine, for this event. ON CONFLICT DO
 	// NOTHING keeps a re-run after a partial failure from double-spending a budget that is
 	// counted in hundreds per day: the row is what makes the send idempotent, so it is
@@ -7520,6 +7517,7 @@ type Querier interface {
 	// (source, id) open index can supply candidates without reading the catalogue's wide rows.
 	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
 	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
+	SaveCoverLetterEvidence(ctx context.Context, arg SaveCoverLetterEvidenceParams) (SaveCoverLetterEvidenceRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
@@ -8414,6 +8412,7 @@ type Querier interface {
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
+	UpdateCoverLetterEvidence(ctx context.Context, arg UpdateCoverLetterEvidenceParams) (UpdateCoverLetterEvidenceRow, error)
 	// The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
 	// created_by is in the actor's company team (employer_team, migration 0271 — not merely IS
 	// NOT NULL) AND source = 'employer'. UpdateManualJob's
@@ -8689,8 +8688,14 @@ type Querier interface {
 	// nightly re-sync must not un-read a message, resurrect a deleted one, or wipe the
 	// agent's triage verdict.
 	UpsertExternalEmail(ctx context.Context, arg UpsertExternalEmailParams) (UpsertExternalEmailRow, error)
-	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
-	// mark connected, preserving the sync cursor on reconnect.
+	// Connect (or reconnect) a user's Gmail: store the encrypted refresh token, mark
+	// connected, preserving the sync cursor on reconnect, and record what the grant covers.
+	//
+	// Token and scopes go in one statement, so the row always holds a token together with
+	// the scopes reported for it. Written separately, a calendar connect landing between the
+	// two would leave its token next to this grant's scopes, and cal-sync (which selects by
+	// scope) would skip the account. Scopes replace, as in UpsertCalendarGrant; an empty
+	// list means the exchange did not say and keeps what we held.
 	UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error
 	// Write one provider's override. Every argument is optional: a NULL means "leave this
 	// alone" on an existing row and "use the documented default" on a new one, so a curator

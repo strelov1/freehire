@@ -2934,6 +2934,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/cvs/{id}/cover-letter/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Review the confirmed evidence for a cover letter.
+         * @description Review confirmed evidence without a model call or allowance charge.
+         */
+        get: operations["getCVCoverLetterEvidence"];
+        /**
+         * Save the confirmed evidence selection for a cover letter.
+         * @description Save up to 50 confirmed achievement ids with an expected revision.
+         *     An empty atom_ids array explicitly prevents drafting until facts are selected.
+         *     Returns 409 when the expected revision is stale, or 422 for invalid evidence.
+         */
+        put: operations["saveCVCoverLetterEvidence"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/cvs/{id}/duplicate": {
         parameters: {
             query?: never;
@@ -7261,6 +7287,8 @@ export interface components {
         };
         /** @description A stored cover letter; `present` is false, with no letter, when none was drafted. */
         CvCoverLetter: {
+            evidence_blocked?: boolean;
+            evidence_changed?: boolean;
             present: boolean;
             stale?: boolean;
             letter?: unknown;
@@ -18068,6 +18096,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CvPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCVCoverLetterEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tailored CV id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "revision": 0,
+                     *         "explicit": false,
+                     *         "atom_ids": [],
+                     *         "suggested_ids": [],
+                     *         "invalid_ids": [],
+                     *         "available": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    saveCVCoverLetterEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tailored CV id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description revision is the expected saved revision (0 before the first save); atom_ids contains up to 50 unique, owned, confirmed achievement UUIDs. */
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "revision": 0,
+                 *       "atom_ids": []
+                 *     }
+                 */
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "revision": 1,
+                     *         "atom_ids": []
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: unknown;
+                    };
                 };
             };
             /** @description An unexpected error response. */

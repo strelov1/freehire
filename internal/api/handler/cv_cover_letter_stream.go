@@ -45,6 +45,11 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 
 	// Charged BEFORE the stream opens, while the fiber ctx is still valid — a refused caller
 	// gets a real 402 rather than an error event inside a 200 nobody status-checks.
+	prepared, err := drafter.prepare(c.Context(), userID, jobID)
+	if err != nil {
+		return mapLetterSelectionError(err)
+	}
+
 	attempt := letterAttempt(c.Context(), h.letter.letters, userID, jobID)
 	charge, refused, decision := chargeLetter(c.Context(), h.plans, userID, jobID, attempt)
 	if refused {
@@ -96,7 +101,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 		// The chain's own first emit opens a stage before it makes any network call, so it IS
 		// the early first byte this endpoint exists for — nothing needs to be written ahead of
 		// it, and writing one would send `select` twice.
-		letter, err := drafter.draftStream(ctx, caller, userID, jobID, band, func(stage string, done bool) {
+		letter, err := drafter.draftStream(ctx, caller, userID, jobID, band, prepared, func(stage string, done bool) {
 			stream.event("stage", letterStageEvent{Stage: stage, Done: done})
 		})
 		if err == nil && letter != nil {
@@ -134,6 +139,8 @@ func letterFailureMessage(err error) string {
 		return "drafting is unavailable on this deployment"
 	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 		return "nothing in your experience bank is yours to cite yet: confirm an achievement first"
+	case errors.Is(err, coverletter.ErrInvalidSelection):
+		return "select between 1 and 50 confirmed achievements; review unavailable facts"
 	case errors.Is(err, fitanalysis.ErrNoAnalysis):
 		return "run the fit analysis first"
 	default:

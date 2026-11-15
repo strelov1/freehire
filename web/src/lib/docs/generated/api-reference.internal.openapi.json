@@ -5249,6 +5249,75 @@
         ]
       }
     },
+    "/me/cvs/{id}/cover-letter/evidence": {
+      "put": {
+        "operationId": "saveCVCoverLetterEvidence",
+        "summary": "Save the confirmed evidence selection for a cover letter.",
+        "description": "Save up to 50 confirmed achievement ids with an expected revision.\nAn empty atom_ids array explicitly prevents drafting until facts are selected.\nReturns 409 when the expected revision is stale, or 422 for invalid evidence.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The tailored CV id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {}
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "revision": 1,
+                    "atom_ids": []
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "CV"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {},
+              "example": {
+                "revision": 0,
+                "atom_ids": []
+              }
+            }
+          },
+          "description": "revision is the expected saved revision (0 before the first save); atom_ids contains up to 50 unique, owned, confirmed achievement UUIDs."
+        }
+      }
+    },
     "/me/cvs/{id}/duplicate": {
       "post": {
         "operationId": "duplicateCV",
@@ -12859,6 +12928,12 @@
           "present"
         ],
         "properties": {
+          "evidence_blocked": {
+            "type": "boolean"
+          },
+          "evidence_changed": {
+            "type": "boolean"
+          },
           "present": {
             "type": "boolean"
           },

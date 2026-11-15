@@ -987,23 +987,39 @@ func (q *Queries) UpsertExternalEmail(ctx context.Context, arg UpsertExternalEma
 }
 
 const upsertGmailConnection = `-- name: UpsertGmailConnection :exec
-INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status)
-VALUES ($1, $2, $3, 'connected')
+INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status, scopes)
+VALUES ($1, $2, $3, 'connected', COALESCE($4::text[], '{}'))
 ON CONFLICT (user_id) DO UPDATE
 SET email = EXCLUDED.email,
     refresh_token_enc = EXCLUDED.refresh_token_enc,
-    status = 'connected'
+    status = 'connected',
+    scopes = CASE
+                 WHEN cardinality(EXCLUDED.scopes) > 0 THEN EXCLUDED.scopes
+                 ELSE gmail_connections.scopes
+             END
 `
 
 type UpsertGmailConnectionParams struct {
-	UserID          int64  `json:"user_id"`
-	Email           string `json:"email"`
-	RefreshTokenEnc string `json:"refresh_token_enc"`
+	UserID          int64    `json:"user_id"`
+	Email           string   `json:"email"`
+	RefreshTokenEnc string   `json:"refresh_token_enc"`
+	Scopes          []string `json:"scopes"`
 }
 
-// Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
-// mark connected, preserving the sync cursor on reconnect.
+// Connect (or reconnect) a user's Gmail: store the encrypted refresh token, mark
+// connected, preserving the sync cursor on reconnect, and record what the grant covers.
+//
+// Token and scopes go in one statement, so the row always holds a token together with
+// the scopes reported for it. Written separately, a calendar connect landing between the
+// two would leave its token next to this grant's scopes, and cal-sync (which selects by
+// scope) would skip the account. Scopes replace, as in UpsertCalendarGrant; an empty
+// list means the exchange did not say and keeps what we held.
 func (q *Queries) UpsertGmailConnection(ctx context.Context, arg UpsertGmailConnectionParams) error {
-	_, err := q.db.Exec(ctx, upsertGmailConnection, arg.UserID, arg.Email, arg.RefreshTokenEnc)
+	_, err := q.db.Exec(ctx, upsertGmailConnection,
+		arg.UserID,
+		arg.Email,
+		arg.RefreshTokenEnc,
+		arg.Scopes,
+	)
 	return err
 }
