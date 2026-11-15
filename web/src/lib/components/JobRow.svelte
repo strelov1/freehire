@@ -7,6 +7,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { cardLocation } from '#lib/cardLocation.js';
   import JobMatchBar from './JobMatchBar.svelte';
+  import SourceBadge from './SourceBadge.svelte';
   import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn, signinUrl } from '#lib/signin.js';
@@ -565,6 +566,12 @@
     <!-- The skills, as the card's one chip row (the pay rides the meta line above). -->
     {#if skills.length}
       <JobRowSkills {shownSkills} {extraSkills} {haveSet} />
+    {/if}
+
+    {#if 'source' in job && job.source}
+      <div class="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+        <SourceBadge source={job.source} />
+      </div>
     {/if}
 
     <!-- Card-level profile match: the real client-computed coverage bar, only for a

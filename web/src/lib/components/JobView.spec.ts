@@ -420,3 +420,8 @@ describe('content tabs', () => {
     expect(String(goto.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('?tab=discussion'));
   });
 });
+
+it.each([JobView, JobRow])('shows the source brand on the posting and its feed card', (component) => {
+  render(component, { job: { ...job, source: 'whatjobs-uk' } });
+  expect(screen.getByText('WhatJobs')).toBeTruthy();
+});
