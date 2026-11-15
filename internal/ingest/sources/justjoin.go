@@ -23,8 +23,8 @@ import (
 )
 
 // justjoinSite adapts one of the two Polish job boards that run on the Just Join IT platform:
-// justjoin.it, the country's largest IT board (~11k open offers), and rocketjobs.pl, its sibling
-// for every other trade (~16k). Both are boardless aggregators — thousands of employers and
+// justjoin.it, the country's largest IT board, and rocketjobs.pl, its sibling
+// for every other trade. Both are boardless aggregators — thousands of employers and
 // agencies post there, each named per offer. See the "Just Join IT and RocketJobs" section of
 // AGENTS.md for the measurements behind each rule.
 //
@@ -66,12 +66,11 @@ const (
 	// host without refusal.
 	justjoinRequestInterval = time.Second
 	justjoinDetailWorkers   = 2
-	// justjoinFreshPerRun and justjoinBacklogPerRun split one run's 1,400 offer pages (~100 KB
-	// compressed each, ~24 minutes at one a second, inside the scheduler's default 2,400 s crawl
-	// budget) into hydrationLanes' two lanes. The sitemap names no employer, so nothing can be
-	// judged before a page is bought; an offer the pipeline discards unsaved (an employer already
-	// covered first-party) stays unseen and would be bought again on every run, which the backlog
-	// lane keeps from starving the older offers.
+	// justjoinFreshPerRun and justjoinBacklogPerRun split one run's offer pages, sized to the
+	// crawl budget at one request a second, into hydrationLanes' two lanes. The sitemap names no
+	// employer, so nothing can be judged before a page is bought; an offer the pipeline discards
+	// unsaved (an employer already covered first-party) stays unseen and would be bought again on
+	// every run, which the backlog lane keeps from starving the older offers.
 	justjoinFreshPerRun    = 1100
 	justjoinBacklogPerRun  = 300
 	justjoinDeadlineMargin = 5 * time.Minute

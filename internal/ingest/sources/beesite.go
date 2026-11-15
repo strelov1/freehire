@@ -35,8 +35,7 @@ type beesiteHTTP interface {
 
 const (
 	beesitePageSize = 100
-	// beesiteMaxPages bounds the walk; reaching it before the stated total fails the crawl. The
-	// largest tenant measured holds ~2,760 postings (28 pages).
+	// beesiteMaxPages bounds the walk; reaching it before the stated total fails the crawl.
 	beesiteMaxPages = 300
 )
 
@@ -105,8 +104,7 @@ func (s beesite) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 }
 
 func beesiteSearchURL(host string, first int) string {
-	// The default order is kept: no sort criterion is sent. It paged every tenant measured
-	// without a repeat or a gap (distinct == SearchResultCountAll on all seven).
+	// The default order is kept: no sort criterion is sent, since it pages without repeats or gaps.
 	q, _ := json.Marshal(map[string]any{
 		"LanguageCode":     "EN",
 		"SearchParameters": map[string]any{"FirstItem": first, "CountItem": beesitePageSize},

@@ -26,10 +26,9 @@ import (
 // only for offers the catalogue does not already have (FetchNew).
 //
 // Every page sits behind a GeeTest bot challenge for a plain client: the crawl host's IP is
-// refused outright (405 since 2026-10-08) and the proxy is challenged from the sixth listing
-// page. Through the Scrapling tier's browser over the proxy, listing and offer pages alike are
-// served (measured 2026-10-20: 20 of 20 listing pages, 5 of 5 offer pages with full bodies), so
-// production crawls it there (scraplingtier.go).
+// refused outright (405) and the proxy is challenged from the sixth listing page. Through the
+// Scrapling tier's browser over the proxy, listing and offer pages are served, so production
+// crawls it there (scraplingtier.go).
 type infojobs struct {
 	http TextGetter
 	// maxNewPerRun bounds how many new offers one run hydrates; non-positive takes
@@ -38,28 +37,22 @@ type infojobs struct {
 	maxNewPerRun int
 }
 
-// infojobsMaxNewPerRun is the default hydration budget. An offer page is a browser navigation
-// of ~7 s through the Scrapling tier, three in flight, so 1 000 is ~40 minutes on top of the
-// ~2 h listing walk; the ~64k-offer backlog the first runs face drains over days rather than
-// pushing one run past its timeout.
+// infojobsMaxNewPerRun is the default hydration budget. An offer page is a ~7 s browser navigation
+// through the Scrapling tier, three in flight, so the budget keeps a run inside its timeout while
+// a large backlog drains over several runs.
 const infojobsMaxNewPerRun = 1000
 
 const (
-	// infojobsRootURL is the whole-site listing's first page, read only for the total it states
-	// and the categories it aggregates. (The IT category's semantic path,
-	// /ofertas-trabajo/informatica-telecomunicaciones, answered a GeeTest challenge by 2026-10-20
-	// and, like every /ofertas-trabajo/<slug> path, serves the UNFILTERED listing anyway.)
+	// infojobsRootURL is the whole-site listing's first page, read only for the total it states and
+	// the categories it aggregates. (The IT category's semantic path answers a GeeTest challenge and,
+	// like every /ofertas-trabajo/<slug> path, serves the UNFILTERED listing anyway.)
 	infojobsRootURL = "https://www.infojobs.net/ofertas-trabajo?page=1"
 	// infojobsCategoryURL is one category's listing; the filter is the categoryIds query
 	// parameter, which the page echoes back in its search props.
 	infojobsCategoryURL = "https://www.infojobs.net/ofertas-trabajo?categoryIds=%s&page=%d"
-	// infojobsMaxPages is the deepest page the listing serves. Measured 2026-10-30: the
-	// whole-site listing stated 63,729 offers over 3,187 pages, served pages 1-2999 and answered
-	// page 3000 onwards with an error page carrying no offers — so the unfiltered walk this
-	// replaced never saw the oldest ~3.7k live offers, and stopped (at a page count computed
-	// from page 1's 22 cards, two of them promoted, against 20 on every later page) after ~2.9k
-	// pages. A category stating more pages than this cannot be read whole and fails the crawl;
-	// the largest, "Comercial y ventas", stated 367.
+	// infojobsMaxPages is the deepest page the listing serves: later pages answer an error page with
+	// no offers, so an unfiltered walk never sees the oldest offers. A category stating more pages
+	// than this cannot be read whole and fails the crawl.
 	infojobsMaxPages = 2999
 	// infojobsDriftPages is how many of a category's stated last pages may come back empty: offers
 	// removed while the category is walked pull the tail forward, and its last page or two can
@@ -189,9 +182,8 @@ func (s infojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 }
 
 // infojobsDetailAttempts is how many times an offer page refused with 405 is sent. InfoJobs
-// refuses a flagged browser session with 405 (measured 2026-10-30: 942 of ~950 pages after the
-// first ~45 of a session), and the Scrapling tier retires the session that met it, so the next
-// attempt opens on another exit IP — where the same page was served.
+// refuses a flagged browser session with 405 partway through, and the Scrapling tier retires that
+// session, so the next attempt opens on another exit IP.
 const infojobsDetailAttempts = 2
 
 // detail fetches an offer page and returns its full description, ok=false on a failed request
@@ -220,25 +212,22 @@ func (s infojobs) detail(ctx context.Context, jobURL string) (string, bool) {
 	return props.Offer.Description, true
 }
 
-// infojobsListWorkers bounds how many listing pages are in flight at once. Through the
-// Scrapling tier each page is a browser navigation of ~7.5 s, so a ~3.2k-page walk is ~6 h on
-// one session; this matches the service's default browser cap (SCRAPLING_MAX_BROWSERS).
+// infojobsListWorkers bounds how many listing pages are in flight at once. Each is a ~7.5 s
+// browser navigation through the Scrapling tier; this matches the service's default browser cap
+// (SCRAPLING_MAX_BROWSERS).
 const infojobsListWorkers = 3
 
-// crawl reads the whole catalogue and returns every raw offer, newest first — the shared list
-// walk behind Fetch and FetchNew. The whole-site listing cannot be walked to its end (it stops
-// serving at infojobsMaxPages, ~3.7k offers short), so its first page is read only for the total
-// and the categories, which partition the catalogue (measured 2026-10-30: 21 categories whose
-// counts sum exactly to the 63,729 stated), and each category is walked to its own end. An offer
-// that shifted between pages while the crawl ran is kept once.
+// crawl reads the whole catalogue and returns every raw offer, newest first: the shared list walk
+// behind Fetch and FetchNew. The whole-site listing cannot be walked to its end (it stops serving
+// at infojobsMaxPages), so its first page is read only for the total and the categories, which
+// partition the catalogue, and each category is walked to its own end. An offer that shifted
+// between pages while the crawl ran is kept once.
 //
 // infojobs is swept by source, so a partial list would close every offer the walk missed, and
 // anything that leaves the read unproven fails the whole crawl: a page that still fails after its
 // attempts (a request error, or the bot-challenge page that carries no props blob), categories
 // that do not account for the stated total, a category page that did not apply its filter, a
-// category longer than the listing serves, or a hole in a category's pages. Measured 2026-10-20
-// through the proxy on a plain client, the sixth consecutive page was a challenge, and an earlier
-// "keep what was gathered" rule closed 300.
+// category longer than the listing serves, or a hole in a category's pages.
 func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	root, err := s.listPage(ctx, infojobsRootURL)
 	if err != nil {
@@ -410,11 +399,9 @@ func sortInfojobsNewestFirst(offers []infojobsOffer) {
 }
 
 // infojobsListAttempts is how many times one listing page is sent before the crawl gives up.
-// Through the Scrapling tier a failed navigation retires its browser session, so a retry opens
-// on the next sticky exit IP. Measured 2026-10-26..28 on the crawl host, every failed run died on
-// the first page of a freshly opened session — pages 1, 501 and 1001, against the service's
-// 500-page session life — while the pages around it were served: some exits never finish
-// loading the page (a 90 s timeout), and one such page used to fail the whole ~2.9k-page walk.
+// Through the Scrapling tier a failed navigation retires its browser session, so a retry opens on
+// the next sticky exit IP; some exits never finish loading the page (90 s timeout), and one such
+// page would otherwise fail the whole walk.
 const infojobsListAttempts = 3
 
 // listPage fetches and decodes one listing page, sending it again on failure.
@@ -488,10 +475,9 @@ func infojobsWorkMode(teleworking string) string {
 // on, no link to build the URL, or no company). The URL is the offer's protocol-relative link
 // with its tracking query stripped and the scheme restored.
 //
-// infojobs.net is the Spanish board, and its location is the bare city ("Murcia", "Vigo",
-// "Getafe"), which GeoNames also gives to Latin-American and Philippine towns: measured
-// 2026-10-27, 28% of its open postings had no country at all. Spain is therefore the
-// FallbackCountries signal — read only when the city states no country of its own.
+// infojobs.net's location is the bare city ("Murcia", "Vigo"), which GeoNames also gives to Latin-
+// American and Philippine towns, so Spain is the FallbackCountries signal, read only when the city
+// states no country of its own.
 func (o infojobsOffer) toJob() (Job, bool) {
 	if o.Code == "" || o.Link == "" || o.CompanyName == "" {
 		return Job{}, false

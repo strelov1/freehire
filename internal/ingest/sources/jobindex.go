@@ -15,23 +15,20 @@ import (
 // the search page server-renders its whole result state as a `var Stash = {...}` JSON object,
 // which carries every posting's id, title, employer, area and date, plus the rendered card.
 //
-// Two measured limits shape the crawl (live-checked 2026-10-25):
+// Two limits shape the crawl:
 //
 //   - A query reaches at most max_page=50 pages of 20, so 1000 postings, while the unfiltered
-//     catalogue holds ~17.6k. The crawl therefore walks the site's own ~78 subcategories
-//     (`subid`), read from the page itself rather than hard-coded, so a new subcategory is
-//     crawled without a release. All but three fit the window; those three (Pædagog, Pleje og
-//     omsorg, Detailhandel — none technical, 1.1k-1.5k each) are walked newest-first, so what
-//     the window cannot reach is consistently their oldest tail.
-//   - Subcategories overlap: a posting is filed under several (the seven IT subcategories sum
-//     to ~1.5k for ~975 distinct IT postings). One boardless crawl that de-duplicates by the
-//     posting id stores each posting once; per-subcategory boards would store it once per
-//     board, since the pipeline namespaces external_id by board.
+//     catalogue is far larger. The crawl therefore walks the site's own subcategories (`subid`),
+//     read from the page itself rather than hard-coded, so a new one is crawled without a
+//     release. The few that exceed the window are walked newest-first, so what it cannot reach
+//     is consistently their oldest tail.
+//   - Subcategories overlap: a posting is filed under several. One boardless crawl that
+//     de-duplicates by the posting id stores each posting once; per-subcategory boards would
+//     store it once per board, since the pipeline namespaces external_id by board.
 //
-// The card text is all Jobindex has: the posting page (/vis-job/<id>) renders the same ~340-
-// character teaser, and the full body lives on the employer's own site behind a "Se jobbet"
-// link to heterogeneous hosts (none of three sampled carried a schema.org JobPosting). So the
-// adapter is list-only and spends no detail request.
+// The card text is all Jobindex has: the posting page (/vis-job/<id>) renders the same teaser,
+// and the full body lives on the employer's own site behind a "Se jobbet" link to heterogeneous
+// hosts. So the adapter is list-only and spends no detail request.
 //
 // Like jobnet/jobdanmark it covers every sector; the dictionaries decide relevance.
 type jobindex struct {
@@ -43,11 +40,10 @@ const (
 	jobindexSearchURL = "https://www.jobindex.dk/jobsoegning?sort=date"
 	jobindexSliceURL  = "https://www.jobindex.dk/jobsoegning?subid=%d&sort=date&page=%d"
 	jobindexJobURL    = "https://www.jobindex.dk/vis-job/"
-	// jobindexMaxPages is the runaway backstop under the max_page the page itself declares
-	// (50 when measured), so a malformed total cannot loop.
+	// jobindexMaxPages is the runaway backstop under the max_page the page itself declares, so a
+	// malformed total cannot loop.
 	jobindexMaxPages = 60
-	// jobindexSliceWorkers bounds how many subcategories are walked at once. A page answers in
-	// ~1s from the crawl hosts and a full crawl is ~1.2k pages, so 4 keeps a run near 5 minutes.
+	// jobindexSliceWorkers bounds how many subcategories are walked at once, keeping a run short.
 	jobindexSliceWorkers = 4
 	jobindexStashMarker  = "var Stash = "
 )

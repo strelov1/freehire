@@ -9,12 +9,12 @@ import (
 
 // doverBaseURL is the Dover public career-page API root, shared by all three endpoints this
 // adapter calls: slug resolution, paginated listing, and per-posting detail. All three answer a
-// bare, unauthenticated GET with no bot protection on the data itself (verified live 2026-09-18)
+// bare, unauthenticated GET with no bot protection on the data itself
 // — only the browser apply-submission flow gates behind Cloudflare Turnstile, which this adapter
 // never touches.
 const doverBaseURL = "https://app.dover.com/api/v1"
 
-// doverListPageSize is the listing page size; the API accepts a large value (300 observed live)
+// doverListPageSize is the listing page size; the API accepts a large value (300 works)
 // and returns a "next" URL when more remain.
 const doverListPageSize = 300
 
@@ -95,8 +95,7 @@ func (s dover) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 // resolveClientID resolves a board's Dover slug to the platform's internal client id. Dover
 // boards all carry the company's slug — whether harvested off app.dover.com's apply/listing
 // paths or off jobs.dover.com, whose board link is /<slug>/<uuid> where the uuid may be the
-// client id OR a posting id (on the submitted Deepspatial link it is a posting id: its client
-// is 1aeeba55-…, live-verified 2026-11-05) — so there is no uuid shortcut: the slug lookup is
+// client id OR a posting id (it can be a posting id) — so there is no uuid shortcut: the slug lookup is
 // the one supported address path, and it doubles as the existence check the jobs.dover.com
 // marketing shell (which serves ANY slug) cannot provide.
 func (s dover) resolveClientID(ctx context.Context, slug string) (string, error) {
@@ -225,8 +224,8 @@ type doverDetailResponse struct {
 	Active                  bool              `json:"active"`
 	IsPrivate               bool              `json:"is_private"`
 
-	// Client identity fields, populated on the same endpoint (verified live 2026-11-05: the
-	// submitted jobs.dover.com link's detail carries client_id/client_name/client_domain).
+	// Client identity fields, populated on the same endpoint (the detail carries
+	// client_id/client_name/client_domain).
 	// DoverJobDetail reuses this struct for the link-source resolver, which needs the company's
 	// own naming and client id off the posting rather than a humanized link segment.
 	ClientID     string `json:"client_id"`

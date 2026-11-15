@@ -16,11 +16,11 @@ import (
 // Vietnam, Indonesia, Singapore and the US. It is one central catalogue with no per-employer
 // tenancy, so it is boardless and an aggregator: the employer is read per posting.
 //
-// Measured live on 2026-10-25 (see the "Cake traps" section of AGENTS.md):
+// See the "Cake traps" section of AGENTS.md:
 //
 //   - The search answers at most 499 rows per query: `page * per_page` must stay below 500,
 //     `per_page` is capped at 50, and a query matching more reports total_entries 500 with
-//     total_relation "gte". The catalogue (~16k postings, ~3.3k of them under the `it_` family)
+//     total_relation "gte". The catalogue
 //     is therefore read as SLICES, split recursively over the platform's own facets until every
 //     slice reports an exact ("eq") total that fits the window.
 //   - Every posting carries exactly one profession, one job type, one seniority level, one
@@ -30,9 +30,9 @@ import (
 //   - The search's description is plain text; the detail endpoint carries the HTML body, the
 //     separate requirements section, the posting date, the country code and the remote mode. A
 //     detail costs a request, so only postings the catalogue lacks are hydrated.
-//   - One exit IP is refused (429, Retry-After ~50s) after ~40 requests a minute, and the crawl
+//   - One exit IP is refused (429 with a Retry-After) past a per-minute request budget, and the crawl
 //     hosts' own IPs are answered with a Cloudflare challenge; the crawl egresses through the
-//     rotating proxy (see proxy.go), whose exits were served 60 of 60.
+//     rotating proxy (see proxy.go).
 type cake struct {
 	http         cakeHTTP
 	maxNewPerRun int
@@ -69,13 +69,12 @@ var cakeSplitFacets = []string{
 const cakeDetailWorkers = 4
 
 // cakeMaxNewPerRun bounds how many unseen postings one run hydrates. The first runs face the
-// whole ~16k catalogue; at ~1.5 s a detail over four workers this is ~15 minutes, and a posting
-// past the bound is hydrated by a later run.
+// whole catalogue; a posting past the bound is hydrated by a later run.
 const cakeMaxNewPerRun = 2500
 
 // cakeRefusalRetries is how many times a refused (403/429), failed (5xx) or unanswered request
-// is retried. A retry leaves through a fresh rotating exit, and a bad exit is the usual cause:
-// the first production run lost its whole listing to ONE search whose body timed out.
+// is retried. A retry leaves through a fresh rotating exit, and a bad exit is the usual cause;
+// without retries one timed-out search loses the whole listing.
 const cakeRefusalRetries = 3
 
 // cakeRetryBackoff is the first retry's wait, doubling after.
@@ -216,7 +215,7 @@ func (s cake) list(ctx context.Context) ([]cakeListing, error) {
 			values = cakeFacetValues(first.Facets, facet)
 		}
 		if len(values) == 0 {
-			// Nothing left to split on: read what the window reaches. Measured, this is a
+			// Nothing left to split on: read what the window reaches. This happens for a
 			// retail chain posting hundreds of near-identical store vacancies.
 			add(first.Data)
 			truncated++
@@ -332,8 +331,7 @@ func cakeJob(l cakeListing, d cakeDetail) Job {
 		Seniority:          cakeSeniority(d.Seniority),
 		ExperienceYearsMin: d.MinExperience,
 		Countries:          countriesFromCodes(codes),
-		// The platform files every IT role under the `it_` family; measured on all 49 of its
-		// leaves, each is a technical craft (back-end, firmware, IC design, QA, ...).
+		// The platform files every IT role under the `it_` family; each of its leaves is a technical craft (back-end, firmware, IC design, QA, ...).
 		IsTechHint: strings.HasPrefix(d.Profession, "it_"),
 	}
 	if !d.CreatedAt.IsZero() {

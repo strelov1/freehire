@@ -17,9 +17,8 @@ import (
 // offer rows carrying ids, a title and a city cell but no description, so the body comes from
 // each offer's Offer.aspx detail page. That page is read once, for an offer the catalogue does
 // not hold yet (HydratingSource): a stored offer is re-listed as a SeenRefresh from its row, so
-// a crawl costs its list pages plus one request per NEW offer rather than one per offer —
-// ~160 boards on one host made the per-offer re-read ~8k requests a run. Boards are paged;
-// page 1's hidden marker row reports the total, giving a clean stop condition.
+// a crawl costs its list pages plus one request per NEW offer rather than one per offer.
+// Boards are paged; page 1's hidden marker row reports the total, giving a clean stop condition.
 type erecruiter struct {
 	http erecruiterHTTP
 }
@@ -312,9 +311,8 @@ func ProbeErecruiterCfg(ctx context.Context, http TextGetter, cfg string) (int, 
 }
 
 // erecruiterEmployerRe reads the employer from an offer page's meta description, which the
-// platform writes as "Praca w <employer>: <position> | Oferta pracy w …" on every template
-// measured (2026-10-28) — the list rows name no employer, and a board's display name is not
-// in its widget either.
+// platform writes as "Praca w <employer>: <position> | Oferta pracy w …" on every template. The
+// list rows name no employer, and a board's display name is not in its widget either.
 var erecruiterEmployerRe = regexp.MustCompile(`(?is)<meta\s+name="description"\s*content="Praca w ([^":<]+):`)
 
 // ProbeErecruiterBoard live-validates a cfg like ProbeErecruiterCfg and also names the employer,

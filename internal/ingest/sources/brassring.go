@@ -31,8 +31,7 @@ import (
 //   - ProcessSortAndShowMoreJobs lists the board, 50 postings a page, and states the total;
 //   - JobDetails returns one posting's full body.
 //
-// The listing's own "jobdescription" is only a summary on many tenants (150-400 characters on
-// Caterpillar's), so this is a HydratingSource: the detail is read for each posting the
+// The listing's own "jobdescription" is only a summary on many tenants, so this is a HydratingSource: the detail is read for each posting the
 // catalogue lacks. The fields a tenant shows are configured per tenant (formtext8 is a city on
 // one site and a free-text title on another), so nothing is read by field number: the body is
 // every long-text field the detail carries, in the order the site shows them under the label
@@ -58,7 +57,7 @@ type brassringHTTP interface {
 
 const (
 	// brassringMaxPages bounds the walk; reaching it before the stated total fails the crawl.
-	// It covers 10,000 postings — the largest sampled board holds 131.
+	// It covers 10,000 postings.
 	brassringMaxPages = 200
 	// brassringDetailWorkers is the detail fan-out. Every request of a board rides one session
 	// and the platform documents no request limit, so it stays under the shared default.

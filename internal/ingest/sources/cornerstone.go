@@ -33,8 +33,8 @@ const cornerstonePageSize = 100
 
 // cornerstoneMaxSites bounds the career sites probed per tenant. A tenant may run several
 // (one per country or audience) and nothing lists them, so the adapter asks each id in turn:
-// an unused id answers an empty search, not an error. Most tenants post on site 1 alone;
-// Krka posts on 13-22 and leaves 1-12 empty (freehire#3446), the highest ids measured.
+// an unused id answers an empty search, not an error. Most tenants post on site 1 alone; some
+// post only on high ids (Krka on 13-22, leaving 1-12 empty).
 const cornerstoneMaxSites = 40
 
 // cornerstoneLocation is one of a requisition's locations.

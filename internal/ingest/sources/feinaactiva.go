@@ -15,14 +15,14 @@ import (
 )
 
 // feinaactiva adapts Feina Activa (feinaactiva.gencat.cat), the job board of Catalonia's public
-// employment service (SOC): ~5.7k open offers, about two thirds posted by employers and SOC
-// offices and a third public-sector calls relayed from the Diputació de Barcelona's CIDO
-// bulletin. It is boardless and an aggregator — the employer is read per offer. See the
-// "Feina Activa traps" section of AGENTS.md for the measurements behind each rule.
+// employment service (SOC): offers from employers and SOC offices plus public-sector calls
+// relayed from the Diputació de Barcelona's CIDO bulletin. It is boardless and an aggregator: the
+// employer is read per offer. See the "Feina Activa traps" section of AGENTS.md for the
+// measurements behind each rule.
 //
 // The listing is the site's own JSON API, which carries every offer in full — title, employer,
 // place, duties, requirements and conditions — so no posting page is ever bought. It serves ten
-// offers a page whatever the request asks for, so a whole walk is ~570 requests; the adapter
+// offers a page whatever the request asks for, so a whole walk is hundreds of requests; the adapter
 // therefore STREAMS each page's offers to the pipeline as it reads them, so a run cut short still
 // keeps what it read, and reads ahead while the pipeline writes (see feinaactivaPrefetch).
 type feinaactiva struct {
@@ -34,7 +34,7 @@ const (
 	feinaactivaBaseURL = "https://feinaactiva.gencat.cat"
 	// feinaactivaListURL is the offer search, newest first. The sort is what makes the walk
 	// stable: without it the site's default order reshuffles between requests and a full walk
-	// read only 4,296 distinct offers of 5,694. Pages are 1-based (page 0 repeats page 1).
+	// misses offers. Pages are 1-based (page 0 repeats page 1).
 	feinaactivaListURL = feinaactivaBaseURL + "/api/offers/list?sort=publishedAt&order=desc&page=%d"
 	// feinaactivaOfferURL is an offer's public page, keyed by its reference.
 	feinaactivaOfferURL = feinaactivaBaseURL + "/search/offers/detail/%s"
@@ -42,7 +42,7 @@ const (
 	// feinaactivaRequestInterval paces the walk at one page a second — a courtesy ceiling toward
 	// a public service, not a measured limit.
 	feinaactivaRequestInterval = time.Second
-	// feinaactivaMaxPages is a safety ceiling: ~570 pages on 2026-10-27.
+	// feinaactivaMaxPages is a safety ceiling well above the catalogue's page count.
 	feinaactivaMaxPages = 1500
 )
 
@@ -99,9 +99,8 @@ func (s feinaactiva) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // feinaactivaPrefetch is how many listing pages may wait, read, for the pipeline to save them.
-// Reading and saving are decoupled because each is slow on its own: a page answers in ~1.5 s
-// and its ten offers take ~1.5 s more to write from the crawl host, so a walk that waited on its
-// own writes took ~45 minutes against a 50-minute run budget.
+// Reading and saving are decoupled because each is slow on its own: a walk that waited on its
+// own writes nearly overran the run budget.
 const feinaactivaPrefetch = 64
 
 // feinaactivaBatch is one listing page as the walk hands it over: its offers, or the error that

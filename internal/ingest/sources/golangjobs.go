@@ -14,7 +14,7 @@ import (
 )
 
 // golangJobs adapts Golang Jobs (golangjobs.tech), a niche board of Go developer postings, each
-// naming its own employer — a boardless aggregator. 1,199 postings were listed on 2026-10-18.
+// naming its own employer — a boardless aggregator.
 //
 // The site is a client-rendered shell over a Supabase backend; it publishes no job sitemap and
 // no server-rendered listing. The catalogue is read the way the site's own frontend reads it:
@@ -53,11 +53,8 @@ const (
 	// expected end: reaching it before the table's count is read FAILS the crawl.
 	golangJobsMaxPages = 50
 	// golangJobsMaxAge is how old a posting may be and still be ingested. The board never
-	// retires a posting: on 2026-10-18 every one of its 1,199 rows was unarchived, going back
-	// to 2025-04, and of the Greenhouse and Lever postings it links to only 8 of 17 posted in
-	// the last 60 days were still open against 18 of 269 older than three months. Nothing
-	// downstream can close a posting the board keeps listing, so age is the only staleness
-	// signal there is.
+	// retires a posting, and older postings are mostly closed upstream. Nothing downstream can
+	// close a posting the board keeps listing, so age is the only staleness signal.
 	golangJobsMaxAge = 60 * 24 * time.Hour
 )
 

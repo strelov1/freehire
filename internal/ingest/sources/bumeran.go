@@ -20,10 +20,10 @@ import (
 
 // bumeran adapts Bumeran (www.bumeran.com.ar), Argentina's largest general job board, and with it
 // ZonaJobs (www.zonajobs.com.ar): both belong to Jobint/Navent and are ONE posting pool behind
-// one API — the same search answers the same ~9k postings on either host, a ZonaJobs-born
+// one API — the same search answers the same postings on either host, a ZonaJobs-born
 // posting keeping its own (shorter) id. Every trade, mostly staffing agencies and consultancies,
-// ~5% technical. It is boardless and an aggregator — the employer is read per posting. See the
-// "Bumeran traps" section of AGENTS.md for the measurements behind each rule.
+// few technical. It is boardless and an aggregator — the employer is read per posting. See the
+// "Bumeran traps" section of AGENTS.md for the reasoning behind each rule.
 //
 // The listing is the web app's own search API, 100 postings a request, newest first; it carries
 // everything but a usable body (its "detalle" is the body with every tag and line break
@@ -42,7 +42,7 @@ type bumeran struct {
 const (
 	bumeranBaseURL = "https://www.bumeran.com.ar"
 	// bumeranListURL is the search, newest first. The edge answers 403 to an API request
-	// without the site's own Referer (measured from the crawl host, any User-Agent).
+	// without the site's own Referer, whatever the User-Agent.
 	bumeranListURL   = bumeranBaseURL + "/api/avisos/searchV2?pageSize=%d&page=%d&sort=RECIENTES"
 	bumeranDetailURL = bumeranBaseURL + "/api/candidates/fichaAvisoNormalizada/%d"
 	bumeranReferer   = bumeranBaseURL + "/empleos.html"
@@ -52,10 +52,10 @@ const (
 	bumeranPageSize = 100
 
 	// bumeranRequestInterval paces every request of a run at one a second — a courtesy ceiling,
-	// not a measured limit.
+	// not a known limit.
 	bumeranRequestInterval = time.Second
 	bumeranDetailWorkers   = 2
-	// bumeranMaxPages is a safety ceiling: the pool was 8,941 postings (90 pages) on 2026-10-27.
+	// bumeranMaxPages is a safety ceiling: far above the pool size.
 	bumeranMaxPages = 400
 	// bumeranMaxNewPerRun bounds the posting requests of one run: ~90 listing requests and 1,200
 	// posting requests at one a second, plus the writes that follow, sit well inside the
@@ -266,7 +266,7 @@ func (s bumeran) list(ctx context.Context) ([]bumeranCard, error) {
 }
 
 // bumeranHiddenEmployer reports whether a posting hides its employer: the confidential flag
-// (20% of the pool, shown as "Confidencial"), or a description standing in for a name
+// (shown as "Confidencial"), or a description standing in for a name
 // ("Importante empresa de retail", "Empresa Alimenticia", a bare "Consultora"). Filing those under
 // the label would invent one employer collecting every anonymous posting of its kind.
 func bumeranHiddenEmployer(name string, confidential bool) bool {
@@ -402,7 +402,7 @@ func bumeranTime(s string) (time.Time, bool) {
 }
 
 // bumeranWorkMode reads the posting's structured arrangement. "Presencial" is the form's default
-// — 85% of the pool, including postings whose own title says "Home office" or "(Remoto)" — so it
+// — the bulk of the pool, including postings whose own title says "Home office" or "(Remoto)" — so it
 // says nothing and is left to the description.
 func bumeranWorkMode(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {

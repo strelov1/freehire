@@ -123,7 +123,6 @@ func (s dvinci) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // several times in ONE language is left alone: those are differently titled postings of one
 // vacancy (cadenas runs "(Senior) IT Administrator" and "DevOps Engineer" on one opening), each
 // with its own page, and dropping one would hide a title the employer chose to advertise.
-// Measured 2026-10-25 over 75 boards: 19 translation groups, 44 same-language ones.
 func dvinciCollapseTranslations(pubs []dvinciPublication) []dvinciPublication {
 	groups := map[int64][]int{}
 	for i, p := range pubs {
@@ -218,7 +217,7 @@ func dvinciJob(e CompanyEntry, p dvinciPublication) (Job, bool) {
 var dvinciSections = []string{"introduction", "tasks", "profile", "weOffer", "additionalInformation"}
 
 // dvinciBody is the posting's body. The rendered sections are preferred: a tenant whose page
-// template adds sections fills them there, and on ~30% of publications they are the longer
+// template adds sections fills them there, and on many publications they are the longer
 // text. A tenant on the plain template (no renderedContent) has only the raw fields.
 func dvinciBody(p dvinciPublication) string {
 	var parts []string

@@ -18,11 +18,10 @@ import (
 )
 
 // jobsch adapts JobCloud's two national job boards, jobs.ch (German- and English-speaking
-// Switzerland) and jobup.ch (Romandie). Both sites serve one posting pool under one UUID space —
-// ~17k of jobup's ~31k postings are also on jobs.ch — so they are one provider: ~52k distinct
-// postings from every trade, a few percent IT. It is boardless and an aggregator — the employer
-// is read per posting. See the "jobs.ch traps" section of AGENTS.md for the measurements behind
-// each rule.
+// Switzerland) and jobup.ch (Romandie). Both sites serve one posting pool under one UUID space,
+// so they are one provider covering every trade, a few percent IT. It is boardless and an
+// aggregator — the employer is read per posting. See the "jobs.ch traps" section of AGENTS.md
+// for the measurements behind each rule.
 //
 // robots.txt disallows the web app's API, so the posting set comes from each site's job
 // sitemap, which names nothing but each posting's URL. The newest postings also come from the
@@ -79,29 +78,28 @@ var jobschSites = []jobschSite{
 }
 
 const (
-	// jobschMaxSitemapBytes caps one sitemap file as read off the wire (~1 MB compressed for
-	// jobs.ch's 38k postings); decodeSitemapBody caps it again once inflated.
+	// jobschMaxSitemapBytes caps one sitemap file as read off the wire; decodeSitemapBody caps it
+	// again once inflated.
 	jobschMaxSitemapBytes = 16 << 20
 	// jobschRequestInterval paces every request of a run, sitemap, search and posting page alike,
-	// through one limiter: one a second, a courtesy ceiling rather than a measured limit (~400
-	// pages at that pace drew no refusal, from a residential IP and from the crawl host).
+	// through one limiter: one a second, a courtesy ceiling rather than a measured limit.
 	jobschRequestInterval = time.Second
 	// jobschDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 	jobschDetailWorkers = 2
-	// jobschSearchPages is how deep each site's date-sorted search is read: 25 pages of 20 are
-	// the ~500 newest publications, about half a day of jobs.ch's (a page past 100 redirects to
-	// page 1, so the whole catalogue can never come from here).
+	// jobschSearchPages is how deep each site's date-sorted search is read: 25 pages of 20, the
+	// newest publications (a page past 100 redirects to page 1, so the whole catalogue can never
+	// come from here).
 	jobschSearchPages = 25
 	// jobschDeadlineMargin is the time left to the pipeline's writes: a hydrating crawl writes
 	// nothing until FetchNewGated returns.
 	jobschDeadlineMargin = 5 * time.Minute
 )
 
-// jobschFreshPerRun and jobschBacklogPerRun split one run's 1,800 posting pages (~30 minutes at
-// one a second, inside the 2,400 s crawl budget) into two lanes.
+// jobschFreshPerRun and jobschBacklogPerRun split one run's posting pages, sized to the crawl
+// budget at one request a second, into two lanes.
 //
 // The fresh lane takes the postings the search pages named and the gate let through, newest
-// first: ~1,200 distinct postings are first published a day across both sites.
+// first.
 //
 // The backlog lane takes a window of the remaining unseen sitemap postings that moves every
 // hour (hydrationLanes). Those name no employer before their page is bought, so the gate can
@@ -480,7 +478,7 @@ type jobschSalary struct {
 
 // jobschDetail maps a posting's state to a Job. ok is false for an inactive posting, and for one
 // without a title, employer or body: storing it body-less would make it seen, and a seen posting
-// is never read again. An anonymous posting (a recruiter's "for a client", ~1%) names no
+// is never read again. An anonymous posting (a recruiter's "for a client") names no
 // employer, and filing it would build one bogus company out of many.
 func jobschDetail(v jobschVacancy, p jobschPosting) (Job, bool) {
 	title := collapseSpace(v.Title)

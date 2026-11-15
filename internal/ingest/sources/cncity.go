@@ -8,9 +8,9 @@ type cnCityPlace struct{ name, country string }
 
 // cnCities maps the Chinese city names the mainland careers sites state (Alibaba, Meituan) to
 // English, because internal/dict/location reads no Chinese: "北京" resolves no city and no
-// country, while "Beijing" resolves both. The list is the names seen on those sites' live
-// catalogues (2026-10-15), not a gazetteer; a name it lacks keeps its Chinese spelling and states
-// no country rather than being assumed Chinese, since the same sites list Tokyo and Madrid.
+// country, while "Beijing" resolves both. The list is not a gazetteer; a name it lacks keeps its
+// Chinese spelling and states no country rather than being assumed Chinese, since the same sites list
+// Tokyo and Madrid.
 var cnCities = map[string]cnCityPlace{
 	// Mainland China.
 	"北京": {"Beijing", "cn"}, "上海": {"Shanghai", "cn"}, "杭州": {"Hangzhou", "cn"},

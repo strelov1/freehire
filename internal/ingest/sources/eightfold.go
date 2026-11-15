@@ -23,11 +23,10 @@ const eightfoldDetailWorkers = 2
 
 // eightfoldMaxNewPerBoard bounds how many unseen positions one board hydrates per run. Every
 // board of a shard shares one ~1 req/s pace (pacedEightfoldGetter) inside a ~2,400 s crawl
-// deadline, so a cold or long-unreached board (nvidia, ~2,500 positions) hydrated in full would
+// deadline, so a cold or long-unreached board with thousands of positions hydrated in full would
 // spend the whole shard's budget and, since a buffered board saves nothing until it returns,
 // save nothing either. At 250 such a board converges over a few runs while steady-state churn
-// (measured 2026-10-29: ~7k new positions a week across ~35k open, ~85 per shard run) never
-// reaches the bound.
+// never reaches the bound.
 const eightfoldMaxNewPerBoard = 250
 
 // eightfoldMaxRetries bounds how many times a rate-limited (403/429) request is retried before
@@ -123,11 +122,10 @@ func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // back as a SeenRefresh carrying the listing's identity, so its liveness refreshes and its
 // stored body is kept; an unseen position past the bound is left for a later run (see crawl).
 //
-// The detail was this adapter's whole cost: the list serves ten positions per request and the
+// The detail is this adapter's whole cost: the list serves ten positions per request and the
 // detail one, all under a ~1 req/s pace shared by every board in a shard. Re-reading every
-// stored body each run kept 24 of 25 runs in the fortnight to 2026-10-29 on their crawl
-// deadline, the Microsoft board (~2,400 positions) never finished a crawl after 10-26, and a
-// board that never finishes never qualifies for the board-scoped sweep.
+// stored body each run would hit the crawl deadline, and a board that never finishes never
+// qualifies for the board-scoped sweep.
 func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	return s.crawl(ctx, e, seen, eightfoldMaxNewPerBoard)
 }

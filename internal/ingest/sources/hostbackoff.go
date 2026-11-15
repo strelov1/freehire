@@ -16,14 +16,12 @@ const (
 
 // hostBackoff holds back every request to a host that has just refused one with a 429.
 //
-// A Retry-After honoured per REQUEST is not enough once a crawl runs eight boards at once: the
-// request that drew the 429 waits, and the other seven keep firing into the same refusal. That
-// is how a workable run turned one tripped budget into ~1,500 failed boards in three minutes
-// (2026-10-18; its refusal-retry client returns on the second refusal with no wait at all), and
-// it is the same mechanism that let join's retries go out on top of its pacer. The hold is per
-// host, shared by every request this Client makes, so the whole crawl slows the moment the
-// platform says so — and boards the run then never reaches keep their last state instead of
-// recording a failure each.
+// A Retry-After honoured per REQUEST is not enough once a crawl runs several boards at once: the
+// request that drew the 429 waits, and the others keep firing into the same refusal, so one
+// tripped budget fails a mass of boards (it is also how join's retries went out on top of its
+// pacer). The hold is per host, shared by every request this Client makes, so the whole crawl
+// slows the moment the platform says so, and boards the run then never reaches keep their last
+// state instead of recording a failure each.
 //
 // A refusal after a hold has expired doubles the next hold, up to max; the refusals of one burst
 // count once. A served response resets the escalation (it does not shorten a hold already set,

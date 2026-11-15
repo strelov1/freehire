@@ -16,53 +16,45 @@ import (
 // employer is read from each posting.
 //
 // THE BOARD IS A JOB-TYPE ID, NOT A DISTRICT. The numeric ids that show up beside an
-// employer on edjoin.org are districtID, one more facet of the same central index, and there
-// are 1,573 of them. What the board selects here is the slice to crawl — the hh
-// (professional_role) and trudvsem (OKATO region) shape, not a tenant. That choice is
-// measured, not stylistic (whole platform crawled live 2026-09-02):
+// employer on edjoin.org are districtID, one more facet of the same central index. What the
+// board selects here is the slice to crawl — the hh (professional_role) and trudvsem (OKATO
+// region) shape, not a tenant:
 //
-//   - The platform holds 16,447 open postings and freehire's catalogue filter rejects only
-//     38.2% of them by title. The other 10,163 are paraeducators, instructional aides, yard
-//     monitors, campus supervisors and cafeteria assistants — classify's non-tech dictionary
-//     was written against tech-company ATS boards and carries no term for K-12
-//     classified-staff vocabulary, so it admits them. Crawling the whole index would put ten
-//     thousand school-support postings into an IT catalogue.
+//   - Most of the platform is K-12 school-support work (paraeducators, instructional aides, yard
+//     monitors, cafeteria assistants). classify's non-tech dictionary was written against
+//     tech-company ATS boards and has no term for that vocabulary, so it admits them; crawling
+//     the whole index would flood an IT catalogue.
 //   - Job type 25, "Information Tech. / Computer Svcs.", is the platform's OWN technology
-//     facet and the only technical entry in its 66-value job-type vocabulary. It held 71
-//     postings across 59 districts, of which 65 are genuinely IT practice.
-//   - The listing carries no body, so every posting costs a 147 KB detail page. A rejected
+//     facet and the only technical entry in its job-type vocabulary.
+//   - The listing carries no body, so every posting costs a ~147 KB detail page. A rejected
 //     posting is never stored, so it is never `seen`, so a whole-index crawl would buy and
-//     throw away ~2.4 GB of detail pages on EVERY run, forever — the trap the ukgready note
-//     in this package's AGENTS.md describes, at ten times the ratio. The IT slice costs 71
-//     pages.
+//     throw away gigabytes of detail pages on EVERY run — the trap the ukgready note in this
+//     package's AGENTS.md describes, at a far worse ratio.
 //
-// Traps, all verified live on 2026-09-02:
+// Traps:
 //
 //   - The listing endpoint is /Home/LoadJobs, the site's own XHR. catID, districtID and
 //     recruitmentCenterID are dereferenced without a null check: omit any one of the three,
 //     or send it empty, and the endpoint answers a 500 .NET NullReferenceException PAGE —
 //     HTML, not JSON — however valid the rest of the query is.
-//   - totalRecords is exact and stable across page sizes (16,450 at rows=1, 25, 100, 500 and
-//     1000 alike), unlike SEEK's totalCount, so it can bound the walk. rows above 1,000
-//     answers 500; rows=1 serves 10 rows while still reporting a totalPages computed from 1,
-//     so neither the requested page size nor totalPages is worth trusting. There is no result
-//     window: the whole 16,447-posting index paginates to the end.
-//   - The same posting can appear on two adjacent pages (3 of 16,447 did, ties on the
-//     postingDate sort), so the walk dedups on postingID rather than assuming pages partition.
+//   - totalRecords is exact and stable across page sizes, unlike SEEK's totalCount, so it can
+//     bound the walk. rows above 1,000 answers 500; rows=1 serves 10 rows while still reporting
+//     a totalPages computed from 1, so neither the requested page size nor totalPages is worth
+//     trusting. There is no result window: the whole index paginates to the end.
+//   - The same posting can appear on two adjacent pages (ties on the postingDate sort), so the
+//     walk dedups on postingID rather than assuming pages partition.
 //   - An unknown job-type id is answered 200 with totalRecords 0, not an error, so a mistyped
 //     board is indistinguishable from an empty one. The board ids in sources/edjoin.yml carry
 //     the platform's own label beside them for that reason.
 //   - The body lives only on the posting page, as a schema.org JobPosting in ld+json whose
-//     description subsumes the experienceRequirements and skills fields beside it (214/214 and
-//     120/120 on the live sample), so nothing else on the page needs reading. Hence
-//     HydratingSource.
+//     description subsumes the experienceRequirements and skills fields beside it, so nothing
+//     else on the page needs reading. Hence HydratingSource.
 //   - The pay fields are employer-typed text boxes, not currency-formatted platform fields:
 //     alongside "$25.04" they hold "TBD", "Stipend", "District Salary Schedule", "Range 1:
 //     $18.30" and "$22 - $26/hr". Only the PERIOD beside them is a picklist. So a figure is
 //     read only when the whole value is a bare amount and nothing else — see edjoinAmount.
-//   - No metering observed: 300 detail pages at 16-way concurrency (~12 req/s) all answered
-//     200 bar one 410 for a taken-down posting, so no pacer is wired. pacer.go is where one
-//     would go.
+//   - No metering observed on detail pages at 16-way concurrency (a taken-down posting answers
+//     410), so no pacer is wired. pacer.go is where one would go.
 type edjoin struct {
 	http edjoinHTTP
 }
@@ -95,7 +87,7 @@ const (
 	// rows is refused with an HTTP 500 — so the walk keeps a margin below the refusal and still
 	// reads any realistic slice in one or two requests.
 	edjoinPageSize = 500
-	// edjoinMaxPages bounds the walk well above the whole platform's 33 pages at that size, so
+	// edjoinMaxPages bounds the walk well above the whole platform at that size, so
 	// a listing change that keeps yielding new ids cannot loop unboundedly.
 	edjoinMaxPages = 60
 )
@@ -306,8 +298,7 @@ func edjoinSchedule(field string) map[string]bool {
 }
 
 // edjoinRemote reports whether the district ticked the platform's own "Remote" option. It is
-// EDJOIN's only structured remote signal, and it is rare — 3 of 16,447 live postings set it,
-// which is what a K-12 board looks like. A posting that leaves it unticked says nothing about
+// EDJOIN's only structured remote signal, and it is rare. A posting that leaves it unticked says nothing about
 // work mode rather than claiming to be onsite.
 func edjoinRemote(schedule map[string]bool) bool { return schedule["Remote"] }
 

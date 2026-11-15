@@ -20,15 +20,14 @@ import (
 )
 
 // itviec adapts ITviec (itviec.com), Vietnam's IT-only job board. The whole catalogue is one
-// server-rendered listing (/it-jobs, ~20 cards a page, 658 postings over 33 pages measured
-// 2026-10-15), so the provider is boardless. Each card carries the posting's slug and its own
-// key; the body, employer, place and salary come from the posting page's schema.org JobPosting,
-// so this is a HydratingSource that buys a page only for a posting the catalogue lacks.
+// server-rendered listing (/it-jobs, ~20 cards a page), so the provider is boardless. Each card
+// carries the posting's slug and its own key; the body, employer, place and salary come from the
+// posting page's schema.org JobPosting, so this is a HydratingSource that buys a page only for a
+// posting the catalogue lacks.
 //
 // The walk follows the ordinary "which page failed decides" rule and does NOT claim
-// fullBoardListing or fullCatalog: it was measured against one snapshot of the listing, and the
-// end of the listing (a page with no cards) has not been proven against the stated total over
-// time. See the ITviec traps in AGENTS.md.
+// fullBoardListing or fullCatalog: the end of the listing (a page with no cards) has not been
+// proven against the stated total. See the ITviec traps in AGENTS.md.
 type itviec struct {
 	http HTMLGetter
 }
@@ -39,10 +38,8 @@ const (
 	itviecMaxPages = 100 // a ceiling three times the measured catalogue, never the expected end
 )
 
-// ITviec has refused a third party's back-to-back sequential listing sweeps with 429
-// (career-ops, 2026-08-23) while answering ten sequential listing requests from the crawl host
-// (2026-10-15). The budget is unmeasured, so every request — listing and detail alike — is held
-// to one a second; a first full run is ~700 requests, ~12 minutes. Tune from the first runs.
+// ITviec has refused back-to-back sequential listing sweeps with 429. The budget is unmeasured,
+// so every request, listing and detail alike, is held to one a second.
 const (
 	itviecRequestInterval = time.Second
 	itviecRequestBurst    = 2

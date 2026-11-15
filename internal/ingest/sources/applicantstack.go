@@ -16,7 +16,7 @@ import (
 // lower-cased (hosts are case-insensitive, and the same tenant is linked as both "M30" and
 // "m30").
 //
-// What the platform serves, measured live 2026-10-20:
+// What the platform serves:
 //   - /x/openings is the whole listing: a table (#data-table) linking each posting as
 //     /x/detail/<id>, 100 rows a page, paged with ?pge=N, and a pager stating
 //     "Showing 1 - 100 of 282". A board with no openings renders the table with no rows and no
@@ -173,9 +173,9 @@ func applicantstackListingPage(root *html.Node) ([]applicantstackPosting, int, e
 // applicantstackTotalPattern reads the total from the pager's "Showing 1 - 100 of 282".
 var applicantstackTotalPattern = regexp.MustCompile(`\bof\s+(\d+)`)
 
-// applicantstackJobIDPattern captures the posting id from a /x/detail/<id> link. The ids
-// measured are lower-case base-36 ("a23rqqe2fctl"); a tenant on its own domain may use a slug,
-// so letters of either case, digits and hyphens are accepted.
+// applicantstackJobIDPattern captures the posting id from a /x/detail/<id> link. Ids are
+// lower-case base-36 ("a23rqqe2fctl"); a tenant on its own domain may use a slug, so letters of
+// either case, digits and hyphens are accepted.
 var applicantstackJobIDPattern = regexp.MustCompile(`/x/detail/([A-Za-z0-9_-]+)`)
 
 // applicantstackJobID extracts the native posting id from a posting link, or "".

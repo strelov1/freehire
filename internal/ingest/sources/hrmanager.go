@@ -34,14 +34,11 @@ type hrManager struct {
 const (
 	hrManagerListURL = "https://api.hr-manager.net/jobportal.svc/%s/positionlist/json/"
 	// hrManagerTake is the most rows the one listing request asks for: three times the largest
-	// customer seen (mercuryeng, 663), and a ceiling that fails the crawl when a customer
-	// outgrows it.
+	// customer seen, and a ceiling that fails the crawl when a customer outgrows it.
 	hrManagerTake = 2000
 	// hrManagerMaxHidden is how many postings PositionCountSearch may count that no public view
-	// serves. Measured 2026-10-19: statensrekrutteringsloesning_tr counted 414 and served 413 —
-	// through this API at any take, through its RSS variant and on the platform's own HTML
-	// listing alike — while the other 300 customers measured served exactly their count. Paging shows
-	// the server skips over the hidden row's position and then drops it. A shortfall beyond
+	// serves: a customer can count a posting that its API (at any take), RSS variant and HTML
+	// listing all omit, because the server skips the hidden row's position. A shortfall beyond
 	// this is not a hidden posting but a listing we did not fully read.
 	hrManagerMaxHidden = 2
 	// hrManagerOpenApplication is the project type of a customer's standing "unsolicited

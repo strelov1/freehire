@@ -16,7 +16,7 @@ import (
 // earcu adapts an eArcu career site. eArcu is a multi-tenant UK ATS whose clients each run
 // on their own careers host and publish a keyless RSS feed at /jobs/rss. The feed names every
 // open posting, but what it says about one is thin: the body is a ~1,000-character preview
-// ending in "..." (measured 2026-10-30 on 16 tenants, every non-empty body truncated), and the
+// ending in "...", and the
 // "Key: value, …" metadata prefix is whatever fields the tenant chose — Cambridge's carries a
 // Country and a Location, most carry none ("Region: , Business Area: …"), and some fill
 // "Region" with a person's name. The posting itself is the detail page: its schema.org
@@ -164,7 +164,7 @@ func (a earcu) hydrate(ctx context.Context, job *Job) error {
 // renders neither block. PosDescriptionText is the whole posting — the tenant's intro, the
 // description container and its benefits (Mitie); some templates render only the container
 // (DX), others only the wrapper (Cromwell). The JobPosting description is not preferred: it is
-// sometimes only the first paragraph (Mills & Reeve: 167 characters of a ~5k body), and some
+// sometimes only the first paragraph (a few characters of a long body), and some
 // tenants render no JobPosting at all (Cromwell).
 func earcuDetailBody(root *html.Node) string {
 	for _, class := range []string{"PosDescriptionText", "earcu_posdescriptionContainer"} {

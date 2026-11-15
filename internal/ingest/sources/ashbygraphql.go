@@ -5,13 +5,12 @@ import (
 	"fmt"
 )
 
-// ashbyGraphQL adapts Ashby boards whose public Posting API (see ashby.go) is disabled, so
-// the only machine-readable source is the same embed GraphQL endpoint Ashby's own hosted
-// careers widget calls. It is a separate provider from ashby on purpose: the 2400+ boards on
-// the stable Posting API stay untouched, and only the handful that 404 there (e.g. Chainlink
-// Labs, Toggl) opt into this path. The list query returns brief postings without a
-// description, so each posting takes a detail query — the same list+detail shape as
-// SmartRecruiters.
+// ashbyGraphQL adapts Ashby boards whose public Posting API (see ashby.go) is disabled, so the
+// only machine-readable source is the embed GraphQL endpoint Ashby's own hosted careers widget
+// calls. It is a separate provider from ashby on purpose: boards on the stable Posting API stay
+// untouched, and only those that 404 there opt into this path. The list query returns brief
+// postings without a description, so each posting takes a detail query, the same list+detail shape
+// as SmartRecruiters.
 type ashbyGraphQL struct {
 	http JSONPoster
 }

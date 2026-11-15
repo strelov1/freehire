@@ -19,12 +19,10 @@ import (
 
 // fingerprintHTTP is the Chrome-fingerprint transport shared by the adapters whose edge rejects
 // Go's default TLS+HTTP/2 fingerprint (Meta's edge 400s it; Bayt's and GulfTalent's Akamai/
-// Cloudflare edges 403 it). A live spike confirmed plain JA3 spoofing via utls is not enough — the
-// edge fingerprints the HTTP/2 layer too; tls-client with a Chrome profile spoofs both the JA3 and
-// the Chrome HTTP/2 fingerprint and is served normally. This is the only file in the package that
-// imports tls-client/fhttp; the fork never leaks into the rest of internal/ingest/sources. Connections
-// still dial through the safehttp SSRF guard via WithDialer (TestFingerprintHTTPBlocksInternalTarget
-// locks that contract).
+// Cloudflare edges 403 it). JA3 spoofing via utls alone is not enough, since the edge fingerprints
+// the HTTP/2 layer too; tls-client with a Chrome profile spoofs both. This is the only file in the
+// package that imports tls-client/fhttp. Connections still dial through the safehttp SSRF guard
+// via WithDialer (TestFingerprintHTTPBlocksInternalTarget locks that contract).
 //
 // Upgrade note: tls-client bundles forks of net/http (fhttp) and utls. When bumping it, re-run the
 // live adapter smoke of every consumer (an edge can tighten its fingerprint check) and re-confirm
@@ -57,9 +55,8 @@ func newFingerprintHTTP() (*fingerprintHTTP, error) {
 
 // newProxiedFingerprintHTTP builds a Chrome-fingerprint transport that egresses through the
 // proxy at proxyURL — for a source blocked by BOTH its TLS-fingerprint check AND the prod
-// datacenter IP. gulftalent is the case: a correct Chrome fingerprint from the direct
-// datacenter IP still 403s, but the same fingerprint through the residential proxy is served
-// 200 (spike-verified — via the same proxy, curl's JA3 403s while this Chrome JA3 is 200). The
+// datacenter IP (gulftalent): a correct Chrome fingerprint from the datacenter IP still 403s, but
+// the same fingerprint through the residential proxy is served. The
 // proxy dial replaces the SSRF-guarded direct dialer; the target is a fixed trusted host, so the
 // SSRF guard is moot.
 func newProxiedFingerprintHTTP(proxyURL string) (*fingerprintHTTP, error) {

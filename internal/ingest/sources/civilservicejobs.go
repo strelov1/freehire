@@ -24,9 +24,9 @@ import (
 )
 
 // civilServiceJobs adapts Civil Service Jobs (www.civilservicejobs.service.gov.uk), the UK
-// government's own vacancy board: every department and agency of the Civil Service, ~1.4k open
-// postings. It is boardless and an aggregator — the employer is the department each card names.
-// See the "Civil Service Jobs traps" section of AGENTS.md for the measurements behind each rule.
+// government's own vacancy board: every department and agency of the Civil Service. It is boardless
+// and an aggregator; the employer is the department each card names. See the "Civil Service Jobs
+// traps" section of AGENTS.md.
 //
 // Every path sits behind an ALTCHA proof-of-work check ("Quick check needed"): a session must
 // find the number whose hash the challenge names before the site serves anything else. That
@@ -49,23 +49,20 @@ type csjHTTP interface {
 const csjBaseURL = "https://www.civilservicejobs.service.gov.uk"
 
 // csjRequestInterval paces every request of a run, listing and detail alike, through one
-// limiter. Unmeasured as a limit: the full 57-page listing at one page a second drew no
-// refusal and no second challenge. It is courtesy toward a slow origin (a posting page took
-// ~4 s to answer) rather than a budget we know.
+// limiter. Courtesy toward a slow origin, not a measured limit.
 const csjRequestInterval = time.Second
 
 // csjDetailWorkers keeps several slow posting pages in flight so the limiter, not latency,
-// sets the pace: at ~4 s a page, one worker would manage a quarter of a request a second.
+// sets the pace.
 const csjDetailWorkers = 4
 
-// csjMaxNewPerRun bounds how many unseen postings one run hydrates. The first run faces the
-// whole ~1.4k catalogue at one page a second, which fits the 50-minute run timeout only while
-// the origin stays fast; a run that hits the timeout saves nothing, so the backlog is taken in
-// slices. The postings past the bound are not stored this run and are hydrated by the next.
+// csjMaxNewPerRun bounds how many unseen postings one run hydrates. A run that hits the 50-minute
+// timeout saves nothing, so the first run's backlog is taken in slices and the postings past the
+// bound are hydrated by the next.
 const csjMaxNewPerRun = 600
 
-// csjMaxPages is the listing walk's safety ceiling — 25 postings a page, ~57 pages today.
-// Reaching it without the pager running out FAILS the crawl, as fullCatalog requires.
+// csjMaxPages is the listing walk's safety ceiling. Reaching it without the pager running out
+// FAILS the crawl, as fullCatalog requires.
 var csjMaxPages = 200
 
 // NewCivilServiceJobs builds the adapter over a cookie-jar client (see cookieSessionSource).
@@ -279,8 +276,7 @@ type altchaChallenge struct {
 }
 
 // solveAltcha searches the challenge's number range and returns the base64 JSON payload the
-// widget submits in its "altcha" form field. With maxnumber 300000 the search is a fraction of
-// a second.
+// widget submits in its "altcha" form field.
 func solveAltcha(ch altchaChallenge) (string, error) {
 	var newHash func() hash.Hash
 	switch ch.Algorithm {
@@ -555,10 +551,8 @@ func csjEmploymentType(pattern string) string {
 
 var csjPoundPattern = regexp.MustCompile(`£([\d,]+)`)
 
-// csjAnnualFloor separates an annual salary from the rest. The card states an amount and
-// no period; across the whole catalogue (1,409 cards with a salary, 2026-10-23) every bound
-// was an annual figure except two, £475 and £1,000, which are not. Below the floor the
-// amount is not published rather than published under the wrong period.
+// csjAnnualFloor separates an annual salary from the rest: the card states an amount and no period.
+// Below the floor the amount is treated as not published rather than published under the wrong period.
 const csjAnnualFloor = 5000
 
 // csjSalary parses the card's "£59,207 to £70,958" (or a single "£34,000").

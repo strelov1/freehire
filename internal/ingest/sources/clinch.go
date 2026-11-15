@@ -23,10 +23,9 @@ import (
 // Title and location are split out of the slug (clinchSplitSlug). The description is then
 // hydrated best-effort from each posting's detail page (div.job-description) through a paced
 // detail getter that holds the run's request rate under the WAF window. The first WAF
-// challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF is
-// wasteful and prolongs the penalty), so the remaining postings keep the empty description
-// they would have had before. Coverage is therefore partial and back-fills across runs, and
-// the adapter is never worse than the old sitemap-only reconstruction.
+// challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF prolongs
+// the penalty), so the remaining postings keep the empty description. Coverage is therefore partial
+// and back-fills across runs.
 type clinch struct {
 	sitemap XMLGetter  // the career-site sitemap.xml (one request per run)
 	detail  HTMLGetter // per-posting detail pages, paced under the WAF window

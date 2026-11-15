@@ -12,9 +12,9 @@ import (
 )
 
 // gemeentebanen adapts Gemeentebanen (www.gemeentebanen.nl), the job site of the Dutch
-// municipalities and their joint bodies (omgevingsdiensten, regional social services), ~600
-// postings at a time. It is boardless and an aggregator — each municipality is named per posting.
-// See the "Dutch public boards" section of AGENTS.md for the measurements behind each rule.
+// municipalities and their joint bodies (omgevingsdiensten, regional social services), It is
+// boardless and an aggregator — each municipality is named per posting. See the "Dutch public
+// boards" section of AGENTS.md.
 //
 // The posting set is one sitemap, which names only each posting's URL; the body is the posting
 // page's schema.org JobPosting, so the adapter hydrates only the postings the catalogue lacks.
@@ -34,13 +34,13 @@ type gemeentebanenHTTP interface {
 const gemeentebanenSitemapURL = "https://www.gemeentebanen.nl/sitemap-vacancies.xml"
 
 // gemeentebanenRequestInterval paces every request of a run through one limiter; one a second is
-// courtesy, not a measured limit.
+// courtesy, not a known limit.
 const gemeentebanenRequestInterval = time.Second
 
 const gemeentebanenDetailWorkers = 2
 
-// gemeentebanenMaxNewPerRun bounds how many unseen postings one run hydrates: 1,000 pages at one
-// a second is ~17 minutes, which takes the whole first catalogue (~600) in one run.
+// gemeentebanenMaxNewPerRun bounds how many unseen postings one run hydrates: sized so the whole first
+// catalogue is read in one run at one request a second.
 const gemeentebanenMaxNewPerRun = 1000
 
 // NewGemeentebanen builds the adapter over the given client.

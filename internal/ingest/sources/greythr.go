@@ -14,11 +14,10 @@ import (
 // <tenant>.greythr.com/hire/jobs/. The board is that whole host, as with Darwinbox: the same host
 // is the tenant's employee HRMS login.
 //
-// Two open JSON endpoints on the tenant host carry everything (measured 2026-10-25 across 57
-// tenants, 843 postings): POST /hire/api/career/published_jobs/ answers every published opening
-// in one unpaginated array, description included, so there is no detail request; and GET
-// /hire/api/greythr/emp-category/ maps the opening's location ids to the tenant's own names
-// ("519" -> "KARAIKUDI").
+// Two open JSON endpoints on the tenant host carry everything: POST
+// /hire/api/career/published_jobs/ answers every published opening in one unpaginated array,
+// description included, so there is no detail request; and GET /hire/api/greythr/emp-category/
+// maps the opening's location ids to the tenant's own names ("519" -> "KARAIKUDI").
 type greythr struct {
 	http greythrHTTP
 }
@@ -132,8 +131,8 @@ func greythrJob(base, company string, p greythrPosting, location string) Job {
 	return j
 }
 
-// greythrEmploymentType maps the platform's job_type picklist; measured values: Full-time,
-// Internship, Contract, Direct Contract, Part-time.
+// greythrEmploymentType maps the platform's job_type picklist (Full-time, Internship,
+// Contract, Direct Contract, Part-time).
 func greythrEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full-time":

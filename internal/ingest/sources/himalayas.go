@@ -16,18 +16,14 @@ type himalayas struct {
 }
 
 const (
-	// himalayasLimit is the page size requested per offset page. Himalayas caps the page
-	// size at 20 regardless of the requested value, so this matches the cap; the loop
-	// advances by the count actually returned (not by this), staying correct even if the
-	// cap changes.
+	// himalayasLimit is the page size requested. Himalayas caps it at 20; the loop advances by the
+	// count actually returned, so it stays correct if the cap changes.
 	himalayasLimit = 20
-	// himalayasMaxPages is a per-run page budget, not just a runaway guard. Himalayas rate-
-	// limits (429) after ~150 rapid requests, so a single run crawling the full ~88k catalogue
-	// would grind for many minutes against the limit. This budget keeps each run under the
-	// limit (≈ himalayasMaxPages × himalayasLimit freshest jobs per run), so the crawl is fast
-	// and never trips the 429; the idempotent upsert plus the cron cadence keep coverage fresh.
-	// (Full back-catalogue coverage would need a persisted offset cursor across runs — a seam,
-	// not built: the feed is recency-ordered, so the freshest slice is what matters.)
+	// himalayasMaxPages is a per-run page budget, not just a runaway guard: Himalayas rate-limits
+	// (429) after ~150 rapid requests, so the budget keeps each run under the limit (about
+	// himalayasMaxPages × himalayasLimit freshest jobs); the idempotent upsert plus the cron
+	// cadence keep coverage fresh. Seam: full back-catalogue coverage would need a persisted
+	// offset cursor, not built because the feed is recency-ordered.
 	himalayasMaxPages = 120
 	himalayasListURL  = "https://himalayas.app/jobs/api?limit=%d&offset=%d"
 )
@@ -74,11 +70,9 @@ func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		var resp himalayasResponse
 		url := fmt.Sprintf(himalayasListURL, himalayasLimit, offset)
 		if err := s.http.GetJSON(ctx, url, &resp); err != nil {
-			// Himalayas rate-limits (429) after a number of rapid pages. Once we have
-			// collected jobs, treat a page failure as the end of what we can fetch this run
-			// and return the partial result (freshest jobs first) rather than discarding
-			// everything; the idempotent upsert means the next run picks up where the rate
-			// limit allows. Only a failure on the very first page is a real board error.
+			// Himalayas rate-limits (429) after a number of rapid pages. Once jobs are collected,
+			// a page failure ends the run with the partial (freshest-first) result; only a failure
+			// on the first page is a real board error.
 			if len(jobs) == 0 {
 				return nil, fmt.Errorf("himalayas: list offset %d: %w", offset, err)
 			}
@@ -106,12 +100,10 @@ func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no
 // guid to key on, or no company which would break the slug). Himalayas lists only remote jobs.
 //
-// Himalayas' own feed renders companyName as the literal string "name" for a chunk of
-// postings (~20% in a sample crawl) — a template field left unresolved on their end.
-// companySlug, a separate field carrying the same company, is unaffected, so a posting
-// caught by this falls back to it (e.g. "talentcross") rather than being dropped or showing
-// the literal "name" as the employer. That slug is the same shape internal/dict/companyname
-// already resolves for other slug-only boards; Himalayas has no resolver registered there yet.
+// Himalayas' feed renders companyName as the literal string "name" for a subset of postings (an
+// unresolved template field on their end). companySlug carries the same company, so such a posting
+// falls back to it (e.g. "talentcross") rather than being dropped or showing "name" as the
+// employer. Himalayas has no resolver registered in internal/dict/companyname yet.
 func (p himalayasPosting) toJob() (Job, bool) {
 	company := p.CompanyName
 	if strings.EqualFold(strings.TrimSpace(company), himalayasCompanyNameSentinel) {

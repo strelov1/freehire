@@ -18,8 +18,7 @@ import (
 // page is a Next.js Pages Router app embedding that company's currently open postings IN FULL —
 // title, HTML body, structured skills, place/work-mode flags, required languages, and a salary
 // range — in its __NEXT_DATA__ script, so no separate per-posting detail request exists or is
-// needed. See design.md in openspec/changes/add-joppy-source-adapter for the live-verified shape
-// and the decisions behind the field mappings below.
+// needed.
 type joppy struct {
 	http joppyHTTP
 }
@@ -101,10 +100,9 @@ type joppyPlace struct {
 	Cities   []string `json:"cities"`
 }
 
-// joppyLanguage is one required language and the platform's own 1-5 proficiency scale. There is
-// no authoritative equivalence between that scale and freehire's CEFR-based EnglishLevel
-// vocabulary (see design.md), so it is folded into the description as a plain "name (level N/5)"
-// statement rather than forced into a guessed CEFR bucket.
+// joppyLanguage is one required language and the platform's own 1-5 proficiency scale. That
+// scale has no authoritative equivalence to freehire's CEFR-based EnglishLevel vocabulary, so it
+// is folded into the description as a plain "name (level N/5)" statement, not a guessed CEFR bucket.
 type joppyLanguage struct {
 	Name  string `json:"name"`
 	Level int    `json:"level"`
@@ -219,8 +217,8 @@ func joppySkillNames(skills []joppySkill) []string {
 	return names
 }
 
-// joppyWorkMode derives a work mode from Joppy's three place booleans, which live inspection
-// showed are NOT mutually exclusive (a genuinely hybrid posting sets all three). isHybrid is the
+// joppyWorkMode derives a work mode from Joppy's three place booleans, which are NOT mutually
+// exclusive (a genuinely hybrid posting sets all three). isHybrid is the
 // platform's own explicit "hybrid" statement and always wins; when it is unset, exactly one of
 // remote/office being true is unambiguous. Both set with hybrid false has no clean single-word
 // reading and is left "" for the pipeline's location-text heuristic to decide, rather than
@@ -255,8 +253,7 @@ const joppyLanguageLevelMax = 5
 // skill split, and required languages — as sanitized HTML the caller can append directly to the
 // (already-HTML) description, so a real platform-stated fact is never silently dropped just
 // because no column exists for it. Language levels are rendered as the platform's own raw "N/5"
-// figure rather than mapped onto a CEFR bucket Joppy never actually committed to (see
-// design.md).
+// figure rather than mapped onto a CEFR bucket Joppy never actually committed to.
 func joppyDescriptionExtras(j joppyJob) string {
 	return sanitizeHTML(markdownToHTML(joppyDescriptionExtrasMarkdown(j)))
 }
@@ -313,10 +310,9 @@ func joppyDescriptionExtrasMarkdown(j joppyJob) string {
 }
 
 // joppyCompanySlugs extracts every distinct company slug named in the sitemap, from either a
-// bare company-profile URL or a per-posting URL nested under one. Every slug is walked — not
-// only the ones with a posting sub-entry — because trusting the sitemap's own job entries as a
-// prefilter risks the same class of staleness bug this codebase has hit before on other
-// sitemap-driven boards (see design.md); a company's own page is the ground truth.
+// bare company-profile URL or a per-posting URL nested under one. Every slug is walked, not
+// only the ones with a posting sub-entry, because a sitemap's own job entries can go stale as a
+// prefilter; a company's own page is the ground truth.
 func joppyCompanySlugs(doc sitemapDoc) []string {
 	seen := make(map[string]struct{})
 	const prefix = joppyBaseURL + "/companies/"

@@ -159,10 +159,10 @@ func workModeFromRemote(remote bool) string {
 // and hybrid separately (Recruitee, SmartRecruiters) to a work mode. Reading the remote one
 // alone silently drops every hybrid posting, which is most of them on some boards.
 //
-// Remote wins when a posting sets both — around 2% of Recruitee offers do, and Recruitee
-// itself renders each of them as "Remote job", so the broader arrangement is what the
-// employer means. Both false stays "" rather than "onsite": an ATS cannot distinguish
-// "marked as office" from "not marked at all", and the dictionary contract forbids the guess.
+// Remote wins when a posting sets both (Recruitee renders each as "Remote job"), so the
+// broader arrangement is what the employer means. Both false stays "" rather than "onsite": an
+// ATS cannot distinguish "marked as office" from "not marked at all", and the dictionary
+// contract forbids the guess.
 func workModeFromRemoteHybrid(remote, hybrid bool) string {
 	switch {
 	case remote:
@@ -203,10 +203,9 @@ func countryFromCode(code string) []string {
 
 // countriesFromCodes is the multi-place counterpart of countryFromCode: it normalizes a
 // posting's whole set of ATS-supplied country codes, dropping unresolved and duplicate ones and
-// keeping first-seen order. A board that states several locations for one posting states several
-// countries (landing.jobs lists a single role across Munich, Lisbon and Cologne), and keeping
-// only the first would hide that posting from a filter on any of the others. Returns nil when
-// nothing resolves, so an adapter can wire it straight into Job.Countries.
+// keeping first-seen order. A posting listed across several places states several countries,
+// and keeping only the first would hide it from a filter on any of the others. Returns nil
+// when nothing resolves, so an adapter can wire it straight into Job.Countries.
 func countriesFromCodes(codes []string) []string {
 	var out []string
 	seen := make(map[string]struct{}, len(codes))
@@ -276,12 +275,9 @@ func joinNonEmpty(parts ...string) string {
 	return strings.Join(kept, ", ")
 }
 
-// firstNonEmpty returns the first part that is not the empty string, or "" when every
-// part is empty. Adapters use it for the common "this value, else fall back to that one"
-// choice (e.g. a posting's own employer name, else the configured company). The check is
-// exact-empty (not whitespace-trimmed), so it is a drop-in for the inline
-// `if x == "" { x = fallback }` idiom it replaces; unlike joinNonEmpty it does not treat a
-// whitespace-only value as blank.
+// firstNonEmpty returns the first part that is not the empty string, or "" when every part is
+// empty. Adapters use it for the "this value, else fall back to that one" choice. The check is
+// exact-empty (not whitespace-trimmed), unlike joinNonEmpty.
 func firstNonEmpty(parts ...string) string {
 	for _, p := range parts {
 		if p != "" {
@@ -329,10 +325,9 @@ func retryWhile(ctx context.Context, maxAttempts int, base time.Duration, retry 
 // client surfaces a non-2xx response as a typed *StatusError, so the status code is matched
 // structurally (errors.As) rather than scraped from the message.
 //
-// 403 is in here because both platforms that need it return 403 for a burst rather than
-// 429: Eightfold caps an IP at ~290 requests per window, and some Workday tenants answer a
-// burst the same way. The shared client already retries 429/5xx/network on its own; this is
-// what the two adapters add on top.
+// 403 is in here because Eightfold and some Workday tenants return 403 for a burst rather than
+// 429. The shared client already retries 429/5xx/network on its own; this is what the two
+// adapters add on top.
 func isRateLimited(err error) bool {
 	var se *StatusError
 	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)

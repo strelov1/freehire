@@ -49,9 +49,9 @@ type cleverstaffVacancy struct {
 }
 
 // cleverstaffEmploymentType maps CleverStaff's employmentType enum to freehire's controlled
-// EmploymentType vocabulary. The keys are the values CleverStaff actually emits (observed live:
-// fullEmployment, underemployment, projectWork); an unrecognized value maps to "" so the
-// dictionaries decide, rather than guessing at keys the platform does not use.
+// The keys are the values CleverStaff actually emits (fullEmployment, underemployment,
+// projectWork); an unrecognized value maps to "" so the dictionaries decide, rather than guessing at
+// keys the platform does not use.
 var cleverstaffEmploymentType = map[string]string{
 	"fullEmployment":  "full_time",
 	"underemployment": "part_time",

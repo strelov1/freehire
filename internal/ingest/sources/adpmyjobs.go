@@ -8,20 +8,14 @@ import (
 	"golang.org/x/net/html"
 )
 
-// adpMyJobs adapts ADP MyJobs career sites (myjobs.adp.com). It is a SECOND ADP product, not a
-// second front door onto the one `adp` already crawls: Workforce Now addresses a board by the
-// cid+ccId pair carried in its recruitment URL, MyJobs by the career site's own slug, and
-// neither id is derivable from the other. A company on MyJobs is therefore unreachable through
-// the adp adapter however its board is written.
+// adpMyJobs adapts ADP MyJobs career sites (myjobs.adp.com), a different ADP product from the
+// Workforce Now one `adp` crawls: MyJobs addresses a board by the career site's slug, not
+// cid+ccId, and neither id derives from the other. The staffing API underneath is shared
+// ($top/$skip paging, a list without descriptions, a per-requisition detail).
 //
-// What the two share is the staffing API underneath — the same $top/$skip paging, the same
-// requisition list that omits the description and per-requisition detail that carries it — so
-// this reads as a near-sibling of adp.go by construction rather than by copying.
-//
-// Two things make it its own adapter rather than a mode of that one. The board is a slug, and
-// the listing is authorised by an `orgoid` REQUEST HEADER rather than by query parameters — an
-// id the slug does not contain, so every crawl resolves it first from the career site's own
-// public record.
+// It is its own adapter because the listing is authorised by an `orgoid` REQUEST HEADER, not query
+// parameters, and the slug does not contain it, so every crawl first resolves it from the career
+// site's public record.
 type adpMyJobs struct {
 	http HeaderJSONGetter
 }
@@ -86,9 +80,8 @@ func (a adpMyJobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("adpmyjobs: career site %s: %w", board, err)
 	}
 	if site.Orgoid == "" {
-		// The site answered without the id the listing is authorised by. Failing here rather
-		// than fetching is the point: an unauthorised listing returns 400, which would read as a
-		// board that has gone away rather than one we asked for wrongly.
+		// The site answered without the orgoid. Fail here: an unauthorised listing returns 400,
+		// which would read as a board that has gone away.
 		return nil, fmt.Errorf("adpmyjobs: career site %s published no orgoid", board)
 	}
 	headers := map[string]string{"orgoid": site.Orgoid}
@@ -151,10 +144,9 @@ func (a adpMyJobs) detail(ctx context.Context, board, company string, headers ma
 	}, true
 }
 
-// adpMyJobsCompany is the employer name the career site publishes, used only when the catalog
-// row carries none. clientName is the account's own name ("Stellantis"); the site name is the
-// career site's ("Stellantis External CX"), which reads as a board rather than an employer, so
-// it is the fallback rather than the first choice.
+// adpMyJobsCompany is the employer name the career site publishes, used only when the catalog row
+// carries none. clientName is the employer ("Stellantis"); the site name reads as a board
+// ("Stellantis External CX"), so it is the fallback.
 func adpMyJobsCompany(s adpMyJobsSite) string {
 	if n := strings.TrimSpace(s.ClientName); n != "" {
 		return n
@@ -162,15 +154,12 @@ func adpMyJobsCompany(s adpMyJobsSite) string {
 	return strings.TrimSpace(s.Name)
 }
 
-// adpMyJobsLocation renders the first location as "City, Region, Country", dropping the parts
-// the platform left empty. Unlike Workforce Now, which publishes a ready display string, MyJobs
-// only gives the address in pieces.
+// adpMyJobsLocation renders the first location as "City, Region, Country", dropping empty parts;
+// MyJobs gives the address only in pieces.
 //
-// It reads requisitionLocations and nothing else on purpose. The payload carries postingLocations
-// and workLocations beside it, and both were empty for every posting sampled across three boards
-// — while one of those boards (jsmcareers) published no location in ANY of the three arrays. An
-// empty location here is therefore an employer saying nothing, not a field read from the wrong
-// place, and the pipeline's dictionaries would rather have nothing than a guess.
+// It reads requisitionLocations only on purpose: postingLocations and workLocations were empty
+// wherever sampled, and some boards publish no location in any array, so an empty result is the
+// employer saying nothing.
 func adpMyJobsLocation(r adpMyJobsReq) string {
 	if len(r.Locations) == 0 {
 		return ""

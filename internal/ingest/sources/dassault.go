@@ -17,9 +17,6 @@ import (
 // adapter cannot read it ("no portalNo"). What 3ds.com's own job search calls instead is an
 // Exalead "card search" API, whose career cards carry every posting WITH its full body — so a
 // crawl is a handful of paged GETs and no detail request.
-//
-// Measured live 2026-10-15: 697 postings. Each exists once per site language (8,364 cards over
-// 12 languages), and the English refinement alone covers all 697 distinct requisitions.
 type dassault struct {
 	http XMLGetter
 }
@@ -48,9 +45,8 @@ func (dassault) boardless() {}
 
 // fullBoardListing: every page states the hit count (`nhits`), and Fetch fails unless the
 // distinct postings read equal it. Any page failing — a later one included — fails the crawl.
-// The answer's `estimated` attribute is NOT the proof: at hf=100 it read "true" on 23 of 24
-// requests while nhits stayed 697 and the walk read exactly 697 distinct cards, so it says
-// nothing usable about the count; the count check is what carries the claim.
+// The answer's `estimated` attribute is NOT the proof: it read "true" while nhits and the distinct
+// cards read agreed, so it says nothing usable about the count; the count check carries the claim.
 func (dassault) fullBoardListing() {}
 
 // dassaultAnswer is the Exalead response (served as application/javascript, but XML).
@@ -107,7 +103,7 @@ func (s dassault) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // dassaultCategories splits content_categories, a flat "Label/value" string whose values hold
-// spaces and commas. All 697 postings carried the same six labels in the same order, so the
+// spaces and commas. Every posting carries the same six labels in the same order, so the
 // split anchors on that order rather than guessing where a value ends.
 var dassaultCategories = regexp.MustCompile(`^Category/(.*) Type/(.*) Country/(.*) City/(.*) Products/(.*) Year/(.*)$`)
 

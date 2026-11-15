@@ -21,10 +21,9 @@ import (
 // Chrome-fingerprint transport (fingerprintHTTP) rather than the shared client. Keyless.
 //
 // That fingerprint stopped passing: Bayt's Cloudflare-managed challenge 403s every plain request,
-// direct or proxied, and production crawls it through the Scrapling tier's browser, which solves
-// the challenge (scraplingtier.go). A browser page costs ~6 s, which is what shapes the crawl:
-// the whole listing is walked (it is what the sweep relies on) but only NEW postings are
-// hydrated, up to maxNewPerRun per country per run.
+// direct or proxied, so production crawls it through the Scrapling tier's browser (scraplingtier.go).
+// A browser page is slow (seconds), so the whole listing is walked (the sweep relies on it) but only
+// NEW postings are hydrated, up to maxNewPerRun per country per run.
 
 // baytHTTP is the transport bayt needs: HTML listing and detail pages.
 type baytHTTP interface{ HTMLGetter }
@@ -59,11 +58,9 @@ func (bayt) fullBoardListing() {}
 const (
 	baytBaseURL = "https://www.bayt.com"
 	// baytMaxPages caps the per-country pagination so a listing that never runs dry (or a
-	// markup change that keeps yielding "new" links) cannot loop unboundedly. Measured
-	// 2026-10-20 the UAE alone lists 14,200 postings over ~334 pages of 30.
+	// markup change that keeps yielding "new" links) cannot loop unboundedly.
 	baytMaxPages = 2000
-	// baytMaxNewPerRun is the default hydration budget per country per run: at ~6 s a browser
-	// detail page and baytDetailWorkers in flight, 300 is ~10 minutes a country.
+	// baytMaxNewPerRun is the default hydration budget per country per run, (browser pages are slow).
 	baytMaxNewPerRun = 300
 	// baytDetailWorkers bounds the detail fan-out well below the shared defaultDetailWorkers (8):
 	// Bayt's Akamai edge throttles a fast burst to 403 (observed live), and the fingerprint
@@ -155,17 +152,14 @@ func (b bayt) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	})...), nil
 }
 
-// listing walks the country's listing pages sequentially (one request at a time — the burst
-// throttling bayt's edge is documented to apply is a concurrency-triggered risk, which the
-// detail fan-out paces around with baytDetailWorkers) and returns every posting link, deduped.
+// listing walks the country's listing pages sequentially (one request at a time: the edge's burst
+// throttling is concurrency-triggered) and returns every posting link, deduped.
 //
-// The end is the PAGER: a page that links no page beyond itself is the last one. Bayt never
-// answers an empty page past its end — measured 2026-10-20, ?page=1000 of the UAE listing
-// redirected to page 333 — so waiting for one walked into the cap and failed every country. A
-// genuinely empty page still ends the walk, for a page rendered without a pager. A page whose
-// links are all already-seen duplicates does not: only the pager or an empty page proves the
-// end. Every page failing, and reaching baytMaxPages, are hard failures rather than a partial
-// success — see the fullBoardListing interface (source.go) for the bar.
+// The end is the PAGER: a page that links no page beyond itself is the last one. Bayt never answers
+// an empty page past its end (it redirects to the last page), so waiting for one runs into the cap.
+// A genuinely empty page still ends the walk, for a page rendered without a pager. A page of only
+// already-seen duplicates does not. Every page failing, or reaching baytMaxPages, is a hard failure,
+// not a partial success; see the fullBoardListing interface (source.go) for the bar.
 func (b bayt) listing(ctx context.Context, e CompanyEntry) ([]string, error) {
 	seen := make(map[string]struct{})
 	var links []string
@@ -245,11 +239,9 @@ func baytListingLinks(root *html.Node) []string {
 // baytBase is the parsed Bayt origin, resolved against once per listing href.
 var baytBase, _ = url.Parse(baytBaseURL)
 
-// baytAbsURL resolves a listing href against the Bayt origin, handling all three forms via
-// ResolveReference: an already-absolute href keeps itself, a protocol-relative "//host/path"
-// keeps its own host under the origin's scheme, and a root-relative "/path" gets the origin. The
-// old strings.HasPrefix(href, "http") guess mis-resolved a protocol-relative href into
-// "https://www.bayt.com//host/path", silently dropping those postings at the detail fetch.
+// baytAbsURL resolves a listing href against the Bayt origin via ResolveReference: an absolute href
+// keeps itself, a protocol-relative "//host/path" keeps its host under the origin's scheme, and a
+// root-relative "/path" gets the origin.
 func baytAbsURL(href string) string {
 	ref, err := url.Parse(href)
 	if err != nil {
@@ -258,15 +250,13 @@ func baytAbsURL(href string) string {
 	return baytBase.ResolveReference(ref).String()
 }
 
-// detail fetches one job page and maps its ld+json JobPosting to a Job. A URL carrying no
-// parseable id is a plain drop (ok=false) — it could never have been stored, so no close can
-// reach it. A page the platform answers 404/410 for is dropped too: the platform's own
-// evidence the posting is gone. Everything else — a fetch failure (including a throttled
-// 403, the documented risk of a fast burst against Bayt's Akamai edge), a 200 with no
-// ld+json JobPosting at all, or one with no resolvable employer — comes back as an
-// unreadableDetail marker instead: this crawl proves listing completeness (fullBoardListing),
-// so a plain drop on any of these would be indistinguishable from the posting having been
-// taken down, and a site-wide markup change that broke parsing would silently look like a
+// detail fetches one job page and maps its ld+json JobPosting to a Job. A URL with no parseable id
+// is a plain drop (ok=false): it could never have been stored. A 404/410 is dropped too: the
+// platform's own evidence the posting is gone. Everything else (a fetch failure incl. a throttled
+// 403, a 200 with no ld+json JobPosting, or no resolvable employer) comes back as an
+// unreadableDetail marker: this crawl proves listing completeness (fullBoardListing), so a plain
+// drop would look like a takedown, and a markup change that broke parsing would look like a mass
+// removal to the board-scoped close.
 // mass removal to the board-scoped close.
 func (b bayt) detail(ctx context.Context, e CompanyEntry, link string) (Job, bool) {
 	id := baytJobID(link)

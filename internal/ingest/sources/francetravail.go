@@ -68,9 +68,8 @@ const (
 	francetravailOrigin = "1"
 )
 
-// francetravailFloor is the earliest creation date a window reaches back to. Offers older than a
-// few months are rare; a département whose unwindowed count exceeds what the windows found says
-// so in the log.
+// francetravailFloor is the earliest creation date a window reaches back to. A département whose
+// unwindowed count exceeds what the windows found says so in the log.
 var francetravailFloor = time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // NewFranceTravail builds the adapter over the given client with the application's credentials.

@@ -19,10 +19,9 @@ import (
 // the shared Chrome-fingerprint transport (fingerprintHTTP) rather than the shared client. Keyless.
 //
 // That fingerprint stopped passing too; production crawls it through the Scrapling tier's
-// browser (scraplingtier.go), ~2 s a detail page at four tabs. The sitemap lists ~36k postings,
-// so the whole sitemap is read every run (the sweep relies on it) but only NEW postings are
-// hydrated, a bounded number a run — re-reading every posting each run took a run past four
-// hours.
+// browser (scraplingtier.go). The whole sitemap is read every run (the sweep relies on it) but
+// only NEW postings are hydrated, a bounded number a run: re-reading every posting each run
+// overran the provider timeout.
 //
 // The listing is the whole catalogue or an error, so gulftalent is swept by source
 // (fullCatalog): a posting gone from the sitemap closes whatever company it belonged to.
@@ -43,10 +42,9 @@ type gulftalent struct {
 	now func() time.Time
 }
 
-// The hydration budget. A run of 500 detail pages took 15 minutes on 2026-10-30 with no page
-// refused, so 1500 is about 45 minutes against the provider's four-hour timeout. The newest 500
-// keep fresh postings arriving within a day; the backlog window of 1000 walks the ~33k older new
-// postings in about a month.
+// The hydration budget: 1500 detail pages a run fits the provider's four-hour timeout with
+// margin. The newest 500 keep fresh postings arriving within a day; the backlog window of 1000
+// walks the older new postings in about a month.
 const (
 	gulftalentNewestPerRun  = 500
 	gulftalentBacklogPerRun = 1000
@@ -162,9 +160,8 @@ func (g gulftalent) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exte
 // lists newest first), then backlogPerRun more from the rest, starting at an offset that
 // advances by the window's width every day and wraps — so successive daily runs walk the whole
 // backlog. A fixed window starved it for good: a posting whose company an ATS already covers is
-// skipped after hydration, never stored, and so stays new forever — measured 2026-10-30, 383 of
-// each run's 500 hydrations were such postings, the same ones every day, while ~33.5k live
-// postings further down the sitemap were never read.
+// skipped after hydration, never stored, and so stays new forever, and the same ones would eat
+// the window every day.
 func (g gulftalent) hydrationQueue(fresh []string) []string {
 	head := min(g.newestPerRun, len(fresh))
 	queue := slices.Clone(fresh[:head])

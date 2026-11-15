@@ -95,9 +95,8 @@ func (a avito) detail(ctx context.Context, e CompanyEntry, loc string) (Job, boo
 		Company:     e.Company,
 		Location:    location,
 		Description: sanitizeHTML(html.UnescapeString(p.Description)),
-		// Avito's JobPosting omits jobLocationType (verified across pages, incl. remote
-		// roles), so unlike radancy there is no structured remote enum to read — the title's
-		// "Удалённая работа" city is the only signal. isRemote matches the Russian stem "удал".
+		// Avito's JobPosting omits jobLocationType, so there is no structured remote enum to read;
+		// the title's "Удалённая работа" city is the only signal. isRemote matches the stem "удал".
 		Remote: isRemote(location) || isRemote(p.Title),
 		// datePosted is RFC3339 with a +03:00 offset.
 		PostedAt: parseRFC3339(p.DatePosted),

@@ -19,7 +19,7 @@ type Config struct {
 // the one thing it addresses. Case folding is not enough where a platform accepts more than
 // one FORM of board id: iCIMS boards are written both as a bare slug and as the full
 // "careers-<slug>.icims.com" host, and icimsHost resolves both to that host, so the two
-// spellings are one crawl target — 37 pairs were once stored and crawled as if they were two.
+// spellings are one crawl target.
 // Dayforce is the same shape for a different reason: its optional culture segment chooses
 // which translations of a site's postings to read, and one posting keeps the same id in every
 // culture, so two entries differing only in culture would store each shared posting twice.

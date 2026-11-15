@@ -95,8 +95,8 @@ func (s cutshort) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 			if place != "" {
 				cities[id] = append(cities[id], place)
 			}
-			// Any remote city-row makes the posting remote. The live feed (2026-11-10) never mixes
-			// arrangements within one partnerJobId and carries no hybrid, so this is a guard only.
+			// Any remote city-row makes the posting remote. The feed does not mix arrangements within one
+			// partnerJobId, so this is a guard only.
 			if job.Remote && !prev.Remote {
 				prev.Remote = true
 				prev.WorkMode = job.WorkMode

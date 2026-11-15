@@ -12,10 +12,8 @@ import (
 // jibe adapts Jibe career sites (the career-site product fronting iCIMS, e.g.
 // github.careers). The board is the site's public host (e.g. "www.github.careers"),
 // forming the JSON listing API "https://<board>/api/jobs". That list endpoint already
-// carries the full posting HTML in "description", so there is no per-job detail fetch —
-// the separate responsibilities/qualifications fields are redundant re-extractions of
-// the same body (verified: every posting's description already contains them) and are
-// intentionally not appended.
+// carries the full posting HTML in "description", so there is no per-job detail fetch; the
+// separate responsibilities/qualifications fields repeat the body and are not appended.
 
 // jibePageLimit is the listing page size. The API reports the catalogue total, so the
 // crawl pages until every posting is collected.
@@ -88,10 +86,9 @@ func (p *jibePosting) UnmarshalJSON(b []byte) error {
 // jibeWorkplaceTags maps a tag value, lowercased, to a work mode. Jibe has no workplace field
 // of its own — the record's location_type is a geocoding setting ("LAT_LNG", "ANY") on every
 // sampled posting — so a tenant that states the arrangement puts it in one of its free tag
-// slots, and which slot differs per tenant. Every entry is a label a live board publishes (189
-// boards, 2026-10-30; about a quarter of postings carry one). Labels that offer a choice
-// ("Onsite or Hybrid Required", "Remote / Hybrid / In-Office", "Remote Optional") or a
-// permission ("Virtual Permitted") are absent, so they state nothing.
+// slots, and which slot differs per tenant. Every entry is a label a live board publishes.
+// Labels that offer a choice ("Onsite or Hybrid Required", "Remote / Hybrid / In-Office",
+// "Remote Optional") or a permission ("Virtual Permitted") are absent, so they state nothing.
 var jibeWorkplaceTags = map[string]string{
 	"remote": "remote", "fully remote": "remote", "remote - us": "remote",
 	"remote within the united states": "remote", "remote within location state only": "remote",

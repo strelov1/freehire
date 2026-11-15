@@ -15,26 +15,25 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// homerun adapts Homerun (homerun.co), a Dutch ATS for small and mid-sized employers whose
-// career site lives at https://<board>.homerun.co — or on the employer's own domain
-// (vacatures.douglas.nl, werkenbijautokan.nl), which the tenant host redirects to. Whatever the
-// domain, every tenant publishes one open Atom feed at https://feed.homerun.co/<board>: every
-// open vacancy with its full body, department, location name, job type and publication time,
-// unpaginated (douglas: 106 entries). That feed is the listing.
+// homerun adapts Homerun (homerun.co), a Dutch ATS for small and mid-sized employers whose career
+// site lives at https://<board>.homerun.co, or on the employer's own domain (vacatures.douglas.nl,
+// werkenbijautokan.nl), which the tenant host redirects to. Whatever the domain, every tenant
+// publishes one open Atom feed at https://feed.homerun.co/<board>: every open vacancy with its
+// full body, department, location name, job type and publication time, unpaginated. That feed is
+// the listing.
 //
 // What the feed lacks is structured geography: its location is the name the employer gave an
 // office ("Douglas Hoofdkantoor - Nijmegen", "Preston Palace", "Remote", "Other"). The vacancy's
-// own page carries a schema.org JobPosting with that office's postal address and ISO country —
-// on 1,332 of the 2,043 pages that answered (2026-10-25); the rest carry no JobPosting or an
-// empty block, which is what Homerun emits for an office with no address. So a NEW vacancy costs
-// one page request (HydratingSource), and the page is only enrichment: when it cannot be read
-// the feed's own entry is stored as it stands. The one answer that changes the outcome is a 404:
-// 62 of those 2,499 feed entries (2.5%) named a page Homerun answers "not found" for — a
-// vacancy the feed still carries after it was taken down — and those are dropped.
+// own page carries a schema.org JobPosting with that office's postal address and ISO country, but
+// not always: an office with no address yields no JobPosting or an empty block. So a NEW vacancy
+// costs one page request (HydratingSource), and the page is only enrichment: when it cannot be
+// read the feed's own entry is stored as it stands. The one answer that changes the outcome is a
+// 404: Homerun answers "not found" for a vacancy the feed still carries after it was taken down,
+// and those are dropped.
 //
 // An unknown or switched-off tenant's feed redirects to 404.homerun.co, which answers 404:
-// ErrBoardGone. The tenant HOST is no such signal: 115 tenants whose site redirects to
-// 404.homerun.co still serve live vacancies on their feed.
+// ErrBoardGone. The tenant HOST is no such signal: tenants whose site redirects to 404.homerun.co
+// can still serve live vacancies on their feed.
 type homerun struct {
 	http homerunGetter
 }
@@ -181,11 +180,10 @@ func homerunJob(e CompanyEntry, en homerunEntry) Job {
 	}
 }
 
-// homerunAddPage folds the page's JobPosting into the Job: the office's countries, its town
-// beside the employer's own name for the office, and TELECOMMUTE as remote — the only work
-// arrangement the page states (47 of 1,332 JobPostings, 2026-10-25). Its absence says nothing,
-// so it never yields "onsite"; the location name ("Hybride", "Remote") stays in the text for the
-// parser to read.
+// homerunAddPage folds the page's JobPosting into the Job: the office's countries, its town beside
+// the employer's own name for the office, and TELECOMMUTE as remote, the only work arrangement the
+// page states. Its absence says nothing, so it never yields "onsite"; the location name
+// ("Hybride", "Remote") stays in the text for the parser to read.
 func homerunAddPage(j *Job, root *html.Node) {
 	var jp homerunJobPosting
 	if !ldJobPosting(root, &jp) {
@@ -213,10 +211,10 @@ func homerunAddPage(j *Job, root *html.Node) {
 }
 
 // homerunEmploymentType maps the feed's job type, which Homerun writes in English whatever the
-// site's language. Measured across 2,499 entries: Full-time, Full-time / Part-time, Part-time,
-// Internship, Traineeship, Freelance, Volunteer, Seasonal, Contracted, Temporary. A vacancy
-// offering both full and part time states neither; a traineeship is a junior employee, not an
-// internship, and a volunteer is unpaid — neither has a value in the vocabulary.
+// site's language (Full-time, Full-time / Part-time, Part-time, Internship, Traineeship,
+// Freelance, Volunteer, Seasonal, Contracted, Temporary). A vacancy offering both full and part
+// time states neither; a traineeship is a junior employee, not an internship, and a volunteer is
+// unpaid: neither has a value in the vocabulary.
 func homerunEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full-time":

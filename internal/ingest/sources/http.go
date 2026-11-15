@@ -18,12 +18,9 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-// The capability interfaces below are the narrow transport roles an adapter depends
-// on (interface segregation): a JSON-list adapter takes a JSONGetter, an HTML-detail
-// adapter an HTMLGetter, and so on. The real Client implements them all, so one Client
-// serves every adapter; a test fake implements only the role(s) its adapter uses
-// rather than stubbing a six-method surface. Composed roles (e.g. JSON list + HTML
-// detail) are declared as a small embedded interface at the adapter that needs them.
+// The capability interfaces below are the narrow transport roles an adapter depends on. The real
+// Client implements them all; a test fake implements only the roles its adapter uses. Composed
+// roles are declared as a small embedded interface at the adapter that needs them.
 
 // JSONGetter fetches a URL and decodes its JSON body into v.
 type JSONGetter interface {
@@ -161,23 +158,16 @@ type HTTPClient interface {
 	CookieReader
 }
 
-// maxResponseBody caps how many bytes a decoder reads from any response. It bounds a
-// hostile or buggy endpoint returning a multi-GB body (or a gzip bomb the transport
-// transparently inflates) so it cannot exhaust the worker's memory. The ceiling sits
-// well past the largest real feed: measured 2026-07-30, the biggest list bodies were
-// Lever jobgether 36.8 MiB, Greenhouse pulse 35.5 MiB and Anduril 34.6 MiB — a list
-// endpoint that inlines every description (`?content=true`) reaches tens of MiB at a
-// few thousand postings. The previous 32 MiB ceiling sat just under that, silently
-// truncating five of the largest boards; those now fetch, and a board that ever does
-// outgrow this one says so through BodyTooLargeError instead of looking transient.
+// maxResponseBody caps how many bytes a decoder reads from any response, so a hostile or buggy
+// endpoint (or a gzip bomb the transport inflates) cannot exhaust memory. It sits above the
+// largest real feed: a list endpoint that inlines every description reaches tens of MiB. A board
+// that outgrows it fails with BodyTooLargeError instead of looking transient.
 const maxResponseBody = 64 << 20 // 64 MiB
 
-// BodyTooLargeError is a response whose body ran past the size cap and was therefore
-// truncated mid-stream. It is NOT transient — the same board returns the same oversized
-// body on every run — so callers must not treat it as a fetch that might recover. A bare
-// io.LimitReader used to cap the read, which handed the decoder a truncated stream that
-// was indistinguishable from a dropped connection; Anduril's Greenhouse board then spent
-// six weeks reporting "unexpected EOF" and cooling down as if the network were at fault.
+// BodyTooLargeError is a response whose body ran past the size cap and was truncated mid-stream.
+// It is NOT transient: the same board returns the same oversized body every run, so callers must
+// not treat it as a fetch that might recover. A bare io.LimitReader would hand the decoder a
+// truncated stream indistinguishable from a dropped connection.
 type BodyTooLargeError struct {
 	URL   string
 	Limit int64
@@ -229,15 +219,13 @@ type cappedBody struct {
 // retried — it will not recover on its own.
 type Client struct {
 	httpClient *http.Client
-	// streamClient is a long-timeout transport for GetStream. The bulk feeds it serves
-	// (JobStream) throttle to a trickle, so a full window read takes minutes — far past the
-	// 15s httpClient timeout. Same SSRF-guarded transport, just patient.
+	// streamClient is a long-timeout transport for GetStream: the bulk feeds it serves throttle to a
+	// trickle. Same SSRF-guarded transport, just patient.
 	streamClient *http.Client
-	// refusalClient is an optional second transport used ONLY after the direct one has been
-	// refused (429/403). It exists because a refusal is the one failure a different egress IP
-	// can actually fix, and because the proxy behind it is a single shared IP: routing a whole
-	// crawl through it would concentrate the same burst on a weaker address and starve the
-	// providers that are genuinely IP-blocked. Nil for every client but the opted-in few.
+	// refusalClient is an optional second transport used ONLY after the direct one was refused
+	// (429/403), the one failure a different egress IP can fix. The proxy behind it is a single
+	// shared IP, so routing a whole crawl through it would starve the providers that are genuinely
+	// IP-blocked. Nil for every client but the opted-in few.
 	refusalClient *http.Client
 	userAgent     string
 	maxRetries    int
@@ -259,9 +247,8 @@ func (c *Client) bodyLimit() int64 {
 	return maxResponseBody
 }
 
-// streamTimeout bounds a GetStream read. Generous because the throttled bulk feeds it
-// serves trickle in over many minutes; the per-run page/window budget keeps the actual
-// transfer well under this ceiling, which is only a stuck-connection backstop.
+// streamTimeout bounds a GetStream read. It is a stuck-connection backstop; the per-run
+// page/window budget keeps real transfers well under it.
 const streamTimeout = 15 * time.Minute
 
 // GetStream issues a guarded GET and hands the raw response body to fn for streaming
@@ -308,10 +295,9 @@ func (c *Client) GetJSONWithHeaders(ctx context.Context, url string, headers map
 	})
 }
 
-// GetJSONOrNoContent behaves like GetJSONWithHeaders, except that a 204 No Content answer is
-// a success that decodes nothing and reports false — for an API that answers an empty search
-// with 204 rather than an empty list (France Travail). Without it the empty body would read as a
-// dropped connection and be retried until the request failed.
+// GetJSONOrNoContent behaves like GetJSONWithHeaders, except that a 204 No Content answer is a
+// success that decodes nothing and reports false, for an API that answers an empty search with 204
+// (France Travail). Otherwise the empty body would read as a dropped connection and be retried.
 func (c *Client) GetJSONOrNoContent(ctx context.Context, url string, headers map[string]string, v any) (bool, error) {
 	found := false
 	err := c.do(ctx, request{
@@ -351,14 +337,12 @@ func (c *Client) GetJSONResolved(ctx context.Context, url string, v any) (string
 	return final, err
 }
 
-// xmlAccept is the Accept header of the XML getters. Naming text/xml beside application/xml is
-// what some servers require: Dualoo's sitemaps and the Croatian Employment Service's RSS answer
-// 406 to application/xml alone, because they serve text/xml (2026-10-29).
+// xmlAccept is the Accept header of the XML getters. Some servers (Dualoo's sitemaps, the Croatian
+// Employment Service's RSS) answer 406 to application/xml alone because they serve text/xml.
 const xmlAccept = "application/xml, text/xml"
 
-// newXMLDecoder decodes a feed in the charset its XML declaration names. encoding/xml reads
-// only UTF-8 and fails outright on any other declared encoding ("ISO-8859-2" on the Croatian
-// Employment Service's RSS), which made every such feed unreadable through GetXML.
+// newXMLDecoder decodes a feed in the charset its XML declaration names. encoding/xml reads only
+// UTF-8 and fails on any other declared encoding (e.g. ISO-8859-2).
 func newXMLDecoder(r io.Reader) *xml.Decoder {
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charset.NewReaderLabel
@@ -426,22 +410,10 @@ func (c *Client) GetXMLResolved(ctx context.Context, url string, v any) (string,
 	return final, err
 }
 
-// maxTextBody caps the raw body GetText reads — tighter than the client's own
-// maxResponseBody, because these endpoints are markup a caller slices rather than a feed
-// that inlines every posting; the cap keeps a runaway page from ballooning memory.
-//
-// The ceiling is a measurement, and the previous one (2 MiB, "the largest measured in
-// production is ~880 KB") was outgrown rather than wrong. crowd.yandex.ru/vacancies renders
-// its whole listing into one page and reached 2,109,478 bytes on 2026-09-07 — 0.6% over,
-// enough to fail every crawl of that provider since 2026-09-06 and to keep failing as the
-// listing grows. A page that inlines its listing has no natural size, so the new figure
-// carries deliberate headroom rather than tracking the current largest: 8 MiB is 4x the
-// page that broke it and still 8x tighter than the feed cap, which is the distinction this
-// constant exists to draw.
-//
-// Growing past THIS one is reported, not silent (see GetText below), so the next page to
-// outgrow it says so with its size instead of returning short markup that reads like an
-// employer with no ATS link.
+// maxTextBody caps the raw body GetText reads. It is tighter than maxResponseBody because these
+// endpoints are markup a caller slices, not a feed. A page that inlines its listing has no natural
+// size, so the cap carries deliberate headroom rather than tracking the current largest. Growing
+// past it is reported (see GetText), not silent.
 const maxTextBody = 8 << 20 // 8 MiB
 
 // GetText fetches url and returns its raw response body as a string (capped at
@@ -449,12 +421,10 @@ const maxTextBody = 8 << 20 // 8 MiB
 // themselves rather than parse as a DOM (paylocity, taleo, infojobs, …) and the
 // harvest/board-resolve probes that regex-scan a careers page for an embedded ATS link.
 //
-// A body past the cap is a *BodyTooLargeError alongside the bytes read so far: truncation
-// is REPORTED, never silent. A caller slicing markup for a link cannot tell a page that
-// does not carry one from a page whose copy was cut short, and the answers differ — the
-// first is a fact about the employer, the second is a fact about this fetch. The one caller
-// that can genuinely use a truncated body says so explicitly (cmd/harvest-boards' Common
-// Crawl sweep, whose pages are independent JSON lines).
+// A body past the cap is a *BodyTooLargeError alongside the bytes read so far: truncation is
+// REPORTED, never silent. A caller slicing markup for a link cannot tell a page that carries none
+// from a page cut short. The one caller that can use a truncated body says so explicitly
+// (cmd/harvest-boards' Common Crawl sweep, whose pages are independent JSON lines).
 func (c *Client) GetText(ctx context.Context, url string) (string, error) {
 	return c.GetTextWithHeaders(ctx, url, nil)
 }
@@ -470,12 +440,9 @@ func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map
 		accept:  "text/html",
 		headers: headers,
 		decode: func(resp *http.Response) error {
-			// cappedReader rather than a bare io.LimitReader — the shape becf1d41 removed
-			// everywhere else, and which this file's BodyTooLargeError doc records as the
-			// cause of Anduril's six-week "unexpected EOF". do's own cap is 64 MiB and can
-			// never fire for a 2 MiB read, so without this the truncation had no signal at
-			// all. The bytes read so far are kept: io.ReadAll returns them with the error,
-			// and a caller that can use a prefix is entitled to the prefix.
+			// cappedReader rather than a bare io.LimitReader, so truncation is signalled: do's own 64 MiB
+			// cap can never fire for this read. The bytes read so far are kept for a caller that can use a
+			// prefix.
 			b, err := io.ReadAll(newCappedReader(resp.Body, url, maxTextBody))
 			body = string(b)
 			return err
@@ -698,10 +665,9 @@ type request struct {
 func (c *Client) do(ctx context.Context, r request) error {
 	var lastErr error
 	delay := c.retryDelay
-	// refusalTried records that the fallback egress has had its one turn. A refusal says the
-	// platform is there and is declining THIS IP, so a second IP is worth exactly one try;
-	// spending more of a shared proxy on a request the platform is refusing anyway would take
-	// the budget from the providers that have no direct path at all.
+	// refusalTried records that the fallback egress has had its one turn. A refusal means the
+	// platform is declining THIS IP, so a second IP is worth one try; more would drain the shared
+	// proxy budget from providers that have no direct path.
 	refusalTried := false
 	client := c.httpClient
 	var host string

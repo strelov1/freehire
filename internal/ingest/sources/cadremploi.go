@@ -19,9 +19,9 @@ import (
 )
 
 // cadremploi adapts Cadremploi (www.cadremploi.fr), France's job board for managers and
-// professionals ("cadres"): ~30k open postings from employers, recruitment firms and franchise
-// networks, every trade, ~10% technical. It is boardless and an aggregator — the employer is read
-// per posting. See the "Cadremploi traps" section of AGENTS.md for the measurements behind each
+// professionals ("cadres"): postings from employers, recruitment firms and franchise
+// networks, every trade, mostly non-technical. It is boardless and an aggregator — the employer is read
+// per posting. See the "Cadremploi traps" section of AGENTS.md for the reasoning behind each
 // rule.
 //
 // The posting set is the site's paged "online postings" sitemap, which carries only each
@@ -54,30 +54,27 @@ const (
 	cadremploiHost    = "www.cadremploi.fr"
 	cadremploiBaseURL = "https://" + cadremploiHost
 	// cadremploiSitemapURL is one page of the online-postings sitemap, numbered from 1. The
-	// sitemap index names only the first page; the second exists all the same (30,149 postings
-	// over two pages on 2026-10-28), and the page past the last answers 404.
+	// sitemap index names only the first page; the second exists all the same,
+	// and the page past the last answers 404.
 	cadremploiSitemapURL = cadremploiBaseURL + "/sitemap/002_job-postings-online-%d.xml"
-	// cadremploiMaxSitemapPages is a safety ceiling: the set filled two pages.
+	// cadremploiMaxSitemapPages is a safety ceiling.
 	cadremploiMaxSitemapPages = 20
 
 	// cadremploiRequestInterval paces every request of a run, sitemap and posting page alike, at
-	// one a second — a courtesy ceiling, not a measured limit.
+	// one a second — a courtesy ceiling, not a known limit.
 	cadremploiRequestInterval = time.Second
 	cadremploiDetailWorkers   = 2
 	// cadremploiRetries bounds how often a refused (403/429) or failed (5xx) request is asked
-	// again: one page in six drew a 403 at one a second, and five of six of those were served on
-	// a second try two seconds later.
+	// again: an occasional 403 at one request a second clears on a second try shortly after.
 	cadremploiRetries      = 3
 	cadremploiRetryBackoff = 3 * time.Second
 
-	// cadremploiFreshPerRun and cadremploiBacklogPerRun split one run's 1,200 posting pages
-	// (~230 KB each, ~20 minutes at one a second, leaving the rest of the scheduler's default
-	// 2,400 s crawl budget to the two sitemap pages and the writes after the fetch) into
-	// hydrationLanes' two lanes. The sitemap names no employer and no title, so nothing can be
+	// cadremploiFreshPerRun and cadremploiBacklogPerRun split one run's posting pages
+	// (leaving the rest of the scheduler's crawl budget to the sitemap pages and the writes after
+	// the fetch) into hydrationLanes' two lanes. The sitemap names no employer and no title, so nothing can be
 	// judged before a page is bought, and a posting the pipeline discards unsaved (an employer
 	// already covered first-party) stays unseen and would be bought again on every run;
-	// newest-first alone would let those fill the budget for good. ~2k postings are touched a
-	// day, so the first ~25 runs drain the catalogue.
+	// newest-first alone would let those fill the budget for good.
 	cadremploiFreshPerRun    = 900
 	cadremploiBacklogPerRun  = 300
 	cadremploiDeadlineMargin = 5 * time.Minute
@@ -113,7 +110,7 @@ type cadremploiPosting struct {
 	lastmod time.Time
 }
 
-// cadremploiID matches the posting id the URL's offreId parameter carries (18 digits today).
+// cadremploiID matches the posting id the URL's offreId parameter carries.
 var cadremploiID = regexp.MustCompile(`^\d{6,20}$`)
 
 // cadremploiParsePosting reads a sitemap entry, or ok=false when it is not a posting URL on the
@@ -282,8 +279,7 @@ type cadremploiLD struct {
 }
 
 // cadremploiExpired is the notice an expired posting's page shows, under HTTP 200 and without a
-// JobPosting. The sitemap still names such postings for a while: one of fifteen sampled from its
-// most recently touched entries had expired that day.
+// JobPosting. The sitemap still names such postings for a while.
 const cadremploiExpired = "cette offre est expirée"
 
 // errCadremploiNoPosting marks a page that answered without a JobPosting. It is not the site's
@@ -372,7 +368,7 @@ func cadremploiJob(ld cadremploiLD, p cadremploiPosting) (Job, bool) {
 }
 
 // cadremploiBlockTag spots block markup in a JobPosting field. The site writes a posting's text
-// the way its poster typed it: 31 of 49 sampled descriptions carried markup, and many of the rest
+// the way its poster typed it: some descriptions carry markup, and many of the rest
 // are plain text whose line breaks are its only structure, here and there with a stray <br> or
 // inline tag — so it is not escaped as literal text, only given its paragraphs.
 var cadremploiBlockTag = regexp.MustCompile(`(?i)<(p|ul|ol|li|div|table|h[1-6])[\s/>]`)

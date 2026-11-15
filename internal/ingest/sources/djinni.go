@@ -26,16 +26,15 @@ const (
 	// djinniListBase is the guest listing; the caller appends the "page=N" (1-based) marker,
 	// which doubles as the end-of-feed sentinel checked against the resolved final URL.
 	djinniListBase = "https://djinni.co/jobs/?"
-	// djinniMaxPages caps pagination as a backstop, comfortably above the observed corpus
-	// (~488 pages). The empty-page stop below is the primary terminator; this only bounds a
-	// pathological feed that never empties.
+	// djinniMaxPages caps pagination as a backstop, comfortably above the real corpus.
+	// The empty-page stop below is the primary terminator; this only bounds a feed that never empties.
 	djinniMaxPages = 600
 )
 
 // djinniPageDelay paces the sequential page crawl. Djinni rate-limits a fast burst from a
-// datacenter IP with a 403 (a no-delay crawl 403'd around page ~200 from prod, while the same
-// pages spaced ~1s apart return 200), so we throttle to stay under the limit and be a polite
-// crawler; partial-on-error bounds the damage if a 403 still lands. A var so tests zero it.
+// datacenter IP with a 403 (a no-delay crawl 403s a couple of hundred pages in, while pages
+// spaced ~1s apart return 200), so we throttle; partial-on-error bounds the damage if a 403
+// still lands. A var so tests zero it.
 var djinniPageDelay = 600 * time.Millisecond
 
 // NewDjinni builds the djinni listing adapter over the given HTML client.
@@ -47,8 +46,7 @@ func (djinni) boardless() {}
 
 func (djinni) aggregator() {}
 
-// djinni's listing names only about the last month of postings (measured 2026-10-29: one stale
-// posting in eight was still live, every one of them posted earlier than that), so an older
+// djinni's listing names only about the last month of postings, so an older
 // live posting is never listed again; cmd/liveness reads the job page's inactive-ad alert.
 func (djinni) livenessProbed() {}
 
@@ -143,7 +141,7 @@ type djinniPosting struct {
 // Leaving a stated area unread is not neutral: the served facet falls back to the enrichment
 // guess whenever the dictionary pins nothing (see internal/job/jobview.geoFacet), and the LLM
 // reads "work ... from any part of the world" out of a benefits paragraph, publishing a
-// Europe-only role as open worldwide (1012 open postings at the time of the fix).
+// Europe-only role as open worldwide.
 func (p djinniPosting) toJob() (Job, bool) {
 	if p.Identifier == 0 || p.URL == "" || p.HiringOrganization.Name == "" {
 		return Job{}, false
@@ -179,7 +177,7 @@ var djinniCardLabels = map[string]string{
 }
 
 // djinniCardModes reads the work mode of each card on a listing page, keyed by posting id. The
-// JSON-LD marks only remote postings (1,130 of 5,108 open djinni rows had no mode, #4370), while
+// JSON-LD marks only remote postings (many open rows had no mode), while
 // a card (div#job-item-<id>) carries the label in its metadata row (div.fw-medium).
 func djinniCardModes(root *html.Node) map[int64]string {
 	modes := map[int64]string{}

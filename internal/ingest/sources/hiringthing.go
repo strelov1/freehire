@@ -21,10 +21,10 @@ import (
 // slug can exist under two resellers. Every reseller domain serves the identical application,
 // so one adapter covers all of them and no per-domain registry is needed.
 //
-// A board is listed on its site ROOT in full: HiringThing renders every open posting on one
-// page (no pagination — the listing's own filter state declares showAll, and across 80 live
-// boards the posting anchors matched the filter state's position count exactly), so enumeration
-// costs one request and the permalinks it carries are the complete live set.
+// A board is listed on its site ROOT in full: HiringThing renders every open posting on one page
+// (no pagination; the listing's own filter state declares showAll and its position count matches
+// the posting anchors), so enumeration costs one request and the permalinks it carries are the
+// complete live set.
 //
 // A posting page carries the platform's own job record as JSON in the props of its
 // ApplyButtonGroup React component: title, html_description, posted_at, location, and the
@@ -35,11 +35,9 @@ import (
 // page, so it is left nil — mapping it would be a change to that contract, not to this adapter.)
 //
 // The description lives only on that page, so the adapter hydrates (HydratingSource): a detail
-// request is spent on a posting the catalogue does not already have, never on re-listing one it
-// has. The boards are small — a median of four postings, measured over 80 live ones — but there
-// are thousands of them, and a posting page is ~40 KB against the listing's ~15 KB, so the
-// difference is a run that costs a request per POSTING and one that costs a request per NEW
-// posting.
+// request is spent only on a posting the catalogue does not already have. Boards are small but
+// there are thousands of them, and a posting page is several times the listing's size, so a
+// request per NEW posting is far cheaper than one per posting.
 type hiringthing struct {
 	http HTMLGetter
 }

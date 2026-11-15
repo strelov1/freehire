@@ -64,11 +64,9 @@ func NewBairesDev(c bairesDevHTTP, referral string) Source {
 // referral dashboard by hand, and a malformed one is a misconfiguration to notice.
 var bairesDevReferrerCodePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// applyURL hangs the configured referrer code off the apply link, which is all BairesDev needs:
-// its apply flow keeps the parameter across the hop to the login/register step (verified live —
-// clicking Apply on a job carrying ?referrer=<code> lands on
-// /login?careerId=…&jobId=…&referrer=<code>), so a candidate who signs up from our link is
-// attributed. An unset code leaves the plain apply link alone.
+// applyURL hangs the configured referrer code off the apply link. BairesDev's apply flow keeps
+// the parameter across the hop to the login/register step, so a candidate who signs up from our
+// link is attributed. An unset code leaves the plain apply link alone.
 func (b bairesdev) applyURL(applyLink string) string {
 	if b.referral == "" {
 		return applyLink

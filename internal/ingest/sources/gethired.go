@@ -9,8 +9,7 @@ import (
 // gethired adapts the GetHired ATS, whose career sites live on easyapply.co. Each employer is
 // a tenant subdomain (<board>.easyapply.co) that publishes every open position in one RSS
 // document at /rss, body inline per item — one GET per board, no pagination and no detail
-// request. The feed is the complete listing: measured 2026-10-20, a tenant whose HTML career
-// page splits 84 postings over two pages of 50 carries all 84 in its feed.
+// request. The feed is the complete listing even when the HTML career page paginates.
 //
 // A posting's identity is the slug in its <guid> (https://easyapply.co/job/<slug>). The
 // platform mints it once, globally unique across tenants (a repeated title gets a numeric

@@ -14,10 +14,7 @@ import (
 
 // jettycloud adapts JettyCloud's own careers site (jettycloud.com/vacancies), a single-company
 // source with no per-tenant board id (boardless). It is here rather than under an ATS because
-// the employer runs no ATS a crawl can reach: probed 2026-09-23, its name resolves to nothing
-// on greenhouse, lever, huntflow, hurma and teamtailor, and the four vendor hosts that DID
-// answer 200 (ashby, recruitee, bamboohr, peopleforce) each served the vendor's own marketing
-// page rather than a tenant. The site is the only place these postings exist.
+// the employer runs no ATS a crawl can reach; the site is the only place these postings exist.
 //
 // The site is a Next.js app whose GraphQL endpoint is not reachable from outside — every path
 // serves the SPA shell — so a posting's fields are read from the Apollo cache Next.js embeds in
@@ -110,11 +107,9 @@ type jettyVacancy struct {
 const jettyVacancyKey = "Vacancy:"
 
 // detail reads one vacancy page. ok is false when the page carries no vacancy, which is not a
-// failure: a CLOSED posting keeps its URL, answers 200 with the ordinary layout, and simply
-// drops out of the Apollo cache — measured 2026-09-23 on /vacancies/go-developer and
-// /vacancies/frontend-developer-billing-team-1, both still linked from search results. Treating
-// that page as a posting would write a job with no id and no title; treating it as an error
-// would fail a crawl that merely raced a closure. The listing is the source of truth.
+// failure: a CLOSED posting keeps its URL, answers 200 with the ordinary layout, and drops out of
+// the Apollo cache. Treating it as a posting would write a job with no id and title; treating it as
+// an error would fail a crawl that merely raced a closure. The listing is the source of truth.
 func (j jettycloud) detail(ctx context.Context, e CompanyEntry, pageURL string) (Job, bool) {
 	root, err := j.http.GetHTML(ctx, pageURL)
 	if err != nil {
@@ -147,12 +142,9 @@ func jettyVacancyURL(slug, fetched string) string {
 // jettyVacancyOf pulls the page's OWN vacancy out of its Apollo cache, identified by the slug
 // the page was fetched under.
 //
-// The cache holds more than one: a posting carries its `related` vacancies, and those are in
-// the same normalised store under the same "Vacancy:<id>" key shape. Taking whichever comes
-// first is not merely imprecise — Go randomises map iteration, so the adapter would return a
-// different posting on each run, and a related entry carries no body, so the description would
-// sometimes be empty. Measured against the live site before this was keyed on the slug: two of
-// three pages resolved to the same id and one of them had no description.
+// The cache holds more than one: a posting carries its `related` vacancies under the same
+// "Vacancy:<id>" key shape. Taking whichever comes first would return a different posting per run
+// (Go randomises map iteration), and a related entry carries no body.
 //
 // A page whose cache names no vacancy matching its slug yields nothing, which is how a closed
 // posting is recognised (see detail).

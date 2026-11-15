@@ -291,16 +291,12 @@ func crawlAllPagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageU
 // pagedLinks is the shared paging loop. failOnGap makes a later-page fetch failure fail the whole
 // crawl (crawlAllPagedLinks) instead of ending the walk with what was gathered (crawlPagedLinks).
 //
-// The loop has three exits: a page erroring, a page adding no new link (the natural end — the
-// tail, or a board clamping ?page=N past its last page), or maxPages running out while pages are
-// still yielding new links. Only the first two are a genuine end of the listing; the third means
-// the walk stopped short of one, and — unlike a page error, which is always surfaced (failOnGap)
-// or documented as a partial-result contract (crawlPagedLinks) — used to return (out, nil)
-// indistinguishable from a genuinely small catalogue. For crawlAllPagedLinks (failOnGap), whose
-// caller relies on exactly that distinction to keep a fullCatalog source-scoped sweep from
-// mass-closing everything past the cap (see sources.fullCatalog), this now errors instead of
-// succeeding silently; for crawlPagedLinks it is logged, since that caller already accepts a
-// partial listing by design.
+// The loop has three exits: a page erroring, a page adding no new link (the natural end: the tail,
+// or a board clamping ?page=N past its last page), or maxPages running out while pages still yield
+// new links. Only the first two are a genuine end of the listing. The third is an error under
+// failOnGap, whose caller (a fullCatalog source-scoped sweep, see sources.fullCatalog) must not
+// mass-close everything past the cap; for crawlPagedLinks it is logged, since that caller accepts
+// a partial listing by design.
 func pagedLinks(ctx context.Context, get HTMLGetter, maxPages int, pageURL func(page int) string, links func(*html.Node) []string, failOnGap bool) ([]string, error) {
 	var out []string
 	seen := make(map[string]bool)

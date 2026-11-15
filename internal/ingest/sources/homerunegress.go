@@ -17,12 +17,10 @@ var errHomerunStopped = errors.New("homerun: the crawl host was refused earlier 
 // homerunEgress picks the egress every Homerun request of one run takes, and owns the one
 // decision no single board can make: what to do once Homerun's edge refuses the crawl host.
 //
-// That refusal is not per request. Measured on host2 2026-10-25..27: five of six runs drew a
-// first 403 between 60 and 220 seconds in (~120 to ~440 feed requests at 2 a second), and from
-// then on every request was refused, 500 ms apart, until the run ran out of boards — 138, 215,
-// 209, 158 and 201 failed boards. The block had lifted by the next run, hours later, and through
-// the rotating proxy gateway the same feeds answered 200 all along. Sending the rest of a run
-// into the refusal both fails every board it touches and very likely keeps the block in force.
+// That refusal is not per request: Homerun's edge accepts the crawl host for a while, then answers
+// every further request with a refusal until the run ends, while the rotating proxy gateway keeps
+// getting 200. Sending the rest of a run into the refusal both fails every board it touches and
+// very likely keeps the block in force.
 //
 // So the first 403 or 429 on the direct IP moves the whole rest of the run — and the request that
 // drew it — to the proxy lane: the ROTATING gateway, a fresh exit per request, so no single

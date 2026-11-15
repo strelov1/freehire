@@ -26,7 +26,7 @@ import (
 // close every still-open ad the incremental stream did not re-report).
 //
 // Consequence (a documented seam, not a bug): the stream only carries CHANGES, so the
-// catalogue is a rolling window of recent Swedish postings, not the full ~40k back-catalogue.
+// catalogue is a rolling window of recent Swedish postings, not the full back-catalogue.
 // Seeding the full history would need a one-time /snapshot bootstrap — the throttled,
 // multi-hour path deliberately not built here.
 //
@@ -102,11 +102,10 @@ func (s jobtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // upsert.
 //
 // The window is spooled to a temporary file before anything is emitted. Every emit is a
-// database write from the crawl host, a few a second, and the window runs to ~18k items
-// (80 MB on 2026-10-31); decoding while writing held the download open behind the writes until
-// the stream client's timeout ended it a few thousand items in. JobStream lists live ads first
-// and removals after them, so that cut fell before every removal: from 2026-10-27 no run closed
-// anything, and a removal that ages out of the window is never sent again.
+// database write from the crawl host, and decoding while writing held the download open behind
+// the writes until the stream client's timeout cut it off. JobStream lists live ads first and
+// removals after, so that cut fell before every removal and nothing was closed; a removal that
+// ages out of the window is never sent again.
 //
 // Removals go first for the same reason — they are the only close signal this source has,
 // while a live ad not reached this run is re-sent by every run for the window's 72h. An ad the

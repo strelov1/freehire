@@ -20,10 +20,9 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// itjobs adapts ITJobs.pt (www.itjobs.pt), Portugal's IT-only job board: ~825 public postings,
-// every one technical, posted by employers and IT staffing consultancies alike. It is boardless
-// and an aggregator — the employer is read per posting. See the "ITJobs.pt traps" section of
-// AGENTS.md for the measurements behind each rule.
+// itjobs adapts ITJobs.pt (www.itjobs.pt), Portugal's IT-only job board, posted by employers
+// and IT staffing consultancies alike. It is boardless and an aggregator (the employer is read
+// per posting). See the "ITJobs.pt traps" section of AGENTS.md.
 //
 // The listing is the site's own paginated /emprego walk, 16 cards a page, which spell each
 // posting's title, employer, places and work model — everything but the body. The body is bought
@@ -51,13 +50,11 @@ const (
 	// itjobsDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the
 	// pace.
 	itjobsDetailWorkers = 2
-	// itjobsMaxPages is a safety ceiling on the walk: the listing ran to 52 pages on 2026-10-27
-	// and answers a card-less page (HTTP 200) past its end.
+	// itjobsMaxPages is a safety ceiling on the walk; the listing answers a card-less page
+	// (HTTP 200) past its end.
 	itjobsMaxPages = 200
-	// itjobsMaxNewPerRun bounds how many unseen postings one run reads: the ~52-page walk takes
-	// about a minute and 1,200 posting pages twenty more, inside the scheduler's default 2,400 s
-	// crawl budget with room for the writes. It covers the whole catalogue, so the first run
-	// reads all of it; later runs read the day's ~30-50 new postings.
+	// itjobsMaxNewPerRun bounds how many unseen postings one run reads, so the walk plus posting
+	// pages fit the scheduler's default 2,400 s crawl budget with room for the writes.
 	itjobsMaxNewPerRun   = 1200
 	itjobsDeadlineMargin = 5 * time.Minute
 )

@@ -32,36 +32,33 @@ import (
 //	POST /core/api/v1/harri_search/search_jobs   {"brand_level_ids":[id],"start":K,"size":N,...}
 //	GET  /core-reader/api/v1/profile/job/<id>    -> the posting, with its HTML description
 //
-// Traps, all verified live 2026-10-20 from a residential IP:
+// Traps:
 //
-//   - A brand is a TREE. A group's brand id lists every posting of every brand under it — Jollibee
-//     North America's 198 postings sit under 120 store-level brands ("JB Mira Mesa"), Ghai
-//     Management's 924 under 273 ("043397-Mont Belvieu,TX"). So the posting's own brand name is a
-//     store, not an employer, and the employer is the board's catalogue company. A posting's URL
-//     does carry the STORE's slug, which is why a sample apply URL can name a slug (`Taco-Social`)
-//     different from the career page that listed it (`bicos`).
+//   - A brand is a TREE. A group's brand id lists every posting of every brand under it, so
+//     the posting's own brand name is a store ("JB Mira Mesa"), not an employer, and the
+//     employer is the board's catalogue company. A posting's URL carries the STORE's slug,
+//     which can differ from the career page that listed it.
 //   - The slug lookup is case-insensitive, and an unknown slug answers HTTP 400 ("Slug not found"),
 //     not 404 — that is read as the board being gone.
 //   - `start` pages the search; `from`, `offset` and `page` are silently ignored and answer the
-//     first page again. `hits` is the exact total (Panera: 183, read back as 183 distinct ids),
-//     and `size` is honoured up to at least 500.
+//     first page again. `hits` is the exact total, and `size` is honoured up to at least 500.
 //   - The listing row carries title, structured locations and publish time but no body, hence
 //     HydratingSource. The detail answers for expired postings too (`status: EXPIRED`), so a
 //     detail that is not PUBLISHED is read as gone.
 //   - `Timing` is where the platform states both the schedule and the work arrangement:
-//     FULL_TIME / PART_TIME beside FULLY_REMOTE / HYBRID_REMOTE (a Wendy's UK district-manager
-//     posting carries FULL_TIME + FULLY_REMOTE). Most postings carry both schedules at once,
-//     which states nothing, so an employment type is taken only from a lone one.
+//     FULL_TIME / PART_TIME beside FULLY_REMOTE / HYBRID_REMOTE. Most postings carry both
+//     schedules at once, which states nothing, so an employment type is taken only from a lone
+//     one.
 //   - `country_code` is not always ISO: the UK is "UK". It is normalised through the location
 //     dictionary, falling back to the country name.
 //   - The compensation block is not mapped: "Up to" postings carry their ceiling in
 //     `compensation_from`, and the currency is only in the detail's brand settings, null on some
 //     brands — reading it would be a guess.
-//   - No metering was met: 100 detail requests at 8 in flight (~23 req/s) were all answered 200.
-//     The crawl is still paced (harriRequestInterval) because a group's bootstrap is one detail
-//     request per posting (KFC's brand lists 953) and nothing is known about the API's budget.
-//   - This is an hourly frontline segment (cooks, servers, store managers); its technical yield is
-//     expected to be near zero, like Workstream's.
+//   - No metering was met at ~23 req/s of detail requests. The crawl is still paced
+//     (harriRequestInterval) because a group's bootstrap is one detail request per posting
+//     (hundreds to ~1,000) and nothing is known about the API's budget.
+//   - This is an hourly frontline segment (cooks, servers, store managers); its technical yield
+//     is expected to be near zero, like Workstream's.
 type harri struct {
 	http harriHTTP
 }
@@ -91,8 +88,8 @@ const (
 	harriMaxPages  = 100
 	harriPublished = "PUBLISHED"
 	// harriRequestInterval paces every request of a run (slug, search pages, details) through one
-	// bucket. 100 detail requests at ~23 req/s drew no refusal, so 5 req/s sits far under what
-	// was measured while bounding a group bootstrap (KFC's ~950 postings) to a few minutes.
+	// bucket: 5 req/s sits far under the rate that drew no refusal while bounding a group
+	// bootstrap to a few minutes.
 	harriRequestInterval = 200 * time.Millisecond
 	harriRequestBurst    = 2
 )

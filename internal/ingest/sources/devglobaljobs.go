@@ -28,10 +28,9 @@ const (
 	devglobaljobsPageSize  = 100
 	devglobaljobsMaxPages  = 100 // bounds pagination against runaway loops; offset is clamped at 10,000
 	devglobaljobsDetailURL = "https://devglobaljobs.com/api/v1/jobs/%s"
-	// devglobaljobsSweepGrace is 30 days because the API clamps offset pagination at 10,000,
-	// which covers only the newest ~36 hours of the feed. Postings older than ~1.5 days drop
-	// out of the reachable crawl window and cannot have their seen timestamp refreshed; a wider
-	// grace period prevents the sweep from prematurely closing active jobs.
+	// devglobaljobsSweepGrace is wide because the API clamps offset pagination at 10,000, which
+	// reaches only the newest day or two of the feed; older postings cannot be re-seen, and a
+	// short grace would let the sweep close them while still active.
 	devglobaljobsSweepGrace = 30 * 24 * time.Hour
 )
 

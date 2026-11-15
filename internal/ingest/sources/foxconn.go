@@ -23,7 +23,7 @@ import (
 // state a posting is technical (foxconnTechTracks).
 //
 // Not fullBoardListing: the single response states no total to check it against, the same
-// reason quanta, whose one-response dump was once seen truncated, does not claim it.
+// reason quanta, whose one-response dump can truncate, does not claim it.
 type foxconn struct {
 	http JSONGetter
 }

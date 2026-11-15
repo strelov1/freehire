@@ -12,17 +12,12 @@ import (
 )
 
 // russianTrustedRootCA is the "Russian Trusted Root CA" certificate (Ministry of Digital
-// Development), read off job.alfabank.ru's own served chain on 2026-09-01 rather than
-// downloaded from a third party — the server presents the full chain, so the bytes come
-// from the same connection the trust is being extended to. extraroot_test.go pins its
-// SHA-256, so replacing this file is a visible, failing edit.
+// Development), read off job.alfabank.ru's own served chain rather than downloaded from a third
+// party. extraroot_test.go pins its SHA-256, so replacing this file is a visible, failing edit.
 //
-// Alfa-Bank's careers API moved to a certificate this CA issued, which no standard trust
-// store carries, so the crawl failed at the TLS handshake before any request went out —
-// 2,416 vacancies unreachable since 2026-07-29. ptsecurity.com and hr.tochka.com serve
-// certificates chaining to the same root (verified from hydra on 2026-10-14), and so does
-// www.tbank.ru (verified from the crawl host on 2026-10-21: its served root matched this
-// file's SHA-256 and the copy published on gu-st.ru).
+// Alfa-Bank's careers API moved to a certificate this CA issued, which no standard trust store
+// carries, so the crawl failed at the TLS handshake. ptsecurity.com, hr.tochka.com and
+// www.tbank.ru serve certificates chaining to the same root.
 //
 //go:embed russian_trusted_root_ca.pem
 var russianTrustedRootCA []byte
@@ -59,9 +54,8 @@ func newRussianTrustedRootClient(timeout time.Duration) *Client {
 		pool = x509.NewCertPool()
 	}
 	if !pool.AppendCertsFromPEM(russianTrustedRootCA) {
-		// A PEM that does not parse leaves the client with the system store alone, which
-		// is the pre-change behaviour: these adapters fail at the handshake, loudly, and
-		// no other source is affected.
+		// A PEM that does not parse leaves the client with the system store alone: these adapters
+		// fail at the handshake, loudly, and no other source is affected.
 		log.Printf("sources: embedded Russian Trusted Root CA did not parse; alfabank, ptsecurity and tochka will keep failing their TLS handshakes")
 	}
 

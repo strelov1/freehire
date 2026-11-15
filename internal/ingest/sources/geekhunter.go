@@ -31,8 +31,7 @@ func (geekhunter) Provider() string { return "geekhunter" }
 const geekhunterBase = "https://www.geekhunter.com/pt"
 
 // fullBoardListing: the board's /jobs page inlines every open posting in one ItemList ld+json
-// block (verified live against boards up to 10 postings, matching numberOfItems exactly; no
-// pagination observed), so a listing failure aborts the whole Fetch rather than silently
+// block (matching numberOfItems; no pagination), so a listing failure aborts the whole Fetch rather than silently
 // returning a partial board.
 func (geekhunter) fullBoardListing() {}
 
@@ -69,8 +68,7 @@ func (s geekhunter) detail(ctx context.Context, e CompanyEntry, loc string) (Job
 		location = p.JobLocation[0].Address.Location()
 	}
 	// GeekHunter carries no structured remote flag: a fully remote posting simply omits
-	// jobLocation entirely (verified live against a "REMOTO" posting, which had no jobLocation
-	// at all), so that absence is the structured signal here. isRemote(location) only ever
+	// jobLocation entirely (a "REMOTO" posting has none), so that absence is the structured signal here. isRemote(location) only ever
 	// fires for the rare posting whose location string itself mentions "remote" in English —
 	// GeekHunter's own wording is Portuguese ("remoto"), which it does not match.
 	remote := len(p.JobLocation) == 0
