@@ -80,7 +80,9 @@ describe('the job page action strip', () => {
  *  the title is scrolled away. Anchored on the icon-only Save only it renders, and cut at
  *  the row's own closing tag — nothing inside it opens a `div`. */
 function pinnedHeaderButtons(): string {
-  const open = JOB_VIEW.indexOf('<JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />');
+  const open = JOB_VIEW.indexOf(
+    '<JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />',
+  );
   if (open === -1) return '';
   const close = JOB_VIEW.indexOf('</div>', open);
   return close === -1 ? '' : JOB_VIEW.slice(open, close);
