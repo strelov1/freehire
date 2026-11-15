@@ -13,4 +13,4 @@
 ## 4. Verification
 
 - [x] 4.1 Run repository checks, resolve findings, update ownership documentation and record final verification.
-- [ ] 4.2 Finish the development branch using the selected integration option, then archive/sync OpenSpec.
+- [x] 4.2 Finish the development branch using the selected integration option, then archive/sync OpenSpec.

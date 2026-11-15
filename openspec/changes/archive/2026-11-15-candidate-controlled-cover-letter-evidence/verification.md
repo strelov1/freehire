@@ -33,5 +33,12 @@ persistence and UI orchestration; they do not measure the quality of generated a
 ## Completion
 
 The cover-letter increment is implemented. CV tailoring, screening answers and sentence-level
-citations remain outside this increment. Branch integration and OpenSpec archive/sync await the
-user's integration choice.
+citations remain outside this increment. The branch is published for review in PR #4665. OpenSpec is archived with its requirements
+synced to the main specification.
+
+## Publication validation
+
+Rebased onto main's TypeSpec CV contract. Regenerated server/client contracts and API
+documentation; repeated Go unit tests, vet, integration-tag vet and focused HTTP integration
+tests successfully. Svelte check passed with zero errors and 50 existing warnings. The
+contract adaptation received an additional review with no important findings.
