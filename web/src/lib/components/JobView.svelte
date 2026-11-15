@@ -2,7 +2,9 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
-  import { ArrowRight, Bookmark, CheckCircle2, ExternalLink, Flag, SquarePen } from '@lucide/svelte';
+  import { ArrowRight, CheckCircle2, SquarePen } from '@lucide/svelte';
+  import JobActionStrip from './JobActionStrip.svelte';
+  import JobSaveButton from './JobSaveButton.svelte';
   import { ApiError, api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
@@ -309,14 +311,6 @@
     toggleSave();
   }
 
-  // The save button's accessible name, where its visible text does not already state the
-  // effect (see the saveButton snippet).
-  function saveLabel(iconOnly: boolean): string | undefined {
-    if (saved) return 'Remove from your board';
-    if (iconOnly) return 'Save to board';
-    return undefined;
-  }
-
   // Reporting also requires an account (the report is attributed to the user).
   function onReportClick() {
     if (!isAuthenticated()) {
@@ -357,6 +351,14 @@
   // ("never two primaries; one wherever an action remains") live in autoApplyButton.ts,
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
+  const strip = $derived({
+    saved,
+    onSaveClick,
+    onReportClick,
+    applyUrl: cta.autoApply?.leads ? job.url : null,
+    applyLabel: cta.external.label,
+    onApplyClick,
+  });
 
   // Tailoring: the cached fit analysis, whether there is a CV, and the start (see JobTailor).
   const tailor = new JobTailor(() => job);
@@ -386,7 +388,7 @@
      link never reads at two ranks on one page. Size and layout classes are the only
      difference, which is why they share this snippet.
      A fourth copy of the link exists and does NOT come through here: the phone-only anchor
-     in `actionStrip`, which is quiet strip furniture rather than a button. It repeats the
+     in `JobActionStrip`, which is quiet strip furniture rather than a button. It repeats the
      `rel`/`target`/handler below on purpose — see the note there.
      `external` decides only the WORD. The treatment does not vary: the brand fill belongs
      to `Tailor my CV` in every state, so this link is an outline button whether it reads
@@ -488,93 +490,6 @@
   {/if}
 {/snippet}
 
-<!-- Save, a quiet action rather than the full-width button it was in the sidebar: keeping a
-     posting is something a reader does in passing, not the thing the page is for. It sits
-     with the other quiet ones on the tab row, and beside the apply CTA in the pinned header,
-     which has room for one bookmark and not for four. The filled bookmark is the state.
-     `iconOnly` keeps the pinned header and mobile action strip compact.
-     The words are JobRow's ("Save to board" / "On your board"), so one action reads the same
-     on the card and on the page, and so is the accessible-name rule: the visible label
-     already flips with the state, so there is no `aria-pressed` announcing the same fact a
-     second time in another vocabulary. Only the saved state overrides the name, because "On
-     your board" is a state and leaves a screen reader with a button whose effect is
-     unstated. The icon-only copy has no visible label, so it names both states itself. -->
-{#snippet saveButton(className = '', iconOnly = false)}
-  <Button
-    variant="ghost"
-    size="sm"
-    onclick={onSaveClick}
-    aria-label={saveLabel(iconOnly)}
-    title={saved ? 'On your board' : 'Save to board'}
-    class={`shrink-0 gap-1.5 px-2 ${saved ? 'text-brand hover:text-brand' : 'text-muted-foreground'} ${className}`}
-  >
-    <Bookmark class="size-4 shrink-0 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-    {#if !iconOnly}{saved ? 'On your board' : 'Save to board'}{/if}
-  </Button>
-{/snippet}
-
-<!-- Report, the same shape as Save and, like it, `ghost`: complaining about a posting is
-     the rarest thing on the strip, and a filled or outlined box would give it the
-     standing of the apply CTA beside it. -->
-{#snippet reportButton()}
-  <Button
-    variant="ghost"
-    size="sm"
-    onclick={onReportClick}
-    aria-label="Report this job"
-    title="Report this job"
-    class="shrink-0 gap-1.5 px-2 text-muted-foreground"
-  >
-    <Flag class="size-4 shrink-0" aria-hidden="true" />
-    <!-- Icon only from lg, where it sits beside the CTAs: a rare action, it should not
-         weigh as much as Apply. The accessible name stays on the button. -->
-    <span class="sr-only">Report</span>
-  </Button>
-{/snippet}
-
-<!-- The action strip: the QUIET things a reader does with a posting — talk about it, flag
-     it, keep it, file it — on one line, sharing the tab row's rule. It carries the
-     rule itself (`border-b`) rather than sitting above one, so the line reads as a
-     single edge across the column: the strip and the TabStrip beside it are aligned on
-     their bottoms, and each draws its own half of it.
-     The two loud things — auto-apply and the apply link — are NOT here; they are ctaGroup,
-     up beside the title. They shared this row until there were six controls on it, at which
-     point the TabStrip, the only half that yields, had been squeezed to a scrolling sliver.
-     Rendered in two places, one visible at a time (the caller passes the display class):
-     the tab row on lg, and directly under the title below it, where the sidebar stacks
-     between the title and the description and a strip left on the tab row would put Save
-     a whole screen away from the job it saves. -->
-{#snippet actionStrip(className: string, iconOnly = false)}
-  <div class={`shrink-0 items-center gap-1.5 ${className}`}>
-    {@render reportButton()}
-    {@render saveButton(iconOnly ? 'size-11 px-0' : '', iconOnly)}
-    <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
-         whenever auto-apply can be started, so the posting's own page needs a door
-         somewhere else — and this strip is where the quiet things already are. On lg the
-         same link is a button up beside the title, so this copy stays hidden rather than
-         offering it twice. Same handler as that button: one click, one apply-intent event,
-         whichever copy the reader reached.
-         An anchor rather than `applyCta`, because a `Button` here would be a fourth loud
-         thing on a strip whose whole job is to be quiet — so it carries `rel` and `target`
-         itself. `nofollow` for the reason the snippet above states in full: the destination
-         is the posting's own site, which the catalogue never vetted, and without it a
-         submitted vacancy buys a followed link from every job page. Change one, change
-         both. -->
-    {#if cta.autoApply?.leads}
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-        href={job.url}
-        class="inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium text-muted-foreground hover:text-foreground lg:hidden"
-        target="_blank"
-        rel="nofollow noopener noreferrer"
-        onclick={onApplyClick}
-      >
-        <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
-        {cta.external.label}
-      </a>
-    {/if}
-  </div>
-{/snippet}
-
 <!-- The call-to-action buttons: the page's answer to "what do I do with this posting".
      They ride the title's own row rather than the tab row below it, because the tab row's
      other half is the content TabStrip and the strip is the half that cannot shrink — every
@@ -636,7 +551,7 @@
          took came out of the tab labels. -->
     <div class="hidden items-center justify-between gap-4 lg:flex">
       {@render ctaGroup()}
-      {@render actionStrip('-mr-1 flex')}
+      <JobActionStrip className="-mr-1 flex" {...strip} />
     </div>
 
     <!-- Below lg the provenance line already spends its width on the company name and its
@@ -647,7 +562,7 @@
          longer metadata wraps onto its own line. -->
     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border pb-2 lg:hidden">
       <JobPostingMeta {job} className="flex min-w-0 flex-wrap" />
-      {@render actionStrip('ml-auto -mr-2 flex max-w-full flex-wrap justify-end', true)}
+      <JobActionStrip className="ml-auto -mr-2 flex max-w-full flex-wrap justify-end" iconOnly {...strip} />
     </div>
 
     <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
@@ -681,7 +596,7 @@
   <div class="relative flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-3">
     <JobPinnedHeader {job} lang={contentLang}>
       {#snippet actions()}
-        {@render saveButton('size-9 rounded-md px-0', true)}
+        <JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />
         {#if !closed}
           {@render autoApplyCta('md', 'shrink-0')}
           {@render applyCta('md', 'shrink-0', cta.external)}

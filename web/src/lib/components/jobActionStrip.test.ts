@@ -25,6 +25,8 @@ import { describe, expect, it } from 'vitest';
 // regression that produced the bug: a call to action landing back in the strip. Those are
 // the widest controls on the row and the reason it overflowed.
 const JOB_VIEW = readFileSync(join(import.meta.dirname, 'JobView.svelte'), 'utf8');
+// The strip is its own component; JobView renders it in two places.
+const ACTION_STRIP = readFileSync(join(import.meta.dirname, 'JobActionStrip.svelte'), 'utf8');
 
 /** The body of a `{#snippet name(...)}` … `{/snippet}` block. Snippets do not nest in this
  *  file, so the first closing tag is the matching one. */
@@ -36,17 +38,17 @@ function snippetBody(name: string): string {
 }
 
 const CTA_SNIPPETS = ['applyCta', 'autoApplyCta'] as const;
-const QUIET_CONTROLS = ['reportButton', 'saveButton'] as const;
+const QUIET_CONTROLS = ['Report this job', '<JobSaveButton'] as const;
 
 describe('the job page action strip', () => {
-  const strip = snippetBody('actionStrip');
+  const strip = ACTION_STRIP.slice(ACTION_STRIP.indexOf('</script>'));
   const ctaGroup = snippetBody('ctaGroup');
 
   // Guards the audit itself: renaming either snippet would otherwise leave every
   // assertion below passing over an empty string, which is the failure mode of every
   // test that greps.
   it('finds the two snippets it audits', () => {
-    expect(strip, 'actionStrip snippet not found in JobView.svelte').not.toBe('');
+    expect(strip, 'markup not found in JobActionStrip.svelte').not.toBe('');
     expect(ctaGroup, 'ctaGroup snippet not found in JobView.svelte').not.toBe('');
   });
 
@@ -70,7 +72,7 @@ describe('the job page action strip', () => {
   // when the `applyCta` button is not.
   it('carries the phone-only link out, hidden from lg up', () => {
     expect(strip).toContain('lg:hidden');
-    expect(strip).toContain('cta.external.label');
+    expect(strip).toContain('applyLabel');
   });
 });
 
@@ -78,7 +80,7 @@ describe('the job page action strip', () => {
  *  the title is scrolled away. Anchored on the icon-only Save only it renders, and cut at
  *  the row's own closing tag — nothing inside it opens a `div`. */
 function pinnedHeaderButtons(): string {
-  const open = JOB_VIEW.indexOf("{@render saveButton('size-9 rounded-md px-0', true)}");
+  const open = JOB_VIEW.indexOf('<JobSaveButton {saved} onclick={onSaveClick} className="size-9 rounded-md px-0" iconOnly />');
   if (open === -1) return '';
   const close = JOB_VIEW.indexOf('</div>', open);
   return close === -1 ? '' : JOB_VIEW.slice(open, close);

@@ -3,11 +3,11 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Search, SlidersHorizontal, X } from '@lucide/svelte';
+  import { Search, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
   import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
   import { displayQuery } from '#lib/filters.js';
-  import { dropdownRows, sectionHeading } from '#lib/dropdownRows.js';
+  import { dropdownRows } from '#lib/dropdownRows.js';
   import type { FacetCounts } from '#lib/types.js';
   import { listSearchTarget, type ListSearchTarget } from '#lib/listSearch.svelte.js';
   import { headerFilterTrigger } from '#lib/headerFilterTrigger.js';
@@ -33,7 +33,8 @@
   import { cn } from '#lib/ui/index.js';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
   import type { HeaderSearchProps } from './HeaderSearch.props';
-  import HeaderSearchRow from './HeaderSearchRow.svelte';
+  import HeaderFilterTrigger from './HeaderFilterTrigger.svelte';
+  import HeaderSuggestionList from './HeaderSuggestionList.svelte';
   import LinkIntakeRow from './LinkIntakeRow.svelte';
 
   // The header's search box — the ONE of them, on every page.
@@ -568,12 +569,6 @@
     ),
   );
 
-  const rowClass = (active: boolean) =>
-    cn(
-      'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-      active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
-    );
-
   function onWindowClick(e: MouseEvent) {
     if (suggestOpen && wrapEl && !wrapEl.contains(e.target as Node)) close();
   }
@@ -729,39 +724,7 @@
     {:else}
       <kbd class="hidden shrink-0 rounded border border-border px-1.5 text-xs text-muted-foreground sm:inline">/</kbd>
     {/if}
-    <!-- All-filters trigger, mirroring the Location scope-prefix on the left: divided
-         from the input and pinned to the right edge. Opens the active page's own filter
-         modal — or, on a page with no list, the one its host handed us. The badge shows
-         the active-filter count, and only a list can have one. Hidden where neither
-         exists.
-
-         On a phone this is the ONLY way into the filters (the jobs sidebar is md+), and
-         it was a bare 16px glyph. The button is now a 44px square around the same glyph,
-         pulled into the box's right padding by `-mr-3` so the icon sits where it did;
-         the badge rides the glyph's own wrapper so it stays pinned to the icon rather
-         than to the larger box. -->
-    {#if filterTrigger.open}
-      <div class="h-5 w-px shrink-0 bg-border"></div>
-      <button
-        type="button"
-        onclick={filterTrigger.open}
-        aria-label={filterTrigger.count > 0 ? `Filters (${filterTrigger.count} active)` : 'Filters'}
-        title="Filters"
-        class="-mr-3 grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span class="relative flex">
-          <SlidersHorizontal class="size-4 shrink-0" aria-hidden="true" />
-          {#if filterTrigger.count > 0}
-            <span
-              aria-hidden="true"
-              class="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
-            >
-              {filterTrigger.count}
-            </span>
-          {/if}
-        </span>
-      </button>
-    {/if}
+    <HeaderFilterTrigger open={filterTrigger.open} count={filterTrigger.count} />
   </div>
 
   <!-- Three sections and a free-text row, flattened by `dropdownRows` into the single
@@ -790,63 +753,13 @@
       </span>
     </div>
   {:else if suggestOpen}
-    <ul
-      id="role-suggestions"
-      role="listbox"
-      style:bottom={keyboard.fit.lift > 0 ? `${keyboard.fit.lift}px` : null}
-      style:max-height={keyboard.fit.ceiling > 0 ? `${keyboard.fit.ceiling}px` : null}
-      aria-label="Search suggestions"
-      class={cn(
-        'inset-x-0 z-50 max-h-[70vh] overflow-y-auto border border-border bg-background py-1 shadow-lg',
-        hero
-          ? 'absolute top-full mt-2 rounded-2xl'
-          : // On a phone the panel leaves the box and takes the screen: full width, from
-            // under the sticky header (`top-14` is that header's own `h-14`) down to
-            // `bottom-0`. The box is 278px of a 390px screen, so at its width every row —
-            // a logo, a title, a company line — truncates; and a panel that stopped short
-            // of the bottom left the feed showing through beneath it, where a scroll moved
-            // whichever of the two the finger happened to land on. The side borders and
-            // the radius go with the edges they drew.
-            //
-            // `fixed` rather than an outward margin, because the box does not start at the
-            // viewport edge — the brand sits to its left and the menu to its right, so no
-            // margin reaches past them. It works only because the header draws no
-            // `backdrop-filter` (see TopBar): one would make the header the containing
-            // block and pin this panel to it instead of to the window.
-            'max-sm:fixed max-sm:bottom-0 max-sm:top-14 max-sm:max-h-none max-sm:border-x-0 max-sm:border-b-0 sm:absolute sm:top-full sm:mt-2 sm:rounded-md',
-      )}
-    >
-      {#each rows as row, i (row.key)}
-        {@const heading = row.first ? sectionHeading(row, draft.text.trim() === '') : null}
-        {#if heading}
-          <!-- A caption, not a choice: presentation keeps it out of the option count while
-               its text still reads in place. -->
-          <li role="presentation" class="px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">
-            {heading}
-          </li>
-        {/if}
-        <!-- The option itself takes the click — a button inside it would be a second
-             interactive element nested in the first. tabindex -1 keeps rows out of the Tab
-             order; the input owns the keyboard through aria-activedescendant. -->
-        <li
-          role="option"
-          id="role-suggestion-{i}"
-          aria-selected={activeIndex === i}
-          tabindex="-1"
-          onmouseenter={() => (activeIndex = i)}
-          onclick={() => choose(i)}
-          onkeydown={(e) => {
-            // Reached only if a row ever held focus itself; the input normally handles keys.
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              choose(i);
-            }
-          }}
-          class={cn(rowClass(activeIndex === i), 'cursor-pointer', row.kind === 'text' && 'border-t border-border')}
-        >
-          <HeaderSearchRow {row} />
-        </li>
-      {/each}
-    </ul>
+    <HeaderSuggestionList
+      {rows}
+      bind:activeIndex
+      {hero}
+      fit={keyboard.fit}
+      emptyQuery={draft.text.trim() === ''}
+      onChoose={choose}
+    />
   {/if}
 </div>
