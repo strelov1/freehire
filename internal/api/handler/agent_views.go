@@ -8,15 +8,13 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// agentViews marks a request as an agent's, so the postings its handler serves are
-// recorded (internal/application/agentview). The scope lives in fasthttp's user values,
-// which RequestCtx.Value exposes as a context — the same context the MCP adaptor hands
-// the SDK — so Fiber handlers and MCP tools reach it alike. A nil sink records nothing.
+// agentViews marks a request as an agent's, so the postings its handler serves are recorded
+// (internal/application/agentview). The scope rides in fasthttp's user values, which
+// RequestCtx.Value exposes as a context, so Fiber handlers and MCP tools reach it alike. A nil
+// sink records nothing.
 //
-// The viewer is the verified MCP account, a signed-in caller, or the owner
-// of a credential the trusted authentication service verified — and
-// otherwise the client IP (c.IP(), already resolved from the trusted proxy's X-Real-IP)
-// with the User-Agent.
+// The viewer is the MCP account, a signed-in caller, or the verified external caller; else the
+// client IP with the User-Agent.
 func agentViews(sink agentview.Sink, surface string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if sink == nil {

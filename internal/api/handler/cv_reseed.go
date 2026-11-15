@@ -14,15 +14,11 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
-// ReseedCV rebuilds one owned CV's content from the current seed (experience bank +
-// structured extract — the same source first-time tailor uses, and the bank first
-// whenever it has rows; see cv_seed.go) and keeps its id (and, for a tailored copy, its
-// agent session). It touches ONLY the CV it was asked about: a tailored copy is refreshed
-// without writing any base, and a base is refreshed without touching its copies. Pointed at a
-// base it is the candidate's explicit "update from my CV", so it replaces hand edits — the
-// confirmation is the client's. Cookie-only: destructive whole-document replace.
-//
-// Upload does not do this. Upload refreshes the seed source; this is the explicit apply.
+// ReseedCV rebuilds one owned CV's content from the current seed (see cv_seed.go), keeping
+// its id and, for a tailored copy, its agent session. It touches ONLY the CV it was asked
+// about: never a base from a copy, never copies from a base. On a base it replaces hand
+// edits; the confirmation is the client's. Cookie-only: destructive whole-document replace.
+// Upload only refreshes the seed source; this is the explicit apply.
 func (h *cvHandlers) ReseedCV(ctx context.Context, params apigen.ReseedCVParams) (*apigen.ReseedCVOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -33,8 +29,8 @@ func (h *cvHandlers) ReseedCV(ctx context.Context, params apigen.ReseedCVParams)
 		return nil, err
 	}
 
-	// Ownership before seed: a foreign id must 404 even when the caller has no résumé
-	// (otherwise "add a résumé" would leak that the CV exists).
+	// Ownership before seed: a foreign id must 404 even when the caller has no résumé,
+	// else "add a résumé" would leak that the CV exists.
 	rec, err := h.cvStore.Get(ctx, id, userID)
 	if err != nil {
 		return nil, mapCVError(err)
@@ -45,16 +41,13 @@ func (h *cvHandlers) ReseedCV(ctx context.Context, params apigen.ReseedCVParams)
 		return nil, err
 	}
 	if !ok || !hasSeedBody(st) {
-		// ok alone (from StructureForSeed/seedable) is satisfied by identity fields
-		// alone — candidate-owned contacts with no résumé ever uploaded and no bank
-		// rows. This is a destructive whole-document replace of an EXISTING CV, unlike
-		// first-time tailor bootstrap: identity alone is not reason enough to wipe it.
+		// ok alone is satisfied by identity fields (contacts with no résumé or bank
+		// rows); identity alone is not reason enough to wipe an EXISTING CV.
 		return nil, fiber.NewError(fiber.StatusConflict, "add a résumé before reseeding")
 	}
 	seeded := cv.Seed(st)
 
 	if !rec.IsTailored {
-		// An explicit refresh of this base. Presentation is preserved by applySeedContent.
 		if err := h.applySeedToBase(ctx, userID, rec, seeded); err != nil {
 			return nil, mapCVError(err)
 		}
@@ -65,13 +58,9 @@ func (h *cvHandlers) ReseedCV(ctx context.Context, params apigen.ReseedCVParams)
 		return reseedOK(out)
 	}
 
-	// Align only the tailored copy to the vacancy. The base stays on the résumé's own
-	// spellings — a vacancy's wording belongs to the copy aimed at it, not to the
-	// candidate's seed.
-	//
-	// Alignment runs on the MERGED state, not on the seed: applySeedContent keeps the
-	// summary and skills already on the page when the seed carries none, and aligning
-	// beforehand would leave exactly those kept sections in the old wording.
+	// Align only the tailored copy; a vacancy's wording does not belong in the base. Align
+	// the MERGED state, not the seed: applySeedContent keeps summary and skills already on
+	// the page when the seed has none, and those would stay in the old wording.
 	next := applySeedContent(cvedit.State{
 		Title:      rec.Title,
 		TemplateID: rec.TemplateID,
@@ -107,10 +96,9 @@ func reseedOK(rec cv.Record) (*apigen.ReseedCVOK, error) {
 	return &apigen.ReseedCVOK{Data: out}, nil
 }
 
-// ReseedBaseCV rebuilds the owner's DEFAULT base CV from the current seed (experience bank +
-// structured extract). Cookie-only. Does not touch tailored copies — those stay on
-// History → Reset (or the tailor-workspace refresh prompt). It is an explicit action, so it
-// replaces hand edits; POST /me/cvs/:id/reseed does the same for one named base.
+// ReseedBaseCV rebuilds the owner's DEFAULT base CV from the current seed. Cookie-only.
+// Does not touch tailored copies. Explicit action, so it replaces hand edits; ReseedCV
+// does the same for one named base.
 func (h *cvHandlers) ReseedBaseCV(ctx context.Context) (*apigen.ReseedBaseCVOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -205,11 +193,9 @@ func (h *cvHandlers) reseedBaseIfStaleVsUpload(ctx context.Context, userID int64
 	if err != nil || !usable {
 		return err
 	}
-	// A current structure refreshes the whole base from the seed. Provisional-only
-	// identity (pending extract) only heals the header — a full Seed would blank
-	// summary/education the candidate already has on the base. Same for a seed that
-	// is technically current/usable but carries identity alone: not enough reason to
-	// wipe an existing base's body.
+	// A current structure refreshes the whole base. Provisional-only identity (pending
+	// extract), or a seed with identity alone, only heals the header: a full Seed would
+	// blank summary/education the candidate already has.
 	if _, current, cerr := h.resume.Structured(ctx, userID); cerr != nil {
 		return cerr
 	} else if !current {

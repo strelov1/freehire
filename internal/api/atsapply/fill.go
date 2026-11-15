@@ -12,18 +12,14 @@ import (
 	"github.com/chromedp/chromedp/kb"
 )
 
-// fillTimeout bounds one field's interaction. Short: a field either responds immediately or
-// it was never a real target on the page.
+// fillTimeout bounds one field's interaction; a field responds immediately or was never a real target.
 const fillTimeout = 5 * time.Second
 
-// submitVerifyTimeout bounds how long this waits for a confirmation or refusal marker to
-// appear after the submit click.
+// submitVerifyTimeout bounds the wait for a confirmation or refusal marker after the submit click.
 const submitVerifyTimeout = 15 * time.Second
 
-// dispatchChangeEventsJS fires the events a real user interaction would after
-// chromedp.SetValue writes a <select>'s value directly — SetValue does not fire them
-// itself, and a React-controlled select's onChange (and so its component state) never
-// otherwise observes the write. %q (via fmt.Sprintf) is the element's own CSS selector.
+// dispatchChangeEventsJS fires the input/change events chromedp.SetValue does not, so a
+// React-controlled select's onChange sees the write. %q is the element's CSS selector.
 const dispatchChangeEventsJS = `(() => {
 	const el = document.querySelector(%q);
 	if (!el) return;
@@ -31,10 +27,9 @@ const dispatchChangeEventsJS = `(() => {
 	el.dispatchEvent(new Event('change', {bubbles: true}));
 })()`
 
-// CONFIRMATION_MARKERS are positive acknowledgements only, per the reference
-// implementation's own rule: matching none of these means "unconfirmed", never "failed".
-// Extend, never invert — a false "confirmed" risks recording an application that never went
-// through; a false "unconfirmed" only costs a retry.
+// confirmationMarkers are positive acknowledgements only: matching none means
+// "unconfirmed", never "failed". Extend, never invert: a false "confirmed" records an
+// application that never went through; a false "unconfirmed" only costs a retry.
 var confirmationMarkers = []string{
 	"thank you for applying",
 	"application submitted",
@@ -43,23 +38,22 @@ var confirmationMarkers = []string{
 	"we've received your application",
 }
 
-// submitRefusedMarkers is text a board renders when it declined the submit click itself —
-// an explicit refusal, safe to act on (unlike inverting confirmationMarkers would be).
+// submitRefusedMarkers is text a board renders when it declined the submit click itself,
+// an explicit refusal safe to act on.
 var submitRefusedMarkers = []string{
 	"please try again",
 	"there was an error",
 }
 
-// errCaptchaRefused marks the one refusal that is safe to retry. A board that says it could
-// not VERIFY the submission is telling us it did not accept one — no application exists, so
-// asking again costs the employer nothing. Every other post-submit uncertainty must not be
-// retried, because it might mean the opposite.
+// errCaptchaRefused marks the one refusal that is safe to retry: a board that could not
+// verify the submission did not accept one, so no application exists. Every other
+// post-submit uncertainty must not be retried.
 var errCaptchaRefused = errors.New("captcha refused the submission")
 
-// captchaRefusalMarkers are the boards' own wordings for a failed captcha verification.
-// Deliberately narrow: each requires the word "verify"/"verifying" beside the failure, so a
-// board objecting to the résumé or a field — which it could only do having READ the
-// submission — stays an ordinary refusal.
+// captchaRefusalMarkers are the boards' wordings for a failed captcha verification. Narrow
+// on purpose: each needs "verify"/"verifying" beside the failure, so a board objecting to
+// the résumé or a field (which it could only do after reading the submission) stays an
+// ordinary refusal.
 var captchaRefusalMarkers = []string{
 	"error verifying your",
 	"could not verify",
@@ -75,21 +69,17 @@ func isCaptchaRefusal(bodyText string) bool {
 }
 
 // captchaRefusal carries a refusal that is safe to retry. It answers errors.Is for
-// errCaptchaRefused while reading as the detail alone: the sentinel is a label the client
-// dispatches on, and the runner writes its own sentence in front of it when it records the
-// row. Wrapping with fmt.Errorf("%w: %w", …) instead made the recorded reason say "captcha
-// refused the submission" twice before saying anything a person could act on.
+// errCaptchaRefused but reads as the detail alone, since the runner writes its own sentence
+// in front; wrapping with %w: %w repeated "captcha refused the submission" in the reason.
 type captchaRefusal struct{ detail error }
 
 func (e captchaRefusal) Error() string   { return e.detail.Error() }
 func (e captchaRefusal) Unwrap() []error { return []error{errCaptchaRefused, e.detail} }
 
-// challengeVisibleJS asks the page whether a captcha challenge is actually ON SCREEN. Both
-// conditions are load-bearing and both were learned the same way, by reading a live page:
-// the provider mounts its frames on EVERY posting at full size and keeps them
-// visibility:hidden until it poses a puzzle, so size alone says nothing — an earlier version
-// of this check called a hidden frame a challenge and reported a run that had actually
-// PASSED as refused.
+// challengeVisibleJS asks whether a captcha challenge is actually on screen. Both checks
+// are load-bearing: providers mount their frames on every posting at full size and keep
+// them visibility:hidden until they pose a puzzle, so size alone calls a passed run
+// refused.
 const challengeVisibleJS = `(() => Array.from(document.querySelectorAll("iframe")).some(f => {
 	const src = f.src || "";
 	if (!src.includes("hcaptcha.com") && !src.includes("recaptcha")) return false;
@@ -97,10 +87,10 @@ const challengeVisibleJS = `(() => Array.from(document.querySelectorAll("iframe"
 	return f.getBoundingClientRect().height > 100;
 }))()`
 
-// challengeVisible reports whether a captcha challenge currently covers the form. A page that
-// cannot be asked (the browser is gone, the context is done) answers false: this only ever
-// reclassifies a failure that already happened, and guessing "captcha" without evidence would
-// hand an ordinary error the captcha's twenty asks.
+// challengeVisible reports whether a captcha challenge currently covers the form. A page
+// that cannot be asked answers false: this only reclassifies a failure that already
+// happened, and guessing "captcha" without evidence would charge an ordinary error to the
+// captcha's retry budget.
 func challengeVisible(ctx context.Context) bool {
 	visible, err := chromedp.Run(ctx, chromedp.Evaluate[bool](challengeVisibleJS))
 	if err != nil {
@@ -109,13 +99,10 @@ func challengeVisible(ctx context.Context) bool {
 	return visible
 }
 
-// formStillPresentJS asks the page whether the given selector still resolves to a control
-// the loop could still usably click later — present, enabled, and not hidden. A same-page
-// async submit can leave the element mounted but disabled (a "Submitting…" state) or hidden
-// behind a confirmation overlay without removing it from the DOM, and a bare
-// querySelector(...) !== null would call that "still present" and let the loop click it a
-// second time — precisely the duplicate submission this check exists to prevent.
-// %q (via fmt.Sprintf) is the submit control's own CSS selector.
+// formStillPresentJS asks whether the selector still resolves to a control that can be
+// clicked: present, enabled and not hidden. An async submit can leave the element mounted
+// but disabled or hidden, and a bare querySelector !== null would let the loop click it
+// again, a duplicate submission. %q is the submit control's CSS selector.
 const formStillPresentJS = `(() => {
 	const el = document.querySelector(%q);
 	if (!el) return false;
@@ -125,20 +112,14 @@ const formStillPresentJS = `(() => {
 	return true;
 })()`
 
-// formStillPresent reports whether the form's submit control is still on the page in a
-// state the loop could still usably act on. Both this function and challengeVisible return
-// false on an Evaluate error, but that shared literal value means opposite things to each
-// caller: challengeVisible's false is neutral ("no evidence of a challenge"), while this
-// false is the protective direction ("treat it as gone"). The likeliest reason the call
-// itself fails right after a field's trailing Enter keystroke is that the keystroke just
-// navigated the page and destroyed the execution context — which is exactly the condition
-// this asks about, not an absence of evidence either way. Costing an unnecessary trip
-// through verifySubmission (which times out to an unconfirmed, dead-lettered result) is
-// preferred over silently continuing to fill a form that may already be gone.
+// formStillPresent reports whether the form's submit control is still usable on the page.
+// An Evaluate error returns false, the protective direction ("treat it as gone"), unlike
+// challengeVisible's neutral false: the likeliest cause is that a field's trailing Enter
+// navigated the page and destroyed the execution context, which is exactly what this asks
+// about. A needless trip through verifySubmission beats filling a form that may be gone.
 //
-// No unit test exercises this function directly, matching challengeVisible beside it — a real
-// browser session cannot be faked usefully. The decision this feeds (runFillLoop) is what is
-// unit tested, with this function's result taken as a plain bool parameter.
+// Not unit tested (a browser cannot be faked usefully); runFillLoop, which consumes it as a
+// bool, is.
 func formStillPresent(ctx context.Context, submitSelector string) bool {
 	present, err := chromedp.Run(ctx, chromedp.Evaluate[bool](fmt.Sprintf(formStillPresentJS, submitSelector)))
 	if err != nil {
@@ -147,13 +128,10 @@ func formStillPresent(ctx context.Context, submitSelector string) bool {
 	return present
 }
 
-// classifyFillFailure decides whether a failure to fill a field was really the captcha.
-//
-// Lever's own page binds the invisible captcha to the LOCATION field's focus — touching it
-// calls hcaptcha.execute() — so when the score is not enough the challenge covers the form
-// and the very next keystroke times out. Recorded as an ordinary transient error, three of
-// those dead-lettered a live entry whose captcha budget still had twelve asks left. The
-// cause is the captcha, so it belongs on the captcha's counter.
+// classifyFillFailure decides whether a failed field fill was really the captcha. Lever
+// binds the invisible captcha to the LOCATION field's focus, so when the score is too low
+// the challenge covers the form and the next keystroke times out. That belongs on the
+// captcha's counter, not as an ordinary transient error.
 func classifyFillFailure(err error, challengeOnScreen bool) error {
 	if challengeOnScreen {
 		return captchaRefusal{detail: err}
@@ -161,9 +139,8 @@ func classifyFillFailure(err error, challengeOnScreen bool) error {
 	return err
 }
 
-// newRefusalError builds the error a matched refusal marker travels as: the marker that
-// fired, the board's own sentence around it, and — when the board declined to verify — the
-// errCaptchaRefused sentinel the runner reads with errors.Is.
+// newRefusalError builds the error for a matched refusal marker: the marker, the board's
+// sentence around it, and errCaptchaRefused when the board declined to verify.
 func newRefusalError(marker, bodyText string) error {
 	err := fmt.Errorf("board refused the submission: matched marker %q in %q", marker, refusalEvidence(bodyText, marker))
 	if isCaptchaRefusal(bodyText) {
@@ -172,15 +149,12 @@ func newRefusalError(marker, bodyText string) error {
 	return err
 }
 
-// refusalEvidenceWindow is how much of the page text either side of a refusal marker is
-// carried back. Wide enough for the sentence the marker sits in — which is where a board
-// says what it actually objected to — and narrow enough to stay one readable line in a
-// queue row's last_error.
+// refusalEvidenceWindow is how much page text either side of a refusal marker is carried
+// back: enough for the sentence it sits in, narrow enough for one line in last_error.
 const refusalEvidenceWindow = 140
 
-// refusalEvidence returns the page text around a matched refusal marker, collapsed onto one
-// line. A marker names this package's own detector; the board's reason is in the sentence
-// beside it, and without that sentence the only way to learn it is a second real submission.
+// refusalEvidence returns the page text around a matched refusal marker, collapsed to one
+// line. The board's reason is in the sentence beside the marker.
 func refusalEvidence(bodyText, marker string) string {
 	i := strings.Index(strings.ToLower(bodyText), marker)
 	if i < 0 {
@@ -191,21 +165,18 @@ func refusalEvidence(bodyText, marker string) string {
 	return strings.Join(strings.Fields(bodyText[start:end]), " ")
 }
 
-// fillLoopOutcome reports how far runFillLoop got: how many fields it actually filled, and
-// whether it stopped because the submit control disappeared early rather than reaching the
-// end of the plan.
+// fillLoopOutcome reports how many fields runFillLoop filled and whether it stopped
+// because the submit control disappeared early.
 type fillLoopOutcome struct {
 	filledCount  int
 	stoppedEarly bool
 }
 
-// runFillLoop is fillAndSubmit's field loop, factored out as pure control flow so it is
-// unit-testable without a real browser: fill is called once per field in order, and
-// presentAfter is consulted only immediately after a text/textarea field fills — the one
-// field kind whose interaction (a trailing Enter, see fillOne) can trigger the form's own
-// submit binding. The first time presentAfter reports false, the loop stops: it neither
-// fills any remaining field nor lets its caller reach its own submit click, since the
-// submission may already be underway.
+// runFillLoop is fillAndSubmit's field loop as pure control flow, testable without a
+// browser. fill runs per field in order; presentAfter is consulted only after a
+// text/textarea field (whose trailing Enter, see fillOne, can trigger the form's own
+// submit). The first false stops the loop: no further fields and no submit click, since
+// the submission may be underway.
 func runFillLoop(kinds []string, fill func(i int) error, presentAfter func(i int) bool) (fillLoopOutcome, error) {
 	for i, kind := range kinds {
 		if err := fill(i); err != nil {
@@ -219,14 +190,11 @@ func runFillLoop(kinds []string, fill func(i int) error, presentAfter func(i int
 }
 
 // fillAndSubmit fills every field the plan resolved, presses submit, and reports whether
-// the submission was confirmed. It runs on an already-navigated page (the same session
-// renderedHTML used to scan the form) — config always wins here in the sense that matters
-// for v1: this package fills strictly from the plan and never reads back or trusts anything
-// the page may have pre-filled itself.
+// the submission was confirmed. It runs on the already-navigated page that renderedHTML
+// scanned, and fills strictly from the plan, never trusting what the page pre-filled.
 //
-// This is the least-verified part of the package — see design.md's Testing section and
-// task 7.1: correctness here rests on the 2026-09-02 spike's single live posting and the
-// reference implementation's own measured rules, not on this package's own live testing.
+// The least-verified part of the package: it rests on one live posting and the reference
+// implementation's measured rules.
 func fillAndSubmit(ctx context.Context, jobID int64, plan Plan, layout formLayout) (bool, error) {
 	kinds := make([]string, len(plan.Fields))
 	for i, f := range plan.Fields {
@@ -246,13 +214,10 @@ func fillAndSubmit(ctx context.Context, jobID int64, plan Plan, layout formLayou
 		return false, err
 	}
 	if outcome.stoppedEarly {
-		// A text/textarea field's own trailing Enter may have already triggered the real
-		// submit (see fillOne's doc comment on that branch) — verify what actually
-		// happened rather than filling further fields or clicking submit again on a form
-		// that may already be gone. Logged unconditionally, not only when unconfirmed or
-		// refused: even a CONFIRMED result here may be missing every field ordered after
-		// the trigger (an approved résumé included), and that gap is otherwise invisible —
-		// nothing else records how many of the plan's fields actually filled.
+		// A field's trailing Enter may already have submitted (see fillOne): verify instead of
+		// filling further or clicking submit again. Logged unconditionally, since even a confirmed
+		// result may be missing every field after the trigger (the résumé included) and nothing
+		// else records how many fields filled.
 		log.Printf("atsapply: job %d submit control disappeared after field %d of %d — verifying rather than continuing to fill or clicking submit again", jobID, outcome.filledCount, len(kinds))
 		return verifySubmission(ctx)
 	}
@@ -268,81 +233,58 @@ func fillOne(parent context.Context, f ResolvedField, by addressing) error {
 	ctx, cancel := context.WithTimeout(parent, fillTimeout)
 	defer cancel()
 
-	// sel carries its own lookup in its type (chromedp.CSS), so no branch can pair it with a
-	// different one. Under the old untyped API it took a separate query-kind option, and a
-	// review caught the file branch hard-coding a by-id lookup — which rewrites a
-	// `[name=…]` selector to `#[name=…]`, invalid CSS matching nothing, so no Lever
-	// application carrying a résumé could have been submitted.
+	// sel carries its lookup in its type (chromedp.CSS), so no branch can pair it with a
+	// different one; a by-id lookup on a `[name=…]` selector becomes invalid CSS and matches
+	// nothing.
 	sel := fieldSelector(f.ID, by)
 
 	switch f.Kind {
 	case "textarea", "text":
-		// Text and the react-select-backed autocomplete fields (country,
-		// candidate-location) are indistinguishable in this package's DOM scan — both
-		// render as a plain <input type="text">. The trailing Enter is meant as a no-op
-		// on a plain text field and, for an autocomplete field, commits the highlighted
-		// suggestion — the same "type, then confirm" interaction a person uses.
-		// Unverified beyond the reference implementation's own account of the pattern,
-		// and a code review flagged a specific, plausible way that assumption could be
-		// wrong: a React-driven SPA form can bind its own Enter-submits-the-form
-		// behavior regardless of field count (unlike plain HTML's multi-field implicit-
-		// submission exemption), which would trigger a real submit mid-fill-loop rather
-		// than a no-op. There is no reliable signal in this package's current scan data
-		// to tell a true autocomplete field apart from a plain one (the field's Options
-		// are empty for both, since Greenhouse never declares country/location as an
-		// enumerated field) — a targeted fix needs live verification against a real
-		// board, not a guess. The trigger itself is therefore still a known, accepted
-		// risk rather than worked around blind — but its blast radius is bounded:
-		// runFillLoop checks the submit control's presence right after this field, and
-		// an early submit stops the loop before it fills anything further or clicks
-		// submit a second time (see formStillPresent). A typed value with no matching
-		// suggestion, or an unintended early submit, can still surface as an
-		// unconfirmed or malformed outcome, which is exactly why StatusUnconfirmed
-		// exists as a distinct, non-retried outcome rather than trusting any of this
-		// always worked.
+		// Text and react-select autocomplete fields (country, candidate-location) are
+		// indistinguishable in the DOM scan: both are a plain <input type="text">. The trailing
+		// Enter is a no-op on a plain field and commits the highlighted suggestion on an
+		// autocomplete. Known, accepted risk: a React SPA form may bind Enter to submit and
+		// trigger a real submit mid-fill. The scan has no signal to tell the two apart (Options
+		// are empty for both), so a fix needs live verification. The blast radius is bounded:
+		// runFillLoop checks the submit control after this field (see formStillPresent) and stops
+		// before filling more or clicking submit again. A stray early submit can still end
+		// unconfirmed, which is why StatusUnconfirmed is a distinct, non-retried outcome.
 		return chromedp.Do(ctx,
 			chromedp.Clear(sel),
 			chromedp.SendKeys(sel, f.Value),
 			chromedp.SendKeys(sel, kb.Enter),
 		)
 	case "select":
-		// SetValue sets the DOM .value property directly, which a React-controlled
-		// select does not observe as a change — its own onChange handler never fires,
-		// so the framework's state (and the value actually posted on submit) can stay
-		// unset even though the raw DOM value looks right. Dispatching the events a
-		// real interaction would fire is what makes React notice.
+		// SetValue writes the DOM .value directly, which a React-controlled select does not see:
+		// onChange never fires and the posted value can stay unset. Dispatching the events a real
+		// interaction fires makes React notice.
 		return chromedp.Do(ctx,
 			chromedp.SetValue(sel, f.Value),
 			chromedp.Evaluate[chromedp.Void](fmt.Sprintf(dispatchChangeEventsJS, sel)),
 		)
 	case "checkbox_group":
-		// f.Value is one option's value — resolveOne (resolve.go) never resolves more
-		// than one for a Multi field, since AnswerSource never supplies more than one
-		// candidate value per question today. See resolveOne's doc comment.
+		// f.Value is one option's value: resolveOne (resolve.go) never resolves more than one
+		// for a Multi field.
 		optSel := fmt.Sprintf(`input[name=%q][value=%q]`, f.ID, f.Value)
 		return chromedp.Do(ctx, chromedp.Click(chromedp.CSS(optSel)))
 	case "file":
-		// The only file field resolveOne ever resolves is the résumé/CV upload
-		// (isResumeField, resolve.go), and only once client.go's attachApprovedResume has
-		// rendered the approved tailored CV and overwritten Value with the temp PDF's
-		// path — never a candidate-authored string, so no further validation of Value
-		// belongs here.
+		// The only file field resolveOne resolves is the résumé upload (isResumeField), and
+		// attachApprovedResume (client.go) overwrites Value with the temp PDF path, never a
+		// candidate-authored string, so Value needs no validation here.
 		return chromedp.Do(ctx, chromedp.SetUploadFiles(sel, []string{f.Value}))
 	default:
 		return fmt.Errorf("no fill strategy for kind %q", f.Kind)
 	}
 }
 
-// fieldSelector resolves a field's identifier to a CSS selector, the way its own platform
-// names it. The identifier is whatever the layout addressed the control by (see
-// domscan.identify) — an element id on Greenhouse, a name on Lever.
+// fieldSelector resolves a field's identifier to a CSS selector the way its platform names
+// it: an element id on Greenhouse, a name on Lever (see domscan.identify).
 //
-// A byName selector quotes the value because Lever's names carry brackets:
-// `urls[LinkedIn]`, and every employer question as `cards[<uuid>][field0]`. Unquoted,
-// brackets are selector syntax and the lookup silently matches nothing.
+// A byName selector quotes the value because Lever's names carry brackets (`urls[LinkedIn]`,
+// `cards[<uuid>][field0]`); unquoted they are selector syntax and match nothing.
 //
-// checkbox_group is the exception under either addressing: fillOne selects those by
-// name+value directly, since a group's members share a name rather than an identifier.
+// checkbox_group is the exception under either addressing: fillOne selects its members by
+// name+value, since they share a name.
 func fieldSelector(id string, by addressing) chromedp.CSS {
 	if by == byName {
 		return chromedp.CSS(fmt.Sprintf("[name=%q]", id))
@@ -350,28 +292,21 @@ func fieldSelector(id string, by addressing) chromedp.CSS {
 	return chromedp.CSS("#" + id)
 }
 
-// classifyPollError reports whether a failed poll call should be treated as unconfirmed
-// (the same outcome the between-polls ctx.Done() case already reports) rather than a real
-// error. A non-nil ctx.Err() means the deadline/cancellation is what actually ended the
-// call, regardless of what chromedp's own error text says — the same timeout firing a
-// moment earlier or later would have hit the ordinary ctx.Done() branch instead, and this
-// must report identically either way. Found by code review: this check did not exist, so a
-// deadline firing mid-call surfaced as a plain retryable error.
+// pollEndedByDeadline reports whether ctx's deadline or cancellation ended a failed poll
+// call, so it is treated as unconfirmed (like the between-polls ctx.Done() case) rather
+// than a retryable error, whatever chromedp's error text says.
 func pollEndedByDeadline(ctx context.Context) bool {
 	return ctx.Err() != nil
 }
 
-// verifySubmission waits for either a confirmation or an explicit refusal marker in the
-// page text. Neither appearing within the timeout is reported as unconfirmed (false),
-// distinct from an error — see the CONFIRMATION_MARKERS doc comment for why the two
-// failure directions are not symmetric.
+// verifySubmission waits for a confirmation or an explicit refusal marker in the page
+// text. Neither within the timeout is unconfirmed (false), not an error; see
+// confirmationMarkers for why the failure directions are not symmetric.
 func verifySubmission(parent context.Context) (bool, error) {
 	ctx, cancel := context.WithTimeout(parent, submitVerifyTimeout)
 	defer cancel()
 
-	// One deadline, the context's. The loop used to carry a second time.Now()-based one
-	// computed from the same timeout, which could never be the binding limit — ctx is
-	// derived from it above and cancels first or together.
+	// One deadline: the context's.
 	for ctx.Err() == nil {
 		bodyText, err := chromedp.Run(ctx, chromedp.Text(chromedp.CSS("body")))
 		if err != nil {

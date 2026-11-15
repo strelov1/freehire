@@ -11,30 +11,21 @@ import (
 )
 
 // Drafter drafts a free-text answer for one question, grounded in grounding. ok is false
-// when no groundable answer exists — a legitimate outcome, not an error: the model found
-// nothing in the candidate's own data to say, so the question still parks rather than
-// receiving an invented answer.
+// when nothing groundable exists; that is not an error, the question parks instead of
+// getting an invented answer.
 type Drafter interface {
 	Draft(ctx context.Context, question MergedField, grounding GroundingContext) (answer string, ok bool, err error)
 }
 
-// LetterReader reads a candidate's own already-drafted cover letter for one job, when one
-// exists. *coverletter.Store satisfies it directly — the same structural fit AtomReader
-// already has over *experience.Store — so no adapter type is needed: a nil *Stored means
-// "no letter yet", exactly coverletter.Store.Get's own contract, not an error this package
-// re-derives.
+// LetterReader reads a candidate's already-drafted cover letter for one job.
+// *coverletter.Store satisfies it; a nil *Stored means no letter yet, as in Store.Get.
 type LetterReader interface {
 	Get(ctx context.Context, userID, jobID int64) (*coverletter.Stored, error)
 }
 
-// coverLetterAnswer looks up the candidate's own existing letter for (userID, jobID) and, if
-// one exists with a non-blank body, returns it as a ready answer — ok is false when no
-// letter has been drafted yet (the ordinary case for a job never drafted for), when the
-// stored letter's body is blank (a state that should not occur, but answering a required
-// field with an empty string is worse than falling through to the drafter), and when the
-// read itself fails, which degrades to "nothing found" here rather than failing the whole
-// attempt, the same "a failure to read the grounding source degrades to drafting nothing"
-// discipline client.go's own resolve already follows for buildGroundingContext.
+// coverLetterAnswer returns the candidate's existing letter for (userID, jobID) as a ready
+// answer. ok is false when there is none, its body is blank, or the read fails (that
+// degrades to drafting, like buildGroundingContext).
 func coverLetterAnswer(ctx context.Context, letters LetterReader, userID, jobID int64) (answer string, ok bool) {
 	stored, err := letters.Get(ctx, userID, jobID)
 	if err != nil {
@@ -47,12 +38,10 @@ func coverLetterAnswer(ctx context.Context, letters LetterReader, userID, jobID 
 	return stored.Body, true
 }
 
-// answerFor prefers the candidate's own existing cover letter over drafter for a
-// cover-letter-semantic FREE-TEXT field, falling through to drafter for everything else
-// (including a select/radio the label heuristic happens to match — the letter's prose is
-// never one of the platform's own option labels, and matchOption would just park it, where
-// the generic drafter at least has a chance of picking a real option) and whenever no
-// letter exists yet.
+// answerFor prefers the candidate's existing cover letter over drafter for a
+// cover-letter-semantic free-text field, and falls through to drafter otherwise. A
+// select/radio the label heuristic matches also falls through: letter prose never equals
+// an option label.
 func answerFor(ctx context.Context, f MergedField, drafter Drafter, grounding GroundingContext, letters LetterReader, userID, jobID int64) (answer string, ok bool, err error) {
 	if letters != nil && (f.Kind == "text" || f.Kind == "textarea") && isCoverLetterTextField(f) {
 		if answer, ok := coverLetterAnswer(ctx, letters, userID, jobID); ok {
@@ -62,17 +51,10 @@ func answerFor(ctx context.Context, f MergedField, drafter Drafter, grounding Gr
 	return drafter.Draft(ctx, f, grounding)
 }
 
-// draftable reports whether a field is even a candidate for drafting: required (an
-// optional field with no answer is already a fine outcome, nothing to fix), labeled (a
-// field with no label — the DOM-only shape reconcile.go's own tests measure, e.g. an
-// undeclared EEOC control — can never be VERIFIED non-sensitive, since isSensitiveLabel
-// has no text to check; failing closed here is what found and fixed by code review after
-// the empty-string case slipped through isSensitiveLabel's Contains checks), a kind a
-// free-text or single-choice answer actually fits (never a file — see resolveOne's file
-// case — and never a checkbox_group, which resolveOne's own Multi note already scopes
-// out), not sensitive, and not a geography/residency question (geography.go) — a
-// different reason to park (unverifiable, not off-limits) but the same outcome: never
-// reaches the model.
+// draftable reports whether a field may be drafted: required, labeled (an unlabeled field
+// cannot be verified non-sensitive, so it fails closed), a free-text or single-choice kind
+// (never file or checkbox_group), not sensitive, and not a geography question
+// (geography.go), which parks as unverifiable.
 func draftable(f MergedField) bool {
 	if !f.Required || f.Label == "" {
 		return false
@@ -85,20 +67,14 @@ func draftable(f MergedField) bool {
 	return !isSensitiveLabel(f.Label) && !isGeographyLabel(f.Label)
 }
 
-// ResolveWithDrafting runs the deterministic Resolve pass first, then offers the drafter
-// exactly the required, non-sensitive, free-text-or-single-choice fields it left unmapped
-// — never a field Resolve already answered, never an optional field, never a sensitive
-// one. A drafted answer is checked against the field's own offered options exactly as a
-// deterministic one is (matchOption): a draft that matches no option still parks.
+// ResolveWithDrafting runs the deterministic Resolve pass, then offers drafter the
+// required, non-sensitive, free-text-or-single-choice fields it left unmapped. A drafted
+// answer is checked against the field's options like a deterministic one (matchOption);
+// no match still parks.
 //
-// drafter may be nil (an unconfigured deployment, or a caller that has not wired one in
-// yet) — the deterministic Plan is returned unchanged, the same outcome as today.
-//
-// letters may also be nil (no letter store wired in), in which case every field drafts the
-// same way it always has. When it is set, a field draftable's own gates already accept AND
-// identified as cover-letter-semantic (isCoverLetterTextField) prefers the candidate's own
-// existing letter for (userID, jobID) over the generic drafter — see
-// atsapply-cover-letter-reuse's spec. userID/jobID are only ever used for that lookup.
+// A nil drafter returns the deterministic Plan unchanged. A non-nil letters makes
+// cover-letter fields prefer the candidate's existing letter for (userID, jobID);
+// userID/jobID are used only for that lookup.
 func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[string]string, drafter Drafter, grounding GroundingContext, hasApprovedCV bool, letters LetterReader, userID, jobID int64) (Plan, error) {
 	plan := Resolve(fields, answers, hasApprovedCV)
 	if drafter == nil {

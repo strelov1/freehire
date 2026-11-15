@@ -10,28 +10,24 @@ import (
 	"github.com/strelov1/freehire/internal/job/companyrelation"
 )
 
-// companyRelationHandlers serves the company corrections people propose (two slugs are one
-// employer, or one company is another's subsidiary) and the moderator queue that decides
-// them. The rules live in internal/job/companyrelation. This file only parses and renders.
+// companyRelationHandlers serves the company corrections people propose (two slugs are one employer, or one is
+// another's subsidiary) and the moderator queue that decides them. Rules live in internal/job/companyrelation.
 type companyRelationHandlers struct {
 	relations *companyrelation.Service
 }
 
 func (h *companyRelationHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie-only: a proposal is a person's judgement about two employers, and a leaked API
-	// key must not be able to fill the moderators' queue.
+	// Cookie-only: a leaked API key must not be able to fill the moderators' queue.
 	api.Post("/companies/:slug/relations", mw.cookie, contract)
 
-	// The moderator queue sits under its own prefix rather than /companies/..., where a
-	// literal segment would compete with the /companies/:slug read.
+	// The moderator queue has its own prefix: a literal segment under /companies/... would compete with /companies/:slug.
 	api.Get("/company-relations", mw.cookie, mw.moderator, contract)
 	api.Post("/company-relations/:id/approve", mw.cookie, mw.moderator, contract)
 	api.Post("/company-relations/:id/reject", mw.cookie, mw.moderator, contract)
 }
 
-// companyRelationError maps the service's sentinels onto statuses. The ErrInvalid and
-// ErrConflict messages name the reason and are written for the person who proposed, so
-// they go out as they are.
+// companyRelationError maps the service's sentinels onto statuses. ErrInvalid and ErrConflict messages are written
+// for the proposer, so they go out as they are.
 func companyRelationError(err error) error {
 	switch {
 	case errors.Is(err, companyrelation.ErrInvalid):
@@ -47,9 +43,8 @@ func companyRelationError(err error) error {
 	}
 }
 
-// ProposeCompanyRelation records a correction for a moderator: {"kind": "same"|"subsidiary",
-// "target_slug": "...", "note": "..."}. The route's :slug is the company the person is
-// looking at, the one that retires (`same`) or the subsidiary (`subsidiary`).
+// ProposeCompanyRelation records a correction for a moderator: {"kind": "same"|"subsidiary", "target_slug", "note"}.
+// The route's :slug is the company being viewed: the one that retires (`same`) or the subsidiary.
 func (h *companyRelationHandlers) ProposeCompanyRelation(ctx context.Context, req *apigen.CompanyRelationRequest, params apigen.ProposeCompanyRelationParams) (*apigen.ProposeCompanyRelationCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -76,8 +71,7 @@ func (h *companyRelationHandlers) ProposeCompanyRelation(ctx context.Context, re
 	}}, nil
 }
 
-// ListPendingCompanyRelations serves the moderator queue, oldest first, one row per
-// proposal with both companies' names and open-job counts so the decision needs no second page.
+// ListPendingCompanyRelations serves the moderator queue, oldest first, with both companies' names and open-job counts.
 func (h *companyRelationHandlers) ListPendingCompanyRelations(ctx context.Context) (*apigen.ListPendingCompanyRelationsOK, error) {
 	rows, err := h.relations.Pending(ctx)
 	if err != nil {
@@ -102,9 +96,8 @@ func (h *companyRelationHandlers) ListPendingCompanyRelations(ctx context.Contex
 	return &apigen.ListPendingCompanyRelationsOK{Data: out}, nil
 }
 
-// ApproveCompanyRelation applies a proposal. A `same` approval moves the retiring slug's jobs
-// within the request and answers with how many moved. Approving it again resumes a move that
-// failed part-way.
+// ApproveCompanyRelation applies a proposal. A `same` approval moves the retiring slug's jobs within the request and
+// answers with how many moved; approving again resumes a move that failed part-way.
 func (h *companyRelationHandlers) ApproveCompanyRelation(ctx context.Context, params apigen.ApproveCompanyRelationParams) (*apigen.ApproveCompanyRelationOK, error) {
 	id, err := contractPathID(params.ID)
 	if err != nil {

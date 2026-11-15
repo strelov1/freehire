@@ -7,10 +7,10 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// A source family (vocab.SourceFamilies) is one brand split into per-market adapters only
-// because each market is its own publisher account and dedup namespace. The public pages
-// show the brand once, the way the search filter already does, so the /sources and /status
-// reads fold each family's rows into one row under the family name before rendering.
+// A source family (vocab.SourceFamilies) is one brand split into per-market adapters, each
+// its own publisher account and dedup namespace. The public pages show the brand once, as
+// the search filter does, so the /sources and /status reads fold each family's rows into
+// one row under the family name.
 
 // foldHealthFamilies merges each family's health rows into one, keeping the order in which
 // rows first appear. Board counts add up; the freshness timestamps take the latest member.

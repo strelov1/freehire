@@ -15,12 +15,11 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// GetResumeVerdict serves the market-coverage verdict for the caller's profile:
-// how many of the selected role's open vacancies the profile's skills reach, and
-// which missing skill unlocks the most new vacancies. The role is the request's
-// facet params (defaulting to the profile's specializations when no category is
-// given); the profile's skills are always the measured set, never a filter.
-// Cookie-only, session-scoped (no profile → 404); 503 when search is unconfigured.
+// GetResumeVerdict serves the market-coverage verdict for the caller's profile: how many of
+// the role's open vacancies the profile's skills reach, and which missing skill unlocks the
+// most. The role is the request's facet params (defaulting to the profile's specializations);
+// the profile's skills are always the measured set, never a filter. No profile is a 404; 503
+// when search is unconfigured.
 func (h *resumeHandlers) GetResumeVerdict(ctx context.Context) (*apigen.GetResumeVerdictOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -46,30 +45,23 @@ func (h *resumeHandlers) GetResumeVerdict(ctx context.Context) (*apigen.GetResum
 	return &apigen.GetResumeVerdictOK{Data: raw}, nil
 }
 
-// computeCoverage builds the coverage verdict for the caller's profile: the role
-// filter is the request facets (defaulting category to the profile), the covered
-// count is measured against the profile's structured skills, and the role-skill
-// breakdown is scored against the CV's parsed declared/body/all sets.
+// computeCoverage builds the coverage verdict for the caller's profile: the covered count uses
+// the profile's skills, the role-skill breakdown the CV's parsed declared/body/all sets.
 func (h *resumeHandlers) computeCoverage(ctx context.Context, userID int64, profile userprofile.Profile) (verdict.Verdict, error) {
 	roleFilter := search.FilterFromValues(roleValues(contractQuery(ctx), profile))
 	declared, body, all := h.cvSkillSets(ctx, userID)
 	return h.coverageFor(ctx, roleFilter, profile.Skills, declared, body, all)
 }
 
-// coverageFor runs the three facet queries behind the coverage verdict for a role
-// filter and folds them through the pure verdict.Compute. Query A is the role's
-// open-vacancy total (plus its full skill distribution, ranked into the
-// breakdown); query B is the "uncovered" set — the same role filtered to vacancies
-// listing none of coverageSkills — whose total and skill distribution give the
-// covered count and the per-skill new-vacancy unlock; query C is the skill-bearing
-// total (see below). coverageSkills drives covered/uncovered; declared/body/all
-// score the role-skill breakdown — the two sets differ for the CV verdict (profile
-// skills vs parsed CV) and coincide for a stateless skill list.
+// coverageFor runs the three facet queries behind the coverage verdict and folds them through
+// verdict.Compute. A is the role's open-vacancy total and skill distribution; B is the
+// "uncovered" set (the role filtered to vacancies listing none of coverageSkills), giving the
+// covered count and per-skill unlock; C is the skill-bearing total. coverageSkills drives
+// covered/uncovered; declared/body/all score the breakdown.
 //
-// The role query (A) is split into coverageWithRole so a caller that has already asked
-// for the role's skill distribution — the public roast, which needs it for the ATS
-// keyword score too — can supply it instead of asking twice. Two answers to the same
-// question can differ while the index is being written; one answer cannot.
+// Query A is split into coverageWithRole so a caller that already holds the role's skill
+// distribution (the public roast) supplies it: two answers to the same question can differ
+// while the index is being written.
 func (h *resumeHandlers) coverageFor(ctx context.Context, roleFilter any, coverageSkills, declared, body, all []string) (verdict.Verdict, error) {
 	role, err := h.facets.FacetCounts(ctx, search.FacetParams{
 		Filter: roleFilter,
@@ -112,10 +104,9 @@ func (h *resumeHandlers) coverageWithRole(ctx context.Context, roleFilter any, r
 	}), nil
 }
 
-// cvSkillSets parses the caller's stored CV into its declared (Skills-section), body,
-// and union skill sets for the role breakdown and bundle coverage. Best-effort: with
-// no CV stored (or a read error) it returns empty sets so the breakdown degrades to
-// all-missing rather than failing the verdict.
+// cvSkillSets parses the caller's stored CV into declared (Skills-section), body and union
+// skill sets. Best-effort: with no CV or a read error it returns empty sets, so the breakdown
+// degrades to all-missing rather than failing the verdict.
 func (h *resumeHandlers) cvSkillSets(ctx context.Context, userID int64) (declared, body, all []string) {
 	text, ok, err := h.storedCVText(ctx, userID)
 	if err != nil || !ok {
@@ -124,10 +115,9 @@ func (h *resumeHandlers) cvSkillSets(ctx context.Context, userID int64) (declare
 	return cvsection.Parse(text)
 }
 
-// roleValues builds the facet query for the coverage role from the request. It
-// strips the `skills` facet (the profile's skills are the measured set, not a role
-// filter) and defaults `category` to the profile's specializations when the caller
-// selected no category — so an unfiltered verdict scores the profile's own role.
+// roleValues builds the coverage role's facet query: it strips the `skills` facet (the
+// profile's skills are the measured set) and defaults `category` to the profile's
+// specializations.
 func roleValues(query url.Values, profile userprofile.Profile) url.Values {
 	vals := maps.Clone(query)
 	stripSkillParams(vals)
@@ -137,14 +127,12 @@ func roleValues(query url.Values, profile userprofile.Profile) url.Values {
 	return vals
 }
 
-// skillParams are the skills facet's query params (bare + _exclude/_mode). Named
-// once because two places need the same list: the strip below, and the coverage
+// skillParams are the skills facet's query params, shared by the strip below and the coverage
 // endpoint's report of what it discarded.
 var skillParams = []string{"skills", "skills_exclude", "skills_mode"}
 
-// stripSkillParams removes the skills facet params from a query set. In the
-// coverage endpoints the caller's skills are the measured set, never a market
-// filter that would narrow the market to jobs already listing them.
+// stripSkillParams removes the skills facet params: the caller's skills are the measured set,
+// never a filter that would narrow the market to jobs already listing them.
 func stripSkillParams(vals url.Values) {
 	for _, param := range skillParams {
 		delete(vals, param)

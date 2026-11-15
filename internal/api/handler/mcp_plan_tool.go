@@ -10,17 +10,15 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// The plan tool of the signed-in MCP server (openspec/changes/mcp-plan-standing): an agent
-// reads what the account may still use today BEFORE it queues metered work, rather than
-// learning it from a 402 afterwards. It reads loadPlan, the use case GET /me/plan serves, so
-// the two doors cannot disagree about what a caller is on.
+// The plan tool of the signed-in MCP server: an agent reads what the account may still use
+// today before it queues metered work, rather than learning it from a 402. It reads
+// loadPlan, the use case GET /me/plan serves, so the two cannot disagree.
 //
 // Not the support agent's my_account: that one carries prices, the payment source and plan
-// history, which are for freehire's own support chat and not for a third-party model.
+// history, which are not for a third-party model.
 
-// mcpPlan is an allowlist, like accountSummary: a field added to the plan surface later
-// reaches an agent only by being added here. No price, payment source or invoice — billing
-// is the website's, and PlanURL is where the agent sends the person for it.
+// mcpPlan is an allowlist, like accountSummary: a new plan field reaches an agent only by
+// being added here. No price, payment source or invoice; PlanURL is where billing lives.
 type mcpPlan struct {
 	Plan string `json:"plan"`
 	// PaidUntil is the end of the current paid period — for an auto-renewing subscription the
@@ -32,8 +30,8 @@ type mcpPlan struct {
 }
 
 // mcpAllowance is one feature's standing today. Limit and Remaining are omitted for an
-// unlimited feature, for the reason allowanceView omits Limit: the fair-use guard is not
-// what the person bought. Remaining is also omitted for a limit that is not enforced. Every allowance resets at mcpPlan.ResetsAt, so it is stated once.
+// unlimited feature (the fair-use guard is not what the person bought), and Remaining for a
+// limit that is not enforced. Every allowance resets at mcpPlan.ResetsAt.
 type mcpAllowance struct {
 	Feature   string `json:"feature"`
 	Used      int    `json:"used"`
@@ -67,8 +65,8 @@ func mcpPlanFrom(p planResponse, origin string) mcpPlan {
 	return out
 }
 
-// planMCPTool is served to OAuth grants and full-scope API keys alike: GET /me/plan has
-// always been open to a key over REST, and reading a plan changes nothing.
+// planMCPTool is served to OAuth grants and full-scope API keys alike; reading a plan
+// changes nothing.
 func (h *assistantHandlers) planMCPTool(origin string) assistant.Tool {
 	return assistant.Tool{
 		Name:       "get_plan",
@@ -76,10 +74,9 @@ func (h *assistantHandlers) planMCPTool(origin string) assistant.Tool {
 		Effect:     assistant.EffectReads,
 		Idempotent: true,
 		// Phrased around auto-apply, the one metered feature an MCP tool spends; the rest are
-		// listed so the agent can read the result, not as something it can start here. The
-		// stop rule is the plan's own (internal/ai/plan/decide.go): free is refused whatever
-		// the allowance, an unlimited plan's fair-use guard ignores enforcement, and a charge
-		// is per posting, so retrying or reviewing an attempt is never charged.
+		// listed so the agent can read the result. The stop rule is the plan's own
+		// (internal/ai/plan/decide.go): free is refused whatever the allowance, an unlimited plan's
+		// fair-use guard ignores enforcement, and a charge is per posting, so retries are free.
 		Description: "Read the signed-in account's plan (\"free\", \"pro\" or \"ultra\") and today's allowance of " +
 			"each metered AI feature: limit, used and remaining, all resetting at resets_at (UTC). " +
 			"paid_until is the end of the current paid period (it may renew; see plan_url). " +

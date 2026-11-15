@@ -6,10 +6,8 @@ import (
 	"github.com/strelov1/freehire/internal/api/apigen"
 )
 
-// CheckUsername reports whether a candidate username could be claimed right
-// now (valid format, not reserved, not already held). Public — usable while
-// picking a name before committing to a claim, or before the caller is even
-// signed in.
+// CheckUsername reports whether a candidate username could be claimed now (valid format, not
+// reserved, not held). Public, so usable before sign-in.
 func (h *authHandlers) CheckUsername(ctx context.Context, params apigen.CheckUsernameParams) (*apigen.CheckUsernameOK, error) {
 	available, err := h.accounts.UsernameAvailable(ctx, params.Value.Value)
 	if err != nil {
@@ -33,9 +31,7 @@ func (h *authHandlers) accountUsername(ctx context.Context, userID int64) (apige
 	return out, nil
 }
 
-// GetUsername returns the caller's own username (null until claimed/allocated).
-// Cookie-only, same reasoning as the other /me reads: it is the caller's own
-// account state.
+// GetUsername returns the caller's own username (null until claimed/allocated). Cookie-only.
 func (h *authHandlers) GetUsername(ctx context.Context) (*apigen.GetUsernameOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

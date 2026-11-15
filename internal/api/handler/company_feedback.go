@@ -12,9 +12,8 @@ import (
 	"github.com/strelov1/freehire/internal/engage/companyfeedback"
 )
 
-// communityPersonas adapts community.Service to companyfeedback.PersonaSource,
-// so feedback reuses the exact same site-wide persona discussion threads mint
-// rather than a second identity being minted here.
+// communityPersonas adapts community.Service to companyfeedback.PersonaSource, so feedback reuses the site-wide persona
+// that discussion threads mint.
 type communityPersonas struct{ svc *community.Service }
 
 func (p communityPersonas) PersonaFor(ctx context.Context, userID int64) (string, error) {
@@ -25,11 +24,8 @@ func (p communityPersonas) PersonaFor(ctx context.Context, userID int64) (string
 	return persona.Handle, nil
 }
 
-// companyFeedbackHandlers serves company feedback: a signed-in user's 1-5 star
-// rating + closed category + text about a company, shown under their site-wide
-// pseudonymous persona, plus the reader-report/moderator-hide lever. The use
-// cases live in companyfeedback.Service; the handlers translate wire ↔ domain
-// and delegate to it.
+// companyFeedbackHandlers serves company feedback: a 1-5 star rating, closed category and text under the user's site-wide
+// pseudonymous persona, plus the reader-report/moderator-hide lever. Use cases live in companyfeedback.Service.
 type companyFeedbackHandlers struct {
 	feedback *companyfeedback.Service
 }
@@ -40,21 +36,17 @@ func newCompanyFeedbackHandlers(svc *companyfeedback.Service) *companyFeedbackHa
 
 // registerPublic mounts pseudonymous feedback reads without requiring sign-in.
 func (h *companyFeedbackHandlers) registerPublic(api fiber.Router, contract fiber.Handler) {
-	// Only pseudonymous persona handles are ever exposed, never a user id, so feedback is
-	// browsable without signing in.
+	// Only persona handles are exposed, never a user id, so feedback is browsable without signing in.
 	api.Get("/companies/:slug/feedback", contract)
 }
 
 func (h *companyFeedbackHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	h.registerPublic(api, contract)
-	// Writes are cookie-only, the same as thread create/reply: this is authored public
-	// content, not the single-bit vote a leaked API key is trusted with.
+	// Writes are cookie-only like thread create/reply: authored public content, not the single-bit vote a leaked API key is trusted with.
 	api.Get("/companies/:slug/feedback/mine", mw.cookie, contract)
 	api.Post("/companies/:slug/feedback", mw.cookie, contract)
 	api.Delete("/companies/:slug/feedback", mw.cookie, contract)
-	// Reporting a specific review, and the moderator lever it feeds, are addressed
-	// by the review's own id — flat routes, the same shape as /threads/:id/close —
-	// rather than nested under a company slug the id doesn't need to be found.
+	// Reporting a review and the moderator lever are addressed by the review's own id (flat routes, like /threads/:id/close).
 	api.Post("/company-feedback/:id/report", mw.cookie, contract)
 	api.Get("/company-feedback/reported", mw.cookie, mw.moderator, contract)
 	api.Post("/company-feedback/:id/hide", mw.cookie, mw.moderator, contract)
@@ -137,10 +129,8 @@ func (h *companyFeedbackHandlers) ListCompanyFeedback(ctx context.Context, param
 	}, nil
 }
 
-// MyCompanyFeedback returns all of the caller's own feedback on a company, across
-// every category they've reviewed it under (an empty array when they have not
-// left any yet) — the write form's per-category prefill, so picking a category
-// the caller has already used edits that review instead of starting a new one.
+// MyCompanyFeedback returns all of the caller's own feedback on a company, across every category (an empty array when none):
+// the write form's per-category prefill, so reusing a category edits that review.
 func (h *companyFeedbackHandlers) MyCompanyFeedback(ctx context.Context, params apigen.MyCompanyFeedbackParams) (*apigen.MyCompanyFeedbackOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -153,10 +143,8 @@ func (h *companyFeedbackHandlers) MyCompanyFeedback(ctx context.Context, params 
 	return &apigen.MyCompanyFeedbackOK{Data: toCompanyFeedbacks(items)}, nil
 }
 
-// UpsertCompanyFeedback creates or overwrites the caller's feedback in one category
-// on a company; 400/404/422/429. The response's nested `company` field is the
-// freshly recomputed counters, so the caller can update its own view of the
-// company (e.g. a header badge) without a second round trip.
+// UpsertCompanyFeedback creates or overwrites the caller's feedback in one category on a company; 400/404/422/429.
+// The nested `company` field carries the recomputed counters, saving a second round trip.
 func (h *companyFeedbackHandlers) UpsertCompanyFeedback(ctx context.Context, req *apigen.CompanyFeedbackRequest, params apigen.UpsertCompanyFeedbackParams) (*apigen.UpsertCompanyFeedbackCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -175,11 +163,8 @@ func (h *companyFeedbackHandlers) UpsertCompanyFeedback(ctx context.Context, req
 	return &apigen.UpsertCompanyFeedbackCreated{Data: out}, nil
 }
 
-// DeleteCompanyFeedback removes the caller's own feedback in one category
-// (?feedback_type=) on a company (no-op when absent) and returns the
-// company's freshly recomputed counters — the same cast/clear-returns-the-tally
-// shape as VoteControl's clear endpoints, so the caller never needs a
-// follow-up fetch to learn the new count.
+// DeleteCompanyFeedback removes the caller's own feedback in one category (?feedback_type=; no-op when absent) and returns
+// the company's recomputed counters, the same shape as VoteControl's clear endpoints.
 func (h *companyFeedbackHandlers) DeleteCompanyFeedback(ctx context.Context, params apigen.DeleteCompanyFeedbackParams) (*apigen.DeleteCompanyFeedbackOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -192,8 +177,7 @@ func (h *companyFeedbackHandlers) DeleteCompanyFeedback(ctx context.Context, par
 	return &apigen.DeleteCompanyFeedbackOK{Data: toCompanyFeedbackSummary(summary)}, nil
 }
 
-// ReportCompanyFeedback files a complaint against a specific review, addressed by its
-// id. Any signed-in user; a second report of the same review by the same user
+// ReportCompanyFeedback files a complaint against a review by its id. Any signed-in user; a repeat report by the same user
 // is a silent no-op. 400/404.
 func (h *companyFeedbackHandlers) ReportCompanyFeedback(ctx context.Context, req *apigen.CompanyFeedbackReportRequest, params apigen.ReportCompanyFeedbackParams) error {
 	userID, err := requireUserIDFromContext(ctx)
@@ -224,9 +208,8 @@ func (h *companyFeedbackHandlers) ListReportedCompanyFeedback(ctx context.Contex
 	return &apigen.ListReportedCompanyFeedbackOK{Data: out}, nil
 }
 
-// HideCompanyFeedback is the moderator lever: hide a specific review, addressed by
-// its id, and drop it out of its company's public list and average in the
-// same step. Idempotent; role-gated. 404 for an unknown id.
+// HideCompanyFeedback is the moderator lever: hide a review by its id, dropping it from its company's public list and
+// average in the same step. Idempotent; role-gated. 404 for an unknown id.
 func (h *companyFeedbackHandlers) HideCompanyFeedback(ctx context.Context, params apigen.HideCompanyFeedbackParams) error {
 	id, err := contractPathID(params.ID)
 	if err != nil {

@@ -17,10 +17,8 @@ import (
 
 // cvJobMatchResponse is the wire shape for the tailoring job-match score. Available is false
 // — with a short reason and no Score — when the score could not be produced, so the
-// workspace renders an absence instead of an error. That covers both an absent toolchain
-// and a vacancy nothing could be matched against: from the panel's side they are the same
-// answer, and giving the client one falsy case to handle is worth more than telling the two
-// apart in a field nobody would branch on.
+// workspace renders an absence instead of an error. An absent toolchain and an unmatchable vacancy give
+// the same answer, so the client has one falsy case to handle.
 // GetCVJobMatch serves how well a tailored CV matches the vacancy it was written for,
 // measured on the rendered PDF's text layer and against that vacancy alone.
 //

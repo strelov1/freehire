@@ -13,9 +13,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// accessTokenTTL is the grant's fixed lifetime. No refresh token exists in this
-// server (so a resource binding has nothing to be carried across) — the issue asks for grants that "expire after 30 days," not ones that
-// renew themselves; re-approving the consent screen mints a fresh one.
+// accessTokenTTL is the grant's fixed lifetime. There is no refresh token (so a resource
+// binding has nothing to carry across); re-approving consent mints a fresh grant.
 const accessTokenTTL = 30 * 24 * time.Hour
 
 type tokenResponse struct {
@@ -58,11 +57,8 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// The code is already consumed (deleted) at this point — every check below
-	// that fails must still leave it spent, which is the right failure mode: a
-	// mismatched client/redirect/verifier means something is wrong with this
-	// exchange, and the client must restart the authorize step rather than retry
-	// the same code.
+	// The code is already consumed here, so every failing check below leaves it spent: a
+	// mismatched client/redirect/verifier means the client must restart authorize, not retry.
 	if row.ClientID != clientID || row.RedirectUri != redirectURI {
 		return fiber.NewError(fiber.StatusBadRequest, "client_id or redirect_uri does not match the authorization request")
 	}
@@ -80,13 +76,10 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 		resource = tokenResource
 	}
 
-	// The grant is stamped with the generation the CONSUMED code was bound to —
-	// the consent-time session generation, already re-validated against the
-	// account's CURRENT one by the consume's latch — never a fresh read of
-	// users.token_version. A revocation landing between this consume and the
-	// grant INSERT below therefore leaves the grant on the dead generation,
-	// where AuthenticateOAuthGrant refuses it: a consumed code can never be
-	// upgraded to the generation that revocation minted.
+	// The grant is stamped with the generation the CONSUMED code carried (already re-validated
+	// by the consume's latch), never a fresh read of users.token_version. A revocation between
+	// consume and INSERT leaves the grant on the dead generation, where AuthenticateOAuthGrant
+	// refuses it.
 	version := row.IssuedTokenVersion.Int32
 
 	token, hash, err := oauth2server.GenerateAccessToken()

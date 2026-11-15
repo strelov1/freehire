@@ -16,8 +16,8 @@ import (
 )
 
 // paidEntitlement is what the paid-AI gate asks of the plan: whether the caller is on a paid
-// tier at all, and — only to word a refusal — where they stand on the feature they asked
-// for — and to remember a refusal, which is the one write it makes. *plan.Store in production.
+// tier, where they stand on the feature (only to word a refusal), and remembering a refusal,
+// its one write. *plan.Store in production.
 type paidEntitlement interface {
 	RequirePaid(ctx context.Context, userID int64) (plan.Tier, error)
 	Standing(ctx context.Context, userID int64, f plan.Feature) (plan.Standing, error)
@@ -39,18 +39,16 @@ func entitlementOf(s *plan.Store) paidEntitlement {
 // paid gate still stands in front of it; only the refusal has no allowance to quote.
 const unmeteredAI plan.Feature = ""
 
-// paidAIGate builds the route middleware every user-initiated model call sits behind. It is
-// a function of the feature rather than one handler, so a refusal on a metered route names
-// what the plan does not include in the same body every other plan refusal carries; a route
-// with no allowance of its own (the ATS review, mail recall, autofill,
+// paidAIGate builds the route middleware every user-initiated model call sits behind. A
+// function of the feature so a refusal on a metered route names what the plan lacks in the
+// usual body; a route with no allowance of its own (ATS review, mail recall, autofill,
 // extraction) passes the zero Feature.
 //
-// Mounted AFTER the authentication gate, which is what put the caller's id in locals.
+// Mounted AFTER the authentication gate, which puts the caller's id in locals.
 //
-// It is one of two halves. The other is the user-call binding (user_llm.go), which refuses
-// to hand out a model client for a context this gate did not mark — so a route that makes a
-// model call and was mounted without this middleware fails closed on its first request
-// rather than spending on somebody who never paid.
+// It is one of two halves: the user-call binding (user_llm.go) refuses a model client to a
+// context this gate did not mark, so a model-calling route mounted without it fails closed on
+// its first request.
 func paidAIGate(plans paidEntitlement) func(plan.Feature) fiber.Handler {
 	return func(feature plan.Feature) fiber.Handler {
 		return func(c *fiber.Ctx) error {
@@ -69,14 +67,12 @@ func paidAIGate(plans paidEntitlement) func(plan.Feature) fiber.Handler {
 // authorizePaidAI is the gate's check for one user, for a handler that cannot use the
 // middleware. A refusal is recorded as a paywall hit (see recordPaywallHit).
 //
-// ok is false when the request has been answered: a 402 written to c (with a nil error, since
-// `c.Status(402).JSON(...)` returns nil — which is why there is a bool beside it), or a 503
-// returned as the error when the plan could not be read. A read failure never authorises:
-// an entitlement nobody could read is not one, and what this protects is model spend.
+// ok is false when the request has been answered: a 402 written to c (nil error, since
+// `c.Status(402).JSON(...)` returns nil, hence the bool), or a 503 returned as the error when
+// the plan could not be read. A read failure never authorises: this protects model spend.
 //
-// On success the request's user context is marked (plan.WithPaidAI), which is what the
-// user-call binding reads before it hands out a model client. Handlers pass c.UserContext()
-// — or a context derived from it — to the binding for exactly that reason.
+// On success the user context is marked (plan.WithPaidAI), which the user-call binding reads
+// before handing out a model client; handlers must pass c.UserContext() or a derivative.
 func authorizePaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature) (bool, error) {
 	return checkPaidAI(c, plans, userID, feature, true)
 }
@@ -110,13 +106,12 @@ func checkPaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan
 	return true, nil
 }
 
-// refusePaidAI writes the 402 an unpaid caller gets, in the shape every plan refusal has —
-// the sentence, the upgrade link, and for a metered feature the allowance it does not
-// include — so the web and the extension render it through the path they already have.
+// refusePaidAI writes the 402 an unpaid caller gets, in the shape every plan refusal has
+// (sentence, upgrade link, and for a metered feature the allowance it lacks), so the web and
+// the extension render it as usual.
 //
-// The allowance is read rather than assembled: a refusal built from fields filled in by
-// hand is a lie that reads as fact at the next call site (see refuseStanding). If that read
-// fails, the refusal still stands and goes out without it; there is nothing left to decide.
+// The allowance is read, not assembled by hand (see refuseStanding). If the read fails the
+// refusal still goes out without it.
 func refusePaidAI(c *fiber.Ctx, plans paidEntitlement, userID int64, tier plan.Tier, feature plan.Feature) error {
 	if feature != "" {
 		st, err := plans.Standing(c.Context(), userID, feature)
@@ -153,11 +148,10 @@ const unknownPaywallFeature = "ai_other"
 // recordPaywallHit remembers that an unpaid signed-in user was refused, for the paywall
 // report and the letter that answers it.
 //
-// It reads everything it needs from the request now — fiber recycles the context once the
-// handler returns — and writes from a goroutine on a context detached from the request, so
-// the 402 neither waits for the database nor depends on it. The goroutine recovers its own
-// panic, which the server's recover middleware cannot reach; a failed write is logged and
-// dropped.
+// It reads everything from the request up front (fiber recycles the context after the
+// handler) and writes from a goroutine on a detached context, so the 402 neither waits for
+// nor depends on the database. The goroutine recovers its own panic, which the server's
+// recover middleware cannot reach; a failed write is logged and dropped.
 func recordPaywallHit(c *fiber.Ctx, plans paidEntitlement, userID int64, feature plan.Feature) {
 	label := string(feature)
 	if feature == unmeteredAI {

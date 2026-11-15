@@ -12,8 +12,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// timelineHandlers serves the ledger's dated read — the caller's application events over
-// a range, which the tracking calendar paints and an agent can ask for directly.
+// timelineHandlers serves the ledger's dated read: the caller's application events over a
+// range, which the tracking calendar paints and an agent can ask for directly.
 type timelineHandlers struct {
 	timeline *apptimeline.Service
 }
@@ -23,34 +23,27 @@ func newTimelineHandlers(queries *db.Queries) *timelineHandlers {
 }
 
 func (h *timelineHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Its own namespace rather than a segment under /me/tracking. GET /me/tracking/:slug
-	// is mounted from gmail.go and only avoids shadowing its static siblings because the
-	// registration order is deliberate — both sides say so (see the comment there and the
-	// one above inboxH.register). That arrangement is maintained by hand and by nothing
-	// else, and its failure is quiet: the parameterised route would answer for a job slug
-	// that does not exist. Every static segment added under that prefix is another thing
-	// the arrangement has to keep carrying, so this one is not added to it.
+	// Its own namespace, not a segment under /me/tracking: GET /me/tracking/:slug (gmail.go)
+	// avoids shadowing its static siblings only through a hand-kept registration order, and
+	// its failure is quiet (the parameterised route would answer for a nonexistent job slug).
 	//
 	// mw.key like the rest of /me: a cookie or a full-scope key, so a caller's own harness
 	// can read its history.
 	api.Get("/me/timeline", mw.key, contract)
-	// The calendar's second layer, on its own path rather than folded into the timeline.
-	// /me/timeline is published with `data` as a list of events and is read by the CLI
-	// and MCP surfaces; a second list inside it would either break that shape or hide
-	// the meetings in `meta`. The day panel's no-fetch rule does not require ONE request
-	// — it requires the data to be in hand before a day is clicked, and the page asks
-	// for both ranges together.
+	// The calendar's second layer, on its own path: /me/timeline's `data` is a list of events
+	// read by the CLI and MCP, so a second list there would break that shape or hide meetings
+	// in `meta`. The page asks for both ranges together, so the data is in hand before a day
+	// is clicked.
 	api.Get("/me/interviews", mw.key, contract)
 }
 
-// timelineWire projects the service's events onto the wire — separate from apptimeline.Event
-// so that a field added to the service type has to be published deliberately rather than by
-// inheritance. Shared by the range read and the single application's history, so an event
-// published by one cannot carry a field the other withholds.
+// timelineWire projects the service's events onto the wire, separate from apptimeline.Event
+// so a field added to the service type must be published deliberately. Shared by the range
+// read and a single application's history so the two cannot disagree on fields.
 //
-// The optional members are omitted rather than zeroed; apptimeline.Event says when each is
-// legitimately absent. OccurredAt is an instant, not a day: which day it falls on depends on
-// the reader's clock, so the grouping belongs in the browser that knows it.
+// Optional members are omitted rather than zeroed (apptimeline.Event says when each is
+// legitimately absent). OccurredAt is an instant, not a day: grouping by day belongs in the
+// browser, which knows the reader's clock.
 func timelineWire(events []apptimeline.Event) []apigen.TimelineEvent {
 	out := make([]apigen.TimelineEvent, 0, len(events))
 	for _, e := range events {
@@ -91,11 +84,9 @@ func (h *timelineHandlers) GetTimeline(ctx context.Context, params apigen.GetTim
 	return &apigen.GetTimelineOK{Data: out, Meta: apigen.TimelineMeta{From: from, To: to, Count: int64(len(out))}}, nil
 }
 
-// GetInterviews serves the caller's arranged meetings whose start falls in the range.
-//
-// A meeting is a different kind of fact from a timeline event: an event happened and
-// cannot change, a meeting is arranged and can move or be called off. Rendering them with
-// one shape would invite the view to draw them with one meaning.
+// GetInterviews serves the caller's arranged meetings whose start falls in the range. A
+// meeting is arranged and can move or be called off, unlike an event that happened, so it
+// keeps a separate shape.
 func (h *timelineHandlers) GetInterviews(ctx context.Context, params apigen.GetInterviewsParams) (*apigen.GetInterviewsOK, error) {
 	userID, from, to, err := timelineRequest(ctx, params.From, params.To)
 	if err != nil {
@@ -116,8 +107,7 @@ func (h *timelineHandlers) GetInterviews(ctx context.Context, params apigen.GetI
 			ID:            iv.ID,
 			ApplicationID: iv.ApplicationID,
 			StartsAt:      iv.StartsAt,
-			// An all-day entry legitimately has no end; a zero time is left out, not
-			// sent as the year 1, which a reader would draw two millennia long.
+			// An all-day entry has no end; a zero time is left out, not sent as the year 1.
 			EndsAt:      optTime(iv.EndsAt),
 			Title:       optString(iv.Title),
 			JoinURL:     optString(iv.JoinURL),
@@ -145,11 +135,8 @@ func optTime(at time.Time) apigen.OptDateTime {
 	return apigen.NewOptDateTime(at)
 }
 
-// timelineRequest reads the caller and the range both calendar layers are asked for.
-//
-// Shared so a change to how a range is read cannot reach one layer and not the other:
-// the view puts the two answers on one grid, and a bound parsed differently by each would
-// paint half a month with nothing to say why.
+// timelineRequest reads the caller and the range both calendar layers are asked for. Shared
+// so a bound cannot be parsed differently by each layer on the same grid.
 func timelineRequest(ctx context.Context, rawFrom, rawTo apigen.OptString) (userID int64, from, to time.Time, err error) {
 	if userID, err = requireUserIDFromContext(ctx); err != nil {
 		return 0, time.Time{}, time.Time{}, err
@@ -164,8 +151,7 @@ func timelineRequest(ctx context.Context, rawFrom, rawTo apigen.OptString) (user
 }
 
 // timelineBound parses one RFC3339 bound. Both are required and neither is defaulted: a
-// missing bound silently widened to "the last month" would answer a question the caller
-// did not ask, and the reader's month is not the server's to guess.
+// silently widened range would answer a question the caller did not ask.
 func timelineBound(name, raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, fiber.NewError(fiber.StatusBadRequest, "both from and to are required, as RFC3339 instants")

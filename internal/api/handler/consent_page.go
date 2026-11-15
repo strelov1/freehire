@@ -8,11 +8,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// consentScreen is what one server-rendered approval screen says. The OAuth
-// authorize flow (ChatGPT, Claude, a CLI on a loopback port) and the
-// browser-extension connect share it, so the screens a person approves an agent
-// on cannot drift apart in look or in what they warn. html/template escapes every
-// field, so a caller cannot forget to.
+// consentScreen is what one server-rendered approval screen says. The OAuth authorize flow and
+// the browser-extension connect share it so the screens cannot drift apart. html/template
+// escapes every field.
 type consentScreen struct {
 	Title       string // e.g. "ChatGPT wants to access your freehire account"
 	SignedIn    string // the account's email; empty omits the line

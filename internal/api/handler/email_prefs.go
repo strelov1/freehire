@@ -11,14 +11,11 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// emailPrefsHandlers serve the preference page a mail links to. Every route here is
-// UNAUTHENTICATED by design: the whole point is that somebody holding one of our
-// mails can turn it off without an account, a password, or a support ticket. What
-// stands in for a session is the signed token in the link, which names one user and
-// one group of mail and nothing else.
+// emailPrefsHandlers serve the preference page a mail links to. The token routes are
+// UNAUTHENTICATED by design: whoever holds a mail can turn it off with no account. The
+// signed token in the link names one user and one group of mail and nothing else.
 //
-// No route here issues a cookie. A page reached by a forwarded link must not become
-// a way into the account.
+// No route here issues a cookie: a forwarded link must not become a way into the account.
 type emailPrefsHandlers struct {
 	prefs *emailprefs.Service
 }
@@ -29,9 +26,8 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 
 // register mounts the token-authenticated email preference routes.
 //
-// The token rides in the QUERY only where it has nowhere else to go. nginx logs
-// query strings (freehire-ops' provision/host2/nginx/snippets/freehire-app.conf), so a never-expiring
-// credential in a URL lands in a bulk store that outlives the click:
+// The token rides in the QUERY only where it has nowhere else to go. nginx logs query
+// strings, so a never-expiring credential in a URL outlives the click:
 //
 //   - GET has no body, and the link in the mail has to carry it. The page strips it
 //     from the address bar after the first read.
@@ -40,11 +36,8 @@ func newEmailPrefsHandlers(svc *emailprefs.Service) *emailPrefsHandlers {
 //     `List-Unsubscribe=One-Click`, so the URL Gmail was handed is the only place
 //     left. The access log is switched off for that path on the host instead.
 //
-// The two /me routes are the same three switches for somebody who IS signed in, so
-// the account's own settings page shows and writes exactly what the emailed link
-// would. They share the service rather than the endpoint because only the way the
-// user is established differs — and two views that disagreed about one boolean would
-// read as the product losing a setting.
+// The two /me routes are the same three switches for a signed-in user. They share the
+// service, not the endpoint, because only the way the user is established differs.
 func (h *emailPrefsHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// The handlers below implement the contract (typespec/email-prefs.tsp); each route
 	// here only names its middleware and ends in the generated server.
@@ -65,9 +58,8 @@ func (h *emailPrefsHandlers) GetEmailPrefs(ctx context.Context, params apigen.Ge
 	return &apigen.GetEmailPrefsOK{Data: prefs}, nil
 }
 
-// UpdateEmailPrefs saves the switches somebody set. The token is a body field rather
-// than a query parameter, so the one write path that has a choice keeps the
-// credential out of the access log.
+// UpdateEmailPrefs saves the switches somebody set. The token is a body field, not a
+// query parameter, to keep it out of the access log.
 func (h *emailPrefsHandlers) UpdateEmailPrefs(ctx context.Context, req *apigen.EmailPrefsTokenUpdate) (*apigen.UpdateEmailPrefsOK, error) {
 	token := req.Token.Value
 	update := apigen.EmailPrefsUpdate{
@@ -80,7 +72,7 @@ func (h *emailPrefsHandlers) UpdateEmailPrefs(ctx context.Context, req *apigen.E
 	if err != nil {
 		return nil, renderTokenError(err)
 	}
-	// Answer with what was actually stored rather than what the caller hoped it had stored.
+	// Answer with what was actually stored.
 	prefs, err := h.loadByToken(ctx, token)
 	if err != nil {
 		return nil, err
@@ -88,12 +80,9 @@ func (h *emailPrefsHandlers) UpdateEmailPrefs(ctx context.Context, req *apigen.E
 	return &apigen.UpdateEmailPrefsOK{Data: prefs}, nil
 }
 
-// applyPatch is the patch semantics both write routes share: read the stored state
-// first so an ABSENT switch keeps its value rather than defaulting to false, then
-// write. The two routes differ only in how they establish the user, which is what
-// the two closures carry.
-//
-// Reading first is also what validates the caller before anything is written.
+// applyPatch is the patch semantics both write routes share: read the stored state first
+// so an ABSENT switch keeps its value rather than defaulting to false, then write. The
+// read also validates the caller before anything is written.
 func applyPatch(
 	body apigen.EmailPrefsUpdate,
 	load func() (emailprefs.Prefs, error),
@@ -120,11 +109,8 @@ func (h *emailPrefsHandlers) OneClickUnsubscribe(ctx context.Context, params api
 	if err != nil {
 		return nil, renderTokenError(err)
 	}
-	// The response names what was turned off and points at the full page, so
-	// somebody who meant "all of it" is one click from it. The link carries the
-	// SAME token: without it the page has no way to know whose preferences to
-	// open, and the "one click from the rest" would land on "this link is no
-	// longer valid".
+	// The response points at the full page for somebody who meant "all of it". The link
+	// carries the SAME token, or the page could not tell whose preferences to open.
 	return &apigen.OneClickUnsubscribeOK{Data: apigen.OneClickResult{
 		UnsubscribedFrom: string(group),
 		ManageURL:        emailprefs.Path + "?t=" + url.QueryEscape(token),
@@ -140,11 +126,9 @@ func (h *emailPrefsHandlers) loadByToken(ctx context.Context, token string) (api
 	return toEmailPrefsResponse(prefs), nil
 }
 
-// toEmailPrefsResponse projects the domain shape onto the wire one. Both the
-// token-opened and the signed-in routes answer through it, so the two views cannot
-// drift apart in what they report. It carries the address the mail already went to,
-// the three switches, and the names of the searches those switches govern — nothing
-// else about the account reaches this response.
+// toEmailPrefsResponse projects the domain shape onto the wire one for both the token and
+// signed-in routes. It carries the mail address, the three switches and the governed
+// search names; nothing else about the account reaches this response.
 func toEmailPrefsResponse(prefs emailprefs.Prefs) apigen.EmailPrefs {
 	out := apigen.EmailPrefs{
 		Email: prefs.Email, AlertsEnabled: prefs.Alerts, ActivityEnabled: prefs.Activity, NewsEnabled: prefs.News,

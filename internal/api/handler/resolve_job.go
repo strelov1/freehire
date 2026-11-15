@@ -10,43 +10,30 @@ import (
 	"github.com/strelov1/freehire/internal/api/apigen"
 )
 
-// Intake outcomes. They differ only in what the system already knew about the link, which is
-// precisely what the caller needs to be told.
+// Intake outcomes. They differ only in what the system already knew about the link.
 const (
-	// outcomeFound — the catalog already carries this vacancy. Reached two ways: the URL
-	// itself is stored (no fetch, no write), or the page turned out to be a second copy of a
-	// posting we hold under another source, which collapses onto it.
+	// outcomeFound — the catalog already carries this vacancy: the URL is stored (no fetch, no
+	// write), or the page is a second copy of a posting held under another source.
 	outcomeFound = "found"
-	// outcomeTracked — we already crawl the board; this posting just had not landed yet, so it
-	// was imported now and the company we cover is named.
+	// outcomeTracked — we already crawl the board; the posting was imported now.
 	outcomeTracked = "tracked"
 	// outcomeImported — imported, and the board behind it queued for onboarding.
 	outcomeImported = "imported"
-	// outcomeReview — imported, but the page names no board we can crawl (a careers site on
-	// the company's own domain), so the link went to manual triage rather than onboarding.
-	// Distinct from outcomeImported precisely because no crawl follows from it.
+	// outcomeReview — imported, but no crawlable board (e.g. a careers site on the company's own
+	// domain), so the link went to manual triage and no crawl follows.
 	outcomeReview = "review"
 	// outcomeQueued — nothing could read the page; the link went to manual triage.
 	outcomeQueued = "queued"
 )
 
 // ResolveJob is the HTTP door onto the shared intake sequence (see intakeService), used by the
-// website, the browser extension and the CLI. Authenticated, alongside board
-// contributions because both make the server fetch a user-supplied URL.
+// website, extension and CLI. Authenticated because it makes the server fetch a user-supplied URL.
 //
-// Four outcomes, one shape:
+// Outcomes (see the outcome constants): 200 found, 201 tracked, 201 imported, 201 review,
+// 202 queued.
 //
-//	200 found    — the catalog already carries the vacancy: the URL is stored (no fetch, no
-//	               write), or the imported page collapsed onto a posting we already had
-//	201 tracked  — we crawl this board already; the posting had not landed, so it was imported
-//	               now, and the company we cover is named
-//	201 imported — imported, and the board behind it queued for onboarding
-//	201 review   — imported, but no crawlable board could be named, so the link went to triage
-//	202 queued   — nothing could read the page, so the link went to manual triage
-//
-// company_slug rides along on every 201 whose employer the catalog already carries, whatever
-// became of the board — the two are independent, and a surface that reads "new company" off
-// the status alone gets it wrong for a company we reach through a different ATS.
+// company_slug rides along on every 201 whose employer the catalog already carries, independent
+// of the board outcome: "new company" must not be read off the status alone.
 func (h *contributionHandlers) ResolveJob(ctx context.Context, req *apigen.ResolveJobRequest) (apigen.ResolveJobRes, error) {
 	pageURL := strings.TrimSpace(req.URL.Value)
 	if !isHTTPURL(pageURL) {

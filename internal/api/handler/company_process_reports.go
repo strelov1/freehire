@@ -10,14 +10,9 @@ import (
 	"github.com/strelov1/freehire/internal/engage/processreport"
 )
 
-// companyProcessReportHandlers serve candidate-reported facts about how a company
-// hires — today only that it screens with an AI interviewer. The use cases live in
-// processreport.Service; these handlers translate wire ↔ domain and delegate.
-//
-// They are addressed by COMPANY slug even though the report is filed from a job page,
-// because that is what the report is about. Routing it through the job report endpoint
-// would make a route documented as storing a pending moderation report against a job
-// do neither of those things.
+// companyProcessReportHandlers serve candidate-reported facts about how a company hires (today: it screens with an AI
+// interviewer). Use cases live in processreport.Service. Addressed by COMPANY slug although filed from a job page,
+// because the report is about the company, not a job moderation report.
 type companyProcessReportHandlers struct {
 	reports *processreport.Service
 }
@@ -27,11 +22,8 @@ func newCompanyProcessReportHandlers(svc *processreport.Service) *companyProcess
 }
 
 func (h *companyProcessReportHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie-only, like every other authored claim about an employer: this is a
-	// statement attributed to a person, not the single-bit action a leaked API key is
-	// trusted with. There is no public read — the COUNT is public and travels on the
-	// job and company payloads; what is behind auth is only "did I report this",
-	// which is the caller's own state.
+	// Cookie-only like every authored claim about an employer. No public read: the COUNT is public and travels on the
+	// job and company payloads; what is behind auth is only "did I report this".
 	api.Get("/companies/:slug/process-reports/mine", mw.cookie, contract)
 	api.Post("/companies/:slug/process-reports", mw.cookie, contract)
 	api.Delete("/companies/:slug/process-reports", mw.cookie, contract)
@@ -69,9 +61,8 @@ func (h *companyProcessReportHandlers) RetractProcessReport(ctx context.Context,
 	return &apigen.RetractProcessReportOK{Data: apigen.ProcessReport{Kind: apigen.ProcessReportKind(kind), Count: int64(count)}}, nil
 }
 
-// MyProcessReports lists the kinds the caller currently has live against this company,
-// so the write surface opens in the right state instead of finding out by being
-// refused. Always an array, never null.
+// MyProcessReports lists the kinds the caller has live against this company, so the write surface opens in the right
+// state. Always an array, never null.
 func (h *companyProcessReportHandlers) MyProcessReports(ctx context.Context, params apigen.MyProcessReportsParams) (*apigen.MyProcessReportsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -84,9 +75,8 @@ func (h *companyProcessReportHandlers) MyProcessReports(ctx context.Context, par
 	return &apigen.MyProcessReportsOK{Data: kinds}, nil
 }
 
-// companyProcessReportError maps the service's sentinels onto statuses. The default
-// case passes an unrecognised error through untouched, so an infrastructure failure
-// never renders as a client mistake.
+// companyProcessReportError maps the service's sentinels onto statuses. Unrecognised errors pass through, so an
+// infrastructure failure never renders as a client mistake.
 func companyProcessReportError(err error) error {
 	switch {
 	case errors.Is(err, processreport.ErrCompanyNotFound), errors.Is(err, processreport.ErrNotFound):

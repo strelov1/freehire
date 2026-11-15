@@ -12,14 +12,12 @@ import (
 const (
 	defaultSimilar = 6
 	maxSimilar     = 20
-	// marketTopValues is how many values of each facet job_market_stats keeps: enough to
-	// say what dominates a slice of the market, few enough that ten facets fit a turn.
+	// marketTopValues is how many values of each facet job_market_stats keeps, so ten facets fit a turn.
 	marketTopValues = 10
 )
 
-// marketFacets are the distributions job_market_stats publishes — the ones a person asks
-// about in a sentence. Cities are left out: their long tail is thousands of entries, and the
-// question "where" is answered by countries and regions.
+// marketFacets are the distributions job_market_stats publishes. Cities are left out: their
+// long tail is thousands of entries; countries and regions answer "where".
 var marketFacets = []string{
 	"category", "seniority", "skills", "work_mode", "countries", "regions",
 	"employment_type", "english_level", "visa_sponsorship", "relocation",
@@ -61,8 +59,8 @@ func (in SalaryInput) Scope() (category, seniority, country string) {
 	return category, seniority, country
 }
 
-// Unsupported names the scope values that were dropped, the same doctrine as search_jobs:
-// a salary for "backend in Germany" answered as "backend everywhere" must say so.
+// Unsupported names the scope values that were dropped, as search_jobs does: a salary for
+// "backend in Germany" answered as "backend everywhere" must say so.
 func (in SalaryInput) Unsupported() []string {
 	var out []string
 	if in.Category != "" && !known(vocab.CategoryValues, in.Category) {

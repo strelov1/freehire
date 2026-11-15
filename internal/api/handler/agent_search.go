@@ -12,24 +12,19 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// jobDescriptions loads full job descriptions by internal id, to rehydrate the
-// truncated preview the search index serves. *db.Queries satisfies it; tests
-// inject a fake.
+// jobDescriptions loads full job descriptions by internal id, to rehydrate the truncated
+// preview the search index serves.
 type jobDescriptions interface {
 	GetJobDescriptionsByIDs(ctx context.Context, ids []int64) ([]db.GetJobDescriptionsByIDsRow, error)
 }
 
-// AgentSearchJobs is the programmatic-consumer variant of SearchJobs: it runs the
-// exact same query (via the shared runJobSearch core) and always rehydrates each
-// result with the full description from Postgres, in a selectable format. The
-// truncated preview stays exclusive to /jobs/search — a caller that wants the
-// lightweight variant uses that endpoint instead. Public and unauthenticated like
-// the other job reads; full descriptions are already public via the detail
-// endpoint.
+// AgentSearchJobs is the programmatic-consumer variant of SearchJobs: the same query (shared
+// runJobSearch core), but every result is rehydrated with the full description from Postgres,
+// in a selectable format. The truncated preview stays exclusive to /jobs/search. Public and
+// unauthenticated like the other job reads.
 //
-// `semantic=true` is still accepted but never honoured (see semanticOutcome):
-// meta.semantic is then "unavailable", the request having been answered by keywords.
-// Omitted when not asked.
+// `semantic=true` is accepted but never honoured (see semanticOutcome): meta.semantic is then
+// "unavailable", omitted when not asked.
 func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSearchJobsParams) (*apigen.AgentJobSearchPageHeaders, error) {
 	vals := contractQuery(ctx)
 	userID, _ := auth.UserIDFromContext(ctx)
@@ -43,8 +38,7 @@ func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSear
 			return nil, err
 		}
 	}
-	// Recorded only once the answer is certain to be served: a failed hydration serves no
-	// postings, so it must not count them as seen.
+	// Recorded only once the answer is certain to be served: a failed hydration serves nothing.
 	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 
 	format := vals.Get("description_format")
@@ -75,10 +69,8 @@ func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSear
 	}, nil
 }
 
-// hydrateDescriptions replaces each hit's truncated preview description with the
-// job's full description read from Postgres, keyed by internal id. Best-effort: a
-// hit whose id has no row (index lag vs a just-removed job) keeps its preview
-// rather than being dropped.
+// hydrateDescriptions replaces each hit's truncated preview with the full description from
+// Postgres, keyed by internal id. Best-effort: a hit with no row (index lag) keeps its preview.
 func (h *searchHandlers) hydrateDescriptions(ctx context.Context, hits []search.JobDocument) error {
 	ids := make([]int64, len(hits))
 	for i := range hits {
@@ -100,10 +92,8 @@ func (h *searchHandlers) hydrateDescriptions(ctx context.Context, hits []search.
 	return nil
 }
 
-// formatDescription renders a job description in the requested format. Any value
-// other than "text" or "markdown" — including the empty default and unrecognized
-// values — yields the stored verbatim HTML, so the endpoint never fails on a bad
-// format param.
+// formatDescription renders a job description in the requested format. Anything other than
+// "text" or "markdown" yields the stored HTML, so a bad format param never fails the endpoint.
 func formatDescription(html, format string) string {
 	switch format {
 	case "text":

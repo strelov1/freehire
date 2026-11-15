@@ -24,14 +24,13 @@ import (
 )
 
 // matchHandlers serves the per-job match surfaces: the read-only skill match, the
-// on-demand three-stage LLM fit analysis (GET cached / POST run / SSE stream), and
-// the caller's list of analyzed jobs.
+// on-demand three-stage LLM fit analysis (GET cached / POST run / SSE stream), and the
+// caller's list of analyzed jobs.
 //
-// The use cases behind those routes — the cache, the staleness stamp, the credit rule and
-// the coalescing — live in internal/candidate/fitanalysis, because the autopilot's two
-// invisible halves reach them with no fiber ctx at all and the assistant's tools will too.
-// What stays here is transport: slug → job, binding the caller's gateway credential, SSE
-// framing, and rendering the 402 that fitanalysis refuses with.
+// The use cases (cache, staleness stamp, credit rule, coalescing) live in
+// internal/candidate/fitanalysis because the autopilot and the assistant reach them with no
+// fiber ctx. This handler is transport only: slug -> job, binding the caller's gateway
+// credential, SSE framing, and rendering the 402 fitanalysis refuses with.
 type matchHandlers struct {
 	queries *db.Queries
 	// userProfile loads the caller's profile (skills for the match bar, location
@@ -48,13 +47,11 @@ type matchHandlers struct {
 	// llm binds the model client and the credential resolver, so an analysis is spent
 	// under the account that asked for it.
 	llm llmBinding
-	// fit is the fit-analysis use case: the cache, the staleness rule, the credit decision
-	// and the coalescing. It also answers the points balance every fit surface reports, so
-	// this handler holds no ledger of its own. Nil in a fixture that exercises only the
-	// skill-match or candidate-profile paths.
+	// fit is the fit-analysis use case; it also answers the points balance, so this handler
+	// holds no ledger. Nil in a fixture that exercises only the skill-match or profile paths.
 	fit *fitanalysis.Service
-	// bank supplies the candidate's work history. Nil when there are no queries to build
-	// it over, which reads as an empty bank — and an empty bank means no analysis.
+	// bank supplies the candidate's work history. Nil when there are no queries to build it
+	// over, which reads as an empty bank (and an empty bank means no analysis).
 	bank candidateProfiler
 	// plans answers the tailoring standing reported beside the fit one. Nil in a fixture
 	// assembled without a meter.
@@ -74,9 +71,8 @@ func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, res
 	}
 }
 
-// meterOrNil keeps a nil *plan.Store out of the service as a NON-nil interface holding a
-// nil pointer, which would defeat fitanalysis's own nil-meter check and panic on the first
-// standing read. Only fixtures assemble without a meter; production always has one.
+// meterOrNil keeps a nil *plan.Store out of the service as a non-nil interface holding a
+// nil pointer, which would defeat fitanalysis's nil-meter check. Only fixtures lack a meter.
 func meterOrNil(s *plan.Store) fitanalysis.Meter {
 	if s == nil {
 		return nil
@@ -95,8 +91,7 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware, contract fiber
 	api.Get("/jobs/:slug/match-analysis", mw.key, contract)
 	api.Post("/jobs/:slug/match-analysis", mw.key, mw.paidAI(plan.FeatureFit), contract)
 	api.Get("/jobs/:slug/match-analysis/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
-	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
-	// CLI don't break; they hit the same code. Remove once callers have migrated.
+	// Deprecated pre-rename aliases (was "fit"), kept for existing API-key and CLI clients.
 	api.Get("/jobs/:slug/fit", mw.key, contract)
 	api.Post("/jobs/:slug/fit", mw.key, mw.paidAI(plan.FeatureFit), contract)
 	api.Get("/jobs/:slug/fit/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
@@ -158,22 +153,12 @@ func (h *matchHandlers) liveStamps(ctx context.Context, userID int64, job db.Job
 }
 
 // fitAnalysisResponse is the wire shape for the LLM fit analysis. HasCV is false when the
-// caller has no stored CV — the SPA then prompts an upload instead of an empty report.
-// Stale marks a cached analysis whose CV or job changed since (the SPA offers a
-// recompute); Analysis is nil when none is cached or the LLM is unconfigured. Allowance is
-// set on reads (GET) so the SPA can show where the caller stands today and pre-block a
-// new-job analysis that would be refused; it is omitted on the compute responses.
+// caller has no stored CV. Stale marks a cached analysis whose CV or job changed since.
+// Analysis is nil when none is cached or the LLM is unconfigured. Allowance is set on reads
+// only, so the SPA can pre-block a new-job analysis that would be refused.
 //
-// TailorAllowance rides along on the same reads because a caller deciding what to offer
-// off this response is usually deciding between two features, and the two carry their own
-// daily ceilings — a response holding only the fit standing can do nothing but report the
-// wrong number for a tailoring session.
-//
-// Our own job page no longer reads it: the "Tailor my CV" button moved out of the sidebar
-// this feeds and into the page's CTA row, where the pre-flight dialog states the tailoring
-// allowance from its own /me/plan read at the moment the candidate commits. The field stays
-// because it is part of a documented public API and because the fit standing alone has
-// never been the whole answer for anyone offering both.
+// TailorAllowance rides along because the fit and tailoring features carry separate daily
+// ceilings. Our own job page no longer reads it, but it is part of the documented public API.
 func fitAnalysisResponse(hasCV, stale bool, analysis *matchanalysis.Analysis, allowance, tailor *allowanceView) (*apigen.FitAnalysisResponse, error) {
 	// The analysis and the allowances travel as the Go types marshal them. A nil analysis
 	// is the JSON null the field always carried.
@@ -216,8 +201,7 @@ func (h *matchHandlers) GetMatchAnalysis(ctx context.Context, params apigen.GetM
 		// No CV means no analysis is possible, so usage is moot — skip the count query.
 		return fitAnalysisResponse(false, false, nil, nil, nil)
 	}
-	// The standings are the same either way, so they are read once and the analysis is
-	// filled in below when there is one.
+	// The standings are the same either way, so they are read once.
 	allowance, tailor := h.allowanceView(ctx, userID), h.tailorAllowanceView(ctx, userID)
 	analysis, stored, err := h.fit.Cached(ctx, userID, job.ID)
 	if err != nil {
@@ -312,11 +296,9 @@ func (h *matchHandlers) runMatchAnalysis(ctx context.Context, slug string) (*api
 		out, err := fitAnalysisResponse(false, false, nil, nil, nil)
 		return out, nil, err
 	}
-	// The upload time above doubles as the cache stamp, captured up front so the cache
-	// is stamped with the CV that was actually analyzed even if the user re-uploads
-	// mid-analysis (the three-stage chain takes seconds); re-reading it afterwards would
-	// risk stamping a newer CV's time on an older CV's analysis. language is captured the
-	// same way, for the same reason.
+	// The upload time doubles as the cache stamp, captured up front so a re-upload
+	// mid-analysis cannot stamp a newer CV's time on an older CV's analysis. language is
+	// captured the same way.
 	language := h.callerLanguage(ctx, userID)
 	// Bound before the reservation below, so a binding that refuses (a route mounted without
 	// the paid gate) leaves nothing reserved behind it.
@@ -406,23 +388,16 @@ func (h *matchHandlers) boundAnalyzer(ctx context.Context, userID int64) (*match
 }
 
 // autopilotAnalysis is one autopilot run's fit analysis: the cold-start fill the run's first
-// tool call (cv_context) depends on, and the refresh that must follow the run. Both run the
-// same three-stage chain over the same Input, so both are assembled once, here, rather than
-// each reading the candidate's profile, blockers and bank for itself.
+// tool call (cv_context) depends on, and the refresh that follows the run. Both run the same
+// chain over the same Input, so it is assembled once, here.
 //
-// Everything it holds is a plain value because NEITHER half runs in the request. The refresh
-// never could — it fires after the turn, from the SSE writer's detached goroutine. The fill
-// now joins it there: run in the handler ahead of the stream, it left the response silent for
-// the whole chain, which on 2026-08-21 was 2m6s against nginx's 60s default. The proxy cut
-// five runs that way, and each one told the candidate their run had failed to start while it
-// was in fact running.
+// Everything it holds is a plain value because neither half runs in the request: the refresh
+// fires from the SSE writer's detached goroutine, and the fill joins it there because running
+// it ahead of the stream left the response silent past nginx's 60s timeout.
 //
-// A nil *autopilotAnalysis is a working no-op — the caller has no match surface wired — so
-// PostAssistantAutopilot needs no branch of its own.
+// A nil *autopilotAnalysis is a working no-op (no match surface wired).
 //
-// Neither half is chargeable, and the request it carries says so by leaving Reserved false:
-// the cold-start pre-run is unmetered by design, tracked only by the LLM spend attribution
-// every call already carries — so it reserves nothing and has nothing to release.
+// Neither half is chargeable (Reserved is false): the cold-start pre-run is unmetered by design.
 type autopilotAnalysis struct {
 	fit *fitanalysis.Service
 	req fitanalysis.Request
@@ -459,9 +434,8 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 // fitanalysis.Service.Ensure's; the claim is taken here because it is per attempt, not per
 // prepared run.
 //
-// It REPORTS the outcome. A nil analysis means the deployment has no match surface at all,
-// which is a shape rather than a failure — the fixtures run that way — so it reports nothing
-// missing and leaves the caller free to proceed.
+// It reports the outcome. A nil analysis (no match surface, as in fixtures) reports nothing
+// missing.
 func (a *autopilotAnalysis) ensure(ctx context.Context) error {
 	if a == nil {
 		return nil
@@ -506,14 +480,11 @@ func (h *matchHandlers) candidateProfile(ctx context.Context, userID int64) resu
 // the experience bank, layered over what the structured résumé still owns (education,
 // languages, the summary, the years estimate).
 //
-// It takes a context.Context rather than a *fiber.Ctx because three callers need it and one of
-// them — the assistant's cover_letter_draft tool — runs from a detached SSE-writer goroutine
-// with no request in scope at all. A rule written where one caller happens to reach it is a
-// rule the others never meet; fitanalysis's own AGENTS.md records that same lesson.
+// It takes a context.Context rather than a *fiber.Ctx because the assistant's
+// cover_letter_draft tool calls it from a detached SSE-writer goroutine with no request.
 func candidateProfileFrom(ctx context.Context, resumeStore *resume.Store, bank candidateProfiler, userID int64) resumeextract.Professional {
 	// The structured résumé still owns education, languages, the summary and the years
-	// estimate, and is read best-effort: a stale or absent structure now costs those
-	// sections, not the whole analysis.
+	// estimate; read best-effort, a stale or absent structure costs those sections only.
 	var st resumeextract.Structured
 	if resumeStore != nil && resumeStore.Enabled() {
 		if stored, ok, err := resumeStore.Structured(ctx, userID); err == nil && ok {
@@ -528,10 +499,9 @@ func candidateProfileFrom(ctx context.Context, resumeStore *resume.Store, bank c
 		log.Printf("candidate profile: user %d: %v", userID, err)
 		return resumeextract.Professional{}
 	}
-	// Returned as-is, empty work history included — the chain is what refuses a candidate
-	// with no experience. There is deliberately no fallback here to the structure's own copy
-	// of that history: scoring somebody against experience nothing owns is worse than not
-	// scoring them, and a silent fallback would hide a failed backfill for months.
+	// Returned as-is, empty work history included: the chain refuses a candidate with no
+	// experience. No fallback to the structure's own history, since scoring against experience
+	// nothing owns is worse than not scoring, and it would hide a failed backfill.
 	return profile
 }
 

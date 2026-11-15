@@ -15,13 +15,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// The interview-buddy and mock-interview tools of the signed-in MCP server: an agent
-// connected for a person can join the network, find a host, book or cancel a mock, and keep
-// the person's own hosting schedule. Each tool calls the same service method as the cookie
-// route beside it (buddies.go, buddy_mocks.go) and maps errors through the same buddyError /
-// mockError, so the two doors cannot disagree. Served to OAuth grants only (mcpAccountTools):
-// every buddy route is cookie-only, so a leaked API key must not book or read mocks here
-// either.
+// The interview-buddy and mock-interview tools of the signed-in MCP server. Each calls the same service method as its cookie
+// route (buddies.go, buddy_mocks.go) and maps errors through buddyError / mockError, so the two doors cannot disagree.
+// Served to OAuth grants only (mcpAccountTools): every buddy route is cookie-only, so a leaked API key must not reach them.
 
 // mcpTools builds the buddy tools. Building touches no field, so a nil receiver is safe
 // until a tool runs.

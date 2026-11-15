@@ -13,9 +13,8 @@ import (
 )
 
 // autoApplyReviewInfoForJob reads the caller's live auto-apply attempt for job, if any, and
-// assembles the candidate-facing view the tracker drawer shows (openspec/changes/
-// auto-apply-review-tracking). A missing entry is not an error and returns (nil, nil) — most
-// tracked jobs have never had an auto-apply attempt.
+// assembles the candidate-facing view the tracker drawer shows. A missing entry returns
+// (nil, nil): most tracked jobs never had an attempt.
 func autoApplyReviewInfoForJob(ctx context.Context, queries *db.Queries, userID, jobID int64) (*autoapply.AutoApplyReviewInfo, error) {
 	row, err := queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -30,15 +29,12 @@ func autoApplyReviewInfoForJob(ctx context.Context, queries *db.Queries, userID,
 		HasTailoredCV:  row.TailoredCvID != nil,
 		ReviewDecision: pgStr(row.ReviewDecision),
 		Blocked:        row.BlockedAt.Valid,
-		// Either budget exhausting counts as failed: a dead-lettered submission
-		// (failed_at) or a preview pass that never managed to resolve one
-		// (preview_failed_at, migration 0140) — without the latter, an entry stuck
-		// there would read as "tailoring" forever, with nothing telling the candidate
-		// anything went wrong.
+		// Either budget exhausting counts as failed: a dead-lettered submission (failed_at)
+		// or a preview pass that never resolved (preview_failed_at); otherwise the entry
+		// would read as "tailoring" forever.
 		Failed: row.FailedAt.Valid || row.PreviewFailedAt.Valid,
-		// Distinct from Failed: a tailoring run that never produced a CV (tailor_failed_at,
-		// migration 0154). Folding it into Failed would tell the candidate the submission
-		// gave up, which is a different — and, since there is no CV, a wrong — story.
+		// Distinct from Failed: a tailoring run that never produced a CV (tailor_failed_at).
+		// Folding it in would wrongly say a submission gave up.
 		TailorFailed:    row.TailorFailedAt.Valid,
 		SubmitUncertain: row.SubmitUncertainAt.Valid,
 	}

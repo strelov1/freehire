@@ -21,10 +21,8 @@ import (
 // that already exist. Nothing here writes the ledger, because an employer_reply is recorded
 // on a link.
 //
-// A model failure is a 502 rather than an empty success. Unlike the assistant's follow-up
-// strip, which answers an empty list on every failure path because it is decoration, this
-// is what somebody pressed — and "your mailbox holds nothing" is the wrong thing to tell
-// them about a gateway being down.
+// A model failure is a 502, not an empty success: the user pressed this, and "your mailbox
+// holds nothing" is wrong when the gateway is down.
 func (h *inboxHandlers) RecallApplicationMail(ctx context.Context, params apigen.RecallApplicationMailParams) (*apigen.RecallApplicationMailOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -66,26 +64,18 @@ func (h *inboxHandlers) RecallApplicationMail(ctx context.Context, params apigen
 	})
 	switch {
 	case errors.Is(err, mailrecall.ErrNotAnApplication):
-		// A tracked job nobody applied to is not an application and has no mail to find.
-		// The verdict is the service's, so the in-process caller meets it too; the handler
-		// only chooses how to say it.
+		// A tracked job nobody applied to is not an application. The verdict is the
+		// service's so in-process callers meet it too; the handler only words it.
 		return nil, fiber.NewError(fiber.StatusNotFound, "no application recorded for this job")
 	case errors.Is(err, mailrecall.ErrModel), errors.Is(err, mailrecall.ErrSearch):
-		// Somebody else's outage: the gateway let us down, or Google did. Logged rather
-		// than reported, because classify() marks every *fiber.Error routine and the
-		// exception log would never see it — and a 502 nobody records is how "the model had a bad day"
-		// and "the model has been down since Tuesday" come to look identical.
-		//
-		// One branch for both because the sentence to the caller is the same one, and it
-		// is already this branch's message. The two sentinels stay separate upstream, where
-		// the distinction is between "we could not look" and "there was nothing to find".
+		// Somebody else's outage (gateway or Google). Logged, because classify() treats every
+		// *fiber.Error as routine and the exception log would never see a 502.
+		// One branch for both sentinels: the caller's message is the same.
 		log.Printf("mail-recall: user %d: %v", userID, err)
 		return nil, fiber.NewError(fiber.StatusBadGateway, "could not search your mail right now")
 	case err != nil:
-		// Anything else is ours: a dead pool, a lock timeout, a cancelled request. Returned
-		// bare so classify() can do its job — 499 for a closed tab, 500 AND a report for a
-		// fault. Wrapping these in a 502 would blame the model for a database error and
-		// silence the only signal that there was one.
+		// Anything else is ours (dead pool, lock timeout, cancelled request). Returned bare so
+		// classify() yields 499 or a reported 500; a 502 would blame the model for a DB error.
 		return nil, err
 	}
 
@@ -107,11 +97,10 @@ func (h *inboxHandlers) RecallApplicationMail(ctx context.Context, params apigen
 
 // LinkRecalledMail imports a message the sweep proposed and links it to the application.
 //
-// It exists because a searched message is not ours yet: the sweep shows what the mailbox
-// holds and keeps nothing, so this is the moment the message arrives. Import first, then
-// link through internal/application/inbox so the ledger reconcile runs exactly as it does for a message
-// the sync had fetched — the import is idempotent on (source, external_id), so a message
-// already stored is linked rather than duplicated.
+// A searched message is not ours yet: the sweep keeps nothing, so this is when it arrives.
+// Import first, then link through internal/application/inbox so the ledger reconcile runs
+// as for synced mail. The import is idempotent on (source, external_id), so an already
+// stored message is linked, not duplicated.
 func (h *inboxHandlers) LinkRecalledMail(ctx context.Context, req apigen.OptMailRecalledPick, params apigen.LinkRecalledMailParams) (*apigen.LinkRecalledMailOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -145,8 +134,7 @@ func (h *inboxHandlers) LinkRecalledMail(ctx context.Context, req apigen.OptMail
 		return nil, fiber.NewError(fiber.StatusBadGateway, "could not read that message right now")
 	}
 
-	// The import just stored it, so this resolves; a message the sync had already fetched
-	// resolves to that same row rather than a second copy.
+	// Resolves to the just-imported row, or to the existing one for already-synced mail.
 	id, err := h.queries.GetEmailIDByExternalID(ctx,
 		db.GetEmailIDByExternalIDParams{UserID: userID, ExternalID: providerID})
 	if err != nil {

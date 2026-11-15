@@ -18,9 +18,8 @@ func EmployerContextFrom(c db.Company) EmployerContextResponse {
 		Description: c.Tagline.String,
 		Industries:  c.Industries,
 		HQLocation:  headquarters(c),
-		// A negative count is not a figure an agent should ever see, and the schema's
-		// `integer` would accept one: the column is materialised by a rollup, so a floor here
-		// costs nothing and removes a class of nonsense answer.
+		// Floor at zero: the column is rollup-materialised and the schema's `integer` would
+		// accept a negative.
 		OpenRolesCount: max(int(c.JobCount), 0),
 	}.Finalize()
 }
@@ -28,9 +27,8 @@ func EmployerContextFrom(c db.Company) EmployerContextResponse {
 // headquarters is the company's home, or nil where we know of none. An empty block would
 // say "we know where this company is" and then say nothing.
 //
-// The country is uppercased: it is stored lowercase like every geography facet here, while
-// the standard's country fields are ISO 3166-1 alpha-2 — the same trap a posting's
-// addressCountry fell into.
+// The country is uppercased: stored lowercase like every geography facet, while the
+// standard's fields are ISO 3166-1 alpha-2.
 func headquarters(c db.Company) *EmployerLocation {
 	country := strings.ToUpper(strings.TrimSpace(c.HqCountry.String))
 	if country == "" {

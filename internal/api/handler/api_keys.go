@@ -18,16 +18,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// mintAPIKey generates a new API key for the user and persists it (only the hash
-// is stored), returning the plaintext token — revealed to the caller exactly once —
-// and the stored row. Used by the key-management endpoint (the
-// browser-extension connect flow issues a session JWT instead).
+// mintAPIKey generates a new API key for the user and persists it (only the hash is stored),
+// returning the plaintext token, revealed to the caller exactly once, and the stored row.
 func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz, scope string) (string, db.CreateAPIKeyRow, error) {
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
-		// Returned rather than phrased as fiber.NewError(500, …): the reader we need
-		// here is the exception log, and a *fiber.Error carries no cause for it to show. The
-		// caller sees the generic 500 body instead — see classify.
+		// Returned rather than phrased as fiber.NewError(500, …): the exception log needs the cause,
+		// which a *fiber.Error does not carry. The caller sees the generic 500 body (see classify).
 		return "", db.CreateAPIKeyRow{}, fmt.Errorf("generate api key for user %d: %w", userID, err)
 	}
 	row, err := h.queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
@@ -38,11 +35,9 @@ func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string
 		Scope:       scope,
 		ExpiresAt:   expiresAt,
 	})
-	// The statement inserts nothing — and so returns no row — when the account's address
-	// was never proven. The caller is authenticated (a session cookie got them here), so
-	// this is an authorization refusal, not a failed lookup: 403, not 404. The SPA reads
-	// email_verified from /auth/me and hides the button, so this is the guard for a
-	// direct API call rather than the message a user normally meets.
+	// The statement inserts nothing when the account's address was never proven. That is an
+	// authorization refusal, not a failed lookup: 403, not 404. The SPA hides the button, so
+	// this guards direct API calls.
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", db.CreateAPIKeyRow{}, fiber.NewError(fiber.StatusForbidden,
 			"confirm your email address before creating an API key")
@@ -53,13 +48,11 @@ func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string
 	return token, row, nil
 }
 
-// CreateApiKey mints a new API key for the authenticated user and returns the
-// plaintext token exactly once. Behind RequireAuth (cookie-only): a leaked key
-// must not be able to mint more keys. An absent/empty scope mints auth.ScopeFull; the
-// only other scope a client may request for itself is auth.ScopeEmbed (for the
-// volunteer-embed-mvp service, a separate repo that only ever reads/validates api_keys
-// directly — this scope grants nothing on freehire's own API). ScopeCV stays
-// server-only: no client-requestable value mints it.
+// CreateApiKey mints a new API key for the authenticated user and returns the plaintext token
+// exactly once. Cookie-only (RequireAuth): a leaked key must not mint more keys. An empty scope
+// mints auth.ScopeFull; the only other client-requestable scope is auth.ScopeEmbed (read-only
+// api_keys validation by a separate service, no access to freehire's own API). ScopeCV stays
+// server-only.
 func (h *authHandlers) CreateApiKey(ctx context.Context, req *apigen.ApiKeyCreate) (*apigen.CreateApiKeyCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -121,8 +114,7 @@ func (h *authHandlers) ListApiKeys(ctx context.Context) (*apigen.ListApiKeysOK, 
 			ExpiresAt:   nilDateTime(pgconv.TimePtr(r.ExpiresAt)),
 		}
 	}
-	// A user's keys are an unpaginated, owner-scoped set; meta carries the count
-	// to keep the list envelope ({"data", "meta"}) consistent with other lists.
+	// Owner-scoped and unpaginated; meta carries the count to keep the list envelope consistent.
 	return &apigen.ListApiKeysOK{Data: keys, Meta: apigen.AccountTotalMeta{Total: int64(len(keys))}}, nil
 }
 

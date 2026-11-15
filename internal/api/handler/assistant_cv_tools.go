@@ -20,32 +20,21 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 )
 
-// opBatch is an edit batch as it arrives from a model: either the array the schema asks for,
-// or a string holding that array. Models package it both ways, and the packaging is a guess
-// about the wire format that says nothing about the edit — refusing it spends a round of the
-// turn's budget and teaches the model nothing about the CV.
-//
-// What is inside is read by the same strict rules either way. The decoder is re-armed with
-// DisallowUnknownFields here because a custom unmarshaller receives the raw bytes and the
-// caller's strictness does not reach through it, and that strictness is load-bearing: an
-// undefined field silently dropped is how an agent once rewrote the wrong experience entry
-// while reading success back.
-// evidenceGoesOnTheOp is the refusal a misplaced evidence_id gets. It names the PLACE, which
-// is the whole point: the decoder's own `unknown field "evidence_id"` names only the field,
-// and a model that cannot tell what to change re-sends what it sent.
+// opBatch is an edit batch as it arrives from a model: either the array the schema asks for, or a
+// string holding that array. Models package it both ways; refusing it spends a round and teaches
+// nothing about the CV. The contents are read by the same strict rules either way: the decoder is
+// re-armed with DisallowUnknownFields because a custom unmarshaller does not inherit the caller's
+// strictness, and a silently dropped undefined field is how an agent once rewrote the wrong entry.
+// evidenceGoesOnTheOp is the refusal a misplaced evidence_id gets. It names the place: the decoder's
+// `unknown field "evidence_id"` names only the field, and the model re-sends what it sent.
 const evidenceGoesOnTheOp = "evidence_id goes on each op inside `ops`, not on the call itself — " +
 	"put it beside the kind, path and value of the edit whose claim it backs"
 
-// adoptCallLevelEvidence reads a call-level evidence_id onto the op it can only have meant.
-//
-// Exactly one op with no evidence of its own: the intent is not in doubt, so the batch is
-// read through — the same leniency opBatch.UnmarshalJSON already extends to a batch packaged
-// as a string. Anything else is refused:
-//
-//   - several ops, because one achievement's evidence spread across several claims is what
-//     the provenance gate exists to stop, and it would be granted here by a typo;
-//   - an op that already names one, because which claim the id was meant to back is exactly
-//     what is unclear, and picking either is inventing an answer.
+// adoptCallLevelEvidence reads a call-level evidence_id onto the op it can only have meant, the same
+// leniency opBatch.UnmarshalJSON extends to a batch packaged as a string. Only when exactly one op has
+// no evidence of its own. Refused otherwise:
+//   - several ops: spreading one achievement's evidence across claims is what the provenance gate stops;
+//   - an op that already names one: which claim the id backs is unclear, and picking is inventing.
 func adoptCallLevelEvidence(ops opBatch, evidenceID string) error {
 	evidenceID = strings.TrimSpace(evidenceID)
 	if evidenceID == "" {
@@ -73,9 +62,8 @@ func (b *opBatch) UnmarshalJSON(data []byte) error {
 	if err := dec.Decode((*[]cvedit.Op)(b)); err != nil {
 		return err
 	}
-	// A second value means the string held more than the one batch — two arrays, or an array
-	// and some trailing text. Applying the first and dropping the rest is the same silent
-	// helpfulness the unknown-field check exists to refuse.
+	// A second value means the string held more than one batch. Applying the first and dropping the
+	// rest is the silent helpfulness the unknown-field check exists to refuse.
 	if dec.More() {
 		return errors.New("ops holds more than one batch")
 	}
@@ -83,11 +71,9 @@ func (b *opBatch) UnmarshalJSON(data []byte) error {
 }
 
 // assistantCVTools is the CV tool set of a conversation bound to a CV. Bound to a vacancy too (a
-// tailoring session) it adds the tools that read the CV against that vacancy: cv_context, the
-// run report, job_match and the cover letter. With no vacancy (jobID nil — a BASE CV
-// conversation) those have nothing to read against and are not registered; the CV tools
-// themselves are the same either way, under the same evidence gate. The CV id closes over the
-// session binding, so the model cannot address another CV by guessing an id.
+// tailoring session) it adds the tools that read the CV against that vacancy: cv_context, the run
+// report, job_match and the cover letter. With no vacancy (jobID nil, a base CV conversation) those are
+// not registered. The CV id closes over the session binding, so the model cannot address another CV.
 func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID *int64, batchID uuid.UUID) []assistant.Tool {
 	tools := []assistant.Tool{
 		h.cvGetTool(cvID),
@@ -107,15 +93,11 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID *int64, batch
 	)
 }
 
-// requestConfirmationTool puts a confirmation question in front of the candidate as a
-// claim plus a Yes/No choice, instead of the agent writing it as free-text prose. It has
-// no side effect: the client renders the buttons from the call's own arguments, and the
-// candidate's answer arrives as an ordinary chat message on their NEXT turn — clicking Yes
-// replays the claim text verbatim, which is what lets the unchanged verbatim-quote
-// provenance check (internal/ai/assistant/message.go's UserSaid) recognise it as the
-// candidate's own words on the agent's next experience_add retry. There is no dedicated
-// confirmation endpoint and no new provenance value; this tool only changes how the
-// question is put, not how an answer becomes citable.
+// requestConfirmationTool puts a confirmation question in front of the candidate as a claim plus a
+// Yes/No choice. No side effect: the client renders the buttons from the call's own arguments, and the
+// answer arrives as an ordinary chat message on the NEXT turn. Clicking Yes replays the claim text
+// verbatim, which lets the verbatim-quote provenance check (internal/ai/assistant/message.go's UserSaid)
+// recognise it as the candidate's own words on the agent's next experience_add retry.
 func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "request_confirmation",
@@ -145,15 +127,11 @@ func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			// The claim is the whole tool: the client renders the card from these
-			// arguments, so an empty one draws nothing — no card, no buttons, not even a
-			// chip — and the candidate is never asked. The agent then reads a success
-			// receipt, takes silence for a confirmation, and its next experience_add is
-			// stamped agent_inferred because no verbatim quote was ever said. Schema
-			// `required` does not stop this: DecodeArgs does not enforce it, and
-			// healToolArguments turns a mangled argument string into "{}", so an empty
-			// call arrives whatever the provider did. An empty question is allowed on
-			// purpose — the client falls back to the claim alone.
+			// The claim is the whole tool: the client renders the card from it, so an empty one draws nothing and
+			// the candidate is never asked; the agent then takes silence for a confirmation and its next
+			// experience_add is stamped agent_inferred. Schema `required` does not stop this: DecodeArgs does not
+			// enforce it and healToolArguments turns a mangled argument string into "{}". An empty question is
+			// allowed on purpose: the client falls back to the claim alone.
 			if strings.TrimSpace(in.Claim) == "" {
 				return nil, errors.New("claim is required: pass the exact claim text the candidate must confirm, verbatim")
 			}
@@ -162,16 +140,11 @@ func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
 	}
 }
 
-// tailorReportTool records what a run made of each requirement, so the workspace can show
-// the outcome beside the fit analysis and the candidate can see what is left.
-//
-// The whole report is written on every call. There is no append: a requirement closed later
-// from the candidate's own words arrives as the same list with one entry changed, which
-// keeps one write path instead of two and makes the stored value always the current truth.
-//
-// The result is a receipt, not the report. A tool result is persisted in the transcript and
-// replayed into the model's context on EVERY later turn of the session, so echoing a
-// forty-line report back would be paid for again and again for nothing.
+// tailorReportTool records what a run made of each requirement, so the workspace can show the outcome
+// beside the fit analysis. The whole report is written on every call, with no append: a requirement
+// closed later arrives as the same list with one entry changed, so the stored value is always current.
+// The result is a receipt, not the report: tool results are replayed into the model's context on every
+// later turn, so echoing a long report back would be paid for again and again.
 func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "tailor_report",
@@ -227,9 +200,8 @@ func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
 	}
 }
 
-// cvContextTool serves the reasoning context for the tailoring: the cached fit
-// analysis split into requirements the candidate can evidence (reframe them) and
-// genuine gaps (ask before writing anything).
+// cvContextTool serves the reasoning context for the tailoring: the cached fit analysis split into
+// requirements the candidate can evidence (reframe them) and genuine gaps (ask before writing).
 func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_context",
@@ -240,10 +212,9 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 			"words, including what the CV already covers — those are worth keeping prominent, not editing away.",
 		Schema: assistant.EmptySchema,
 		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
-			// A tool error is a sentence the model can act on; a nil dereference here is a
-			// panic inside the SSE writer's goroutine, where Registry.Call's error path
-			// cannot reach it and Fiber's recover is not listening. Production always wires
-			// this, so the guard is for the next partially-wired harness.
+			// A tool error is a sentence the model can act on; a nil dereference would panic inside the SSE
+			// writer's goroutine, out of Registry.Call's error path and Fiber's recover. The guard is for a
+			// partially-wired harness.
 			if h.jobs == nil {
 				return nil, errors.New("the tailoring context is unavailable in this deployment")
 			}
@@ -260,13 +231,10 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 	}
 }
 
-// cvJobMatchTool lets the tailoring agent read the deterministic CV-vs-vacancy score as
-// feedback on what it has changed. It is a different signal from cv_context's Verdict/
-// OverallScore: those come from the cached LLM fit analysis and MUST NOT be recomputed
-// mid-tailoring (internal/candidate/matchanalysis, cv-tailoring spec), while this recomputes fresh off
-// the CV's own rendered text every call — the same read GetCVJobMatch serves the workspace
-// panel, which already refreshes after every saved edit. No model call, so it costs nothing
-// to check after a batch of edits.
+// cvJobMatchTool lets the tailoring agent read the deterministic CV-vs-vacancy score as feedback on
+// what it has changed. Unlike cv_context's Verdict/OverallScore (cached LLM fit analysis, which MUST NOT
+// be recomputed mid-tailoring), this recomputes off the CV's rendered text every call, the same read
+// GetCVJobMatch serves the workspace panel. No model call, so it is free to check after a batch.
 func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "job_match",
@@ -275,9 +243,8 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 			"not the cached fit analysis. Call it after a batch of edits to see their effect; no model call.",
 		Schema: assistant.EmptySchema,
 		Run: assistant.NoArgs(func(ctx context.Context, userID int64) (any, error) {
-			// Same reason cv_context guards: a nil dereference here is a panic on the SSE
-			// writer's goroutine, which takes the process down rather than one request.
-			// This tool needs both the CV surface and the vacancy read.
+			// Same reason cv_context guards: a nil dereference is a panic on the SSE writer's goroutine, which
+			// takes the process down. Needs both the CV surface and the vacancy read.
 			if h.cv == nil || h.jobs == nil {
 				return nil, errors.New("the job-match score is unavailable in this deployment")
 			}
@@ -311,11 +278,9 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 	}
 }
 
-// cvPageCountTool renders the CV exactly as the candidate would download it and reports how
-// many pages Typst actually laid it out onto — the number the "keep it to one or two pages"
-// instruction cannot verify on its own, since the model never sees the rendered artifact, only
-// the JSON document it is writing. Call it after a batch of edits, the same way job_match
-// checks the score: no write, one render.
+// cvPageCountTool renders the CV as the candidate would download it and reports how many pages Typst
+// laid it out onto: the model never sees the rendered artifact, only the JSON it is writing, so it
+// cannot verify "keep it to one or two pages" itself. No write, one render.
 func (h *assistantHandlers) cvPageCountTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_page_count",
@@ -342,12 +307,10 @@ func (h *assistantHandlers) cvPageCountTool(cvID uuid.UUID) assistant.Tool {
 	}
 }
 
-// cvEvidenceFidelityTool re-surfaces the text behind a citation the agent already used, so it
-// can compare its own wording against what the evidence actually says and catch a bullet that
-// claims more scope, seniority, or a bigger metric than it supports. This checks no new fact:
-// the agent already saw the atom's claim once, from experience_search or cv_context, before
-// writing — the value here is the forced second look, not new information. Read-only: no model
-// call, no write to the CV, the report, or the bank.
+// cvEvidenceFidelityTool re-surfaces the text behind a citation the agent already used, so it can
+// compare its wording against the evidence and catch a bullet claiming more scope, seniority or a
+// bigger metric than it supports. The value is the forced second look, not new information.
+// Read-only: no model call, no write to the CV, the report, or the bank.
 func (h *assistantHandlers) cvEvidenceFidelityTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "check_evidence_fidelity",
@@ -393,9 +356,8 @@ func (h *assistantHandlers) cvEvidenceFidelityTool() assistant.Tool {
 	}
 }
 
-// evidencedRequirement is a requirement plus what the candidate's own bank already holds for
-// it. The evidence is named, not inlined whole: the agent needs enough to decide "I can write
-// this" and the id to cite, and a tool result is replayed into its context on every later turn.
+// evidencedRequirement is a requirement plus what the candidate's bank already holds for it. The
+// evidence is named, not inlined: the agent needs the id to cite, and tool results are replayed every turn.
 type evidencedRequirement struct {
 	matchanalysis.Requirement
 	Evidence []requirementEvidence `json:"evidence"`
@@ -409,17 +371,11 @@ type requirementEvidence struct {
 	NeedsMetrics bool   `json:"needs_metrics,omitempty"`
 }
 
-// agentTailorContext is the tailoring context as the AGENT reads it — deliberately narrower
-// than what the endpoint serves the page.
-//
-// Measured on a recorded session, the served context was 11.4 KB: 4.2 KB of posting, 2.5 KB of
-// requirements, and 3 KB of dimension comments, strengths, gaps and recommendation. That last
-// 3 KB is the part the agent must NOT act on — it cannot edit a CV from a dimension comment,
-// and restating the verdict is exactly what it is told not to do. It is on the candidate's
-// screen already, in the panel beside the chat.
-//
-// So the agent gets what it works from: the vacancy, the score in one line for tone, and the
-// requirements with the bank's answer attached.
+// agentTailorContext is the tailoring context as the AGENT reads it, deliberately narrower than what
+// the endpoint serves the page. Dimension comments, strengths, gaps and recommendation are left out:
+// the agent cannot edit a CV from them, restating the verdict is what it is told not to do, and the
+// candidate already sees them in the panel. The agent gets the vacancy, the score in one line for tone,
+// and the requirements with the bank's answer attached.
 type agentTailorContext struct {
 	Job          fitanalysis.TailoringJob `json:"job"`
 	Verdict      string                   `json:"verdict"`
@@ -428,19 +384,14 @@ type agentTailorContext struct {
 	MissingGap   []evidencedRequirement   `json:"missing_gap"`
 }
 
-// evidencePerRequirement bounds what one requirement may carry. Three is enough to write a
-// bullet from and to see that the bank is not empty; the rest is one experience_search away.
+// evidencePerRequirement bounds what one requirement may carry: enough to write a bullet from and to
+// see the bank is not empty; the rest is one experience_search away.
 const evidencePerRequirement = 3
 
-// withBankEvidence answers, for every requirement, the question the agent would otherwise
-// spend a tool round on: does the bank hold anything for this?
-//
-// Retrieval is a linear scan over the caller's own atoms with no model call in it, so asking it
-// once per requirement here costs less than the single round it replaces. A recorded session
-// made TEN searches and never reached an edit; this is what those searches were asking for.
-//
-// A bank that cannot be read degrades to no evidence rather than to an error: the requirements
-// are worth reading either way, and an empty list already means "nothing found".
+// withBankEvidence answers, for every requirement, the question the agent would otherwise spend a tool
+// round on: does the bank hold anything for this? Retrieval is a linear scan over the caller's own
+// atoms with no model call, cheaper than the round it replaces. A bank that cannot be read degrades to
+// no evidence rather than an error: the requirements are worth reading either way.
 func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, base fitanalysis.TailoringContext) agentTailorContext {
 	return agentTailorContext{
 		Job:          base.Job,
@@ -454,8 +405,8 @@ func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, 
 func (h *assistantHandlers) evidenceFor(ctx context.Context, userID int64, reqs []matchanalysis.Requirement) []evidencedRequirement {
 	out := make([]evidencedRequirement, 0, len(reqs))
 	for _, r := range reqs {
-		// Always a list, never nil: "looked and found nothing" is the answer that decides
-		// whether to ask the candidate, and an absent field reads as "did not look".
+		// Always a list, never nil: "looked and found nothing" decides whether to ask the candidate, and an
+		// absent field reads as "did not look".
 		found := []requirementEvidence{}
 		if h.experience != nil {
 			matches, err := h.experience.Retrieve(ctx, userID,
@@ -479,9 +430,8 @@ func (h *assistantHandlers) evidenceFor(ctx context.Context, userID int64, reqs 
 	return out
 }
 
-// cvGetTool reads the tailored CV document the session is editing, minus the contact
-// block: this result goes straight into a model's context, and that model reads
-// attacker-controlled text elsewhere in the same turn.
+// cvGetTool reads the tailored CV document the session is editing, minus the contact block: this
+// result goes into a model's context, and that model reads attacker-controlled text in the same turn.
 func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name:        "cv_get",
@@ -497,10 +447,8 @@ func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	}
 }
 
-// cvOpSchema mirrors cvedit.Op field by field: the kind, the address, and the payload each
-// kind reads. The address vocabulary is generated from the document's own structure rather
-// than restated here, so a field added to the CV becomes addressable without anyone editing
-// this schema — the drift that once dropped an operation out of a model's view.
+// cvOpSchema mirrors cvedit.Op field by field. The address vocabulary is generated from the
+// document's own structure, so a field added to the CV becomes addressable without editing this schema.
 var cvOpSchema = map[string]any{
 	"type": "object",
 	"description": "One edit: a kind, the address it applies to, and what that kind needs. " +
@@ -538,18 +486,11 @@ var cvOpSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-// cvEditTool applies a batch of edits to the tailored CV.
-//
-// A batch rather than one edit per call: closing one requirement usually takes several edits
-// — rewrite the bullet, add the technology, adjust the summary — and a turn has a step
-// ceiling. Sending them together also makes them one entry in the candidate's history, which
-// is what they actually did.
-//
-// Two rules the tool no longer states because the editor enforces them. What the agent may
-// address is a path policy, so the contact block is closed to it wherever it is reached from.
-// And writing a claim requires citing banked evidence with publishable provenance: the honest
-// wall made structural rather than instructional, in the service path rather than a prompt.
-// One uncited edit refuses the whole batch.
+// cvEditTool applies a batch of edits to the tailored CV. A batch, not one edit per call: closing a
+// requirement usually takes several edits and a turn has a step ceiling; together they are also one
+// history entry. Two rules live in the editor, not here: what the agent may address is a path policy
+// (the contact block is closed to it), and writing a claim requires citing banked evidence with
+// publishable provenance, in the service path rather than a prompt. One uncited edit refuses the batch.
 func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
@@ -605,15 +546,10 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 				Note              string  `json:"note"`
 				Requirement       string  `json:"requirement"`
 				RequirementStatus string  `json:"requirement_status"`
-				// EvidenceID is NOT part of this call — it belongs on the op whose claim it
-				// backs. It is read here so the mistake can be answered rather than met with
-				// DecodeArgs's `unknown field "evidence_id"`, which names the field and not
-				// the place: measured on prod 2026-08-25..09-08, 21 refusals, and the model
-				// answered each by re-sending the identical call.
-				//
-				// The mistake is a reasonable one. `requirement` and `requirement_status` ARE
-				// call-level and describe the batch, so "batch metadata goes at the top"
-				// generalises straight onto this.
+				// EvidenceID is not part of this call: it belongs on the op whose claim it backs. It is read here so
+				// the mistake can be answered rather than met with DecodeArgs's `unknown field "evidence_id"`, which
+				// names the field and not the place (the model re-sent the identical call). The mistake is reasonable:
+				// `requirement` and `requirement_status` ARE call-level, so "batch metadata goes at the top" generalises.
 				EvidenceID string `json:"evidence_id"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
@@ -628,12 +564,10 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 				return nil, fmt.Errorf("requirement_status must be %q or %q when requirement is set",
 					cv.AutopilotClosedBank, cv.AutopilotClosedCandidate)
 			}
-			// A model names the positions it SAW: it read the document once and wrote every
-			// index against that reading. Applied in sequence those addresses shift out from
-			// under each other, so a batch removing two lines of one list would refuse itself.
-			// The conversion happens here and not inside the editor, because the editor's other
-			// callers — the whole-document save and undo — state their indices sequentially and
-			// would be corrupted by it.
+			// A model names the positions it SAW: it read the document once and wrote every index against that
+			// reading, so applied in sequence the addresses shift (a batch removing two lines of one list would
+			// refuse itself). Converted here, not in the editor, whose other callers (whole-document save, undo)
+			// state indices sequentially and would be corrupted.
 			meta, rev, err := h.cv.editor.Commit(ctx, cvID, userID, cvedit.Change{
 				Actor:   cvedit.ActorAgent,
 				Origin:  cvedit.OriginTailorAgent,
@@ -644,11 +578,9 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			if err != nil {
 				return nil, cvToolError(err)
 			}
-			// Merged only after Commit succeeds: a refused batch must not leave the report
-			// claiming a requirement was closed by an edit that never landed. But once Commit
-			// has landed, this merge is best-effort — the document already carries the edit, and
-			// failing the whole tool call now would tell the model the edit never happened,
-			// inviting a retry that reapplies ops Commit has no content-level dedup against.
+			// Merged only after Commit succeeds: a refused batch must not leave the report claiming a requirement
+			// was closed. After Commit it is best-effort: failing the call would tell the model the edit never
+			// happened, inviting a retry that reapplies ops Commit cannot dedup.
 			if requirement != "" {
 				if err := h.cv.cvStore.MergeAutopilotEntry(ctx, cvID, userID, cv.AutopilotEntry{
 					Requirement: requirement,
@@ -658,16 +590,14 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 					log.Printf("assistant: recording autopilot entry for requirement %q: %v", requirement, err)
 				}
 			}
-			// A receipt, not the document: a tool result is replayed into the model's
-			// context on every later turn of the session, so echoing the CV back would be
-			// paid for again and again.
+			// A receipt, not the document: tool results are replayed into the context on every later turn.
 			return map[string]any{"updated_at": meta.UpdatedAt, "applied": len(rev.Ops), "recorded_as": rev.Title}, nil
 		},
 	}
 }
 
-// cvToolError renders a CV failure for the model, keeping owner isolation intact:
-// a foreign CV is reported as missing, never as forbidden.
+// cvToolError renders a CV failure for the model, keeping owner isolation: a foreign CV is reported
+// as missing, never as forbidden.
 func cvToolError(err error) error {
 	if errors.Is(err, cv.ErrNotFound) {
 		return errors.New("this tailoring session's CV is no longer available")
@@ -675,15 +605,10 @@ func cvToolError(err error) error {
 	return err
 }
 
-// bankGate answers the editor's evidence question from the experience bank.
-//
-// The rule it enforces is the one the whole tailoring capability exists to keep: a sentence
-// about what the candidate did cannot reach the page unless it traces to something THEY
-// asserted — on their CV, in their own words, or by typing it themselves. An agent's own
-// inference is banked and searchable, and stops here.
-//
-// Every refusal names what to do next, because for a model that message is its only route to
-// correcting itself inside the turn.
+// bankGate answers the editor's evidence question from the experience bank. A sentence about what the
+// candidate did cannot reach the page unless it traces to something THEY asserted (their CV, their own
+// words, or typed themselves); an agent's inference is banked and searchable, and stops here. Every
+// refusal names what to do next, since that message is the model's only route to self-correction.
 type bankGate struct{ bank experienceBankTools }
 
 func (g bankGate) Publishable(ctx context.Context, userID int64, evidenceID string) error {
@@ -693,8 +618,7 @@ func (g bankGate) Publishable(ctx context.Context, userID int64, evidenceID stri
 	}
 	atom, err := g.bank.GetAtom(ctx, id, userID)
 	if errors.Is(err, experience.ErrNotFound) {
-		// Named, not "that id": a batch cites one per operation, so a bare refusal leaves the
-		// model guessing which of them to go back for.
+		// Named, not "that id": a batch cites one per operation, so a bare refusal leaves the model guessing.
 		return fmt.Errorf("no banked achievement with id %s — take evidence_id from experience_search", id)
 	}
 	if err != nil {

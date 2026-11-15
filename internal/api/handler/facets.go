@@ -22,32 +22,22 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// facetCacheTTL bounds how stale a cached facet distribution may be. Facet counts
-// are identical for every caller and change only when ingest lands a wave (a few
-// times an hour), so a minute of staleness is invisible to a user while collapsing
-// the repeated recomputation that the see-also block and crawler traffic drive —
-// the endpoint measured at 55% of API handler time. It is deliberately short: the
-// win is in absorbing bursts of identical requests, not in holding a count for long.
-// Five minutes, not one, since 2026-10-30: at ~44 req/s the endpoint was the API's
-// busiest route, and a count four minutes older than a wave is still invisible beside
-// the totals the filter panel shows. Server renders hold their own copy for ten
-// (web/src/lib/server/facetCache.ts), so this mostly serves browsers and agents.
+// facetCacheTTL bounds how stale a cached facet distribution may be. Counts are
+// identical for every caller and change only when ingest lands a wave, so the win
+// is absorbing bursts of identical requests, not holding a count for long. Server
+// renders keep their own ten-minute copy (web/src/lib/server/facetCache.ts).
 const facetCacheTTL = 5 * time.Minute
 
 // cachedFacetCounts wraps facetCounter.FacetCounts with a best-effort read-through
-// cache. A nil cache, a miss, or any cache error all fall straight through to a
-// live count — the cache can never fail or refuse the request, only skip work.
-// The key is a hash of the exact FacetParams (query, filter, requested attributes),
-// so two requests share a cached result only when they would compute the identical
-// one. The disjunctive path is intentionally not routed here: it is the interactive
-// live-modal experience, lower volume, and its per-facet fan-out keys poorly.
+// cache: a nil cache, a miss or any cache error falls through to a live count.
+// The key hashes the exact FacetParams. The disjunctive path is not routed here:
+// it is the interactive live-modal path and its per-facet fan-out keys poorly.
 func (h *searchHandlers) cachedFacetCounts(ctx context.Context, p search.FacetParams) (search.FacetResult, error) {
 	return cachedFacetCounts(ctx, h.facets, h.cache, p)
 }
 
-// cachedFacetCounts is the cache-through facet read, a function rather than only a method so
-// the ChatGPT app's job_market_stats shares the website's cache slots instead of computing
-// the same distributions twice. A nil cache reads straight through.
+// cachedFacetCounts is the cache-through facet read. It is a function so the ChatGPT
+// app's job_market_stats shares the website's cache slots. A nil cache reads through.
 func cachedFacetCounts(ctx context.Context, f facetCounter, c cache.Cache, p search.FacetParams) (search.FacetResult, error) {
 	key := facetCacheKey(p)
 	if res, ok := cachedFacets(ctx, c, key); ok {
@@ -94,9 +84,9 @@ func cachedFacets(ctx context.Context, c cache.Cache, key string) (search.FacetR
 	return res, err == nil && found
 }
 
-// facetFlight collapses concurrent misses on one cache key into a single count. On
-// 2026-11-05 a burst on an expired key sent every request to Meilisearch at once and
-// filled its search queue. Callers share the result and only read it.
+// facetFlight collapses concurrent misses on one cache key into a single count, so
+// an expired key does not send every request to Meilisearch at once. Callers only
+// read the shared result.
 var facetFlight singleflight.Group
 
 // facetCountTimeout bounds a shared count, which no single caller's deadline does.
@@ -133,21 +123,14 @@ func countFacets(ctx context.Context, f facetCounter, p search.FacetParams) (sea
 	return res, nil
 }
 
-// facetCacheKey derives a deterministic cache key from the params that fully
-// determine a facet result. It marshals FacetParams to JSON and hashes it, so the
-// key is bounded in length regardless of how many filter values a request carries.
-// FacetParams marshals in practice (Query string, Filter [][]string, Facets
-// []string); the error branch is a guard, not a real path, and its fixed key just
-// means any unmarshalable request degrades to sharing one cache slot rather than
-// panicking.
+// facetCacheKey derives a bounded, deterministic cache key by hashing the JSON of
+// the params. The marshal error branch is a guard, not a real path: it degrades to
+// one shared slot instead of panicking.
 //
-// The filter must be canonicalized first. search.FilterFromValues builds the
-// [][]string by ranging over a map (query_filter.go), so its group order — and the
-// value order inside the location OR-group — is randomized per request. Left as-is,
-// the SAME multi-facet request would hash to different keys on successive calls and
-// miss its own cache entry, defeating the cache on exactly the filtered traffic it
-// targets. AND across groups and OR within one are both order-independent, so
-// sorting is safe for keying and never touches the filter actually sent to Meili.
+// The filter is canonicalized first: search.FilterFromValues ranges over a map, so
+// group and value order is random per request and the same request would miss its
+// own cache entry. AND across groups and OR within one are order-independent, so
+// sorting is safe and never touches the filter sent to Meili.
 func facetCacheKey(p search.FacetParams) string {
 	p.Filter = canonicalFilter(p.Filter)
 	raw, err := json.Marshal(p)
@@ -158,10 +141,8 @@ func facetCacheKey(p search.FacetParams) string {
 	return "jobfacets:v1:" + hex.EncodeToString(sum[:])
 }
 
-// canonicalFilter returns f with a stable ordering when it is the [][]string the
-// facet filter uses (sorted within each group, then across groups), so an
-// order-only difference cannot change the cache key. Any other shape is returned
-// unchanged — the key still reflects it, just without canonicalization.
+// canonicalFilter sorts a [][]string filter within and across groups so order alone
+// cannot change the cache key. Any other shape is returned unchanged.
 func canonicalFilter(f any) any {
 	groups, ok := f.([][]string)
 	if !ok {
@@ -179,11 +160,9 @@ func canonicalFilter(f any) any {
 	return out
 }
 
-// facetCounter is the analytics backend the facets handler depends on. It is
-// deliberately separate from searcher: counting facet distributions is a
-// distinct responsibility from returning ranked hits, so the handler depends
-// only on the method it uses. *search.Client satisfies both; a nil counter
-// means search is unconfigured and the endpoint reports 503.
+// facetCounter is the analytics backend the facets handler depends on, separate
+// from searcher so the handler needs only the method it uses. *search.Client
+// satisfies both; a nil counter means search is unconfigured and the endpoint 503s.
 type facetCounter interface {
 	FacetCounts(ctx context.Context, p search.FacetParams) (search.FacetResult, error)
 	// DisjunctiveFacetCounts counts each facet under its own reduced filter (see
@@ -200,10 +179,9 @@ type companyNamer interface {
 	CompanyNamesBySlugs(ctx context.Context, slugs []string) ([]db.CompanyNamesBySlugsRow, error)
 }
 
-// facetExtra describes a facetable attribute that is not a string-equality facet
-// in search.StringFacets. statOnly marks a continuous numeric facet exposed only
-// as min/max stats: Meili always also returns a per-value distribution for a
-// faceted attribute, but a bucket per distinct salary is noise, so it is dropped.
+// facetExtra describes a facetable attribute that is not a string-equality facet in
+// search.StringFacets. statOnly marks a continuous numeric facet exposed only as
+// min/max stats: its per-value distribution (a bucket per salary) is dropped.
 type facetExtra struct {
 	attr     string
 	statOnly bool
@@ -220,10 +198,9 @@ var facetExtraParams = map[string]facetExtra{
 }
 
 // companyFacetParam is the one facet outside the default set, counted only when
-// `facets=` names it. It has thousands of values and the sidebar company filter
-// is a server-backed typeahead (GET /api/v1/companies), so the default set does
-// not pay for it; a caller that names it gets the exact distinct-company count
-// and the top topCompaniesLimit companies by job count (see JobFacets).
+// `facets=` names it: it has thousands of values and the sidebar filter is a
+// server-backed typeahead. A caller that names it gets the exact distinct-company
+// count and the top topCompaniesLimit companies (see JobFacets).
 const companyFacetParam = "company_slug"
 
 // topCompaniesLimit bounds the named company distribution: the response carries
@@ -234,17 +211,13 @@ const topCompaniesLimit = 50
 // DEFAULT distribution set; each is counted only when `facets=` names it.
 var facetsNoDistribution = map[string]bool{companyFacetParam: true}
 
-// facetAttributes is the list of index attributes to request facets for: every
-// string facet (the same attributes search.StringFacets filters on), minus the
-// ones in facetsNoDistribution, plus the extras. Sorted for a deterministic
-// request. This is the single source shared with the search filter vocabulary —
-// a new facet added to search.StringFacets is counted here automatically.
+// facetAttributes lists the index attributes to request facets for: every string
+// facet (the same attributes search.StringFacets filters on) minus
+// facetsNoDistribution, plus the extras. Sorted for a deterministic request.
 //
-// `only` narrows the set to the named public params, and is the only way to
-// reach a facet in facetsNoDistribution. A distribution is counted
-// per attribute and the wide-valued ones (cities, skills) dominate — on prod the
-// full set costs 284ms against ?work_mode=remote versus 10ms for one attribute —
-// so a caller that reads a single key should not pay for the other twenty-six.
+// `only` narrows the set to the named public params and is the only way to reach a
+// facet in facetsNoDistribution. Wide-valued attributes (cities, skills) dominate
+// the cost, so a caller that reads one key should not pay for the rest.
 func facetAttributes(only ...string) []string {
 	want := make(map[string]bool, len(only))
 	for _, p := range only {
@@ -273,10 +246,9 @@ func facetAttributes(only ...string) []string {
 // requestedFacets reads the optional `facets=`: a comma-separated list of public
 // facet params to count instead of all of them.
 //
-// An unknown name is an error, not a silent no-op. Callers read counts by key and
-// already treat a missing one as "Meili's per-facet cap dropped this value", so a
-// typo would hide indefinitely. company_slug is accepted here although it is
-// absent from the default set: naming it is how a caller opts in.
+// An unknown name is an error, not a no-op: callers read counts by key and treat a
+// missing one as "dropped by Meili's per-facet cap", so a typo would hide. company_slug
+// is accepted although absent from the default set: naming it is the opt-in.
 func requestedFacets(vals url.Values) ([]string, error) {
 	raw := vals.Get("facets")
 	if raw == "" {
@@ -300,16 +272,13 @@ func requestedFacets(vals url.Values) ([]string, error) {
 }
 
 // locationFacetParams are the geography facets that share ONE OR-group in
-// FilterFromValues (their included values widen the results together, not
-// intersect). Disjunctive counting of any one of them must drop the whole group's
-// contribution, not just that param — otherwise selecting a country would zero
-// every sibling region (the reverse of what disjunctive mode is for).
+// FilterFromValues. Disjunctive counting of one must drop the whole group, or
+// selecting a country would zero every sibling region.
 var locationFacetParams = []string{"regions", "countries", "cities", "metros"}
 
-// facetReqs builds one disjunctive request per distribution attribute: each
-// counted under the filter with its own facet's params removed, so a facet's
-// selection doesn't hide its alternatives. For a location facet, the whole
-// location OR-group is removed (see locationFacetParams).
+// facetReqs builds one disjunctive request per distribution attribute, counted
+// under the filter with its own facet's params removed (the whole location
+// OR-group for a location facet), so a selection doesn't hide its alternatives.
 func facetReqs(vals url.Values) []search.FacetReq {
 	param := facetParamByAttr()
 	attrs := facetAttributes()
@@ -381,13 +350,9 @@ func (h *searchHandlers) JobFacets(ctx context.Context, _ apigen.JobFacetsParams
 
 	var res search.FacetResult
 	if wantsParam(vals, "disjunctive") {
-		// Disjunctive: each facet counted under the full filter minus its own
-		// selection, so a selected facet still shows its siblings (the live-modal
-		// experience). The total stays the full-filter count.
-		//
-		// `facets=` is refused, not ignored: disjunctive derives one query per
-		// facet from the SELECTION, so narrowing the output saves none of them —
-		// full price for a partial answer.
+		// Each facet is counted under the full filter minus its own selection. `facets=`
+		// is refused, not ignored: disjunctive derives one query per facet from the
+		// selection, so narrowing the output saves nothing.
 		if len(only) > 0 {
 			return nil, fiber.NewError(fiber.StatusBadRequest, "facets= cannot be combined with disjunctive")
 		}
@@ -498,8 +463,7 @@ func topCompanies(dist map[string]int64) []companyFacetValue {
 func facetView(res search.FacetResult) facetPayload {
 	param := facetParamByAttr()
 
-	// Distributions, dropping the noisy per-value distribution of the continuous
-	// numeric facets (kept only as stats below).
+	// The continuous numeric facets keep only their stats.
 	facets := make(map[string]map[string]int64, len(res.Facets))
 	var top []companyFacetValue
 	for attr, dist := range res.Facets {

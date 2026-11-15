@@ -9,19 +9,17 @@ import (
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// The apply conversation's tools (openspec/changes/auto-apply-chat): the MCP server's
-// auto-apply tools, bound to the one application the session is held against.
+// The apply conversation's tools: the MCP server's auto-apply tools, bound to the one
+// application the session is held against.
 //
-// They are the same tools rather than a second set, so the rules that keep an application
-// safe — answers are the candidate's, one review decision, never retry what may already
-// have reached the employer — live in one place. Two things differ, and both come from
-// binding:
-//   - the session names the attempt, so the model is not asked for a job and cannot name
-//     another one;
-//   - the agents_may_apply switch does not apply to a turn the person sends from their own
-//     browser (the session cookie): that is the same authority as the drawer's buttons. A
-//     turn sent with an API key is an agent acting outside the browser, and the switch holds
-//     for it exactly as on the MCP server — see withPersonInBrowser.
+// They are the same tools, so the rules that keep an application safe (answers are the
+// candidate's, one review decision, never retry what may already have reached the employer)
+// live in one place. Two things differ, both from binding:
+//   - the session names the attempt, so the model cannot name another job;
+//   - the agents_may_apply switch does not apply to a turn sent from the person's own browser
+//     (session cookie), the same authority as the drawer's buttons. A turn sent with an API
+//     key is an agent outside the browser, and the switch holds as on the MCP server (see
+//     withPersonInBrowser).
 func (h *assistantHandlers) assistantApplyTools(jobID int64) []assistant.Tool {
 	slugOf := func(ctx context.Context) (string, error) {
 		job, err := h.queries.GetJob(ctx, jobID)
@@ -41,9 +39,8 @@ func (h *assistantHandlers) assistantApplyTools(jobID int64) []assistant.Tool {
 	}
 }
 
-// personInBrowserKey marks an assistant turn the person sent from the website itself,
-// authenticated by its session cookie — where requireAgentsMayApply has nothing to protect,
-// since that switch exists for agents acting outside the person's browser. streamSSE sets it
+// personInBrowserKey marks an assistant turn the person sent from the website, authenticated
+// by its session cookie, where requireAgentsMayApply has nothing to protect. streamSSE sets it
 // from auth.ViaCookie; an API key or the MCP server never does.
 type personInBrowserKey struct{}
 

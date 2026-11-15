@@ -26,20 +26,14 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// The job-alert tools of the signed-in MCP server: an agent connected for a person can
-// subscribe a search to the person's alerts, list them with their settings, change them,
-// remove them, and ask what they have matched. MCP cannot push, so delivery stays where it
-// is — email, Telegram, the mobile app, the webhook — and these tools only manage what is
-// delivered.
-//
-// An ALERT is what the website shows on its alerts page: one saved search, over any of the
-// search filters, delivered on one or more channels. In storage that is a saved_searches
-// row plus one subscriptions row per channel; the tools address the alert by its saved
-// search id and name the per-channel rows only where they differ (active, pending).
-//
-// Every write goes through the website's own use cases — savedsearch.Service for the
-// search and its name, subscription.Service for the channels and pause — so Narrows, the
-// push-device rule and the per-account cap are enforced once.
+// The job-alert tools of the signed-in MCP server: an agent can subscribe a search to the
+// person's alerts, list and change them, remove them, and ask what they matched. MCP cannot
+// push, so delivery stays where it is (email, Telegram, mobile app, webhook).
+// An ALERT is what the alerts page shows: one saved search delivered on one or more channels.
+// In storage that is a saved_searches row plus one subscriptions row per channel; tools address
+// the alert by its saved search id and name the per-channel rows only where they differ.
+// Every write goes through the website's use cases (savedsearch.Service, subscription.Service),
+// so Narrows, the push-device rule and the per-account cap are enforced once.
 
 // subscriptionMCPTools is the set the account server adds for job alerts. Not offered to
 // the in-app assistant: the browser there already has the alert controls beside the
@@ -55,9 +49,8 @@ func (h *assistantHandlers) subscriptionMCPTools(origin string) []assistant.Tool
 }
 
 const (
-	// subscriptionUpdatesDefaultDays and subscriptionUpdatesMaxDays bound the look-back
-	// of subscription_updates. The ceiling is the notify worker's freshness window in
-	// spirit: a match older than a few weeks is no longer news.
+	// subscriptionUpdatesDefaultDays and subscriptionUpdatesMaxDays bound the look-back of
+	// subscription_updates; a match older than a few weeks is no longer news.
 	subscriptionUpdatesDefaultDays = 7
 	subscriptionUpdatesMaxDays     = 30
 	subscriptionUpdatesDefaultMax  = 20
@@ -88,12 +81,10 @@ func alertChannelsHelp(origin string) string {
 		"back on at %s/my/notifications/settings", origin, origin)
 }
 
-// deliverableChannels lists the channels that would actually reach this account now, in
-// the order a default is picked from. Each is the delivery worker's own test: email is
-// gated by the job-alerts mail switch (ListActiveSubscriptions), Telegram needs a linked
-// chat, push a registered device, a webhook an enabled destination
-// (GetSubscriptionForDelivery). A subscription on any other channel is soft-skipped on
-// every pass and nobody receives it.
+// deliverableChannels lists the channels that would reach this account now, in the order a
+// default is picked from, using the delivery worker's own tests: email needs the job-alerts mail
+// switch, Telegram a linked chat, push a registered device, a webhook an enabled destination.
+// A subscription on any other channel is soft-skipped on every pass.
 func deliverableChannels(st db.GetAlertChannelStateRow) []string {
 	var out []string
 	if st.EmailAlertsEnabled {
@@ -156,16 +147,12 @@ func alertSearchSchema(props map[string]any) map[string]any {
 	return props
 }
 
-// applyAlertSearch writes the given search fields over base — a copy of the alert's
-// stored query, or nothing for a new one — and returns the result. A given field replaces
-// what was there: filters replaces every facet the tool can name (an empty object clears
-// them), query replaces the text, a salary bound of 0 clears it. Params only the website
-// sets (exclusions, match-all modes, visa and the like) are kept as they were.
-//
-// Unknown filter NAMES are refused (assistantFilterArgs.values, the search_jobs rule); a
-// value outside a closed vocabulary is DROPPED and named, the rule the catalogue's
-// search_jobs follows: kept, it would narrow the alert to nothing, and a person would wait
-// for mail that can never come.
+// applyAlertSearch writes the given search fields over base (the alert's stored query, or
+// nothing for a new one). A given field replaces what was there: filters replaces every facet
+// (an empty object clears them), query the text, a salary bound of 0 clears it. Params only the
+// website sets (exclusions, match-all modes, visa) are kept.
+// Unknown filter NAMES are refused (the search_jobs rule); a value outside a closed vocabulary
+// is DROPPED and named, since kept it would narrow the alert to nothing.
 func applyAlertSearch(base url.Values, a alertSearchArgs) (url.Values, []string, error) {
 	out := url.Values{}
 	for k, vs := range base {
@@ -461,10 +448,8 @@ func withIgnored(msg string, ignored []string) string {
 	return msg + "; these values were not understood and dropped: " + strings.Join(ignored, ", ")
 }
 
-// deliverySchedule is the account-wide timing every alert shares. It is shown beside the
-// alerts because it decides when they arrive, but it is not a per-alert setting — the
-// website keeps it on the notification settings page, for reminders as well as alerts —
-// so update_subscription does not change it.
+// deliverySchedule is the account-wide timing every alert shares. It is shown beside the alerts
+// but lives on the notification settings page, so update_subscription does not change it.
 type deliverySchedule struct {
 	DigestFrequency string `json:"digest_frequency"`
 	DigestTime      string `json:"digest_time,omitempty"`
@@ -583,8 +568,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 				return nil, err
 			}
 
-			// Everything is validated before the first write, so a refused change leaves the
-			// alert exactly as it was.
+			// Everything is validated before the first write, so a refused change leaves the alert as it was.
 			var newQuery *string
 			var ignored []string
 			if in.given() {

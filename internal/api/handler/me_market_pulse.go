@@ -13,16 +13,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/isoweek"
 )
 
-// skillHistoryReader is the slice of the DB the market-pulse read needs
-// (*db.Queries satisfies it), kept narrow so the handler is unit-testable without a
-// database — mirroring structuredResumeReader in me_profile.go.
+// skillHistoryReader is the slice of the DB the market-pulse read needs (*db.Queries
+// satisfies it), kept narrow so the handler is unit-testable without a database.
 type skillHistoryReader interface {
 	ListInsightsSkillHistory(ctx context.Context, skills []string) ([]db.InsightsSkillHistory, error)
 }
 
-// marketPulseHandlers serves the signed-in user's personal skill-demand trend:
-// their own profile skills joined against the weekly insights_skill_history
-// snapshots cmd/rollup-stats writes. See openspec/changes/market-pulse-skill-trend.
+// marketPulseHandlers serves the signed-in user's personal skill-demand trend: their profile
+// skills joined against the weekly insights_skill_history snapshots cmd/rollup-stats writes.
 type marketPulseHandlers struct {
 	userProfile *userprofile.Service
 	history     skillHistoryReader
@@ -33,14 +31,13 @@ func newMarketPulseHandlers(userProfile *userprofile.Service, history skillHisto
 }
 
 func (h *marketPulseHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie-only like the other personal /me/* browser surfaces (profile, inbox) — a
-	// leaked API key must not read a candidate's own skill trend.
+	// Cookie-only like the other personal /me/* browser surfaces: a leaked API key must not
+	// read a candidate's skill trend.
 	api.Get("/me/market-pulse", mw.cookie, contract)
 }
 
-// GetMarketPulse returns the caller's own profile skills' demand trend. A caller with
-// no profile, or a profile with no skills, gets an empty data array rather than an
-// error — there is nothing to plot yet, not a failure.
+// GetMarketPulse returns the caller's profile skills' demand trend. No profile, or no
+// skills, gives an empty data array: nothing to plot yet, not a failure.
 func (h *marketPulseHandlers) GetMarketPulse(ctx context.Context) (*apigen.GetMarketPulseOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -63,11 +60,10 @@ func (h *marketPulseHandlers) GetMarketPulse(ctx context.Context) (*apigen.GetMa
 	return &apigen.GetMarketPulseOK{Data: buildSkillPulses(profile.Skills, rows), Meta: meta}, nil
 }
 
-// buildSkillPulses groups the caller's skill-history rows by skill (preserving the
-// caller's own skill order) and derives each skill's current count, percent change,
-// and chronological series. rows arrive newest-first per skill (ListInsightsSkillHistory's
-// ORDER BY skill, week_start DESC); a skill with no rows at all — never seen in an open
-// job — is omitted rather than reported with a fabricated count.
+// buildSkillPulses groups the caller's skill-history rows by skill (keeping the caller's
+// skill order) and derives each skill's current count, percent change and chronological
+// series. Rows arrive newest-first per skill (ListInsightsSkillHistory's ORDER BY skill,
+// week_start DESC); a skill with no rows is omitted rather than reported with a made-up count.
 func buildSkillPulses(skills []string, rows []db.InsightsSkillHistory) []apigen.SkillPulse {
 	bySkill := make(map[string][]db.InsightsSkillHistory, len(skills))
 	for _, r := range rows {

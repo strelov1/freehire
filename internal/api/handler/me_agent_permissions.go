@@ -10,13 +10,11 @@ import (
 )
 
 // agentPermissionHandlers serves the account's switch for what a connected MCP agent may do
-// beyond reading and tracking (openspec/changes/auto-apply-over-mcp). Today that is one
-// thing: acting on auto-apply attempts.
+// beyond reading and tracking. Today that is one thing: acting on auto-apply attempts.
 type agentPermissionHandlers struct{ queries *db.Queries }
 
-// register mounts the read with mw.key and the write with mw.cookie ONLY. The switch gates
-// what a credential other than the browser session may do, so no such credential may turn it
-// on — an agent granting itself the permission it is gated by would make the gate decoration.
+// register mounts the read with mw.key and the write with mw.cookie only. The switch gates
+// what a non-browser credential may do, so no such credential may turn it on.
 func (h *agentPermissionHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	api.Get("/me/agent-permissions", mw.key, contract)
 	api.Put("/me/agent-permissions", mw.cookie, contract)
@@ -35,7 +33,7 @@ func (h *agentPermissionHandlers) GetAgentPermissions(ctx context.Context) (*api
 	return &apigen.GetAgentPermissionsOK{Data: apigen.AgentPermissions{AgentsMayApply: allowed}}, nil
 }
 
-// SetAgentPermissions stores the switch. An absent field turns it off, as it always did.
+// SetAgentPermissions stores the switch. An absent field turns it off.
 func (h *agentPermissionHandlers) SetAgentPermissions(ctx context.Context, req *apigen.AgentPermissionsUpdate) (*apigen.SetAgentPermissionsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

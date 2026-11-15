@@ -56,11 +56,10 @@ const addCVNext = "Show the person every suggested value, ask which to keep, and
 	"get_setup_status reports when reading is done."
 
 // addCVTool stores a CV the person supplied, as text, for an account that has none, through
-// storeFirstCV — the website's own upload use case, so the document, the free background
-// extraction and the experience-bank import (cv_import: the text IS the stored CV each atom
-// traces to) are the same as a paste on the profile page. It takes only the person's own CV,
-// never one an agent composed: a model-written history banked as cv_import would read as the
-// candidate's own words. See openspec/changes/mcp-cv-setup/design.md.
+// storeFirstCV, the website's own upload use case (same document, free background extraction and
+// experience-bank import; cv_import: the text IS the stored CV each atom traces to). It takes only
+// the person's own CV, never one an agent composed: a model-written history banked as cv_import
+// would read as the candidate's own words.
 func (h *assistantHandlers) addCVTool(origin string) assistant.Tool {
 	profileURL := strings.TrimSuffix(origin, "/") + "/my/profile"
 	return assistant.Tool{

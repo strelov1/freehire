@@ -25,14 +25,13 @@ type myAnalysisItem struct {
 }
 
 // buildAnalysisItems projects the caller's analysed-job rows into list items, flagging
-// staleness against the caller's live CV upload time, current model, and profile
-// language. Rows whose stored analysis blob is empty or corrupt are skipped (nothing to
-// show). Order is preserved (the query returns newest-first).
+// staleness against the caller's live CV upload time, current model, and profile language.
+// Rows whose stored analysis blob is empty or corrupt are skipped. Order is preserved
+// (newest first).
 //
-// live carries the caller-wide stamps; the job content hash is the one thing that varies per
-// row (each row joins its own job's current hash), so it is filled in per item rather than
-// passed in. The rule those stamps are compared by is fitanalysis's, the same one the single-
-// job read uses — this listing must not be able to disagree with the page it links to.
+// live carries the caller-wide stamps; the job content hash varies per row, so it is filled
+// in per item. The stale rule is fitanalysis's, the same one the single-job read uses, so
+// this listing cannot disagree with the page it links to.
 func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, live fitanalysis.Stamps) []myAnalysisItem {
 	items := make([]myAnalysisItem, 0, len(rows))
 	for _, r := range rows {

@@ -15,25 +15,21 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// communityHandlers serves the anonymous discussion threads: topics attached to a
-// company or vacancy, pseudonymous personas, flat replies. The use cases live in
-// community.Service; the handlers translate wire ↔ domain and delegate to it.
+// communityHandlers serves the anonymous discussion threads: topics attached to a company or vacancy, pseudonymous
+// personas, flat replies. Use cases live in community.Service; handlers translate wire and domain.
 type communityHandlers struct {
 	community *community.Service
 }
 
 func newCommunityHandlers(queries *db.Queries) *communityHandlers {
-	// One repository satisfies both the persistence port and the subject-existence
-	// port, so it is passed for each.
+	// One repository satisfies both the persistence and subject-existence ports.
 	repo := community.NewQueriesRepository(queries)
 	return &communityHandlers{community: community.New(repo, repo, community.Config{})}
 }
 
 func (h *communityHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Community discussion threads: anonymous topics attached to a company or vacancy.
-	// Reads are public — only pseudonymous persona handles are ever exposed, never a
-	// user id — so discussions are browsable without signing in. Writing a thread or
-	// reply requires a signed-in session (cookie); closing a thread is moderator-gated.
+	// Community discussion threads. Reads are public (only persona handles are exposed, never a user id).
+	// Writing needs a signed-in cookie session; closing is moderator-gated.
 	api.Get("/threads", contract)
 	// Registered before "/threads/:id" so "count" and "recent" are not parsed as a
 	// thread id.
@@ -45,14 +41,11 @@ func (h *communityHandlers) register(api fiber.Router, mw middleware, contract f
 	api.Post("/threads/:id/close", mw.cookie, mw.moderator, contract)
 }
 
-// aiAuthor is the display name used for a reply flagged is_ai (a future AI-authored
-// reply). No AI posts exist at MVP; this keeps the wire shape stable for when they do.
+// aiAuthor is the display name for a reply flagged is_ai; no AI posts exist yet, this keeps the wire shape stable.
 const aiAuthor = "AI"
 
-// deletedAuthor is the display name for content whose author deleted their account.
-// Threads and replies outlive their author (the FK nulls the reference), and the
-// persona — the handle — goes with the account, so there is nothing left to show. The
-// brackets keep it out of the handle namespace, which is "adjective-noun-NN".
+// deletedAuthor is the display name for content whose author deleted their account: threads and replies outlive
+// their author and the persona goes with the account. The brackets keep it out of the "adjective-noun-NN" handle namespace.
 const deletedAuthor = "[deleted]"
 
 // personaOrDeleted is the author display name for a handle: an empty one means the
@@ -129,19 +122,12 @@ func (h *communityHandlers) ListThreads(ctx context.Context, params apigen.ListT
 	return &apigen.ThreadPage{Data: out, Meta: pageMeta(threads, h.community.PageSize())}, nil
 }
 
-// pageMeta carries a listing's continuation cursor, and only when the page came back
-// FULL. A partial page is the last one, and a cursor on it tells the client a further
-// page exists — which is how a single-thread subject rendered a "Load more" that
-// fetched nothing.
-//
-// One function for all three community listings (subject threads, replies, the feed):
-// the rule is one rule, and each row type reports its own keyset position. The page
-// size is a parameter rather than read off the handler because a method cannot carry a
-// type parameter in Go.
+// pageMeta carries a listing's continuation cursor only when the page came back FULL: a cursor on a partial (last) page
+// makes the client show a "Load more" that fetches nothing. One function for all three community listings; the page size
+// is a parameter because a Go method cannot carry a type parameter.
 func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize int32) apigen.ThreadCursorMeta {
 	var meta apigen.ThreadCursorMeta
-	// >= not ==: a page longer than asked for is still a full one, and equality would
-	// drop the cursor on it — the same silence, from the other side.
+	// >= not ==: a page longer than asked for is still full, and equality would drop the cursor.
 	if n := len(items); n > 0 && int32(n) >= pageSize {
 		pos := items[n-1].Position()
 		meta.NextCursor = apigen.NewOptString(encodeCursor(pos.CreatedAt, pos.ID))
@@ -149,11 +135,8 @@ func pageMeta[T interface{ Position() community.Cursor }](items []T, pageSize in
 	return meta
 }
 
-// ListRecentThreads returns open threads across every subject, newest first,
-// keyset-paged — the /discussions feed. Public, like the other thread reads. Each row
-// carries the display name of its subject, which the cross-subject listing needs because
-// a reader has no other way to know what the thread is about; both are empty when the
-// subject no longer exists (there is no FK to it).
+// ListRecentThreads returns open threads across every subject, newest first, keyset-paged: the /discussions feed. Public.
+// Each row carries its subject's display name; both are empty when the subject no longer exists (no FK to it).
 func (h *communityHandlers) ListRecentThreads(ctx context.Context, params apigen.ListRecentThreadsParams) (*apigen.RecentThreadPage, error) {
 	cur, err := decodeCursor(params.Cursor.Value)
 	if err != nil {

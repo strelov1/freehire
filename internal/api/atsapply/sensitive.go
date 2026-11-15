@@ -6,32 +6,22 @@ import (
 	"unicode"
 )
 
-// sensitiveTerms is a direct port of freehire-apply/internal/drafting's isSensitive list
-// (a sibling, more mature paid repo — already measured against real Ashby postings there,
-// not invented fresh here), with one fix a live smoke check (task 5.1) found: the ported
-// "work authoriz" is a FIXED-ORDER phrase and never matches "authorization to work" — a
-// real Greenhouse posting's exact wording, the more common of the two orderings in
-// practice. Replaced with the standalone "authoriz", which catches "authorization"/
-// "authorized" in either order and is, if anything, the more defensible term: in an
-// application form's context there is no ordinary (non-sensitive) reason a question would
-// use that word at all.
+// sensitiveTerms is ported from freehire-apply/internal/drafting's isSensitive list, with
+// "work authoriz" replaced by the standalone "authoriz", which also matches "authorization
+// to work" (the common ordering) and has no ordinary non-sensitive use in a form.
 //
-// A question matching any of these is never drafted, regardless of how confident a draft
-// would be — draftable (draft.go) checks isSensitiveLabel before Drafter.Draft is ever
-// invoked, so a sensitive question never reaches the model at all.
+// A question matching any term is never drafted: draftable (draft.go) checks
+// isSensitiveLabel before Drafter.Draft, so it never reaches the model.
 var sensitiveTerms = []string{
 	"salary", "compensation", "sponsor", "visa", "authoriz", "right to work",
 	"gender", "race", "ethnic", "veteran", "disab", "demographic", "sexual orientation",
-	// The remaining US EEOC-adjacent categories a live posting could ask about as a
-	// custom question, found missing by a PR review pass: religion, national origin,
-	// date of birth (age-discrimination-adjacent), and genetic information (GINA).
+	// The remaining US EEOC-adjacent categories: religion, national origin, date of birth,
+	// genetic information (GINA).
 	"religi", "national origin", "date of birth", "genetic",
 
-	// The same categories in the other languages the catalogue's forms are written in. A
-	// Brazilian Greenhouse form previewed on production (2026-10-25) had its salary,
-	// disability and diversity questions all marked for drafting, because every stem above
-	// is English: "salarial" does not contain "salary". Stems again, chosen to cover the
-	// Romance forms at once — "salar" is salario/salarial/salariale, "etni" is
+	// The same categories in other languages the catalogue's forms use; the English stems
+	// above miss them ("salarial" does not contain "salary"). Stems chosen to cover the
+	// Romance forms at once: "salar" is salario/salarial/salariale, "etni" is
 	// etnia/étnico/etnicidade, "diversi" is diversity/diversidade/diversité.
 	"salar", "salaire", "remunera", "rémunéra", "gehalt", "зарплат", "оклад", "pretensão",
 	"patrocín", "autoriza", "autoris", "permiso de trabajo", "arbeitserlaubnis",
@@ -44,9 +34,8 @@ var sensitiveTerms = []string{
 }
 
 // identityTerms are a person's document and account numbers: facts no CV holds, so a
-// drafted one is a FABRICATED number submitted in their name — worse than any wrong opinion
-// a draft could hold. Found missing on the same production preview: "Qual é o seu CPF?" was
-// marked for drafting. Substring stems, like sensitiveTerms.
+// drafted one is a fabricated number submitted in their name. Substring stems, like
+// sensitiveTerms.
 var identityTerms = []string{
 	"social security", "seguridad social", "segurança social", "national insurance",
 	"passport", "passaporte", "pasaporte", "паспорт",
@@ -59,32 +48,29 @@ var identityTerms = []string{
 	"pan number",
 }
 
-// identityTokens are the same category's acronyms, matched as WHOLE words: as substrings
-// they are everywhere — "rg" in "organization", "cpf" is safe but "pis" is in "pista".
+// identityTokens are the same category's acronyms, matched as whole words because as
+// substrings they are everywhere ("rg" in "organization", "pis" in "pista").
 //
-// An acronym that is also an ordinary word in a language the forms use stays OUT and is
-// caught by its spelled-out name in identityTerms instead: "ein" is the German article,
-// "sin" Spanish for "without", "nie" German for "never", "pan" Polish for "Mr". Listed, each
-// would stop the drafter on every ordinary question in that language.
+// An acronym that is also an ordinary word in a form language stays out and is caught by
+// its spelled-out name in identityTerms: "ein" (German article), "sin" (Spanish
+// "without"), "nie" (German "never"), "pan" (Polish "Mr").
 var identityTokens = []string{
 	"cpf", "cnpj", "rg", "cnh", "pis", "ssn", "nino", "nif", "dni", "nss", "curp", "rfc",
 	"pesel", "aadhaar", "itin", "iban", "bsn", "инн", "снилс",
 }
 
-// isSensitiveLabel reports whether a question's label text concerns compensation, work
-// authorization/visa sponsorship, an equal-opportunity/demographic category, or a document
-// or account number — the categories a candidate's answer must never be guessed or drafted
-// for, only ever taken from a fact the candidate stated directly (see labelAnswerKeyFor's
-// visa_sponsorship_needed case) or left to park.
+// isSensitiveLabel reports whether a label concerns compensation, work authorization/visa
+// sponsorship, a demographic category, or a document/account number: answers that are
+// never guessed or drafted, only taken from a fact the candidate stated (see
+// labelAnswerKeyFor's visa_sponsorship_needed case) or left to park.
 func isSensitiveLabel(label string) bool {
 	return containsAnyTerm(label, sensitiveTerms) || containsAnyTerm(label, identityTerms) ||
 		containsAnyWord(label, identityTokens)
 }
 
-// containsAnyTerm reports whether the label contains any of the terms, case-insensitively.
-// Substring, not whole-word: every term here is a stem ("authoriz" for
-// "authorized"/"authorization", "disab" for "disability"/"disabled") chosen so a partial
-// spelling still matches.
+// containsAnyTerm reports whether the label contains any term, case-insensitively.
+// Substring, not whole-word: terms are stems ("authoriz", "disab") so partial spellings
+// match.
 func containsAnyTerm(label string, terms []string) bool {
 	lower := strings.ToLower(label)
 	for _, term := range terms {

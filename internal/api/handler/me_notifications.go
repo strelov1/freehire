@@ -12,10 +12,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// notificationOut is the public shape of one user_notifications row. No internal job id
-// is exposed — only the public slug, same rule DigestJob already follows. jobs passes
-// the stored JSON straight through (empty for every kind but a multi-job digest, and
-// then left out of the answer).
+// notificationOut is the public shape of one user_notifications row. No internal job id is
+// exposed, only the public slug (same rule as DigestJob). jobs passes the stored JSON
+// through and is omitted for every kind but a multi-job digest.
 func notificationOut(id int64, kind, title, body string, publicSlug pgtype.Text, jobs json.RawMessage, createdAt, readAt pgtype.Timestamptz) apigen.Notification {
 	out := apigen.Notification{
 		ID: id, Kind: apigen.NotificationKind(kind), Title: title, Body: body,
@@ -34,10 +33,8 @@ func notificationOut(id int64, kind, title, body string, publicSlug pgtype.Text,
 	return out
 }
 
-// ListNotifications returns the caller's own notification-center entries,
-// newest first, standard offset/limit paging. meta.unread_count rides in the
-// same response as the page, computed by one query alongside the total so the
-// two numbers always describe the same underlying set (see CountUserNotifications).
+// ListNotifications returns the caller's notification-center entries, newest first.
+// meta.unread_count comes from one query alongside the total so both describe the same set.
 // Cookie-only.
 func (h *authHandlers) ListNotifications(ctx context.Context, _ apigen.ListNotificationsParams) (*apigen.NotificationPage, error) {
 	userID, err := requireUserIDFromContext(ctx)
@@ -69,12 +66,9 @@ func (h *authHandlers) ListNotifications(ctx context.Context, _ apigen.ListNotif
 	}, nil
 }
 
-// GetNotification returns one of the caller's own notifications, including
-// its jobs snapshot when it has one — the read a direct visit or bookmark of
-// /my/notifications/[id]/jobs needs, since the list page alone only ever
-// serves whatever offset the caller last paged to. Owner-scoped: another
-// user's id — or a nonexistent one — 404s rather than revealing which.
-// Cookie-only.
+// GetNotification returns one of the caller's notifications, with its jobs snapshot when it
+// has one (the read behind a direct visit to /my/notifications/[id]/jobs). Another user's id
+// and a nonexistent one both 404. Cookie-only.
 func (h *authHandlers) GetNotification(ctx context.Context, params apigen.GetNotificationParams) (*apigen.GetNotificationOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -92,10 +86,8 @@ func (h *authHandlers) GetNotification(ctx context.Context, params apigen.GetNot
 	return &apigen.GetNotificationOK{Data: notificationOut(r.ID, r.Kind, r.Title, r.Body, r.PublicSlug, r.Jobs, r.CreatedAt, r.ReadAt)}, nil
 }
 
-// MarkNotificationRead marks one of the caller's own notifications read.
-// Idempotent (an already-read notification is left unchanged, not an error);
-// owner-scoped, so another user's id — or a nonexistent one — 404s rather
-// than revealing which is which. Cookie-only.
+// MarkNotificationRead marks one of the caller's notifications read. Idempotent; another
+// user's id and a nonexistent one both 404. Cookie-only.
 func (h *authHandlers) MarkNotificationRead(ctx context.Context, params apigen.MarkNotificationReadParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

@@ -35,9 +35,7 @@ func maskEmail(email string) string {
 	return localMasked + "@" + domainMasked
 }
 
-// forgotPasswordTimeout bounds the background work a forgot-password request spawns —
-// the account lookup, the bcrypt of the code, and the outbound mail — so a stuck goroutine
-// cannot leak after the request has already been answered.
+// forgotPasswordTimeout bounds the background lookup, bcrypt and mail of a forgot-password request.
 const forgotPasswordTimeout = 30 * time.Second
 
 // recoveryError maps the code-flow sentinels to HTTP errors. Wrong, absent, and burnt
@@ -107,18 +105,15 @@ func (h *authHandlers) ConfirmEmailVerification(ctx context.Context, req *apigen
 }
 
 // ForgotPassword mails a reset code, if the address has a password-backed account. It
-// ALWAYS answers 202 and does the work on a bounded background context: the lookup, a
-// bcrypt hash, and an SES round-trip take wildly different times for a known and an
-// unknown address, so answering before any of it happens removes the timing side-channel
-// instead of trying to mask it with dummy work.
+// ALWAYS answers 202 and works on a bounded background context: lookup, bcrypt and mail
+// time differ for known and unknown addresses, so answering first removes the timing channel.
 func (h *authHandlers) ForgotPassword(_ context.Context, req *apigen.AuthPasswordForgot) error {
 	go h.sendPasswordResetCode(req.Email.Value)
 	return nil
 }
 
 // sendPasswordResetCode runs the forgot-password work off the request path. Failures are
-// logged, never surfaced — the response was already sent, and any difference a caller
-// could observe would be the enumeration oracle this design removes.
+// logged, never surfaced: any observable difference would be an enumeration oracle.
 func (h *authHandlers) sendPasswordResetCode(email string) {
 	ctx, cancel := context.WithTimeout(context.Background(), forgotPasswordTimeout)
 	defer cancel()
@@ -143,9 +138,8 @@ type changePasswordRequest struct {
 	Password        string `json:"password"`
 }
 
-// ChangePassword replaces a known password. Cookie-only: an API key must not be able to
-// change the credential it would then outlive. The change revokes every session, and the
-// caller's own cookie is re-issued at the new generation so they stay signed in.
+// ChangePassword replaces a known password. Cookie-only: an API key must not change the
+// credential it would outlive. Revokes every session; the caller's cookie is re-issued at the new generation.
 func (h *authHandlers) ChangePassword(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -178,9 +172,8 @@ func (h *authHandlers) RequestEmailChange(ctx context.Context, req *apigen.AuthE
 	return nil
 }
 
-// ConfirmEmailChange moves the caller's account to the address the code was mailed to.
-// The change revokes every session, and the caller's own cookie is re-issued at the new
-// generation so they stay signed in — the same shape as ChangePassword.
+// ConfirmEmailChange moves the account to the address the code was mailed to. Revokes
+// every session and re-issues the caller's cookie, like ChangePassword.
 func (h *authHandlers) ConfirmEmailChange(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

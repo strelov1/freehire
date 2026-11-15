@@ -11,10 +11,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// companyWatchHandlers serves a signed-in person's company watchlist: the list itself, one
-// company's membership, add and remove, and a bulk import by name. The alert that reports
-// new postings from it is a saved search of `watchlist=true` (see companywatch), so there is
-// nothing to subscribe to here.
+// companyWatchHandlers serves a signed-in person's company watchlist: the list, one company's membership, add and remove,
+// and a bulk import by name. The alert for new postings is a saved search of `watchlist=true` (see companywatch),
+// so there is nothing to subscribe to here.
 type companyWatchHandlers struct {
 	watch *companywatch.Service
 }
@@ -24,9 +23,8 @@ func newCompanyWatchHandlers(queries *db.Queries) *companyWatchHandlers {
 }
 
 func (h *companyWatchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie-only like saved searches and subscriptions: a browser convenience whose answers
-	// are one person's own and never cacheable. The handlers below implement the contract
-	// (typespec/watchlist.tsp).
+	// Cookie-only like saved searches and subscriptions: answers are one person's own and never cacheable.
+	// The handlers implement the contract (typespec/watchlist.tsp).
 	api.Get("/me/watchlist", mw.cookie, contract)
 	api.Post("/me/watchlist/import", mw.cookie, contract)
 	// Reserve the literal resource before the slug routes: Fiber otherwise includes

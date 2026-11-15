@@ -52,10 +52,9 @@ func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 // has seen.
 type assistantFilterArgs map[string][]string
 
-// UnmarshalJSON also reads a bare string as a one-value list. Models routinely send
-// work_mode: "remote"; the strict decode failed the whole call before searching, which on
-// 2026-11-05 was every internal_error search_jobs on the account MCP server (~57/day).
-// The schema keeps publishing lists only, so no model provider is handed a union type.
+// UnmarshalJSON also reads a bare string as a one-value list: models routinely send
+// work_mode: "remote", which the strict decode failed. The schema still publishes lists only,
+// so no provider is handed a union type.
 func (f *assistantFilterArgs) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -112,10 +111,9 @@ func assistantFacetNames() []string {
 }
 
 // facets builds the facets tool. full lists every value for the in-app assistant, whose turn
-// caps a tool result. An MCP client caps nothing and keeps every answer in its context,
-// where the whole vocabulary ran to ~125 KB (2026-11-05) — metros, cities, skills and
-// sources hold up to 1,200 values each — so MCP answers with the filter names and how many
-// values each has, and lists one filter's values when the caller names it.
+// caps a tool result. An MCP client caps nothing and keeps every answer in context, and the
+// whole vocabulary is huge (up to 1,200 values per facet), so MCP answers with the filter names
+// and value counts, and lists one filter's values when the caller names it.
 func (h *assistantHandlers) facets(full bool) assistant.Tool {
 	description := "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
 		"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
@@ -279,8 +277,8 @@ func (h *assistantHandlers) searchJobs() assistant.Tool {
 				"filters": assistantFilterSchema("Facet filters; values must come from the facets tool."),
 				"limit":   map[string]any{"type": "integer", "description": fmt.Sprintf("How many vacancies to return (default %d, max %d).", assistantDefaultSearchLimit, assistantMaxSearchLimit)},
 				"offset":  map[string]any{"type": "integer", "description": "Skip this many results (paging)."},
-				// The non-facet filters the public search_jobs already takes. Agents sent them
-				// here too and got "unknown filter" (~145 calls a week, 2026-11).
+				// The non-facet filters the public search_jobs already takes; agents sent them here too and
+				// got "unknown filter".
 				"salary_min":         map[string]any{"type": "integer", "description": "Minimum salary, in the currency named by filters.salary_currency."},
 				"posted_within_days": map[string]any{"type": "integer", "description": "Only postings published within this many days."},
 				"visa_sponsorship":   map[string]any{"type": "boolean", "description": "true: only postings that offer visa sponsorship."},
@@ -448,7 +446,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			// Ten full bodies ran to ~160 KB per call (2026-11); the page is for picking a vacancy.
+			// The page is for picking a vacancy; ten full bodies are too big for one call.
 			for i := range views {
 				views[i].Description = llm.ClipRunesEllipsis(formatDescription(views[i].Description, "markdown"), mcpSearchExcerptRunes)
 			}
@@ -515,11 +513,9 @@ func (h *assistantHandlers) marketFitTool() assistant.Tool {
 
 // assistantFilterSchema is the JSON schema of the shared facet-filter argument.
 //
-// Every facet name is declared as a property and nothing else is admitted. An open
-// map left the model to guess the keys, and it guessed from the nearest vocabulary
-// it had seen — get_profile's `specializations` instead of `category` — which cost a
-// refused call and an error chip on screen before it retried. values() still rejects
-// an unknown name: a model is free to ignore a schema.
+// Every facet name is declared as a property and nothing else is admitted: with an open map the
+// model guessed keys from the nearest vocabulary (get_profile's `specializations` instead of
+// `category`). values() still rejects an unknown name: a model may ignore a schema.
 func assistantFilterSchema(description string) map[string]any {
 	list := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	props := make(map[string]any, len(search.StringFacets))
@@ -539,30 +535,19 @@ func assistantFilterSchema(description string) map[string]any {
 // cap a single search can push the user's own question out of the window.
 const assistantResultCap = 60_000
 
-// assistantRegistry builds the tool set a session runs with. The preset decides:
-// every session gets the discovery, tracking and experience-bank tools; a tailoring
-// session bound to a CV also gets the CV tools, with the binding closed over; and a
-// browsing session gets the page tool. A tailoring session whose binding is gone
-// degrades to a plain chat rather than registering tools pointed at nothing.
-//
-// The bank tools are NOT preset-scoped. A candidate articulates their experience
-// whenever they happen to, and a version of this that only listens in one surface
-// would miss most of what they say. The page tool is the opposite case: it is scoped,
-// because only a browsing session has a browser on the other end of the relay.
-//
-// sess.Preset is trusted as-is here — it is the caller's job (streamSSE, via
-// effectivePreset) to have already demoted a browse session that is not running over
-// the extension's own connection to plain chat, BEFORE calling this. Deciding that
-// here too, from a second signal this function would have to take on its own, is
-// exactly the split answer assistant.NormalizePreset's doc comment warns against: the
-// prompt and the tool set must resolve from the SAME preset value or the model is
-// told to always call a tool it was never given. See the
-// confine-browse-preset-to-extension change.
+// assistantRegistry builds the tool set a session runs with. Every session gets the discovery,
+// tracking and experience-bank tools; a tailoring session bound to a CV also gets the CV tools;
+// a browsing session gets the page tool. A tailoring session whose binding is gone degrades to
+// plain chat.
+// The bank tools are NOT preset-scoped: candidates articulate experience whenever they happen
+// to. The page tool is scoped, because only a browsing session has a browser on the relay.
+// sess.Preset is trusted as-is: streamSSE (via effectivePreset) must already have demoted a
+// browse session not on the extension's own connection to plain chat. The prompt and the tool
+// set must resolve from the SAME preset value (see assistant.NormalizePreset), or the model is
+// told to call a tool it was never given.
 func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) *assistant.Registry {
-	// One normaliser answers the preset for BOTH the prompt and the tools. Comparing
-	// against the constants directly would let an unrecognised preset fall back to the
-	// chat prompt here while matching no branch below — instructions for tools the
-	// session was never given.
+	// One normaliser answers the preset for BOTH the prompt and the tools; comparing constants
+	// directly would let an unknown preset get the chat prompt while matching no branch below.
 	preset := assistant.NormalizePreset(sess.Preset)
 	if preset == assistant.PresetSupport {
 		reg := assistant.NewRegistry(h.supportTools(sess.ID)...)
@@ -584,21 +569,14 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	if sess.CVID != nil && (preset == assistant.PresetBase || (preset == assistant.PresetTailor && sess.JobID != nil)) {
 		tools = append(tools, h.assistantCVTools(*sess.CVID, sess.JobID, batchID)...)
 	}
-	// Mail is the general chat session's. A tailoring session is working one CV
-	// against one vacancy, an interview is collecting what the candidate has done,
-	// and a side panel is talking about the page on screen — none of them has a
-	// reason to read the mailbox, and every tool offered is paid for on every turn.
+	// Mail is the general chat session's; the other presets have no reason to read the mailbox,
+	// and every tool offered is paid for on every turn.
 	if preset == assistant.PresetChat {
 		tools = append(tools, h.assistantInboxTools()...)
 	}
-	// A rehearsal and a debrief are bound to a vacancy and to no CV, and they read the
-	// same material: the posting, the stage, the requirements with the bank's evidence,
-	// the employer's invitation. One reads it to ask what is coming, the other to judge
-	// what was asked — the difference is the prompt, not the tools.
-	//
-	// Without the binding there is nothing to hold the conversation against, so both
-	// degrade to a plain chat rather than registering a context tool pointed at nothing —
-	// the same rule a CV-less tailoring session follows.
+	// A rehearsal and a debrief are bound to a vacancy and no CV and read the same material (posting,
+	// stage, requirements with bank evidence, the employer's invitation); only the prompt differs.
+	// Without the binding both degrade to plain chat, like a CV-less tailoring session.
 	if (preset == assistant.PresetInterview || preset == assistant.PresetDebrief) && sess.JobID != nil {
 		tools = append(tools, h.assistantInterviewTools(*sess.JobID)...)
 	}

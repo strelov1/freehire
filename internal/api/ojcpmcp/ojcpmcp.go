@@ -1,13 +1,8 @@
 // Package ojcpmcp is the MCP transport for freehire's OJCP read surface.
 //
-// It is an ADAPTER and nothing else. Every tool here loads its data through the same
-// Reader the REST handlers use and projects it with the same internal/api/ojcp functions,
-// so the two transports cannot answer the same question differently — which the OJCP
-// specification treats as one answer rendered two ways, not two implementations.
-//
-// It exists beside REST rather than instead of it because REST is what OJCP's conformance
-// suite exercises and what any plain HTTP client can reach, while MCP is what ChatGPT and
-// Claude actually connect to today.
+// It is an adapter only: every tool loads data through the same Reader the REST handlers
+// use and projects it with the same internal/api/ojcp functions, so the transports cannot
+// answer differently. REST stays because OJCP's conformance suite uses it.
 package ojcpmcp
 
 import (
@@ -26,25 +21,21 @@ import (
 	"github.com/strelov1/freehire/internal/api/ojcp"
 )
 
-// Reader is everything this transport needs from the rest of the system: the three tool
-// answers, already projected. The REST handlers satisfy it, which is how the two transports
-// are held to one implementation rather than being asked to agree.
+// Reader is everything this transport needs: the three tool answers, already projected.
+// The REST handlers satisfy it.
 type Reader interface {
 	SearchJobs(ctx context.Context, input ojcp.SearchInput) (ojcp.SearchJobsResponse, error)
 	JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDetailResponse, error)
 	EmployerContext(ctx context.Context, employerID string) (ojcp.EmployerContextResponse, error)
 }
 
-// NotFoundError marks the one failure an agent must be able to tell apart: the posting or
-// employer simply is not here. Everything else is this deployment's problem, not the
-// agent's, and says so.
+// NotFoundError marks the one failure an agent must tell apart: the posting or employer is
+// not here. Everything else is this deployment's problem.
 type NotFoundError struct{ What string }
 
 func (e NotFoundError) Error() string { return e.What + " not found" }
 
-// Code is the standard's error code for what was not found. The enum keeps the two kinds
-// apart, and an agent branches on them: "no such posting" and "no such employer" lead to
-// different next steps.
+// Code is the standard's error code for what was not found (job and employer are distinct).
 func (e NotFoundError) Code() string {
 	if e.What == "employer" {
 		return ojcp.ErrorEmployerNotFound
@@ -52,18 +43,11 @@ func (e NotFoundError) Code() string {
 	return ojcp.ErrorJobNotFound
 }
 
-// jobDetailInput and employerContextInput are the tools' inputs. They are declared here
-// rather than in internal/api/ojcp because the SDK derives each tool's JSON Schema from the
-// Go type, so the shape belongs with the transport that publishes it.
-// The field NAMES are the standard's, not ours. `get_job_detail` takes `job_id` —
-// tools/get-job-detail-input.json makes it the one required property — even though the
-// value is what a posting publishes as `ojcp_id`. An earlier version named the field
-// `ojcp_id` to match, which made the tool unreachable for any conforming client: it sends
-// `job_id`, the server sees a missing required field, and answers a validation error.
-//
-// Found by OJCP's own conformance suite. The input schemas were vendored into
-// internal/api/ojcp and never checked against — the same switched-off-check shape that let
-// the error envelope ship wrong.
+// jobDetailInput and employerContextInput are the tools' inputs, declared here because the
+// SDK derives each tool's JSON Schema from the Go type.
+// The field names are the standard's: `get_job_detail` takes `job_id`
+// (tools/get-job-detail-input.json), though the value is what a posting publishes as
+// `ojcp_id`; naming it `ojcp_id` makes the tool unreachable for conforming clients.
 type jobDetailInput struct {
 	JobID string `json:"job_id" jsonschema:"the posting's identifier, as published in ojcp_id"`
 }
@@ -75,7 +59,7 @@ type employerContextInput struct {
 // Handler builds the HTTP handler serving the OJCP tools over MCP's streamable transport.
 // Mount it with Fiber's adaptor at the path the manifest declares as `mcp_endpoint`.
 //
-// It is stateless, as the ChatGPT app's server is (see mcpapp.StatelessHandler).
+// It is stateless (see mcpapp.StatelessHandler).
 func Handler(r Reader, origin string) http.Handler {
 	return mcpapp.StatelessHandler(func() *mcp.Server { return newServer(r, origin) })
 }
@@ -123,18 +107,16 @@ func newServer(r Reader, origin string) *mcp.Server {
 
 // The output schemas of the tools whose results carry a JobPosting.
 //
-// The SDK validates every result against a schema it infers from the Go type unless one is
-// given. Inferred from ojcp.Places — a slice — that schema admits only an array, while
-// OJCP's jobLocation is a Place OR an array and a single place is written as an object. Left
-// to inference, every search returning a one-place posting failed validation in production.
+// The SDK validates results against a schema inferred from the Go type unless one is given.
+// Inferred from ojcp.Places (a slice) it admits only an array, but a single place is written
+// as an object, so one-place postings would fail validation.
 var (
 	searchJobsOutputSchema = outputSchema[ojcp.SearchJobsResponse]()
 	jobDetailOutputSchema  = outputSchema[ojcp.JobDetailResponse]()
 )
 
 // outputSchema infers T's schema the way the SDK would, except that ojcp.Places is described
-// as OJCP describes jobLocation. It panics on a type it cannot describe — a programming
-// error, surfaced when the package loads rather than on an agent's first call.
+// as OJCP describes jobLocation. It panics on an undescribable type, at package load.
 func outputSchema[T any]() *jsonschema.Schema {
 	place, err := jsonschema.For[ojcp.Place](nil)
 	if err != nil {
@@ -154,9 +136,8 @@ func outputSchema[T any]() *jsonschema.Schema {
 	return schema
 }
 
-// Tool names, declared once and used BOTH to register a tool and to answer ToolNames.
-// A second hand-written list would be the one that goes stale, and the manifest's `tools`
-// is a binding claim: an agent reads it and calls what it names.
+// Tool names, declared once and used both to register a tool and to answer ToolNames; the
+// manifest's `tools` is a binding claim agents call by.
 const (
 	toolSearchJobs         = "search_jobs"
 	toolGetJobDetail       = "get_job_detail"
@@ -165,32 +146,21 @@ const (
 
 // ToolNames is what the manifest may advertise over this transport.
 //
-// It returns the SAME constants newServer registers with, so a name cannot be advertised
-// under one spelling and served under another. That is all it guarantees: the SDK exposes
-// no way to read a server's registrations back, so nothing here can prove a constant was
-// actually passed to AddTool.
-//
-// What closes that gap is on the other side — the handler's own test walks this list and
-// requires a method behind every name. An earlier version of this comment claimed the list
-// was derived from the registrations, which it was not, and a comment that overstates a
-// guarantee is worse than one that admits the limit: the next reader stops looking.
+// It returns the same constants newServer registers with. The SDK cannot read registrations
+// back, so nothing here proves a constant was passed to AddTool; the handler's test closes
+// that by requiring a method behind every name.
 func ToolNames() []string {
 	return []string{toolSearchJobs, toolGetJobDetail, toolGetEmployerContext}
 }
 
-// toolError renders a failure as a JSON-RPC error carrying the OJCP envelope in `data`,
-// which is what the specification asks of an MCP transport.
+// toolError renders a failure as a JSON-RPC error carrying the OJCP envelope in `data`, as
+// the specification asks of an MCP transport.
 //
-// The SDK forwards an error to the PROTOCOL only when it is a `*jsonrpc.Error`; an ordinary
-// Go error becomes a CallToolResult with IsError set and the message as text (server.go:427).
-// An earlier version returned plain errors while its own comment claimed the opposite, so no
-// OJCP envelope ever reached an agent over this transport.
+// The SDK forwards an error to the protocol only when it is a `*jsonrpc.Error`; an ordinary
+// Go error becomes a CallToolResult with IsError set (server.go:427).
 //
-// A not-found is stated plainly, because an agent must be able to tell "no such posting"
-// from "this provider is broken" — the same distinction REST draws with a 404 rather than an
-// empty object. Every other failure is reported WITHOUT its detail: what went wrong inside
-// this deployment is ours, not a caller's. It stays an error and never an empty answer,
-// which would read as a catalogue holding nothing.
+// A not-found is stated plainly, as REST's 404 is. Every other failure is reported without
+// its detail, and is never an empty answer, which would read as an empty catalogue.
 func toolError(err error) error {
 	if err == nil {
 		return nil
@@ -204,9 +174,8 @@ func toolError(err error) error {
 		ojcp.NewError(ojcp.ErrorProviderError, "freehire could not answer this request"))
 }
 
-// wireError packages an OJCP envelope as the `data` of a JSON-RPC error. A payload that will
-// not marshal still yields an error rather than a success: the envelope is the detail, never
-// the fact of the failure.
+// wireError packages an OJCP envelope as the `data` of a JSON-RPC error. A payload that
+// will not marshal still yields an error, just without the envelope.
 func wireError(code int64, payload ojcp.ErrorResponse) error {
 	wire := &jsonrpc.Error{Code: code, Message: payload.Message}
 	if data, err := json.Marshal(payload); err == nil {

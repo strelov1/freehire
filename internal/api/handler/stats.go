@@ -15,23 +15,17 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// statsHandlers serves the public transparency and market-insights reads:
-// catalogue activity, member growth, engagement counts, the facet snapshot, the
-// insights rollups, and the site/ingest-fleet status. All are unauthenticated,
-// aggregate-only reads — no record-level field or user identifier is exposed.
+// statsHandlers serves the public transparency and market-insights reads. All are
+// unauthenticated and aggregate-only: no record-level field or user identifier is exposed.
 type statsHandlers struct {
 	queries *db.Queries
 
-	// cache and estimator back the catalogue-scale read. The cache holds the snapshot
-	// the rollup worker publishes; the estimator is the approximate open-job count
-	// served when no snapshot is available. Neither is required — a nil cache degrades
-	// to the estimate, which is the same path a cold or unreachable cache takes.
+	// cache holds the snapshot the rollup worker publishes; estimator is the approximate
+	// open-job count served when there is none. A nil cache degrades to the estimate.
 	cache     cache.Cache
 	estimator catalogstats.Estimator
 
-	// pool backs the site-status database check (IngestStatus): the same live
-	// pool.Ping approach the /health handler uses, kept separate from it
-	// rather than shared because Health is mounted on *API, not statsHandlers.
+	// pool backs the site-status database check (IngestStatus), a live pool.Ping like /health.
 	pool *pgxpool.Pool
 }
 
@@ -40,51 +34,34 @@ func newStatsHandlers(queries *db.Queries, c cache.Cache, pool *pgxpool.Pool) *s
 }
 
 // register mounts the stats and insights reads. optionalAuth attaches the caller when
-// signed in and never rejects — only /insights/roles takes it, and only so a single-role
-// read can overlay that caller's own skill coverage. Every other route here stays
-// strictly anonymous and aggregate-only.
+// signed in and never rejects; only /insights/roles takes it, to overlay the caller's own
+// skill coverage. Every other route stays anonymous and aggregate-only.
 func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler, contract fiber.Handler) {
-	// Public catalogue-activity time series (added vs. removed vacancies per period),
-	// unauthenticated like the other public reads. Served from the job_daily_stats
-	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
-	// Public catalogue-scale figures, unauthenticated like the other public reads.
-	// One response carries every number a surface quotes about how big the catalogue
-	// is, so /about and /open render the same snapshot instead of taking their own
-	// totals at their own moments and disagreeing.
+	// One response carries every catalogue-size figure, so /about and /open render the
+	// same snapshot instead of disagreeing.
 	api.Get("/stats/catalog", contract)
 
+	// Added vs. removed vacancies per period, from the job_daily_stats rollup (cmd/rollup-stats).
 	api.Get("/stats/jobs-activity", contract)
 
-	// Public catalogue size per UTC day (catalog_size_daily), the /open page's size chart.
+	// Catalogue size per UTC day (catalog_size_daily).
 	api.Get("/stats/catalog-history", contract)
 
-	// Public member-growth time series (cumulative registrations per UTC day),
-	// unauthenticated like the other public reads. Computed on the fly from
-	// users.created_at (no rollup); the /open transparency page renders it as a
-	// bar chart. Aggregate-only — no user identifier is exposed.
+	// Cumulative registrations per UTC day, computed on the fly from users.created_at (no rollup).
 	api.Get("/stats/user-growth", contract)
 
-	// Public engagement counts (jobs saved / applied / viewed across all users),
-	// unauthenticated like the other public reads. Aggregate-only from user_jobs;
-	// the /open transparency page renders them as a stat-strip.
+	// Engagement counts across all users, aggregated from user_jobs.
 	api.Get("/stats/engagement", contract)
 
-	// Public facet-distribution snapshot (countries, skills, seniority, work_mode),
-	// unauthenticated like the other public reads. Served from the insights_facet_stats
-	// rollup (cmd/rollup-facets) so the /open transparency page's "what's inside"
-	// section stays off the live Meilisearch facet count. Aggregate-only — per-value
-	// counts only.
+	// Facet-distribution snapshot from the insights_facet_stats rollup (cmd/rollup-facets),
+	// which keeps /open off the live Meilisearch facet count.
 	api.Get("/stats/facets", contract)
 
-	// Public skill co-occurrence snapshot: the skills most often listed beside one
-	// skill, for the /skills/<slug> glossary page. Served from insights_skill_neighbours
+	// Skills most often listed beside one skill, from insights_skill_neighbours
 	// (cmd/rollup-facets) so a page render never asks the engine for a skills facet.
 	api.Get("/stats/skills/:slug/neighbours", contract)
 
-	// Public Trends & Insights reads: aggregate market intelligence (role & skill
-	// demand, hiring velocity, salary bands) served from the insights_* rollups
-	// (cmd/rollup-stats), unauthenticated like the other public reads. Aggregate-only
-	// — no record-level field is exposed.
+	// Market intelligence served from the insights_* rollups (cmd/rollup-stats).
 	api.Get("/insights/roles", optionalAuth, contract)
 	api.Get("/insights/skills", contract)
 	api.Get("/insights/velocity", contract)
@@ -94,16 +71,11 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler, c
 	api.Get("/insights/role-countries", contract)
 	api.Get("/insights/role-pulse", contract)
 
-	// Public ingest-fleet status, unauthenticated like the other public reads.
-	// A per-provider health rollup over board_health, sanitized (no error text or
-	// board identifiers); the /status page renders it as a status board.
+	// Per-provider health rollup over board_health, sanitized (no error text or board identifiers).
 	api.Get("/status", contract)
 
-	// Public source catalogue, unauthenticated like the other public reads. The same
-	// board_health rollup /status reads, joined with the per-source snapshot
-	// (cmd/rollup-stats) and classified through the adapter registry; the /sources page
-	// renders it as a searchable catalogue. Sanitized the same way /status is — no board
-	// identifier, no error text, no posting URL.
+	// The /status board_health rollup joined with the per-source snapshot (cmd/rollup-stats)
+	// and classified through the adapter registry. Sanitized like /status, and no posting URL.
 	api.Get("/sources", contract)
 }
 
@@ -111,10 +83,8 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler, c
 // writes (ISO 8601 calendar date, UTC).
 const dateLayout = "2006-01-02"
 
-// maxRangeDays caps the [from, to] span the public activity endpoint will serve.
-// The read builds a per-day generate_series, so an unbounded range on an
-// unauthenticated endpoint is a cheap resource-abuse vector; ~11 years comfortably
-// covers the coarsest default window and any realistic custom range.
+// maxRangeDays caps the [from, to] span served. The read builds a per-day generate_series,
+// so an unbounded range on an unauthenticated endpoint is a cheap abuse vector.
 const maxRangeDays = 4000
 
 // activityQuery is the validated, defaulted read window for the job-activity
@@ -133,13 +103,10 @@ type activityPoint struct {
 	Removed int32  `json:"removed"`
 }
 
-// parseActivityQuery validates the granularity/from/to query params and resolves
-// the read window. Granularity defaults to "day" and must be one of day/week/month
-// (anything else is an error → 400). `to` defaults to today (from the injected
-// now, truncated to the UTC date so the result is deterministic); `from` defaults
-// to a per-granularity window before `to` (coarser granularities look back
-// further). Explicit dates override the defaults. now is a parameter so the
-// defaulting is unit-testable without wall-clock coupling.
+// parseActivityQuery validates the granularity/from/to params and resolves the read window.
+// Granularity defaults to "day" and must be day/week/month. `to` defaults to today (UTC date
+// of now); `from` defaults to a per-granularity window before `to`. now is a parameter so
+// the defaults are testable.
 func parseActivityQuery(granularity, from, to string, now time.Time) (activityQuery, error) {
 	if granularity == "" {
 		granularity = "day"
@@ -190,13 +157,9 @@ func truncateToDate(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// UserGrowth serves the public, unauthenticated member-growth time series: the
-// cumulative count of registered members per UTC day, from the first registration
-// through today, plus each day's own new-signup count. The dense, gap-free,
-// monotonically non-decreasing series is produced by the SQL query; this handler
-// only maps rows to the wire envelope. Aggregate-only — the query selects no user
-// identifier, so no personal field can leak here. An empty catalogue yields an
-// empty series (200 with data: []).
+// UserGrowth serves the cumulative member count per UTC day plus each day's new signups.
+// The dense series comes from the SQL query; the query selects no user identifier.
+// No members yields 200 with data: [].
 func (h *statsHandlers) UserGrowth(ctx context.Context) (*apigen.UserGrowthOK, error) {
 	rows, err := h.queries.ListUserGrowth(ctx)
 	if err != nil {
@@ -211,9 +174,8 @@ func (h *statsHandlers) UserGrowth(ctx context.Context) (*apigen.UserGrowthOK, e
 	return &apigen.UserGrowthOK{Data: points}, nil
 }
 
-// CatalogHistory serves the catalogue's size per UTC day: measured days from cmd/rollup-stats'
-// daily snapshot, earlier days reconstructed once by cmd/backfill-catalog-history and marked
-// so. The table holds one row a day, so the whole series is returned.
+// CatalogHistory serves the catalogue's size per UTC day: measured days from cmd/rollup-stats,
+// earlier days reconstructed by cmd/backfill-catalog-history and marked so.
 func (h *statsHandlers) CatalogHistory(ctx context.Context) (*apigen.CatalogHistoryOK, error) {
 	rows, err := h.queries.ListCatalogSize(ctx)
 	if err != nil {
@@ -226,20 +188,11 @@ func (h *statsHandlers) CatalogHistory(ctx context.Context) (*apigen.CatalogHist
 	return &apigen.CatalogHistoryOK{Data: points}, nil
 }
 
-// EngagementStats serves the public, unauthenticated engagement counts: how many
-// user_jobs rows have been saved, applied to, and viewed, plus how many résumés
-// have been uploaded, CVs tailored to a vacancy, matches analyzed, inboxes
-// connected, and searches saved. Aggregate-only — the query selects nothing but
-// integer totals, so no per-user field can leak. An empty database yields all
-// zeros (200).
-// CatalogScale serves the catalogue-scale snapshot: how many open postings the
-// catalogue holds (raw and de-duplicated), from how many companies, across how many
-// sources, ATS platforms and Telegram channels.
+// CatalogScale serves the catalogue-scale snapshot: open postings (raw and de-duplicated),
+// companies, sources, ATS platforms and Telegram channels.
 //
-// It never fails. A cold cache (before the first rollup run), an unreachable one, and a
-// payload left by an older build all degrade to the approximate open-job count, and
-// `exact` reports which of the two the caller holds — a transparency page showing a
-// labelled estimate beats one showing a 500.
+// It never fails. A cold or unreachable cache, or a payload from an older build, degrades
+// to the approximate open-job count, and `exact` reports which one the caller holds.
 func (h *statsHandlers) CatalogScale(ctx context.Context) (*apigen.CatalogScaleOK, error) {
 	result := catalogstats.Load(ctx, h.cache, h.estimator)
 
@@ -255,10 +208,8 @@ func (h *statsHandlers) CatalogScale(ctx context.Context) (*apigen.CatalogScaleO
 	}}, nil
 }
 
-// engagementCacheKey and engagementCacheTTL hold the engagement row between requests.
-// The query sums the whole job_daily_views rollup, which only grows (2-2.7s measured
-// from outside on 2026-11-08, /open's slowest leg), and the figures are totals nobody
-// reads to the minute.
+// engagementCacheKey and engagementCacheTTL hold the engagement row between requests:
+// the query sums the whole, ever-growing job_daily_views rollup and nobody reads the totals to the minute.
 const (
 	engagementCacheKey = "stats:engagement:v1"
 	engagementCacheTTL = 10 * time.Minute
@@ -281,18 +232,18 @@ func (h *statsHandlers) engagementStats(ctx context.Context) (db.GetEngagementSt
 	return s, nil
 }
 
+// EngagementStats serves the engagement counts: user_jobs saved, applied and viewed, plus CVs
+// uploaded and tailored, alert subscribers, inboxes connected and saved searches. Integer
+// totals only; an empty database yields zeros.
 func (h *statsHandlers) EngagementStats(ctx context.Context) (*apigen.EngagementStatsOK, error) {
 	s, err := h.engagementStats(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// `viewed` covers only the days the rollup actually recorded page views for, which
-	// is not the life of the site — migration 0138 added the column without a backfill
-	// and the nginx history it would need is past logrotate's window. Publishing the
-	// window beside the number is what keeps the figure from reading as all-time; null
-	// means nothing has been rolled up yet, and a caller that ignores the field is no
-	// worse off than before it existed.
+	// `viewed` covers only the days the rollup recorded page views for, not the life of the
+	// site (no backfill exists). ViewedSince publishes that window so the figure does not
+	// read as all-time; null means nothing has been rolled up yet.
 	viewedSince := apigen.NilString{Null: true}
 	if s.ViewedSince.Valid {
 		viewedSince = apigen.NewNilString(s.ViewedSince.Time.Format(dateLayout))
@@ -311,11 +262,8 @@ func (h *statsHandlers) EngagementStats(ctx context.Context) (*apigen.Engagement
 	}}, nil
 }
 
-// JobsActivity serves the public, unauthenticated job-activity time series:
-// added vs. removed vacancies per period, aggregated to the requested granularity
-// over a date range. The dense, gap-free series (missing periods → 0) is produced
-// by the SQL generate_series queries; this handler only validates the window,
-// picks the matching query, and maps rows to the wire envelope.
+// JobsActivity serves added vs. removed vacancies per period at the requested granularity.
+// The dense series (missing periods are 0) comes from the SQL generate_series queries.
 func (h *statsHandlers) JobsActivity(ctx context.Context, params apigen.JobsActivityParams) (*apigen.JobsActivity, error) {
 	q, err := parseActivityQuery(params.Granularity.Value, params.From.Value, params.To.Value, time.Now().UTC())
 	if err != nil {

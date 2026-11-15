@@ -7,31 +7,24 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// codeCrossSiteRefusal is the machine-readable code on the gate's refusals. It
-// rides the repo's standard coded-error envelope ({"error", "code"}), and the
-// SPA classifies on this code — not on the bare status — so an unrelated 403
-// is never mistaken for the gate's answer.
+// codeCrossSiteRefusal is the code on the gate's refusals ({"error", "code"} envelope); the
+// SPA classifies on it, not on the bare 403.
 const codeCrossSiteRefusal = "cross_site_refused"
 
-// Session-issuing routes are browser forms reached same-origin by the SPA (dev
-// reaches them through the Vite proxy). SameSite=Lax governs whether an EXISTING
-// cookie rides along; it says nothing about a NEW cookie a response issues, so a
-// top-level cross-site form POST to /auth/login would otherwise store an
-// attacker-supplied session in the victim's browser (login CSRF).
+// requireSameOrigin binds session-issuing routes to the request's origin. SameSite=Lax says
+// nothing about a NEW cookie a response issues, so a cross-site form POST to /auth/login would
+// otherwise store an attacker's session in the victim's browser (login CSRF).
 //
-// requireSameOrigin binds these routes to the request's origin. A present Origin
-// decides: allowed (auth.BrowserOrigins) passes, anything else refuses. With
-// Origin absent, a present Referer decides the same way. When BOTH are absent
-// the request presents the headerless non-browser shape (curl, the CLI, the
-// documented JSON API) and is accepted — unless its own Sec-Fetch-Site header
-// says another site initiated it, which refuses.
+// A present Origin decides: allowed (auth.BrowserOrigins) passes, anything else refuses. With
+// Origin absent, a present Referer decides the same way. With BOTH absent the request is the
+// headerless non-browser shape (curl, CLI, JSON API) and is accepted unless Sec-Fetch-Site says
+// another site initiated it.
 //
-// Known limit: a request carrying none of the three headers is indistinguishable
-// from the non-browser shape and is accepted; the policy explicitly accepts that
-// missing-metadata shape rather than claiming it cannot occur.
+// Known limit: a browser request carrying none of the three headers is indistinguishable from
+// that shape and is accepted.
 //
-// Every refusal is 403 with code cross_site_refused BEFORE the handler runs, so
-// a refused login never verifies credentials and never sets a cookie.
+// Every refusal is 403 cross_site_refused BEFORE the handler runs, so a refused login never
+// verifies credentials or sets a cookie.
 func (h *authHandlers) requireSameOrigin() func(*fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		if err := h.checkSameOrigin(c); err != nil {
@@ -62,11 +55,8 @@ func (h *authHandlers) checkSameOrigin(c *fiber.Ctx) error {
 	return nil
 }
 
-// requestIsCrossSite reports whether the request's Sec-Fetch-Site header says
-// another site initiated the request. An absent or unknown value is not
-// cross-site; the header and its value live as locals so the gate owns its
-// declarations outright (a sibling patch declares its own Fetch-Metadata
-// constants at package level).
+// requestIsCrossSite reports whether Sec-Fetch-Site says another site initiated the
+// request. An absent or unknown value is not cross-site.
 func requestIsCrossSite(c *fiber.Ctx) bool {
 	const headerSecFetchSite = "Sec-Fetch-Site"
 	const valueCrossSite = "cross-site"

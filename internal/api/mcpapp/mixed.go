@@ -11,13 +11,12 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
-// ResourceMetadataPath is the RFC 9728 path-inserted metadata of /api/v1/mcp. Clients that
-// follow the 2025-11-25 discovery order ask for it before the root document; both name the
-// same resource.
+// ResourceMetadataPath is the RFC 9728 path-inserted metadata of /api/v1/mcp. Clients
+// following the 2025-11-25 discovery order ask for it before the root document.
 const ResourceMetadataPath = "/.well-known/oauth-protected-resource" + oauth2server.MCPResourcePath
 
-// surfaceMCP labels this server's tool logs and metrics. The value predates the removal of
-// the anonymous surface ("mixed" public + account) and is kept so the Grafana series continue.
+// surfaceMCP labels this server's tool logs and metrics. "mixed" is a legacy value kept so
+// the Grafana series continue.
 const surfaceMCP = "mixed"
 
 // oauthOnly is every tool's securitySchemes: the server admits no anonymous caller, so the
@@ -39,9 +38,8 @@ func addCatalogueTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler m
 var catalogueOwned = map[string]bool{toolSearchJobs: true, toolGetJob: true, toolGetCompany: true}
 
 // cliSessionInstructions ends the instructions of a session the freehire CLI opened
-// (`freehire mcp`). Such an agent has a shell, so work that would flood its context —
-// whole result sets, a PDF — can go to disk through the CLI instead; nothing else tells
-// the agent the CLI is there. It names CLI commands, not tools, and grants nothing.
+// (`freehire mcp`). That agent has a shell, so context-flooding work can go to disk through
+// the CLI; nothing else tells it the CLI is there. It grants nothing.
 const cliSessionInstructions = "The freehire CLI is on this shell: `freehire search <query> --json > jobs.json` " +
 	"saves whole results with full descriptions to grep; `freehire cv render <id> --out cv.pdf` writes the CV PDF."
 
@@ -67,11 +65,10 @@ func newServer(tools []assistant.Tool, userID int64, origin string, reader Reade
 	return server
 }
 
-// Handler serves the catalogue and account tools to the user the authentication
-// middleware stamped on the request. That middleware answers a request with no credential
-// 401 before it gets here — the MCP specification's only signal that a server needs sign-in,
-// and the one Claude.ai, Grok, Cursor and the CLIs act on when a connector is added — so a
-// request without a valid identity is a wiring error, never an anonymous session.
+// Handler serves the catalogue and account tools to the user the authentication middleware
+// stamped on the request. That middleware answers a credential-less request 401 (the MCP
+// signal that sign-in is needed) before it gets here, so a request without a valid identity
+// is a wiring error, never an anonymous session.
 func Handler(tools []assistant.Tool, origin string, reader Reader) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, err := strconv.ParseInt(r.Header.Get(AccountUserIDHeader), 10, 64)

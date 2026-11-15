@@ -58,20 +58,11 @@ const hideAppliedCompaniesParam = "hide_applied_companies"
 // public /jobs/search reads it; the agent search reports it like any other unread param.
 const hideSeenParam = "hide_seen"
 
-// appliedCompanyExclusionFor resolves ?hide_applied_companies=true into the filter
-// fragment that keeps the caller's applied-to employers out of this search, and
-// reports whether the param has to be named in meta.ignored_params instead.
+// appliedCompanyExclusionFor resolves ?hide_applied_companies=true into the filter fragment that keeps the caller's applied-to employers out of this search, and reports whether the param has to be named in meta.ignored_params instead.
 //
-// The exclusion runs inside the index query rather than over the returned page, so
-// meta.total and every later page stay honest: dropping hits after the fact would
-// shrink a page below its limit and leave the total counting what the caller never
-// sees.
+// The exclusion runs inside the index query, not over the returned page, so meta.total and later pages stay honest.
 //
-// It is honoured for a signed-in caller only, because the set is that account's own
-// applications. An anonymous caller, an unparseable value, or a record that could not
-// be read all fall back to the unhidden search and say so, rather than refusing a
-// shared link or quietly widening. A caller with no applications gets "" — nothing to
-// exclude, and nothing ignored either.
+// Honoured for a signed-in caller only, since the set is that account's own applications. An anonymous caller, an unparseable value, or an unreadable record falls back to the unhidden search and says so, rather than refusing a shared link or quietly widening. A caller with no applications gets "": nothing to exclude, nothing ignored.
 func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID int64, vals url.Values) (frag string, ignored bool) {
 	raw := vals.Get(hideAppliedCompaniesParam)
 	if !vals.Has(hideAppliedCompaniesParam) {
@@ -102,14 +93,13 @@ func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID 
 // seenExclusionFor resolves ?hide_seen=true into the job ids to keep out of this search,
 // and reports whether the param has to be named in meta.ignored_params instead.
 //
-// The exclusion happens inside the index query rather than over the returned page, so
-// meta.total and every later page stay honest: hiding hits after the fact would shrink
-// a page below its limit and leave the total counting what the caller never sees.
+// The exclusion runs inside the index query, not over the returned page, so meta.total and
+// later pages stay honest.
 //
-// It is honoured for a signed-in caller only, because "seen" is the server's record of
-// what that account opened — the same record the feed dims cards by. An anonymous
-// caller, an unparseable value, or a record that could not be read all fall back to the
-// unhidden search and say so, rather than refusing a shared link or quietly widening.
+// Honoured for a signed-in caller only, since "seen" is the server's record of what that
+// account opened (the record the feed dims cards by). An anonymous caller, an unparseable
+// value, or an unreadable record falls back to the unhidden search and says so, rather
+// than refusing a shared link or quietly widening.
 func (h *searchHandlers) seenExclusionFor(ctx context.Context, userID int64, vals url.Values) (ids []int64, ignored bool) {
 	if !vals.Has(hideSeenParam) {
 		return nil, false
@@ -130,7 +120,7 @@ func (h *searchHandlers) seenExclusionFor(ctx context.Context, userID int64, val
 		log.Printf("search: hide_seen: read seen jobs of user %d: %v", userID, err)
 		return nil, true
 	}
-	// The answer now depends on who asked, under a URL that does not say so.
+	// The answer depends on who asked, under a URL that does not say so.
 	return ids, false
 }
 

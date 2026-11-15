@@ -1,11 +1,8 @@
-// The bring-your-own-harness tier: a user's own mail client pushes what it
-// fetched, and their own agent records its verdict. It is called the HARNESS
-// surface rather than the "agent" surface because there are now two agents on this
-// store — this one, an external process holding an API key, and the in-app
-// assistant, which issues no HTTP request at all and reaches internal/application/inbox
-// directly. The rules they share live in that package; what lives here is only
-// what this tier does differently: it brings its own transport and its own
-// classifier, and it is therefore the tier that costs us nothing.
+// The bring-your-own-harness tier: a user's own mail client pushes what it fetched, and
+// their own agent records its verdict. "Harness", not "agent", because the in-app
+// assistant is a second agent on this store and reaches internal/application/inbox
+// directly. Shared rules live in that package; this tier only brings its own transport
+// and classifier.
 
 package handler
 
@@ -21,9 +18,8 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 )
 
-// ingestMessage is one message a caller's own mail client fetched and handed over — the WIRE
-// shape. The rules it must satisfy, and the atomicity of the batch, belong to
-// internal/application/inbox: this tier is not the only reader of that store.
+// ingestMessage is one message a caller's mail client fetched — the wire shape. Its rules
+// and the batch atomicity belong to internal/application/inbox.
 type ingestMessage struct {
 	ExternalID string    `json:"external_id"`
 	ThreadID   string    `json:"thread_id"`
@@ -41,14 +37,9 @@ type ingestRequest struct {
 }
 
 // IngestEmails stores a batch of messages the caller's own harness fetched, under source
-// 'external'. freehire provides no transport here: the caller owns the mail client, and this
-// endpoint is where its output enters the ordinary inbox.
+// 'external'. It only maps and renders; inbox.Service does the write.
 //
-// It maps and renders. It used to open its own pgx transaction and write through sqlc — the
-// only handler in this package that did — which is why the in-app assistant, which reaches
-// inbox.Service directly and issues no HTTP request, could not ingest mail at all.
-//
-// The body travels as raw JSON and is decoded here, as the push payload is open-ended: a
+// The body travels as raw JSON and is decoded here, as the payload is open-ended: a
 // batch the service refuses is its own 400 with its own text.
 func (h *inboxHandlers) IngestEmails(ctx context.Context, body jx.Raw) (*apigen.IngestEmailsOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
@@ -66,8 +57,7 @@ func (h *inboxHandlers) IngestEmails(ctx context.Context, body jx.Raw) (*apigen.
 	for i, m := range req.Messages {
 		msgs[i] = m.incoming()
 	}
-	// A refused batch arrives as inbox.BatchError and renders as a 400 through classify —
-	// the same rule the assistant's tools will report to the model.
+	// A refused batch arrives as inbox.BatchError and renders as a 400 through classify.
 	out, err := h.inbox.Ingest(ctx, userID, msgs)
 	if err != nil {
 		return nil, err

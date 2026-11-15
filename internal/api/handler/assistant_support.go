@@ -60,11 +60,9 @@ func (h *assistantHandlers) CreateSupportSession(ctx context.Context) (apigen.Cr
 	if err != nil {
 		return nil, err
 	}
-	// An owner cannot delete a support session, and this route is not metered, so it hands
-	// back the blank session it already made rather than adding one per call. That bounds
-	// the rows by the messages actually sent, which the daily allowance already bounds. The
-	// read and the insert share one transaction under a per-user lock: two parallel calls
-	// would otherwise both find none and both insert.
+	// An owner cannot delete a support session and this route is not metered, so it returns the
+	// blank session it already made instead of adding one per call. The read and the insert share
+	// one transaction under a per-user lock, or two parallel calls would both insert.
 	tx, err := h.support.pool.Begin(ctx)
 	if err != nil {
 		return nil, err

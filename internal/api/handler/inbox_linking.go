@@ -65,13 +65,10 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 		})
 	}
 
-	// The candidate's own last word on the stage, which silences an offer they have already
-	// answered. Mail-sourced stage_set rows are excluded because the mail path records its
-	// own auto-advances there, and one of those silencing a suggestion computed from the
-	// same messages would answer the question on the candidate's behalf. A failure here
-	// must not cost them the application: the ledger read is an input to an optional
-	// prompt, not to the record itself, so it degrades to "never set" — the direction that
-	// shows the offer rather than hiding it.
+	// The candidate's own last word on the stage silences an offer they already answered.
+	// Mail-sourced stage_set rows are excluded: the mail path records its own auto-advances
+	// there and would answer on the candidate's behalf. A failure degrades to "never set",
+	// which shows the offer rather than hiding it.
 	lastStageSet, err := h.queries.LastStageSetAt(ctx, db.LastStageSetAtParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 		ExcludeSources: appevent.MailSources,
@@ -80,17 +77,13 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 		lastStageSet = pgtype.Timestamptz{}
 	}
 
-	// The history. A failure here must not cost the caller their application: it is one
-	// section of a panel whose other four tabs do not depend on it, so it degrades to an
-	// empty history rather than a 500 on a page that was otherwise ready to render.
+	// A history failure degrades to an empty history, not a 500 on the whole panel.
 	events, err := h.timeline.ForApplication(ctx, userID, job.ID)
 	if err != nil {
 		events = nil
 	}
 
-	// A failure here must not cost the caller the rest of the panel either — the same
-	// degrade-to-absent convention the history (events) and the stage-set read
-	// (lastStageSet) above already follow.
+	// Degrades to absent on failure, like events and lastStageSet above.
 	autoApply, err := autoApplyReviewInfoForJob(ctx, h.queries, userID, job.ID)
 	if err != nil {
 		log.Printf("auto-apply: reading review info for user %d job %d: %v", userID, job.ID, err)
@@ -194,9 +187,7 @@ func (h *inboxHandlers) LinkEmail(ctx context.Context, req apigen.OptInboxLinkTa
 // CreateApplicationFromEmail records a tracked application from one of the
 // caller's emails and links the email to it in a single call, given {"slug": …}
 // naming a catalog job. It is the path for mail about an application the caller
-// never recorded: the employer is known and the job is in the catalog, but there
-// is no application to attach the mail to, so plain linking has nothing to point
-// at.
+// never recorded, where plain linking has nothing to point at.
 //
 // The application is dated by the email, not by now(). Mail still carrying a
 // pending suggestion is refused (409) — see inbox.Service.RecordApplication.
@@ -225,9 +216,7 @@ func slugFromBody(req apigen.OptInboxLinkTarget) (string, error) {
 
 // renderMutation runs one email mutation for the caller and returns the message it
 // changed. It is the shared tail of link, unlink, confirm, reject, triage and
-// application-from-mail, so none of them can drift from another or from GetEmail —
-// and unlike GetEmail it does not mark the message read: the caller is acting on
-// the message, not opening it.
+// application-from-mail. Unlike GetEmail it does not mark the message read.
 func (h *inboxHandlers) renderMutation(ctx context.Context, rawID string, do func(userID, id int64) (inbox.Message, error)) (apigen.InboxEmail, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

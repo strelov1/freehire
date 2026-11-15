@@ -35,26 +35,19 @@ type oauthRegistry interface {
 	Provider(name, origin string) (oauth.Provider, bool)
 }
 
-// authHandlers serves the auth surface: register/login/logout/me, OAuth sign-in
-// (provider listing, start/callback redirects, the mobile code exchange), the
-// browser-extension connect flow, and API-key management. accounts resolves
-// external OAuth identities into local user accounts (identity-first lookup,
-// verified-email gate, link-or-create, race retry). cookieDomains are the
-// registrable domains we serve (bare, e.g. "freehire.me"): per request the session
-// cookie is scoped to whichever one the request host falls under (empty list =
-// host-only, for dev); the same set gates requestOrigin (see
-// auth.CookieDomainForHost).
+// authHandlers serves the auth surface: register/login/logout/me, OAuth sign-in,
+// the browser-extension connect flow, and API-key management. cookieDomains are the
+// bare registrable domains we serve (e.g. "freehire.me"): the session cookie is
+// scoped to the one the request host falls under (empty = host-only, for dev); the
+// same set gates requestOrigin (see auth.CookieDomainForHost).
 type authHandlers struct {
 	queries       *db.Queries
 	issuer        *auth.Issuer
 	cookieSecure  bool
 	cookieDomains []string
-	// oauth resolves enabled OAuth providers by name, building each with a redirect
-	// URL rooted at the request origin. Never nil (an empty registry 404s / lists
-	// empty). *oauth.Registry in production; a fake in tests.
+	// oauth is never nil (an empty registry 404s / lists empty).
 	oauth oauthRegistry
-	// oauthCodes hands out the single-use codes that carry a mobile OAuth
-	// sign-in from the browser callback to the app's /exchange call.
+	// oauthCodes holds the single-use codes that carry a mobile OAuth sign-in to /exchange.
 	oauthCodes *oauth.CodeStore
 	// frontendOrigin is where OAuth callbacks send the browser back to.
 	frontendOrigin string
@@ -78,14 +71,11 @@ type authHandlers struct {
 	appleNative     *appleauth.Client
 	appleGrantKeys  *appleauth.KeyRing
 	// pushNotifier sends test/device push notifications (see me_push_tokens.go).
-	// pushnotify.Notifier in production; a fake in tests.
 	pushNotifier pushnotify.Notifier
 	// ga4 sends the GA4 sign_up from the server (me_attribution.go). Nil — and so
 	// inert — when GA4_API_SECRET is not configured.
 	ga4 ga4mp.Reporter
-	// browserOrigins are the origins a same-origin browser request may name in
-	// Origin/Referer, consumed by requireSameOrigin (auth.BrowserOrigins over the
-	// same frontendOrigin/cookieDomains pair the CORS allowlist is built from).
+	// browserOrigins are the origins requireSameOrigin accepts in Origin/Referer (the CORS allowlist's source).
 	browserOrigins []string
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
@@ -208,16 +198,11 @@ func (h *authHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	// read of the caller's own user — not key management, which is cookie-only.
 
 	authGroup := api.Group("/auth", noCache)
-	// sameOrigin binds session-issuing routes to the browser origins this deployment
-	// serves (auth.BrowserOrigins, the same list the CORS allowlist is built from):
-	// a present Origin or Referer must name one of them, and a Sec-Fetch-Site:
-	// cross-site statement refuses even when both were stripped. Only the genuinely
-	// headerless shape — curl, the CLI, a mobile SDK, any programmatic caller of the
-	// documented JSON API — passes with no browser metadata at all. Mounted on the
-	// session-COOKIE writers and nothing else: a cross-site form post to the
-	// account-data routes arrives WITHOUT the session cookie (Lax transmits cookies
-	// only on top-level navigations), so those routes need no origin gate; and
-	// API-key callers of /auth/me send no Origin at all.
+	// sameOrigin binds session-issuing routes to the served browser origins: a present
+	// Origin or Referer must name one, and Sec-Fetch-Site: cross-site refuses even with
+	// both stripped. A fully headerless caller (curl, CLI, mobile SDK) passes. Mounted
+	// on the session-COOKIE writers only: a cross-site form post to account-data routes
+	// arrives without the cookie (Lax), and API-key callers of /auth/me send no Origin.
 	sameOrigin := h.requireSameOrigin()
 	authGroup.Post("/register", sameOrigin, h.Register)
 	authGroup.Post("/login", sameOrigin, h.Login)
@@ -262,12 +247,9 @@ func (h *authHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	authGroup.Get("/extension/connect", mw.optionalCookie, h.ExtensionConnect)
 	authGroup.Post("/extension/connect", mw.optionalCookie, h.ExtensionConnectSubmit)
 
-	// MCP OAuth 2.1 (freehire#3114). Mounted on api directly (NOT authGroup —
-	// /api/v1/oauth/*, not /api/v1/auth/oauth/*): every external-facing string
-	// that names these paths (the metadata document, the sign-in returnTo, the
-	// consent form's own action) is written against that shorter path, and the
-	// pre-existing /auth/oauth/* routes above are a different, unrelated
-	// surface (social sign-in) that happens to share the "oauth" word.
+	// MCP OAuth 2.1. Mounted on api directly (/api/v1/oauth/*, NOT authGroup's
+	// /auth/oauth/*, which is social sign-in): the metadata document, the sign-in
+	// returnTo and the consent form action are all written against the shorter path.
 	//
 	// Dynamic client registration (RFC 7591): public, no session involved yet.
 	api.Post("/oauth/register", noCache, h.RegisterOAuthClient)
@@ -335,20 +317,13 @@ type userResponse struct {
 	// page to pre-fill its timezone field and by the notification-settings UI's
 	// missing-timezone hint.
 	Timezone *string `json:"timezone"`
-	// Language is the account's preferred interface language (one of
-	// supportedLanguages, "en" until changed). No UI translation exists yet —
-	// this only records the preference for later (freehire#1836).
+	// Language is the preferred interface language (one of supportedLanguages, "en" until
+	// changed). No UI translation exists yet; this only records the preference.
 	Language string `json:"language"`
-	// OnboardingCompletedAt is when this account finished (or declined) the onboarding
-	// wizard, null for one that never has. The root layout reads it as the whole gate:
-	// null routes the user to /onboarding, a timestamp never does. It rides along here
-	// rather than on its own endpoint because the layout already makes this read before
-	// it can decide anything at all.
+	// OnboardingCompletedAt is when the account finished (or declined) onboarding. The
+	// root layout's whole gate: null routes to /onboarding, a timestamp never does.
 	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at"`
-	// Tier is the caller's resolved plan (plan.TierFree/TierPro/TierUltra). It rides
-	// along on the same call that already powers currentUser() on every page — the
-	// header's tier badge reads it from here rather than a second request to
-	// GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
+	// Tier is the caller's resolved plan (plan.TierFree/TierPro/TierUltra); the header badge reads it here to avoid a second request.
 	Tier plan.Tier `json:"tier"`
 	// AgentConnected is whether the account holds a live API key or MCP grant — see
 	// UserHasAgentCredential. The site's "connect your agent" strip stops asking once it
@@ -368,19 +343,15 @@ type credentials struct {
 	Timezone *string `json:"timezone"`
 }
 
-// toUserResponse maps an accounts.User to its public response shape. Pure and DB-free on
-// purpose — it leaves Tier at its zero value, which is why every response handler calls
-// toUserResponseWithTier instead; this stays the thing submissions_test.go's
-// TestToUserResponse_* cases exercise without a database.
+// toUserResponse maps an accounts.User to its public shape. Pure and DB-free: it leaves
+// Tier zero, so response handlers call toUserResponseWithTier instead.
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
 		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
 		Timezone: u.Timezone, Language: u.Language, OnboardingCompletedAt: u.OnboardingCompletedAt}
 }
 
-// toUserResponseWithTier is what every response handler calls: toUserResponse plus the
-// caller's resolved tier and agent connection, riding along on the same request that
-// already powers currentUser() on every page — see resolveTiers.
+// toUserResponseWithTier is toUserResponse plus the caller's resolved tier and agent connection.
 func (h *authHandlers) toUserResponseWithTier(ctx context.Context, u accounts.User) userResponse {
 	resp := toUserResponse(u)
 	resp.Tier, resp.APITier = h.resolveTiers(ctx, u.ID)
@@ -402,12 +373,9 @@ func (h *authHandlers) resolveAgentConnected(ctx context.Context, userID int64) 
 	return connected
 }
 
-// resolveTiers reads one indexed row holding every entitlement and resolves the plan via
-// plan.TierOf and the API product via billing.APITierOf — never a second resolution path.
-// A read failure, or queries being unset (several handler unit tests build an
-// authHandlers with only the fields their own code path touches), degrades to free and
-// no API product and is logged rather than failing the response: nothing about signing
-// in, registering, or reading one's own account may depend on a badge rendering correctly.
+// resolveTiers reads one row of entitlements and resolves the plan via plan.TierOf and
+// the API product via billing.APITierOf. A read failure or unset queries degrades to
+// free / no API product and is logged: sign-in and /me must not depend on a badge.
 func (h *authHandlers) resolveTiers(ctx context.Context, userID int64) (plan.Tier, billing.APITier) {
 	if h.queries == nil {
 		return plan.TierFree, billing.APITierNone
@@ -458,8 +426,7 @@ func authUserOut(r userResponse) apigen.AuthUser {
 		APITier: apigen.AuthUserAPITier(r.APITier)}
 }
 
-// accountsError maps the accounts service sentinels to HTTP errors, preserving
-// the statuses and generic messages the handlers used before delegation.
+// accountsError maps the accounts service sentinels to HTTP errors.
 func accountsError(err error) error {
 	switch {
 	case errors.Is(err, accounts.ErrInvalidEmail):
@@ -514,9 +481,8 @@ func (h *authHandlers) Register(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }
 
-// Login verifies credentials, starts a session (auth cookie), and returns the
-// user. Unknown email, wrong password, and passwordless accounts all yield the
-// same generic 401 so the response never reveals which factor failed.
+// Login verifies credentials, starts a session, and returns the user. Unknown email,
+// wrong password and passwordless accounts all yield the same generic 401.
 func (h *authHandlers) Login(c *fiber.Ctx) error {
 	var in credentials
 	if err := c.BodyParser(&in); err != nil {
@@ -650,14 +616,10 @@ func (authHasher) Check(hash, plain string) error    { return auth.CheckPassword
 // free of a database import, which is why it cannot name the sqlc row type directly.
 type apiKeys struct{ q *db.Queries }
 
-// AuthenticateAPIKey resolves a bearer token hash against api_keys first, and —
-// only when no live key matches — against oauth_grants (freehire#3114). The two
-// tables are deliberately separate (a key and a grant are minted, listed, and
-// revoked through different surfaces), but every REST route this authenticator
-// guards must accept either: an MCP client holding an OAuth grant is acting as
-// the same account a pasted API key would, so it gets the same reach. A grant
-// always resolves as ScopeFull — the same reasoning the register endpoint uses
-// for a user-created key: an OAuth grant has no narrower variant to request.
+// AuthenticateAPIKey resolves a bearer token hash against api_keys first, then
+// oauth_grants. Every guarded REST route accepts either: an MCP client with a grant
+// acts as the same account a pasted key would. A grant always resolves as ScopeFull,
+// since it has no narrower variant to request.
 func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth.APIKeyIdentity, error) {
 	row, err := a.q.AuthenticateAPIKey(ctx, tokenHash)
 	if err == nil {
