@@ -22,3 +22,8 @@
   --region='United Kingdom' --company='LinkedIn UK software' --apply`, then arrange the
   normal ingest and liveness schedules in freehire-ops. Adapter registration alone starts
   no crawl. A LinkedIn closure does not close an independent employer ATS copy.
+- Guest pages sampled 2026-11-15 hide the external Apply destination behind sign-in.
+  Do not infer an ATS address from the employer name or description links. When a curator
+  has verified it, `cmd/set-job-application-url --slug=... --url=... --apply` records it in
+  `jobs.application_url`; public Apply links prefer it. `jobs.url` remains the LinkedIn
+  posting used by liveness, and ingest leaves the separately recorded destination alone.

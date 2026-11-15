@@ -1157,6 +1157,7 @@ type Job struct {
 	HydratedAt                pgtype.Timestamptz `json:"hydrated_at"`
 	LivenessStrikes           int32              `json:"liveness_strikes"`
 	Team                      string             `json:"team"`
+	ApplicationUrl            string             `json:"application_url"`
 }
 
 type JobActivity struct {
@@ -1295,6 +1296,8 @@ type JobRow struct {
 	Engagement          []string    `json:"engagement"`
 	// Department or team the source ATS files the posting under, verbatim and trimmed; empty when unstated.
 	Team string `json:"team"`
+	// Verified application destination; empty falls back to the source posting URL. Independent of ingest and liveness.
+	ApplicationUrl string `json:"application_url"`
 }
 
 type JobSearchPing struct {

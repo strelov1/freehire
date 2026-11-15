@@ -32,11 +32,14 @@ type Job struct {
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
 	URL           string `json:"url"`
-	Title         string `json:"title"`
-	Company       string `json:"company"`
-	CompanySlug   string `json:"company_slug"`
-	Location      string `json:"location"`
-	Description   string `json:"description"`
+	// SourceURL is the original posting when URL points to a separately verified
+	// application destination. Omitted when both links are the same.
+	SourceURL   string `json:"source_url,omitempty"`
+	Title       string `json:"title"`
+	Company     string `json:"company"`
+	CompanySlug string `json:"company_slug"`
+	Location    string `json:"location"`
+	Description string `json:"description"`
 	// DirectApply marks an employer vacancy that takes applications on freehire instead
 	// of linking out (job.IsDirectApply); its URL is empty. Omitted rather than served
 	// false, to keep the search index small.
@@ -244,7 +247,8 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Source:              f.Source,
 		ManuallyAdded:       f.ManuallyAdded,
 		ExternalID:          f.ExternalID,
-		URL:                 outboundurl.Tag(f.URL),
+		URL:                 outboundurl.Tag(applicationDestination(f)),
+		SourceURL:           originalPosting(f),
 		DirectApply:         job.IsDirectApply(f.Source, f.ExternalID),
 		Title:               f.Title,
 		Company:             f.Company,

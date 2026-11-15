@@ -2674,7 +2674,8 @@ type Querier interface {
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
 	// by scheme, www., tracking query, fragment, case or trailing slash still matches; the
-	// same expression backs jobs_normalized_url_idx, so this is an index lookup.
+	// same expression backs the posting and nonempty application URL indexes. A verified
+	// destination must resolve after an extension follows Apply, just like the source URL.
 	// Scoped to open rows: a closed posting is not one to show a match card for.
 	//
 	// Duplicates ARE matched, and answer with the posting they duplicate. One in five open
@@ -7808,6 +7809,9 @@ type Querier interface {
 	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
+	// Curator-owned destination: never written by UpsertJob. Lock posting then activity
+	// before queueing, like the posting writers, and fence competing curator edits.
+	SetJobApplicationURL(ctx context.Context, arg SetJobApplicationURLParams) (int64, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.

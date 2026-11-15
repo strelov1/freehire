@@ -65,9 +65,12 @@ type Draft struct {
 // Fields is the readable projection of a Job, a plain DTO for the wire projection and
 // search indexing. It can be constructed freely but is not a Job and cannot be persisted.
 type Fields struct {
-	Source              string
-	ExternalID          string
-	URL                 string
+	Source     string
+	ExternalID string
+	URL        string
+	// ApplicationURL is an independently verified destination. URL remains the source
+	// posting for identity and liveness; ingestion never overwrites this destination.
+	ApplicationURL      string
 	Title               string
 	Company             string
 	CompanySlug         string

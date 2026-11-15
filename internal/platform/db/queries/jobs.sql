@@ -190,7 +190,8 @@ WHERE source = $1 AND external_id = $2;
 -- /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 -- URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
 -- by scheme, www., tracking query, fragment, case or trailing slash still matches; the
--- same expression backs jobs_normalized_url_idx, so this is an index lookup.
+-- same expression backs the posting and nonempty application URL indexes. A verified
+-- destination must resolve after an extension follows Apply, just like the source URL.
 -- Scoped to open rows: a closed posting is not one to show a match card for.
 --
 -- Duplicates ARE matched, and answer with the posting they duplicate. One in five open
@@ -213,7 +214,8 @@ SELECT COALESCE(canonical.public_slug, j.public_slug)
 FROM jobs j
 LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of AND canonical.closed_at IS NULL
 LEFT JOIN job_activity a ON a.job_id = j.id
-WHERE normalize_job_url(j.url) = normalize_job_url(@url)
+WHERE (normalize_job_url(j.url) = normalize_job_url(@url)
+       OR (j.application_url <> '' AND normalize_job_url(j.application_url) = normalize_job_url(@url)))
   AND normalize_job_url(@url) <> ''
   AND j.closed_at IS NULL
 ORDER BY (j.duplicate_of IS NULL) DESC, a.last_seen_at DESC, j.id DESC

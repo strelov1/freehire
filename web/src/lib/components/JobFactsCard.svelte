@@ -82,7 +82,7 @@
     <div
       class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
     >
-      <JobSourceRow source={job.source} jobUrl={job.url} manuallyAdded={job.manually_added} />
+      <JobSourceRow source={job.source} jobUrl={job.source_url ?? job.url} manuallyAdded={job.manually_added} />
       <div class="flex shrink-0">
         <!-- Keyed on the slug so a client-side navigation to another job remounts
              the control and re-seeds its counts/highlight (JobView itself is not

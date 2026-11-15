@@ -168,6 +168,11 @@ export interface Job {
   manually_added: boolean;
   external_id: string;
   url: string;
+  /**
+   * SourceURL is the original posting when URL points to a separately verified
+   * application destination. Omitted when both links are the same.
+   */
+  source_url?: string;
   title: string;
   company: string;
   company_slug: string;
