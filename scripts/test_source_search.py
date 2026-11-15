@@ -33,7 +33,7 @@ class SourceSearchTest(unittest.TestCase):
                 )
 
             result = search()
-            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 0, result.stderr)
             for name in ("jobs.sql", "001.sql", "main.tsp", "old.go"):
                 self.assertIn(name, result.stdout)
             for name in ("generated.go", "spec.md", "AGENTS.md"):
