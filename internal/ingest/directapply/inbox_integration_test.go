@@ -218,10 +218,10 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 	t.Cleanup(releaseOnce) // a failed assertion must not leave the first move blocked
 	done := make(chan error, 1)
 	go func() {
-		done <- moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) error {
+		done <- moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) (func(context.Context), error) {
 			close(firstIn)
 			<-release
-			return nil
+			return nil, nil
 		})
 	}()
 	select {
@@ -234,7 +234,10 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 
 	secondRan := make(chan struct{})
 	go func() {
-		_ = moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) error { close(secondRan); return nil })
+		_ = moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) (func(context.Context), error) {
+			close(secondRan)
+			return nil, nil
+		})
 	}()
 	select {
 	case <-secondRan:
@@ -242,7 +245,7 @@ func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 	// Another application is not held up.
-	if err := moves.RunMove(ctx, 43, func(context.Context, directapply.MoveScope) error { return nil }); err != nil {
+	if err := moves.RunMove(ctx, 43, func(context.Context, directapply.MoveScope) (func(context.Context), error) { return nil, nil }); err != nil {
 		t.Fatalf("RunMove(43): %v", err)
 	}
 	releaseOnce()
@@ -264,23 +267,39 @@ func TestApplicationMoves_RunTheMoveOnItsOwnTransaction(t *testing.T) {
 
 	// A failed run rolls its stage write back.
 	failed := errors.New("boom")
-	if err := moves.RunMove(ctx, id, func(ctx context.Context, sc directapply.MoveScope) error {
+	if err := moves.RunMove(ctx, id, func(ctx context.Context, sc directapply.MoveScope) (func(context.Context), error) {
 		if _, err := sc.Repo.SetStage(ctx, f.employer, id, directapply.StageRejected); err != nil {
-			return err
+			return nil, err
 		}
-		return failed
+		return nil, failed
 	}); !errors.Is(err, failed) {
 		t.Fatalf("RunMove err = %v, want the callback's", err)
 	}
 	if a, err := f.repo.Get(ctx, f.employer, id); err != nil || a.Stage != directapply.StageNew {
 		t.Fatalf("stage after a failed run = %+v, %v; want new", a.Stage, err)
 	}
-	// A successful one commits it.
-	if err := moves.RunMove(ctx, id, func(ctx context.Context, sc directapply.MoveScope) error {
-		_, err := sc.Repo.SetStage(ctx, f.employer, id, directapply.StageInterview)
-		return err
+	// A successful one commits it BEFORE its after-commit step, which sees the stage saved —
+	// and a context that ends during that step (a slow letter) undoes nothing.
+	runCtx, cancel := context.WithCancel(ctx)
+	var seen directapply.Stage
+	if err := moves.RunMove(runCtx, id, func(ctx context.Context, sc directapply.MoveScope) (func(context.Context), error) {
+		if _, err := sc.Repo.SetStage(ctx, f.employer, id, directapply.StageInterview); err != nil {
+			return nil, err
+		}
+		return func(context.Context) {
+			a, _ := f.repo.Get(ctx, f.employer, id) // a fresh connection: only committed data
+			seen = a.Stage
+			cancel()
+		}, nil
 	}); err != nil {
 		t.Fatalf("RunMove: %v", err)
+	}
+	if seen != directapply.StageInterview {
+		t.Fatalf("the after-commit step saw %q; want the committed interview", seen)
+	}
+	// The lock was released despite the cancelled context: the next move runs.
+	if err := moves.RunMove(ctx, id, func(context.Context, directapply.MoveScope) (func(context.Context), error) { return nil, nil }); err != nil {
+		t.Fatalf("a move after a cancelled one: %v", err)
 	}
 	if a, err := f.repo.Get(ctx, f.employer, id); err != nil || a.Stage != directapply.StageInterview {
 		t.Fatalf("stage after a successful run = %+v, %v; want interview", a.Stage, err)

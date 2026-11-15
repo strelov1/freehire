@@ -244,14 +244,16 @@ func (r *QueriesRepository) SetStage(ctx context.Context, employerID, id int64, 
 	}, nil
 }
 
-// ApplicationMoves runs each move of an application on one transaction that first takes the
-// application's advisory lock (LockDirectApplication): moves of one application are
-// serialised, and the move's own reads and writes — the stage, the candidate's tracking —
-// use that transaction's connection, so a move never holds one connection while waiting
-// for another (which, with enough concurrent moves, would exhaust the pool). The stage
-// write and the candidate's mirror commit together; the mirror runs in a savepoint so its
-// failure leaves the stage write standing. The move sends the candidate's letter after its
-// last database step, inside the run, so letters keep the order of the moves.
+// ApplicationMoves runs each move of an application on one pooled connection that first
+// takes the application's session advisory lock (LockDirectApplication), so moves of one
+// application are serialised. On that connection the move's database work — the stage, the
+// candidate's tracking — runs in one transaction, so a move never holds one connection while
+// waiting for another (which, with enough concurrent moves, would exhaust the pool); the
+// mirror runs in a savepoint so its failure leaves the stage standing. The transaction
+// commits BEFORE the move's after-commit step (the candidate's letter) runs, still inside the
+// lock: a letter is only ever about a committed decision, and letters keep the order of the
+// moves. The lock is released at the end; if releasing fails the connection is closed, which
+// releases it too.
 type ApplicationMoves struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
@@ -262,22 +264,51 @@ func NewApplicationMoves(q *db.Queries, pool *pgxpool.Pool) *ApplicationMoves {
 	return &ApplicationMoves{pool: pool, q: q}
 }
 
-// RunMove runs fn as one move of application id; see ApplicationMoves.
-func (m *ApplicationMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error {
-	tx, err := m.pool.Begin(ctx)
+// RunMove runs fn as one move of application id; see ApplicationMoves. fn returns the step
+// to run after the commit, or nil.
+func (m *ApplicationMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) (func(context.Context), error)) error {
+	conn, err := m.pool.Acquire(ctx)
 	if err != nil {
 		return err
 	}
+	defer conn.Release()
+	qc := db.New(conn)
+	if err := qc.LockDirectApplication(ctx, id); err != nil {
+		return err
+	}
+	defer func() {
+		// Released even when ctx is done: a lock left on a pooled connection would block
+		// every later move of this application.
+		if ok, err := qc.UnlockDirectApplication(context.WithoutCancel(ctx), id); err != nil || !ok {
+			_ = conn.Hijack().Close(context.WithoutCancel(ctx))
+		}
+	}()
+
+	after, err := m.inTx(ctx, conn, fn)
+	if err != nil {
+		return err
+	}
+	if after != nil {
+		after(ctx)
+	}
+	return nil
+}
+
+func (m *ApplicationMoves) inTx(ctx context.Context, conn *pgxpool.Conn, fn func(context.Context, MoveScope) (func(context.Context), error)) (func(context.Context), error) {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	qtx := m.q.WithTx(tx)
-	if err := qtx.LockDirectApplication(ctx, id); err != nil {
-		return err
-	}
 	mirror := savepointMirror{tx: tx, build: func(d db.DBTX) StageMirror { return jobtracking.NewEmployerStages(db.New(d)) }}
-	if err := fn(ctx, MoveScope{Repo: NewQueriesRepository(qtx), Mirror: mirror}); err != nil {
-		return err
+	after, err := fn(ctx, MoveScope{Repo: NewQueriesRepository(m.q.WithTx(tx)), Mirror: mirror})
+	if err != nil {
+		return nil, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return after, nil
 }
 
 // savepointMirror runs each mirror inside a savepoint of the move's transaction. The mirror

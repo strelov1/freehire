@@ -144,6 +144,11 @@ JOIN users u ON u.id = m.user_id;
 -- name: LockDirectApplication :exec
 -- Serialises everything one employer move does to one application — the stage write, the
 -- candidate's tracking and the letter — against another move of the same application, so
--- an older move can never mirror or mail after a newer one. Transaction-scoped: the caller
--- holds the transaction open for the move and rolls it back to release.
-SELECT pg_advisory_xact_lock(hashtextextended('direct_application:' || sqlc.arg(id)::bigint::text, 0));
+-- an older move can never mirror or mail after a newer one. Session-scoped, because the
+-- letter goes out after the move's transaction commits and must still be inside the lock;
+-- the caller releases it with UnlockDirectApplication on the same connection.
+SELECT pg_advisory_lock(hashtextextended('direct_application:' || sqlc.arg(id)::bigint::text, 0));
+
+-- name: UnlockDirectApplication :one
+-- Releases LockDirectApplication; false when this session did not hold it.
+SELECT pg_advisory_unlock(hashtextextended('direct_application:' || sqlc.arg(id)::bigint::text, 0))::boolean AS released;

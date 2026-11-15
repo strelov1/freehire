@@ -112,13 +112,24 @@ type fakeMoves struct {
 	mirror StageMirror
 	held   int64
 	locked []int64
+	// committed is set between fn and its after-commit step, as the real commit is.
+	committed bool
 }
 
-func (m *fakeMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error {
+func (m *fakeMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) (func(context.Context), error)) error {
 	m.locked = append(m.locked, id)
 	m.held = id
+	m.committed = false
 	defer func() { m.held = 0 }()
-	return fn(ctx, MoveScope{Repo: m.repo, Mirror: m.mirror})
+	after, err := fn(ctx, MoveScope{Repo: m.repo, Mirror: m.mirror})
+	if err != nil {
+		return err
+	}
+	m.committed = true
+	if after != nil {
+		after(ctx)
+	}
+	return nil
 }
 
 type inboxHarness struct {
@@ -310,5 +321,29 @@ func TestInboxMove_RunsUnderTheApplicationsLock(t *testing.T) {
 	}
 	if len(h.locks.locked) != 1 || h.locks.locked[0] != 1 || heldDuringMirror != 1 {
 		t.Errorf("locked %v, held during mirror %d; want the move's follow-ups inside application 1's lock", h.locks.locked, heldDuringMirror)
+	}
+}
+
+// notifierAfterCommit records whether the move had committed when the letter went out.
+type notifierAfterCommit struct {
+	moves     *fakeMoves
+	committed []bool
+}
+
+func (n *notifierAfterCommit) SendStatusUpdate(context.Context, StatusMail) error {
+	n.committed = append(n.committed, n.moves.committed)
+	return nil
+}
+
+func TestInboxMove_TheLetterFollowsTheCommit(t *testing.T) {
+	h := newInboxHarness()
+	n := &notifierAfterCommit{moves: h.locks}
+	in := NewInbox(h.repo, h.employers, n, h.locks)
+	res, err := in.Move(context.Background(), employerID, 1, StageRejected, "")
+	if err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if len(n.committed) != 1 || !n.committed[0] || !res.Notified {
+		t.Errorf("letter sent with committed=%v, notified=%v; want one letter after the commit", n.committed, res.Notified)
 	}
 }

@@ -206,13 +206,14 @@ func (q *Queries) ListEmployerApplications(ctx context.Context, arg ListEmployer
 }
 
 const lockDirectApplication = `-- name: LockDirectApplication :exec
-SELECT pg_advisory_xact_lock(hashtextextended('direct_application:' || $1::bigint::text, 0))
+SELECT pg_advisory_lock(hashtextextended('direct_application:' || $1::bigint::text, 0))
 `
 
 // Serialises everything one employer move does to one application — the stage write, the
 // candidate's tracking and the letter — against another move of the same application, so
-// an older move can never mirror or mail after a newer one. Transaction-scoped: the caller
-// holds the transaction open for the move and rolls it back to release.
+// an older move can never mirror or mail after a newer one. Session-scoped, because the
+// letter goes out after the move's transaction commits and must still be inside the lock;
+// the caller releases it with UnlockDirectApplication on the same connection.
 func (q *Queries) LockDirectApplication(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, lockDirectApplication, id)
 	return err
@@ -300,6 +301,18 @@ func (q *Queries) SetDirectApplicationStage(ctx context.Context, arg SetDirectAp
 		&i.Company,
 	)
 	return i, err
+}
+
+const unlockDirectApplication = `-- name: UnlockDirectApplication :one
+SELECT pg_advisory_unlock(hashtextextended('direct_application:' || $1::bigint::text, 0))::boolean AS released
+`
+
+// Releases LockDirectApplication; false when this session did not hold it.
+func (q *Queries) UnlockDirectApplication(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, unlockDirectApplication, id)
+	var released bool
+	err := row.Scan(&released)
+	return released, err
 }
 
 const upsertDirectApplication = `-- name: UpsertDirectApplication :one

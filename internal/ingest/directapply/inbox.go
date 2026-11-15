@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/strelov1/freehire/internal/ingest/employer"
 )
 
 // Stage is an application's position in the employer's own hiring pipeline. Every
@@ -157,10 +155,11 @@ type MoveScope struct {
 }
 
 // MoveRunner runs fn as one move of an application: serialised against every other move
-// of the same application, with all its database work on the one transaction that holds
-// that serialisation, committed when fn succeeds. ApplicationMoves satisfies it.
+// of the same application, with all its database work on one transaction, committed when
+// fn succeeds; the step fn returns runs after that commit, still serialised.
+// ApplicationMoves satisfies it.
 type MoveRunner interface {
-	RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error
+	RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) (func(context.Context), error)) error
 }
 
 // NewInbox builds an Inbox. Every dependency is required.
@@ -252,50 +251,57 @@ func (in *Inbox) Move(ctx context.Context, employerID, id int64, st Stage, messa
 
 	// The whole move is one MoveRunner run: two moves of one application never interleave,
 	// so an older move cannot mirror or mail after a newer one has, and the move's database
-	// work shares the connection that holds that guarantee rather than queueing for more.
+	// work shares one connection rather than queueing for more. The letter is the
+	// after-commit step: it goes out only once the decision it announces is saved.
 	var res MoveResult
-	err = in.moves.RunMove(ctx, id, func(ctx context.Context, sc MoveScope) error {
-		var err error
-		res, err = in.move(ctx, sc, acc, employerID, id, st, message)
-		return err
+	err = in.moves.RunMove(ctx, id, func(ctx context.Context, sc MoveScope) (func(context.Context), error) {
+		mv, app, err := in.save(ctx, sc, employerID, id, st)
+		if err != nil {
+			return nil, err
+		}
+		res.Application = app
+		if !mv.Changed || !st.Notifies() {
+			return nil, nil
+		}
+		return func(ctx context.Context) {
+			err := in.notifier.SendStatusUpdate(ctx, StatusMail{
+				To:          mv.CandidateEmail,
+				ReplyTo:     acc.WorkEmail,
+				CompanyName: mv.Company,
+				JobTitle:    mv.JobTitle,
+				JobSlug:     mv.JobSlug,
+				Stage:       st,
+				Message:     message,
+			})
+			if err != nil {
+				log.Printf("directapply: candidate not emailed about application %d: %v", id, err)
+			}
+			res.Notified = err == nil
+		}, nil
 	})
-	return res, err
-}
-
-// move is Move's body, run as one move of the application.
-func (in *Inbox) move(ctx context.Context, sc MoveScope, acc employer.Account, employerID, id int64, st Stage, message string) (MoveResult, error) {
-	mv, err := sc.Repo.SetStage(ctx, employerID, id, st)
 	if err != nil {
 		return MoveResult{}, err
 	}
+	return res, nil
+}
+
+// save is the database part of a move: the stage, the candidate's tracking (best effort),
+// and the application read back.
+func (in *Inbox) save(ctx context.Context, sc MoveScope, employerID, id int64, st Stage) (StageMove, InboxApplication, error) {
+	mv, err := sc.Repo.SetStage(ctx, employerID, id, st)
+	if err != nil {
+		return StageMove{}, InboxApplication{}, err
+	}
 	if mv.Changed {
-		// Best effort: a mirror failure is contained by the MoveScope (a savepoint in
-		// ApplicationMoves) and logged, never failing the move.
+		// A mirror failure is contained by the MoveScope (a savepoint in ApplicationMoves)
+		// and logged, never failing the move.
 		if _, err := sc.Mirror.Mirror(ctx, mv.CandidateID, mv.JobID, candidateStage[st]); err != nil {
 			log.Printf("directapply: candidate's tracking not updated for application %d: %v", id, err)
 		}
 	}
 	app, err := sc.Repo.Get(ctx, employerID, id)
 	if err != nil {
-		return MoveResult{}, err
+		return StageMove{}, InboxApplication{}, err
 	}
-	// The letter goes last, once every database step of the move has succeeded, so a
-	// failure there can never follow a letter about a decision that is then rolled back.
-	var notified bool
-	if mv.Changed && st.Notifies() {
-		err := in.notifier.SendStatusUpdate(ctx, StatusMail{
-			To:          mv.CandidateEmail,
-			ReplyTo:     acc.WorkEmail,
-			CompanyName: mv.Company,
-			JobTitle:    mv.JobTitle,
-			JobSlug:     mv.JobSlug,
-			Stage:       st,
-			Message:     message,
-		})
-		if err != nil {
-			log.Printf("directapply: candidate not emailed about application %d: %v", id, err)
-		}
-		notified = err == nil
-	}
-	return MoveResult{Application: app, Notified: notified}, nil
+	return mv, app, nil
 }

@@ -5804,8 +5804,9 @@ type Querier interface {
 	LockCompanyRelationDecisions(ctx context.Context) error
 	// Serialises everything one employer move does to one application — the stage write, the
 	// candidate's tracking and the letter — against another move of the same application, so
-	// an older move can never mirror or mail after a newer one. Transaction-scoped: the caller
-	// holds the transaction open for the move and rolls it back to release.
+	// an older move can never mirror or mail after a newer one. Session-scoped, because the
+	// letter goes out after the move's transaction commits and must still be inside the lock;
+	// the caller releases it with UnlockDirectApplication on the same connection.
 	LockDirectApplication(ctx context.Context, id int64) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
@@ -8276,6 +8277,8 @@ type Querier interface {
 	UnlinkDiscordAccount(ctx context.Context, userID int64) (int64, error)
 	// Clear an email's application link (leaves the classified status intact).
 	UnlinkEmail(ctx context.Context, arg UnlinkEmailParams) (int64, error)
+	// Releases LockDirectApplication; false when this session did not hold it.
+	UnlockDirectApplication(ctx context.Context, id int64) (bool, error)
 	// Clear a job's saved mark without deleting the interaction row, so view and
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
