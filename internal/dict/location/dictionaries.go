@@ -1,8 +1,8 @@
 package location
 
-// The dictionaries below are seeded from the high-frequency location strings
-// observed in production ATS data. They are meant to grow by observation — add
-// the names/cities that show up unresolved, not a full gazetteer up front.
+// The dictionaries below are seeded from high-frequency location strings in ATS
+// data and grow by observation: add names that show up unresolved, not a full
+// gazetteer.
 
 // regionCountries groups ISO 3166-1 alpha-2 country codes under one canonical
 // region code from vocab.RegionValues. Each country maps to exactly one region
@@ -105,13 +105,11 @@ var nameToCountry = map[string]string{
 	// the US state; the country resolves via its capital "tbilisi" only.
 	"russia": "ru", "moscow": "ru", "saint petersburg": "ru", "st petersburg": "ru",
 	"kyiv": "ua", "kiev": "ua",
-	// Other Ukrainian oblast centres, added with the Telegram UA cohort, in the
-	// Ukrainian and the Russian transliteration. Every key here is Ukraine-only in
-	// cities1000.tsv. Omitted because GeoNames lists the alias in more than one
-	// country, the same reason "georgia" is omitted above: "odesa"/"odessa" (also
-	// Odessa, Texas), "lutsk" (Belarus), "cherkasy"/"cherkassy" and "donetsk"
-	// (Russia), "nikolaev" (Bulgaria, Russia). Those keep resolving to a bare city
-	// name — under-resolving is what the never-guess contract asks for.
+	// Other Ukrainian oblast centres, in Ukrainian and Russian transliteration. Omitted
+	// because GeoNames lists the alias in more than one country (as for "georgia"):
+	// "odesa"/"odessa" (Odessa, Texas), "lutsk" (Belarus), "cherkasy"/"cherkassy" and
+	// "donetsk" (Russia), "nikolaev" (Bulgaria, Russia); under-resolving is what the
+	// never-guess contract asks for.
 	"lviv": "ua", "lvov": "ua", "kharkiv": "ua", "kharkov": "ua",
 	"dnipro": "ua", "dnepr": "ua", "dnepropetrovsk": "ua",
 	"vinnytsia": "ua", "ivano-frankivsk": "ua",
@@ -133,13 +131,10 @@ var nameToCountry = map[string]string{
 	"azerbaijan": "az", "baku": "az",
 	"tbilisi": "ge",
 
-	// Cyrillic, for the RU-segment ATS sources (sber, mts, alfabank, tbank, vk,
-	// huntflow, …) whose location fields are in Russian. Seeded from the
-	// high-frequency unresolved strings observed in production; grow by
-	// observation. "россия"/"рф" are the country catch-all (the comma tokenizer
-	// resolves "Самара, Россия" via the country token even when the city is
-	// unknown). The "г "/"город " city-marker prefix is stripped before lookup
-	// (stripCityPrefix), so only the bare city name is keyed.
+	// Cyrillic, for the RU-segment ATS sources whose location fields are in Russian;
+	// grow by observation. "россия"/"рф" are the country catch-all (so "Самара, Россия"
+	// resolves via the country token). The "г "/"город " prefix is stripped before
+	// lookup (stripCityPrefix), so only the bare city name is keyed.
 	"россия": "ru", "рф": "ru",
 	"москва": "ru", "санкт-петербург": "ru", "спб": "ru", "питер": "ru",
 	"екатеринбург": "ru", "новосибирск": "ru", "нижний новгород": "ru",
@@ -170,13 +165,11 @@ var nameToCountry = map[string]string{
 	"алматы": "kz", "астана": "kz", "казахстан": "kz",
 	"ереван": "am", "баку": "az", "бишкек": "kg",
 	"киев": "ua", "київ": "ua", "україна": "ua", "украина": "ua",
-	// Oblast centres in both spellings: the Telegram UA channels write Ukrainian,
-	// the RU-segment ATS sources write Russian, and a location field carries either.
-	// A Cyrillic key is dropped only when GeoNames places the alias in another
-	// Cyrillic-writing country, since those are the postings that could carry this
-	// spelling: "луцьк"/"луцк" (Belarus), "черкассы" (Russia), "николаев" (Bulgaria,
-	// Russia). The Latin block above is stricter — a Latin field can come from
-	// anywhere, so "odesa" is absent there and present here.
+	// Oblast centres in both spellings: Telegram UA channels write Ukrainian, RU-segment
+	// ATS sources write Russian. A Cyrillic key is dropped only when GeoNames places the
+	// alias in another Cyrillic-writing country: "луцьк"/"луцк" (Belarus), "черкассы"
+	// (Russia), "николаев" (Bulgaria, Russia). The Latin block is stricter, since a
+	// Latin field can come from anywhere ("odesa" is absent there, present here).
 	"львів": "ua", "львов": "ua", "харків": "ua", "харьков": "ua",
 	"одеса": "ua", "одесса": "ua", "дніпро": "ua", "днепр": "ua",
 	"вінниця": "ua", "винница": "ua", "івано-франківськ": "ua", "ивано-франковск": "ua",
@@ -254,7 +247,7 @@ var nameToCountry = map[string]string{
 	"tschechien": "cz", "bulgarien": "bg", "saudi-arabien": "sa",
 	"vereinigte arabische emirate": "ae", "bundesweit": "de",
 	// Dutch — Recruitee writes the country in the posting's language, and "Nederland"
-	// is otherwise read as the Colorado town of that name (10,801 open rows, 2026-10-25).
+	// is otherwise read as the Colorado town of that name.
 	"nederland": "nl", "belgië": "be", "belgie": "be", "duitsland": "de",
 	"frankrijk": "fr", "spanje": "es", "italië": "it", "verenigd koninkrijk": "gb",
 	"verenigde staten": "us", "oostenrijk": "at", "zwitserland": "ch", "zweden": "se",
@@ -263,12 +256,12 @@ var nameToCountry = map[string]string{
 	// French, for the Belgian postings written in it.
 	"belgique": "be", "pays-bas": "nl", "royaume-uni": "gb", "allemagne": "de",
 	"suisse": "ch", "espagne": "es",
-	// Endonyms the same field carries for the rest of Europe (Recruitee, 2026-10-25).
+	// Endonyms the same field carries for the rest of Europe (Recruitee).
 	"noreg": "no", "polska": "pl", "svizzera": "ch", "eesti": "ee", "slovenija": "si",
 	"slovensko": "sk", "česko": "cz", "česká republika": "cz", "éire": "ie",
 	"lietuva": "lt", "latvija": "lv", "hrvatska": "hr", "românia": "ro", "ελλάδα": "gr",
-	// Slovene, for the neighbours Slovenian boards post abroad to (Optius, 2026-10-29: 89
-	// postings filed under "Tujina", most of them "Avstrija, <town>").
+	// Slovene, for the neighbours Slovenian boards post abroad to (Optius files these
+	// under "Tujina", mostly "Avstrija, <town>").
 	"avstrija": "at", "hrvaška": "hr", "nemčija": "de", "madžarska": "hu",
 
 	// --- Beacon cities (high-frequency, unambiguous), region falls out of the code.
@@ -359,18 +352,15 @@ var nameToCountry = map[string]string{
 // formats that dominate North American ATS data. The region falls out of
 // countryToRegion (both us and ca resolve to north_america).
 //
-// Two-letter codes that collide with a country ISO code whose city the parser
-// already keys are listed here anyway (not omitted): computeCollidingSubdivisions
-// picks them up into collidingSubdivisions, and resolveSubdivision's
-// subdivisionAccepted gate lets the US/CA reading win only when the neighbouring
-// city token names a recognized US/CA place ("Carmel, IN" stays Indiana,
-// "Bangalore, IN" stays India). "nl" is the one deliberate omission — Newfoundland
-// resolves via its full name instead, so the Netherlands always wins "Amsterdam,
-// NL". "ca" is the opposite exception: it stays California unconditionally
-// because "City, CA" is the single most common US location form — the rare
-// "Toronto, CA" mislabel is accepted. The country Georgia is unaffected: the state
-// carries the code "ga", and the name "georgia" is intentionally absent here too
-// (the country resolves via "tbilisi").
+// Two-letter codes that collide with a country ISO code are listed anyway:
+// computeCollidingSubdivisions picks them up into collidingSubdivisions, and
+// resolveSubdivision's subdivisionAccepted gate lets the US/CA reading win only when
+// the neighbouring city token names a recognized US/CA place ("Carmel, IN" stays
+// Indiana, "Bangalore, IN" stays India). "nl" is the one deliberate omission:
+// Newfoundland resolves via its full name so "Amsterdam, NL" stays the Netherlands.
+// "ca" stays California unconditionally because "City, CA" is the most common US
+// form; the rare "Toronto, CA" mislabel is accepted. The name "georgia" is absent
+// (the country resolves via "tbilisi"; the state carries "ga").
 var subdivisionToCountry = map[string]string{
 	// US states (postal codes). de/in/id collide with Germany / India /
 	// Indonesia; collidingSubdivisions gates them behind subdivisionAccepted.
@@ -441,34 +431,26 @@ var subdivisionCode = map[string]string{
 	"nunavut": "NU",
 }
 
-// collidingSubdivisions is the subset of subdivisionToCountry's two-letter codes
-// that also spell a curated country's ISO 3166-1 alpha-2 code: "il" (Illinois vs
-// Israel), "la" (Louisiana vs Laos), "pa" (Pennsylvania vs Panama), "mn"
-// (Minnesota vs Mongolia), "sk" (Saskatchewan vs Slovakia), and about a dozen
-// more. resolveSubdivision only accepts the US/CA reading for one of these when
-// the neighbouring city token names a recognized US/CA place (subdivisionAccepted
-// in location.go); otherwise the bare-country-code interpretation wins. Computed
-// rather than hand-listed so it can never drift from the two source tables. "ca"
-// is deliberately excluded — see subdivisionToCountry's comment above: "City, CA"
-// stays California.
+// collidingSubdivisions is the subset of subdivisionToCountry's two-letter codes that
+// also spell a curated country's alpha-2 code ("il" Illinois/Israel, "la"
+// Louisiana/Laos, "pa" Pennsylvania/Panama, and about a dozen more).
+// resolveSubdivision accepts the US/CA reading only when the neighbouring city token
+// names a recognized US/CA place (subdivisionAccepted in location.go); otherwise the
+// country code wins. Computed so it cannot drift from the source tables; "ca" is
+// excluded (see subdivisionToCountry).
 var collidingSubdivisions = computeCollidingSubdivisions()
 
-// stateFirstSubdivisions are the colliding codes whose US-STATE reading dominates
-// this catalogue, so the default flips: after a city the dictionary does not place
-// in the colliding country, the code is the state. Without it, every US town the
-// curated maps and GeoNames do not call American — "Cambridge" and "Birmingham" are
-// British there, "Annapolis Junction" is nowhere — fell through to the country code.
+// stateFirstSubdivisions are the colliding codes whose US-STATE reading dominates the
+// catalogue, so the default flips: after a city the dictionary does not place in the
+// colliding country, the code is the state. Otherwise every US town the curated maps
+// and GeoNames do not call American ("Cambridge" and "Birmingham" are British there,
+// "Annapolis Junction" is nowhere) fell through to the country code.
 //
-// Measured 2026-10-21 by cmd/report-geo-gaps over open postings stored under the
-// country reading, against the countries LLM enrichment recorded for them: PA
-// (Panama) 227 of 239 read as US, MA (Morocco) 168/227, MD (Moldova) 131/132, IL
-// (Israel) 48/51, MN (Mongolia) 35/35, AL (Albania) 30/31, MO (Macau) 42/42, LA
-// (Laos) 61/64, ME (Montenegro) 8/8 — about 29k postings in all.
-//
-// Deliberately absent, because the same measurement says the COUNTRY wins there:
-// DE (Germany, 5 of 708 US), IN (India, 34/503), ID (Indonesia, 2/51), AR
-// (Argentina, 7/49), CO (Colombia, 83/321), TN (Tunisia, 36/101), MT (Malta, 1/6).
-// A code joins this set on a measurement like that one, never on intuition.
+// Membership rests on a measurement (cmd/report-geo-gaps over postings stored under
+// the country reading, against the countries LLM enrichment recorded): PA (Panama),
+// MA, MD, IL, MN, AL, MO, LA, ME read as US almost always. Deliberately absent
+// because the COUNTRY wins there: DE, IN, ID, AR, CO, TN, MT. A code joins this set
+// on such a measurement, never on intuition.
 var stateFirstSubdivisions = map[string]struct{}{
 	"pa": {}, "ma": {}, "md": {}, "il": {}, "mn": {}, "al": {}, "mo": {}, "la": {}, "me": {},
 }
@@ -486,16 +468,12 @@ func computeCollidingSubdivisions() map[string]struct{} {
 	return out
 }
 
-// cityOverrides pins a curated canonical display name for aliases where the
-// generated GeoNames name (cityDict, from cmd/gen-cities) differs from the clean
-// English form we want in the `cities` facet. It is applied over the generated base
-// (override wins) and covers only the handful of spelling divergences; every other
-// beacon city already resolves from the generated dataset. Country matches the
-// generated entry. Add an entry here for a genuine GeoNames gap or spelling we want
-// to pin — not for cities the dataset already covers.
-// Fields are named rather than positional: an override is hand-asserted, so it stays
-// uncontested by construction, and spelling that out keeps a future field from
-// silently changing what these mean.
+// cityOverrides pins a curated display name for aliases where the generated GeoNames
+// name (cityDict, from cmd/gen-cities) differs from the clean English form wanted in
+// the `cities` facet. Applied over the generated base (override wins); country
+// matches the generated entry. Add an entry for a genuine GeoNames gap or spelling to
+// pin, not for cities the dataset already covers. Fields are named, not positional:
+// an override is hand-asserted, so it stays uncontested by construction.
 var cityOverrides = map[string]cityEntry{
 	// Croatian and Serbian cities whose alias GeoNames also gives a hamlet abroad, so the
 	// alias stated no country (location_bcs.go); the City of Zagreb as its own lines
@@ -540,8 +518,8 @@ var cityOverrides = map[string]cityEntry{
 	"zurich":        {Name: "Zurich", Country: "ch"},   // GeoNames: "Zürich"
 	"montreal":      {Name: "Montreal", Country: "ca"}, // GeoNames: "Montréal"
 	"montréal":      {Name: "Montreal", Country: "ca"},
-	// Valencia (Venezuela) and Zaragoza outnumber their Spanish namesakes in GeoNames, so
-	// the curated "valencia"/"zaragoza" → es named no city at all.
+	// Valencia (Venezuela) and Zaragoza outnumber their Spanish namesakes in GeoNames,
+	// so without these the curated "valencia"/"zaragoza" → es named no city.
 	"valencia":       {Name: "Valencia", Country: "es"},
 	"zaragoza":       {Name: "Zaragoza", Country: "es"},
 	"madrid capital": {Name: "Madrid", Country: "es"},
@@ -562,7 +540,7 @@ var cityOverrides = map[string]cityEntry{
 	"capital federal":        {Name: "Buenos Aires", Country: "ar"},
 	"ciudad de buenos aires": {Name: "Buenos Aires", Country: "ar"},
 	"buenos aires city":      {Name: "Buenos Aires", Country: "ar"},
-	// Łódź with one diacritic dropped and the other kept: "Lodz" resolves, these did not.
+	// Łódź with one diacritic dropped and the other kept.
 	"lódz": {Name: "Łódź", Country: "pl"},
 	"łodź": {Name: "Łódź", Country: "pl"},
 	"lodź": {Name: "Łódź", Country: "pl"},

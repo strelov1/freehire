@@ -19,9 +19,8 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"ptc creo", "creo"}, {"creo parametric", "creo"},
 	{"cadence virtuoso", "cadence-virtuoso"},
 
-	// LLM-mined batch 4 — the phrase half. Every term here was mined as a bare token
-	// too, and every one is routed through a phrase instead because the bare form has
-	// a reading this catalogue carries in bulk.
+	// LLM-mined terms routed through a phrase because the bare form has another reading
+	// this catalogue carries in bulk.
 	// .net server stack — the word pass cannot see a dotted or two-word product name.
 	{".net core", "dotnet"}, {"asp.net core", "dotnet"},
 	{"entity framework", "dotnet"},
@@ -31,21 +30,18 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"aws glue", "aws-glue"},
 	{"azure synapse", "azure-synapse"}, {"synapse analytics", "azure-synapse"},
 	// HANA is the database and S/4HANA the ERP suite on top of it, so they are two
-	// canonicals rather than one. The qualified spellings of S/4HANA are declared with
-	// the other SAP products above; only the unseparated form was missing.
+	// canonicals. The qualified S/4HANA spellings are with the other SAP products above.
 	{"sap hana", "sap-hana"}, {"s4hana", "sap-s4hana"},
 	// Network security vendors named after places and plants. "Palo Alto" is the city
 	// in every Bay Area address block and "juniper" is a shrub; the qualified product
 	// name is the only safe route.
 	{"palo alto networks", "palo-alto-networks"},
 	{"juniper networks", "juniper"}, {"junos", "juniper"},
-	// Compliance frameworks and security certifications. The acronyms are coined, so
-	// tagging them was never the risk — VOUCHING was. A strong match lifts the
-	// corroboration gate off every weak word in the same text, and these appear in the
-	// prose of postings that are not technical at all: "HIPAA training required" is on
-	// most of a healthcare catalogue, ISO 9001 on most of a manufacturing one. As word
-	// aliases they turned a nurse's "pick up the slack" into `slack`. They are phrases
-	// now, and every canonical below is listed in nonCorroboratingPhrases.
+	// Compliance frameworks and security certifications. Tagging them is safe; VOUCHING
+	// is not: a strong match lifts the corroboration gate off every weak word in the same
+	// text, and these appear in non-technical postings ("HIPAA training required" in
+	// healthcare, ISO 9001 in manufacturing). As word aliases they turned a nurse's "pick
+	// up the slack" into `slack`. Every canonical below is in nonCorroboratingPhrases.
 	//
 	// The privacy and trade-control regimes sit in the PROFESSIONAL list further down
 	// instead: a posting whose only match is HIPAA or GDPR is a compliance role.
@@ -60,29 +56,27 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"iso 13485", "iso-13485"},
 	{"iso 26262", "iso-26262"},
 	{"as9100", "as9100"},
-	// Silicon and simulation terms whose bare acronym belongs to another industry
-	// this catalogue carries in bulk: ASIC is the Australian Securities and Investments
+	// Silicon and simulation terms whose bare acronym belongs to another industry:
+	// ASIC is the Australian Securities and Investments
 	// Commission, RTL is right-to-left text (and React Testing Library), CFD is a
 	// contract for difference, and KVM is the switch in an IT-support closet.
 	{"asic design", "asic"}, {"asic verification", "asic"}, {"asic development", "asic"},
 	{"rtl design", "rtl"}, {"rtl verification", "rtl"}, {"rtl coding", "rtl"},
 	{"computational fluid dynamics", "cfd"}, {"cfd simulation", "cfd"}, {"cfd analysis", "cfd"},
 	{"kvm hypervisor", "kvm"}, {"kvm virtualization", "kvm"}, {"kvm virtualisation", "kvm"},
-	// Industrial automation. "PLC" is the British company suffix — "… PLC" closes a
-	// legal entity name in a third of UK postings — so the controller returns only
-	// through what an engineer actually writes beside it. "CAN" as a bare token is
-	// hopeless for the obvious reason.
+	// Industrial automation. "PLC" is the British company suffix ("… PLC" closes a legal
+	// entity name), so the controller returns only through what an engineer writes beside
+	// it. Bare "CAN" is the English modal verb.
 	{"plc programming", "plc"}, {"ladder logic", "plc"}, {"allen bradley", "plc"},
 	{"can bus", "can-bus"},
-	// "PCB" is also polychlorinated biphenyl, which this catalogue meets on every
-	// environmental-remediation posting.
+	// "PCB" is also polychlorinated biphenyl (environmental-remediation postings).
 	{"pcb design", "pcb"}, {"pcb layout", "pcb"},
 	{"gd&t", "gd-t"}, {"geometric dimensioning and tolerancing", "gd-t"},
 	// Shop-floor vocabulary. These ARE the skill on a machinist, technician or
 	// assembler posting, so they must tag on their own — but they are declared as
 	// phrases and listed in nonCorroboratingPhrases so they never vouch for the gated
-	// design and software words beside them. A CNC operator who "reads wireframes and
-	// 2D drawings" is not doing UX, and as a strong word alias `cnc` said he was.
+	// design and software words beside them: a CNC operator who "reads wireframes" is
+	// not doing UX.
 	{"cnc", "cnc"},
 	{"soldering", "soldering"},
 	{"oscilloscope", "oscilloscope"}, {"oscilloscopes", "oscilloscope"},
@@ -110,7 +104,7 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"lite llm", "litellm"},
 	{"sg lang", "sglang"},
 	{"duck db", "duckdb"},
-	// batch 5 (2026-10 enrichment mining). Multi-word product and practice names.
+	// Multi-word product and practice names.
 	// Each phrase emits its canonical BESIDE whatever word its parts already tag
 	// ("api gateway" still tags api) — phrases do not consume text.
 	{"api gateway", "api-gateway"}, {"api testing", "api-testing"},
@@ -183,7 +177,7 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"midjourney", "midjourney"},
 	{"helpdesk", "help-desk"},
 	{"dmaic", "six-sigma"},
-	// batch 6 (2026-10-25, German market). "SPS" is German for PLC; the bare acronym is
+	// German market. "SPS" is German for PLC; the bare acronym is
 	// left out (it is also a German abbreviation in care and social-work postings), so
 	// the controller comes back through what an automation technician writes. TIA Portal
 	// and STEP 7 are Siemens' PLC environment and SIMATIC its PLC line. Sinumerik and a
@@ -196,11 +190,11 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"heidenhain steuerung", "cnc"}, {"heidenhain steuerungen", "cnc"},
 	// Tools an electrician, a site manager or a draughtsperson is asked for: real and
 	// specific, so they tag on their own, but listed in nonCorroboratingPhrases so they
-	// never vouch for a gated word. Measured on the crawl: as strong word aliases, "iTWO"
-	// on a site manager's posting vouched for "julia" (the contact, "Frau Julia …").
+	// never vouch for a gated word: as a strong alias, "iTWO" on a site manager's posting
+	// vouched for "julia" (the contact, "Frau Julia …").
 	{"eplan", "eplan"}, {"knx", "knx"}, {"itwo", "itwo"},
 	{"archicad", "archicad"}, {"allplan", "allplan"},
-	// batch 7 (2026-10-25, Dutch market). Bare "pega" is a Spanish and Portuguese verb,
+	// Dutch market. Bare "pega" is a Spanish and Portuguese verb,
 	// "tekton" a hand-tool brand and "business central" could be prose, so each comes back
 	// only bound to its context. HASTUS is a transit planner's scheduling tool and does not
 	// vouch, nor does TOPdesk. NIS2 and NEN 7510 are regimes a posting is subject to: they tag, and never
@@ -213,7 +207,7 @@ var engineeringPhraseAliases2 = []phraseAlias{
 	{"apache camel", "apache-camel"},
 	{"hastus", "hastus"}, {"topdesk", "topdesk"},
 	{"nis2", "nis2"}, {"nis 2", "nis2"}, {"nen 7510", "nen-7510"}, {"nen7510", "nen-7510"},
-	// batch 8 (2026-10-27, Spanish market). The Spanish name of an English canonical, each
+	// Spanish market. The Spanish name of an English canonical, each
 	// written with and without its accents, as postings write both. Every one is a
 	// multi-word term of the craft; the plain words in them ("datos", "pruebas",
 	// "calidad") stay out.

@@ -30,8 +30,7 @@ var engineeringPhraseAliases3 = []phraseAlias{
 	{"visión por computador", "computer-vision"}, {"vision por computador", "computer-vision"},
 	{"visión artificial", "computer-vision"}, {"vision artificial", "computer-vision"},
 	{"pruebas de penetración", "penetration-testing"}, {"pruebas de penetracion", "penetration-testing"},
-	// batch 9 (2026-10-27, Brazilian and Portuguese market), measured over 37,608 open
-	// postings. Brazilian and European spellings both ("modelagem"/"modelação",
+	// Brazilian and Portuguese market. Brazilian and European spellings both ("modelagem"/"modelação",
 	// "controle"/"controlo"). Left out: "entrega contínua" (a delivery driver's promise, as
 	// in Spanish), bare "banco de dados" (no "database" canonical; only the relational and
 	// vector forms map), "análise de dados", "segurança da informação", "metodologias
@@ -86,9 +85,7 @@ var engineeringPhraseAliases3 = []phraseAlias{
 	{"testes de penetração", "penetration-testing"}, {"testes de penetracao", "penetration-testing"},
 	{"testes de intrusão", "penetration-testing"}, {"testes de intrusao", "penetration-testing"},
 	{"teste de intrusão", "penetration-testing"},
-	// batch 10 (2026-10-28, French market), mined from 24,609 open French-language
-	// postings (wttj, flatchr, werecruit, smartrecruiters, teamtailor, workday, eures,
-	// recruitee, lever, join). With and without the accents. Left out: "qualité des
+	// French market, with and without the accents. Left out: "qualité des
 	// données" (an accountant's and an order clerk's duty; only the term of art "qualité de
 	// la donnée" maps), "sécurité informatique" (an employer's sector more often than the
 	// craft), "méthodes agiles" (the English name is gated), and "tests de charge" and
@@ -157,10 +154,7 @@ var engineeringPhraseAliases3 = []phraseAlias{
 	{"tests d’intrusion", "penetration-testing"},
 	{"tests de pénétration", "penetration-testing"},
 	{"services rest", "rest"},
-	// batch 11 (2026-10-29, Polish market), mined from 9,835 open Polish-language
-	// postings (erecruiter, traffit, nofluffjobs, solidjobs, smartrecruiters, teamtailor,
-	// recruitee, eures, whatjobs-pl). Polish inflects, so each practice lists the cases
-	// the crawl carries. Left out: the nominative "systemy wbudowane" (an agency's "our
+	// Polish market. Polish inflects, so each practice lists the cases postings use. Left out: the nominative "systemy wbudowane" (an agency's "our
 	// services: … systemy wbudowane" boilerplate on every one of its postings; the
 	// requirement's own cases stay), bare "sztuczna inteligencja" and
 	// "cyberbezpieczeństwo" (an employer's pitch or sector more often than the craft, as

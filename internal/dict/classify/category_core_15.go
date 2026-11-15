@@ -264,11 +264,10 @@ var coreCategoryTable15 = []aliasEntry{
 	{"szerviztechnikus", "skilled_trades"},
 	{"építésvezető", "skilled_trades"},
 
-	// The plant's engineers, by the discipline the title names. There is NO bare
-	// engineer noun, as there is none in English: the word beside it decides, and a bare
-	// "inženir"/"inżynier"/"inženjer" filed the software, security, sales, radiology and
-	// test engineers with the plant (freehire#3518). The process technologist is filed
-	// as the Russian "технолог" is.
+	// The plant's engineers, by the discipline the title names. There is NO bare engineer noun:
+	// a bare "inženir"/"inżynier"/"inženjer" filed the software, security, sales, radiology and
+	// test engineers with the plant. The process technologist is filed as the Russian
+	// "технолог" is.
 	{"inżynier procesu", "industrial_engineering"},
 	{"inżynier procesów", "industrial_engineering"},
 	{"inżynier jakości", "industrial_engineering"},

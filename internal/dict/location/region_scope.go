@@ -7,24 +7,17 @@ import (
 	"github.com/strelov1/freehire/internal/platform/stringset"
 )
 
-// regionScopePhrases anchor an explicit "this role is restricted to a named place"
-// statement, as opposed to EligibilityFromDescription's closed per-nationality
-// citizenship/work-authorization phrases: these introduce an open-ended list of
-// countries/regions that the curated dictionaries resolve, the same way a `location`
-// string's tokens do. Deliberately a short, anchored set — precision over recall,
-// the same stance eligibility.go's phrase lists take — tuned against the reported
-// cases rather than an exhaustive sweep of every ATS's phrasing.
+// regionScopePhrases anchor an explicit "this role is restricted to a named place" statement,
+// as opposed to EligibilityFromDescription's closed per-nationality phrases: these introduce
+// an open-ended list of countries/regions the curated dictionaries resolve. Deliberately short
+// and anchored: precision over recall.
 //
-// "based in"/"located in" are deliberately ROLE- or CANDIDATE-qualified rather than
-// bare: an unqualified "based in"/"located in" is ambiguous between a role
-// restriction and a company-HQ "About Us" mention ("Our company is based in Berlin,
-// Germany, but this role is fully remote and open worldwide" — a real, common ATS
-// boilerplate pattern found in code review), and a bare anchor would read the HQ
-// sentence as the restriction regardless of what the actual role statement says
-// elsewhere in the same description. "restricted to" likewise needs a role or
-// candidate subject: access to employee records "restricted to HR and IT" describes
-// departments, whose codes also name countries. "remote role within"/"hiring in"/
-// "open to candidates|applicants in" already qualify the role or its candidates.
+// "based in"/"located in" are ROLE- or CANDIDATE-qualified rather than bare: an unqualified
+// one is ambiguous with a company-HQ mention ("Our company is based in Berlin, Germany, but
+// this role is fully remote"). "restricted to" likewise needs a role or candidate subject:
+// records "restricted to HR and IT" describe departments, whose codes also name countries.
+// "remote role within"/"hiring in"/"open to candidates|applicants in" already qualify the role
+// or its candidates.
 var regionScopePhrases = []string{
 	"remote role within",
 	"candidates based in",
@@ -42,28 +35,19 @@ var regionScopePhrases = []string{
 	"hiring in",
 }
 
-// clauseWindow bounds how much text after an asserted anchor phrase is read as the
-// scoping clause, so one long unpunctuated block of text cannot pull an unrelated
-// paragraph in as if it were part of the list. A run-on sentence with no punctuation
-// before the cap could still pull in a following unrelated clause, the same trade-off
-// negationWindow makes in eligibility.go — mitigated in practice because only tokens
-// the curated dictionaries actually resolve contribute, so trailing noise words are
-// silently dropped rather than misread as a place.
+// clauseWindow bounds how much text after an anchor phrase is read as the scoping clause, so
+// one long unpunctuated block cannot pull in an unrelated paragraph. Trailing noise words are
+// harmless: only tokens the dictionaries resolve contribute.
 const clauseWindow = 200
 
 // RegionScopeFromDescription reports the geography an explicit "role is based/located
-// within/restricted to <place list>" statement in a job description restricts a
-// posting to. It is additive to, and does not replace, EligibilityFromDescription's
-// citizenship-phrase rules: this function targets open-ended place lists
-// ("...within New Zealand, Australia, or nearby time zones"), which a closed
-// per-nationality phrase table cannot enumerate.
+// within/restricted to <place list>" statement in a job description restricts a posting to. It
+// is additive to EligibilityFromDescription's closed citizenship phrases: it targets open-
+// ended place lists ("...within New Zealand, Australia, or nearby time zones").
 //
-// It never guesses: the clause following an asserted anchor is tokenized the same way
-// a `location` string is, and only tokens the curated dictionaries resolve contribute
-// — a noise phrase like "nearby time zones" or "East Coast" attached to a real country
-// name is silently skipped rather than producing a wrong or partial guess. A phrase
-// found in a sentence that denies it ("not restricted to the US") is not a match, the
-// same negation handling EligibilityFromDescription uses.
+// It never guesses: the clause after an anchor is tokenized like a `location` string and only
+// tokens the dictionaries resolve contribute, so "nearby time zones" is skipped. A phrase in a
+// sentence that denies it ("not restricted to the US") is not a match.
 func RegionScopeFromDescription(desc string) (countries, regions []string) {
 	lower := strings.ToLower(htmltext.ToTextFull(joinWrappedRegionLists(desc)))
 	lower = strings.NewReplacer("u.s.a.", "usa", "u.s.", "us", "u.k.", "uk").Replace(lower)

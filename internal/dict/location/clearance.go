@@ -8,26 +8,20 @@ import (
 )
 
 // clearancePhrases are the anchored statements that a posting requires a government
-// security clearance. They are tuned for PRECISION over recall on the same reasoning
-// as usOnlyPhrases: a false positive hides a job the candidate could actually have
-// got, while a miss merely leaves the status quo.
+// security clearance, tuned for PRECISION over recall as usOnlyPhrases is: a false
+// positive hides a job the candidate could have got, a miss leaves the status quo.
 //
-// Every UK entry carries a following noun. The scheme names themselves — "SC", "DV",
-// "CTC", "L", "Q" — are one- and two-letter tokens that collide with ordinary words
-// and unrelated initialisms ("an SC-registered charity", "the DV team"), which is
-// exactly why eligibility.go declined to carry them for geography. Anchoring each to
-// "clearance"/"cleared" buys the signal without the collision.
+// Every UK entry carries a following noun. The scheme names ("SC", "DV", "CTC", "L",
+// "Q") collide with ordinary words and initialisms ("an SC-registered charity"), which
+// is why eligibility.go declined to carry them for geography; anchoring each to
+// "clearance"/"cleared" avoids the collision.
 //
-// "public trust" is listed only as "public trust clearance". Measured on the
-// catalogue, the bare pair is overwhelmingly promotional copy — "commitment to public
-// trust", "build public trust" — and only the full form names the US vetting tier.
-// "clearance" alone is likewise absent: it carries unrelated senses (customs, medical,
-// a billing "clearance specialist") that the labelled-field rule below distinguishes
-// by structure rather than by the word.
+// "public trust" is listed only as "public trust clearance": the bare pair is mostly
+// promotional copy ("commitment to public trust"). "clearance" alone is absent too, as
+// it has unrelated senses (customs, medical, billing); the labelled-field rule below
+// tells them apart by structure.
 var clearancePhrases = []string{
-	// Scheme-neutral. "obtain a clearance" earns its place on measured evidence:
-	// a live posting reading "will need to be able to obtain a clearance" named no
-	// scheme anywhere and was missed by every other entry.
+	// Scheme-neutral. "obtain a clearance" is needed for postings that name no scheme.
 	"security clearance", "active clearance", "current clearance", "security-cleared",
 	"clearance required", "government clearance",
 	"obtain a clearance", "obtain a security clearance",
@@ -46,23 +40,18 @@ var clearancePhrases = []string{
 }
 
 // clearanceLabel matches the labelled-field form an ATS posting uses to state the
-// requirement as structured text rather than prose: a "clearance" label, optionally
-// qualified, then a separator, then the value. It captures the value so
-// labelledClearanceAsserted can judge it.
+// requirement as structured text: a "clearance" label, optionally qualified, a
+// separator, then the value, which it captures for labelledClearanceAsserted.
 //
-// The value is bounded to one line and 60 bytes because these fields sit in a run of
-// them ("CLEARANCE TYPE: Polygraph\nTRAVEL: 10%") and an unbounded capture would
-// swallow the neighbours. A newline terminates it for the same reason.
+// The value is bounded to one line and 60 bytes because these fields sit in a run
+// ("CLEARANCE TYPE: Polygraph\nTRAVEL: 10%") and an unbounded capture would swallow
+// the neighbours.
 //
-// This rule exists because a phrase list alone cannot cover the form: the value varies
-// without bound ("Secret", "TS with SCI eligibility", "Ability to Obtain Public
-// Trust", "Yes"), while the structure is trivially recognisable. In the sampled
-// catalogue rows it accounted for roughly a fifth of all true positives.
+// A phrase list alone cannot cover the form: the value varies without bound ("Secret",
+// "TS with SCI eligibility", "Yes"), while the structure is easy to recognise.
 //
-// The qualifier is a loose run of words rather than a fixed list, because postings
-// write it every way: "Clearance Level", "Clearance Type", "Clearance Required for
-// Start", "Clearance Level Must Currently Possess". Pinning the list missed the last
-// of those on live data.
+// The qualifier is a loose run of words, not a fixed list, because postings write it
+// every way ("Clearance Level Must Currently Possess").
 var clearanceLabel = regexp.MustCompile(`(?i)\bclearance(?:\s+[a-z]+){0,4}?\s*[:\-]\s*([^\n]{1,60})`)
 
 // clearanceValues are the values a clearance label may carry that assert a real
@@ -86,29 +75,21 @@ var clearanceDenials = []string{"no", "none", "n/a", "na", "nil"}
 // polygraph, AU baseline/NV1, or the scheme-neutral forms.
 //
 // It reads prose and structured ATS fields, dict-only: an unlisted phrase yields
-// nothing rather than a guess, so false means "not stated" and never "stated as not
-// required". The caller stores that as a tri-state (nil = unknown), because the
-// dictionary cannot tell a posting that promises no clearance from one that is simply
-// silent, and only a rounding error of the catalogue states the former.
+// nothing, so false means "not stated", never "stated as not required". The caller
+// stores a tri-state (nil = unknown) because the dictionary cannot tell a posting that
+// promises no clearance from a silent one.
 //
-// Being able to OBTAIN a clearance counts the same as holding one. Eligibility turns
-// on nationality and residency history, so a candidate who cannot hold a clearance
-// cannot obtain one either, and serving those postings as unrestricted would leave
-// them in exactly the lane this signal exists to clear.
+// Being able to OBTAIN a clearance counts as holding one: eligibility turns on
+// nationality and residency, so a candidate who cannot hold one cannot obtain one.
 //
-// The description is read as VISIBLE TEXT, not as markup. Descriptions are stored as
-// HTML and tags routinely land between a label and its value — a live posting reading
-// `<p><b>Security Clearance: </b></p>None/Not Required` put the denial out of reach of
-// the label rule and marked a role that explicitly needs no clearance. Stripping first
-// is the difference between reading what the posting says and reading how it is
-// typeset.
+// The description is read as VISIBLE TEXT, not markup: tags routinely land between a
+// label and its value (`<p><b>Security Clearance: </b></p>None/Not Required`).
 //
-// The two rules read the stripped text differently, which is why both forms are
-// built here. The phrase rule keeps the line breaks, because negatedSentence treats
-// them as sentence boundaries and losing them would let one paragraph's "not" cancel
-// the next paragraph's requirement. The label rule needs them GONE, because stripping
-// a `<p>` leaves the label and its value on separate lines and a same-line match would
-// never see the value.
+// The two rules read the stripped text differently, so both forms are built here. The
+// phrase rule keeps line breaks, because negatedSentence treats them as sentence
+// boundaries and one paragraph's "not" must not cancel the next one's requirement. The
+// label rule needs them GONE, because stripping a `<p>` leaves label and value on
+// separate lines.
 func RequiresClearanceFromDescription(desc string) bool {
 	text := strings.ToLower(htmltext.ToText(desc))
 	return requiresClearanceText(text, strings.Join(strings.Fields(text), " "))
@@ -129,14 +110,12 @@ func requiresClearanceText(text, flat string) bool {
 }
 
 // phraseAssertedOutsideLabel is phraseAsserted with one exclusion: an occurrence that
-// is itself a field LABEL — immediately followed by a colon — asserts nothing, because
-// what the posting requires is stated by the label's value, and the label rule reads
-// that value.
+// is itself a field LABEL (immediately followed by a colon) asserts nothing, because
+// the label's value states the requirement and the label rule reads that.
 //
-// Without the exclusion, "Security Clearance: None/Not Required" marks itself. The
-// denial cannot rescue it either: stripping the markup puts the value on the next
-// line, and negatedSentence stops at the line break, so the phrase sees only its own
-// label and reads as an unqualified assertion.
+// Without it, "Security Clearance: None/Not Required" marks itself: stripping puts the
+// value on the next line, negatedSentence stops at the line break, and the phrase
+// reads as unqualified.
 func phraseAssertedOutsideLabel(text, p string) bool {
 	for offset := 0; ; {
 		i := strings.Index(text[offset:], p)
@@ -170,10 +149,8 @@ func isFieldLabel(text string, end int) bool {
 }
 
 // questionField reports whether the phrase ending at end is the label of a
-// question-form field — "Government Clearance Required? No", a Workday template — and
-// whether its answer is yes. Such a field states the requirement only by its answer:
-// the phrase alone used to mark every posting carrying the template, and 109 of 3,331
-// sampled clearance-marked postings (2026-10-31) answered it "No" or left it blank.
+// question-form field ("Government Clearance Required? No", a Workday template) and
+// whether its answer is yes. Such a field states the requirement only by its answer.
 func questionField(text string, end int) (question, yes bool) {
 	m := questionTail.FindStringSubmatch(text[end:])
 	if m == nil || strings.HasPrefix(m[1], "?") {
@@ -184,16 +161,14 @@ func questionField(text string, end int) (question, yes bool) {
 
 // questionTail is the rest of a question-form label and its answer. htmltext renders a
 // bolded label as "*Government Clearance Required?* No", so emphasis is skipped on
-// both sides of the answer. A doubled "??" is not a question: it is how an emoji bullet
-// survives a lossy feed ("?? Active SC clearance required ??"), and reading it as an
-// unanswered field dropped a real requirement.
+// both sides. A doubled "??" is not a question: it is how an emoji bullet survives a
+// lossy feed ("?? Active SC clearance required ??").
 var questionTail = regexp.MustCompile(`^(?:\s+[a-z]+){0,2}\s*\?([?*\s]*[a-z]*)`)
 
 // clearanceFalseFriends are phrases that carry a clearance word without stating a
-// security clearance, blanked before any rule reads the text. The catalogue sample
-// found the Employee Polygraph Protection Act notice (67 postings) and tuberculosis
-// "TB clearance" (7). Regression examples also cover medical, health, drug-screen
-// and customs fields that use "clearance" without referring to security vetting.
+// security clearance (the Employee Polygraph Protection Act notice, tuberculosis "TB
+// clearance", medical, drug-screen and customs fields), blanked before any rule reads
+// the text.
 var clearanceFalseFriends = strings.NewReplacer(
 	"polygraph protection act", "                        ",
 	"tb clearance", "            ",
@@ -206,8 +181,7 @@ var clearanceFalseFriends = strings.NewReplacer(
 // labelledClearanceAsserted reports whether a "Clearance: <value>" field asserts a
 // requirement. Every occurrence is examined rather than only the first: a posting may
 // carry both a denial and a real field, and one unrecognised value must not hide a
-// later recognised one.
-// flat is the stripped text with every whitespace run folded to a single space, so a
+// later recognised one. flat is the stripped text with every whitespace run folded to a single space, so a
 // label and the value below it sit on one line.
 func labelledClearanceAsserted(flat string) bool {
 	for _, m := range clearanceLabel.FindAllStringSubmatch(flat, -1) {
@@ -224,14 +198,13 @@ func labelledClearanceAsserted(flat string) bool {
 	return false
 }
 
-// valueDenies reports whether a clearance field's value denies the requirement. The
-// match is against the value's leading WORD so "None" denies while "Nonprofit sector
-// experience" does not, and so a denial cannot be read out of the middle of a value
-// that names a scheme.
+// valueDenies reports whether a clearance field's value denies the requirement. It
+// matches the value's leading WORD so "None" denies while "Nonprofit sector
+// experience" does not, and a denial cannot be read out of the middle of a value that
+// names a scheme.
 //
-// The word ends at the first non-letter, not at the first space: postings write the
-// denial as "None/Not Required", and splitting on whitespace yields "none/not", which
-// matches no entry and lets the label go on to assert itself.
+// The word ends at the first non-letter, not the first space: "None/Not Required"
+// would otherwise split to "none/not", match no entry, and let the label assert itself.
 func valueDenies(value string) bool {
 	head := leadingWord(value)
 	if head == "" {
@@ -245,15 +218,12 @@ func valueDenies(value string) bool {
 	return strings.HasPrefix(value, "not required")
 }
 
-// containsWord reports whether v occurs in value on word boundaries. A plain substring
-// test cannot be used: half of clearanceValues are two-letter scheme names that hide
-// inside ordinary English — "sc" in "describe" and "discuss", "ts" in "contracts", "dv"
-// in "advise" — so "Clearance: discuss with your recruiter" would assert a requirement
-// out of a value that says nobody knows of one.
+// containsWord reports whether v occurs in value on word boundaries. A substring test
+// would not do: half of clearanceValues are two-letter scheme names that hide inside
+// ordinary words ("sc" in "describe", "ts" in "contracts", "dv" in "advise").
 //
-// "eligib" is the deliberate exception the trailing-boundary check must tolerate: it is
-// a stem standing in for "eligible"/"eligibility", so only its leading boundary is
-// meaningful. Listing it as a stem beats listing every inflection.
+// "eligib" is the exception to the trailing-boundary check: it is a stem standing in
+// for "eligible"/"eligibility", so only its leading boundary matters.
 func containsWord(value, v string) bool {
 	for offset := 0; ; {
 		i := strings.Index(value[offset:], v)

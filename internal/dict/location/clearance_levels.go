@@ -14,34 +14,25 @@ import (
 // RequiresClearanceFromDescription is false, so the two columns can never disagree: a
 // posting either states a clearance (and carries at least one level) or carries none.
 //
-// The ladder is the US one — confidential, secret, top_secret, ts_sci, public_trust —
-// plus interim, which is a STATUS stated beside a level ("interim Secret required to
-// start") rather than a level of its own, and other. A posting may carry several:
-// "Active Secret, must be able to obtain TS/SCI" is both and is returned by a filter
-// for either level.
+// The ladder is the US one (confidential, secret, top_secret, ts_sci, public_trust)
+// plus interim, a STATUS stated beside a level ("interim Secret required to start"),
+// and other. A posting may carry several: "Active Secret, must be able to obtain
+// TS/SCI" is both.
 //
-// Everything outside that ladder is "other". Measured on a sample of 3,331 postings
-// carrying requires_clearance (tablesample over every jobs row, 2026-10-31), of which
-// 3,092 still pass the requirement rule after its false friends were removed:
+// Everything outside that ladder is "other":
 //
-//   - The US ladder covers 1,794 of the 3,092: secret 874, ts_sci 688, top_secret 306,
-//     public_trust 182, confidential 4 (several per posting). interim rides beside a
-//     rung on 88.
-//   - Non-US schemes are a minority — UK (SC, DV/eDV, BPSS, CTC) 271, AU (Baseline,
-//     NV1, NV2, PV) 69, NATO 21 — and they do not line up rung for rung (UK SC is not
-//     US Secret), so folding them into the US chips would assert an equivalence no
-//     vetting agency makes, while giving each its own ladder would put a dozen chips
-//     in the filter that hold a few dozen postings each. They are "other" (371).
-//   - 939 state a clearance and name no level ("an active security clearance is
-//     required"). They must not land under "no detected clearance requirement", which would
-//     contradict requires_clearance, so they are "other" too: a requirement the
-//     dictionary recognises but cannot place on the ladder.
+//   - Non-US schemes (UK SC/DV/eDV/BPSS/CTC, AU Baseline/NV1/NV2/PV, NATO) do not line
+//     up rung for rung (UK SC is not US Secret), so folding them into US chips would
+//     assert an equivalence no vetting agency makes, while a ladder each would put a
+//     dozen near-empty chips in the filter.
+//   - A posting that states a clearance but names no level ("an active security
+//     clearance is required") must not land under "no detected clearance requirement",
+//     which would contradict requires_clearance.
 //
 // Each rung is matched only in an anchored form (a following "clearance", a leading
-// "active"/"interim"/"dod", or the value of a clearance field), never as a bare word.
-// "secret" alone is "trade secrets", "secret management" and "let you in on a
-// secret"; "confidential" alone is "kept confidential" — of the 3,331 sampled
-// clearance postings, 148 say "confidential" and exactly 4 mean the clearance level.
+// "active"/"interim"/"dod", or the value of a clearance field), never as a bare word:
+// "secret" alone is "trade secrets" or "secret management", and "confidential" alone
+// is "kept confidential".
 func ClearanceLevelsFromDescription(desc string) []string {
 	text := strings.ToLower(htmltext.ToText(desc))
 	flat := strings.Join(strings.Fields(text), " ")
@@ -51,10 +42,9 @@ func ClearanceLevelsFromDescription(desc string) []string {
 	text, flat = levelText(text), levelText(flat)
 	found := map[string]bool{}
 	for _, r := range clearanceLevelRules {
-		// The flattened text as well: a field written without a colon puts its label
-		// and value on separate lines ("Clearance Level\nSecret"), and only the
-		// flattened form joins them. The line-broken form is read first because its
-		// negation check stops at line breaks, the narrower and better reading.
+		// Flattened text too: a field written without a colon puts its label and value
+		// on separate lines ("Clearance Level\nSecret"). The line-broken form is read
+		// first because its negation check stops at line breaks, the narrower reading.
 		if r.assertedIn(text) || r.assertedIn(flat) {
 			found[r.level] = true
 		}
@@ -84,19 +74,17 @@ func ClearanceLevelsFromDescription(desc string) []string {
 	return levels
 }
 
-// levelText prepares stripped text for the rung rules. Quotes and emphasis go, because
-// postings write "a “Secret” security clearance" and htmltext renders a bolded rung as
-// "*secret*", and neither mark is a word the patterns can see through. "without
-// polygraph" goes, because it QUALIFIES the rung rather than denying it — "TS/SCI without polygraph" is a TS/SCI requirement — and
-// negatedSentence would read its "without" as a denial of the whole field.
+// levelText prepares stripped text for the rung rules. Quotes and emphasis go, since
+// "a “Secret” security clearance" and a bolded "*secret*" hide the rung from the
+// patterns. "without polygraph" goes because it QUALIFIES the rung ("TS/SCI without
+// polygraph" is TS/SCI) and negatedSentence would read its "without" as a denial.
 func levelText(s string) string {
 	return withoutPolygraph.ReplaceAllString(levelNoise.Replace(s), " ")
 }
 
 var (
-	// "u.s." folds to "us" so its periods cannot read as sentence ends: "an interim
-	// and/or final U.S. Secret clearance" otherwise breaks the interim rule's run at
-	// the abbreviation.
+	// "u.s." folds to "us" so its periods cannot read as sentence ends ("an interim
+	// and/or final U.S. Secret clearance" would break the interim rule's run).
 	levelNoise       = strings.NewReplacer("“", "", "”", "", "\"", "", "‘", "", "’", "", "*", "", "u.s.", "us")
 	withoutPolygraph = regexp.MustCompile(`\b(?:with or )?without (?:an? )?(?:ci |fs |full[- ]scope |lifestyle )?poly(?:graph)?\b`)
 )
@@ -138,12 +126,11 @@ var (
 		`\b(?:ts|top[ -]secret) ?(?:/{1,2} ?|- ?|(?:(?:security )?clearance )?(?:with (?:an? )?)?)sci\b|\bsci (?:clearance|eligib|access)|` +
 			`\btop secret ?/ ?sensitive compartmented\b`)
 	topSecretPattern = regexp.MustCompile(`\btop[ -]secret\b|\bts (?:security )?clearance\b`)
-	// secret needs an anchor on one side. The leading anchors are the words the sampled
-	// postings put in front of the rung ("active", "final u.s.", "dod", "obtain and
-	// maintain a", "clearance level"); the trailing ones are "clearance" (with
-	// "security"/"us"/"dod" between — levelText has folded "u.s." to "us") and the ladder phrasing "secret or higher" /
-	// "secret/top secret". "nato secret" is deliberately not an anchor: NATO's scheme is
-	// "other" (see foreignSchemePhrases).
+	// secret needs an anchor on one side: a leading word ("active", "dod", "obtain and
+	// maintain a", "clearance level") or a trailing one ("clearance", with
+	// "security"/"us"/"dod" between; levelText folds "u.s." to "us") or ladder phrasing
+	// ("secret or higher", "secret/top secret"). "nato secret" is deliberately not an
+	// anchor: NATO's scheme is "other" (see foreignSchemePhrases).
 	secretPattern = regexp.MustCompile(
 		`\b(?:active|interim|current|final|existing|dod|dow|defense|issued|us|government|level 2|level of|obtain|maintain|hold|possess)(?: an?)? secret\b|` +
 			`\bclearance(?: (?:level|type|requirement|required|required to start|for the role|of))?:? secret\b|` +
@@ -151,20 +138,17 @@ var (
 			`\bsecret (?:or (?:higher|above|top)|eligib)|\bsecret[ -]level\b|\bsecret ?/ ?top\b`)
 	confidentialPattern = regexp.MustCompile(
 		`\bconfidential(?: (?:security|level))* clearance\b|\bconfidential or (?:higher|above)\b`)
-	// public trust is a US suitability determination, not a clearance, and postings
-	// say so: "obtain a public trust", "public trust determination", "a position of
-	// public trust". The bare pair stays out for the reason clearancePhrases gives —
-	// it is promotional copy far more often than a requirement.
+	// public trust is a US suitability determination, not a clearance: "obtain a public
+	// trust", "public trust determination". The bare pair stays out for the reason
+	// clearancePhrases gives.
 	publicTrustPattern = regexp.MustCompile(
 		`\bpublic trust(?: (?:security|level|position))* (?:clearance|background|investigation|determination|level|or higher)\b|` +
 			`\bpublic trust/other required\b|\bclearance(?: level)? public trust\b|\(public trust\)|\bpublic trust \(tier|\bpublic trust eligib|` +
 			`\bobtain (?:and maintain )?(?:an? )?(?:client-issued )?(?:position of )?public trust\b|` +
 			`\bclearance at the public trust level\b|\b(?:dhs|doj|irs|va|cbp|federal|moderate|high|low) public trust\b`)
-	// interim reaches its clearance through a short run of qualifiers, because the
-	// sampled postings write "an interim and/or final U.S. Secret clearance" and
-	// "ability to obtain interim U.S. Government issued security clearance". The run
-	// stops at a sentence or clause break so the job-title sense ("Interim IT Director")
-	// cannot borrow a clearance from the next sentence.
+	// interim reaches its clearance through a short run of qualifiers ("an interim
+	// and/or final U.S. Secret clearance"). The run stops at a sentence or clause break
+	// so the job-title sense ("Interim IT Director") cannot borrow a later clearance.
 	interimPattern = regexp.MustCompile(
 		`\binterim\b[^.;\n]{0,40}?\b(?:clearance|secret|ts|sci)\b|\b(?:secret|clearance)\s*\(interim\)`)
 )
@@ -185,16 +169,14 @@ var clearanceLevelRules = []clearanceLevelRule{
 }
 
 // clearanceFieldValues returns the value of every clearance field in flat that does
-// not deny the requirement, each trimmed to the field itself and with a bare rung
-// rewritten into the anchored form the prose rules match — inside a clearance field
-// the label IS the anchor, so "Clearance Type: Secret" reads as "secret clearance".
+// not deny the requirement, trimmed to the field itself, with a bare rung rewritten
+// into the anchored form the prose rules match (inside a field the label IS the
+// anchor: "Clearance Type: Secret" reads as "secret clearance").
 //
-// Fields are found overlapping, not with FindAll. ATS forms nest them: RTX writes
-// "Security Clearance Type: DoD Clearance: Confidential", and a non-overlapping scan
-// spends the outer label's capture on the inner label and never sees the value — that
-// alone hid 3 of the 4 sampled Confidential postings. Each value is cut at the next
-// colon for the same reason: flattened, the next field follows straight on
-// ("Clearance Type: Secret Travel: Yes").
+// Fields are found overlapping, not with FindAll: ATS forms nest them ("Security
+// Clearance Type: DoD Clearance: Confidential"), and a non-overlapping scan spends the
+// outer label's capture on the inner label and never sees the value. Each value is cut
+// at the next colon because flattened, the next field follows straight on.
 func clearanceFieldValues(flat string) []string {
 	var out []string
 	for offset := 0; offset < len(flat); {
@@ -230,15 +212,12 @@ var fieldRung = regexp.MustCompile(
 
 // levelDenied reports whether the rung matched at text[start:end] is denied by the
 // words right around it: a negation among the few words before it ("no Secret
-// clearance", "does not require a Secret clearance") or a denial straight after it
-// ("Secret clearance: not required", "Secret clearance is not needed").
+// clearance") or a denial straight after it ("Secret clearance: not required").
 //
-// It is deliberately narrower than negatedSentence, which the requirement rule uses.
-// That rule decides WHETHER a posting needs a clearance and cancels on any negation in
-// the sentence; by the time a rung is read, the gate has already answered yes, and the
-// sentence-wide reading threw away true levels — "must be able to obtain and maintain
-// a Public Trust clearance and cannot start before cleared" lost its Public Trust to
-// the "cannot" about the start date.
+// It is deliberately narrower than negatedSentence, which decides WHETHER a posting
+// needs a clearance. By the time a rung is read the gate has answered yes, and a
+// sentence-wide reading lost true levels ("must obtain a Public Trust clearance and
+// cannot start before cleared" lost Public Trust to the "cannot").
 func levelDenied(text string, start, end int) bool {
 	before := text[max(0, start-levelNegationWindow):start]
 	if i := strings.LastIndexAny(before, ".!?;\n"); i >= 0 {
@@ -260,17 +239,14 @@ const (
 	levelNegationWords  = 4
 )
 
-// deniedAfter is a denial written straight after the rung.
-//
-// A trailing "clearance(s)" is skipped first, because the interim rule's match ends at
-// the rung: "interim Secret clearances are not allowed" — written in two of the sampled
-// postings that demand a FULL Secret — reads the denial only past the noun.
+// deniedAfter is a denial written straight after the rung. A trailing "clearance(s)"
+// is skipped first, because the interim rule's match ends at the rung: "interim Secret
+// clearances are not allowed" reads the denial only past the noun.
 var deniedAfter = regexp.MustCompile(`^[\s:*,(\-]*(?:(?:security\s+)?clearances?[\s:*,(\-]*)?(?:(?:is|are|though|but|but is)\s+)?(?:not|no|none|n/a)\b`)
 
 // deniedLabel reports whether a rung matched in prose is in fact a field LABEL whose
-// value denies it. A sampled Leidos template carries "Public Trust/Other Required:
-// None" on every posting, beside a real Secret field; reading the label as a Public
-// Trust requirement put 21 of the sample under a rung the posting explicitly refuses.
+// value denies it (a template carrying "Public Trust/Other Required: None" beside a
+// real Secret field).
 func deniedLabel(text string, end int) bool {
 	m := labelTail.FindStringSubmatch(text[end:])
 	return m != nil && valueDenies(strings.TrimSpace(m[1]))

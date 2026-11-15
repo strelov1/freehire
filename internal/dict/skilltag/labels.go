@@ -55,7 +55,7 @@ var displayNames = map[string]string{
 	"lockout-tagout":                "Lockout/Tagout",
 	"job-safety-analysis":           "Job Safety Analysis (JSA)",
 	"process-safety-management":     "Process Safety Management (PSM)",
-	// batch 5 (2026-10 enrichment mining) — acronyms and vendor stylizations.
+	// Acronyms and vendor stylizations.
 	"abac":                     "ABAC",
 	"adas":                     "ADAS",
 	"adobe-experience-manager": "Adobe Experience Manager (AEM)",

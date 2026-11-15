@@ -12,8 +12,7 @@ var professionalPhraseAliases = []phraseAlias{
 	// AI enablement — the adoption side of AI, and a skill rather than a role.
 	// These postings are Program Managers, Architects, Change Managers and even
 	// Interns whose SUBJECT is getting an organisation to use AI; tagging the
-	// subject lets it filter alongside the role instead of displacing it, which
-	// is what a named role did when this first shipped.
+	// subject lets it filter alongside the role instead of displacing it.
 	//
 	// "ai trainer" is deliberately absent: it names the opposite job — labelling
 	// data so a model learns, not teaching people to use one.
@@ -89,8 +88,7 @@ var professionalPhraseAliases = []phraseAlias{
 	{"ticket resolution", "ticket-resolution"},
 	// marketing — search optimization tooling. These are unambiguous product names,
 	// so they are strong matches, which also makes them corroborators for the gated
-	// `seo` canonical: before this block a posting could name its whole toolchain and
-	// still lose the `seo` tag for want of an engineering token to corroborate it.
+	// `seo` canonical, so a posting naming its toolchain keeps the `seo` tag.
 	{"semrush", "semrush"}, {"ahrefs", "ahrefs"},
 	{"screaming frog", "screaming-frog"},
 	{"google search console", "google-search-console"}, {"search console", "google-search-console"},
@@ -111,7 +109,7 @@ var professionalPhraseAliases = []phraseAlias{
 	// marketing — the disciplines themselves, so a search can combine "does technical
 	// SEO" with "uses Ahrefs". All multi-word, hence strong without gating. "SEM" is
 	// absent by design: it is a Portuguese and Spanish preposition ("sem experiência")
-	// and this catalogue carries that population in bulk.
+	// and this catalogue carries many such postings.
 	{"technical seo", "technical-seo"},
 	{"link building", "link-building"}, {"linkbuilding", "link-building"},
 	{"paid social", "paid-social"},
@@ -160,9 +158,7 @@ var professionalPhraseAliases = []phraseAlias{
 	// role. All are non-corroborating — see below.
 	{"hipaa", "hipaa"}, {"gdpr", "gdpr"}, {"ccpa", "ccpa"}, {"lgpd", "lgpd"},
 	{"itar", "itar"}, {"dfars", "dfars"},
-	// batch 6 (2026-10-25, German market) — mined from the requirement clauses of the
-	// German ATS crawl ("Kenntnisse in …", "Erfahrung mit …"), which carries no LLM
-	// skills to mine. Bare "sap" stays gated (tree sap); the German clause that binds
+	// German market, mined from requirement clauses ("Kenntnisse in …", "Erfahrung mit …"). Bare "sap" stays gated (tree sap); the German clause that binds
 	// it to a requirement does not have that reading. Only German forms, so the English
 	// decisions about "SAP system" and "CRM" stay as they were: "systeme"/"systemen"
 	// are German plurals, never English. All non-corroborating — see below.
@@ -175,30 +171,23 @@ var professionalPhraseAliases = []phraseAlias{
 	{"datev", "datev"}, {"lodas", "datev"},
 	{"erp systeme", "erp"}, {"erp systemen", "erp"},
 	{"crm systeme", "crm"}, {"crm systemen", "crm"},
-	// batch 7 (2026-10-25, Dutch market) — the HR, payroll and bookkeeping suites a Dutch
+	// Dutch market — the HR, payroll and bookkeeping suites a Dutch
 	// clerk's or a functional administrator's posting asks for. All non-corroborating.
 	{"afas", "afas"}, {"exact online", "exact-online"}, {"nmbrs", "nmbrs"},
 	{"youforce", "youforce"},
 }
 
 // occupationalSafetyPhraseAliases is its own slice rather than more lines in the list
-// above, for one reason: every canonical it emits must also be a nonCorroboratingPhrases
-// member, and that set now DERIVES from this slice instead of repeating its canonicals by
-// hand. A hand-typed copy drifts: a thirty-sixth safety phrase added to a literal would
-// silently become a strong corroborator, which is the bug this vocabulary shipped with once.
+// above: every canonical it emits must also be a nonCorroboratingPhrases member, and that
+// set derives from this slice. A hand-typed copy would drift, and a missed phrase would
+// silently become a strong corroborator.
 var occupationalSafetyPhraseAliases = []phraseAlias{
-	// Occupational safety — health, safety and environment. This vocabulary carries more
-	// weight than its size suggests: an HSE posting derives `is_tech = false` and the
-	// enrichment enqueue gate reads `is_tech IS TRUE`, so the LLM never sees this
-	// population and these entries are the only thing that will ever put a skill on it.
-	// Measured on prod 2026-09-24, just 2,535 of 6,254 live HSE postings carried any
-	// skill, and the profession had no representation here at all.
+	// Occupational safety — health, safety and environment. An HSE posting derives
+	// `is_tech = false` and the enrichment enqueue gate reads `is_tech IS TRUE`, so the LLM
+	// never sees this population and these entries are the only source of its skills.
 	//
-	// The terms are mined, not written down: 2,500 live descriptions from this exact
-	// population, HTML-stripped, counted as 1–3-grams by document frequency with the
-	// existing vocabulary subtracted. The percentage on each line is that frequency, and
-	// it is the admission evidence — a list written from what the work sounds like can
-	// only ever be tested against itself.
+	// The terms are mined from live HSE descriptions by document frequency, not written
+	// from what the work sounds like; the percentage on each line is that frequency.
 	{"iso 45001", "iso-45001"}, {"iso45001", "iso-45001"}, // 19%
 	{"iso 14001", "iso-14001"}, {"iso14001", "iso-14001"}, // 20%
 	{"emergency response", "emergency-response"}, // 20%
@@ -229,9 +218,7 @@ var occupationalSafetyPhraseAliases = []phraseAlias{
 	{"hot work", "hot-work"},
 	{"near miss", "near-miss-reporting"}, {"near misses", "near-miss-reporting"}, // the plural is the 11% form
 	// The acronym PSM is NOT admitted: the scoped-acronym table below already maps that
-	// key to professional-scrum-master, and it holds one canonical per key. Measured, the
-	// acronym and this phrase each appear in 2% of the corpus, so the phrase alone loses
-	// almost nothing — and widening the table's shape would touch every existing entry.
+	// key to professional-scrum-master, and it holds one canonical per key.
 	{"process safety management", "process-safety-management"},
 	{"permit to work", "permit-to-work"},           // 2%
 	{"job safety analysis", "job-safety-analysis"}, // 2%

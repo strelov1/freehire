@@ -2,16 +2,14 @@ package vocab
 
 import "strings"
 
-// SourceFamilies folds adapters that are one brand's regional splits into the single
-// name a person picks in the source filter. WhatJobs runs one adapter per country
-// market (`whatjobs`, `whatjobs-br`, …), each its own `source` value because each is a
-// separate publisher account; to a visitor they are one site. Choosing the family name
-// selects every member, and the source facet reports the members as one bucket.
+// SourceFamilies folds one brand's regional adapters (WhatJobs runs one per country,
+// each its own `source` value) into the single name shown in the source filter.
+// Choosing the family selects every member, and the source facet reports them as one
+// bucket.
 //
-// The members are listed, not matched by prefix, because the search index has no
-// prefix filter. internal/ingest/sources checks the list against its registry, so a
-// market added there without being added here fails a test instead of staying a
-// separate entry in the picker.
+// Members are listed, not prefix-matched, because the search index has no prefix
+// filter. internal/ingest/sources checks the list against its registry, so a market
+// missing here fails a test.
 var SourceFamilies = map[string][]string{
 	"whatjobs": {
 		"whatjobs",

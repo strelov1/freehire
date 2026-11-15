@@ -2,12 +2,10 @@ package location
 
 import "strings"
 
-// alpha3ToAlpha2 maps the ISO 3166-1 alpha-3 code of every country this package already
-// places on the region map (countryToRegion) to its alpha-2 equivalent, so a source that
-// states its country as an alpha-3 code (Ashby) normalizes the same as one using alpha-2
-// (Lever, Workday). It deliberately covers only the curated 133-country set rather than
-// the full ISO-3166 list: a code outside it "resolves to nothing" everywhere else in this
-// package, and NormalizeCountry keeps that same contract.
+// alpha3ToAlpha2 maps the ISO 3166-1 alpha-3 code of every country on the region map
+// (countryToRegion) to its alpha-2 equivalent, so a source stating alpha-3 (Ashby)
+// normalizes like one using alpha-2 (Lever, Workday). It covers only that curated set,
+// not all of ISO-3166: a code outside it resolves to nothing, as elsewhere here.
 var alpha3ToAlpha2 = map[string]string{
 	"deu": "de", "fra": "fr", "nld": "nl", "esp": "es", "swe": "se", "pol": "pl",
 	"irl": "ie", "prt": "pt", "ita": "it", "bel": "be", "dnk": "dk", "fin": "fi",
@@ -38,17 +36,11 @@ var alpha3ToAlpha2 = map[string]string{
 }
 
 // NormalizeCountry maps an ATS-supplied country value to freehire's canonical lowercase
-// alpha-2 code. The input is a dedicated country field, not a free-text location line, but
-// its own format still varies by ATS and even by employer within one ATS: an alpha-2 code
-// (Lever, Workday), an alpha-3 code (Ashby usually — e.g. "USA"), or a plain country name
-// (Ashby sometimes — schema.org's addressCountry accepts either, and which one a given
-// employer's Ashby config carries is up to them; "United States" and "USA" both appear on
-// live boards). nameToCountry already resolves the name case via the same lookup Parse
-// uses for a location string's country token, so this is a lookup order, not new parsing.
-// It returns "" for a value outside the curated country set Parse itself resolves
-// (countryToRegion): the same never-guess contract, so a country this package cannot place
-// on the region map is left for the location/description dictionaries to fill instead of
-// being recorded ungrouped.
+// alpha-2 code. The field's format varies by ATS and even by employer: alpha-2 (Lever,
+// Workday), alpha-3 ("USA", Ashby) or a plain name ("United States", Ashby). The name
+// case reuses nameToCountry, the lookup Parse uses for a location string's country
+// token. It returns "" for a value outside the curated set (countryToRegion), leaving
+// that country for the location/description dictionaries to fill.
 func NormalizeCountry(code string) string {
 	c := strings.ToLower(strings.TrimSpace(code))
 	if _, ok := countryToRegion[c]; ok {

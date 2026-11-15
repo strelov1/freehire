@@ -3,11 +3,7 @@ package classify
 // French titles share the Spanish shape — a HEAD followed by the FIELD it works in
 // ("Technicien de maintenance", "Conseiller de vente", "Chargé de recrutement",
 // "Agent de quai") — but almost none of their words are the Spanish ones, so the
-// Spanish and Portuguese fallbacks read next to nothing of them. Measured 2026-10-28
-// over 24,609 open French-language postings (wttj, flatchr, werecruit, smartrecruiters,
-// teamtailor, workday, eures, recruitee, lever, join, workable, greenhouse, personio,
-// read per source with `countries @> {fr}` where the source spans countries), 80% of
-// the titles resolved no category.
+// Spanish and Portuguese fallbacks read next to nothing of them.
 //
 // The table is ordered in the Spanish bands, and table order is the precedence:
 //

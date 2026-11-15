@@ -10,12 +10,8 @@ import (
 
 // Spanish titles are not compounds: the role is a HEAD NOUN followed by the field it
 // works in — "Técnico de mantenimiento", "Auxiliar de cocina", "Jefe de obra",
-// "Ejecutivo de ventas". Measured 2026-10-27 over 25,017 open Spanish-language
-// postings (infojobs, occ, pandapelatam, teamtailor, factorial, getonbrd, torre,
-// hiringroom, personio, eures and getmanfred, read per source), 82% resolved no
-// category. The commonest unresolved first words were heads with no field of their
-// own — asesor, técnico, ejecutivo, operario, auxiliar, gerente, analista, jefe — and
-// the field after "de" is what names the work.
+// "Ejecutivo de ventas". Heads like asesor, técnico, ejecutivo, operario, auxiliar,
+// gerente, analista and jefe carry no category of their own; the field after "de" does.
 //
 // So the table is ordered in four bands, and table order is the precedence:
 //

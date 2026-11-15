@@ -5,22 +5,11 @@ import (
 	"unicode/utf8"
 )
 
-// titleBoundary is the word-boundary rule every title alias is matched under. It is
-// wordmatch.UnicodeBoundary with one exception: an alias EDGE that is a Japanese or Chinese
-// character needs no boundary on that side.
+// titleBoundary is the word-boundary rule every title alias is matched under: wordmatch.UnicodeBoundary with one exception, an alias EDGE that is a Japanese or Chinese character needs no boundary on that side.
 //
-// Neither language separates words, so a compound arrives glued to whatever qualifies it —
-// シニア+データサイエンティスト, 金融機関向け+Webアプリケーションエンジニア. UnicodeBoundary counts
-// kana and kanji as letters, which is right for the Latin and Cyrillic titles it was written
-// for and means a CJK alias could only ever match when the employer happened to bracket it.
-// Measured over 65,895 open Japanese-script postings (2026-10-26), that rule left 90.7% of
-// them with no category at all.
+// Neither language separates words, so a compound arrives glued to whatever qualifies it (シニア+データサイエンティスト). UnicodeBoundary counts kana and kanji as letters, which is right for Latin and Cyrillic titles but would let a CJK alias match only when the employer happened to bracket it.
 //
-// The exception is per side and keyed on the ALIAS, not on the title: "sreエンジニア" still
-// needs a boundary before its Latin "s", so it cannot match inside "presreエンジニア", while
-// its katakana tail may run straight into whatever follows. A one-letter Latin alias is what
-// the boundary exists to stop; a CJK alias in this table is a whole role noun, which is why
-// substring matching is safe for it and for nothing else.
+// The exception is per side and keyed on the ALIAS, not the title: "sreエンジニア" still needs a boundary before its Latin "s", so it cannot match inside "presreエンジニア", while its katakana tail may run straight into whatever follows. A one-letter Latin alias is what the boundary exists to stop; a CJK alias in this table is a whole role noun, so substring matching is safe for it and for nothing else.
 func titleBoundary(s string, start, end int) bool {
 	first, _ := utf8.DecodeRuneInString(s[start:end])
 	last, _ := utf8.DecodeLastRuneInString(s[start:end])

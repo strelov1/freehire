@@ -11,8 +11,7 @@ package classify
 // procurement and recruiting titles — 半導体プロセス生産エンジニア is a semiconductor
 // production engineer, トラクタのキャビン…設計開発 designs a tractor cab, and 開発エンジニア on
 // its own is as often an anti-reflection film or a plumbing fixture as software. Matching
-// a single token would declare all of them technical, which is the trap a bare "analyst"
-// already sprang on 77k postings.
+// a single token would declare all of them technical.
 //
 // The table is ordered by how much a term says about the ROLE, because a Japanese title
 // is a noun phrase whose head can sit anywhere once brackets are involved: the role
@@ -193,9 +192,8 @@ var japaneseCategoryTable = []aliasEntry{
 // japaneseTrailCategoryTable closes categoryTable, BEHIND the core aliases: the named non-IT
 // professions and the broad business heads. A bilingual title ("Director of Sales &
 // Marketing … セールス＆マーケティング部長") is then read by its English half, which the core
-// table has been tuned on far longer — measured over the 65,895-posting sample, leading with
-// these instead put hotel staff in `hospitality` on the hotel's NAME and moved 76 rows the
-// English alias had right.
+// table has been tuned on far longer: leading with these instead put hotel staff in
+// `hospitality` on the hotel's NAME.
 var japaneseTrailCategoryTable = []aliasEntry{
 	// --- Named professions outside IT. The catalogue is broader than IT, so these get
 	// their own category rather than staying unfiled.

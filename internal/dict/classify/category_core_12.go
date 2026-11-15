@@ -41,15 +41,13 @@ var coreCategoryTable12 = []aliasEntry{
 	{"kibernetsko varnost", "security"},
 	{"kibernetske varnosti", "security"},
 
-	// SLOVENIAN JOB-BOARD TITLES (freehire#3518, contributed by @josepowera from 3,288
-	// distinct Slovenian titles, curated here). The multi-word phrases come first, so a
-	// longer title that names its craft is read before a shorter noun below would shadow
-	// it ("vzdrževalec perila" is the laundry, not maintenance). Curation dropped the
-	// catch-all nouns (vodja, specialist, sodelavec, svetovalec, delavec, operater,
-	// referent, asistent, tehnik, ...), the civil-service ranks and the recruiting copy,
-	// and re-filed what English files elsewhere: the sales engineer is
-	// solutions_engineering, the systems engineer software_engineering, the quality
-	// manager industrial_engineering, the receptionist administration.
+	// SLOVENIAN JOB-BOARD TITLES, curated from a contributed list. The multi-word phrases come
+	// first, so a longer title that names its craft is read before a shorter noun would shadow
+	// it ("vzdrževalec perila" is the laundry, not maintenance). The catch-all nouns (vodja,
+	// specialist, sodelavec, svetovalec, delavec, operater, referent, asistent, tehnik), the
+	// civil-service ranks and the recruiting copy are dropped, and roles are re-filed where
+	// English files them: sales engineer is solutions_engineering, systems engineer
+	// software_engineering, quality manager industrial_engineering, receptionist administration.
 	{"strokovnjak s področja informacijsko-komunikacijskih tehnologij", "devops"},
 	{"strokovni svetovalec področja v raziskovalni dejavnosti", "science"},
 	{"strokovnjak za mobilne komunikacije vgrajenih sistemov", "embedded"},

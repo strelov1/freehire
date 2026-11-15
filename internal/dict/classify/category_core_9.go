@@ -7,56 +7,30 @@ var coreCategoryTable9 = []aliasEntry{
 	{"softwaretester", "qa"},
 	{"anwendungsentwickler", "software_engineering"},
 
-	// Systemtechniker/Systemelektroniker also name non-IT disciplines in prod
-	// titles ("Systemtechniker Elektrotechnik", "Systemtechniker
-	// Sicherheitstechnik") — the same cross-domain trap the Systems Engineer
-	// family below documents. Only the IT-qualified spellings resolve; the
-	// bare word is deliberately absent, and hyphenated/spaced forms are two
-	// different strings to this matcher so both need their own entry.
+	// Systemtechniker/Systemelektroniker also name non-IT disciplines ("Systemtechniker Elektrotechnik"), like the Systems Engineer family below. Only IT-qualified spellings resolve; the bare word is absent. Hyphenated and spaced forms are different strings to the matcher, so each needs its own entry.
 	{"it systemtechniker", "devops"},
 	{"it-systemtechniker", "devops"},
 	{"it systemelektroniker", "devops"},
 	{"it-systemelektroniker", "devops"},
 
-	// Fachinformatiker: the German formal IT-specialist title and
-	// apprenticeship. Unlike Systemtechniker above, it never names a non-IT
-	// role, so the bare word resolves too — but declared LAST, after its two
-	// dominant qualifiers, so a title where the qualifier sits directly next
-	// to the word (no intervening "für"/"/in"/"m/w/d") gets the more precise
-	// category. SPS-Programmierer (PLC/industrial-controller programming) is
-	// deliberately NOT given an entry here — already excluded from a software
-	// category, same reasoning as "CNC Programmer" above.
+	// Fachinformatiker never names a non-IT role, so the bare word resolves, but it is declared LAST so a title with the qualifier right next to it gets the more precise category. SPS-Programmierer is deliberately absent: already excluded from software, like "CNC Programmer" above.
 	{"fachinformatiker systemintegration", "devops"},
 	{"fachinformatiker für systemintegration", "devops"},
 	{"fachinformatiker anwendungsentwicklung", "software_engineering"},
 	{"fachinformatiker für anwendungsentwicklung", "software_engineering"},
 	{"fachinformatiker", "devops"},
 
-	// The Russian engineering family. Roughly half the industrial residue, and none of
-	// it carried an English alias. The two qualified forms that name ANOTHER discipline
-	// are declared first: "Инженер-проектировщик" is a draughtsman and
-	// "Инженер по защите информации" an information-security engineer, and the bare
-	// token below would otherwise claim both.
+	// The Russian engineering family. The qualified forms naming another discipline come first ("Инженер-проектировщик" is a draughtsman, "Инженер по защите информации" a security engineer), or the bare token below would claim both.
 	//
-	// Bare tokens for the same reason the software ones above are: the qualified forms
-	// either hyphenate ("Инженер-технолог") or postfix a prepositional phrase
-	// ("Инженер по подготовке производства"), and a hyphen is a word boundary — only
-	// the bare token reaches every spelling.
+	// Bare tokens throughout: qualified forms hyphenate or postfix a phrase, and a hyphen is a word boundary, so only the bare token reaches every spelling.
 	{"инженер-проектировщик", "engineering_design"},
 	{"инженер по защите информации", "security"},
 	{"инженер", "industrial_engineering"},
 	{"технолог", "industrial_engineering"},
 
-	// The Russian consumer vocabularies. `врач` is a bare token for the same reason
-	// every Russian entry here is: the qualified forms hyphenate (`Врач-терапевт`,
-	// `Врач-акушер-гинеколог`) or postfix a phrase (`Врач ультразвуковой
-	// диагностики`), and a hyphen is a word boundary.
+	// The Russian consumer vocabularies. `врач` is bare because qualified forms hyphenate or postfix a phrase.
 	//
-	// The hazard runs the other way here — a short alias hiding INSIDE a longer word.
-	// `Делопроизводитель` (an office clerk) ends in `водитель`, and `Электромеханик`
-	// contains `механик`. wordmatch matches on boundaries and cannot make that
-	// mistake, but nothing in this list shows the hazard, so both pairs carry a
-	// regression test.
+	// Hazard: a short alias hiding inside a longer word (`Делопроизводитель` ends in `водитель`, `Электромеханик` contains `механик`). wordmatch matches on boundaries so it cannot happen, but both pairs carry a regression test.
 	{"ветеринарный врач", "healthcare"},
 	{"врач", "healthcare"},
 	{"медсестра", "healthcare"},
@@ -73,19 +47,13 @@ var coreCategoryTable9 = []aliasEntry{
 	{"плотник", "skilled_trades"},
 	{"маляр", "skilled_trades"},
 	{"механик", "skilled_trades"},
-	// General building maintenance — 5 256 open across these two spellings, and the
-	// same work the trades above already cover.
+	// General building maintenance, the same work the trades above cover.
 	{"рабочий по комплексному обслуживанию", "skilled_trades"},
 	{"рабочий по благоустройству", "skilled_trades"},
 
 	// The Russian service vocabularies.
 	//
-	// `делопроизводитель` is declared FIRST and on purpose: it is an office clerk, and
-	// it ENDS in `водитель`. wordmatch matches on word boundaries so the bare driver
-	// alias could not take it anyway — but the two now exist together in production,
-	// in different categories, and a reader scanning this list would have no way to
-	// see the hazard. The regression test asserts the clerk resolves to
-	// `administration` specifically, not merely to something.
+	// `делопроизводитель` is declared FIRST on purpose: an office clerk whose word ends in `водитель`. Word boundaries already keep the driver alias off it; the order makes the hazard visible. The regression test asserts it resolves to `administration`.
 	{"делопроизводитель", "administration"},
 	{"секретарь", "administration"},
 	{"администратор", "administration"},
@@ -103,10 +71,7 @@ var coreCategoryTable9 = []aliasEntry{
 	{"курьер", "logistics"},
 	{"водитель", "logistics"},
 
-	// Russian inflects, and `wordmatch` has no more morphology for it than it has for
-	// English plurals: "Помощник воспитателя" (2 097 open across two spellings) is the
-	// genitive and the nominative alias cannot reach it. The same trap as the
-	// automotive plurals fixed in this change, in another language.
+	// Russian inflects and wordmatch has no morphology: "Помощник воспитателя" is genitive, which the nominative alias cannot reach.
 	{"воспитателя", "education"},
 	{"воспитатель", "education"},
 	{"преподаватель", "education"},
@@ -121,10 +86,7 @@ var coreCategoryTable9 = []aliasEntry{
 	{"уборщица", "personal_services"},
 	{"сиделка", "personal_services"},
 
-	// The Russian half of the non-technical title dictionary, filed (see the English
-	// block above the 1С entries for why). Bare tokens, as everywhere in Russian here:
-	// "Продавец-кассир" and "Продавец-консультант" are reached by "продавец", since a
-	// hyphen is a word boundary.
+	// The Russian half of the non-technical title dictionary (see the English block above the 1С entries). Bare tokens, since a hyphen is a word boundary: "Продавец-кассир" is reached by "продавец".
 	{"медицинская сестра", "healthcare"},
 	{"санитарка", "healthcare"},
 	{"логопед", "healthcare"},
@@ -169,39 +131,13 @@ var coreCategoryTable9 = []aliasEntry{
 	{"косметолог", "personal_services"},
 	{"учитель", "education"},
 
-	// NO bare English "engineer", though 689 open postings spell it exactly. It was
-	// tried and the existing suite rejected it, which is the answer: "Product
-	// Engineer", "Growth Engineer", "Staff Engineer" and "Developer Onboarding
-	// Engineer" are all pinned to NO category on purpose, because the word before
-	// "engineer" is what decides and those words are ambiguous. A bare alias overrides
-	// every one of those decisions at once.
-	//
-	// It also breaks `Categories()`, which returns EVERY matching alias rather than the
-	// strongest: a bare "engineer" appends this category to "Senior Backend Engineer"
-	// and to every other engineering title in the catalogue, polluting the multi-
-	// category CV path that reads it.
-	//
-	// The Russian bare token above does not have the second problem to the same degree
-	// — "инженер" heads far fewer resolved titles here — and its qualified forms are
-	// declared above it, so `Parse` stays correct.
+	// No bare English "engineer": "Product Engineer", "Growth Engineer" and "Staff Engineer" are pinned to NO category on purpose, and a bare alias would override all of them. It would also break `Categories()`, which returns every matching alias, adding this category to every engineering title. The Russian bare token has this problem far less ("инженер" heads fewer resolved titles) and its qualified forms are declared above it.
 
-	// Media production, declared after every discipline block on purpose (only the
-	// three SOC families below follow it, and they reach no title anything above
-	// resolves). Every craft here is also a tool or a
-	// second hat named inside someone else's title — "Marketing Specialist (Photoshop,
-	// Illustrator)", "Graphic Designer & Photographer", "Junior Motion Designer /
-	// Animator". This table resolves in declaration order, so declaring these anywhere
-	// above `design` or `marketing` does not merely add a category: it TAKES those
-	// rows, which is the one thing this change promised not to do. Declared last, a
-	// title resolves to the craft only when it names no other discipline at all.
+	// Media production, declared after every discipline block (only the three SOC families below follow). Each craft is also a tool or second hat in someone else's title ("Marketing Specialist (Photoshop, Illustrator)"). Resolution is in declaration order, so declaring these above `design` or `marketing` would take those rows. Declared last, a title resolves to the craft only when it names no other discipline.
 	//
-	// The cost is stated rather than hidden: a "Social Media Video Editor" resolves to
-	// `marketing`, not to the craft. That is the right side to err on — the posting is
-	// still findable, on a facet that was already correct for it.
+	// Cost: "Social Media Video Editor" resolves to `marketing`, which is still findable on a correct facet.
 	//
-	// The bare craft words ("video", "audio", "art", "sound", "photo") are not aliases
-	// in either block: each occurs in titles across every discipline ("Audio DSP
-	// Engineer", "Art Director", "State of the Art").
+	// Bare craft words ("video", "audio", "art", "sound", "photo") are not aliases: each occurs across every discipline ("Audio DSP Engineer", "Art Director").
 	{"video editor", "creative"},
 	{"video producer", "creative"},
 	{"videographer", "creative"},
@@ -224,17 +160,9 @@ var coreCategoryTable9 = []aliasEntry{
 	// belongs with: a design or marketing title that names the tool keeps its own row.
 	{"illustrator", "creative"},
 
-	// SOCIAL SERVICES, SCIENCE AND MANUFACTURING — the three families the catalogue
-	// filed nowhere once it grew past IT, so ingest refused them and search excluded
-	// them. Declared after every other block, the media crafts included, so a title any
-	// alias above resolves keeps exactly the category it had: these lines only reach a
-	// title that named nothing else. The one deliberate move is the four production-
-	// floor spellings above, re-filed from `skilled_trades` in place.
+	// SOCIAL SERVICES, SCIENCE AND MANUFACTURING, declared after every other block so a title any alias above resolves keeps its category; these lines only reach a title that named nothing else. The one deliberate move is the four production-floor spellings above, re-filed from `skilled_trades`.
 	//
-	// Community and social service (SOC 21). Counsellors and therapists who treat
-	// mental health stay in `healthcare`, where they already resolve. A bare "case
-	// manager" is a nurse as often as a social worker and resolves nothing; only the
-	// qualified forms are here.
+	// Community and social service (SOC 21). Mental-health counsellors and therapists stay in `healthcare`. A bare "case manager" is a nurse as often as a social worker, so only qualified forms are here.
 	{"social worker", "social_services"},
 	{"social workers", "social_services"},
 	{"social work", "social_services"},
@@ -303,13 +231,7 @@ var coreCategoryTable9 = []aliasEntry{
 	{"trabajador social", "social_services"},
 	{"trabajadora social", "social_services"},
 
-	// Science (SOC 19): the laboratory and the named sciences.
-	//
-	// The clinical laboratory comes first and goes to `healthcare`: SOC files medical
-	// and clinical laboratory technologists and technicians under 29-2010, the
-	// healthcare practitioners, not with the science technicians of 19-4000. The
-	// hospital lab is staffed and hired as part of patient care. A cath lab is a
-	// cardiac procedure room, not a laboratory at all.
+	// Science (SOC 19). The clinical laboratory comes first and goes to `healthcare`: SOC files clinical laboratory technologists under 29-2010 (healthcare practitioners), not 19-4000. A cath lab is a cardiac procedure room, not a laboratory.
 	{"medical lab technician", "healthcare"},
 	{"medical laboratory technician", "healthcare"},
 	{"medical lab tech", "healthcare"},

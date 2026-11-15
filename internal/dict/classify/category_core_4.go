@@ -12,10 +12,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"forward deployed engineer", "solutions_engineering"},
 	{"пресейл", "solutions_engineering"},
 	{"пресейл-инженер", "solutions_engineering"},
-	// GTM engineering builds the outbound data pipeline rather than selling, but the
-	// split from RevOps is not title-separable, so it rides with the rest of that
-	// cluster. Only the phrase resolves — the bare "gtm" names Google Tag Manager in
-	// a requirements list, and that meaning belongs to the skill dictionary.
+	// GTM engineering builds the outbound data pipeline rather than selling, but the split from RevOps is not
+	// title-separable, so it rides with that cluster. Only the phrase resolves: bare "gtm" names Google Tag Manager in a
+	// requirements list, which belongs to the skill dictionary.
 	{"gtm engineer", "sales"},
 	{"go-to-market engineer", "sales"},
 	{"go to market engineer", "sales"},
@@ -25,34 +24,28 @@ var coreCategoryTable4 = []aliasEntry{
 	{"account manager", "sales"},
 	{"sdr", "sales"},
 	{"bdr", "sales"},
-	// RevOps/Sales Ops belong to the GTM cluster; the finance-side rev-rec meaning is
-	// not title-separable, so the commercial default routes here (not to finance/ops).
+	// RevOps/Sales Ops belong to the GTM cluster; the finance-side rev-rec meaning is not title-separable, so the
+	// commercial default routes here (not to finance/ops).
 	{"revenue operations", "sales"},
 	{"revops", "sales"},
 	{"sales operations", "sales"},
 	{"продажи", "sales"},
 	{"продаж", "sales"},
 	{"продажам", "sales"},
-	// IT support: the help desk and the service desk, desktop and end-user support,
-	// the tiered desk (1st/2nd line, L1-L3), the technical support engineer of a
-	// software product and the NOC. Split out of `support` (customer service) into
-	// its own TECHNICAL category, so a service-desk veteran finds a facet naming the
-	// work and the derivation reads it as technical from the category alone.
-	//
-	// A phrase earns its place by naming the IT ESTATE, not the mood of the work
-	// (the rule tech.go's techTitleTerms carries for the same family). Sampled
-	// 2026-10-26 against a 10% sample of the open `support` population (22,638
-	// postings): of 624 carrying "help desk"/"service desk", the only non-IT ones
-	// were an HR help desk and a customer service desk, pinned first below. Bare
-	// "technical support" and bare "support engineer" stay `support`: they also name
-	// automotive, field-equipment, robotics and maintenance support, so only the
-	// analyst/engineer/specialist forms of technical support are claimed.
+	// IT support: help desk, service desk, desktop and end-user support, the tiered desk (1st/2nd line, L1-L3), the
+	// technical support engineer of a software product, and the NOC. Split out of `support` (customer service) into its
+	// own TECHNICAL category.
+	// A phrase earns its place by naming the IT ESTATE, not the mood of the work (the rule tech.go's techTitleTerms
+	// carries for the same family). The only non-IT "help desk"/"service desk" titles are an HR help desk and a customer
+	// service desk, pinned first below. Bare "technical support" and bare "support engineer" stay `support`: they also
+	// name automotive, field-equipment, robotics and maintenance support, so only the analyst/engineer/specialist forms
+	// of technical support are claimed.
 	{"customer service desk", "support"},
 	{"hr help desk", "hr"},
 	{"it support", "it_support"},
 	{"it-support", "it_support"},
-	// The German/Nordic surface form ("1st Level IT Supporter"): the trailing "er"
-	// breaks the word boundary, so "it support" cannot see it.
+	// The German/Nordic surface form ("1st Level IT Supporter"): the trailing "er" breaks the word boundary, so "it
+	// support" cannot see it.
 	{"it supporter", "it_support"},
 	{"it-supporter", "it_support"},
 	{"it technical support", "it_support"},
@@ -70,11 +63,10 @@ var coreCategoryTable4 = []aliasEntry{
 	{"end user support", "it_support"},
 	{"end-user support", "it_support"},
 	{"help desk", "it_support"},
-	// The unspaced compound: "help desk" above cannot reach it, the same trap the
-	// "back-end"/"back end"/"backend" trio guards against.
+	// The unspaced compound: "help desk" above cannot reach it (same trap as the "back-end"/"back end"/"backend" trio).
 	{"helpdesk", "it_support"},
-	// The ITIL name for the same desk. Without it the far more common "Service Desk
-	// Analyst" fell through to the bare "analyst" alias and read as data_analytics.
+	// The ITIL name for the same desk. Without it "Service Desk Analyst" falls to the bare "analyst" alias and reads as
+	// data_analytics.
 	{"service desk", "it_support"},
 	{"servicedesk", "it_support"},
 	{"technical support engineer", "it_support"},
@@ -116,10 +108,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"noc analyst", "it_support"},
 	{"noc specialist", "it_support"},
 	{"noc operator", "it_support"},
-	// Russian. "Техническая поддержка" is filed by hh.ru under Information
-	// Technology ("Специалист технической поддержки") and the sampled titles agree —
-	// 1C, L2, "2-я линия", telecoms. The bare "поддержка"/"поддержки" below stay
-	// `support`: they also name chat operators and the state-benefits desks.
+	// Russian. hh.ru files "Техническая поддержка" under Information Technology, and sampled titles agree (1C, L2,
+	// "2-я линия", telecoms). The bare "поддержка"/"поддержки" below stay `support`: they also name chat operators and
+	// state-benefits desks.
 	{"техподдержка", "it_support"},
 	{"техподдержки", "it_support"},
 	{"тех поддержки", "it_support"},
@@ -128,17 +119,13 @@ var coreCategoryTable4 = []aliasEntry{
 	{"поддержки пользователей", "it_support"},
 	{"хелпдеск", "it_support"},
 	{"хелпдеска", "it_support"},
-	// Disability and residential care is social service, not a help desk. "Direct
-	// Support Professional" is the US title for the worker who supports a person with an
-	// intellectual or developmental disability at home or in a group home, and "Support
-	// Worker" (with "Personal/Family/Home/Bank Support Worker") is the UK and Canadian
-	// title for the same care work. The bare "support" filed both as customer support.
-	// The IT, administrative and customer-service spellings of "support worker" are
-	// pinned first, so each desk keeps them.
-	//
-	// The abbreviation "DSP" is deliberately never an alias: in this catalogue it is as
-	// often Amazon's Delivery Service Partner ("Amazon DSP Delivery Driver"), a
-	// demand-side platform, a downstream-process operator or digital signal processing.
+	// Disability and residential care is social service, not a help desk. "Direct Support Professional" is the US title
+	// for the worker supporting a person with a disability at home or in a group home; "Support Worker" (with
+	// "Personal/Family/Home/Bank Support Worker") is the UK and Canadian title for the same work. The bare "support"
+	// would file both as customer support. The IT, administrative and customer-service spellings of "support worker"
+	// are pinned first, so each desk keeps them.
+	// The abbreviation "DSP" is never an alias: it is as often Amazon's Delivery Service Partner, a demand-side
+	// platform, a downstream-process operator or digital signal processing.
 	{"administrative support", "administration"},
 	{"customer support worker", "support"},
 	{"technical support worker", "support"},
@@ -146,9 +133,8 @@ var coreCategoryTable4 = []aliasEntry{
 	{"support worker", "social_services"},
 	{"support workers", "social_services"},
 	{"customer service", "support"},
-	// The desk phrases that name the customer side outright. The bare "support" is
-	// declared last in the table, so without these a "Client Support & Benefits
-	// Representative" read as sales through a word further down.
+	// The desk phrases that name the customer side outright. The bare "support" is declared last in the table, so
+	// without these "Client Support & Benefits Representative" would read as sales through a word further down.
 	{"customer support", "support"},
 	{"client support", "support"},
 	{"call center", "support"},
@@ -167,13 +153,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"onboarding manager", "customer_success"},
 	{"implementation specialist", "customer_success"},
 	{"implementation consultant", "customer_success"},
-	// NOT "onboarding engineer": unlike "implementation engineer" above (still a
-	// customer-facing role, the technical sibling of "implementation
-	// specialist"/"consultant"), "onboarding engineer" is genuinely dual-use — it is
-	// also a real internal-platform title ("Developer Onboarding Engineer" builds
-	// onboarding tooling for a company's own engineers), so a bare entry would
-	// misfile that population the way a bare "growth"/"compliance" would elsewhere
-	// in this file.
+	// NOT "onboarding engineer": unlike "implementation engineer" above (a customer-facing role), it is genuinely
+	// dual-use. It is also an internal-platform title ("Developer Onboarding Engineer" builds tooling for a company's
+	// own engineers), so a bare entry would misfile those, as a bare "growth"/"compliance" would elsewhere.
 	{"implementation engineer", "customer_success"},
 	{"renewals manager", "customer_success"},
 	{"renewal manager", "customer_success"},
@@ -193,10 +175,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"recruitment specialist", "recruiting"},
 	{"sourcer", "recruiting"},
 	{"talent partner", "recruiting"},
-	// Employer branding sells the company to candidates, not customers — the
-	// recruiting-side twin of the marketing "brand manager" alias above, which this
-	// phrase does not contain a substring of ("employer branding manager" has no
-	// "brand manager" inside it), so it needs its own entry.
+	// Employer branding sells the company to candidates, not customers. It is the recruiting-side twin of the marketing
+	// "brand manager" alias above, which it does not contain ("employer branding manager" has no "brand manager"
+	// inside), so it needs its own entry.
 	{"employer branding", "recruiting"},
 	{"рекрутер", "recruiting"},
 	{"рекрутёр", "recruiting"},
@@ -262,10 +243,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"data privacy manager", "legal"},
 	{"contracts administrator", "legal"},
 	{"contract administrator", "legal"},
-	// Immigration practice: must precede the administration block ("Immigration
-	// Assistant") and the case-manager spellings so neither steals this family. "immigration paralegal" is
-	// listed for completeness — the bare "paralegal" entry above already
-	// resolves it to `legal` — but every other entry here is load-bearing.
+	// Immigration practice: must precede the administration block ("Immigration Assistant") and the case-manager
+	// spellings so neither steals this family. "immigration paralegal" is redundant (bare "paralegal" above resolves
+	// it to `legal`); every other entry here is load-bearing.
 	{"immigration paralegal", "legal"},
 	{"immigration specialist", "legal"},
 	{"immigration assistant", "legal"},
@@ -287,11 +267,9 @@ var coreCategoryTable4 = []aliasEntry{
 	{"ops manager", "operations"},
 	{"head of operations", "operations"},
 	{"office manager", "operations"},
-	// The assistant family is `administration` (see that block below), but these
-	// spellings must resolve HERE, at the precedence they always had: "Executive
-	// Assistant to the General Manager" names a manager after the role, and the
-	// manager aliases declared between this line and the administration block would
-	// take it.
+	// The assistant family is `administration` (block below), but these spellings must resolve HERE, at their
+	// precedence: "Executive Assistant to the General Manager" names a manager after the role, and the manager aliases
+	// declared between here and the administration block would take it.
 	{"executive assistant", "administration"},
 	{"administrative assistant", "administration"},
 	{"personal assistant", "administration"},

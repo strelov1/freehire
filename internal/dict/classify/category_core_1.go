@@ -60,10 +60,8 @@ var coreCategoryTable1 = []aliasEntry{
 	{"computer vision engineer", "ml_ai"},
 	{"nlp engineer", "ml_ai"},
 	{"ml engineer", "ml_ai"},
-	// Same reason as the "<discipline> developer" spellings below: redundant for
-	// tagging ("machine learning" already resolves it), needed by search, where the
-	// label reads "ML Engineer" and the query "machine learning engineer" reached
-	// nothing. 7,199 open postings carry the full phrase.
+	// Redundant for tagging, needed by search: the label reads "ML Engineer" and the query
+	// "machine learning engineer" reached nothing.
 	{"machine learning engineer", "ml_ai"},
 	{"ml/ai", "ml_ai"},
 	{"ai/ml", "ml_ai"},
@@ -107,30 +105,24 @@ var coreCategoryTable1 = []aliasEntry{
 	// an estate, not a role, so it resolves with the other domain nouns further down,
 	// below the technical role nouns. Search for it there.
 	{"cloud engineer", "devops"},
-	// The estate-facing analyst titles: 82 and 18 live postings.
+	// The estate-facing analyst titles.
 	{"infrastructure analyst", "devops"},
 	{"cloud analyst", "devops"},
 	{"system administrator", "devops"},
-	// The plural is the far more common surface form in prod titles ("Systems
-	// Administrator") and does not contain "system administrator" as a substring
-	// (the trailing "s" breaks the word boundary), so it needs its own entry.
+	// The plural ("Systems Administrator") lacks the "system administrator" word boundary,
+	// so it needs its own entry.
 	{"systems administrator", "devops"},
 	{"sysadmin", "devops"},
 	{"database administrator", "devops"},
 	{"linux administrator", "devops"},
 	{"windows administrator", "devops"},
 	{"it administrator", "devops"},
-	// Hungarian. "rendszergazda" is the sysadmin, a closed compound with no second
-	// sense: all 17 occurrences among the 7,207 open Hungarian postings are this role.
+	// Hungarian. "rendszergazda" is the sysadmin, a closed compound with no second sense.
 	//
-	// The operator noun "üzemeltető" is the "fejlesztő" problem again and is NOT here
-	// bare — it is whoever runs a thing, and the same sample spends it on machines
-	// ("Gépész üzemeltető"), electrical plant ("Villamos Üzemeltető"), buildings
-	// ("Épületüzemeltetési mérnök"), facilities ("Létesítményüzemeltetési koordinátor")
-	// and fuel stations. Only the qualified forms resolve. Hungarian writes both the
-	// closed compound and the spaced pair and prod carries both spellings of each, so
-	// both are listed: a closed compound never contains its spaced twin on a word
-	// boundary, which is also why "szoftverüzemeltető" needs its own entry.
+	// The operator noun "üzemeltető" is NOT here bare: it is whoever runs a thing (machines,
+	// electrical plant, buildings, fuel stations). Only the qualified forms resolve. Both the
+	// closed compound and the spaced pair are listed, since a compound never contains its
+	// spaced twin on a word boundary ("szoftverüzemeltető" needs its own entry too).
 	{"rendszergazda", "devops"},
 	{"rendszerüzemeltető", "devops"},
 	{"alkalmazásüzemeltető", "devops"},
@@ -151,22 +143,16 @@ var coreCategoryTable1 = []aliasEntry{
 	{"network administrator", "network_engineering"},
 	{"сетевой инженер", "network_engineering"},
 	{"сетевой администратор", "network_engineering"},
-	// Hungarian. Neither the bare adjective "hálózati" nor the compound
-	// "hálózatüzemeltető" is here: a "hálózat" is ANY network. The adjective covers a
-	// retail chain's ("Országos Üzlethálózati Tréner") and the compound covers a gas
-	// utility's — three of its four live occurrences are "Hálózatüzemeltető
-	// /Gázszerelő" at OPUS TIGÁZ, a gas fitter, and the fourth says "Cisco", which the
-	// dictionary reads on its own. Only the engineering seats resolve.
+	// Hungarian. Neither the bare adjective "hálózati" nor the compound "hálózatüzemeltető" is
+	// here: a "hálózat" is ANY network (a retail chain's, a gas utility's "Hálózatüzemeltető
+	// /Gázszerelő"). Only the engineering seats resolve.
 	{"hálózati mérnök", "network_engineering"},
 	{"hálózati rendszermérnök", "network_engineering"},
-	// The back end of a can plant, a body shop or a store is an area of the site, and
-	// the trade working it says so: Crown Holdings' "Back End Operator/Mechanic/
-	// Maintainer", a collision shop's "Back-End Estimator", a "Backend Retail
-	// Assistant". Each is filed with its English twin, ahead of the bare alias below —
-	// the "front end cashier" pins' shape. The SHIFT spelling ("Back End Days") is not
-	// a pin but a cut (backEndShiftPatterns), because the role beside it varies. A
-	// bare "back-end associate" is deliberately absent: "associate" names no category
-	// of its own, and prod carries "Back-end Developer Associate" too.
+	// The back end of a can plant, a body shop or a store is an area of the site ("Back End
+	// Operator/Mechanic", "Back-End Estimator"); each is filed with its English twin, ahead of
+	// the bare alias below. The SHIFT spelling ("Back End Days") is a cut
+	// (backEndShiftPatterns), not a pin. A bare "back-end associate" is absent: "associate"
+	// names no category, and "Back-end Developer Associate" exists.
 	{"back end operator", "manufacturing"},
 	{"back-end operator", "manufacturing"},
 	{"back end mechanic", "skilled_trades"},
@@ -185,19 +171,14 @@ var coreCategoryTable1 = []aliasEntry{
 	{"back end", "backend"},
 	{"бэкенд", "backend"},
 	{"бекенд", "backend"},
-	// The "<discipline> developer" spellings are redundant for tagging — the bare
-	// alias above already resolves them — and exist for the search side, which reads
-	// this table through CategoryAliases. Its matcher needs every word of the query to
-	// appear, so "backend developer" reaches nothing when the only alias is "backend"
-	// and the label says "Engineer". Measured: 8,870 open postings titled that way,
-	// and the query returned no suggestion at all.
+	// The "<discipline> developer" spellings are redundant for tagging and exist for search,
+	// which reads this table through CategoryAliases and needs every query word to appear:
+	// "backend developer" reaches nothing when the only alias is "backend".
 	{"backend developer", "backend"},
 	{"back-end developer", "backend"},
-	// In a supermarket the "front end" is the checkout lane, and a grocery chain's
-	// "Front End Cashier" is the single largest spelling the bare alias below would
-	// file as a frontend developer. These were harmless while the ingest filter turned
-	// every cashier away; once a categorised title is kept, they would reach the
-	// catalogue as technical. The heavy-equipment "front end loader" is the same trap.
+	// In a supermarket the "front end" is the checkout lane ("Front End Cashier"), which the
+	// bare alias below would file as a frontend developer. The heavy-equipment "front end
+	// loader" is the same trap.
 	{"front end cashier", "retail"},
 	{"front-end cashier", "retail"},
 	{"front end clerk", "retail"},
@@ -210,14 +191,11 @@ var coreCategoryTable1 = []aliasEntry{
 	{"front end digital design", "hardware"},
 	{"front-end asic", "hardware"},
 	{"front end asic", "hardware"},
-	// The same stage named by the silicon or radio it belongs to — "RF Front-End
-	// Design Engineer", "IC Front-End Architect", "CPU (Front-End) Verification" — or
-	// by a step of the chip flow after it ("Front-End CAD", "Front End RTL Designer").
-	// The qualifier must sit right beside the word: "Software Engineer Frontend IC" is
-	// an individual contributor and "Frontend Developer — RTL UI" right-to-left text.
-	// "Digital front-end", "front-end design engineer" and "front-end implementation"
-	// stay web — prod carries "Digital Frontend Developer", "Front-End Design Engineer -
-	// UX/UI" and "Camera Frontend Implementation Engineer" beside the chip spellings.
+	// The same stage named by the silicon or radio it belongs to ("RF Front-End Design
+	// Engineer", "CPU (Front-End) Verification") or by a later chip-flow step ("Front-End CAD").
+	// The qualifier must sit right beside the word: "Software Engineer Frontend IC" is an
+	// individual contributor and "Frontend Developer — RTL UI" right-to-left text. "Digital
+	// front-end", "front-end design engineer" and "front-end implementation" stay web.
 	{"rf front-end", "hardware"},
 	{"rf front end", "hardware"},
 	{"rf frontend", "hardware"},
@@ -299,28 +277,17 @@ var coreCategoryTable1 = []aliasEntry{
 	{"vue developer", "frontend"},
 	{"vue.js developer", "frontend"},
 	{"vuejs developer", "frontend"},
-	// NO bare "mobile", and no bare "мобильный"/"мобильная"/"мобильных" — the same trap
-	// the bare "analyst" fall-through sprang, measured on the live catalogue 2026-09-18.
-	// Outside software, "mobile" is the word for work that TRAVELS to the customer, and
-	// that meaning is far the commoner one: of 28 650 open postings the bare alias held,
-	// 18 483 named no mobile platform at all. It was claiming a phone carrier's shop
-	// floor (4 500+ "Mobile Associate - Retail Sales"), a bank's travelling
-	// representative (1 053 "Мобильный банкир"), field service ("Mobile Service
-	// Technician", "Mobile Diesel Technician"), facilities ("Mobile Building Engineer")
-	// and clinicians who drive to the patient ("Mobile Phlebotomist", "Mobile X-Ray
-	// Technologist") — and because `mobile` is a technical category, `is_tech` followed
-	// it, so 1 538 retail-sales postings were enqueued for LLM enrichment as engineering.
+	// No bare "mobile" (or "мобильный"/"мобильная"/"мобильных"). Outside software, "mobile" is
+	// far more often work that TRAVELS to the customer (retail associates, travelling bankers,
+	// field service, mobile phlebotomists), and because `mobile` is a technical category,
+	// `is_tech` would follow and enqueue those postings for LLM enrichment as engineering.
 	//
-	// The qualified spellings below are DERIVED from that catalogue rather than imagined,
-	// and they are contiguous phrases on purpose: "Mobile Building Engineer" and "Mobile
-	// Maintenance Engineer" both carry "mobile" and "engineer" without ever carrying
-	// "mobile engineer", so phrase matching declines them for free where a bare word
-	// could not. A title that names the platform ("Android", "iOS", "React Native",
-	// "Flutter") is answered by its own alias below and needs nothing here.
+	// The qualified spellings below are contiguous phrases on purpose: "Mobile Building
+	// Engineer" carries "mobile" and "engineer" but never "mobile engineer", so phrase matching
+	// declines it. A title naming the platform ("Android", "iOS", "React Native", "Flutter")
+	// is answered by its own alias below.
 	//
-	// What this deliberately gives up: "Software Engineer (Mobile)" and its ~60 siblings,
-	// which put the qualifier after the noun, now resolve to `software_engineering`
-	// instead. That is less specific and still true — and still technical — which is the
-	// trade this vocabulary always makes over guessing.
+	// Given up: "Software Engineer (Mobile)", with the qualifier after the noun, resolves to
+	// `software_engineering`: less specific, still true and still technical.
 	{"mobile developer", "mobile"},
 }

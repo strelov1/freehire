@@ -8,38 +8,30 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
-// Croatian, Serbian, Bosnian and Montenegrin (BCS) titles are one language family, so
-// they share one table. Two things set them apart from the languages before them.
+// Croatian, Serbian, Bosnian and Montenegrin (BCS) titles share one table. Two things set
+// them apart.
 //
-// First, the words INFLECT. A title names its role in the nominative ("Voditelj
-// trgovine") but the field after it stands in the genitive, the locative or the
-// instrumental — "Specijalist za podršku klijentima", "Radnik u proizvodnji", "Rad u
-// skladištu". The main table lists whole surface forms, so it reads "prodaja" and not
-// "prodaje", "prodaji" or "prodajom". An alias here may therefore end a word in "*",
-// which stands for the word's stem followed by one of the case and gender endings in
-// bcsEndings ("prodaj*" is prodaja, prodaje, prodaji, prodaju, prodajom; "kuhar*" is
-// kuhar, kuhara, kuharica). The endings are a closed list, so a stem never reaches
-// into an unrelated longer word.
+// First, the words INFLECT: a title names its role in the nominative ("Voditelj trgovine")
+// but the field after it is in the genitive, locative or instrumental ("Rad u skladištu").
+// The main table lists whole surface forms, so an alias here may end a word in "*", the
+// stem plus one of the case and gender endings in bcsEndings ("prodaj*" is prodaja,
+// prodaje, prodaji, prodaju, prodajom). The endings are a closed list, so a stem never
+// reaches into an unrelated longer word.
 //
-// Second, Serbian is written in two scripts. A title in Cyrillic ("Програмер",
-// "Возач") is transliterated into the Latin alphabet before this table reads it, by
-// the official one-to-one mapping (normalize.LatinizeSerbian) — but only a title that shows it is
-// Serbian (looksSerbianCyrillic). Russian, Ukrainian and Bulgarian titles have tables of
-// their own, the main table's Cyrillic aliases.
+// Second, Serbian is written in two scripts. A Cyrillic title ("Програмер") is
+// transliterated to Latin (normalize.LatinizeSerbian) before this table reads it, but only
+// when it shows it is Serbian (looksSerbianCyrillic); Russian, Ukrainian and Bulgarian
+// titles have their own Cyrillic aliases in the main table.
 //
-// The aliases are matched on a FOLDED title: transliterated, the gender forms cut
-// ("(m/ž)", "Voditelj/ica", "Inženjer/ka", "MLAĐI/A"), and the diacritics dropped,
-// đ written "dj" — job boards print both "Vozač" and "Vozac", and "računovođa" and
-// "racunovodja". Before the BCS table, the main table is asked once more of the
-// transliterated, gender-cut title, so a Cyrillic "Програмер" finds the main table's
-// "programer".
+// Aliases match a FOLDED title: transliterated, gender forms cut ("(m/ž)", "Voditelj/ica",
+// "MLAĐI/A"), diacritics dropped, đ written "dj" (boards print both "Vozač" and "Vozac").
+// Before this table, the main table is asked once more of the transliterated, gender-cut
+// title, so "Програмер" finds "programer".
 //
-// The table is a FALLBACK: it runs only after every other table resolved nothing, so
-// no existing answer changes. Every entry must also be safe on the English, Slovenian,
-// Polish, Czech and Slovak titles that reach the same fallback; the stems are BCS
-// words that those languages do not spell, and the ones that need it are argued
+// The table is a FALLBACK: it runs only after every other table resolved nothing, so no
+// existing answer changes. Every entry must also be safe on the English, Slovenian,
+// Polish, Czech and Slovak titles that reach the same fallback; risky ones are argued
 // beside their entry.
-
 // bcsEndings are the case and gender endings a "*" stem may take. They cover the
 // nominative, genitive, dative, accusative, instrumental and locative of the noun and
 // adjective declensions in both numbers, and the feminine agent suffixes (-ica, -ka,
@@ -129,10 +121,8 @@ func matchBCSOrdered(title bcsTitle, table []bcsEntry) string {
 // the Latin alphabet, and returns any other title unchanged.
 //
 // A title is read as Serbian only when it says so (looksSerbianCyrillic): Russian,
-// Ukrainian and Bulgarian titles reach this fallback too, and many of their words are
-// spelled only with letters the Serbian alphabet shares — "Шеф-повар", "Контролер",
-// "Аналитик в логистику", "Кухар". Transliterated, those read as BCS words ("šef",
-// "kontroler", "logistiku", "kuhar") and would change rows the main table's own Cyrillic
+// Ukrainian and Bulgarian titles reach this fallback too, and words like "Шеф-повар" or
+// "Кухар" would transliterate into BCS words and change rows the main table's Cyrillic
 // aliases left alone on purpose.
 func latinizeSerbian(lower string) string {
 	if !looksSerbianCyrillic(lower) {
@@ -164,10 +154,9 @@ func looksSerbianCyrillic(lower string) bool {
 }
 
 // serbianCyrillicCue is a Serbian role word spelled without a Serbian-only letter, which
-// no other Cyrillic language reaching the fallback writes this way: the Russian
-// programmer is a "программист", the driver a "водитель", the seller a "продавец", the
-// waiter an "официант", the technician a "техник". Each is a word stem; the boundary
-// before it is spelled out, as RE2's \b is ASCII-only.
+// no other Cyrillic language writes this way (Russian: "программист", "водитель",
+// "продавец"). Each is a word stem; the boundary before it is spelled out, as RE2's \b
+// is ASCII-only.
 var serbianCyrillicCue = regexp.MustCompile(`(?:^|[^\p{L}])(?:програмер|возач|продавац|продавачиц|конобар|кувар|сарадни[кц]|саветни[кц]|медицинск[аи]|рачуновод|магацин|оператер|техничар|приправни[кц]|чистачиц|електричар|стручни|референт за|менаџ)`)
 
 // bcsGenderNotice is the gender notice BCS titles carry: "(m/ž)", "(M/Ž)", "(ž/m)",

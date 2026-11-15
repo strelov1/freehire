@@ -41,8 +41,7 @@ var wordAliases2 = map[string]string{
 	// staining"), C4d being a standard complement-fragment biomarker — and lifted the
 	// gate off every weak word beside it. Only the word pass can gate a single token.
 	"c4d": "cinema-4d",
-	// web3 / crypto (mined from enrichment->skills; the long tail sits below the
-	// freq-500 floor). Distinctive tokens only — the ambiguous ones are NOT added:
+	// web3 / crypto. Distinctive tokens only — the ambiguous ones are NOT added:
 	// "cosmos" (↔ Azure Cosmos DB), "foundry" (↔ Palantir/Cloud Foundry),
 	// "rollup" (↔ rollup.js bundler), "staking"/"layer 2"/"wallet" (↔ non-crypto uses).
 	"web3":             "web3",
@@ -84,8 +83,7 @@ var wordAliases2 = map[string]string{
 	"hbase":    "hbase",
 	"nifi":     "nifi",
 
-	// LLM-mined batch (jobs.enrichment->skills, freq >= 1500). Distinctive single
-	// tokens whose lowercase form is unambiguous, so the word pass tags both the
+	// LLM-mined. Distinctive single tokens whose lowercase form is unambiguous, so the word pass tags both the
 	// upper- and lowercase surface ("DNS"/"dns") without an acronym tier. Ambiguous
 	// tokens (windows, s3, http-in-URLs, plc) are deliberately omitted or phrase-routed.
 	"unix":           "unix",
@@ -148,8 +146,7 @@ var wordAliases2 = map[string]string{
 	"freshdesk": "freshdesk",
 	"uscis":     "uscis",
 
-	// LLM-mined batch 2 (jobs.enrichment->skills, freq 500-1500). Distinctive single
-	// tokens. Ultra-generic concept words (caching, routing, concurrency,
+	// LLM-mined. Distinctive single tokens. Ultra-generic concept words (caching, routing, concurrency,
 	// web-development, software-testing, memory-management, load-balancing) are
 	// deliberately omitted as low-signal / over-matching; multi-word concepts are
 	// phrase-routed below.
@@ -285,9 +282,8 @@ var wordAliases2 = map[string]string{
 	"ajax":           "ajax",
 	"wcag":           "wcag",
 
-	// LLM-mined batch 3 — broad tech CONCEPTS (jobs.enrichment->skills, freq >= 1500).
-	// A deliberate widening past the "distinctive product token" rule to the high-signal
-	// generic concepts the discovery signal surfaced most. Tokens with a clear non-tech
+	// LLM-mined broad tech CONCEPTS: a deliberate widening past the "distinctive product
+	// token" rule. Tokens with a clear non-tech
 	// collision are still withheld (security↔guard, testing↔drug/QC, architecture↔building,
 	// monitoring/storage/logging, http-in-URLs, "workday"↔"a work day") — the
 	// never-corrupt-a-facet invariant outranks recall.
@@ -314,17 +310,14 @@ var wordAliases2 = map[string]string{
 	"genai":            "generative-ai",
 	"expressjs":        "express",
 
-	// LLM-mined batch 4 — jobs.enrichment->skills, freq >= 500 (2026-08 run: 2660
-	// distinct values, 692 already resolved). The gap this batch closes is not another
-	// web framework. It is the vocabulary of the NON-web technical catalogue the crawl
-	// has grown into: industrial automation, electronics and test equipment, enterprise
-	// vendor software, and the compliance frameworks a technical posting names.
+	// LLM-mined vocabulary of the NON-web technical catalogue: industrial automation,
+	// electronics and test equipment, enterprise vendor software, and compliance
+	// frameworks.
 	//
 	// Everything here is a product name or a coined acronym with no ordinary reading.
 	// Three groups are deliberately NOT here:
-	//   - Office and business vocabulary (excel 68k, powerpoint 22k, customer_service
-	//     150k). skilltag is tech-only and the catalogue is two-thirds non-IT, so the
-	//     head of the mined list is correct to miss.
+	//   - Office and business vocabulary (excel, powerpoint, customer_service): skilltag
+	//     is tech-only.
 	//   - Tokens whose bare form is an ordinary English word (bootstrap, hibernate,
 	//     unity, eclipse, slack, zoom, notion, asana, puppet, bicep, athena, aurora,
 	//     bedrock, parquet, loki, prefect, flux, ros) — those are gated in

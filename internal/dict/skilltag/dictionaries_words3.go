@@ -36,19 +36,16 @@ var wordAliases3 = map[string]string{
 	"vxlan": "vxlan",
 	"sdn":   "sdn",
 	"sase":  "sase",
-	// security vendors. The certifications and the regulatory frameworks that shipped
-	// here beside them have MOVED to the phrase lists and nonCorroboratingPhrases: each
-	// spelling is coined, so tagging was never the problem, but a strong match also
-	// vouches for every gated word in the same text — and "HIPAA training required"
-	// sits on most of a healthcare catalogue. See the compliance block below.
+	// security vendors. Certifications and regulatory frameworks live in the phrase lists
+	// and nonCorroboratingPhrases instead: a strong match vouches for every gated word in
+	// the same text, and "HIPAA training required" sits on most healthcare postings.
 	"crowdstrike": "crowdstrike",
 	"fortinet":    "fortinet",
 	"cyberark":    "cyberark",
 	"osint":       "osint",
 	// embedded, electronics and industrial automation. "asic" (the Australian
-	// Securities and Investments Commission, on a large share of the AU finance
-	// postings SEEK brings in), "rtl" (right-to-left, in any i18n posting) and "cfd"
-	// (contract for difference) were strong here and are now phrase-routed.
+	// Securities and Investments Commission), "rtl" (right-to-left) and "cfd" (contract
+	// for difference) are phrase-routed.
 	"firmware": "firmware",
 	"cmos":     "cmos",
 	"uvm":      "uvm",
@@ -68,9 +65,7 @@ var wordAliases3 = map[string]string{
 	"atlassian": "atlassian",
 	"testrail":  "testrail",
 
-	// batch 5 (2026-10 enrichment mining, freq ≥ 500) — coined product and protocol
-	// names with no common English reading. Each was named by the LLM on 500+ postings
-	// the dictionary tagged with nothing for it.
+	// Coined product and protocol names with no common English reading.
 	// languages, frameworks, libraries
 	"blazor":      "blazor",
 	"sqlalchemy":  "sqlalchemy",
@@ -180,14 +175,13 @@ var wordAliases3 = map[string]string{
 	// CMS
 	"drupal": "drupal",
 
-	// batch 4, gated half — declared here because ambiguousWords marks wordAliases
+	// Gated half — declared here because ambiguousWords marks wordAliases
 	// keys, not canonicals. Each is a real product whose bare token is also ordinary
 	// English, so it tags only with a concrete technology beside it.
 	//
-	// "bedrock" and "ros" were here and are gone: each named a product the dictionary
-	// ALREADY carried under a different canonical ("aws bedrock" → aws-bedrock, "ros2"),
-	// so a posting matched both and the facet split its count between them. Gating does
-	// not help — a corroborated weak match still emits. The qualified forms cover them.
+	// "bedrock" and "ros" are absent: each names a product already carried under another
+	// canonical ("aws bedrock" → aws-bedrock, "ros2"), and a corroborated weak match
+	// would still emit, splitting the facet count. The qualified forms cover them.
 	"bootstrap": "bootstrap",
 	"hibernate": "hibernate",
 	"unity":     "unity",
@@ -204,7 +198,7 @@ var wordAliases3 = map[string]string{
 	"loki":      "loki",
 	"prefect":   "prefect",
 	"flux":      "flux",
-	// batch 5, gated half. Real products and system classes whose bare token either is
+	// Gated half. Real products and system classes whose bare token either is
 	// ordinary English (stripe, fastlane, perforce) or rides on non-technical postings
 	// that merely name the system they use: an HR generalist's HRIS, a facilities
 	// planner's CMMS, a retail associate's Bluetooth headset, a gamer-store GPU.
@@ -222,8 +216,7 @@ var wordAliases3 = map[string]string{
 	"bluetooth": "bluetooth",
 	"adas":      "adas",
 
-	// batch 6 (2026-10-25, German market) — protocol and SCADA names the German ATS crawl
-	// asks for in its requirement clauses, with no common German or English reading, and
+	// German market — protocol and SCADA names with no common German or English reading, and
 	// only an automation engineer's posting carries them. The batch's TOOL names (EPLAN,
 	// KNX, iTWO, ArchiCAD, Allplan) are phrases instead — see engineeringPhraseAliases.
 	"wincc":    "scada",
@@ -231,9 +224,7 @@ var wordAliases3 = map[string]string{
 	"ethercat": "ethercat",
 	"canopen":  "canopen",
 
-	// batch 7 (2026-10-25, Dutch market) — mined from the LLM skills of the open Dutch
-	// postings (eures, recruitee, whatjobs-nl) and counted in their descriptions. Coined
-	// product names with no Dutch or English reading, which a developer's or an architect's
+	// Dutch market — coined product names with no Dutch or English reading, which a developer's or an architect's
 	// posting asks for. Pega is a phrase (Spanish/Portuguese "pega"), and TOPdesk too: a
 	// facility clerk is asked for it as often as a service-desk engineer.
 	"mendix":      "mendix",
@@ -247,14 +238,13 @@ var wordAliases3 = map[string]string{
 	"onelake":     "microsoft-fabric",
 	"pegasystems": "pega",
 
-	// batch 8 (2026-10-27, Spanish market) — the Spanish names of practices already
-	// canonical in English, mined from the requirement clauses of the open
-	// Spanish-language technical postings. See engineeringPhraseAliases for the phrases.
+	// Spanish market — the Spanish names of practices already
+	// canonical in English. See engineeringPhraseAliases for the phrases.
 	"microservicios": "microservices",
 	"microservicio":  "microservices",
 	"observabilidad": "observability",
 
-	// batch 9 (2026-10-27, Brazilian and Portuguese market) — the same, in Portuguese,
+	// Brazilian and Portuguese market — the same, in Portuguese,
 	// with and without the accents. See engineeringPhraseAliases for the phrases.
 	"microsserviços":  "microservices",
 	"microsservicos":  "microservices",
@@ -262,7 +252,7 @@ var wordAliases3 = map[string]string{
 	"microsservico":   "microservices",
 	"observabilidade": "observability",
 
-	// batch 10 (2026-10-28, French market) — the same, in French, with and without the
+	// French market — the same, in French, with and without the
 	// accents. See engineeringPhraseAliases for the phrases.
 	"observabilité":     "observability",
 	"observabilite":     "observability",
@@ -272,8 +262,7 @@ var wordAliases3 = map[string]string{
 	"datavisualisation": "data-visualization",
 	"sgbdr":             "rdbms",
 
-	// batch 11 (2026-10-29, Polish market) — the Polish single words, in the cases the
-	// crawl carries. See engineeringPhraseAliases for the phrases.
+	// Polish market — the single words, in the cases postings use. See engineeringPhraseAliases for the phrases.
 	"mikroserwis": "microservices", "mikroserwisy": "microservices",
 	"mikroserwisów": "microservices", "mikroserwisach": "microservices",
 	"mikroserwisami": "microservices", "mikroserwisowa": "microservices",
@@ -287,7 +276,7 @@ var wordAliases3 = map[string]string{
 	"obserwowalność": "observability", "obserwowalności": "observability",
 	"obserwowalnością": "observability",
 
-	// batch 12 (2026-10-29, Croatian, Serbian and Bosnian market), in the cases a posting
+	// Croatian, Serbian and Bosnian market, in the cases a posting
 	// writes them. See engineeringPhraseAliases for the phrases.
 	"mikroservisi":      "microservices",
 	"mikroservisa":      "microservices",

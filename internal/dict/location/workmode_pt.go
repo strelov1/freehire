@@ -3,9 +3,7 @@ package location
 import "strings"
 
 // portugueseWorkModePhrases is the Portuguese counterpart of spanishWorkModePhrases, built
-// from the Brazilian and Portuguese crawl (gupy, solides, quickin, catho, empregos, vagas,
-// inhire, pandape, smartrecruiters, workday, teamtailor, whatjobs-br/pt: 37,608 open
-// postings on 2026-10-27, of which 95% stated no arrangement any reader understood).
+// from the Brazilian and Portuguese crawl.
 //
 // Brazilian postings state the model in a labelled line ("Modelo de trabalho: híbrido",
 // "Modalidade: presencial", "Atuação: 100% remota"), and the Spanish list already reads
@@ -26,11 +24,10 @@ import "strings"
 //     remoto", "auxílio para despesas do trabalho remoto", "possibilitando o trabalho
 //     remoto em alguns dias".
 //   - bare "teletrabalho" and "sistema híbrido": the internship boilerplate "programa de
-//     gestão por teletrabalho ou sistema híbrido de aprendizagem" sits on ~200 empregos
+//     gestão por teletrabalho ou sistema híbrido de aprendizagem" sits on empregos
 //     postings and says the opposite.
 //   - bare "presencial": "entrevista presencial", "treinamento presencial".
-//   - "trabalhe de onde quiser" / "de qualquer lugar": the work-from-anywhere perk shape
-//     (freehire#2696).
+//   - "trabalhe de onde quiser" / "de qualquer lugar": the work-from-anywhere perk shape.
 var portugueseWorkModePhrases = []struct {
 	mode    string
 	phrases []string

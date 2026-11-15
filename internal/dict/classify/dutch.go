@@ -5,25 +5,11 @@ import (
 	"strings"
 )
 
-// Dutch titles, like German ones, name their role in the LAST morpheme of a compound:
-// a servicedesk|medewerker, a wijk|verpleegkundige, an applicatie|beheerder. Where the
-// qualifier is a separate word ("Functioneel Beheerder", "Business Analist") it is a
-// phrase the main tables never learned, because the head is spelled the Dutch way.
-// Measured 2026-10-25 over the 42,176 open Dutch postings of eures, recruitee and
-// whatjobs-nl, 45% resolved no category, and the commonest unresolved words were
-// Dutch heads — medewerker, analist, beheerder, marketeer, adviseur, begeleider.
+// Dutch titles, like German ones, name their role in the LAST morpheme of a compound: a servicedesk|medewerker, a wijk|verpleegkundige, an applicatie|beheerder. Where the qualifier is a separate word ("Functioneel Beheerder", "Business Analist") it is a phrase the main tables never learned, because the head is spelled the Dutch way.
 //
-// The tables follow german.go exactly (matchHeads): an alias written "-beheerder" is
-// a head and matches any word that ends in it, an alias without the dash is a
-// whole-word phrase, a head resolves per word and precedence is table order. They run
-// after the main AND the German tables have resolved nothing, so no existing answer
-// changes — and every head here must therefore also be safe on an English, French or
-// German title that reaches the same fallback ("Bangkok" ends in "-kok", "Stage
-// Manager" is not an intern).
+// The tables follow german.go exactly (matchHeads): an alias written "-beheerder" is a head and matches any word that ends in it, an alias without the dash is a whole-word phrase, a head resolves per word and precedence is table order. They run after the main AND the German tables have resolved nothing, so no existing answer changes, and every head here must also be safe on an English, French or German title that reaches the same fallback ("Bangkok" ends in "-kok", "Stage Manager" is not an intern).
 //
-// A generic head with no category of its own — "medewerker" (employee), "adviseur",
-// "coördinator", "specialist" — is deliberately absent: only the compound or phrase
-// that names the trade resolves ("magazijnmedewerker", "HR adviseur").
+// A generic head with no category of its own ("medewerker" (employee), "adviseur", "coördinator", "specialist") is deliberately absent: only the compound or phrase that names the trade resolves ("magazijnmedewerker", "HR adviseur").
 
 // dutchCategoryTable lists the Dutch category aliases in precedence order.
 var dutchCategoryTable = []aliasEntry{

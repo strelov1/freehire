@@ -8,8 +8,7 @@ import (
 )
 
 // legalSuffixes are the corporate-form words dropped from the tail of a company name before
-// two names are compared. This is the module's ONLY such list — three packages used to keep
-// their own and disagreed, silently, in both directions.
+// two names are compared. This is the module's ONLY such list.
 //
 // Matched as whole trailing WORDS reduced to their ASCII letters, so one entry covers every
 // spelling of a form: "bv" catches "BV", "B.V." and "b.v.". That is also why there is no entry
@@ -19,25 +18,20 @@ import (
 // A TOKEN EARNS ITS PLACE IN THE DATA, not by looking safe. The test is not whether a word
 // seems dangerous but whether stripping it lands on a DIFFERENT existing employer:
 //
-//   - "co" was once excluded for colliding with ordinary words. All 297 catalogue companies
-//     whose slug ends in it are "& Co." forms, and of the 25 largest merges the wider tokens
-//     produce, every one lands on the right employer (Accenture GmbH → Accenture, Goldman
-//     Sachs & Co. → Goldman Sachs).
-//   - "pte" is small — 7 companies — and earns its place on one of them: without it,
-//     "epam systems pte. ltd." keys apart from the EPAM Systems that holds 1,172 open jobs.
-//   - "pvt" is the South-Asian private-company form and nothing else: every catalogue name
-//     ending in it (measured 2026-10-27) is an Indian "Pvt", "Pvt Ltd" or "(Pvt) Ltd"
-//     employer, and before it was listed "Zoho Corporation Pvt" keyed apart from Zoho.
-//   - The European and Latin-American forms on the second line (freehire#3876) were measured
-//     2026-10-29 against the companies an unsuffixed spelling already holds: Microsoft
-//     s.r.o., Accenture Kft., JYSK d.o.o., Airbus S.A.S., Accenture LTDA and Davita SAS each
-//     keyed apart from their own employer. Of the ~1,000 merges they produce, the wrong ones
-//     sampled are the generic-name kind every form risks ("Hit d.d." onto HIT Inc, "SOLVO
-//     S.A.S" onto a Russian Солво), not a word the form shares with ordinary names. Measured
-//     and LEFT OUT for exactly that: "ad" (the Serbian a.d., but "Canopy A&D" reads as it —
-//     the dotted "a.d." alone is a form, in [spelledForms]),
-//     "sc" (Mexican S.C., and the South Carolina at the end of a US place name), "pt"
-//     (Indonesian PT, and physical therapy), "sia" (seven companies, none merged, and a name).
+//   - "co" is listed: every catalogue slug ending in it is an "& Co." form, and the wider
+//     tokens' merges land on the right employer (Accenture GmbH → Accenture, Goldman Sachs &
+//     Co. → Goldman Sachs).
+//   - "pte" is listed: without it "epam systems pte. ltd." keys apart from EPAM Systems.
+//   - "pvt" is the South-Asian private-company form and nothing else; without it "Zoho
+//     Corporation Pvt" keys apart from Zoho.
+//   - The European and Latin-American forms on the second line each keyed apart from their
+//     own employer (Microsoft s.r.o., Accenture Kft., JYSK d.o.o., Airbus S.A.S., Accenture
+//     LTDA, Davita SAS). The wrong merges they produce are the generic-name kind every form
+//     risks ("Hit d.d." onto HIT Inc), not a word the form shares with ordinary names. LEFT
+//     OUT for exactly that: "ad" (the Serbian a.d., but "Canopy A&D" reads as it — the dotted
+//     "a.d." alone is a form, in [spelledForms]), "sc" (Mexican S.C., and the South Carolina
+//     at the end of a US place name), "pt" (Indonesian PT, and physical therapy), "sia" (a
+//     name).
 //     "oo" is the tail of the Polish "Sp. z o.o." — see [formQualifiers] for the rest of it.
 //
 // A form whose letters alone are not distinctive is listed in [spelledForms] instead, matched
@@ -95,9 +89,8 @@ func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, 
 // are ordinary words in their own right. "Private" ends real names — "Julius Baer Private",
 // "William Blair - Private" — and stripping it there would fold a private bank onto its parent;
 // "(P)" alone ends "Milton Roy India (P)", where nothing says it is a form at all. Before a
-// stripped "Limited" neither reading is open: "Acme Private Limited" is the company form
-// 1,671 catalogue companies carry (2026-10-27), and keying it at `acme-private` split every
-// one of them from its own unsuffixed spelling.
+// stripped "Limited" neither reading is open: "Acme Private Limited" is a common company
+// form, and keying it at `acme-private` would split each one from its unsuffixed spelling.
 //
 // The qualified form must itself have been STRIPPED, not merely be the next word, so "Private
 // Bank" and "Private Limited Partners" keep their "Private".
@@ -206,21 +199,19 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 	return Slug(strings.Join(words, " "))
 }
 
-// CloseSpacedForms closes up the Polish "o.o." written with a space inside it, "Sp. z o. o.",
-// which 82 catalogue companies carry (2026-10-29). Split there, it is two words of the letter
+// CloseSpacedForms closes up the Polish "o.o." written with a space inside it, "Sp. z o. o.". Split there, it is two words of the letter
 // "o", and a lone "o" cannot be a form — it would strip the end of any name with an initial.
 // Closing the gap before the walk turns it into the "o.o." [formQualifiers] already reads.
 // It is anchored to the end of the name (past a closing bracket, "Acme (Sp. z o. o.)") and
 // needs the "z" before it, so only that tail moves.
 //
 // The Slovenian "d. o. o." is closed up the same way, into the "d.o.o." [legalSuffixes] reads:
-// 29 catalogue companies end in it (2026-10-30), "Adria Mobil, d. o. o.", one of them with a
-// "k.d." after it ("Bauhaus, d. o. o., k.d."), which the anchor steps over. It needs all
+// "Adria Mobil, d. o. o.", one of them with a "k.d." after it ("Bauhaus, d. o. o., k.d."), which the anchor steps over. It needs all
 // three letters, so a name ending in initials ("D. O.") is not touched, and only at the tail:
 // mid-name the slug renders "d-o-o" either way.
 //
-// So is the Slovenian and Croatian "d. d.", into the "d.d." legalSuffixes reads: 5 catalogue
-// companies end in it (2026-10-30), "Telekom Slovenije, d. d.", "Banka Intesa Sanpaolo d. d.".
+// So is the Slovenian and Croatian "d. d.", into the "d.d." legalSuffixes reads:
+// "Telekom Slovenije, d. d.", "Banka Intesa Sanpaolo d. d.".
 // Two Latin d's are matched, never the Cyrillic "Д", so the Russian initials "ИП КИМ А. Д."
 // keep their letters.
 //
@@ -229,18 +220,16 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // seat as part of the name, so a source that copies it verbatim ends the name with a town. The
 // form is then no longer the last word, and the walk never reaches it. That kept
 // "Krka, tovarna zdravil, d. d., Novo mesto" and "KRKA, d.d., Novo mesto" apart from the Krka
-// the employer's own board files under (freehire#3895). The cut needs the dotted d.d. or
+// the employer's own board files under. The cut needs the dotted d.d. or
 // d.o.o. (spaced or not) and a comma after it, and it takes only a LAST segment made of letters,
 // so "Acme d. d. Ljubljana" stays as it is. With no comma there, nothing says the town is a seat
 // and not part of the name.
 //
 // The cut also needs at least two name words before the form, because a short name freed of
-// its seat lands on whoever else holds that word. Measured 2026-11-04 over the 97 catalogue
-// companies the cut re-keys: of the 7 one-word names that met an existing company, 3 met a
-// different employer ("SCAN, d.o.o., Preddvor" on the US health plan SCAN, "Bass d.o.o., Celje"
-// on the German BASS GmbH, "FIDATO d.o.o., ..." on a Dutch Fidato), and none of the 22 longer
-// names did. Those three names are safe only through the seat that tells them apart. The
-// price is that one employer's short spellings stay apart until someone merges them.
+// its seat lands on whoever else holds that word ("SCAN, d.o.o., Preddvor" on the US health plan SCAN,
+// "Bass d.o.o., Celje" on the German BASS GmbH). Such names are safe only through the seat that
+// tells them apart; the price is that one employer's short spellings stay apart until someone
+// merges them.
 //
 // Every walk over a name's tail calls it before splitting the name into words, for the same
 // reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
@@ -286,10 +275,9 @@ var (
 // word breaks in the key. "Kohl's" is one word and belongs at `kohls`, which is also what a
 // person types; [Slug] alone renders it `kohl-s`.
 //
-// It matters more than it looks. Once the canonical slug is DERIVED from a name rather than
-// chosen among stored slugs, that artefact can no longer lose to the clean sibling spelling —
-// it elected `kohl-s` over `kohls` across 2,939 postings. Both the ASCII and the typographic
-// mark are covered, since sources use either.
+// The canonical slug is derived from a name rather than chosen among stored slugs, so the
+// `kohl-s` artefact could no longer lose to the clean `kohls`. Both the ASCII and the
+// typographic mark are covered.
 func dropApostrophes(name string) string {
 	return strings.NewReplacer("'", "", "\u2019", "", "\u02bc", "").Replace(name)
 }
@@ -299,8 +287,7 @@ func dropApostrophes(name string) string {
 // looking for ("B.V.", "A/S"), so splitting on them would hide the form instead of finding it.
 //
 // Whitespace alone is not enough: "Sun Technologies,Inc." is how aggregators routinely write
-// the name, and 13,730 companies in the catalogue carry a form with no space before it.
-// Splitting here rather than on Slug's output is also what keeps "Foo.com" one word.
+// the name. Splitting here rather than on Slug's output is also what keeps "Foo.com" one word.
 func isWordBreak(r rune) bool {
 	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '/'
 }
@@ -313,15 +300,15 @@ func isWordBreak(r rune) bool {
 // literal PREFIX or SUFFIX of the name — Japanese puts the form on either side
 // ("株式会社リクルート", "トヨタ自動車株式会社") — and both sides key alike.
 //
-// Before this list the form reached [Slug] whole and was romanised as Chinese: 株式会社
-// became "zhu-shi-hui-she", measured 2026-10-26 on ~12k companies (hrmos, herp, engage,
-// mynavi), and one employer written with the form before and after its name keyed as two.
+// Without this list the form reached [Slug] whole and was romanised as Chinese (株式会社
+// became "zhu-shi-hui-she"), and one employer written with the form before and after its name
+// keyed as two.
 //
 // THE FORM IS KEPT AS A MARK, NOT DROPPED, unlike every Latin form — and the data is why. A
 // token earns its place by whether stripping it lands on a DIFFERENT employer, and these fail
 // that test where the Latin ones pass it: once the form is gone, a small Japanese firm's name
 // romanises into a short Latin word some unrelated company already owns. Dropping it put
-// 726 Japanese companies on someone else's key — 株式会社タケダ on Takeda's, 株式会社COMPASS on
+// Japanese companies on someone else's key — 株式会社タケダ on Takeda's, 株式会社COMPASS on
 // Compass's, 株式会社Walk on a Danish ApS. `takeda-kk` keeps the variants of one Japanese
 // employer together and every foreign namesake apart.
 //
@@ -330,7 +317,7 @@ func isWordBreak(r rune) bool {
 //
 // Only the business forms. The non-profit and institutional ones (医療法人, 学校法人,
 // 一般社団法人) are deliberately absent: they compound ("社会医療法人社団") in ways a literal
-// list does not cover, and together they key fewer than 300 companies.
+// list does not cover.
 var japaneseForms = []struct{ form, mark string }{
 	{"株式会社", "kk"}, {"(株)", "kk"}, {"（株）", "kk"}, {"㈱", "kk"},
 	{"有限会社", "yk"}, {"(有)", "yk"}, {"（有）", "yk"}, {"㈲", "yk"},
@@ -393,25 +380,22 @@ func IsLegalForm(word string) bool {
 // as [legalSuffixes] does, would read ordinary words as forms. Two reasons put a form here:
 //
 //   - Its letters are not all ASCII. [letters] keeps ASCII only, so "OÜ" reads "o". Folding
-//     accents inside letters instead was measured and refused (2026-10-29): it transliterates
+//     accents inside letters instead was measured and refused: it transliterates
 //     Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became `ooo` — two employers on one
 //     key — while initials like "С.А." started reading as forms.
 //   - Its bare letters are a word, or another place's abbreviation, while its dotted spelling
-//     is only the form. Measured 2026-10-30 on the names whose tail the rule left alone: the 23
-//     ending in "a.d." are every one a Serbian joint-stock company (Banca Intesa a.d., Erste
-//     Bank a.d.), while "ad" — and "úřad", whose accents letters drops — is an advert or an
-//     office; the 79 ending in "s.p." are Slovenian sole traders, while a bare "SP" ends 55
-//     names, Brazilian ones for São Paulo; the 25 ending in "z.o.o." are Slovenian cooperatives
-//     and Polish "Sp. z.o.o.", while "Zoo" ends 49 zoos. "k.d." (the Lidl companies' "d.o.o.
+//     is only the form. "a.d." is a Serbian joint-stock company (Banca Intesa a.d.,
+//     Erste Bank a.d.), while "ad" — and "úřad", whose accents letters drops — is an advert or
+//     an office; "s.p." is a Slovenian sole trader, while a bare "SP" is often São Paulo;
+//     "z.o.o." is a Slovenian cooperative or Polish "Sp. z.o.o.", while "Zoo" is a zoo. "k.d." (the Lidl companies' "d.o.o.
 //     k.d.") is here and not in legalSuffixes because letters reads the Danish "Kød" as "kd".
-//     Its undotted "KD" is deliberately NOT listed: of the three names it ends, one is "Lidl
-//     Srbija KD" and another the fashion brand "NA-KD", which it would key at `na`. "d.n.o."
+//     Its undotted "KD" is deliberately NOT listed: it also ends the fashion brand "NA-KD",
+//     which it would key at `na`. "d.n.o."
 //     because "dno" is a Slavic word. "e.s.p." is the Colombian public-utility company (empresa
 //     de servicios públicos, "Conhydra S.A E.S.P"), while a bare "ESP" ends names for Spain or
 //     as an acronym ("Hotmart (ESP)", "Millennium IT ESP"). The dotted "S.A.D." is deliberately
-//     NOT listed: of the two names it ends, the Iberian sports company (Villarreal C.F. S.A.D.)
-//     carries no job, and the other is a French home-care service ("Castel S.A.D", Service
-//     d'Aide à Domicile), for which it is part of the name.
+//     NOT listed: it also ends a French home-care service
+//     ("Castel S.A.D", Service d'Aide à Domicile), where it is part of the name.
 //
 // Matching the spelling is also what lets a GLUED compound in: "Sp.zo.o." and "Sp.z.o.o." are
 // one word to the tail walk (a dot is not a word break), and as letters "spzoo", which ends no

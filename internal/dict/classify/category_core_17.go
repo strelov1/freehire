@@ -243,7 +243,7 @@ var coreCategoryTable17 = []aliasEntry{
 	{"skladišta", "logistics"},
 	{"údržby", "skilled_trades"},
 	{"održavanju", "skilled_trades"},
-	// The Croatian and Serbian desks (freehire#3778): the shop, the kitchen, the hotel,
+	// The Croatian and Serbian desks: the shop, the kitchen, the hotel,
 	// the warehouse, in the genitive and locative a title puts them in.
 	{"prodavaonici", "retail"},
 	{"prodavaonice", "retail"},
@@ -280,10 +280,9 @@ var coreCategoryTable17 = []aliasEntry{
 	{"kontakt centra", "support"},
 	{"pozivnom centru", "support"},
 
-	// The bare programmer and developer nouns are software in each of these languages,
-	// the way "программист" is — but only once nothing else in the title has spoken.
-	// Declared LAST, so "CNC operater - programer" is the machine operator, "Tehnolog -
-	// programer" the technologist, and only a title that names nothing else is software.
+	// The bare programmer and developer nouns are software in each of these languages, but only
+	// once nothing else in the title has spoken. Declared LAST, so "CNC operater - programer" is
+	// the machine operator and "Tehnolog - programer" the technologist.
 	{"programista", "software_engineering"},
 	{"programistka", "software_engineering"},
 	{"programer", "software_engineering"},
@@ -329,20 +328,15 @@ var coreCategoryTable17 = []aliasEntry{
 	{"военнослужащий", categoryNone},
 	{"стрелок", "public_safety"},
 
-	// The bare "support", LAST: the weakest evidence in the table. It names a desk
-	// as often as it names nothing at all — "Associate Dentist – Full Support",
-	// "Mortgage Loan Officer - Purchase-Focused, Full Support", "Autism Support
-	// Specialist (RBT)", "Administrative Support Specialist" — so it only files a
-	// title that no alias above has placed. While it sat beside "customer service"
-	// it outranked every profession declared after it.
+	// The bare "support", LAST: the weakest evidence in the table. It names a desk as often as
+	// nothing ("Associate Dentist – Full Support", "Autism Support Specialist (RBT)"), so it
+	// only files a title no alias above has placed; beside "customer service" it outranked
+	// every profession declared after it.
 	{"support", "support"},
 
-	// English titles filed by their twin, after the bare "support" so no title it
-	// placed moves: the HR assistant ("Human Resources Assistant"), the office
-	// administrator ("Office Assistant"), the finance and purchasing specialists
-	// ("Accounting/Procurement Specialist"), the supply and demand planners ("Supply
-	// Chain Planner"), the Google Ads specialist ("PPC Specialist"), the
-	// physiotherapist ("Physical Therapist") and the midwife.
+	// English titles filed by their twin, after the bare "support" so no title it placed moves:
+	// HR assistant, office administrator, finance and purchasing specialists, supply and demand
+	// planners, PPC specialist, physiotherapist, midwife.
 	{"hr assistant", "hr"},
 	{"office administrator", "administration"},
 	{"finance specialist", "finance"},

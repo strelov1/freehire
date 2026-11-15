@@ -5,9 +5,8 @@ var wordAliases1 = map[string]string{
 	// Occupational safety: the regulators, the standards and the EHS platforms. Every
 	// one of these is a coined word or an initialism with no English-word collision, so
 	// they resolve bare — unlike CSP/CIH/CHMM/BBS, which are category-scoped below, and
-	// unlike ASP and DOT, which are not admitted in any form. That last exclusion was
-	// measured rather than reasoned: the probe that sized this vocabulary reported ASP in
-	// 17% of postings, and it was matching the prefix of "aspects" and "aspiring".
+	// unlike ASP and DOT, which are not admitted in any form (ASP matched the prefix of
+	// "aspects" and "aspiring").
 	"osha":        "osha", // 27% of the mined corpus
 	"epa":         "epa",  // 11%
 	"nfpa":        "nfpa", // 5%
@@ -322,9 +321,7 @@ var wordAliases1 = map[string]string{
 	"oracle":     "oracle",
 	"odoo":       "odoo",
 
-	// LLM-mined gaps: high-frequency tokens the enrichment discovery signal emitted
-	// (jobs.enrichment->skills) that the seed list lacked. Only distinctive tokens are
-	// bare aliases here; ambiguous ones (plc↔"… plc", temporal↔the adjective,
+	// LLM-mined gaps. Only distinctive tokens are bare aliases here; ambiguous ones (plc↔"… plc", temporal↔the adjective,
 	// embedded↔"embedded in", dax↔the index) are deliberately omitted, and R stays a
 	// phrase-only route (see below).
 	"github":        "github",
@@ -369,7 +366,7 @@ var wordAliases1 = map[string]string{
 	//
 	// Two products are absent because their token belongs to someone else: "framer" is
 	// the carpentry trade AND the Framer Motion React library, and "spline" is the
-	// splined shaft of the very mechanical population this dictionary now describes —
+	// splined shaft of mechanical postings —
 	// both would tag a posting with a design tool it never mentions. "creo" is Spanish
 	// for "I think", so it resolves only through the "ptc creo"/"creo parametric" phrase.
 	"illustrator": "illustrator",

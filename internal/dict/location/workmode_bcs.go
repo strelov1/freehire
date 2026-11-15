@@ -3,9 +3,7 @@ package location
 import "strings"
 
 // bcsWorkModePhrases is the Croatian, Serbian and Bosnian counterpart of
-// spanishWorkModePhrases, built from the open postings placed in hr/rs/ba/me
-// (talentlyft, eures, zohorecruit, smartrecruiters, teamtailor: ~1,600 BCS-language
-// postings on 2026-10-29, 0.1% of which a description reader resolved; 6.9% after).
+// spanishWorkModePhrases, built from open postings placed in hr/rs/ba/me.
 //
 // BCS lists home working as a BENEFIT, as German does: "mogućnost rada od kuće",
 // "mogućnost povremenog rada od kuće", "mogućnost rada na daljinu", "hibridni rad i

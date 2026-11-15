@@ -21,46 +21,38 @@ import (
 // the name the ATS states for exactly that board, so AcceptPlaceholder needs no confidence
 // match — the same argument join's id lookup makes in Accept.
 //
-// Measured 2026-10-23 on 15 random placeholder boards per provider:
-//   - paylocity (2,069 boards): the listing page titles itself "{Name} - Job Opportunities", 15/15.
-//   - ukgready (774): format-settings, which the adapter already reads for the currency, carries
-//     company.name, 15/15.
-//   - oracle (746): the candidate-experience site's og:site_name is whatever the employer named
-//     the site — usually the employer, often with a careers tail, sometimes only its purpose
-//     ("Student Casual"). ExtractOracleSiteName keeps 11/15 and refuses the rest. Oracle's own
-//     recruitingCESites API was tried first and is worse: "Candidate Experience site" or nothing.
+// What each resolver reads, and why:
+//   - paylocity: the listing page titles itself "{Name} - Job Opportunities".
+//   - ukgready: format-settings, which the adapter already reads for the currency, carries
+//     company.name.
+//   - oracle: the candidate-experience site's og:site_name is whatever the employer named the
+//     site, sometimes only its purpose ("Student Casual"); ExtractOracleSiteName refuses those.
+//     The recruitingCESites API is worse: "Candidate Experience site" or nothing.
+//   - dayforce: the careers page's Next.js data names the tenant as
+//     candidateCorrespondenceClientName; ExtractDayforceClientName refuses a department
+//     ("Human Resources") or nothing.
+//   - ukg: the job board's header logo alt text carries the brand;
+//     ExtractUKGBrandName refuses a missing logo or the unconfigured "Default Brand".
+//   - taleo: the career section's footer copyright names the employer ("© 2018 by Hyatt
+//     Corporation"), else the header logo's alt text ("Marcus Careers").
+//     ExtractTaleoCopyright is preferred: a legal line, where alt text is whatever a designer
+//     typed. The section's <title> is "Job Search" on every board.
+//   - hiringroom: the portal titles itself with the employer's name on both layouts
+//     (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as is.
+//   - zohorecruit: the careers page's og:site_name is the employer, while its <title> is free
+//     text the tenant typed ("Jobs at Careers"). A host-shaped name would also keep the
+//     aggregator suppression from pairing a posting with its copy, since
+//     "scrumconnect.zohorecruit.eu" and "Scrumconnect Limited" fold to different company slugs.
+//   - successfactors, teamtailor: the host titles its root page "Jobs at {Name}", or states
+//     the name in og:site_name on /jobs.
 //
-// Measured 2026-10-24 on 15 more each:
-//   - dayforce (486): the careers page's Next.js data names the tenant as
-//     candidateCorrespondenceClientName, the sender of the candidate's mail, 13/15 — the others
-//     named a department ("Human Resources") or nothing; ExtractDayforceClientName refuses those.
-//   - ukg (1,152): the job board's header logo carries the brand as its alt text, 11/15 — the
-//     others had no logo or the unconfigured "Default Brand"; ExtractUKGBrandName refuses those.
-//   - taleo (226, every one swept): the career section's footer copyright names the employer on
-//     83 ("© 2018 by Hyatt Corporation"), and the header logo's alt text on 59 more or the same
-//     ones ("Marcus Careers") — 113 boards between them. ExtractTaleoCopyright is preferred: a
-//     legal line, where the alt text is whatever a designer typed ("The black version of the
-//     Stantec logo"). The section's <title> is "Job Search" on every one.
+// These resolvers only run for a board whose stored company exactly equals its board id
+// (ListPlaceholderCompanyBoards). The query excludes SuccessFactors hubs because their root
+// title names the hub, not its tenants.
 //
-// Measured 2026-10-28 on hiringroom's placeholder boards (the Argentina harvest wrote 352 tenant
-// labels as their company): the portal titles itself with the employer's name on both layouts
-// (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as it is.
-//
-// Measured 2026-10-28 on zohorecruit (693 of 4,708 live boards carried their careers host as the
-// company): the careers page's og:site_name is the employer, 20/20 sampled, while its <title> is
-// free text the tenant typed ("Jobs at Careers"). The host-shaped name also kept the aggregator
-// suppression from pairing a posting with its WhatJobs copy, since "scrumconnect.zohorecruit.eu"
-// and "Scrumconnect Limited" fold to different company slugs.
-//
-// Live-verified 2026-11-02 against the two examples in issue #4033: the SuccessFactors host
-// jobs.volvogroup.com titles its root page "Jobs at Volvo Group"; the Teamtailor host
-// jobs.bookbeat.com states "BookBeat" in og:site_name on /jobs. These resolvers only run for a
-// board whose stored company exactly equals its board id (ListPlaceholderCompanyBoards). The query
-// excludes SuccessFactors hubs because their root title names the hub, not its tenants.
-//
-// Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
-// detail's hiringOrganization is a per-posting legal entity — Dover's postings name
-// "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
+// Deliberately absent: adp (neither the listing nor the requisition detail names the client),
+// and workday (the detail's hiringOrganization is a per-posting legal entity, so it would split
+// one employer per subsidiary).
 func NewPlaceholderRegistry(http httpGetter) Registry {
 	return Registry{
 		"paylocity": newTitleResolver(http, "https://recruiting.paylocity.com/recruiting/jobs/All/%s", func(title string) string {
@@ -309,7 +301,7 @@ func (r oracleResolver) Name(ctx context.Context, board string) (string, error) 
 }
 
 // oracleSiteLeads, oracleSiteMarkers and oracleSiteTails are what an Oracle site name wraps
-// around the employer, measured on every site name the prod runs met (677 distinct, 2026-10-24):
+// around the employer:
 // a lead-in ("Working at Signature Aviation", "Jobs @ Carmeuse"), a marker after which nothing
 // names the employer any more ("EXL Talent Acquisition Team", "Mayo Career Site US", "Dollar
 // General External Career Site"), or a tail ("Mountaire Jobs", "Chubb External"). A marker cuts

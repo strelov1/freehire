@@ -14,12 +14,10 @@ package skillvec
 // Dimensions is the declared width of a skill vector — deliberately wider than the
 // dictionary so newly mined skills get positions without a re-declaration.
 //
-// It is not free. Meilisearch stores the declared width whether or not the tail is
-// occupied, so at the live catalogue's scale each 256 dimensions costs roughly
-// 2.5 GB of index. Widening it later requires a full rebuild, and until that rebuild
-// finishes the index rejects every document carrying the new width. Widened from 1024
-// in 2026-10, when one enrichment-mining batch (142 canonicals) outgrew the 98 free
-// positions left.
+// It is not free: Meilisearch stores the declared width whether or not the tail is
+// occupied (each 256 dimensions costs gigabytes of index at catalogue scale). Widening
+// it later requires a full rebuild, and until that finishes the index rejects every
+// document carrying the new width.
 const Dimensions = 1280
 
 // positions indexes the registry for lookup.

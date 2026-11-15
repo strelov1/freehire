@@ -68,11 +68,10 @@ func main() {
 // readAssigned parses the positions already assigned, in order. A MISSING file is the
 // first run and yields none; every other failure is fatal.
 //
-// The distinction is the whole safety of this generator. If an unreadable — but
-// writable — registry were treated as a first run, the rewrite would reassign every
-// position in canonical order, silently invalidating every vector already stored in
-// the search index. Nothing would error; the feed would just start ranking wrongly. A
-// file that exists but parses to no positions is corruption for the same reason.
+// The distinction is the whole safety of this generator: treating an unreadable but
+// writable registry as a first run would reassign every position in canonical order,
+// silently invalidating every stored vector. A file that exists but parses to no
+// positions is corruption for the same reason.
 func readAssigned(path string) ([]string, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {

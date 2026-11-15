@@ -8,15 +8,12 @@ import (
 )
 
 // smallPlacesTSV lists the GeoNames places below the main city table's population floor
-// (cmd/gen-cities' statingPopulation), generated beside cities1000.tsv. Columns:
-// canonical-name, ISO country code, '|'-joined lowercase aliases (the place's own name and
-// ASCII name only).
+// (cmd/gen-cities' statingPopulation), generated beside cities1000.tsv. Columns: canonical-
+// name, ISO country code, '|'-joined lowercase aliases (the place's own name and ASCII name
+// only).
 //
-// It exists for the German-speaking crawl, where most postings name a town of a few
-// thousand people beside its Land: measured 2026-10-25 over 124k open postings from seven
-// German ATSs, 29.5k carried no city, and 18k of those named a place in this table next to
-// a Land or country that already placed them. It is not German-specific — a small town
-// beside its region reads the same way anywhere.
+// It exists for the German-speaking crawl, where most postings name a town of a few thousand
+// people beside its Land. It is not German-specific.
 //
 //go:embed smallplaces.tsv
 var smallPlacesTSV string
@@ -79,8 +76,7 @@ func (p pendingCity) add(country, name string) {
 
 // smallPlaceWithheld are small-place names that a German location line uses as the
 // QUALIFIER after a slash rather than as a place: "Lauenburg/Elbe" (the river; Elbe is
-// also a village in Lower Saxony) and "Lunz/See" (the lake; See is a village in Tyrol).
-// Found by hand-checking what the table newly named over the German crawl. The other
+// also a village in Lower Saxony) and "Lunz/See" (the lake; See is a village in Tyrol). The other
 // river names a slash carries there ("Spree", "Oder", "Erzgebirge") name no small place,
 // and the real towns that share a river's name ("Pegnitz", "Regen", "Lech") stay.
 var smallPlaceWithheld = map[string]bool{"elbe": true, "see": true}

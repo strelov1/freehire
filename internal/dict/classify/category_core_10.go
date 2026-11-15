@@ -20,13 +20,11 @@ var coreCategoryTable10 = []aliasEntry{
 	{"computer lab technician", "it_support"},
 	{"computer laboratory technician", "it_support"},
 	{"computer lab assistant", "it_support"},
-	// There is deliberately NO bare "scientist" and NO bare "research associate".
-	// "Research Scientist", "Applied Scientist", "Computer Scientist" and "Principal
-	// NLP Scientist" are software and machine-learning roles as often as laboratory
-	// ones, and "Research Associate" is an equity analyst at a bank; none of them
-	// resolves a category today and a bare alias would file them all as lab science.
-	// Only spellings that name the laboratory or the discipline are here. A "QA Lab
-	// Technician" never reaches them: "qa" resolves far above.
+	// There is deliberately NO bare "scientist" and NO bare "research associate": "Research
+	// Scientist", "Applied Scientist" and "Computer Scientist" are software and ML roles as often
+	// as lab ones, and "Research Associate" is an equity analyst at a bank. Only spellings that
+	// name the laboratory or the discipline are here. A "QA Lab Technician" never reaches them:
+	// "qa" resolves far above.
 	{"lab technician", "science"},
 	{"laboratory technician", "science"},
 	{"lab tech", "science"},
@@ -160,17 +158,14 @@ var coreCategoryTable10 = []aliasEntry{
 
 	// MANAGERS THAT NAME THEIR CRAFT, and the second pass over the uncategorised tail.
 	//
-	// There is no `management` category any more (see the note where the bare "manager"
-	// fall-through used to be). A manager title resolves the craft it manages — a
-	// Restaurant Manager is hospitality, a Plant Manager manufacturing, a Tax Manager
-	// finance — and the `role_type` facet answers whether it manages people. The generic
-	// titles that name no craft ("General Manager", "Assistant Manager", "District
-	// Manager") are deliberately NOT here: no category is true for them, and roletype
-	// marks them people managers, which is what keeps them searchable.
+	// There is no `management` category. A manager title resolves the craft it manages
+	// (Restaurant Manager is hospitality, Tax Manager finance) and the `role_type` facet says
+	// whether it manages people. Generic titles naming no craft ("General Manager", "District
+	// Manager") are NOT here: no category is true for them, and roletype marks them people
+	// managers, which keeps them searchable.
 	//
-	// Declared at the very end, like every block since the IT waves: a title any alias
-	// above resolves keeps its category. Every spelling was measured against a 2% sample
-	// of the open catalogue before it was written down.
+	// Declared at the very end, like every block since the IT waves, so a title any alias above
+	// resolves keeps its category.
 	//
 	// Hospitality.
 	{"restaurant manager", "hospitality"},
