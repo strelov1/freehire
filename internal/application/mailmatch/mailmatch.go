@@ -17,19 +17,13 @@ import (
 // is expected ("Thank you for applying to Greenhouse!", "Your Workday
 // Application"). They are not employers and must never be treated as a company.
 //
-// Blocking a name here is deliberately lossy: some of these brands are also real
-// employers people apply to, and their own mail will no longer auto-link. That
-// asymmetry is the point. A missed auto-link degrades to an LLM suggestion the
-// caller confirms — a moment's work. A wrong auto-link silently hands one
-// application everyone else's mail, and the damage compounds: on a live mailbox
-// `workable` was absent from this list, and one catalog company named Workable
-// collected 23 acknowledgements meant for 23 other employers, leaving it
-// permanently unable to look silent.
+// Blocking a name here is deliberately lossy: a brand that is also a real employer
+// loses auto-link for its own mail. That is the cheaper error: a missed auto-link
+// degrades to an LLM suggestion the caller confirms, while a wrong one silently hands
+// one application everyone else's mail.
 //
-// The list is sender *display names*, not the provider slugs in sources/ — a new
-// board file does not automatically belong here, and a brand that never appears
-// as a display name does not need to be. When adding an ATS board, ask whether
-// its relay signs mail with its own brand.
+// The list is sender display names, not provider slugs: when adding an ATS board, ask
+// whether its relay signs mail with its own brand.
 var atsPseudoNames = map[string]bool{
 	"greenhouse": true, "workday": true, "myworkday": true, "lever": true,
 	"ashby": true, "smartrecruiters": true, "teamtailor": true, "recruitee": true,
@@ -54,15 +48,11 @@ var nameSuffixes = []string{
 
 // stripLegalForm drops one trailing corporate form from an already-lowercased company name.
 //
-// The vocabulary is normalize's, not this package's. Mail matching exists to reach a company
-// the catalogue holds, and the catalogue keys companies by normalize.CompanySlug — so a form
-// this stripped and that did not (or the reverse) produced a name matching nothing, and a mail
-// that matches no company links to no application without saying so.
-// It repeats, and it splits on punctuation as well as space, for the two shapes senders
-// actually use: "Acme GmbH & Co. KG" needs three passes over an ampersand, and
-// "Sun Technologies,Inc." attaches the form with no space at all — 13,730 catalogue
-// companies are written that way. A name of one word is never stripped, so a sender called
-// "Limited" survives.
+// The vocabulary is normalize's, so names agree with the catalogue's normalize.CompanySlug
+// keys; a divergence would match nothing and link no application silently.
+// It repeats and splits on punctuation as well as space: "Acme GmbH & Co. KG" needs
+// three passes, and "Sun Technologies,Inc." has no space. A one-word name is never
+// stripped, so a sender called "Limited" survives.
 func stripLegalForm(s string) string {
 	s = normalize.CloseSpacedForms(s)
 	next := ""

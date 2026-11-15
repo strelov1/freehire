@@ -1,28 +1,26 @@
-// Package appevent holds the application-event vocabulary shared by the paths that
-// record into the ledger — internal/application/inbox (which owns the mail reconcile both the
-// interactive paths and cmd/classify-mail call) and internal/application/jobtracking — and by the
-// aggregates that read it.
+// Package appevent holds the application-event vocabulary shared by the paths that record
+// into the ledger (internal/application/inbox, internal/application/jobtracking, and
+// cmd/classify-mail through the mail reconcile) and by the aggregates that read it.
 //
-// It is vocabulary and rules only, in the shape internal/application/userjob uses for stages: no
-// database access, so every caller can validate before it writes and the rules are
-// testable without a pool.
+// Vocabulary and rules only, no database access, so callers validate before they write and
+// the rules test without a pool.
 package appevent
 
 import "fmt"
 
-// The event kinds. This vocabulary is ours and narrow, and is meant to stay still: it
-// says WHAT happened, while Signal says what was in it. Signal draws on the mailclassify
-// status vocabulary, which has grown before and will again — folding the two together
-// would make every classifier addition a change to an append-only table.
+// The event kinds. This vocabulary is narrow and meant to stay still: it says WHAT
+// happened, while Signal says what was in it. Signal follows the growing mailclassify
+// vocabulary; folding the two together would make every classifier addition a change to an
+// append-only table.
 const (
 	KindApplied       = "applied"
 	KindEmployerReply = "employer_reply"
 	KindFollowUpSent  = "follow_up_sent"
 	KindStageSet      = "stage_set"
-	// KindInterviewScheduled records that a meeting was arranged, dated by when we
-	// observed the arrangement rather than by when the meeting is. The meeting's own
-	// time lives in application_interviews: it moves and is called off, and occurred_at
-	// here means "when this happened", which a future date would make untrue.
+	// KindInterviewScheduled records that a meeting was arranged, dated by when we observed
+	// the arrangement. The meeting's own time lives in
+	// application_interviews: it moves and is called off, and occurred_at means "when this
+	// happened", which a future date would falsify.
 	KindInterviewScheduled = "interview_scheduled"
 )
 
@@ -37,19 +35,15 @@ const (
 	SourceMailExternal = "mail_external"
 	SourceUser         = "user"
 	SourceAssistant    = "assistant"
-	// SourceCalendarGoogle is a fact read out of the candidate's own calendar. Trusted
-	// for day math like the mail sources and for the same reason: the date was set by an
-	// organiser and observed by us, not typed by the candidate when they got round to it.
+	// SourceCalendarGoogle is a fact read out of the candidate's own calendar. Trusted for day
+	// math like the mail sources: the date was set by an organiser and observed by us.
 	SourceCalendarGoogle = "calendar_google"
-	// SourceSystem is a stage change the platform made on the candidate's behalf, not one
-	// anybody typed or that mail/calendar evidence dated — e.g. internal/engage/nudge auto-expiring
-	// an application whose listing closed. Not trusted for day math: it records when we
-	// noticed, not an employer-side timing fact.
+	// SourceSystem is a stage change the platform made on the candidate's behalf (e.g.
+	// internal/engage/nudge auto-expiring an application whose listing closed). Not trusted for
+	// day math: it records when we noticed, not an employer-side timing fact.
 	SourceSystem = "system"
-	// SourceAutoApply is cmd/auto-apply's own successful, unattended submission —
-	// distinct from SourceSystem so that "auto-apply submitted this" is a stated
-	// contract a reader can filter on, not an accident of SourceSystem happening to be
-	// paired with KindApplied nowhere else today.
+	// SourceAutoApply is cmd/auto-apply's own successful, unattended submission. It is distinct
+	// from SourceSystem so readers can filter on it.
 	SourceAutoApply = "auto_apply"
 	// SourceEmployer is a stage the employer set in their own pipeline for an application
 	// sent on freehire (internal/ingest/directapply), mirrored onto the candidate's record.
@@ -66,23 +60,16 @@ var Sources = []string{
 	SourceCalendarGoogle, SourceSystem, SourceAutoApply, SourceEmployer,
 }
 
-// MailSources is the mail three on their own — every source SourceForMail can return.
-//
-// It exists because a reader has to be able to ask "was this event read out of a message,
-// or set by somebody". LastStageSetAt does: it means "when the stage was last set other
-// than by mail", and since the mail path records its own auto-advances that is a predicate
-// rather than a description. Spelling the three into a query would put the vocabulary in
-// two places, which is the failure the pin test next door already guards against.
+// MailSources is the three mail sources on their own: every source SourceForMail can
+// return. LastStageSetAt needs the set to mean "set other than by mail"; spelling the three
+// into a query would put the vocabulary in two places, which the pin test guards against.
 var MailSources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal}
 
-// TrustedForDayMath reports whether events from this source may enter timing
-// calculations.
+// TrustedForDayMath reports whether events from this source may enter timing calculations.
 //
 // Only the mail, calendar and employer sources carry a timestamp somebody other than the
-// candidate set. A manually-recorded stage dates from when the candidate got around to updating
-// their board, so a funnel built on it would measure diligence and report it as market
-// behaviour. Unknown sources are untrusted: unknown provenance must never read as an
-// observation.
+// candidate set. A manually recorded stage dates from when the candidate updated their board,
+// so a funnel built on it would measure diligence. Unknown sources are untrusted.
 func TrustedForDayMath(source string) bool {
 	switch source {
 	case SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceCalendarGoogle, SourceEmployer:
@@ -92,11 +79,9 @@ func TrustedForDayMath(source string) bool {
 	}
 }
 
-// SourceForMail maps an emails.source value (see inbox.Sources) to the event source.
-//
-// It errors rather than defaulting, because every default here is a trusted one: an
-// unrecognised store silently mapped to a mail source would be admitted to timings on the
-// strength of a typo.
+// SourceForMail maps an emails.source value (see inbox.Sources) to the event source. It
+// errors rather than defaulting, because every default here is a trusted one: an
+// unrecognised store mapped to a mail source would be admitted to timings on a typo.
 func SourceForMail(mailSource string) (string, error) {
 	switch mailSource {
 	case "gmail":

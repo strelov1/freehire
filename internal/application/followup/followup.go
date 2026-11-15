@@ -1,13 +1,11 @@
 // Package followup assembles the message a candidate sends when an application has gone quiet.
 //
-// It is deterministic and I/O-free (the shape internal/candidate/atscheck and internal/job/verdict use): the same
-// application drafts the same text, no model is called, and nothing here can invent a claim about
-// the candidate. The one non-generic sentence is supplied by the caller from the cached fit
-// analysis, which derived it from the candidate's own CV; when there is none, the line is omitted
-// rather than filled.
+// It is deterministic and I/O-free: the same application drafts the same text, no model is
+// called, and nothing here can invent a claim about the candidate. The one non-generic sentence
+// comes from the cached fit analysis (derived from the candidate's own CV); when there is none,
+// the line is omitted.
 //
-// The tone rules are the product and are pinned by tests: no apology, no "just checking in", and a
-// concrete question, because a chase nobody can answer is a nudge that reads as noise.
+// The tone rules are pinned by tests: no apology, no "just checking in", and a concrete question.
 package followup
 
 import "strings"
@@ -44,8 +42,7 @@ func Draft(in Input) Message {
 
 	return Message{
 		Subject: "Following up: " + in.Role + " application",
-		// Joining a slice rather than appending to a buffer is what keeps an omitted strength from
-		// leaving a blank paragraph behind.
+		// A slice join keeps an omitted strength from leaving a blank paragraph.
 		Body: strings.Join(paragraphs, "\n\n"),
 	}
 }
@@ -57,8 +54,8 @@ func greeting(name string) string {
 	return "Hello,"
 }
 
-// opening states what happened and how long ago. A candidate past the application stage has spoken
-// to somebody, and saying "I applied" there would understate the relationship.
+// opening states what happened and how long ago. Past the application stage it must not say
+// "I applied", which would understate the relationship.
 func opening(in Input) string {
 	where := "the " + in.Role + " role"
 	if c := strings.TrimSpace(in.Company); c != "" {
@@ -70,8 +67,8 @@ func opening(in Input) string {
 	return "We last spoke about " + where + " " + elapsed(in.DaysSilent) + " ago, and I have not heard since."
 }
 
-// ask matches the question to where the candidate actually is. Asking whether the role is still
-// open after an interview reads as if they do not know they are already in the process.
+// ask matches the question to the stage: asking whether the role is still open after an
+// interview would read as not knowing they are in the process.
 func ask(stage string) string {
 	if stage == "" || stage == "applied" {
 		return "Is the role still open, and what is the timeline for the next step?"
@@ -79,9 +76,8 @@ func ask(stage string) string {
 	return "Where does my application stand, and what are the next steps?"
 }
 
-// elapsed renders the silence in the units a person would use out loud: weeks up to about six, then
-// months. The exact day count lives on the board; a message that says "24 days" reads like a system
-// wrote it.
+// elapsed renders the silence as a person would say it: weeks up to about six, then months,
+// never an exact day count.
 func elapsed(days int) string {
 	if days >= 45 {
 		return plural((days+15)/30, "month")

@@ -13,11 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
-// SESSource is the production InboundSource: SES receives mail for the domain,
-// stores the raw MIME in S3, and notifies SNS → SQS. Receive long-polls SQS,
-// reads the S3 object each notification points at, and yields it; Ack deletes the
-// SQS message. It is a thin AWS adapter — the parse/resolve/store logic it feeds
-// is covered by the worker tests over the fake source.
+// SESSource is the production InboundSource: SES stores the raw MIME in S3 and
+// notifies SNS → SQS. Receive long-polls SQS and fetches each S3 object; Ack
+// deletes the SQS message.
 type SESSource struct {
 	sqs      *sqs.Client
 	s3       *s3.Client
@@ -50,17 +48,12 @@ type snsEnvelope struct {
 // envelope recipients (receipt.recipients) and where SES stored the raw MIME
 // (receipt.action).
 //
-// It deliberately does not decode mail.destination, the OTHER recipient list SES
-// publishes. That one is "a complete list of all recipient addresses (including To:
-// and CC: recipients) from the MIME headers", while receipt.recipients is "the
-// envelope RCPT TO addresses that were matched by the active receipt rule" — AWS's
-// own words, and it says outright that the two may differ. They differ for every
-// forwarded message, because a Sieve `redirect` rewrites the envelope and leaves the
-// headers naming the mailbox that forwarded: reading the headers dropped such mail
-// entirely (freehire#3027). The header list is also the SENDER's to write, so
-// resolving a mailbox from it let anyone deliver a message into another user's inbox
-// by naming them in To:. Not decoding the field is the guard — a field that is not
-// there cannot be read back by mistake.
+// It deliberately does not decode mail.destination, the recipient list taken from
+// the MIME headers. Forwarded mail (a Sieve `redirect`) rewrites the envelope but
+// leaves the headers naming the forwarding mailbox, and the headers are the SENDER's
+// to write, so resolving a mailbox from them would let anyone deliver into another
+// user's inbox by naming them in To:. A field that is not decoded cannot be read
+// back by mistake.
 type sesNotification struct {
 	Receipt struct {
 		Recipients []string `json:"recipients"`
@@ -100,10 +93,8 @@ func (s *SESSource) Receive(ctx context.Context) ([]Inbound, error) {
 		raw, err := s.fetch(ctx, bucket, note.Receipt.Action.ObjectKey)
 		switch {
 		case errors.Is(err, errMessageTooLarge):
-			// Not retryable, so it is acked like an undecodable notification above: the
-			// object is the same size on every redelivery, and leaving it un-acked would
-			// cycle it through the queue — re-downloading it each time — until the
-			// queue's own redrive policy noticed. The raw MIME stays in S3.
+			// Not retryable, so acked like an undecodable notification: the object is
+			// the same size on every redelivery. The raw MIME stays in S3.
 			log.Printf("mailingest: s3 object %s dropped: %v", note.Receipt.Action.ObjectKey, err)
 			batch = append(batch, Inbound{AckHandle: *m.ReceiptHandle})
 			continue
@@ -141,33 +132,24 @@ func (s *SESSource) fetch(ctx context.Context, bucket, key string) ([]byte, erro
 	return readBounded(obj.Body, maxRawMessage)
 }
 
-// maxRawMessage caps one raw MIME message held in memory. Receive pulls ten notifications
-// at a time and this used to be a bare io.ReadAll, before the recipient is even resolved,
-// in the one Restart=always daemon on the host with no MemoryMax — so a batch of large
-// objects was bounded by nothing at all.
-//
-// The figure is SES's own inbound ceiling: SES refuses to accept a message larger than
-// this, so nothing this bound rejects was ever deliverable mail. It is a guard against a
-// corrupt or planted object in the bucket, not a policy about email size.
+// maxRawMessage caps one raw MIME message held in memory (Receive pulls ten at a
+// time, before the recipient is resolved). It is SES's own inbound ceiling, so it
+// only rejects a corrupt or planted object, never deliverable mail.
 const maxRawMessage = 40 << 20 // 40 MiB
 
-// errMessageTooLarge marks an object over maxRawMessage. It is an error rather than a
-// truncation on purpose: a half-read MIME message parses — the headers are at the front —
-// and would be stored as though it were whole, which is a worse outcome than not storing
-// it, and an invisible one.
+// errMessageTooLarge marks an object over maxRawMessage. It is an error, not a
+// truncation: a half-read MIME message still parses and would be stored as whole.
 var errMessageTooLarge = errors.New("mailingest: raw message exceeds the size limit")
 
-// readBounded reads up to max bytes from r, refusing anything longer. It reads max+1 so
-// "exactly at the limit" is distinguishable from "over it" without trusting a
-// Content-Length the object may not carry.
+// readBounded reads up to max bytes from r, refusing anything longer. It reads max+1
+// to tell "at the limit" from "over it" without trusting a Content-Length.
 func readBounded(r io.Reader, max int64) ([]byte, error) {
 	b, err := io.ReadAll(io.LimitReader(r, max+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(b)) > max {
-		// The real size is unknown by construction — reading it is the thing being
-		// refused — so the message names the limit that was passed, not the object.
+		// The real size is unknown, so the message names the limit.
 		return nil, fmt.Errorf("%w: over %d bytes", errMessageTooLarge, max)
 	}
 	return b, nil

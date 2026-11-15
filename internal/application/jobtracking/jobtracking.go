@@ -57,10 +57,9 @@ func ParseFilter(s string) (Filter, error) {
 	return "", ErrInvalidFilter
 }
 
-// CardDetail says how much of each row's job card a listing carries. The saved and
-// history lists render the full card (blurb, skills, collections); the Kanban board
-// renders only the card's identity and its tag row, so it asks for CardCompact and is
-// spared the blurb's description read and the bytes of what it never draws.
+// CardDetail says how much of each row's job card a listing carries. The Kanban
+// board draws only identity and tags, so it asks for CardCompact and skips the
+// description read.
 type CardDetail int
 
 const (
@@ -104,9 +103,7 @@ type TrackedJob struct {
 	// AddedToBoardAt is the earliest stored save or application-record creation timestamp.
 	// It stays independent of passive views and the candidate's editable application date.
 	AddedToBoardAt *time.Time
-	// ID addresses the row. The board has always been a list of applications and only
-	// borrowed the posting's slug because one was always at hand; an application whose
-	// posting was pruned has none to borrow, so the row carries its own.
+	// ID addresses the row; an application whose posting was pruned has no slug to borrow.
 	ID string
 	// CompanySlug and RoleTitle come from the application record and are present on
 	// every row, so a card can be rendered without reaching into Job.
@@ -119,29 +116,21 @@ type TrackedJob struct {
 	// board's per-card ✉ badge. 0 for users without a connected mailbox.
 	EmailCount int
 	// LastActivityAt and HasPendingSuggestion are the raw silence inputs the
-	// repository supplies; Silence turns them into a verdict. They are kept
-	// separate so the adapter carries facts and the domain does the judging.
+	// repository supplies; Silence turns them into a verdict.
 	LastActivityAt       *time.Time
 	HasPendingSuggestion bool
 	// FollowedUpAt is when the candidate last recorded chasing this application, or
-	// nil for one never chased. It rides beside the silence rather than inside it:
-	// Silence must not read it, because a chase is not a reply (see 0059's column
-	// comment). The board renders the pair — still silent, and chased N days ago.
+	// nil. Silence must not read it: a chase is not a reply.
 	FollowedUpAt *time.Time
 	// CVOpenedAt is when a CV of the caller's tied to this job was last opened by a countable
-	// visitor — not automated traffic, and not the candidate checking their own PDF. Nil when they
-	// have no traced CV for it, or nobody has opened one.
+	// visitor (not automated traffic, not the candidate). Nil when none exists or none was opened.
 	//
-	// The board shows it BESIDE the silence state, never instead of it: "they have not answered in
-	// 24 days" and "somebody opened the CV yesterday" are two readings of the same application, and
-	// the second does not soften the first. It is kept out of silence.StateFor's inputs for the same
-	// reason FollowedUpAt is — see internal/application/userjob.
+	// The board shows it BESIDE the silence state, never instead of it, and it stays out of
+	// silence.StateFor's inputs like FollowedUpAt.
 	CVOpenedAt *time.Time
-	// AutoApplyStatus is the seven-value status of this job's live auto-apply attempt, nil
-	// when it has none (openspec/changes/auto-apply-review-tracking). The board's own
-	// "needs your review" badge reads only this — the full answer preview and unmapped
-	// question list are the drawer's own, richer read (GetTrackedApplication), not
-	// shipped in this list.
+	// AutoApplyStatus is the status of this job's live auto-apply attempt, nil when it has
+	// none. The board's "needs your review" badge reads only this; the answer preview and
+	// unmapped questions come from GetTrackedApplication.
 	AutoApplyStatus *autoapply.Status
 }
 
@@ -163,9 +152,7 @@ var (
 	ErrInvalidFilter = errors.New("jobtracking: invalid filter")
 	ErrEmptyTrack    = errors.New("jobtracking: provide stage and/or notes")
 	// ErrApplicationNotFound is returned when an application id names nothing the
-	// caller holds. It carries no distinction between "no such row" and "somebody
-	// else's row" — the handler renders both as one 404, and the repository must not
-	// hand it the material to do otherwise.
+	// caller holds. It must not distinguish "no such row" from "somebody else's row".
 	ErrApplicationNotFound = errors.New("jobtracking: application not found")
 	// ErrNoInteraction is returned by Repository.UnsaveJob when there is no
 	// interaction row to clear. The Service converts it into a zero-interaction
@@ -173,9 +160,7 @@ var (
 	ErrNoInteraction = errors.New("jobtracking: no interaction row")
 )
 
-// Repository is the narrow persistence contract required by the Service. The
-// real adapter maps db.UserJob → Interaction; the test fake returns canned
-// values.
+// Repository is the narrow persistence contract required by the Service.
 type Repository interface {
 	// JobIDBySlug returns the internal job id for the given public slug, or
 	// ErrJobNotFound when no job matches.
@@ -184,22 +169,17 @@ type Repository interface {
 	RecordView(ctx context.Context, userID, jobID int64) (Interaction, error)
 
 	// MarkApplied records an application. `source` is the appevent source of the
-	// recording — who observed it, not who applied — and is carried by the caller
-	// rather than assumed here: the same method serves the SPA, an API key, and the
-	// in-app assistant, and a ledger that guessed would flatten the three.
+	// recording (who observed it, not who applied), supplied by the caller: the SPA,
+	// an API key and the assistant all use this method.
 	MarkApplied(ctx context.Context, userID, jobID int64, source string) (Interaction, error)
 
-	// MarkAppliedAt records an application dated by `at` instead of now(), for an
-	// application reconstructed from employer mail. It keeps an existing
-	// applied_at rather than rewriting it: a later recording of the same
-	// application is not a later application.
+	// MarkAppliedAt records an application dated by `at` instead of now(), for one
+	// reconstructed from employer mail. It keeps an existing applied_at.
 	MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error)
 
 	// MarkAppliedOn records an application on a day the candidate states, and
-	// overwrites a date already recorded. It is the counterpart of MarkAppliedAt and
-	// differs from it in exactly that: mail supplies an upper bound, while a person
-	// supplies the answer, so theirs wins. The `applied` ledger event moves with the
-	// column, because every aggregate dates the application from the event.
+	// overwrites a date already recorded: mail supplies an upper bound, a person
+	// the answer. The `applied` ledger event moves with the column.
 	MarkAppliedOn(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error)
 
 	SaveJob(ctx context.Context, userID, jobID int64) (Interaction, error)
@@ -228,11 +208,9 @@ type Repository interface {
 	// stage, and notes, keeping viewed_at so the job stays in view history.
 	UntrackJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 
-	// The three below address an application by its own id rather than through a
-	// posting. They exist because the posting is the part that can disappear: once
-	// it is deleted the slug-addressed writes above have nothing to resolve,
-	// and the card on the board becomes unmovable. Each returns
-	// ErrApplicationNotFound when the id names nothing the caller holds.
+	// The three below address an application by its own id, because the posting can
+	// disappear and leave the slug-addressed writes above nothing to resolve. Each
+	// returns ErrApplicationNotFound when the id names nothing the caller holds.
 
 	// TrackApplication sets stage and/or notes on the application. A nil pointer
 	// means "leave unchanged", and `source` is carried as TrackJob carries it.
@@ -288,24 +266,19 @@ type Repository interface {
 const excludedJobsCap int32 = 1000
 
 // appliedCompaniesCap bounds how many of a caller's newest applications the applied-
-// company set is drawn from. It keeps both the read (one posting lookup per
-// application) and the search's `company_slug NOT IN [...]` filter bounded, at the same
-// size as excludedJobsCap; measured 2026-10-31, one account on production is past it.
-// The overflow is a long-ago employer missing its badge, never a wrong one.
+// company set is drawn from. It bounds both the read (one posting lookup per
+// application) and the search's `company_slug NOT IN [...]` filter. The overflow is
+// a long-ago employer missing its badge, never a wrong one.
 const appliedCompaniesCap int32 = 1000
 
 // Reminders is the come-back-and-apply reminder, as this package needs it.
 //
-// It is declared here rather than imported because internal/engage sits ABOVE
-// internal/application in the block order: reminder.Service satisfies it
-// structurally and the composition root supplies it, so the dependency points the
-// way the layering allows.
+// Declared here because internal/engage sits ABOVE internal/application:
+// reminder.Service satisfies it structurally and the composition root supplies it.
 //
-// It lives on the service and not on a caller because saving is what creates the
-// intent a reminder nudges, and applying or unsaving is what ends it. Every caller
-// of these use cases means the same thing by them — the HTTP handler, the in-app
-// assistant, the mail reconstruction — so the side effect belongs where the use
-// case is, not repeated at each door.
+// It hangs off the service so every caller (HTTP handler, assistant, mail
+// reconstruction) gets the same side effect: saving creates the intent, applying
+// or unsaving ends it.
 type Reminders interface {
 	ScheduleOnSave(ctx context.Context, userID, jobID int64) error
 	Cancel(ctx context.Context, userID, jobID int64) error
@@ -334,10 +307,8 @@ func New(repo Repository, opts ...Option) *Service {
 	return s
 }
 
-// scheduleReminder and cancelReminder are best-effort. The tracking write has
-// already succeeded and is the primary action, and the reminder worker re-checks
-// the intent (still open, still saved-but-unapplied) immediately before sending —
-// so a lost schedule or cancel degrades the nudge rather than corrupting anything.
+// scheduleReminder and cancelReminder are best-effort: the tracking write already
+// succeeded, and the reminder worker re-checks the intent before sending.
 func (s *Service) scheduleReminder(ctx context.Context, userID, jobID int64) {
 	if s.reminders == nil {
 		return
@@ -356,10 +327,8 @@ func (s *Service) cancelReminder(ctx context.Context, userID, jobID int64) {
 	}
 }
 
-// ListTracked validates the filter (the vocabulary and its default live in
-// ParseFilter, not the HTTP layer), then reads the caller's interactions and the
-// per-filter counts. The returned Listing knows its active filter, so Total picks
-// the matching count.
+// ListTracked validates the filter, then reads the caller's interactions and the
+// per-filter counts.
 func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, detail CardDetail, limit, offset int32) (Listing, error) {
 	f, err := ParseFilter(filter)
 	if err != nil {
@@ -406,10 +375,8 @@ func (s *Service) AppliedCompanySlugs(ctx context.Context, userID int64) ([]stri
 	return s.repo.AppliedCompanySlugs(ctx, userID, appliedCompaniesCap)
 }
 
-// Pipeline returns the caller's application-pipeline snapshot: the count at each stage of the
-// vocabulary, plus the application total. Grouping those stages into the four the board and the
-// funnel draw is the reader's job, applied from userjob.Groups — the server does not pick a
-// second vocabulary on their behalf.
+// Pipeline returns the caller's per-stage application counts plus the total.
+// Grouping stages for the board is the reader's job (userjob.Groups).
 func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline, error) {
 	counts, err := s.repo.PipelineCounts(ctx, userID)
 	if err != nil {
@@ -417,11 +384,7 @@ func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline,
 	}
 	pipeline := userjob.CountByStage(counts)
 
-	// Best-effort, same convention internal/api/handler/company_response.go already
-	// follows for this exact kind of optional signal: a lookup error yields absence,
-	// not a failed response — the pipeline endpoint existed and was reliable before
-	// this benchmark did, and a transient failure computing an optional comparison
-	// must not take it down.
+	// Best-effort: a lookup error omits the optional benchmark instead of failing the endpoint.
 	you, global, err := s.repo.ReplyRateCounts(ctx, userID)
 	if err != nil {
 		log.Printf("jobtracking: reply-rate counts for user=%d: %v (omitting the benchmark)", userID, err)
@@ -468,24 +431,18 @@ func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, 
 	if err != nil {
 		return row, err
 	}
-	// An application reconstructed from mail ends the intent exactly as a clicked
-	// one does. Only the HTTP door used to cancel, so this path never did — the
-	// same omission this side effect moved down here to stop repeating.
+	// A mail-reconstructed application ends the intent like a clicked one.
 	s.cancelReminder(ctx, userID, jobID)
 	return row, nil
 }
 
 // MarkAppliedOn records an application on the day the candidate states, overwriting a date
-// already held. `now` is supplied rather than read here so the bound is testable and so the
-// caller's clock, not this package's, decides what "the future" means.
+// already held. `now` is supplied so the bound is testable.
 //
-// The window is enforced at this level rather than at the HTTP door so that it holds for every
-// caller of the service, not only the one that arrives over HTTP: the in-app assistant calls
-// jobtracking directly and never passes through Fiber. Its apply tool takes no date today, so
-// this is a guard against the next caller rather than a fix for a current one.
-// `day` is the calendar day stated, and the window is checked against it — never against the
-// instant it is stored at. Those differ by the storage hour, and bounding the instant refuses
-// "today" for the whole UTC morning.
+// The window is enforced here, not at the HTTP door, so it holds for callers that bypass
+// Fiber, like the assistant.
+// `day` is the calendar day stated and the window is checked against it, never against the
+// stored instant, which would refuse "today" for the whole UTC morning.
 func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, day, now time.Time, source string) (Interaction, error) {
 	if err := applydate.Validate(day, now); err != nil {
 		return Interaction{}, err
@@ -602,9 +559,8 @@ func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, n
 	return s.repo.TrackJob(ctx, userID, jobID, stage, notes, source)
 }
 
-// TrackApplication is Track for a caller holding the application's own id. The same
-// validation runs first and for the same reason: a bad body is a bad request whichever
-// way the row was named, and rejecting it here keeps it off the database.
+// TrackApplication is Track for a caller holding the application's own id; the same
+// validation runs first, keeping a bad body off the database.
 func (s *Service) TrackApplication(ctx context.Context, userID, appID int64, stage, notes *string, source string) (Interaction, error) {
 	if stage == nil && notes == nil {
 		return Interaction{}, ErrEmptyTrack

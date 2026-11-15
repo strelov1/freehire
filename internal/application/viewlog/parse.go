@@ -35,23 +35,16 @@ type Record struct {
 //	$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$referer" "$user_agent"
 //
 // plus one OPTIONAL trailing quoted field, "$http_sec_purpose", which the freehire
-// site config appends (see freehire-ops, provision/host2/nginx). The group is
-// optional on purpose: rotated files written before that change are still fed to
-// the aggregator, and the parser has to ship before the nginx change rather than
-// with it — a day whose lines it could not read would silently count nothing.
+// site config appends (see freehire-ops, provision/host2/nginx). Optional so rotated
+// files written before that change still parse.
 //
-// The request group requires METHOD PATH PROTO, so bad requests logged as "-"
-// (or otherwise malformed) fail to match and are skipped by the caller.
+// The request group requires METHOD PATH PROTO, so bad requests logged as "-" fail to
+// match and are skipped by the caller.
 //
-// NOT anchored at the end, and that is load-bearing rather than an oversight. The
-// live format also carries $request_time and $upstream_response_time after the
-// fields above, added so web-metrics.sh can export latency; this parser neither
-// reads them nor needs to know they are there, and the same pattern keeps reading
-// rotated files written before they existed. Anything appended in future is
-// likewise ignored. Do not "tidy" this by adding a $ — the guard for that is
-// TestParseLine/"ignores the timing fields appended for the latency metrics",
-// which fails on a slug credited to the wrong job rather than merely on a
-// rejected line.
+// NOT anchored at the end, on purpose: the live format appends $request_time and
+// $upstream_response_time, which this parser ignores, as it does anything appended
+// later. Adding a $ breaks that; TestParseLine/"ignores the timing fields appended
+// for the latency metrics" guards it.
 var combinedLine = regexp.MustCompile(`^(\S+) \S+ \S+ \[([^\]]*)\] "([A-Z]+) (\S+) [^"]*" (\d{3}) \S+ "[^"]*" "([^"]*)"(?: "([^"]*)")?`)
 
 // timeLocalLayout is nginx's $time_local, e.g. 21/Jul/2026:12:00:00 +0000.

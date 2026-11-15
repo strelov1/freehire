@@ -26,12 +26,9 @@ func Classify(rec Record) (Signal, bool) {
 	if rec.Method != "GET" || rec.Status < 200 || rec.Status >= 300 {
 		return Signal{}, false
 	}
-	// A speculative fetch is not a view: nobody has seen the page, and may never.
-	// This is not a corner case — the app sets data-sveltekit-preload-data="hover",
-	// so moving the pointer across a listing fetched __data.json for every card it
-	// passed, and each one counted. Any non-empty Sec-Purpose is rejected rather
-	// than matching known values, because the header exists to say "not a real
-	// navigation" and a value we don't recognize still says it.
+	// A speculative fetch is not a view. The app sets data-sveltekit-preload-data="hover",
+	// so pointer moves across a listing prefetched every card. Any non-empty Sec-Purpose
+	// is rejected: the header means "not a real navigation" even for values we don't know.
 	if rec.Purpose != "" {
 		return Signal{}, false
 	}
@@ -39,11 +36,9 @@ func Classify(rec Record) (Signal, bool) {
 	if i := strings.IndexByte(path, '?'); i >= 0 {
 		path = path[:i]
 	}
-	// A SvelteKit client-side (SPA) navigation to the detail page fetches the load
-	// data at /jobs/<slug>/__data.json instead of re-requesting the HTML; count it
-	// as the same page view. A full/direct load hits /jobs/<slug> — the two are
-	// mutually exclusive per view, and the (visitor, slug, day) dedup collapses any
-	// overlap, so this never double-counts.
+	// A SvelteKit SPA navigation fetches /jobs/<slug>/__data.json instead of the HTML;
+	// count it as the same page view. The two are exclusive per view and the
+	// (visitor, slug, day) dedup collapses any overlap.
 	path = strings.TrimSuffix(path, "/__data.json")
 	if slug, ok := singleSegment(path, "/jobs/"); ok {
 		return Signal{Slug: slug, Kind: KindPage}, true

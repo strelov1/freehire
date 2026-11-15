@@ -17,9 +17,8 @@ type DBStore struct {
 // NewDBStore wraps the generated queries.
 func NewDBStore(q *db.Queries) *DBStore { return &DBStore{q: q} }
 
-// ListForRecall runs the net. Both body columns come across unresolved: which one carries
-// the text is the service's rule, and resolving it here would put the HTML-only trap in
-// the one place no unit test reaches.
+// ListForRecall runs the net. Both body columns come across unresolved: choosing between
+// them is the service's rule, and doing it here would hide it from unit tests.
 func (s *DBStore) ListForRecall(ctx context.Context, userID int64, since, until time.Time, limit int32) ([]Message, error) {
 	rows, err := s.q.ListEmailsForRecall(ctx, db.ListEmailsForRecallParams{
 		UserID: userID,
@@ -41,9 +40,8 @@ func (s *DBStore) ListForRecall(ctx context.Context, userID int64, since, until 
 	return out, nil
 }
 
-// Suggest records the proposal. The statement carries the guard — it changes nothing on
-// mail that is linked or deleted — so a run whose candidate was claimed underneath it
-// reports zero rows rather than overwriting somebody's link.
+// Suggest records the proposal. The statement changes nothing on linked or deleted mail,
+// so a candidate claimed underneath the run reports zero rows instead of overwriting a link.
 func (s *DBStore) Suggest(ctx context.Context, emailID, userID, jobID int64, confidence float32) (int64, error) {
 	return s.q.SuggestJobForEmail(ctx, db.SuggestJobForEmailParams{
 		ID: emailID, UserID: userID, SuggestedJobID: jobID, Confidence: confidence,

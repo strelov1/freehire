@@ -1,16 +1,12 @@
 // Package deliverywindow decides whether "now" is the right moment to send a
-// notification, for an account's own local time. It is a leaf package —
-// imported by internal/engage/notify, internal/engage/reminder, and internal/engage/nudge, and
-// importing none of them — so that timing math is written and tested once,
-// even though each engine still calls it from its own delivery loop (the
-// established pattern in this codebase's three notification engines).
+// notification, for an account's own local time. It is a leaf package shared by
+// internal/engage/notify, reminder and nudge, so the timing math lives in one place.
 package deliverywindow
 
 import "time"
 
-// resolveLocation maps tz to a *time.Location, falling back to UTC for an
-// empty or unrecognized zone — a bad/missing timezone must never block
-// delivery.
+// resolveLocation maps tz to a *time.Location, falling back to UTC for an empty or
+// unrecognized zone: a bad timezone must never block delivery.
 func resolveLocation(tz string) *time.Location {
 	loc, err := time.LoadLocation(tz)
 	if tz == "" || err != nil {
@@ -43,9 +39,8 @@ func InQuietHours(now time.Time, tz string, start, end *time.Duration) bool {
 
 // DigestDue reports whether a daily-frequency digest should fire now: local
 // time has reached digestTime, and lastSentAt (if any) was on an earlier local
-// calendar day. A nil digestTime is never due. This fires on the first pass
-// after digestTime each local day, regardless of how often the caller polls —
-// it does not assume any particular cron cadence.
+// calendar day. A nil digestTime is never due. Fires on the first pass after digestTime
+// each local day, whatever the polling cadence.
 func DigestDue(now time.Time, tz string, digestTime *time.Duration, lastSentAt *time.Time) bool {
 	if digestTime == nil {
 		return false

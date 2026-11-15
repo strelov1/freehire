@@ -9,10 +9,9 @@ import (
 	"strings"
 )
 
-// LogFile is a rotated access-log file. The worker keys its cursor on a signature
-// of the file's decompressed content (see the worker), which is stable across both
-// logrotate's numeric-suffix rename (.1 -> .2) and its later gzip — so a file is
-// processed exactly once even after compression.
+// LogFile is a rotated access-log file. The worker keys its cursor on a signature of
+// the decompressed content, which survives logrotate's rename and later gzip, so a
+// file is processed exactly once.
 type LogFile struct {
 	Path string
 }

@@ -17,11 +17,9 @@ type thresholds struct {
 // auto-link threshold. Only a deterministic tier qualifies: the LLM reads
 // attacker-controlled text, so its confident pick becomes a suggestion instead.
 //
-// It is ONE predicate because two callers ask the same question for different
-// reasons — the runner decides whether to spend LLM disambiguation on the email,
-// resolveLink decides what to persist. Written twice, a drift between them would
-// either pay for candidates nobody reads or auto-link an email we had just asked
-// the model to disambiguate.
+// It is one predicate because the runner (spend LLM disambiguation?) and resolveLink
+// (what to persist?) must agree, or we pay for candidates nobody reads or auto-link
+// an email we just asked the model to disambiguate.
 func (t thresholds) autoLinks(m mailmatch.Match) bool {
 	deterministic := m.Tier == mailmatch.TierThread || m.Tier == mailmatch.TierName
 	return deterministic && m.Confidence >= t.autoLink

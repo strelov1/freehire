@@ -17,27 +17,20 @@ import (
 )
 
 // GmailReadonlyScope is the restricted read scope; its consent screen requires Google
-// verification for public use (testing-mode test users until then). Exported alongside
-// CalendarScope because the connection row records what a grant covers, and the handler
-// that writes that record must spell it the same way the worker's filter reads it.
+// verification for public use. Exported because the handler that records a grant's scopes
+// must spell them as the worker's filter reads them.
 const GmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly"
 
 // CalendarScope is the read-only calendar scope, asked for on the calendar consent beside
 // CalendarEventsScope.
 //
-// Declared here because every Google scope this service requests lives here, and because
-// two copies of the string would part ways exactly once and silently: internal/application/calsync
-// filters connections on the scopes recorded at consent, so a filter spelling it
-// differently would find nobody and the worker would report a clean run with nothing to
-// do. Sensitive rather than restricted, which is a smaller verification burden than
-// gmail.readonly already carries — and no smaller a privacy one.
+// Declared here, once: internal/application/calsync filters connections on the scopes recorded
+// at consent, so a differently spelled copy would find nobody and report a clean run.
 const CalendarScope = "https://www.googleapis.com/auth/calendar.readonly"
 
 // CalendarEventsScope is the calendar WRITE scope, asked for on the same calendar consent
-// as CalendarScope so a mentor's bookings get a minted Meet link. A grant recorded before
-// the two were one consent may hold either alone, so readers still check each scope.
-// Sensitive rather than restricted, the same tier CalendarScope already carries, so this
-// adds no new verification burden beyond what gmail.readonly already does.
+// as CalendarScope so a mentor's bookings get a minted Meet link. A grant recorded before the
+// two were one consent may hold either alone, so readers still check each scope.
 const CalendarEventsScope = "https://www.googleapis.com/auth/calendar.events"
 
 const gmailProfileURL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
@@ -97,10 +90,8 @@ func (c *Connector) calendarConfig() *oauth2.Config {
 
 // CalendarAuthCodeURL builds the consent URL for the calendar, on its own.
 //
-// Separate from AuthCodeURL because the two are separate costs and separate decisions: a
-// candidate who wants their mail read and not their calendar has to be able to say so,
-// and connecting a mailbox must never quietly ask for a diary. Incremental, so accepting
-// this keeps whatever they already granted — the returned refresh token then covers both.
+// Separate from AuthCodeURL: connecting a mailbox must never quietly ask for the calendar.
+// Incremental, so the returned refresh token covers whatever was already granted.
 func (c *Connector) CalendarAuthCodeURL(state string) string {
 	return c.calendarConfig().AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
@@ -129,11 +120,9 @@ func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, em
 
 // GrantedScopes reads what Google says the grant actually covers.
 //
-// Authoritative, and therefore recorded as-is rather than unioned with what we held
-// before. A union can only ever grow, so a candidate who revokes at Google and reconnects
-// mail alone would keep a calendar scope they no longer have — and cal-sync would take
-// the resulting 403 as a revoked grant and flip the SHARED status, breaking the mailbox
-// they had just reconnected, once per cron tick.
+// Authoritative, so recorded as-is rather than unioned with what we held: a union only grows,
+// so a candidate who reconnects mail alone would keep a calendar scope they no longer have,
+// and cal-sync would read the resulting 403 as revocation and flip the SHARED status.
 //
 // A response without the field is not evidence of no scopes; the caller keeps what it had.
 func GrantedScopes(tok *oauth2.Token) []string {
@@ -143,11 +132,9 @@ func GrantedScopes(tok *oauth2.Token) []string {
 
 // ExchangeCalendar turns the calendar callback's code into a refresh token.
 //
-// Separate from Exchange because that one reads the mailbox address from the Gmail
-// profile API, which needs the mail scope. A candidate who granted only the calendar does
-// not have it, so asking would fail the connect for a field the calendar flow has no use
-// for. The token itself covers whatever they have granted in total — the consent is
-// incremental — so a candidate with both ends up with one grant covering both.
+// Separate from Exchange, which reads the mailbox address via the Gmail profile API and so
+// needs the mail scope a calendar-only candidate lacks. The token covers everything granted
+// in total (incremental consent).
 func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
 	tok, err := c.calendarConfig().Exchange(safehttp.GuardedOAuth2Context(ctx, gmailHTTPTimeout), code)
 	if err != nil {

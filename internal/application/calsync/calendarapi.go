@@ -16,12 +16,9 @@ import (
 // they accepted lands here.
 const eventsURL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
-// maxEvents bounds ONE PAGE, not the window. With singleEvents a recurring meeting
-// expands into an instance per occurrence, so a single daily standup is ~180 rows over a
-// ±90-day window and an ordinary working calendar is several hundred. Reading one page
-// and stopping would have truncated at the OLDEST end — the results come back ascending
-// from now-90d — so the future would simply never arrive, silently, in the feature whose
-// entire purpose is to show it.
+// maxEvents bounds ONE PAGE, not the window. With singleEvents a recurring meeting expands
+// into an instance per occurrence (a daily standup is ~180 rows over ±90 days) and results
+// ascend from now-90d, so stopping after one page would silently drop the future.
 const maxEvents = 250
 
 // maxPages caps a run so one shared diary cannot spin forever. Enough for thousands of
@@ -130,13 +127,10 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 		start := it.Start.parse()
 		cancelled := it.Status == "cancelled"
 		if cancelled {
-			// A cancellation is a fact about a meeting ALREADY stored, so it needs
-			// neither a time nor a title — and Google does not send them. Its own
-			// documentation says a deleted event is only guaranteed to carry `id`, and a
-			// cancelled occurrence of a series only `id`, `recurringEventId` and
-			// `originalStartTime`. The live-event rules below would have discarded every
-			// one of them before this flag was ever read, so the cancellation path was
-			// dead: a called-off interview stood on the calendar forever.
+			// A cancellation is a fact about an already stored meeting, so it needs neither a time nor
+			// a title, and Google does not send them (a deleted event is only guaranteed to carry `id`,
+			// a cancelled series occurrence `id`, `recurringEventId` and `originalStartTime`). The
+			// live-event rules below would discard it and a called-off interview would stand forever.
 			if it.ICalUID != "" || it.ID != "" {
 				out = append(out, Meeting{
 					UID: it.ICalUID, ProviderID: it.ID, StartsAt: start, Cancelled: true,
@@ -150,9 +144,8 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 			// day to show it on.
 			continue
 		}
-		// No Cancelled here: this is the live branch, reached only when the cancelled
-		// branch above did not `continue`, so the expression it used to carry
-		// (it.Status == "cancelled") was provably always false.
+		// No Cancelled here: this is the live branch, reached only when the cancelled branch did
+		// not continue.
 		out = append(out, Meeting{
 			UID:        it.ICalUID,
 			ProviderID: it.ID,
@@ -182,13 +175,10 @@ func (r *APIReader) page(ctx context.Context, q url.Values) (eventsPage, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		// The status travels with the error rather than being decided here. 401 and 403
-		// are the grant saying no; everything else — a 500, a rate limit, a timeout — is
-		// Google having a bad day and must not be read as a revocation, because the flag
-		// it would set is SHARED with mail: one incident would disconnect every
-		// candidate's mailbox at once and each would have to redo a restricted-scope
-		// consent. gmailsync.RevokedGrant is the one place that rule is written, since a
-		// second copy of it here would be a second answer for one grant.
+		// The status travels with the error rather than being decided here. 401 and 403 are the
+		// grant saying no; anything else (500, rate limit, timeout) must not be read as a
+		// revocation, because the flag it sets is SHARED with mail and one incident would disconnect
+		// every candidate's mailbox. gmailsync.RevokedGrant is the one place that rule is written.
 		return eventsPage{}, gmailsync.NewAPIError("calendar: list events", resp)
 	}
 	var body eventsPage

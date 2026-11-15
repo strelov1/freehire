@@ -30,9 +30,8 @@ var ATSDomains = []string{
 	"eightfold.ai",
 	"gem.com",
 	"rippling.com",
-	// Mail-relay domains that differ from a platform's board domain — applicant
-	// mail arrives from these, so they must be listed to be synced (observed in a
-	// real inbox; the board-domain entries above do not cover them).
+	// Mail-relay domains that differ from a platform's board domain; applicant mail arrives
+	// from these, so the board-domain entries above do not cover them.
 	"workablemail.com",         // Workable (board domain: workable.com)
 	"teamtailor-mail.com",      // Teamtailor (board domain: teamtailor.com)
 	"comeet-notifications.com", // Comeet
@@ -49,14 +48,11 @@ var ATSDomains = []string{
 
 // JobBoardSenders are the application-mail addresses of job boards whose host also sends
 // everything else (alerts, feeds, digests), so the host fails the learned-domain precision
-// bar (MaxOtherShare) and is on no allowlist. Measured on prod 2026-10-21, share of synced
-// mail classified `other`: indeedapply@indeed.com 1% (562 hiring mails), noreply@indeed.com
-// 0%, no-reply-message@indeed.com 0%, applyonline@dice.com 0% — against 75% for indeed.com
-// and 88% for dice.com as hosts. Gmail's from: takes a full address as readily as a domain.
+// bar (MaxOtherShare) and is on no allowlist. Gmail's from: takes a full address as readily as a
+// domain, and these addresses are nearly all hiring mail where the hosts are mostly `other`.
 //
-// No LinkedIn address, by the decision in #1027: its InMail and "just messaged you" mail is
-// recruiter outreach, not an application. The learned cache had re-admitted linkedin.com
-// wholesale (90% `other`); MaxOtherShare is what takes it back out.
+// No LinkedIn address: its InMail and "just messaged you" mail is recruiter outreach, not an
+// application, and MaxOtherShare keeps linkedin.com out of the learned cache.
 var JobBoardSenders = []string{
 	"indeedapply@indeed.com",
 	"noreply@indeed.com",
@@ -89,15 +85,8 @@ var recallPhrases = []string{
 	"hemos recibido tu",          // es: we have received your
 	"invitación a la entrevista", // es: interview invitation
 
-	// Added 2026-08-02 from a measurement rather than from imagination. Over 120 days on a
-	// live mailbox this list fetched 431 messages where a hiring-shaped query found 1151,
-	// and the misses were near misses: an acknowledgement reading "we've received your …
-	// application" (a16z) where the list knew only "your application at", and invitations
-	// reading "interview invite" (micro1) where it knew only "invite you to interview".
-	//
-	// The lesson generalises past these six. Each entry above was one canonical wording of
-	// a thing employers phrase several ways, so the list's shape — one phrasing per idea —
-	// was the defect. When adding, add the SIBLINGS of a wording, not the wording.
+	// Near-miss wordings ("we've received your … application", "interview invite"). Employers
+	// phrase one idea several ways: when adding, add the SIBLINGS of a wording, not the wording.
 	"received your application",
 	"interview invite",
 	"interview invitation",
@@ -114,13 +103,11 @@ var recallPhrases = []string{
 // union is time-bounded by after:. A zero watermark omits the time clause for a first-run
 // backfill.
 //
-// The candidate's own replies match these phrasings as readily as an employer's — they are
-// replies to them — and fetching one buys nothing: the worker drops a message whose sender
-// is the connected address before storing it. What it costs is a listed id and a full body
-// retrieval each, and room in the page a widened query returns. An empty address adds no
-// clause, so a caller that has none is unchanged.
+// The candidate's own replies match these phrasings too, and the worker drops them before
+// storing, so fetching them only costs a body retrieval and page room. An empty address adds no
+// clause.
 //
-// The exclusion sits OUTSIDE the alternation. Inside it, `-from:` would be one more thing a
+// The exclusion sits OUTSIDE the alternation: inside it, `-from:` would be one more thing a
 // message could match rather than a condition every message must meet.
 func BuildQueryFor(selfAddr string, afterUnix int64, extraDomains []string) string {
 	senders := make([]string, 0, len(ATSDomains)+len(JobBoardSenders)+len(extraDomains))
@@ -185,8 +172,8 @@ var recallHiringTerms = []string{
 }
 
 // recallMeetingTerms recovers what hiring vocabulary alone demonstrably drops. filename:ics
-// is the exact member: every calendar invitation carries that part whatever language its
-// subject uses, and an invitation is the ONLY route an interview has onto the calendar view.
+// is the exact member: every calendar invitation carries that part whatever its subject
+// language, and an invitation is the only route an interview has onto the calendar view.
 var recallMeetingTerms = []string{
 	"filename:ics", "invite", "invitation", "meeting", `"intro call"`,
 	"напоминание", `"назначена встреча"`, "созвон",
@@ -195,21 +182,16 @@ var recallMeetingTerms = []string{
 // BuildRecallQuery builds the mailbox search for one application: the employer, inside the
 // window, gated to job-shaped mail.
 //
-// The gate is not caution. Searching a mailbox for a company name reaches past the boundary
-// the sync draws — the product holds only job mail, and "Apple" or "Ramp" would pull
-// personal correspondence — so a message qualifies only if it names the employer AND is
+// The gate is a privacy boundary: the product holds only job mail, and "Apple" or "Ramp" would
+// pull personal correspondence, so a message qualifies only if it names the employer AND is
 // job-shaped.
 //
-// All three members of that gate are load-bearing, and the narrow version was measured and
-// rejected. Over 20 applications, hiring vocabulary alone cut 53 candidates to 41 and eight
-// of the twelve it dropped were real: both calendar invitations for one interview, and a
-// live thread whose entire subject was the role. Adding filename:ics and the role title
-// brought it to 47, the six remaining drops being payment slips and job-board digests.
+// All three members of that gate are load-bearing: hiring vocabulary alone dropped real mail
+// (calendar invitations, a thread whose subject was only the role title). Hence filename:ics
+// and the role title too.
 //
-// The employer is spelled twice — as the catalogue writes it and with the spaces closed up.
-// The catalogue says "Blend 360"; the sender signs "Blend360". That is the same class of
-// mismatch that retired the calendar title tier, which compared against a hyphenated slug
-// no human ever types.
+// The employer is spelled twice, as the catalogue writes it and with spaces closed up
+// ("Blend 360" vs the sender's "Blend360").
 func BuildRecallQuery(company, role string, since, until time.Time) string {
 	employer := quotedForms(company)
 	if employer == "" {
@@ -237,11 +219,9 @@ func quotedForms(company string) string {
 	return strings.Join(forms, " OR ")
 }
 
-// quoteTerm renders one caller-supplied term as a single search term. The quotes are
-// stripped rather than escaped: they are the only characters here that could end the term
-// early and let the rest of the string act as query syntax, and no employer or role needs
-// one. An empty term yields "" so the caller can leave it out entirely — an empty pair of
-// quotes in a query is a term that matches nothing.
+// quoteTerm renders one caller-supplied term as a single search term. Quotes are stripped, not
+// escaped: they are the only characters that could end the term early and let the rest act as
+// query syntax. An empty term yields "" so the caller leaves it out (empty quotes match nothing).
 func quoteTerm(s string) string {
 	cleaned := strings.TrimSpace(strings.ReplaceAll(s, `"`, ""))
 	if cleaned == "" {

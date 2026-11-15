@@ -64,15 +64,12 @@ func (w *Worker) WithLearnedDomains(src DomainSource) *Worker {
 
 // Stats reports what a run did, so the command can say it and exit accordingly.
 //
-// Without this a run that reached nobody was byte-identical to a clean one: RunOnce
-// returned nil either way, cmd/gmail-sync exited 0, and freehire_worker_last_run_success
-// read 1 straight through a total failure. Nothing else measures this sync.
+// Without it a run that reached nobody would look clean: RunOnce returns nil either way.
 type Stats struct {
 	Connections int
 	Synced      int
-	// Failed counts connections whose sync did not complete — a token that would not
-	// decrypt, a provider having a bad day, a message that would not store. The next run
-	// retries them.
+	// Failed counts connections whose sync did not complete (token, provider or store error).
+	// The next run retries them.
 	Failed int
 	// Reconsent counts connections whose grant was refused and flagged. No later run
 	// retries those: only a browser consent clears the flag.
@@ -109,17 +106,13 @@ func (w *Worker) RunOnce(ctx context.Context) (Stats, error) {
 }
 
 // markRevoked flags the connection for re-consent, once a call has already logged which
-// one revealed the revoked grant. Shared by every call site that can reveal one (the
-// list call, a message fetch, a thread-sibling listing) so the store write and the
-// outcome it reports cannot drift between them the way ListThreadMessageIDs's own check
-// once did.
+// one revealed the revoked grant. Shared by every call site that can reveal one (list, message
+// fetch, thread-sibling listing) so the store write and the reported outcome cannot drift.
 func (w *Worker) markRevoked(ctx context.Context, userID int64) outcome {
 	if err := w.store.SetNeedsReconsent(ctx, userID); err != nil {
-		// The status did not move, so the mailbox is still `connected` and the next
-		// run will meet the same revoked grant and try again. Counting this as a
-		// re-consent would report a transition that did not happen — and this is the
-		// one outcome the run must not call clean, because nothing else will notice:
-		// the user is told to reconnect by a status that was never written.
+		// The status did not move, so the mailbox is still `connected` and the next run retries.
+		// Counting a re-consent would report a transition that did not happen, and the run must
+		// not look clean: the user is told to reconnect by a status that was never written.
 		log.Printf("gmail-sync: user %d: set status: %v", userID, err)
 		return outcomeFailed
 	}
@@ -127,9 +120,8 @@ func (w *Worker) markRevoked(ctx context.Context, userID int64) outcome {
 }
 
 // SyncUser syncs one connected user's mail on demand (a manual refresh from the
-// inbox), reusing the same best-effort per-user path as the cron worker. The outcome is
-// dropped: the caller is a background goroutine behind a button, and the user reads the
-// result by watching their inbox fill.
+// inbox), reusing the cron worker's best-effort path. The outcome is dropped: the caller is a
+// background goroutine behind a button.
 func (w *Worker) SyncUser(ctx context.Context, u Connection) { _ = w.syncUser(ctx, u) }
 
 // firstSentScanThreads caps how many stored conversations, newest first, the first
@@ -160,12 +152,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	ids, err := reader.ListATSMessageIDs(ctx, u.Email, u.Cursor)
 	if err != nil {
 		if !RevokedGrant(err) {
-			// A rate limit, a 500, a reset connection, or this process being stopped
-			// mid-run. None of them says anything about the grant, and the flag they
-			// used to set is shared with the calendar and cleared only by a browser
-			// consent — so one Google incident, or one redeploy, disconnected every
-			// mailbox we hold. It is reachable from a button, too: the on-demand sync
-			// runs this same path.
+			// A rate limit, a 500, a reset connection, or this process being stopped says nothing
+			// about the grant, and the flag is shared with the calendar and cleared only by a
+			// browser consent. The on-demand sync runs this same path.
 			log.Printf("gmail-sync: user %d: list: %v", u.UserID, err)
 			return outcomeFailed
 		}
@@ -176,8 +165,8 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	newest := u.Cursor
 	sawFailure := false
 	revoked := false
-	// throttled stops the wave on a rate-limit answer: every further call would be refused
-	// too, and keeps the quota window under pressure. The cursors stay put, so the next run retries.
+	// throttled stops the wave on a rate-limit answer: further calls would be refused too. The
+	// cursors stay put, so the next run retries.
 	throttled := false
 	seen := make(map[string]bool)
 	seenThread := make(map[string]bool)
@@ -185,17 +174,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 
 	// fetch persists one message, deduping by id, tracking the watermark, and
 	// recording its thread for expansion. Both directions are retained; newest tracks incoming
-	// ReceivedAt seen regardless of order; once any message in the wave fails,
-	// it is reset to u.Cursor right before SetSynced (below) rather than merely
-	// frozen at whatever it last reached — a newer message can easily succeed
-	// (and advance newest) BEFORE an older sibling in the same wave fails, and
-	// freezing in place would still let the watermark jump past the failed one.
+	// ReceivedAt seen regardless of order; once any message in the wave fails, it is reset to
+	// u.Cursor before SetSynced rather than frozen where it was: a newer message can succeed
+	// before an older sibling fails, and the watermark must not jump past the failed one.
 	//
-	// A message fetch can reveal a revoked grant exactly as the list call can —
-	// RevokedGrant reads the status code, not which endpoint sent it — and must be
-	// asked here too: otherwise a grant that lost message-read access but still
-	// lists fine re-fetches, and re-403s, the same unadvancing watermark's worth of
-	// messages every run, forever, instead of being flagged for re-consent once.
+	// A message fetch can reveal a revoked grant like the list call can, so RevokedGrant is
+	// asked here too; otherwise a grant that lost message-read access but still lists would
+	// re-403 the same messages every run instead of being flagged once.
 	fetch := func(id string) {
 		if seen[id] {
 			return
@@ -260,9 +245,8 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	known := make(map[string]bool, len(knownThreads))
 	for i, tid := range knownThreads {
 		known[tid] = true
-		// The first scan (no sent cursor yet) re-reads stored conversations to pick up
-		// replies sent before this existed. Unbounded, it read every thread of every
-		// mailbox in one burst and Google rate-limited it (#4610).
+		// The first scan (no sent cursor yet) re-reads stored conversations to pick up earlier
+		// replies; it is capped because an unbounded burst gets rate-limited by Google.
 		// shortcut: older conversations never get their past replies, raise the cap or
 		// make the scan resumable if users ask for them.
 		if u.SentCursor == 0 && i < firstSentScanThreads && !seenThread[tid] {

@@ -1,8 +1,7 @@
 // Package mailclassify holds the controlled status vocabulary an inbox email is
 // classified into and the pure rules that map a classification onto the
-// application-stage pipeline. The LLM adapter lives beside it in classifier.go;
-// this file is the contract + sanitizer, the "never persist an out-of-vocabulary
-// value" guard (and the prompt-injection guard for untrusted email bodies).
+// application-stage pipeline. The LLM adapter is in classifier.go; this file is the
+// contract and the sanitizer that never lets an out-of-vocabulary value persist.
 package mailclassify
 
 import "github.com/strelov1/freehire/internal/application/userjob"
@@ -25,10 +24,8 @@ const (
 	SignalOther                 StatusSignal = "other"
 )
 
-// SignalValues is the ordered, canonical vocabulary of classification labels. It is
-// the one definition: the request schema constrains the model to it, and validSignals
-// — the check that still runs on receipt — is built from it, so a label added here
-// cannot reach one and miss the other.
+// SignalValues is the ordered, canonical vocabulary of classification labels. The request
+// schema and validSignals are both built from it, so they cannot diverge.
 var SignalValues = []string{
 	string(SignalAcknowledgement),
 	string(SignalScreening),
@@ -57,26 +54,24 @@ func IsValidSignal(s string) bool {
 }
 
 // Classification is the LLM output for one email: the status signal, a
-// confidence in [0,1], and (only used when deterministic matching was
-// ambiguous/none) the disambiguation pick — 0 meaning "none".
+// confidence in [0,1], and (only when deterministic matching was ambiguous or
+// empty) the disambiguation pick, 0 meaning "none".
 type Classification struct {
 	Signal       StatusSignal `json:"signal"`
 	Confidence   float64      `json:"confidence"`
 	MatchedJobID int64        `json:"matched_job_id"`
-	// MatchConfidence is the confidence in MatchedJobID, kept apart from Confidence (the
-	// signal's): a suggested link must not inherit how sure the classifier was about the
-	// status. The LLM answers one number for both and copies it; Jev answers each.
+	// MatchConfidence is the confidence in MatchedJobID, kept apart from Confidence so a
+	// suggested link does not inherit the status confidence. The LLM answers one number
+	// for both and copies it; Jev answers each.
 	MatchConfidence float64 `json:"-"`
-	// Model names the classifier that answered, when it is not the caller's default
-	// LLM — persisted as emails.classification_model so Jev's answers stay separable.
-	// Never decoded from a model's JSON: an email cannot choose its own attribution.
+	// Model names the classifier that answered when it is not the default LLM, persisted as
+	// emails.classification_model. Never decoded from model JSON: an email cannot choose it.
 	Model string `json:"-"`
 }
 
 // Sanitize coerces the classification into the controlled vocabulary before it
-// is persisted or served: an unknown signal becomes `other`, and the confidence
-// and match confidence are clamped to [0,1]. The matched id is validated against the real candidate
-// set by the caller, not here.
+// is persisted or served: an unknown signal becomes `other`, and both confidences are
+// clamped to [0,1]. The caller validates the matched id against the real candidates.
 func (c Classification) Sanitize() Classification {
 	if !validSignals[c.Signal] {
 		c.Signal = SignalOther
@@ -99,11 +94,8 @@ func clampUnit(v float64) float64 {
 // StageImplication is what a status signal says about the application: the stage the message
 // implies, and whether that implication may be acted on without asking.
 //
-// The two are separate because they have different answers for a rejection. It plainly implies
-// `rejected` — that is what the message says — and it must still never move the application by
-// itself. Collapsing them (as the previous table did, by simply omitting rejection) made the
-// implication unsayable, so the reader was shown a label and left to work out for themselves why
-// the stage had not changed.
+// They are separate because a rejection implies `rejected` yet must never move the
+// application by itself.
 type StageImplication struct {
 	Stage    string
 	Advances bool
@@ -112,8 +104,7 @@ type StageImplication struct {
 // signalStage maps a status signal to the stage it implies.
 //
 // Non-progress signals are absent on purpose: `info_request` and `incomplete_application` are
-// to-dos rather than movement, and `other` means the classifier could not tell — none of the
-// three implies a stage, and inventing one for them would put words in an employer's mouth.
+// to-dos, and `other` means the classifier could not tell. None implies a stage.
 var signalStage = map[StatusSignal]StageImplication{
 	SignalAcknowledgement:     {Stage: "applied", Advances: true},
 	SignalScreening:           {Stage: "screening", Advances: true},
@@ -124,11 +115,8 @@ var signalStage = map[StatusSignal]StageImplication{
 }
 
 // StageFor reports the stage a signal implies and whether it may be applied automatically.
-// An empty stage means the signal implies none.
-//
-// Exported because the reader needs it: an email shown on its application says what its signal
-// means for the stage, and a suggestion is offered when the two disagree. Both are answers to
-// "what does this message imply", which is this package's question.
+// An empty stage means the signal implies none. Exported for readers that show what an
+// email implies or offer a suggestion when the two disagree.
 func StageFor(sig StatusSignal) (stage string, advances bool) {
 	imp, ok := signalStage[sig]
 	if !ok {
@@ -140,11 +128,9 @@ func StageFor(sig StatusSignal) (stage string, advances bool) {
 // AdvanceStage returns the stage a signal should move `current` to and whether an automatic
 // change should occur.
 //
-// The two halves belong to different packages and this is the seam. Which stage a SIGNAL implies
-// is mail's own question — it is about what an employer's email means. Whether an application may
-// MOVE from one stage to another is a tracking rule, and internal/application/userjob owns it along with the
-// vocabulary itself, so a stage added there cannot leave this package computing an order that no
-// longer matches.
+// This is the seam: which stage a SIGNAL implies is mail's question; whether an application
+// may MOVE between stages is a tracking rule owned by internal/application/userjob with the
+// stage vocabulary.
 func AdvanceStage(current string, sig StatusSignal) (string, bool) {
 	target, advances := StageFor(sig)
 	if !advances {
