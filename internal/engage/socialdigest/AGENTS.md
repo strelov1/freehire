@@ -101,7 +101,7 @@ no counterpart in the Discord publisher:
   storing and renewing it is [linkedinauth](../linkedinauth/AGENTS.md); this file
   knows only that a string arrives or an error does.
 - **The text format reserves characters, and they must be escaped even as plain
-  text.** `\ | { } @ [ ] ( ) < > # * _ ~` — a bare `(` in `Senior C++ (Remote)` is a
+  text.** `\ | { } @ [] ( ) < > # * _ ~` — a bare `(` in `Senior C++ (Remote)` is a
   syntax error in LinkedIn's `little` format and the API refuses the whole post with
   a 400. The URL is deliberately NOT escaped: a backslash inside a link publishes
   verbatim and breaks it.

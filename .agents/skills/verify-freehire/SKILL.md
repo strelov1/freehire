@@ -1,15 +1,16 @@
 ---
 name: verify-freehire
-description: Launch an isolated freehire stack from this checkout (Postgres DB, Meilisearch, the Go API, the SvelteKit web app, one real board ingested) and drive it like a user with Playwright to prove a change works. Use before calling a change done, when checking a pull request is ready to merge, or when asked to run, see or screenshot freehire locally. Works on the laptop (mise + Docker) and in the SuperPlane coder runner.
+description: Launch an isolated freehire stack from this checkout with fixture or live ingestion and drive it like a user with Playwright to prove a change works. Use before calling a change done, when checking a pull request is ready to merge, or when asked to run, see or screenshot freehire locally. Works on the laptop (mise + Docker) and in the SuperPlane coder runner.
 ---
 
 # verify-freehire
 
 Proves a change in the real app: the API built from THIS checkout, the web dev server in
-front of it, real postings crawled from one live board, a real browser. Tests passing is
+front of it, postings through the real ingest path, and a real browser. Tests passing is
 not this; this is the user path.
 
 Everything lives in this folder. Run commands from the repository root.
+The helpers require Python 3 to fingerprint source files.
 
 | Helper | What it does |
 |---|---|
@@ -18,6 +19,17 @@ Everything lives in this folder. Run commands from the repository root.
 | `.agents/skills/verify-freehire/stack.sh env` | the exports a drive needs: `eval "$(.agents/skills/verify-freehire/stack.sh env)"` |
 | `.agents/skills/verify-freehire/run-journey.sh <spec>` | run one Playwright journey against the instance, evidence included |
 | `.agents/skills/verify-freehire/stack.sh down` | stop what `up` started, drop its database; evidence stays |
+
+## Foreground lifecycle (recommended)
+
+Run `.agents/skills/verify-freehire/verify.sh preflight` to check local tools. Run
+`verify.sh .agents/skills/verify-freehire/journeys/jobs-search.spec.ts` for a complete
+foreground lifecycle: startup, doctor, journey, evidence and teardown. Pass additional
+spec paths to run them in sequence. Keep this command in one live exec session until
+it exits; detached Vite can disappear when the launching session ends. EXIT, INT and
+TERM trigger cleanup, retaining startup output and service logs in a unique evidence
+directory. SIGKILL cannot run cleanup; use `stack.sh down` after inspecting diagnostics.
+An existing state directory is refused rather than taken over.
 
 ## Launch
 
@@ -33,10 +45,13 @@ What `up` does, in order:
 2. **Meilisearch**, private to this instance on `api port + 2`: a `meilisearch` binary on
    PATH if there is one, else a container `verify-freehire-meili-<port>` from the image
    `docker-compose.yml` pins. Neither: it warns and `/jobs` will answer 500.
-3. **Seed.** `cmd/reindex` (creates the empty index), `cmd/add-board greenhouse/vercel`,
-   `cmd/ingest greenhouse` (crawls the live board, ~90 postings, needs internet),
-   `cmd/search-drain` (pushes them into Meilisearch). Override with
-   `VERIFY_SEED_PROVIDER` / `VERIFY_SEED_BOARD`; `VERIFY_SEED_BOARD=` skips seeding.
+3. **Seed.** `cmd/reindex` creates the empty index. By default a three-posting
+   fixture substitutes the external Greenhouse response and runs the real adapter,
+   pipeline, database store and search enqueue path. `cmd/search-drain` indexes it.
+   Set `VERIFY_SEED_MODE=live` to crawl a real board with `cmd/add-board` and
+   `cmd/ingest`; `VERIFY_SEED_PROVIDER` / `VERIFY_SEED_BOARD` choose it.
+   `VERIFY_SEED_BOARD=` skips seeding. Fixture writes require a loopback `verify_`
+   database; no model or external board request is needed.
 4. **API**: `go build ./cmd/server`, started on the api port with `JWT_SECRET`,
    `FRONTEND_ORIGIN` and `MEILI_*` set. Ready = `/health` says `"database":"up"`.
 5. **Web**: `pnpm install` in `design-system/` and `web/`, then `vite dev` on `api port + 1`,
@@ -60,10 +75,11 @@ state dir. Do not point a drive at someone else's instance.
 .agents/skills/verify-freehire/stack.sh doctor
 ```
 
-Every line must say `ok`. It checks: the server was built from the current `HEAD` (a stale
-binary proves nothing about your change: `down` + `up` after committing), the API and web
+Every line must say `ok`. It checks: the server was built from the current `HEAD` and the Go build source snapshot
+(including dirty/untracked files and embedded assets under `cmd/` and `internal/`,
+vendor files and module/workspace files; `down` + `up` after changing those inputs), the API and web
 processes are the ones `up` started, `/health` sees the database, Meilisearch is healthy,
-search holds seeded postings, `/jobs` renders. Run it first whenever anything looks off.
+search holds seeded postings, `/jobs` renders. The journey helper runs it before every journey and refuses an unhealthy or stale stack.
 
 ## Drive
 
@@ -76,7 +92,7 @@ Playwright from `web/node_modules` with its pinned Chromium (the runner has it i
 
 The journeys in `journeys/` are the mapped features (see `features/README.md`). For a
 change no journey covers, write a spec of your own the same way (any path; the helper
-copies it into `web/e2e/__verify__/` for the run and deletes it after) and run it with the
+copies it into a unique directory under `web/e2e/__verify__/` and deletes only that directory after) and run it with the
 same helper. If it is a real regression test, also add it under `web/e2e/` in the PR.
 
 Rules that came from failed runs:
@@ -97,8 +113,9 @@ Rules that came from failed runs:
 
 ## Evidence
 
-Everything goes to `$VERIFY_EVIDENCE` (default `/tmp/verify-freehire-evidence`), which
-`down` never touches:
+Each journey prints its unique evidence directory under `$VERIFY_EVIDENCE`
+(default `/tmp/verify-freehire-evidence-<api port>`). `down` never touches evidence.
+The journey exports its directory to the spec and stores:
 
 - `<journey>-<n>-<step>.png`: screenshots the journey takes at each step (action, then result);
 - `<journey>.log`: the Playwright run;

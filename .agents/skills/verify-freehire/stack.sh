@@ -27,7 +27,7 @@ API_PORT=${VERIFY_API_PORT:-${PORT:-18080}}
 WEB_PORT=$((API_PORT + 1))
 MEILI_PORT=$((API_PORT + 2))
 STATE=${VERIFY_STATE:-/tmp/verify-freehire-$API_PORT}
-EVIDENCE=${VERIFY_EVIDENCE:-/tmp/verify-freehire-evidence}
+EVIDENCE=${VERIFY_EVIDENCE:-/tmp/verify-freehire-evidence-$API_PORT}
 ADMIN_URL=${TESTDB_ADMIN_URL:?TESTDB_ADMIN_URL is unset: run inside the repo with mise, or in the coder runner}
 DB_NAME=verify_$API_PORT
 # Swap only the path's database name; the user, host and query string stay as they are.
@@ -38,6 +38,11 @@ MEILI_KEY=$(cat "$STATE/meili-key" 2>/dev/null || true)
 MEILI_CONTAINER=verify-freehire-meili-$API_PORT
 SEED_PROVIDER=${VERIFY_SEED_PROVIDER:-greenhouse}
 SEED_BOARD=${VERIFY_SEED_BOARD-vercel}  # set but empty = no seed
+SEED_MODE=${VERIFY_SEED_MODE:-fixture}
+case "$SEED_MODE" in
+  fixture|live) ;;
+  *) printf '%s\n' 'VERIFY_SEED_MODE must be fixture or live' >&2; exit 2 ;;
+esac
 
 export DATABASE_URL MEILI_URL="http://localhost:$MEILI_PORT" MEILI_MASTER_KEY=$MEILI_KEY
 
@@ -66,6 +71,26 @@ print_env() {
   printf 'export VERIFY_EVIDENCE=%q\n' "$EVIDENCE"
   printf 'export VERIFY_STATE=%q\n' "$STATE"
   printf 'export DATABASE_URL=%q\n' "$DATABASE_URL"
+}
+
+source_fingerprint() {
+  # Include untracked files and embedded assets; HEAD alone misses edits after a build.
+  python3 - <<'PYTHON'
+import hashlib
+from pathlib import Path
+import subprocess
+
+paths = subprocess.check_output([
+    "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--",
+    "cmd", "internal", "vendor", "go.mod", "go.sum", "go.work", "go.work.sum",
+])
+fingerprint = hashlib.sha256()
+for name in sorted(set(paths.split(b"\0")) - {b""}):
+    path = Path(name.decode())
+    fingerprint.update(name + b"\0")
+    fingerprint.update(hashlib.sha256(path.read_bytes()).digest() if path.is_file() else b"missing")
+print(fingerprint.hexdigest())
+PYTHON
 }
 
 start_db() {
@@ -104,11 +129,16 @@ start_meili() {
 seed() {
   [ -n "$SEED_BOARD" ] || return 0
   curl -fsS "$MEILI_URL/health" >/dev/null 2>&1 || return 0
-  log "seeding: reindex (empty), add board $SEED_PROVIDER/$SEED_BOARD, ingest, drain to search"
+  log "seeding ($SEED_MODE): ingest, then drain to search"
   {
-    go run ./cmd/reindex &&
-      go run ./cmd/add-board --provider="$SEED_PROVIDER" --board="$SEED_BOARD" --company="$SEED_BOARD" --apply &&
-      go run ./cmd/ingest "$SEED_PROVIDER" &&
+    go run ./cmd/reindex && {
+      if [ "$SEED_MODE" = fixture ]; then
+        VERIFY_SEED_DATABASE_URL="$DATABASE_URL" go test -count=1 -tags=integration ./cmd/ingest -run '^TestVerificationSeed$'
+      else
+        go run ./cmd/add-board --provider="$SEED_PROVIDER" --board="$SEED_BOARD" --company="$SEED_BOARD" --apply &&
+          go run ./cmd/ingest "$SEED_PROVIDER"
+      fi
+    } &&
       go run ./cmd/search-drain
   } >"$STATE/seed.log" 2>&1 || { tail -20 "$STATE/seed.log" >&2; exit 1; }
   grep -E 'ingest done|search-drain done' "$STATE/seed.log" >&2 || true
@@ -116,7 +146,11 @@ seed() {
 
 start_api() {
   log "building and starting the API on :$API_PORT"
+  local fingerprint
+  fingerprint=$(source_fingerprint)
   go build -o "$STATE/hire-server" ./cmd/server
+  [ "$fingerprint" = "$(source_fingerprint)" ] || { log "source changed during the API build; run up again"; exit 1; }
+  printf '%s\n' "$fingerprint" >"$STATE/source-fingerprint"
   PORT=$API_PORT FRONTEND_ORIGIN="http://localhost:$WEB_PORT" \
     JWT_SECRET=verify-insecure-secret-0123456789abcdef \
     nohup "$STATE/hire-server" </dev/null >"$STATE/server.log" 2>&1 &
@@ -136,13 +170,15 @@ start_web() {
   echo $! >"$STATE/web.pid"
   cd "$ROOT"
   # Ready = the first SSR of /jobs answered (vite compiles on first request, ~10-30s).
-  local code slug
-  for _ in $(seq 1 120); do
-    code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$WEB_PORT/jobs" || true)
+  local code slug remaining deadline=$((SECONDS + 120))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -le 30 ] || remaining=30
+    code=$(curl -s --max-time "$remaining" -o /dev/null -w '%{http_code}' "http://localhost:$WEB_PORT/jobs" || true)
     if [ "$code" = 200 ]; then
       # Vite compiles each route on its first request (5-15s). Warm the job page too, so a
       # journey's first click on a posting does not time out on the compile.
-      slug=$(curl -fsS "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"public_slug":"\([^"]*\)".*/\1/p' | head -1 || true)
+      slug=$(curl -fsS --max-time 10 "http://localhost:$API_PORT/api/v1/jobs/search?limit=1" 2>/dev/null | sed -n 's/.*"public_slug":"\([^"]*\)".*/\1/p' | head -1 || true)
       [ -z "$slug" ] || curl -s -o /dev/null --max-time 120 "http://localhost:$WEB_PORT/jobs/$slug" || true
       return 0
     fi
@@ -152,11 +188,12 @@ start_web() {
 }
 
 doctor() {
-  local ok=0 n
+  local ok=0 n fingerprint
   check() { if eval "$2" >/dev/null 2>&1; then printf 'ok    %s\n' "$1"; else printf 'FAIL  %s\n' "$1"; ok=1; fi; }
   printf 'state %s  api :%s  web :%s  meili :%s  db %s\n' "$STATE" "$API_PORT" "$WEB_PORT" "$MEILI_PORT" "$DB_NAME"
   printf 'head  %s (server built from: %s)\n' "$(git rev-parse --short HEAD)" "$(cat "$STATE/built-from" 2>/dev/null || echo '?')"
   check "built from the current HEAD" '[ "$(cat "$STATE/built-from" 2>/dev/null)" = "$(git rev-parse --short HEAD)" ]'
+  check "API build inputs match the current checkout" 'fingerprint=$(source_fingerprint) && [ -n "$fingerprint" ] && [ "$(cat "$STATE/source-fingerprint" 2>/dev/null)" = "$fingerprint" ]'
   check "api process is ours and alive" 'alive server'
   check "api /health says database up" 'curl -fsS http://localhost:$API_PORT/health | grep -q "\"database\":\"up\""'
   check "meilisearch healthy" 'curl -fsS $MEILI_URL/health | grep -q available'
