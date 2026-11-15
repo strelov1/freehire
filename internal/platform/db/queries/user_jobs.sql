@@ -584,16 +584,21 @@ SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
 -- its stage, and who set that stage last — the source of the most recently WRITTEN live
 -- stage_set event, ordered by id, not occurred_at: mail events are dated by the message's
 -- received_at, so a stage mail set after the employer's can carry an earlier date. The event
--- counts only while its signal still IS the live stage: re-applying after clearing progress
--- seeds stage='applied' with no stage_set event, and an older employer event must not then
--- pass for the author of the candidate's fresh record ('' — nobody known — when it does not
--- match, or when there is no event). No row: the candidate has no record of this application, took it off their board,
+-- counts only if it belongs to the current attempt (written after the newest live 'applied'
+-- event — re-applying after clearing progress seeds stage='applied' with no stage_set event,
+-- and an older employer event, even one whose signal was 'applied', must not then pass for the
+-- author of the candidate's fresh record) and while its signal still IS the live stage ('' —
+-- nobody known — otherwise, or when there is no event). MirrorEmployerStage compares against
+-- the same expression. No row: the candidate has no record of this application, took it off their board,
 -- or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
 -- statement that they are not pursuing it, which an employer's move must not undo.
 SELECT a.stage,
        COALESCE((SELECT CASE WHEN e.signal = a.stage THEN e.source END
          FROM application_events e
          WHERE e.application_id = a.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
+           AND e.id > COALESCE((SELECT max(x.id) FROM application_events x
+                                 WHERE x.application_id = a.id AND x.kind = 'applied'
+                                   AND x.retracted_at IS NULL), 0)
          ORDER BY e.id DESC
          LIMIT 1), '')::text AS stage_source
 FROM applications a
@@ -602,8 +607,10 @@ WHERE a.user_id = sqlc.arg(user_id) AND a.job_id = sqlc.arg(job_id)::bigint
 
 -- name: MirrorEmployerStage :one
 -- Sets the candidate's stage to what the employer's pipeline says, but only if it still
--- holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
--- stage the candidate changed in between is never overwritten. Records the `stage_set`
+-- holds the stage the caller read (`expected`, NULL for none) AND that stage still has the
+-- author the caller read (`expected_source`, GetApplicationStageForMirror's expression): a
+-- compare-and-set on both, so a candidate who changed the stage in between — even away and
+-- back to the same value — is never overwritten. Records the `stage_set`
 -- ledger event with source 'employer' in the same statement. Never creates a record: an
 -- application the candidate took off their board stays off it.
 WITH moved AS (
@@ -612,6 +619,14 @@ WITH moved AS (
     WHERE applications.user_id = sqlc.arg(user_id)
       AND applications.job_id = sqlc.arg(job_id)::bigint
       AND applications.stage IS NOT DISTINCT FROM sqlc.narg(expected)::text
+      AND COALESCE((SELECT CASE WHEN e.signal = applications.stage THEN e.source END
+         FROM application_events e
+         WHERE e.application_id = applications.id AND e.kind = 'stage_set' AND e.retracted_at IS NULL
+           AND e.id > COALESCE((SELECT max(x.id) FROM application_events x
+                                 WHERE x.application_id = applications.id AND x.kind = 'applied'
+                                   AND x.retracted_at IS NULL), 0)
+         ORDER BY e.id DESC
+         LIMIT 1), '') = sqlc.arg(expected_source)::text
       AND (applications.stage IS NOT NULL OR applications.applied_at IS NOT NULL)
     RETURNING applications.id, applications.company_slug
 ), event AS (

@@ -202,14 +202,17 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        a.stage,
        (a.user_id IS NOT NULL)::bool AS application_exists,
        -- The same last-activity rule ListFollowUpCandidates matched on, employer moves
-       -- included, so the re-check before send reaches the verdict MATCH did.
+       -- included, so the re-check before send reaches the verdict MATCH did. The employer
+       -- term counts only while the application is applied: a candidate who cleared their
+       -- progress must not have an old employer move keep the follow-up alive.
        GREATEST(a.applied_at, mail.newest_mail_at,
+                CASE WHEN a.applied_at IS NOT NULL THEN
                 (SELECT max(ev.occurred_at)
                    FROM application_events ev
                   WHERE ev.application_id = a.id
                     AND ev.kind = 'stage_set'
                     AND ev.source = 'employer'
-                    AND ev.retracted_at IS NULL))::timestamptz AS last_activity_at,
+                    AND ev.retracted_at IS NULL) END)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
        mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at)::text AS account_email,
        u.timezone AS timezone,

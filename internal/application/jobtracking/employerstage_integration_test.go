@@ -117,6 +117,24 @@ func TestEmployerStagesMirror(t *testing.T) {
 		t.Fatalf("Mirror(preparing) after a re-apply = %v, %v, stage %q; want the candidate's applied kept", moved, err, stage())
 	}
 
+	// The same after an employer event whose signal was 'applied' itself: it belongs to the
+	// attempt before the re-apply, so it still does not make the employer the author.
+	if _, err := svc.ClearProgress(ctx, userID, "acme-platform"); err != nil {
+		t.Fatalf("ClearProgress: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+		SELECT $1, a.id, $2, 'acme', 'stage_set', 'applied', now(), 'employer'
+		FROM applications a WHERE a.user_id = $1 AND a.job_id = $2`, userID, jobID); err != nil {
+		t.Fatalf("employer applied event: %v", err)
+	}
+	if _, err := svc.MarkApplied(ctx, userID, "acme-platform", appevent.SourceUser); err != nil {
+		t.Fatalf("re-apply: %v", err)
+	}
+	if moved, err := mirror.Mirror(ctx, userID, jobID, "preparing"); err != nil || moved || stage() != "applied" {
+		t.Fatalf("Mirror(preparing) after a re-apply over an employer 'applied' event = %v, %v, stage %q", moved, err, stage())
+	}
+
 	// A record whose progress the candidate cleared is not revived by the employer.
 	if _, err := svc.ClearProgress(ctx, userID, "acme-platform"); err != nil {
 		t.Fatalf("ClearProgress: %v", err)

@@ -6,32 +6,32 @@ import (
 )
 
 type fakeEmployerStageRepo struct {
-	stage      string
-	byEmployer bool
-	found      bool
+	stage  string
+	source string
+	found  bool
 	// moved is what SetIfUnchanged answers; set records the call.
 	moved bool
-	set   *[2]string // expected, stage
+	set   *[3]string // expected, expected source, stage
 }
 
-func (f *fakeEmployerStageRepo) CandidateStage(context.Context, int64, int64) (string, bool, bool, error) {
-	return f.stage, f.byEmployer, f.found, nil
+func (f *fakeEmployerStageRepo) CandidateStage(context.Context, int64, int64) (string, string, bool, error) {
+	return f.stage, f.source, f.found, nil
 }
 
-func (f *fakeEmployerStageRepo) SetIfUnchanged(_ context.Context, _, _ int64, expected, stage string) (bool, error) {
-	f.set = &[2]string{expected, stage}
+func (f *fakeEmployerStageRepo) SetIfUnchanged(_ context.Context, _, _ int64, expected, expectedSource, stage string) (bool, error) {
+	f.set = &[3]string{expected, expectedSource, stage}
 	return f.moved, nil
 }
 
 func TestEmployerStagesMirror(t *testing.T) {
-	t.Run("sets an allowed move against the stage it read", func(t *testing.T) {
-		repo := &fakeEmployerStageRepo{stage: "applied", found: true, moved: true}
+	t.Run("sets an allowed move against the stage and author it read", func(t *testing.T) {
+		repo := &fakeEmployerStageRepo{stage: "applied", source: "user", found: true, moved: true}
 		moved, err := (&EmployerStages{repo: repo}).Mirror(context.Background(), 1, 2, "interview")
 		if err != nil || !moved {
 			t.Fatalf("Mirror = %v, %v; want moved", moved, err)
 		}
-		if repo.set == nil || *repo.set != [2]string{"applied", "interview"} {
-			t.Fatalf("SetIfUnchanged got %v, want expected=applied stage=interview", repo.set)
+		if repo.set == nil || *repo.set != [3]string{"applied", "user", "interview"} {
+			t.Fatalf("SetIfUnchanged got %v, want expected=applied/user stage=interview", repo.set)
 		}
 	})
 	t.Run("reports a lost compare-and-set as not moved", func(t *testing.T) {

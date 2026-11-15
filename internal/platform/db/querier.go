@@ -2713,10 +2713,12 @@ type Querier interface {
 	// its stage, and who set that stage last — the source of the most recently WRITTEN live
 	// stage_set event, ordered by id, not occurred_at: mail events are dated by the message's
 	// received_at, so a stage mail set after the employer's can carry an earlier date. The event
-	// counts only while its signal still IS the live stage: re-applying after clearing progress
-	// seeds stage='applied' with no stage_set event, and an older employer event must not then
-	// pass for the author of the candidate's fresh record ('' — nobody known — when it does not
-	// match, or when there is no event). No row: the candidate has no record of this application, took it off their board,
+	// counts only if it belongs to the current attempt (written after the newest live 'applied'
+	// event — re-applying after clearing progress seeds stage='applied' with no stage_set event,
+	// and an older employer event, even one whose signal was 'applied', must not then pass for the
+	// author of the candidate's fresh record) and while its signal still IS the live stage ('' —
+	// nobody known — otherwise, or when there is no event). MirrorEmployerStage compares against
+	// the same expression. No row: the candidate has no record of this application, took it off their board,
 	// or cleared its progress (stage and applied_at both NULL, ClearJobProgress) — each a
 	// statement that they are not pursuing it, which an employer's move must not undo.
 	GetApplicationStageForMirror(ctx context.Context, arg GetApplicationStageForMirrorParams) (GetApplicationStageForMirrorRow, error)
@@ -6088,8 +6090,10 @@ type Querier interface {
 	// standing alone under it.
 	MineJobTitles(ctx context.Context) ([]MineJobTitlesRow, error)
 	// Sets the candidate's stage to what the employer's pipeline says, but only if it still
-	// holds the stage the caller read (`expected`, NULL for none): a compare-and-set, so a
-	// stage the candidate changed in between is never overwritten. Records the `stage_set`
+	// holds the stage the caller read (`expected`, NULL for none) AND that stage still has the
+	// author the caller read (`expected_source`, GetApplicationStageForMirror's expression): a
+	// compare-and-set on both, so a candidate who changed the stage in between — even away and
+	// back to the same value — is never overwritten. Records the `stage_set`
 	// ledger event with source 'employer' in the same statement. Never creates a record: an
 	// application the candidate took off their board stays off it.
 	MirrorEmployerStage(ctx context.Context, arg MirrorEmployerStageParams) (bool, error)
