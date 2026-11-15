@@ -3,7 +3,7 @@
 // accumulation is unit-testable (vitest) without a DOM — mirroring how
 // `matchAnalysis.ts` isolates `reduceMatchEvent`.
 
-import type { TurnEvent } from './wire';
+import { eventsFromTranscript, type StoredMessage, type TurnEvent } from './wire';
 import type { ToolCall } from './tool-formatters';
 
 /** One rendered message. Assistant messages accumulate `text` (the reply),
@@ -30,6 +30,14 @@ export interface ChatState {
 
 export function initChat(): ChatState {
   return { messages: [], queued: false };
+}
+
+/** A stored transcript replayed through the same reducer live events go through, so
+ *  history and a running turn render identically. */
+export function chatFromTranscript(messages: StoredMessage[]): ChatState {
+  let next = initChat();
+  for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+  return next;
 }
 
 /** Fold one `TurnEvent` into the chat state, returning a new state (never

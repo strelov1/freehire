@@ -14,7 +14,9 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { PanelLeftOpen, Terminal } from '@lucide/svelte';
+  import CollapsedPanelRail from './CollapsedPanelRail.svelte';
+  import DesignPanel from './DesignPanel.svelte';
+  import EditorPanel from './EditorPanel.svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
@@ -24,12 +26,7 @@
   import ArtifactPanel from '#lib/tailor/ArtifactPanel.svelte';
   import CliEditDialog from '#lib/components/cv/CliEditDialog.svelte';
   import CvHtmlPreview from '#lib/tailor/CvHtmlPreview.svelte';
-  import CvSectionForm from '#lib/components/cv/CvSectionForm.svelte';
-  import ExperienceBankView from '#lib/components/ExperienceBankView.svelte';
-  import MarginSettings from '#lib/components/cv/MarginSettings.svelte';
-  import TracerLinksSettings from '#lib/components/cv/TracerLinksSettings.svelte';
-  import StyleSettings from '#lib/components/cv/StyleSettings.svelte';
-  import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
+  import ExperiencePanel from './ExperiencePanel.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
   import { fitToWidthZoom } from '#lib/cvGeometry.js';
@@ -620,20 +617,7 @@
            when its tab is picked; at lg it's a splitter-sized column always shown. The width rides a
            CSS var so the inline style never overrides the mobile w-full. -->
       {#if leftCollapsed}
-        <!-- The collapsed rail. Desktop-only, and it carries the one control that brings the
-             panel back — a collapse with no visible way out is a lost panel. -->
-        <div
-          class="hidden shrink-0 flex-col items-center gap-2 border-r border-border bg-background px-1.5 py-2 lg:flex"
-        >
-          <button
-            type="button"
-            onclick={() => (leftCollapsed = false)}
-            aria-label="Expand the editor panel"
-            class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <PanelLeftOpen class="size-4" />
-          </button>
-        </div>
+        <CollapsedPanelRail onExpand={() => (leftCollapsed = false)} />
       {/if}
       <section
         bind:this={leftPanelEl}
@@ -656,70 +640,16 @@
         />
         <div id="tailor-left-panel" role="tabpanel" aria-labelledby="tailor-left-tab-{leftTab}" class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
-            {#if runActive}
-              <p class="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                The agent is editing this CV. Editing is paused until the run finishes.
-              </p>
-            {/if}
-            <!-- A run rewrites this same document server-side while the form holds it in memory
-                 and saves on a debounce; letting both write means one side's work vanishes. -->
-            <fieldset disabled={runActive} class="contents">
-              <CvSectionForm bind:doc bind:title />
-            </fieldset>
-            <!-- The terminal is another way to edit the same text, so it is offered where the
-                 text is edited rather than as an unlabelled glyph in the panel's header. -->
-            <button
-              type="button"
-              onclick={() => (cliDialogOpen = true)}
-              class="mt-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Terminal class="size-4" aria-hidden="true" /> Edit this CV from your terminal
-            </button>
+            <EditorPanel bind:doc bind:title {runActive} onOpenCli={() => (cliDialogOpen = true)} />
           </div>
           <!-- The experience bank as its owner sees it on /my/profile — same component, so
                checking, confirming, or editing what the assistant knows never means leaving the
                workspace. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
-            <!-- The refresh a bank edit offers is the same reset the History tab's control runs,
-                 and it fails into the same `resetError` — but someone who triggered it from here
-                 is not looking at that tab, so the failure is said here too. -->
-            {#if resetError}
-              <p
-                class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
-              >
-                {resetError}
-              </p>
-            {/if}
-            <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
+            <ExperiencePanel {resetError} onBankMutated={offerRefreshAfterBankEdit} />
           </div>
-          <!-- Design: everything that decides how the CV looks, in one place — the template first,
-               since it sets the defaults every control below adjusts. All of it writes straight
-               into the shared document, so the centre preview re-renders live and autosave
-               persists it on the same debounce as any other edit. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'design'}>
-            <div class="space-y-8">
-              <section class="space-y-3">
-                <h2 class="text-sm font-semibold text-foreground">Template</h2>
-                <TemplateGallery {cvId} onSelected={onTemplateSelected} />
-              </section>
-              <section class="space-y-3">
-                <h2 class="text-sm font-semibold text-foreground">Typography</h2>
-                <StyleSettings bind:style={doc.style} {fonts} />
-              </section>
-              <section class="space-y-3">
-                <h2 class="text-sm font-semibold text-foreground">
-                  Page margins <span class="font-normal text-muted-foreground">(inches)</span>
-                </h2>
-                <MarginSettings bind:margins={doc.margins} />
-              </section>
-              <!-- Not a presentation choice, and deliberately last: consent to track whoever opens
-                   this CV is a different kind of decision from a font size, and it writes on its
-                   own rather than riding the document's autosave. -->
-              <section class="space-y-3 border-t border-border pt-6">
-                <h2 class="text-sm font-semibold text-foreground">Link tracking</h2>
-                <TracerLinksSettings {cvId} bind:enabled={tracerLinksEnabled} />
-              </section>
-            </div>
+            <DesignPanel {cvId} bind:doc {fonts} bind:tracerLinksEnabled {onTemplateSelected} />
           </div>
           <!-- Mounts before ArtifactPanel's MatchAnalysisFull (below, in the right panel) —
                deliberately: on a cold start MatchAnalysisFull opens its match-analysis SSE

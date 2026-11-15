@@ -1,6 +1,6 @@
 <script lang="ts">
   import { AlertTriangle, X } from '@lucide/svelte';
-  import type { TurnRefused } from '#lib/assistant/client.js';
+  import { extendSession, TurnRefused } from '#lib/assistant/client.js';
   import PlanLimitLink from '#lib/components/PlanLimitLink.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t } from '#lib/i18n/t.js';
@@ -11,21 +11,51 @@
   // bullet-cap notice the candidate dismisses.
   let {
     error,
-    refusal,
-    extending,
-    onContinue,
+    refusal = $bindable(),
+    onLimitReached,
+    onContinueFailed,
     bulletCapAlert,
     onDismissBulletCap,
   }: {
     error: { message: string; planLimitReached: boolean } | null;
     refusal: TurnRefused | null;
-    extending: boolean;
-    onContinue: () => void;
+    /** Extending was refused too: the day's tailoring allowance is spent. */
+    onLimitReached: (message: string) => void;
+    onContinueFailed: (message: string) => void;
     bulletCapAlert: string | null;
     onDismissBulletCap: () => void;
   } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  let extending = $state(false);
+
+  /** Spend another of today's tailoring sessions so this conversation can carry on.
+   *
+   *  It does not re-send the message: the draft was handed back when the turn was refused,
+   *  so the candidate sends it themselves and can change their mind first. Extending is
+   *  idempotent on the server, so a double click costs one session rather than two. */
+  async function continueSession() {
+    const stopped = refusal;
+    if (!stopped || extending) return;
+    extending = true;
+    try {
+      await extendSession(stopped.sessionId);
+      refusal = null;
+    } catch (err) {
+      // Refused again means the day's tailoring allowance is gone too, and that IS a wall
+      // until tomorrow — so it becomes an ordinary error rather than another offer, with the
+      // same link to the plan the daily-limit refusal in AssistantChat's dispatch() shows.
+      refusal = null;
+      if (err instanceof TurnRefused) {
+        onLimitReached(err.message);
+      } else {
+        onContinueFailed(err instanceof Error ? err.message : s.continueFailed);
+      }
+    } finally {
+      extending = false;
+    }
+  }
 </script>
 
 {#if error}
@@ -64,7 +94,7 @@
     <button
       type="button"
       class="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-60"
-      onclick={onContinue}
+      onclick={continueSession}
       disabled={extending}
     >
       {extending ? s.continuingEllipsis : s.continueUsesSession}
