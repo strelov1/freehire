@@ -63,6 +63,7 @@ namespace Freehire;
 // mw.key, none). ogen never sees this: `make api-contract` strips it from the copy ogen
 // reads, so the gates stay in the router. The default is the cookie; an operation that also
 // takes an API key says `@useAuth(SessionOrKey)`, a public one `@useAuth(NoAuth)`.
+// TestContractAuthMatchesRouter (internal/api/handler) fails when the two disagree.
 
 /** Browser session cookie set on sign-in (HttpOnly, same-origin). */
 model CookieSession is ApiKeyAuth<ApiKeyLocation.cookie, "hire_token">;
