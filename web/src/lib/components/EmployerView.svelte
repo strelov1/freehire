@@ -13,7 +13,7 @@
 
   // Which pane of the claimed company's dashboard this route shows; an account that has
   // not claimed a company sees the claim flow on either.
-  let { section }: { section: 'profile' | 'vacancies' } = $props();
+  let { section }: { section: 'profile' | 'vacancies' | 'applications' } = $props();
 
   const s = $derived(t(messages, locale()));
 

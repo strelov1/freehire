@@ -78,6 +78,8 @@ export class Paginator<T> {
   #keyOf?: (item: T) => unknown;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
   #seen = new Set<unknown>();
+  // Bumped by every start(); a response from an earlier one is discarded (see start).
+  #generation = 0;
 
   constructor(fetch: FetchSlice<T>, opts: { limit?: number; keyOf?: (item: T) => unknown } = {}) {
     this.#fetch = fetch;
@@ -118,9 +120,13 @@ export class Paginator<T> {
    *  on the `?page=N` the visitor is reading, rather than yanking them back to page
    *  one. A changed query passes 0, because its results are a different set. */
   async start(offset = 0) {
+    // A start supersedes every request before it: a slower earlier one — a filter the view
+    // has since changed — must not land after it and replace its items.
+    const mine = ++this.#generation;
     this.error = null;
     try {
       const slice = await loadWithRetry(() => this.#fetch(this.#limit, offset));
+      if (mine !== this.#generation) return;
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
       this.#seen = new Set();
       this.#baseOffset = offset;
@@ -130,6 +136,7 @@ export class Paginator<T> {
       this.hasMore = slice.hasMore;
       this.status = 'ready';
     } catch (error) {
+      if (mine !== this.#generation) return;
       this.error = error;
       this.status = 'error';
     }
@@ -138,10 +145,12 @@ export class Paginator<T> {
   /** Append the next page; no-op while one is in flight or none remain. */
   async loadMore() {
     if (this.loadingMore || !this.hasMore) return;
+    const mine = this.#generation;
     this.loadingMore = true;
     this.loadMoreError = false;
     try {
       const slice = await this.#fetch(this.#limit, this.#baseOffset + this.items.length);
+      if (mine !== this.#generation) return; // a start since replaced the list
       this.items = [...this.items, ...this.#dedupe(slice.items)];
       this.total = slice.total ?? 0;
       this.totalIsLowerBound = slice.totalIsLowerBound ?? false;

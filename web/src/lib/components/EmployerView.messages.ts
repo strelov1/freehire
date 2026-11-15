@@ -43,6 +43,11 @@ export const messages = defineMessages(
     // Dashboard shell.
     dashboardTitle: '{company}',
 
+    // The vacancies section's routed tabs.
+    vacancyTabsLabel: 'Vacancy sections',
+    tabVacancies: 'Vacancies',
+    tabApplications: 'Applications',
+
     // Profile tab.
     profileSaved: 'Saved.',
     profileSaveError: 'Could not save. Please try again.',
@@ -94,7 +99,7 @@ export const messages = defineMessages(
     applyModeLabel: 'How candidates apply',
     applyModeFreehire: 'On freehire',
     applyModeFreehireHint:
-      'Candidates apply on the vacancy page. You receive each application by email — CV attached, reply goes straight to the candidate. The vacancy is only on freehire.',
+      'Candidates apply on the vacancy page. Each application lands in Applications, where you move it through your pipeline, and arrives by email — CV attached, reply goes straight to the candidate. The vacancy is only on freehire.',
     applyModeExternal: 'On my own site',
     applyModeExternalHint: 'Candidates follow your link to apply.',
     questionsLabel: 'Questions for candidates',
@@ -147,6 +152,10 @@ export const messages = defineMessages(
 
       dashboardTitle: '{company}',
 
+      vacancyTabsLabel: 'Разделы вакансий',
+      tabVacancies: 'Вакансии',
+      tabApplications: 'Отклики',
+
       profileSaved: 'Сохранено.',
       profileSaveError: 'Не удалось сохранить. Попробуйте ещё раз.',
       profileTaglineLabel: 'Краткое описание',
@@ -196,7 +205,7 @@ export const messages = defineMessages(
       applyModeLabel: 'Как откликаются кандидаты',
       applyModeFreehire: 'На freehire',
       applyModeFreehireHint:
-        'Кандидаты откликаются прямо на странице вакансии. Каждый отклик приходит вам на почту: CV во вложении, ответ уходит кандидату напрямую. Вакансия есть только на freehire.',
+        'Кандидаты откликаются прямо на странице вакансии. Каждый отклик попадает в раздел «Отклики», где вы ведёте его по стадиям, и приходит вам на почту: CV во вложении, ответ уходит кандидату напрямую. Вакансия есть только на freehire.',
       applyModeExternal: 'На своём сайте',
       applyModeExternalHint: 'Кандидаты переходят по вашей ссылке.',
       questionsLabel: 'Вопросы кандидатам',

@@ -1,16 +1,21 @@
 import type { Http } from '../api-core';
 import type {
   EmployerAccount,
+  EmployerApplication,
+  EmployerApplicationMoved,
+  EmployerApplicationsPage,
+  EmployerApplicationStage,
   EmployerCompany,
   EmployerCompanyProfileInput,
   EmployerVacancyInput,
   EmployerVacancyPatch,
   Job,
 } from '../types';
+import type { Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
-import { ApiError, jsonBody } from '../api-core';
+import { ApiError, jsonBody, toSlice } from '../api-core';
 
-export function employerApi({ call, requestData }: Http) {
+export function employerApi({ call, request, requestData, baseUrl }: Http) {
   // ── Verified employer accounts ────────────────────────────────────────────
 
   /** Claim a company: resolves the name to a slug, refuses a public-webmail work email,
@@ -92,6 +97,43 @@ export function employerApi({ call, requestData }: Http) {
     await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/reopen`, { method: 'POST' });
   }
 
+  // ── The applicant inbox ───────────────────────────────────────────────────
+
+  /** One page of the applications sent on freehire to the caller's vacancies, newest
+   *  first, narrowed to one vacancy and/or stage, as a Slice for the shared Paginator.
+   *  `stageCounts` counts every stage under the vacancy filter. Active-account-only. */
+  async function listEmployerApplications(filter: {
+    job?: string;
+    stage?: EmployerApplicationStage;
+    limit: number;
+    offset: number;
+  }): Promise<Slice<EmployerApplication> & { stageCounts: Record<string, number> }> {
+    const q = new URLSearchParams({ limit: String(filter.limit), offset: String(filter.offset) });
+    if (filter.job) q.set('job', filter.job);
+    if (filter.stage) q.set('stage', filter.stage);
+    const page = await request<EmployerApplicationsPage>(`/api/v1/employer/applications?${q}`);
+    return { ...toSlice(page, filter.offset), stageCounts: page.meta.stage_counts };
+  }
+
+  /** Where the CV an application sent is served, as it was emailed — a link to open, not a
+   *  fetch: the browser renders the PDF itself. */
+  function employerApplicationCVUrl(id: number): string {
+    return `${baseUrl}/api/v1/employer/applications/${id}/cv`;
+  }
+
+  /** Move an application to a stage of the caller's pipeline. `message` goes to the
+   *  candidate and only with interview, offer or rejected. */
+  async function moveEmployerApplication(
+    id: number,
+    stage: EmployerApplicationStage,
+    message?: string,
+  ): Promise<EmployerApplicationMoved> {
+    return requestData<EmployerApplicationMoved>(
+      `/api/v1/employer/applications/${id}/stage`,
+      jsonBody('POST', { stage, message } satisfies components['schemas']['EmployerApplicationMove']),
+    );
+  }
+
   /** The moderator review queue: employer claims that could not auto-activate. */
   async function listPendingEmployerClaims(): Promise<EmployerAccount[]> {
     return requestData<EmployerAccount[]>('/api/v1/employer/claims');
@@ -119,6 +161,9 @@ export function employerApi({ call, requestData }: Http) {
     updateEmployerVacancy,
     closeEmployerVacancy,
     reopenEmployerVacancy,
+    listEmployerApplications,
+    employerApplicationCVUrl,
+    moveEmployerApplication,
     listPendingEmployerClaims,
     approveEmployerClaim,
     rejectEmployerClaim,
