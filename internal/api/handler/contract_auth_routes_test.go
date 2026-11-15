@@ -57,7 +57,6 @@ func TestContractAuthMatchesRouter(t *testing.T) {
 			if op.Security != nil {
 				security = *op.Security
 			}
-			want := expectedGates(security)
 
 			url := "/api/v1" + param.ReplaceAllString(path, "1")
 			req := httptest.NewRequestWithContext(context.Background(), strings.ToUpper(method), url, nil)
@@ -72,10 +71,9 @@ func TestContractAuthMatchesRouter(t *testing.T) {
 					op.OperationID, method, path, resp.StatusCode, gates)
 				continue
 			}
-			first, _, _ := strings.Cut(gates, ",")
-			if !slices.Contains(want, first) {
-				t.Errorf("%s (%s %s): contract security %v wants an auth gate in %q, router mounts %q",
-					op.OperationID, method, path, security, want, gates)
+			if !gatesMatch(security, gates) {
+				t.Errorf("%s (%s %s): contract security %v, router mounts gates %q",
+					op.OperationID, method, path, security, gates)
 			}
 			checked++
 		}
@@ -85,29 +83,77 @@ func TestContractAuthMatchesRouter(t *testing.T) {
 	}
 }
 
-// expectedGates maps a contract security requirement to the first gates that implement it.
-// "" means no auth gate in front (the route is public).
-func expectedGates(security []map[string][]string) []string {
-	var cookie, key, open bool
+// authGates are the gates that authenticate a caller, by what they accept.
+var authGates = map[string]string{
+	"cookie":        "cookie",
+	"key":           "key",
+	"cvKey":         "key",
+	"autoApplyGate": "key",
+}
+
+// callerGates need a caller already in hand, so a public operation must mount none of them.
+var callerGates = []string{"paidAI", "moderator", "admin"}
+
+// gatesMatch reports whether the comma-separated gates a route mounts implement security:
+// a public operation (an empty requirement) mounts no gate that needs a caller; an
+// authenticated one mounts at least one authenticating gate, and every one of them accepts
+// what the contract says (a cookie, or a cookie or a key).
+func gatesMatch(security []map[string][]string, gates string) bool {
+	var open, key bool
 	for _, req := range security {
 		switch {
 		case len(req) == 0:
 			open = true
 		case req["PersonalApiKey"] != nil:
 			key = true
-		case req["CookieSession"] != nil:
-			cookie = true
 		}
 	}
-	switch {
-	case open:
-		return []string{"", "optional", "optionalCookie", "paidAI"}
-	case key:
-		return []string{"key", "cvKey", "autoApplyGate"}
-	case cookie:
-		return []string{"cookie"}
+	var accepts []string
+	for g := range strings.SplitSeq(gates, ",") {
+		if kind, ok := authGates[g]; ok {
+			accepts = append(accepts, kind)
+		} else if open && slices.Contains(callerGates, g) {
+			return false
+		}
 	}
-	return nil
+	if open {
+		return len(accepts) == 0
+	}
+	want := "cookie"
+	if key {
+		want = "key"
+	}
+	return len(accepts) > 0 && !slices.ContainsFunc(accepts, func(k string) bool { return k != want })
+}
+
+func TestGatesMatch(t *testing.T) {
+	public := []map[string][]string{{}}
+	cookie := []map[string][]string{{"CookieSession": {}}}
+	either := []map[string][]string{{"CookieSession": {}}, {"PersonalApiKey": {}}}
+	cases := []struct {
+		name     string
+		security []map[string][]string
+		gates    string
+		want     bool
+	}{
+		{"public, no gate", public, "", true},
+		{"public, optional", public, "optional", true},
+		{"public, optional then cookie", public, "optional,cookie", false},
+		{"public, paidAI", public, "paidAI", false},
+		{"cookie, cookie", cookie, "cookie", true},
+		{"cookie, cookie then moderator", cookie, "cookie,moderator", true},
+		{"cookie, open", cookie, "optional", false},
+		{"cookie, key", cookie, "key", false},
+		{"cookie, cookie then key", cookie, "cookie,key", false},
+		{"either, key", either, "key", true},
+		{"either, cvKey then paidAI", either, "cvKey,paidAI", true},
+		{"either, cookie only", either, "cookie", false},
+	}
+	for _, c := range cases {
+		if got := gatesMatch(c.security, c.gates); got != c.want {
+			t.Errorf("%s: gatesMatch(%q) = %v, want %v", c.name, c.gates, got, c.want)
+		}
+	}
 }
 
 // mountRecordingRoutes mounts every route with gates that record their name in a response
@@ -118,10 +164,11 @@ func mountRecordingRoutes(t *testing.T) *fiber.App {
 	app.Use(recover.New())
 	gate := func(name string) fiber.Handler {
 		return func(c *fiber.Ctx) error {
+			seen := name
 			if prev := string(c.Response().Header.Peek("X-Test-Gates")); prev != "" {
-				name = prev + "," + name
+				seen = prev + "," + name
 			}
-			c.Set("X-Test-Gates", name)
+			c.Set("X-Test-Gates", seen)
 			return c.Next()
 		}
 	}
