@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { TALENT_FACETS, cityLabel, skillLabel, type FacetDef } from '#lib/facets.js';
+  import { cityLabel, skillLabel, type FacetDef } from '#lib/facets.js';
+  import { TALENT_FACETS } from '#lib/directoryFacets.js';
   import type { TalentFilterStore } from '#lib/talentFilters.js';
   import FilterSummaryShell, { type SummaryGroup } from './FilterSummaryShell.svelte';
 

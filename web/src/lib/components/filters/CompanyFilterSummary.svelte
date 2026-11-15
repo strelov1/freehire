@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { COMPANY_FACETS, type FacetDef } from '#lib/facets.js';
+  import { type FacetDef } from '#lib/facets.js';
+  import { COMPANY_FACETS } from '#lib/directoryFacets.js';
   import type { CompanyFilterStore } from '#lib/companyFilters.js';
   import FilterSummaryShell, { type SummaryGroup } from './FilterSummaryShell.svelte';
 

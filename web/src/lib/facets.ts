@@ -284,7 +284,7 @@ export function dynamicLabel(param: string, value: string): string {
 // prefix among themselves — but drawing them from SENIORITY_VALUES keeps this in
 
 /** Build facet options from generated values, overriding labels where given. */
-function options(values: readonly string[], labels: Record<string, string> = {}): FacetOption[] {
+export function options(values: readonly string[], labels: Record<string, string> = {}): FacetOption[] {
   return values.map((value) => ({ value, label: labels[value] ?? titleCase(value) }));
 }
 
@@ -293,7 +293,7 @@ function options(values: readonly string[], labels: Record<string, string> = {})
 // Country-level filtering lives in the Countries facet, so the US sits under
 // `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
 // whose insertion order is the curated display order.
-const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
+export const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
 
 // Reserved `regions` value selecting jobs with no resolved geography (an empty
 // regions array) — the "region not specified" bucket — rather than a real region
@@ -308,19 +308,19 @@ export const REGION_UNSPECIFIED = 'none';
 const JOB_REGION: FacetOption[] = [...REGION, { value: REGION_UNSPECIFIED, label: 'Not specified' }];
 
 const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
-const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
-const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
+export const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
+export const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
 const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, RELOCATION_LABELS);
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
-const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
+export const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 
 // IANA timezone REGIONS — the part before the slash. What a recruiter asking "can we
 // overlap for a call" means is a continent, not a city's zone; there are dozens of zones
 // per region. The list is the regions a candidate can actually be in: Antarctica and the
 // single-city oddities are left out, because a chip nobody will ever match is a chip in
 // the way of the ones they will.
-const TIMEZONE_REGION: FacetOption[] = TIMEZONE_REGIONS.map((r) => ({ value: r, label: r }));
+export const TIMEZONE_REGION: FacetOption[] = TIMEZONE_REGIONS.map((r) => ({ value: r, label: r }));
 
 // The category facet options, exported for reuse outside the filter panel (the search
 // profile's specialization picker) so the same labels/order are shared, not duplicated.
@@ -369,7 +369,7 @@ const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 // beneath domains but the company catalogue's single industry axis, which the
 // backend answers from the curated column and the job-derived domains alike.
 // Generated, like DOMAINS, so the options cannot drift from the Go dictionary.
-const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
+export const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
 // The perks the description states (internal/dict/perks); values and labels are both
 // generated from the dictionary, so a chip cannot offer a perk it never writes.
 const PERKS: FacetOption[] = options(PERK_VALUES, PERK_LABELS);
@@ -452,7 +452,7 @@ export const CURRENCY_OPTIONS: FacetOption[] = CURRENCY;
 // kinds that qualify. Naming them was how `yc` and `techstars` fell out of the
 // filters entirely the day they became backers — filterable through the API,
 // unreachable in the UI, and silent about it.
-const COLLECTION: FacetOption[] = [
+export const COLLECTION: FacetOption[] = [
   ...COLLECTIONS.filter((c) => c.kind !== 'credential').map((c) => ({
     value: c.slug,
     label: c.title,
@@ -482,15 +482,6 @@ export const JOB_COLLECTION: FacetOption[] = COLLECTION.filter((o) => o.group !=
 export const EMPLOYER_CREDENTIALS: FacetOption[] = COLLECTION.filter((o) => o.group === 'Employer credentials').map(
   ({ group: _group, ...o }) => o,
 );
-
-// Company-size buckets — the vocab.CompanySizeValues vocabulary. Not exported as
-// a generated values array (it's a scalar enrichment field, not a search facet on
-// jobs), so the closed set is spelled out here like CURRENCY; the values are
-// already display-ready.
-const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'].map((value) => ({
-  value,
-  label: value,
-}));
 
 // The ISO 3166-1 alpha-2 code set — the country vocabulary the location dictionary
 // draws from — plus 'xk', Kosovo's user-assigned code: ISO has not assigned it, but
@@ -751,7 +742,7 @@ export const ISO_COUNTRY_CODES = [
   'zw',
 ];
 
-const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
+export const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
   value,
   label: countryLabel(value),
   flag: value,
@@ -760,124 +751,6 @@ const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
 // The full ISO country select, exported for the profile's location editor (base +
 // remote/relocation countries) so it reuses the same list/labels as the company facet.
 export const COUNTRY_OPTIONS: FacetOption[] = COUNTRY;
-
-// The company catalog's filter facets: mostly a subset of the job facets whose
-// values are mostly derived from a company's open jobs and denormalized onto the
-// companies row (collections + the RefreshCompanyFacets arrays), including
-// `remote_regions` (regions scoped to remote jobs). `yc_batch`/`yc_status` are the
-// curated YC-directory facets loaded by cmd/import-yc. No exclude/AND-OR modes — the
-// companies list endpoint filters by plain array overlap. Reuses the same option
-// vocabularies as the job facets so labels never drift.
-const YC_STATUS: FacetOption[] = options(['Active', 'Acquired', 'Public', 'Inactive']);
-const YC_STAGE: FacetOption[] = options(['Early', 'Growth']);
-// Deterministic company maturity (see the company-classification-facets change),
-// derived server-side from company signals; unknown (NULL) companies match nothing.
-const MATURITY: FacetOption[] = options(['startup', 'scaleup', 'enterprise', 'government'], {
-  startup: 'Startup',
-  scaleup: 'Scaleup',
-  enterprise: 'Enterprise',
-  government: 'Government',
-});
-const YC_FLAGS: FacetOption[] = options(['top_company', 'hiring'], {
-  top_company: 'YC Top Company',
-  hiring: 'Hiring',
-});
-// YC batch labels are the verbatim source strings ("Winter 2012"). Generate the full
-// season×year grid so the searchable select covers any batch; phantom combinations
-// that no company has simply match nothing. The grid runs from the first YC batch
-// (2005) through next year so a fresh batch is covered as soon as it appears.
-const YC_BATCH: FacetOption[] = (() => {
-  const max = new Date().getFullYear() + 1;
-  return Array.from({ length: max - 2005 + 1 }, (_, i) => max - i).flatMap((y) =>
-    ['Winter', 'Spring', 'Summer', 'Fall'].map((s) => ({ value: `${s} ${y}`, label: `${s} ${y}` })),
-  );
-})();
-/** The Talent Network catalogue's facets.
- *
- *  All include-only — the catalogue endpoint has no `_exclude` and no AND/OR mode — so
- *  every entry sets `excludable: false` and none carries `hasAndOr`.
- *
- *  Skills and city are `dynamic`: their options come from the live facet distribution
- *  (`/talent/facets`) rather than a static list, which is what makes them searchable and
- *  what puts a count beside each value. A closed vocabulary offered as pills and an open
- *  one offered as a searched select are not two styles of the same control — thousands of
- *  skills as pills is the wrong control, and a skill offered without a count cannot be
- *  told apart from one nobody carries.
- *
- *  `specializations` and `categories` share the category vocabulary and ask different
- *  questions of it: what a candidate SAYS they want, and what their most recent title
- *  resolves to. Both are selects rather than pills because 48 values is a wall. */
-export const TALENT_FACETS: FacetDef[] = [
-  {
-    param: 'specializations',
-    label: 'Open to',
-    control: 'select',
-    options: CATEGORY,
-    excludable: false,
-    placeholder: 'Search disciplines',
-  },
-  {
-    param: 'categories',
-    label: 'Has worked in',
-    control: 'select',
-    options: CATEGORY,
-    excludable: false,
-    placeholder: 'Search disciplines',
-  },
-  { param: 'seniorities', label: 'Grade', control: 'pills', options: SENIORITY, excludable: false },
-  {
-    param: 'skills',
-    label: 'Skills',
-    control: 'select',
-    dynamic: true,
-    excludable: false,
-    placeholder: 'Search skills',
-    techIcons: true,
-  },
-  { param: 'tz', label: 'Timezone', control: 'pills', options: TIMEZONE_REGION, excludable: false },
-  { param: 'cities', label: 'City', control: 'select', dynamic: true, excludable: false, placeholder: 'Search cities' },
-];
-
-export const COMPANY_FACETS: FacetDef[] = [
-  { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },
-  { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
-  { param: 'remote_regions', label: 'Remote hiring', control: 'pills', options: REGION, excludable: false },
-  {
-    param: 'countries',
-    label: 'Country',
-    control: 'select',
-    options: COUNTRY,
-    excludable: false,
-    placeholder: 'Search countries',
-  },
-  // The catalogue's only industry control. The backend matches it against the curated
-  // industries column AND the job-derived domains one (internal/industrytag maps
-  // between the vocabularies), so the Domain facet that used to sit here asked the
-  // same question of one of the same columns and is gone. `domains` remains a working
-  // query parameter for a caller who wants the raw job-derived value.
-  {
-    param: 'industries',
-    label: 'Industry',
-    control: 'select',
-    options: INDUSTRIES,
-    excludable: false,
-    placeholder: 'Search industries',
-  },
-  { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
-  { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },
-  { param: 'maturity', label: 'Company stage', control: 'pills', options: MATURITY, excludable: false },
-  { param: 'yc_status', label: 'YC status', control: 'pills', options: YC_STATUS, excludable: false },
-  { param: 'yc_stage', label: 'YC stage', control: 'pills', options: YC_STAGE, excludable: false },
-  { param: 'yc_flags', label: 'YC highlights', control: 'pills', options: YC_FLAGS, excludable: false },
-  {
-    param: 'yc_batch',
-    label: 'YC batch',
-    control: 'select',
-    options: YC_BATCH,
-    excludable: false,
-    placeholder: 'Search YC batches',
-  },
-];
 
 export const FACETS: FacetDef[] = [
   { param: 'collections', label: 'Collection', control: 'pills', options: COLLECTION, excludable: false },

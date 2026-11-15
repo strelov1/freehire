@@ -6,15 +6,8 @@
 
 import { dynamicLabel, FACETS } from './facets';
 import { experienceLabel, freshnessLabel } from './filterControls';
-import {
-  type JobFilters,
-  emptyFacet,
-  emptyFilters,
-  facetAdd,
-  facetSetSign,
-  filtersToParams,
-  signOf,
-} from './facetModel';
+import { type JobFilters, emptyFacet, emptyFilters, filtersToParams } from './facetModel';
+import { facetAdd, facetSetSign, signOf } from './facetSign';
 import type { Interpretation, ResumeProfile } from './types';
 
 /** Build a fresh filter set from an interpretation — the reset-and-apply behind the
