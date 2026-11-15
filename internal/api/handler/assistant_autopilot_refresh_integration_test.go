@@ -129,8 +129,8 @@ func TestAutopilotRefreshesAnalysisAfterEveryRun(t *testing.T) {
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("autopilot: status %d", resp.StatusCode)
 	}
-	io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 
 	if fitM.n != 3 {
 		t.Errorf("fit model called %d times, want exactly 3 (one full chain run) — a cached analysis must still be refreshed once, not skipped and not recomputed twice", fitM.n)
@@ -148,7 +148,7 @@ func TestAutopilotRefreshesAnalysisAfterEveryRun(t *testing.T) {
 // ordinary message — the autopilot endpoint reads no body, so none is sent.
 func dialAutopilotTurn(t *testing.T, addr, sessionID, cookie string) net.Conn {
 	t.Helper()
-	conn, err := net.Dial("tcp", addr)
+	conn, err := (&net.Dialer{}).DialContext(context.Background(), "tcp", addr)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -215,6 +215,7 @@ func TestAutopilotRefreshSurvivesACancelledRun(t *testing.T) {
 	}
 
 	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sessionID+"/cancel", cookie, nil)
+	_ = resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("cancel: status %d, want 204", resp.StatusCode)
 	}
