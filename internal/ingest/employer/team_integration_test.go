@@ -307,3 +307,48 @@ func TestTeam_AClaimantsWriteDuringTheirAccountDeletionDoesNotDeadlock(t *testin
 		t.Fatal("the write never finished after the deletion committed")
 	}
 }
+
+// A member creating a vacancy while the claimant deletes their account, through moderation's
+// real Create: the member's own users row is free, so the write goes on to the company
+// account and waits there behind the deletion; once it commits, the account and the
+// membership are gone and the write is refused, leaving no vacancy behind.
+func TestTeam_AMembersWriteDuringTheAccountDeletionIsRefused(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	member := f.member(t, "someone@gmail.com", "dev@acme.test")
+	mod := moderation.New(moderation.NewQueriesRepository(db.New(f.pool), f.pool, enrich.Version))
+
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, f.holder); err != nil {
+		t.Fatalf("delete claimant (uncommitted): %v", err)
+	}
+
+	created := make(chan error, 1)
+	go func() {
+		_, _, err := mod.Create(ctx, member, moderation.CreateInput{
+			URL: "https://acme.test/jobs/12", Source: "employer", Title: "Go Engineer", Company: "Acme",
+			Description: "Build things.", Employer: moderation.EmployerOwner{UserID: member, CompanySlug: "acme"},
+		})
+		created <- err
+	}()
+	waitForLockWait(t, f.pool, created)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit deletion: %v", err)
+	}
+	select {
+	case err := <-created:
+		if !errors.Is(err, moderation.ErrNoCompany) {
+			t.Fatalf("the member's write after the deletion: err = %v, want ErrNoCompany", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the member's write never finished after the deletion committed")
+	}
+	var n int
+	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE created_by = $1`, member).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("vacancies left by the refused write = %d (err %v), want 0", n, err)
+	}
+}
