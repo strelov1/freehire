@@ -26,7 +26,7 @@ describe('JobView closure notice', () => {
   });
 
   it("links the posting's own page, unfollowed", () => {
-    expect(notice).toContain('href={job.url}');
+    expect(notice).toContain('href={job.source_url ?? job.url}');
     expect(notice).toContain('rel="nofollow noopener noreferrer"');
   });
 
