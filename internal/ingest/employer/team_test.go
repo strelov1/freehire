@@ -16,7 +16,9 @@ type fakeTeam struct {
 	ids         map[string]int64
 	accepted    []int64
 	removed     []int64
-	status      string
+	// actors is who each Withdraw and Remove was made by, in order.
+	actors []int64
+	status string
 }
 
 func newFakeTeam(holder int64) *fakeTeam {
@@ -56,7 +58,8 @@ func (f *fakeTeam) Invite(_ context.Context, inv NewInvitation, maxLive int64) (
 	return Invitation{ID: f.nextID, Email: inv.Email, ExpiresAt: inv.ExpiresAt}, nil
 }
 
-func (f *fakeTeam) Withdraw(_ context.Context, _ string, _, id int64) error {
+func (f *fakeTeam) Withdraw(_ context.Context, _ string, actorID, id int64) error {
+	f.actors = append(f.actors, actorID)
 	for h, i := range f.ids {
 		if i == id {
 			delete(f.invitations, h)
@@ -92,7 +95,8 @@ func (f *fakeTeam) Accept(_ context.Context, userID int64, hash []byte) error {
 	return nil
 }
 
-func (f *fakeTeam) Remove(_ context.Context, _ string, _, memberID int64) error {
+func (f *fakeTeam) Remove(_ context.Context, _ string, actorID, memberID int64) error {
+	f.actors = append(f.actors, actorID)
 	for i, m := range f.members {
 		if m.UserID == memberID && !m.Holder {
 			f.members = append(f.members[:i], f.members[i+1:]...)
@@ -273,6 +277,32 @@ func TestRemoveMember(t *testing.T) {
 	}
 	if err := s.RemoveMember(context.Background(), holderID, 5); err != nil || len(team.removed) != 1 {
 		t.Errorf("RemoveMember = %v, removed %v", err, team.removed)
+	}
+}
+
+// A member's withdrawal and removal are made as the member, not as the claimant the
+// company's Account names: the repository rechecks that actor under the company's lock, and
+// the claimant's id would pass it for a member removed meanwhile.
+func TestTeam_AMembersChangesActAsTheMember(t *testing.T) {
+	s, team, _, repo := teamService(t)
+	const memberID, otherID = 5, 6
+	acc := repo.accounts[holderID]
+	acc.Member = true
+	repo.accounts[memberID] = acc
+	team.members = append(team.members, Member{UserID: memberID, WorkEmail: "dev@acme.test"}, Member{UserID: otherID, WorkEmail: "ops@acme.test"})
+	inv, err := s.Invite(context.Background(), memberID, "qa@acme.test")
+	if err != nil {
+		t.Fatalf("Invite: %v", err)
+	}
+
+	if err := s.WithdrawInvitation(context.Background(), memberID, inv.ID); err != nil {
+		t.Fatalf("WithdrawInvitation: %v", err)
+	}
+	if err := s.RemoveMember(context.Background(), memberID, otherID); err != nil {
+		t.Fatalf("RemoveMember: %v", err)
+	}
+	if len(team.actors) != 2 || team.actors[0] != memberID || team.actors[1] != memberID {
+		t.Errorf("actors = %v, want both changes made as the member (%d), not the claimant (%d)", team.actors, memberID, holderID)
 	}
 }
 
