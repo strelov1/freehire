@@ -293,7 +293,7 @@ export function options(values: readonly string[], labels: Record<string, string
 // Country-level filtering lives in the Countries facet, so the US sits under
 // `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
 // whose insertion order is the curated display order.
-export const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
+const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
 
 // Reserved `regions` value selecting jobs with no resolved geography (an empty
 // regions array) — the "region not specified" bucket — rather than a real region
@@ -308,12 +308,12 @@ export const REGION_UNSPECIFIED = 'none';
 const JOB_REGION: FacetOption[] = [...REGION, { value: REGION_UNSPECIFIED, label: 'Not specified' }];
 
 const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
-export const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
+const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
 export const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
 const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, RELOCATION_LABELS);
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
-export const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
+const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 
 // IANA timezone REGIONS — the part before the slash. What a recruiter asking "can we
 // overlap for a call" means is a continent, not a city's zone; there are dozens of zones
@@ -742,7 +742,7 @@ export const ISO_COUNTRY_CODES = [
   'zw',
 ];
 
-export const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
+const COUNTRY: FacetOption[] = ISO_COUNTRY_CODES.map((value) => ({
   value,
   label: countryLabel(value),
   flag: value,
