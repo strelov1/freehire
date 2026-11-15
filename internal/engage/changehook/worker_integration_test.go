@@ -147,18 +147,33 @@ func TestDeliveryEndToEnd(t *testing.T) {
 	}
 
 	t.Run("a batch of the wanted changes, signed, in order, and the cursor advances", func(t *testing.T) {
-		until(collect(1))
-		if len(got) != 1 || total.Failed != 0 {
-			t.Fatalf("deliveries = %+v totals = %+v, want one POST", got, total)
+		// The two job-a changes are separate transactions, and an unrelated open transaction can
+		// hide the second from the feed for a while: the closing change may come in a later POST.
+		var changes []Change
+		until(func() bool {
+			got = append(got, ep.take()...)
+			changes = changes[:0]
+			for _, r := range got {
+				for _, c := range r.event.Changes {
+					if c.PublicSlug != "before" {
+						changes = append(changes, c)
+					}
+				}
+			}
+			return len(changes) >= 2
+		})
+		if total.Failed != 0 {
+			t.Fatalf("deliveries = %+v totals = %+v, want no failure", got, total)
 		}
-		ev := got[0].event
-		if c := ev.Changes; len(c) == 3 && c[0].PublicSlug == "before" {
-			ev.Changes = c[1:]
+		for _, r := range got {
+			if r.event.Type != EventChanges || r.event.ID != r.delivery {
+				t.Fatalf("event = %+v (delivery %q)", r.event, r.delivery)
+			}
 		}
-		if ev.Type != EventChanges || ev.ID != got[0].delivery || len(ev.Changes) != 2 ||
-			ev.Changes[0].Kind != "opened" || ev.Changes[1].Kind != "closed" || ev.Changes[1].ClosedReason != "expired" ||
-			ev.Changes[0].Seq >= ev.Changes[1].Seq || ev.Changes[0].PublicSlug != "job-a" {
-			t.Fatalf("event = %+v", ev)
+		if len(changes) != 2 || changes[0].PublicSlug != "job-a" || changes[1].PublicSlug != "job-a" ||
+			changes[0].Kind != "opened" || changes[1].Kind != "closed" || changes[1].ClosedReason != "expired" ||
+			changes[0].Seq >= changes[1].Seq {
+			t.Fatalf("changes = %+v", changes)
 		}
 		after := state()
 		if after.CursorID <= start.CursorID || after.ConsecutiveFailures != 0 || !after.LastSuccessAt.Valid {
