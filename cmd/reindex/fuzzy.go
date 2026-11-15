@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
 // fuzzyDedupQuerier is the slice of the store this pass needs, named so the pass can be read
@@ -94,6 +95,13 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 		return 0, err
 	}
 	judged, comparable := jobdedup.BucketByRole(titles)
+	judgeSet := make(map[int64]bool, len(judged))
+	for _, id := range judged {
+		judgeSet[id] = true
+	}
+	summaryGroups, skipped := summaryBuckets(titles, judgeSet)
+	judged = slices.DeleteFunc(judged, func(id int64) bool { return skipped[id] })
+	slices.Sort(judged)
 	if len(judged) == 0 {
 		return 0, nil
 	}
@@ -102,9 +110,23 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 	// (a bucket of one, a title normalizing to nothing) and its verdict is "no cluster".
 	var ids []int64
 	for _, bucketIDs := range comparable {
-		ids = append(ids, bucketIDs...)
+		for _, id := range bucketIDs {
+			if !skipped[id] {
+				ids = append(ids, id)
+			}
+		}
 	}
+	summaryIDs := make(map[int64]bool)
+	for _, group := range summaryGroups {
+		for _, row := range group {
+			ids = append(ids, row.ID)
+			summaryIDs[row.ID] = true
+		}
+	}
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
 	signatures := make(map[int64]map[string]struct{}, len(ids))
+	evidence := make(map[int64]map[string]struct{})
 	if len(ids) > 0 {
 		descriptions, err := q.GetJobDescriptionsByIDs(ctx, ids)
 		if err != nil {
@@ -112,19 +134,43 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 		}
 		for _, row := range descriptions {
 			signatures[row.ID] = jobhash.DescriptionSignature(row.Description)
+			if summaryIDs[row.ID] {
+				evidence[row.ID] = titleWords(htmltext.ToTextFull(row.Description))
+			}
 		}
 	}
 
-	var moveIDs, canons []int64
+	moves := make(map[int64]int64)
 	for _, bucketIDs := range comparable {
 		postings := make([]jobdedup.FuzzyPosting, 0, len(bucketIDs))
 		for _, id := range bucketIDs {
-			postings = append(postings, jobdedup.FuzzyPosting{ID: id, Signature: signatures[id]})
+			if !skipped[id] {
+				postings = append(postings, jobdedup.FuzzyPosting{ID: id, Signature: signatures[id]})
+			}
 		}
 		for id, canon := range jobdedup.ClusterBucket(postings, jobdedup.FuzzyThreshold) {
-			moveIDs = append(moveIDs, id)
-			canons = append(canons, canon)
+			moves[id] = canon
 		}
+	}
+	for _, group := range summaryGroups {
+		collapseSummaries(
+			group,
+			signatures,
+			evidence,
+			moves,
+		)
+	}
+	var moveIDs, canons []int64
+	for id := range moves {
+		moveIDs = append(moveIDs, id)
+	}
+	slices.Sort(moveIDs)
+	for _, id := range moveIDs {
+		canon := moves[id]
+		for moves[canon] != 0 {
+			canon = moves[canon]
+		}
+		canons = append(canons, canon)
 	}
 	// Sent even when nothing clustered: `judged` carries the RELEASES that clear markers of dissolved clusters.
 	return q.MarkFuzzyDuplicatesForCompany(ctx, db.MarkFuzzyDuplicatesForCompanyParams{

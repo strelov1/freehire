@@ -4,8 +4,9 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex/gpt-6.1-sol
-  at: 2026-11-14T22:00:00-03:00
+  at: 2026-11-15T18:33:40-03:00
 sources:
+  - resource: ../../cmd/reindex/summary.go
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/ingest/AGENTS.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/search/AGENTS.md
@@ -31,3 +32,10 @@ catalogue, while Meilisearch serves search documents.
 
 Use current source and observations for a diagnosis; these documents do not
 assert queue health, current catalogue size or timer status.
+
+## Summary duplicates
+
+The existing fuzzy marker pass handles conservative WhatJobs summary matching as
+well as near-identical descriptions. Its rules and operational limits are in
+[the search worker reference](../agents/workers/search.md#whatjobs-summary-duplicates).
+This describes the checkout implementation, not a deployed deduplication run.

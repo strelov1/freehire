@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Senior DevOps Engineer Kubernetes / KI-Plattform",
+    "description": "<h3>Senior DevOps Engineer Kubernetes / KI-Plattform</h3><p>Arbeitsort: BielPensum: 80-100 %Aufgaben:Du konzipierst und entwickelst Infrastruktur vollständig als Code (Terraform, Ansible, Helm) und betreibst, skalierst und härtest OpenShift-/Kubernetes-Plattformen für hochverfügbare Workloads. Du automatisierst CI/CD-Pipelines für Build, Test, Security-Prüfungen, Deployment und Rollback nach GitOps-Prinzipien und entwickelst Automatisierungs- und Tooling-Lösungen in Python, Bash oder Go. Zudem betreibst und entwickelst du das zentrale LLM-Gateway auf Basis von LiteLLM weiter (Routing, Fallbacks, Mandanten, Quotas, Caching, Failover), gestaltest Monitoring, Logging und Tracing (Grafana, Prometheus, Splunk, Instana) und setzt anspruchsvolle Kunden-Grossprojekte bis zum stabilen Betrieb um.Profil:Studium in Informatik oder vergleichbare Ausbildung mit Praxiserfahrung, mindestens fünf Jahre Erfahrung in ICT-Projekten, davon ein substanzieller Anteil in DevOps, Platform Engineering oder",
+    "location": "Bern, Switzerland",
+    "public_slug": "senior-devops-engineer-kubernetes-ki-plattform-myitjob-gmbh-4dectarj"
+  },
+  {
+    "title": "Senior DevOps Engineer: Kubernetes & OpenShift Platform",
+    "description": "<p>myitjob GmbH sucht einen Senior DevOps Engineer mit Fokus Kubernetes und KI-Plattform in Biel. Du konzipierst Infrastruktur vollständig als Code (Terraform, Ansible, Helm) und betreibst OpenShift/Kubernetes-Plattformen für hochverfügbare Workloads.</p><p>Du automatisierst CI/CD-Pipelines (Build, Test, Security, Deployment) und entwickelst Automatisierungs-Tools in Python, Bash oder Go. Außerdem betreibst du das zentrale LLM-Gateway auf Basis von LiteLLM und gestaltest Monitoring, Logging und Tracing</p>",
+    "location": "Bern, Switzerland",
+    "public_slug": "senior-devops-engineer-kubernetes-openshift-platform-myitjob-gmbh-ocxuobhq"
+  }
+]

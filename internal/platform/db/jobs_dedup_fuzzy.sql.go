@@ -61,7 +61,10 @@ func (q *Queries) CompaniesWithFuzzyDedupCandidates(ctx context.Context) ([]stri
 }
 
 const fuzzyDedupCandidateTitlesForCompany = `-- name: FuzzyDedupCandidateTitlesForCompany :many
-SELECT id, title
+SELECT id, title, source, location,
+       COALESCE(category, '')::text AS category,
+       COALESCE(seniority, '')::text AS seniority,
+       COALESCE(posting_language, '')::text AS posting_language
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL
@@ -70,8 +73,13 @@ ORDER BY id
 `
 
 type FuzzyDedupCandidateTitlesForCompanyRow struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
+	ID              int64  `json:"id"`
+	Title           string `json:"title"`
+	Source          string `json:"source"`
+	Location        string `json:"location"`
+	Category        string `json:"category"`
+	Seniority       string `json:"seniority"`
+	PostingLanguage string `json:"posting_language"`
 }
 
 // The (id, title) of one company's open canonical postings — deliberately WITHOUT the
@@ -94,7 +102,15 @@ func (q *Queries) FuzzyDedupCandidateTitlesForCompany(ctx context.Context, compa
 	items := []FuzzyDedupCandidateTitlesForCompanyRow{}
 	for rows.Next() {
 		var i FuzzyDedupCandidateTitlesForCompanyRow
-		if err := rows.Scan(&i.ID, &i.Title); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Source,
+			&i.Location,
+			&i.Category,
+			&i.Seniority,
+			&i.PostingLanguage,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -61,7 +61,10 @@ WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of_fuzzy IS NOT NUL
 -- two owned columns rather than the derived duplicate_of. A row carrying this pass's OWN marker
 -- is offered again on purpose: it is the only way the pass can ever re-decide it, and without
 -- that a marker survives its canon closing, the descriptions diverging, and every later run.
-SELECT id, title
+SELECT id, title, source, location,
+       COALESCE(category, '')::text AS category,
+       COALESCE(seniority, '')::text AS seniority,
+       COALESCE(posting_language, '')::text AS posting_language
 FROM jobs
 WHERE company_slug = sqlc.arg(company) AND closed_at IS NULL
   AND duplicate_of_aggregator IS NULL AND duplicate_of_role IS NULL

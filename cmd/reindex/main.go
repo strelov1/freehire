@@ -55,7 +55,13 @@ func main() {
 func run() int {
 	// -facetd-only rebuilds facetd (FACETD_URL) alone: no Meilisearch.
 	facetdOnly := flag.Bool("facetd-only", false, "rebuild only facetd (needs FACETD_URL), skipping Meilisearch")
+	fuzzyCompany := flag.String("fuzzy-company", "", "refresh fuzzy markers for one company (requires REINDEX_DEDUP_ONLY=1)")
 	flag.Parse()
+	rcfg := config.LoadReindex()
+	if *fuzzyCompany != "" && (!rcfg.DedupOnly || *facetdOnly) {
+		log.Print("config: -fuzzy-company requires REINDEX_DEDUP_ONLY=1 without -facetd-only")
+		return 1
+	}
 	facetdURL := os.Getenv("FACETD_URL")
 	if *facetdOnly && facetdURL == "" {
 		log.Print("config: -facetd-only needs FACETD_URL")
@@ -84,7 +90,6 @@ func run() int {
 	defer releaseLock()
 
 	q := db.New(pool)
-	rcfg := config.LoadReindex()
 	// How many companies the fuzzy pass works on at once. Its work waits on Postgres, not the
 	// CPU, so a few in flight cut its wall time several-fold; each holds a pool connection
 	// (database.defaultMaxConns is 10, one of them already the index lock's), so past that a
@@ -93,6 +98,16 @@ func run() int {
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
+	}
+
+	if *fuzzyCompany != "" {
+		changed, err := collapseFuzzyDuplicatesForCompany(ctx, q, *fuzzyCompany)
+		if err != nil {
+			log.Printf("reindex: fuzzy company %q: %v", *fuzzyCompany, err)
+			return 1
+		}
+		log.Printf("reindex: fuzzy company %q: %d rows re-marked", *fuzzyCompany, changed)
+		return 0
 	}
 
 	// Marker-only mode stops here, before anything Meilisearch-related; see config.Reindex.DedupOnly.
