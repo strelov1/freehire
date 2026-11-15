@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractForm, fillByLabel, formatAuthorizedCountries } from './form';
+import { extractForm, fillByLabel } from './form';
+import { formatAuthorizedCountries } from './fieldKeys';
 import { labeledInput, must, reset } from './test-utils';
 
 let uniqueId = 0;

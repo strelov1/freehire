@@ -2,7 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '#lib/components/Seo.svelte';
-  import { articleJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { jsonLdScript } from '#lib/seo.js';
+  import { articleJsonLd } from '#lib/seoAppJsonLd.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
