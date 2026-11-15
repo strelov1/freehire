@@ -50,7 +50,7 @@ reachable only through a `*fiber.Ctx`.
   Bookkeeping must never be able to refuse a legitimate analysis, and an uncharged run is a
   smaller wrong than a candidate blocked by our accounting.
 - **The autopilot's two halves never charge.** `Ensure` ignores `Reserved` rather than trusting
-  it, so it reserves nothing and has nothing to release. Their spend is tracked only by the LLM attribution every call already carries.
+  it, so it reserves nothing for itself. If it leads a paying follower and produces no result, its defer releases that follower’s charge. Their spend is tracked only by the LLM attribution every call already carries.
 - **The gate runs before the LLM and before a stream's headers.** `Reserve` refuses with
   `*RefusedError`, carrying the decision — the caller renders the 402. A refused request must
   never become an event on a stream that already returned 200.

@@ -2,8 +2,10 @@
 
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -15,7 +17,14 @@ class HelpersTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.env = {**os.environ, "TESTDB_ADMIN_URL": "postgres://localhost/postgres"}
+        self.env = {
+            **{
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("VERIFY_")
+            },
+            "TESTDB_ADMIN_URL": "postgres://localhost/postgres",
+        }
         self.run_cmd("git", "init", "-q")
         self.run_cmd("git", "config", "user.email", "verify@example.com")
         self.run_cmd("git", "config", "user.name", "Verify")
@@ -148,6 +157,82 @@ printf '%s\\n' "$*" > "$PWD/../pnpm-called"
             self.run_cmd("bash", str(runner), str(spec), env=env)
         self.assertTrue((self.root / "web/e2e/__verify__/other.spec.ts").exists())
         self.assertEqual(len(list((self.root / "evidence").glob("sample-*"))), 2)
+
+    def lifecycle_fixture(self, blocked):
+        helpers = self.root / "lifecycle"
+        helpers.mkdir(exist_ok=True)
+        shutil.copy(HERE / "verify.sh", helpers)
+        stack = helpers / "stack.sh"
+        stack.write_text("""#!/usr/bin/env bash
+case "$1" in
+  env) printf 'export VERIFY_STATE=%q\\n' "$TEST_STATE" ;;
+  up) : ;;
+  doctor)
+    if [ "$TEST_BLOCKED" = doctor ]; then touch "$TEST_READY"; sleep 60; fi ;;
+  down) rm -rf "$VERIFY_STATE"; touch "$TEST_DOWN" ;;
+esac
+""")
+        journey = helpers / "run-journey.sh"
+        journey.write_text("""#!/usr/bin/env bash
+touch "$TEST_READY"
+sleep 60
+""")
+        for path in (stack, journey):
+            path.chmod(0o755)
+        binary = self.root / "lifecycle-bin"
+        binary.mkdir(exist_ok=True)
+        for name in ("go", "pnpm", "psql", "curl", "mise"):
+            stub = binary / name
+            stub.write_text("#!/bin/sh\nexit 0\n")
+            stub.chmod(0o755)
+        env = {
+            **self.env,
+            "PATH": f"{binary}:{self.env['PATH']}",
+            "TMPDIR": str(self.root),
+            "TEST_STATE": str(self.root / "claimed-state"),
+            "TEST_READY": str(self.root / "ready"),
+            "TEST_DOWN": str(self.root / "down"),
+            "TEST_BLOCKED": blocked,
+        }
+        process = subprocess.Popen(
+            ["bash", str(helpers / "verify.sh"), "sample.spec.ts"],
+            cwd=self.root,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.addCleanup(lambda: process.poll() is None and process.kill())
+        deadline = time.monotonic() + 10
+        while not (self.root / "ready").exists():
+            if process.poll() is not None or time.monotonic() > deadline:
+                self.fail("lifecycle fixture failed to reach blocked phase")
+            time.sleep(0.01)
+        return process, helpers / "verify.sh", env
+
+    def test_second_lifecycle_cannot_clean_up_an_owned_instance(self):
+        process, runner, env = self.lifecycle_fixture("doctor")
+        refused = self.run_cmd(
+            "bash", str(runner), "other.spec.ts", env=env, check=False
+        )
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIsNone(process.poll())
+        self.assertFalse((self.root / "down").exists())
+        process.send_signal(signal.SIGTERM)
+        process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 143)
+
+    def test_term_interrupts_doctor_and_journey_and_cleans_up(self):
+        for phase in ("doctor", "journey"):
+            with self.subTest(phase=phase):
+                process, _, _ = self.lifecycle_fixture(phase)
+                process.send_signal(signal.SIGTERM)
+                process.communicate(timeout=5)
+                self.assertEqual(process.returncode, 143)
+                self.assertTrue((self.root / "down").exists())
+                self.assertFalse((self.root / "claimed-state").exists())
+                (self.root / "ready").unlink()
+                (self.root / "down").unlink()
 
 
 if __name__ == "__main__":

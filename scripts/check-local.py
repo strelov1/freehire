@@ -35,7 +35,7 @@ def changes(base):
     return resolved, sorted(paths)
 
 
-def plan(paths):
+def plan(paths, base):
     scope = ci.classify(paths)
     commands = [["pnpm", "check:links"], ["pnpm", "check:size"]]
     # Hooks own file-specific rules; passing paths also includes untracked edits.
@@ -51,6 +51,15 @@ def plan(paths):
     else:
         commands.append(["lefthook", "run", "pre-commit", "--all-files"])
     if scope.backend:
+        commands.append(
+            [
+                "golangci-lint",
+                "run",
+                *([f"--new-from-rev={base}"] if base else []),
+                "--allow-parallel-runners",
+                "./...",
+            ]
+        )
         commands.extend(
             shlex.split(command)
             for command in (
@@ -97,14 +106,19 @@ def main():
         print(f"Base: {args.base} -> {base}")
     except (OSError, subprocess.CalledProcessError) as error:
         print(f"Unknown change input ({error}); full fallback")
+        base = None
         paths = None
     print("Dirty status (index/worktree/untracked):")
     print(git("status", "--short").decode(), end="")
     print(f"Changed paths: {paths!r}")
-    scope, commands = plan(paths)
+    scope, commands = plan(paths, base)
     print(f"CI classifier: backend={scope.backend}, web={scope.web}")
     print(
         "Local evidence only; not final readiness. CI and behavior integration tests remain required."
+    )
+    print(
+        "Secret coverage: the hook scans the staged diff only. Committed changes, "
+        "unstaged edits and untracked files are NOT scanned for secrets by this plan."
     )
     for command in commands:
         print(f"PLAN {shlex.join(command)}")

@@ -17,11 +17,11 @@ export VERIFY_EVIDENCE
 VERIFY_EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/verify-freehire-run-XXXXXX")
 eval "$("$here/stack.sh" env)"
 # Refuse an existing instance before installing teardown ownership.
-if [ -d "$VERIFY_STATE" ]; then
+if ! mkdir "$VERIFY_STATE"; then
   printf 'State already exists: %s; inspect it before cleanup\n' "$VERIFY_STATE" >&2
   exit 1
 fi
-startup_pid=
+active_pid=
 stop_tree() {
   local child
   for child in $(pgrep -P "$1" 2>/dev/null); do stop_tree "$child"; done
@@ -30,9 +30,9 @@ stop_tree() {
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  if [ -n "$startup_pid" ]; then
-    stop_tree "$startup_pid"
-    wait "$startup_pid" 2>/dev/null || true
+  if [ -n "$active_pid" ]; then
+    stop_tree "$active_pid"
+    wait "$active_pid" 2>/dev/null || true
   fi
   mkdir -p "$VERIFY_EVIDENCE/diagnostics"
   if [ -d "$VERIFY_STATE" ]; then
@@ -45,9 +45,13 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-"$here/stack.sh" up >"$VERIFY_EVIDENCE/startup.log" 2>&1 &
-startup_pid=$!
-wait "$startup_pid"
-startup_pid=
-"$here/stack.sh" doctor | tee "$VERIFY_EVIDENCE/doctor.log"
-for spec in "$@"; do "$here/run-journey.sh" "$spec"; done
+run_child() {
+  "$@" &
+  active_pid=$!
+  wait "$active_pid"
+  active_pid=
+}
+run_child "$here/stack.sh" up >"$VERIFY_EVIDENCE/startup.log" 2>&1
+run_child "$here/stack.sh" doctor >"$VERIFY_EVIDENCE/doctor.log" 2>&1
+cat "$VERIFY_EVIDENCE/doctor.log"
+for spec in "$@"; do run_child "$here/run-journey.sh" "$spec"; done

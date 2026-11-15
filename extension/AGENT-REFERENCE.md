@@ -198,10 +198,11 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 # which proxies /api). Any signed-in account will do — the assistant is open
 # to every signed-in user.
 
-cd design-system && pnpm install     # once, and after pulling design-system changes
-cd extension && npm install          # runs `wxt prepare` (generates .wxt/)
-cd extension && npm run dev          # dev build with HMR
-cd extension && npm run build        # production build -> .output/chrome-mv3
+(cd design-system && pnpm install)   # once, and after pulling design-system changes
+cd extension
+npm install                         # runs `wxt prepare` (generates .wxt/)
+npm run dev                         # dev build with HMR
+npm run build                       # production build -> .output/chrome-mv3
                                      # targets freehire.me
                                      # (extension/.env.production); dev keeps
                                      # the localhost default

@@ -254,7 +254,9 @@ dependencies first. Hooks can regenerate files; review the resulting diff. Delet
 paths remain in hook input so deletions cannot silently narrow the plan.
 
 Go scope always includes whole-module build, vet, unit tests and integration-tagged
-compilation. Other scopes retain CI's whole-module unit guards. Every command and
+compilation, plus lint against the resolved comparison base (unfiltered on fallback).
+The delegated secret hook scans only the staged diff; committed changes, unstaged
+edits and untracked files remain unscanned for secrets by this helper. Other scopes retain CI's whole-module unit guards. Every command and
 outcome is printed; failures return nonzero after the remaining checks run. A plan
 alone executes nothing. This is local evidence, not final readiness: behavior
 changes still need applicable integration tests and CI gates beyond these checks.

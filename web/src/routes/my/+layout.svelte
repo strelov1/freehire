@@ -146,7 +146,7 @@
             class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
             <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
-            <span class="hidden min-[390px]:inline">{helpLabel}</span>
+            <span class="sr-only min-[390px]:not-sr-only">{helpLabel}</span>
           </button>
           <button
             type="button"

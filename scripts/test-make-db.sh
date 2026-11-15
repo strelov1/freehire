@@ -40,4 +40,14 @@ if (unset DATABASE_URL; make -s psql) >"$tmp/output" 2>&1; then
   echo 'psql must refuse an unset DATABASE_URL' >&2
   exit 1
 fi
+for value in unset empty; do
+  if (if [ "$value" = unset ]; then unset DATABASE_URL; else export DATABASE_URL=; fi; make -s migrate) >"$tmp/output" 2>&1; then
+    echo "migrate must refuse an $value DATABASE_URL" >&2
+    exit 1
+  fi
+  if rg -q 'run ./cmd/migrate' "$tmp/output"; then
+    echo 'migrate must not run without DATABASE_URL' >&2
+    exit 1
+  fi
+done
 echo 'Make database routing passed'

@@ -126,9 +126,9 @@ the case: in the shared file it would re-read the bodies of the whole fleet.
 
 A run becomes a TRANSIENT systemd unit (`systemd-run`), not an instance of a static
 template, because the per-run timeout varies (3000s generally, 4500s for the
-per-posting-detail providers) and a template carries one value. `--collect` is load-bearing:
-without it a failed run's unit keeps its name and the next launch is refused, so the fleet
-would stop one provider at a time with nothing failing loudly.
+per-posting-detail providers) and a template carries one value. The launcher omits
+`--collect` so failed units retain their exit status until the reaper reads it; successful
+units are garbage-collected automatically.
 
 ## The measurements this inherits
 

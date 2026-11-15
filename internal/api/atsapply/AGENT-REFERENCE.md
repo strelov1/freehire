@@ -268,8 +268,7 @@ timeout — classify why via `classifyUnscannableForm`, which `Submit` maps to a
 `ScanForm` → `Reconcile` → `Client.resolve`
 (deterministic `Resolve`, then — if an experience-bank reader is configured —
 `ResolveWithDrafting` over what is still unmapped, via a freshly `llmkey.Bind`-ed
-`LLMDrafter`) → if `Plan.FullyResolved()`, `fillAndSubmit`; else return `StatusParked` with
-`Plan.Unmapped`. `fillAndSubmit` fills every resolved field (a select's
+`LLMDrafter`) → if `Plan.FullyResolved()`, use `fillAndSubmit` for `fillProviders`, or the configured and enforced browser-use executor for eligible schema-only providers such as Ashby. Unsupported or unenforced routes park. An unresolved plan returns `StatusParked` with `Plan.Unmapped`. `fillAndSubmit` fills every resolved field (a select's
 `SetValue` is followed by a dispatched `input`/`change` event, since `SetValue` alone writes
 the DOM property without firing what a React-controlled select listens for), clicks
 Greenhouse's submit button, and waits for a text-based confirmation or refusal marker —
