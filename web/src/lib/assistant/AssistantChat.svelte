@@ -10,23 +10,24 @@
   } from '#lib/assistant/api.js';
   import { track } from '#lib/analytics.js';
   import {
-    extendSession,
     TurnRefused,
     startTurnFor,
     StreamInterrupted,
-    syncApplication,
     type Attachment,
     type Turn,
     type TurnStart,
   } from '#lib/assistant/client.js';
-  import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
+  import { chatFromTranscript, initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
   import { ConfirmDialog } from '#lib/ui/index.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ChatInputArea from './ChatInputArea.svelte';
   import ChatGone from './ChatGone.svelte';
+  import ChatDeleteConfirm from './ChatDeleteConfirm.svelte';
   import ChatTranscript from './ChatTranscript.svelte';
   import { PaneFollow } from './paneFollow.svelte';
+  import { ApplicationSync } from './applicationSync';
+  import { MessageQueue } from './messageQueue.svelte';
   import AssistantAlerts from './AssistantAlerts.svelte';
   import type { AssistantChatProps } from './AssistantChat.props';
   import ChatSessionBar from './ChatSessionBar.svelte';
@@ -39,7 +40,7 @@
     labelFromMessage,
     type SessionItem,
   } from '#lib/assistant/sessions.js';
-  import { eventsFromTranscript, type TurnEvent } from '#lib/assistant/wire.js';
+  import type { TurnEvent } from '#lib/assistant/wire.js';
   import { opensInRail, type ChatPreset, type OpeningAction } from '#lib/assistant/presets.js';
   import { messages } from './AssistantChat.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -53,15 +54,6 @@
 
   type Phase = 'loading' | 'ready';
 
-  // Reusable chat: the host (/my/assistant or /tailor) composes the layout around it.
-  //  - session: open this specific session id (else the newest, else a fresh chat).
-  //  - kickoff: auto-send this as the first message of a fresh session.
-  //  - sessionLabel: name the session in the rail until its first message names it.
-  //  - onTurnComplete: called when a turn finishes (the tailor host refreshes the CV preview).
-  //  - onSessionChange: the active conversation changed. The /my/assistant host turns this
-  //    into a navigation so each chat has its own URL and Back works; the tailor host,
-  //    whose chat is bound to one CV, passes nothing.
-  //  - showSessionRail: whether to render the session sidebar (off on the focused /tailor surface).
   let {
     session = undefined,
     kickoff = undefined,
@@ -107,7 +99,6 @@
   // beside it, and because a plain error message would tell the candidate to give up on
   // work they can carry on with right now.
   let refusal = $state<TurnRefused | null>(null);
-  let extending = $state(false);
   // Distinct from `error`: the URL names a conversation that is not the caller's to
   // open — deleted, someone else's, or a tailoring chat that belongs to a CV. It is
   // a dead link, not a failure, so it gets an explanation and a way out.
@@ -149,9 +140,7 @@
   // Whether the transcript follows the stream (see PaneFollow).
   const follow = new PaneFollow();
 
-  // Messages typed while a turn is in flight, drained one by one when it ends.
-  let queue = $state<{ id: string; text: string; attachments: Attachment[] }[]>([]);
-  let queueCounter = 0;
+  const queue = new MessageQueue();
 
   // Voice mode: a hands-free call on an `interview` session (see ChatInputArea).
   let voiceCallOpen = $state(false);
@@ -159,10 +148,6 @@
   function closeVoiceCall() {
     voiceCallOpen = false;
     if (activeId) void reloadTranscript(activeId);
-  }
-
-  function enqueue(text: string, docs: Attachment[]) {
-    queue = [...queue, { id: `q${++queueCounter}`, text, attachments: docs }];
   }
 
   const NEW_CHAT_LABEL = $derived(s.newChat);
@@ -339,8 +324,7 @@
     setError(err instanceof Error ? err.message : fallback);
   }
 
-  // Open a session and repaint its stored transcript. The replay folds through the
-  // same reducer live events do, so history and a running turn render identically.
+  // Open a session and repaint its stored transcript (see chatFromTranscript).
   //
   // `fromAddress` says the address ALREADY names this chat — we are following it, not
   // asking the host to change it. That distinction is the guard's whole life: raising it
@@ -398,7 +382,7 @@
     voiceCallOpen = false;
     try {
       chat = initChat();
-      queue = [];
+      queue.clear();
       bulletCapAlert = null;
       activeId = id;
       activePreset = null;
@@ -417,9 +401,7 @@
         return;
       }
       activePreset = meta.preset;
-      let next = initChat();
-      for (const event of eventsFromTranscript(transcriptMessages)) next = reduceTurnEvent(next, event);
-      chat = next;
+      chat = chatFromTranscript(transcriptMessages);
       if (meta.label?.trim()) sessions = setLabel(sessions, id, labelFromMessage(meta.label));
       onSessionChange?.(id);
     } finally {
@@ -498,25 +480,11 @@
     }
   }
 
-  let removeTargetId = $state<string | null>(null);
-  let confirmRemoveChatOpen = $state(false);
+  let deleteConfirm: ReturnType<typeof ChatDeleteConfirm> | undefined = $state();
 
-  // A chat that has been named has real history — confirm before deleting. A
-  // still-unnamed one has nothing in it worth confirming.
   function requestRemoveChat(id: string) {
     if (switching) return;
-    const named = sessions.find((sess) => sess.id === id)?.label !== NEW_CHAT_LABEL;
-    if (named) {
-      removeTargetId = id;
-      confirmRemoveChatOpen = true;
-    } else {
-      void removeChat(id);
-    }
-  }
-
-  function confirmRemoveChat() {
-    if (!removeTargetId) return Promise.resolve();
-    return removeChat(removeTargetId);
+    deleteConfirm?.request(id);
   }
 
   async function removeChat(id: string) {
@@ -567,8 +535,7 @@
   // Declining the switch drains it (see the effect beside confirmSwitch).
   function drainQueue() {
     if (confirmSwitchOpen || turnActive || queue.length === 0) return;
-    const [next, ...rest] = queue;
-    queue = rest;
+    const next = queue.shift();
     if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
   }
 
@@ -617,7 +584,7 @@
     draft = '';
     attachments = [];
     if (turnActive || queue.length > 0) {
-      enqueue(text, docs);
+      queue.add(text, docs);
       void follow.toBottom(true);
       return;
     }
@@ -753,104 +720,43 @@
     if (attachments.length === 0) attachments = start.attachments ?? [];
   }
 
-  /** Spend another of today's tailoring sessions so this conversation can carry on.
-   *
-   *  It does not re-send the message: the draft was handed back when the turn was refused,
-   *  so the candidate sends it themselves and can change their mind first. Extending is
-   *  idempotent on the server, so a double click costs one session rather than two. */
-  async function continueSession() {
-    const stopped = refusal;
-    if (!stopped || extending) return;
-    extending = true;
-    try {
-      await extendSession(stopped.sessionId);
-      refusal = null;
-    } catch (err) {
-      // Refused again means the day's tailoring allowance is gone too, and that IS a wall
-      // until tomorrow — so it becomes an ordinary error rather than another offer, with the
-      // same link to the plan the daily-limit refusal in dispatch() shows.
-      refusal = null;
-      if (err instanceof TurnRefused) {
-        error = { message: err.message, planLimitReached: true };
-      } else {
-        setError(err instanceof Error ? err.message : s.continueFailed);
-      }
-    } finally {
-      extending = false;
-    }
-  }
-
   function retryFailedTurn() {
     if (!canStartTurn()) return;
     void dispatch({ kind: 'retry' });
   }
 
-  /** Re-read a session's stored transcript into the view. The server holds the truth about a
-   *  turn whose stream we lost, so this is how a returning client catches up. */
-  // How often an open apply conversation asks whether its application moved. The worker that
-  // moves it runs every five minutes, so this only has to be prompt, not instant.
-  const SYNC_INTERVAL_MS = 15_000;
-
-  // A check still waiting on the server, before it has painted anything. Without it a slow
-  // first token lets the next tick send a second check for the same events.
-  let catchingUp = false;
-  // The plan refused the check: every later one would be refused the same way.
-  let syncRefused = false;
+  // An apply conversation catches up on its application while it is shown.
+  const appSync = new ApplicationSync({
+    busy: () => turnActive || turn !== null,
+    began: (started) => {
+      turnActive = true;
+      turn = started;
+      onTurnStateChange?.(true);
+    },
+    event: onEvent,
+    reload: reloadTranscript,
+    ended: () => {
+      endTurn();
+      void follow.toBottom(true);
+    },
+  });
 
   $effect(() => {
     if (!keepInSync || phase !== 'ready' || !activeId) return;
-    const id = activeId;
-    const check = () => {
-      if (!turnActive && !turn && !catchingUp && !syncRefused) void catchUp(id);
-    };
-    check();
-    const timer = setInterval(check, SYNC_INTERVAL_MS);
-    return () => clearInterval(timer);
+    return appSync.watch(activeId);
   });
 
-  /** One catch-up. It only becomes a turn once the server starts narrating: a check with
-   *  nothing new must not flash the "thinking" state every fifteen seconds. A failed check is
-   *  left for the next one — it is not something the candidate asked for or can act on. */
-  async function catchUp(id: string) {
-    catchingUp = true;
-    let began = false;
-    const started = syncApplication(id, (event) => {
-      if (!began) {
-        began = true;
-        turnActive = true;
-        turn = started;
-        onTurnStateChange?.(true);
-      }
-      onEvent(id, event);
-    });
-    try {
-      await started.done;
-    } catch (err) {
-      if (err instanceof StreamInterrupted) await reloadTranscript(id);
-      if (err instanceof TurnRefused) syncRefused = true;
-    } finally {
-      catchingUp = false;
-    }
-    if (began) {
-      endTurn();
-      void follow.toBottom(true);
-    }
-  }
-
+  /** Re-read a session's stored transcript into the view. The server holds the truth about a
+   *  turn whose stream we lost, so this is how a returning client catches up. */
   async function reloadTranscript(id: string) {
     if (isSupport || id !== activeId) return;
     try {
       const { messages: transcriptMessages } = await getSession(id);
-      let next = initChat();
-      for (const event of eventsFromTranscript(transcriptMessages)) next = reduceTurnEvent(next, event);
+      const next = chatFromTranscript(transcriptMessages);
       if (id === activeId) chat = next;
     } catch {
       /* the transcript stays as it is; the next visit will catch up */
     }
-  }
-
-  function removeQueued(id: string) {
-    queue = queue.filter((q) => q.id !== id);
   }
 
   /** Catch up when the tab comes back. A phone freezes a backgrounded tab, which breaks the
@@ -878,9 +784,9 @@
 <div class="flex min-h-0 min-w-0 flex-1 flex-col">
   <AssistantAlerts
     {error}
-    {refusal}
-    {extending}
-    onContinue={continueSession}
+    bind:refusal
+    onLimitReached={(message) => (error = { message, planLimitReached: true })}
+    onContinueFailed={setError}
     {bulletCapAlert}
     onDismissBulletCap={() => (bulletCapAlert = null)}
   />
@@ -941,13 +847,13 @@
           bind:attachments
           bind:voiceCallOpen
           sessionId={activeId}
-          {queue}
+          queue={queue.items}
           {turnActive}
           support={isSupport}
           disabled={phase !== 'ready' || switching}
           interview={activePreset === 'interview'}
           onSubmit={submitText}
-          onRemoveQueued={removeQueued}
+          onRemoveQueued={(id) => queue.remove(id)}
           onCancel={cancelTurn}
           onClose={closeVoiceCall}
         />
@@ -964,11 +870,4 @@
   onConfirm={confirmSwitch}
 />
 
-<ConfirmDialog
-  bind:open={confirmRemoveChatOpen}
-  title={s.deleteThisChat}
-  description={s.cannotUndo}
-  confirmLabel={s.delete}
-  variant="destructive"
-  onConfirm={confirmRemoveChat}
-/>
+<ChatDeleteConfirm bind:this={deleteConfirm} {sessions} newChatLabel={NEW_CHAT_LABEL} onRemove={removeChat} />

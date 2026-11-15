@@ -1,11 +1,16 @@
 import type { Snippet } from 'svelte';
 import type { ChatPreset, OpeningAction } from './presets';
 
-/** AssistantChat's props; what each one does is listed beside the component's `$props()`. */
+/** AssistantChat's props. The host (/my/assistant or /tailor) composes the layout around
+ *  the chat. */
 export interface AssistantChatProps {
+  /** Open this specific session id (else the newest, else a fresh chat). */
   session?: string;
+  /** Auto-send this as the first message of a fresh session. */
   kickoff?: string;
+  /** Name the session in the rail until its first message names it. */
   sessionLabel?: string;
+  /** Called when a turn finishes (the tailor host refreshes the CV preview). */
   onTurnComplete?: () => void;
   /** Told after each successful `cv_edit` tool call resolves — not just at the end of the
    *  turn — so the tailoring host can refresh the CV preview as a run writes it instead of
@@ -23,7 +28,11 @@ export interface AssistantChatProps {
    *  debounce armed a moment ago would otherwise fire mid-turn and overwrite what the agent
    *  wrote — and the run's pre-run snapshot would be taken without that edit in it. */
   beforeTurn?: () => Promise<void>;
+  /** The active conversation changed. The /my/assistant host turns this into a navigation
+   *  so each chat has its own URL and Back works; the tailor host, whose chat is bound to
+   *  one CV, passes nothing. */
   onSessionChange?: (id: string) => void;
+  /** Whether to render the session sidebar (off on the focused /tailor surface). */
   showSessionRail?: boolean;
   /** What an empty conversation offers instead of a blank prompt. Shown only while the
    *  session has no messages: once it has any, the composer is the way in. A host that
