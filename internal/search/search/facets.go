@@ -12,21 +12,17 @@ import (
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
-// FacetParams is a facet-distribution request: it reports the count of matching
-// jobs per facet value (and numeric min/max) under a filter, with none of the
-// ranking/pagination concerns of a SearchParams. Filter is the value built by
-// Filter (nil for none); Facets lists the attributes to compute distributions for.
+// FacetParams is a facet-distribution request: matching-job counts per facet value (and
+// numeric min/max) under a filter. Filter is the value built by Filter (nil for none).
 type FacetParams struct {
 	Query  string
 	Filter any
 	Facets []string
 }
 
-// FacetResult holds the facet distribution and stats for a FacetCounts request,
-// plus Meilisearch's estimated total for the filtered set. Companies is the exact
-// number of distinct company_slug values under the same filter — set only when a
-// caller asked for it (see DistinctCount), nil otherwise. It lives here so a
-// cached facet result carries it.
+// FacetResult holds the facet distribution and stats for a FacetCounts request plus
+// Meilisearch's estimated total. Companies is the exact distinct company_slug count under
+// the same filter, set only when asked for (see DistinctCount) so a cached result carries it.
 type FacetResult struct {
 	Total     int64
 	Facets    map[string]map[string]int64 // attr → value → count
@@ -34,17 +30,14 @@ type FacetResult struct {
 	Companies *int64
 }
 
-// FacetStat is the numeric range of a facet over the matched set, as reported by
-// Meilisearch's facetStats (e.g. salary min/max).
+// FacetStat is the numeric range of a facet over the matched set (Meilisearch facetStats).
 type FacetStat struct {
 	Min float64 `json:"min"`
 	Max float64 `json:"max"`
 }
 
-// FacetCounts returns the facet distribution for the matched set under the given
-// filter. It is deliberately separate from Search: counting facets is a distinct
-// responsibility from returning ranked hits, so it runs with limit 0 (no
-// documents), no sort, and no hybrid embedder — just the distribution.
+// FacetCounts returns the facet distribution under the given filter. It runs with limit 0,
+// no sort and no hybrid embedder.
 func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, error) {
 	raw, err := c.facetSearch(ctx, p.Query, p.Filter, p.Facets)
 	if err != nil {
@@ -57,9 +50,8 @@ func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, e
 	return res, nil
 }
 
-// andFragment ANDs one more fragment onto a filter as FilterFromValues builds it
-// (nil or [][]string). Any other shape is refused rather than replaced: dropping the
-// caller's filter would report a count for the whole catalogue as if it were theirs.
+// andFragment ANDs a fragment onto a filter as FilterFromValues builds it (nil or
+// [][]string). Any other shape is refused: dropping it would count the whole catalogue.
 func andFragment(filter any, frag string) (any, error) {
 	switch f := filter.(type) {
 	case nil:
@@ -71,12 +63,10 @@ func andFragment(filter any, frag string) (any, error) {
 	}
 }
 
-// widenImpliedRegionCounts replaces each implying region's bucket in a regions
-// distribution with what choosing it actually returns (see regionImplies): the
-// documents carrying ANY of its regions, counted once. Summing the buckets would
-// count an EMEA posting, which carries both "eu" and "uk", twice — so it asks the
-// engine, one count per implying region. A nil distribution (regions not requested)
-// costs nothing.
+// widenImpliedRegionCounts replaces each implying region's bucket with what choosing it
+// returns (see regionImplies): documents carrying ANY of its regions, counted once. Summing
+// buckets would double-count an EMEA posting carrying both "eu" and "uk", so it asks the
+// engine. A nil distribution costs nothing.
 func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dist map[string]int64, search facetSearcher) error {
 	if dist == nil {
 		return nil
@@ -99,9 +89,8 @@ func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dis
 	return nil
 }
 
-// rawFacets is an engine-neutral facet answer: the filtered total, the per-facet
-// value counts and the numeric stats. Meilisearch and the FacetEngine both fill it,
-// so everything above the facet seam is engine-blind.
+// rawFacets is an engine-neutral facet answer, filled by both Meilisearch and the
+// FacetEngine.
 type rawFacets struct {
 	Total        int64
 	Distribution map[string]map[string]int64
@@ -121,9 +110,8 @@ func rawFromResponse(resp *meilisearch.SearchResponse) (rawFacets, error) {
 	return rawFacets{Total: resp.EstimatedTotalHits, Distribution: dist, Stats: stats}, nil
 }
 
-// facetSearch runs one facet-count query. Without query text the router may send it
-// to the second engine (see route.go); otherwise, and as the fallback, it is the
-// Meilisearch request.
+// facetSearch runs one facet-count query. Without query text the router may send it to
+// the second engine (see route.go); otherwise, and as fallback, it goes to Meilisearch.
 func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (rawFacets, error) {
 	meili := func() (rawFacets, error) { return c.meiliFacets(ctx, query, filter, facets) }
 	mode := c.routeMode(query)
@@ -139,9 +127,8 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 		meili, cloneRaw, diffRaw)
 }
 
-// meiliFacets is the Meilisearch half of facetSearch, reading q's operators the same
-// way Search does: a single alternative is today's single-index request, several
-// are one federated request whose merged counts are per document.
+// meiliFacets is the Meilisearch half of facetSearch. One alternative is a single-index
+// request; several are one federated request whose merged counts are per document.
 func (c *Client) meiliFacets(ctx context.Context, query string, filter any, facets []string) (rawFacets, error) {
 	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
@@ -174,20 +161,16 @@ func (c *Client) meiliFacets(ctx context.Context, query string, filter any, face
 	return rawFromResponse(resp)
 }
 
-// DistinctCount returns the exact number of distinct values of attr among the
-// documents matching query and filter — e.g. how many companies a search spans,
-// which the facet distribution cannot answer once it passes the
+// DistinctCount returns the exact number of distinct values of attr among documents
+// matching query and filter, which the facet distribution cannot give past the
 // maxValuesPerFacet cap.
 //
-// Two engine behaviours decide the request's shape. It pages (page 1,
-// hitsPerPage 0) and reads totalHits, because with `limit: 0` Meilisearch's
-// estimatedTotalHits ignores `distinct` and reports the document count. And it
-// asks for no facets, because `distinct` beside `facets` collapses every facet
-// count to 1 — the distribution is a separate request.
+// It pages (page 1, hitsPerPage 0) and reads totalHits because with `limit: 0`
+// estimatedTotalHits ignores `distinct`. It requests no facets because `distinct` beside
+// `facets` collapses every facet count to 1.
 //
-// An OR query is refused as ErrBadQuery: it runs as a federated search, where a
-// per-alternative distinct counts a company matched by two alternatives twice,
-// and a count that is not exact is what this exists to avoid.
+// An OR query is refused as ErrBadQuery: federation would count a company matched by two
+// alternatives twice.
 func (c *Client) DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
 	meili := func() (int64, error) { return c.meiliDistinctCount(ctx, query, filter, attr) }
 	mode := c.routeMode(query)
@@ -224,22 +207,18 @@ func (c *Client) meiliDistinctCount(ctx context.Context, query string, filter an
 	return resp.TotalHits, nil
 }
 
-// FacetReq is one facet's disjunctive request: the attribute to distribute and
-// the filter to count it under — the full filter with that facet's own selection
-// removed, so its own selection does not zero out its sibling values.
+// FacetReq is one facet's disjunctive request: the attribute and the filter to count it
+// under, the full filter minus that facet's own selection so siblings keep their counts.
 type FacetReq struct {
 	Attr   string
 	Filter any
 }
 
-// facetSearcher runs one Limit:0 facet query. It is injected so
-// disjunctiveFacetCounts is unit-testable without a live engine.
+// facetSearcher runs one Limit:0 facet query; injected so tests need no live engine.
 type facetSearcher func(ctx context.Context, query string, filter any, facets []string) (rawFacets, error)
 
-// DisjunctiveFacetCounts computes each facet's distribution under its own reduced
-// filter (so a selected facet still shows its siblings' counts) plus the grand
-// total under the full filter. All queries run concurrently, so the latency is
-// that of the slowest single facet query, not their sum.
+// DisjunctiveFacetCounts computes each facet's distribution under its own reduced filter
+// plus the grand total under the full filter, all queries concurrently.
 func (c *Client) DisjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, totalFilter any) (FacetResult, error) {
 	return disjunctiveFacetCounts(ctx, query, reqs, totalFilter, c.facetSearch)
 }
@@ -265,7 +244,7 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 		}()
 	}
 
-	// The grand total under the full filter — the number "Show N results" reflects.
+	// The grand total under the full filter.
 	run(func() error {
 		resp, err := search(ctx, query, totalFilter, nil)
 		if err != nil {
@@ -276,7 +255,6 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 		mu.Unlock()
 		return nil
 	})
-	// Each facet under its own reduced filter, keeping only its own distribution.
 	for _, r := range reqs {
 		r := r
 		run(func() error {
@@ -309,17 +287,15 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 	return res, nil
 }
 
-// buildFacetResult assembles a FacetResult from an engine's raw answer, folding
-// source families into their own bucket. Split from FacetCounts so the assembly is
-// unit-testable without a live engine.
+// buildFacetResult assembles a FacetResult from a raw answer, folding source families
+// into their own bucket.
 func buildFacetResult(raw rawFacets) FacetResult {
 	foldSourceFamilies(raw.Distribution["source"])
 	return FacetResult{Total: raw.Total, Facets: raw.Distribution, Stats: raw.Stats}
 }
 
-// foldSourceFamilies adds each family member's count into the family's own bucket
-// (vocab.SourceFamilies), so the picker offers "whatjobs" once. A posting has exactly
-// one source, so summing the members counts nothing twice.
+// foldSourceFamilies adds each family member's count into the family's bucket
+// (vocab.SourceFamilies). A posting has one source, so summing counts nothing twice.
 func foldSourceFamilies(dist map[string]int64) {
 	for val, n := range dist {
 		if family := vocab.SourceFamilyOf(val); family != val {
@@ -329,9 +305,8 @@ func foldSourceFamilies(dist map[string]int64) {
 	}
 }
 
-// decodeFacetDistribution parses Meilisearch's raw facetDistribution JSON into
-// attribute → value → count. A nil/empty payload yields a nil map (no facets
-// requested or none matched), never an error.
+// decodeFacetDistribution parses facetDistribution JSON into attribute → value → count.
+// An empty payload yields a nil map, not an error.
 func decodeFacetDistribution(raw json.RawMessage) (map[string]map[string]int64, error) {
 	if len(raw) == 0 {
 		return nil, nil
@@ -343,8 +318,8 @@ func decodeFacetDistribution(raw json.RawMessage) (map[string]map[string]int64, 
 	return out, nil
 }
 
-// decodeFacetStats parses Meilisearch's raw facetStats JSON into attribute →
-// {min,max}. A nil/empty payload yields a nil map, never an error.
+// decodeFacetStats parses facetStats JSON into attribute → {min,max}. An empty payload
+// yields a nil map, not an error.
 func decodeFacetStats(raw json.RawMessage) (map[string]FacetStat, error) {
 	if len(raw) == 0 {
 		return nil, nil

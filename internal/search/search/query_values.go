@@ -11,34 +11,28 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobreality"
 )
 
-// boolValues is the vocabulary of the boolean facets. The true-or-absent ones read
-// anything but "false" as true (see trueOrAbsentFragment), so a typo there is not
-// dropped but MISREAD — `requires_clearance=flase` asks for exactly the postings the
-// caller meant to exclude — which is the stronger reason to name it.
+// boolValues is the vocabulary of the boolean facets. The true-or-absent ones read anything
+// but "false" as true (see trueOrAbsentFragment), so a typo is MISREAD, not dropped:
+// `requires_clearance=flase` asks for the postings the caller meant to exclude.
 var boolValues = []string{"true", "false"}
 
-// closedFacets maps each facet whose values come from a closed vocabulary to the check
-// that a value belongs to it — the dictionary itself, never a copy, so a value added to
-// the dictionary joins this check by existing. A value outside it matches no posting, so
-// the filter narrows the answer to nothing and the empty page reads exactly like an empty
-// market.
+// closedFacets maps each closed-vocabulary facet to the check that a value belongs to it,
+// reading the dictionary itself, never a copy. A value outside it matches no posting, so
+// an empty page would look like an empty market.
 //
-// skills is in the table although its vocabulary is not a vocab list: the facet is written
-// by internal/dict/skilltag alone (measured 2026-10-27, 98 stray values carried by 147
-// postings beside 12.27M canonical tags), so a value skilltag cannot resolve is a value
-// no posting carries. The check is skilltag.Resolve, the same reading the filter makes
-// (see facetValue), so "golang" is known — it reaches the postings tagged "go".
+// skills is here although its vocabulary is not a vocab list: only internal/dict/skilltag
+// writes the facet, so a value skilltag.Resolve cannot resolve is carried by no posting.
+// That is the filter's own reading (see facetValue), so "golang" is known (it reaches "go").
 //
-// The facets NOT listed have no finite list to check against, and writing one here would
-// be a second dictionary drifting from the real one:
+// Facets NOT listed have no finite list, and a copy here would drift from the real one:
 //   - cities, company_slug: open by nature; an unknown value can be legitimate.
 //   - countries: any ISO code is a valid ask, including one no posting carries yet.
 //   - source: the adapter registry grows, and non-adapter sources (telegram) exist.
 //   - collections: curated tags kept in data, not in code.
 //   - salary_currency, posting_language: open code systems (ISO 4217, ISO 639).
 //
-// Every value is read through splitFacetValues, the same way filterFromValues reads it,
-// so the report and the filter cannot disagree about what was asked.
+// Values are read through splitFacetValues, as filterFromValues does, so the report and
+// the filter agree on what was asked.
 var closedFacets = map[string]func(string) bool{
 	"work_mode": oneOf(vocab.WorkModeValues),
 	// RegionUnspecified is a reserved value the filter maps to IS EMPTY.
@@ -78,17 +72,15 @@ var closedFacets = map[string]func(string) bool{
 	AutoApplyAvailableParam: oneOf(boolValues),
 }
 
-// checkedScalars are the scalar filters and modifiers whose values IgnoredValues
-// checks. The older numeric bounds also drop bad values silently; joining them
-// is a change of its own.
+// checkedScalars are the scalar filters and modifiers whose values IgnoredValues checks.
+// The older numeric bounds still drop bad values silently.
 var checkedScalars = map[string]func(string) bool{
 	ApplyQuestionsMaxParam: func(val string) bool {
 		_, ok := applyQuestionsMax(val)
 		return ok
 	},
-	// The remote-anywhere modifier is read whole as a boolean; anything but true
-	// (case-insensitively, like every other bool scalar) leaves it unset, which
-	// widens the answer — so a mis-spelled value is named rather than dropped.
+	// Anything but a case-insensitive true leaves the modifier unset, which widens the
+	// answer, so a mis-spelled value is named.
 	WorkModeRemoteAnywhereParam:             oneOf(boolValues),
 	"visa_sponsorship":                      oneOf(boolValues),
 	SeniorityIncludeUnspecifiedParam:        oneOf(boolValues),
@@ -97,34 +89,25 @@ var checkedScalars = map[string]func(string) bool{
 }
 
 // UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet
-// param (or its `_exclude` form) — the value IgnoredValues would name. false for a param
-// with no closed vocabulary: an open facet has nothing to be unknown against.
-//
-// It is how a surface that DROPS such a value (the MCP app, whose reader is a language
-// model) asks the same question this package's report answers, so the two cannot
-// disagree about which values are known.
+// param (or its `_exclude` form), i.e. the value IgnoredValues would name. False for an
+// open facet. A surface that DROPS such values (the MCP app) uses it to agree with the report.
 func UnknownFacetValue(param, value string) bool {
 	known, closed := closedFacets[strings.TrimSuffix(param, "_exclude")]
 	return closed && !known(value)
 }
 
 // IgnoredValues reports, per query param, the values of a closed-vocabulary facet (or its
-// `_exclude` form) that fall outside the vocabulary. nil when there are none.
+// `_exclude` form) outside the vocabulary. nil when there are none.
 //
-// It is the value-level counterpart of UnknownParams and follows the same rule: report,
-// never refuse. A saved search or a shared link may carry a value the vocabulary has since
-// retired, and a 400 would break it; staying silent is what made `work_mode=foo` answer
-// `total: 0` indistinguishable from a market with no such postings. The filter is left
-// alone — the value still reaches it — so the report describes the answer rather than
-// changing it.
+// Like UnknownParams it reports and never refuses: a saved search may carry a since-retired
+// value, and silence made `work_mode=foo` look like an empty market. The filter is left
+// alone; the value still reaches it.
 //
-// A value is compared trimmed and case-insensitively, the same check the MCP app makes
-// (mcpapp's known): a value the filter could match must never be named as ignored, and a
-// near-miss in spelling is the caller's to fix, not ours to guess.
+// Values are compared trimmed and case-insensitively, as the MCP app does, so a value the
+// filter could match is never named as ignored.
 //
-// Bounded like UnknownParams — every reported value is copied from a public, anonymous
-// request into the response — to maxUnknownParamsReported params of at most
-// maxUnknownParamsReported values each, chosen in sorted order so the report is stable.
+// Bounded like UnknownParams (reported values are copied from an anonymous request): at most
+// maxUnknownParamsReported params of as many values each, in sorted order.
 func IgnoredValues(v url.Values) map[string][]string {
 	var params []string
 	out := map[string][]string{}
@@ -150,14 +133,13 @@ func IgnoredValues(v url.Values) map[string][]string {
 			report(param, splitFacetValues(v[param]), known)
 		}
 	}
-	// The remote reach reads each value as the location facet it names, so a closed
-	// one (regions) is checked against that facet's vocabulary.
+	// The remote reach reads each value as the location facet it names.
 	for param, facet := range remoteReachFacets {
 		if known, closed := closedFacets[facet]; closed {
 			report(param, splitFacetValues(v[param]), known)
 		}
 	}
-	// Mode modifiers are scalars too: a comma-joined pair is not an AND or OR.
+	// A comma-joined pair is not an and/or.
 	validMode := oneOf([]string{"and", "or"})
 	for facet := range StringFacets {
 		param := facet + "_mode"
@@ -165,7 +147,7 @@ func IgnoredValues(v url.Values) map[string][]string {
 			report(param, raw[:1], validMode)
 		}
 	}
-	// A scalar is read whole (v.Get), so its value is checked whole rather than split.
+	// A scalar is read whole (v.Get), so it is checked whole, not split.
 	for param, valid := range checkedScalars {
 		if raw, ok := v[param]; ok && len(raw) > 0 {
 			report(param, raw[:1], valid)
@@ -181,8 +163,7 @@ func IgnoredValues(v url.Values) map[string][]string {
 	return out
 }
 
-// oneOf is the check for a vocabulary given as a list. A value is compared trimmed and
-// case-insensitively (see IgnoredValues).
+// oneOf checks a value against a list, trimmed and case-insensitively.
 func oneOf(allowed []string) func(string) bool {
 	return func(value string) bool {
 		value = strings.TrimSpace(value)

@@ -10,34 +10,25 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// ErrDisabled is returned when the deployment has no model client. The feature is off,
-// which is a different answer from "I did not understand you" and must not be shown as
-// one.
+// ErrDisabled is returned when no model client is configured. The feature is off, which
+// must not be shown as "I did not understand you".
 var ErrDisabled = errors.New("searchintent: no model configured")
 
-// ErrNothingToInterpret is returned for a request carrying no description, no profile
-// and no previous result. It is a sentinel rather than a plain error because the
-// caller's transport has to tell it apart from a fault: this is a bad request, and
-// rendering it as a server error would report the caller's empty box as our bug.
+// ErrNothingToInterpret is returned for a request with no description and no previous
+// result. It is a bad request, not a server fault, so callers must tell it apart.
 var ErrNothingToInterpret = errors.New("searchintent: nothing to interpret")
 
-// MaxTextRunes bounds the description a caller may submit. Two or three sentences
-// describe a job search completely; past that the text is either pasted noise or an
-// attempt to spend someone else's tokens.
+// MaxTextRunes bounds the description a caller may submit.
 const MaxTextRunes = 1000
 
-// Request is one interpretation to run: what the caller wrote, optionally what we
-// already know about them, and optionally the result they are refining.
+// Request is one interpretation to run: the caller's text and optionally the result
+// being refined.
 type Request struct {
-	// Text is the caller's own description.
-	//
-	// There is deliberately no Profile field. A saved profile is already written in the
-	// filter's vocabulary, so FromProfile builds that search with no model at all; a
-	// caller who wants to adjust one passes the built result back as Previous.
+	// Text is the caller's own description. There is no Profile field: FromProfile builds
+	// a profile's search without a model; adjust it by passing the result as Previous.
 	Text string
-	// Previous is the result being refined. Carrying it lets the model return a
-	// complete replacement rather than a diff, so the caller always sees one coherent
-	// search.
+	// Previous is the result being refined. The model returns a complete replacement, not
+	// a diff.
 	Previous *Result
 }
 
@@ -46,8 +37,7 @@ type Interpreter struct {
 	client *llm.Client
 }
 
-// NewInterpreter wraps a model client. A nil client disables the feature rather than
-// failing at call time in a way that reads as a broken request.
+// NewInterpreter wraps a model client. A nil client disables the feature.
 func NewInterpreter(client *llm.Client) *Interpreter {
 	return &Interpreter{client: client}
 }
@@ -55,8 +45,8 @@ func NewInterpreter(client *llm.Client) *Interpreter {
 // Enabled reports whether interpretation can run at all.
 func (i *Interpreter) Enabled() bool { return i != nil && i.client != nil }
 
-// Interpret asks the model for one proposal and returns it resolved. One call: the
-// summary the caller is shown comes back with the values, so the two cannot disagree.
+// Interpret asks the model for one proposal and returns it resolved. The summary comes
+// back in the same call as the values, so the two cannot disagree.
 func (i *Interpreter) Interpret(ctx context.Context, req Request) (Result, error) {
 	if !i.Enabled() {
 		return Result{}, ErrDisabled
@@ -80,9 +70,8 @@ func (i *Interpreter) Interpret(ctx context.Context, req Request) (Result, error
 	return p.intent().resolve()
 }
 
-// userPrompt states what to interpret. It refuses a request with nothing in it rather
-// than paying for a model call that can only invent — an empty description is a bug in
-// the caller, not a search.
+// userPrompt states what to interpret. An empty request is refused instead of paying
+// for a model call that can only invent.
 func userPrompt(req Request) (string, error) {
 	text := strings.TrimSpace(req.Text)
 	if len([]rune(text)) > MaxTextRunes {
@@ -105,18 +94,15 @@ func userPrompt(req Request) (string, error) {
 	return b.String(), nil
 }
 
-// describe renders a previous result back as the plain text the model reads, so a
-// refinement argues with the search that is actually live rather than with its own
-// earlier prose.
+// describe renders a previous result as the text the model reads, so a refinement works
+// from the live search, not its own earlier prose.
 func describe(r Result) string {
 	var b strings.Builder
 	for _, name := range sortedFacetNames(r.Facets) {
 		fmt.Fprintf(&b, "- %s: %s\n", name, strings.Join(r.Facets[name], ", "))
 	}
-	// The exclusions belong here as much as the inclusions do. Left out, the model never
-	// learns about them and hands back a replacement that quietly drops them — so
-	// refining "remote, not in the USA" with "also senior" puts the USA back, and the
-	// person reads a summary saying so one screen after reading the opposite.
+	// Exclusions must be shown too, or the model's replacement silently drops them
+	// ("remote, not in the USA" + "also senior" would put the USA back).
 	for _, name := range sortedFacetNames(r.Exclude) {
 		fmt.Fprintf(&b, "- NOT %s: %s\n", name, strings.Join(r.Exclude[name], ", "))
 	}

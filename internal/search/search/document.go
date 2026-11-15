@@ -15,29 +15,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// maxIndexedDescriptionRunes caps the description text stored in the search
-// document. The full description lives in Postgres and is served verbatim by the
-// detail endpoint (its own jobview.FromRow); the index only needs enough of it
-// for keyword matching. The inverted index over `description` dominates the facet
-// index size (~5x the raw document bytes), and a full rebuild's transient on-disk
-// footprint scales with it — capping the indexed text to the meaningful opening
-// keeps a fresh rebuild small enough to swap in within the host's free disk.
-// Descriptions average ~4900 runes; 1000 captures the role summary and the first
-// requirements, where keyword matches that matter overwhelmingly land.
-//
-// The skill vectors (see JobDocument.Vectors) are the other large contributor to that
-// footprint, and unlike this cap their width is fixed rather than tunable: it is
-// declared in the index settings, so trimming it means a full rebuild.
+// maxIndexedDescriptionRunes caps the description text in the search document. The full
+// text stays in Postgres; the index only needs the opening for keyword matching, and the
+// inverted index over description dominates facet index size and rebuild disk use.
 const maxIndexedDescriptionRunes = 1000
 
-// JobDocument is a job as stored in the Meilisearch index: the internal id (the
-// primary key) plus the public jobview.Job — the exact wire shape served by the
-// list and detail endpoints, so search hits render with the same SPA components.
-// The embedded view flattens into the document JSON, so the stored document is
-// `{ "id": ..., "public_slug": ..., ... }` and Meilisearch reads "id" as the
-// primary key. The id is never returned to clients — handlers respond with the
-// embedded view alone. Meilisearch filters/sorts on the nested enrichment facets
-// via dot paths (e.g. "enrichment.seniority", "enrichment.salary_min").
+// JobDocument is a job as stored in the Meilisearch index: the internal id (primary key)
+// plus the public jobview.Job wire shape, flattened into one JSON object. The id is never
+// returned to clients. Enrichment facets are filtered via dot paths ("enrichment.seniority").
 type JobDocument struct {
 	// IsClosed is internal search state. A full replacement of an open job
 	// clears the marker, while legacy documents without it remain searchable.
@@ -46,119 +31,68 @@ type JobDocument struct {
 	IsDuplicate bool  `json:"is_duplicate,omitempty"`
 	ID          int64 `json:"id"`
 	jobview.Job
-	// PostedTS is the job's effective posting date in unix seconds — the numeric
-	// encoding of the same date jobview.Job.PostedAt renders as an RFC3339 string.
-	// It exists only to back the Meilisearch range filter for "posted within N days"
-	// (Meili range operators need a number, not a string); it is declared on the
-	// document, not on jobview.Job, so it is filterable but never served to clients.
+	// PostedTS is the effective posting date in unix seconds, for the "posted within N days"
+	// range filter (Meili ranges need a number). Kept off jobview.Job so it is never served.
 	PostedTS int64 `json:"posted_ts"`
-	// CreatedTS is when ingest first wrote the row, in unix seconds — the numeric
-	// encoding of the same instant jobview.Job.CreatedAt renders as RFC3339, declared
-	// on the document for the same reason as PostedTS.
-	//
-	// It backs a SECOND date bound ("open within N days") because the two dates are
-	// not interchangeable: PostedTS follows what the source states, and some boards
-	// restate it on every crawl, so a posting open for months reads as posted today
-	// (jobreality calls this fake_freshness). CreatedTS is the system's own
-	// observation and no source can rewrite it.
+	// CreatedTS is when ingest first wrote the row, in unix seconds. It backs the "open within
+	// N days" bound: some boards restate PostedTS on every crawl (fake_freshness), while
+	// created_at cannot be rewritten by a source.
 	CreatedTS int64 `json:"created_ts"`
-	// AIArchetype is the job's skill-signature AI archetype, derived at index
-	// time by aiarchetype from its already-resolved skills and category (empty
-	// for categories outside its ai_engineering/ml_ai scope, or when no rule
-	// matches). Like PostedTS, it is declared on the document, not jobview.Job, so
-	// it backs the `ai_archetype` facet but is never part of the served public
-	// wire shape.
+	// AIArchetype is derived at index time from resolved skills and category; empty outside
+	// ai_engineering/ml_ai or when no rule matches. Backs the ai_archetype facet, not served.
 	AIArchetype string `json:"ai_archetype"`
-	// RoleType is "people_manager" when the title names a people-management role, and
-	// empty otherwise — empty meaning "no marker found", never "individual
-	// contributor" (see internal/dict/roletype for why the other side is not detectable).
-	// Like Roles and AIArchetype it lives on the document rather than jobview.Job, so
-	// it backs the `role_type` facet without entering the public wire shape, and it
-	// needs no jobs column and no cmd/backfill-derive pass — a reindex is what
-	// reaches existing postings.
+	// RoleType is "people_manager" when the title names a people-management role. Empty means
+	// "no marker found", never "individual contributor" (see internal/dict/roletype). Backs the
+	// role_type facet, not served; a reindex reaches existing postings.
 	RoleType string `json:"role_type"`
-	// SourceType is what kind of source the posting was read from — one of
-	// vocab.SourceTypeValues, or empty for a source no kind describes (a manual import, a
-	// pasted link). The classifier is sources.ProviderKind, which this package may not
-	// import, so the caller resolves it and FromJob takes it as a parameter. Like RoleType
-	// it lives on the document only and backs the `source_type` facet.
+	// SourceType is the posting's source kind (one of vocab.SourceTypeValues), empty when no
+	// kind applies. The caller resolves it because sources.ProviderKind is not importable here.
 	//
-	// The key is written even when empty. Meilisearch's `!=` does not match a document
-	// that lacks the attribute, so an omitted key would make `source_type_exclude=aggregator`
-	// drop every unclassified posting along with the aggregators.
+	// The key is written even when empty: Meilisearch's `!=` does not match a document lacking
+	// the attribute, so omitting it would make source_type_exclude=aggregator drop every
+	// unclassified posting.
 	SourceType string `json:"source_type"`
-	// AIInterview is true when the job's company carries at least one un-retracted
-	// AI-interview report, derived at index time from the embedded view's count.
+	// AIInterview is true when the company has at least one un-retracted AI-interview report.
+	// Kept beside the count because filtering an integer would be an unguessable range query.
+	// Not served.
 	//
-	// It exists BESIDE the count rather than instead of it because the two answer
-	// different questions: the count is what the badge renders, and a filter over an
-	// integer would make "hide these employers" a range query nobody would guess. It is
-	// declared on the document, not on jobview.Job, so it is filterable but never served
-	// to clients — the same reason PostedTS lives here.
-	//
-	// Written only when true. Nothing in the index is ever written false, so the
-	// negative is asked as NOT of the positive (see aiInterviewFragment), which is what
-	// also reaches the documents that omit the attribute entirely.
-	//
-	// Unlike AIInterview, the auto-apply eligibility signal (`auto_apply_available`)
-	// has no served proxy standing in for it — there is no count to show a badge with
-	// — so it is a field on jobview.Job itself (jobview.AutoApplyProviders), not a
-	// document-only bool: it needs to reach the served job object, not just back a
-	// filter. It flattens into this document like every other jobview.Job field.
+	// Written only when true, so the negative is asked as NOT of the positive (see
+	// aiInterviewFragment), which also reaches documents that omit it.
 	AIInterview bool `json:"ai_interview,omitempty"`
-	// Vectors carries the job's skill vector under Meilisearch's reserved `_vectors`
-	// key — the userProvided embedder that backs the match sort (see
-	// internal/dict/skillvec). Like Roles and RoleType it lives on the document rather
-	// than jobview.Job, so it never enters the public wire shape.
+	// Vectors carries the skill vector under Meilisearch's reserved `_vectors` key, the
+	// userProvided embedder behind the match sort (see internal/dict/skillvec). Not served.
 	//
-	// The key is ALWAYS present, and carries one of two values:
-	//
-	//   {skills: vec}   the job's vector.
-	//   {skills: nil}   serialises as `"skills":null`, which is Meilisearch's documented
-	//                   opt-out. It both declines to provide a vector AND clears any
-	//                   previously stored one when a replacement removes its skills.
-	//
-	// Omitting the key is NOT a third state: with the embedder declared, Meilisearch
-	// rejects the whole document ("no vectors provided for document"), which would drop
-	// the posting out of the index rather than merely out of the match ordering.
+	// The key is ALWAYS present. {skills: nil} serialises as `"skills":null`, Meilisearch's
+	// opt-out: it declines a vector and clears a stored one. Omitting the key makes Meilisearch
+	// reject the whole document ("no vectors provided for document").
 	Vectors DocumentVectors `json:"_vectors"`
 }
 
-// DocumentVectors is a document's `_vectors` object: one field per embedder the jobs
-// index declares, each always serialised (see JobDocument.Vectors for why nil is a clear
-// and an omission is a rejected document). A struct rather than a map so a writer cannot
-// leave an embedder out; TestDocumentVectorsKeysMatchEmbedders holds the JSON names to
-// the embedder constants.
+// DocumentVectors is a document's `_vectors` object: one always-serialised field per
+// declared embedder (see JobDocument.Vectors). A struct so a writer cannot omit an embedder;
+// TestDocumentVectorsKeysMatchEmbedders pins the JSON names.
 type DocumentVectors struct {
 	// Skills is the match sort's single skill vector.
 	Skills []float32 `json:"skills"`
 }
 
-// SkillEmbedder is the name of the Meilisearch embedder carrying skill vectors. It
-// keys both the document's _vectors object and the hybrid search request, so the
-// stored side and the query side cannot drift apart.
+// SkillEmbedder names the embedder carrying skill vectors, shared by the document's _vectors
+// and the hybrid search request so the two sides cannot drift.
 const SkillEmbedder = "skills"
 
-// FromJob maps a database job row to its index document. An empty or absent
-// enrichment payload yields the zero Enrichment (the job is still fully
-// searchable by its text). Geography (regions/countries) and work_mode ride the
-// document top-level — the resolved union of parsed-location and enrichment
-// values — and are filtered via those bare attributes. The reality signal is NOT
-// set here (it needs the caller's clock and role-cluster counts); the caller
-// attaches it to the returned document via doc.Reality so it backs the
-// `reality.class` facet.
+// FromJob maps a job row to its index document. Empty enrichment yields the zero Enrichment.
+// Geography and work_mode ride top-level as the resolved union of parsed-location and
+// enrichment values. The reality signal is not set here (it needs the caller's clock and
+// cluster counts); the caller attaches it via doc.Reality.
 //
-// sourceType is the job's source kind (see JobDocument.SourceType). It is a parameter
-// rather than something a writer attaches afterwards because a writer that forgot would
-// not fail — it would silently drop the posting out of every `source_type` filter.
+// sourceType is a parameter, not attached later, because a forgotten attach would silently
+// drop the posting from every source_type filter.
 func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {
 		return JobDocument{}, err
 	}
-	// Cap the indexed description (see maxIndexedDescriptionRunes). This trims only
-	// the search document — the detail endpoint serves the full description from
-	// its own jobview.FromRow, unaffected by this local copy.
+	// Cap the indexed description; the detail endpoint serves the full text from its own FromRow.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{
 		ID:          j.ID,
@@ -173,15 +107,11 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}
-	// No fallback rule to apply, unlike PostedTS: created_at is written on insert and
-	// is never absent. The Valid guard is for the zero db.Job a test may build, not for
-	// a row this could meet in production.
+	// created_at is never absent in production; the Valid guard covers a zero db.Job in tests.
 	if j.CreatedAt.Valid {
 		doc.CreatedTS = j.CreatedAt.Time.Unix()
 	}
-	// ALWAYS set the key. With the embedder declared, Meilisearch REJECTS any document
-	// that omits it — "no vectors provided for document" — so an omission is not a
-	// no-op, it drops the posting out of the index entirely.
+	// Always set the key: Meilisearch rejects a document that omits it.
 	doc.Vectors = DocumentVectors{Skills: skillvec.JobVector(j.Skills)}
 	return doc, nil
 }
@@ -196,41 +126,17 @@ func (d *JobDocument) AttachApplyQuestions(counts map[int64]int) {
 	}
 }
 
-// CategoryUnresolved reports whether a job's category is unresolved by both the
-// deterministic title dictionary and the LLM: internal/dict/classify's title match left
-// jobs.category empty, and enrichment either never found one or fell back to the
-// catch-all "other". Such a job carries no meaningful category facet, so it is
-// excluded from the index rather than diluting it with the undifferentiated bulk a
-// broad ATS crawl brings in (painters, stockers, drivers — postings no category
-// filter, and often no keyword search, was ever meant to surface). It reads the raw
-// enrichment JSON rather than jobview's folded Enrichment.Category, which the
-// dictionary column always overwrites (see internal/dict/classify/AGENTS.md) and so
-// never carries the LLM's own answer.
+// CategoryUnresolved reports whether neither the title dictionary nor the LLM resolved a job's
+// category (jobs.category empty, enrichment empty or "other"). Such jobs are kept out of the
+// index so the undifferentiated bulk of broad ATS crawls does not dilute it. It reads the raw
+// enrichment JSON because jobview's Enrichment.Category is always overwritten by the
+// dictionary column.
 //
-// This exclusion does not apply when is_tech is confidently true (see the
-// tech-classification spec): a confirmed-technical job is never the undifferentiated
-// bulk this function exists to keep out, whether that confidence came from the title
-// dictionary alone or from a source's own structured signal (jobderive.Input.IsTechHint
-// — e.g. Profession's dedicated itdev/itops boards, issue #2601). Such a job stays
-// searchable even if its category never resolves further.
-//
-// Nor does it apply to a people manager. The role_type facet is a placement of its own:
-// a "General Manager" or an "Assistant Manager" names no craft, so no category is true
-// for it, but internal/dict/roletype marks it people_manager and the facet reaches it.
-// That axis is what the retired `management` category was a proxy for, and the posting
-// is kept on it. The marker is read through the same roletype.Derive FromJob writes onto
-// the document, so the gate and the facet cannot disagree about a title.
-// classify.ConfirmedNonTech applies the same veto at ingest, for the same reason.
-//
-// The same goes, one step weaker, for any title naming a manager (classify.NamesManager):
-// "Case Manager", "Property Manager", a bare "Manager". No facet reaches them, but the
-// owner chose to keep them findable by keyword search rather than drop the ~2.9% of the
-// catalogue the retired `management` category used to hold.
-//
-// Nor, finally, does it apply to a vacancy a verified employer published here
-// (job.EmployerSource). The gate keeps out crawled rows nobody vouched for; an employer who
-// pressed Publish and then cannot find the vacancy anywhere is a control that lies, and
-// the employer is the one source that has already been checked.
+// Never excluded: confirmed-tech jobs (is_tech true, from the dictionary or a source hint such
+// as jobderive.Input.IsTechHint); people managers (roletype.Derive, the call FromJob uses, so
+// gate and facet agree; classify.ConfirmedNonTech applies the same veto at ingest); any title
+// naming a manager (classify.NamesManager), findable by keyword though no facet reaches them;
+// and vacancies a verified employer published here (job.EmployerSource).
 func CategoryUnresolved(j db.Job) bool {
 	if j.Category != "" || j.Source == job.EmployerSource {
 		return false
@@ -249,24 +155,18 @@ func CategoryUnresolved(j db.Job) bool {
 }
 
 // TitleKeepsUncategorized reports whether a title alone keeps an uncategorized posting in
-// search: a role the roletype dictionary names, or a title naming a manager. It is
-// CategoryUnresolved's title branch, exported for cmd/recount-companies, whose SQL cannot
-// run these Go dictionaries and must count what search keeps (#4503).
+// search: a role the roletype dictionary names, or a title naming a manager. Exported for
+// cmd/recount-companies, whose SQL cannot run these dictionaries.
 func TitleKeepsUncategorized(title string) bool {
 	return roletype.Derive(title) != "" || classify.NamesManager(title)
 }
 
-// DescriptionMissing reports whether a job carries no posting body at all. An adapter
-// keeps a posting whose detail fetch failed — the listing is authoritative for the job
-// existing, and a later crawl can still hydrate it — so a body-less row is a normal,
-// recoverable ingest state rather than an error. It is not something to SHOW: a vacancy
-// page with a title and nothing under it tells a candidate nothing and cannot be applied
-// to on its merits, so such a job is excluded from the index exactly like an
-// unresolved-category one, and re-enters it by itself the moment a crawl fills the body.
+// DescriptionMissing reports whether a job has no visible posting body (a failed detail fetch
+// is a normal, recoverable ingest state). Such a job is excluded from the index like an
+// unresolved category and re-enters once a crawl fills the body.
 //
-// The test is on the VISIBLE text, not the raw column: a source that publishes an empty
-// rich-text field serves markup with no words in it ("<p>&nbsp;</p>"), which the ingest
-// sanitizer keeps because those tags are legal.
+// It tests the visible text, not the raw column: an empty rich-text field arrives as markup
+// with no words ("<p>&nbsp;</p>"), which the sanitizer keeps.
 func DescriptionMissing(j db.Job) bool {
 	return stripToPlainText(j.Description) == ""
 }

@@ -6,31 +6,27 @@ import (
 	"time"
 )
 
-// maxRetries bounds how often a body-less request is re-sent after a 502/503/504
-// (the SDK's own default was three).
+// maxRetries bounds re-sends of a body-less request after a 502/503/504.
 const maxRetries = 3
 
-// errorBodyDrainLimit bounds how much of an error response is read before a retry, so
-// the connection returns to the pool instead of being closed.
+// errorBodyDrainLimit bounds the error body read before a retry so the connection is reused.
 const errorBodyDrainLimit = 4 << 10
 
-// engineMaxIdleConnsPerHost matches the SDK's default transport; the engine is one host.
+// engineMaxIdleConnsPerHost matches the SDK's default transport.
 const engineMaxIdleConnsPerHost = 100
 
-// idempotentRetryTransport re-sends body-less GET, HEAD and DELETE requests that met a
-// transient 502/503/504. It exists because the Meilisearch SDK's retry loop re-sends a
-// request whose body has already been consumed, so it cannot be left on for POSTs (see
-// NewClient). A request with no body is safe to repeat, and two such requests carry a
-// rebuild that nothing else retries: the task-status polls behind Promote, and the index
-// drops around it (dropIndex tolerates the index_not_found a repeated delete can cause).
+// idempotentRetryTransport re-sends body-less GET, HEAD and DELETE requests after a
+// transient 502/503/504. The SDK's own retry re-sends an already consumed body, so it
+// cannot stay on for POSTs (see NewClient). This covers the task polls behind Promote and
+// the index drops (dropIndex tolerates the index_not_found a repeated delete causes).
 type idempotentRetryTransport struct {
 	base    http.RoundTripper
 	backoff func(attempt int) time.Duration
 }
 
-// newEngineHTTPClient is the HTTP client NewClient hands the SDK. Passing a client
-// replaces the SDK's own transport, so its idle pool is restated here: Go's default of
-// two idle connections per host would close and redial under concurrent search traffic.
+// newEngineHTTPClient is the client NewClient hands the SDK. It replaces the SDK's
+// transport, so the idle pool is restated: Go's default of two idle connections per host
+// would redial under concurrent search.
 func newEngineHTTPClient() *http.Client {
 	base := http.DefaultTransport.(*http.Transport).Clone()
 	base.MaxIdleConnsPerHost = engineMaxIdleConnsPerHost

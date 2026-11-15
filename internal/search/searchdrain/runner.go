@@ -1,27 +1,11 @@
-// Package searchdrain drives the incremental facet-search queue: drain search_outbox
-// wave by wave, pushing each wave into the live Meilisearch `jobs` index as ONE batch
-// (one Meili task per wave, not per job).
+// Package searchdrain drives the incremental facet-search queue: it drains search_outbox
+// wave by wave into the live Meilisearch `jobs` index, one Meili task per wave.
 //
-// It replaces the previous design where cmd/ingest pushed each crawl's changed jobs
-// straight to Meilisearch (search.Client.SubmitJobs) from inside every one of the
-// per-board worker processes — observed in production to cost 50-90s per push
-// regardless of batch size, because Meilisearch re-merges its inverted index/facet
-// structures across the whole multi-million-document live index on every push, not
-// just the changed rows. Routing every write through one outbox lets a single worker
-// collapse however many boards changed in a window into one Meili task.
-//
-// It mirrors internal/ai/embed: the batch/fallback logic is unit-tested with fakes of
-// the Store + Indexer ports and cmd/search-drain wires the real adapters. Unlike
-// embed there is no open/closed split — a job that closed or became a non-canonical
-// repost after being queued is simply not claimed (see ClaimSearchOutboxBatch), since
-// there is nothing left to index.
-//
-// Those skipped entries used to be described here as reconciling "on the next full
-// reindex". They did not. The reindex purge also requires jobs.updated_at to predate
-// the run, and a job demoted to a duplicate is still in its board's feed, so ingest
-// keeps touching it and its updated_at keeps moving — the row was skipped by the claim
-// forever and deleted by nothing. Measured on prod 2026-08-15: 1,618 such rows, the
-// oldest queued eight days earlier. Each run now reaps them first (Store.Reap).
+// A push costs about the same whatever its size (Meilisearch re-merges its structures across
+// the whole index), so all writes go through one outbox and one worker. Unlike internal/ai/embed
+// there is no open/closed split: a job that closed or became a non-canonical repost after being
+// queued is not claimed (see ClaimSearchOutboxBatch). Such entries are never purged by a reindex
+// (ingest keeps touching the row), so each run reaps them first (Store.Reap).
 package searchdrain
 
 import (
@@ -54,8 +38,8 @@ type Store interface {
 	Complete(ctx context.Context, entries []Claimed) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
-	// Reap deletes up to maxRows live entries Claim can never take (their job closed,
-	// became a non-canonical repost, or is gone), returning how many it removed.
+	// Reap deletes up to maxRows live entries Claim can never take (job closed, repost, or gone),
+	// returning how many it removed.
 	Reap(ctx context.Context, maxRows int) (int64, error)
 }
 
@@ -66,20 +50,15 @@ type Indexer interface {
 }
 
 // ErrSkipWave is what an Indexer returns when it could not assemble the wave's documents
-// COMPLETELY — not because one document is defective, but because something every
-// document in the wave needs was unavailable.
-//
-// The runner leaves such a wave claimed for its lease to expire rather than falling back
-// per item, because the fallback would push the same incomplete documents one at a time
-// and pay the whole-index re-merge for each. A push is a field-level update over a fixed
-// set of fields, so an incomplete document does not merely fail to add something: it
-// OVERWRITES what is already indexed.
+// completely because something every document needs was unavailable.
+// The runner leaves such a wave claimed until its lease expires instead of falling back per
+// item: a push is a field-level update, so an incomplete document would overwrite what is
+// already indexed.
 var ErrSkipWave = errors.New("searchdrain: wave left claimed for lease-expiry retry")
 
 // RunOptions are the per-run knobs.
 type RunOptions struct {
-	// BatchSize is the claim wave size and the index-push batch size — the lever that
-	// collapses per-board Meili tasks into one task per wave.
+	// BatchSize is the claim wave size and the index-push batch size.
 	BatchSize    int
 	LeaseSeconds int
 	MaxAttempts  int
@@ -100,16 +79,12 @@ type Stats struct {
 	Indexed      int
 	Failed       int
 	DeadLettered int
-	// Reaped counts entries deleted because Claim could never take them — housekeeping,
-	// not indexing work.
+	// Reaped counts entries deleted because Claim could never take them (housekeeping).
 	Reaped int
 }
 
-// reapLimit bounds how many ineligible entries one run deletes. The backlog these
-// accumulate into is measured in thousands (1,618 on prod when this was written, the
-// oldest queued eight days earlier), so an unbounded first pass would turn a two-minute
-// drain tick into a long delete holding row locks the claim then waits on. A few runs
-// clearing it is fine; the queue is not urgent, only unbounded.
+// reapLimit bounds how many ineligible entries one run deletes, so a large backlog cannot turn
+// a drain tick into a long delete holding row locks the claim waits on.
 const reapLimit = 2000
 
 // Runner drains the queue wave by wave until no claimable entries remain.
@@ -143,8 +118,7 @@ func (r Runner) run(ctx context.Context, opt RunOptions, oneWave bool) (Stats, e
 		LeaseSeconds: opt.LeaseSeconds,
 		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
-			// A heartbeat per wave so a long drain shows running totals instead of
-			// going silent for hours.
+			// Heartbeat per wave so a long drain does not go silent.
 			if !oneWave {
 				log.Printf("search-drain: progress indexed=%d failed=%d dead=%d",
 					rn.stats.Indexed, rn.stats.Failed, rn.stats.DeadLettered)
@@ -170,8 +144,7 @@ func reap(ctx context.Context, store Store) int {
 	return int(n)
 }
 
-// run accumulates one Run's options and tallies. Waves are processed sequentially,
-// so the tallies need no lock.
+// run accumulates one Run's options and tallies. Waves are sequential, so no lock.
 type run struct {
 	store   Store
 	indexer Indexer
@@ -179,11 +152,8 @@ type run struct {
 	stats   Stats
 }
 
-// processWave is search-drain's outbox.BatchProcessor: run the existing
-// batch-attempt-then-per-item-fallback cycle (processBatch, unchanged below) and
-// report this wave's delta. Always returns a nil error — processBatch fully handles
-// every item itself (including its own fallback and skipOnContextEnd), so
-// outbox.RunBatch's outer per-item Processor (unreachableFallback) is never invoked.
+// processWave is search-drain's outbox.BatchProcessor: it runs processBatch and reports the
+// wave's delta. It never returns an error, so unreachableFallback is never invoked.
 func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
 	rn.processBatch(ctx, batch)
@@ -196,16 +166,14 @@ func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, 
 	return delta, nil
 }
 
-// unreachableFallback satisfies outbox.RunBatch's Processor parameter. processWave
-// never returns an error, so outbox.RunBatch never calls this — panicking documents
-// that invariant rather than silently returning a fabricated outcome.
+// unreachableFallback satisfies outbox.RunBatch's Processor parameter; processWave never errors,
+// so it is never called.
 func (rn *run) unreachableFallback(context.Context, Claimed) outbox.Outcome {
 	panic("search-drain: outer per-item fallback invoked, but processWave never returns an error")
 }
 
-// processBatch indexes a whole wave in one batch and completes it in one call. Any
-// batch-level failure (a corrupted-row load, a batch index error, a partial load)
-// splits the wave (see split) so one bad entry can't sink the wave.
+// processBatch indexes a whole wave in one batch and completes it in one call. Any batch-level
+// failure splits the wave (see split) so one bad entry cannot sink it.
 func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -239,13 +207,9 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 	if err := rn.store.Complete(callCtx, entries); err != nil {
-		// The push already succeeded, so the documents are in the index and the only
-		// thing left undone is deleting the wave's rows. Complete is one DELETE over an
-		// id list — it cannot fail because of a single row's content, so isolating one
-		// entry from the rest buys nothing, while the fallback would re-push every
-		// document in the wave on its own (see processOne) at roughly the cost of the
-		// whole batch each. Leave the wave claimed and let its lease expire, exactly as
-		// the deletion runner does; the re-push a later run makes is idempotent.
+		// The documents are already indexed and Complete is one DELETE that cannot fail on a row's
+		// content, so a per-item fallback would only re-push every document. Leave the wave claimed
+		// for lease expiry; the later re-push is idempotent.
 		log.Printf("search-drain: complete indexed batch of %d (leaving claimed for "+
 			"lease-expiry retry): %v", len(entries), err)
 		return
@@ -254,25 +218,14 @@ func (rn *run) processBatch(ctx context.Context, entries []Claimed) {
 	log.Printf("search-drain: indexed batch of %d in %s", len(entries), since(start))
 }
 
-// skipOnContextEnd reports whether callCtx ended before the stage finished — either a
-// normal-but-slow operation outran CallTimeout, or the run itself is being cancelled —
-// and, if so, logs and leaves the wave claimed for its lease to expire, so a later run
-// retries the WHOLE batch fresh.
-//
-// It classifies on the CONTEXT rather than on the error, which covers both endings and
-// needs no cooperation from the SDK that produced the error (Meilisearch's own *Error
-// implements no Unwrap, so errors.Is against a context sentinel is blind to it).
-//
-// Both endings matter. Falling back to per-item on a mere timeout is actively harmful:
-// this Meili index's cost is dominated by a fixed whole-index re-merge, so a single
-// document costs about as much to push as the whole batch (see the package doc), and the
-// fallback would turn one slow-but-fine batch into up to len(entries) equally slow calls
-// — exactly what produced the 2026-08-05 outage. Cancellation is worse than harmful, it
-// is wrong: freehire-reindexw stops this service before every rebuild, so an ORDINARY
-// stop would drive the whole wave through the fallback, and each item's Fail runs on a
-// background context and therefore REACHES Postgres. Three stops over one entry set its
-// failed_at, after which the claim skips it and the enqueue's ON CONFLICT DO NOTHING
-// never re-adds it — that job stays out of the index until the next full rebuild.
+// skipOnContextEnd reports whether callCtx ended before the stage finished (CallTimeout or run
+// cancellation) and, if so, logs and leaves the wave claimed so a later run retries it whole.
+// It classifies on the context, not the error: Meilisearch's *Error has no Unwrap, so errors.Is
+// against a context sentinel is blind to it.
+// Falling back per item on a timeout would turn one slow batch into len(entries) equally slow
+// calls. On cancellation it is wrong: reindexw stops this service before every rebuild, and each
+// item's Fail reaches Postgres on a background context, so three stops would set failed_at and
+// the entry would never be re-enqueued (ON CONFLICT DO NOTHING) until the next full rebuild.
 func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stage string) bool {
 	cause := callCtx.Err()
 	if cause == nil {
@@ -283,16 +236,11 @@ func (rn *run) skipOnContextEnd(callCtx context.Context, entries []Claimed, stag
 	return true
 }
 
-// split retries a failed batch as two halves, each going through processBatch again,
-// down to single entries, which processOne isolates and charges.
-//
-// It halves rather than falling straight back to per-item because a push to this index
-// costs about the same whatever its size (see skipOnContextEnd). A wave the index
-// rejects as a whole — a payload over Meilisearch's HTTP size limit (413) is one — needs
-// a split or two, and one poison row among N entries costs ~2*log2(N) pushes. Per-item
-// costs N: on 2026-11-06 a 15000-entry wave over the 100 MB limit went one document at a
-// time at ~22s each, holding the run (and with it the timer) for what would have been
-// ~90 hours while the queue grew past 1.7M.
+// split retries a failed batch as two halves, each through processBatch, down to single
+// entries that processOne isolates and charges.
+// It halves instead of going per item because a push costs about the same whatever its size:
+// a wave rejected as a whole (e.g. payload over Meilisearch's HTTP limit, 413) needs a split or
+// two, and one poison row among N costs ~2*log2(N) pushes against N per item.
 func (rn *run) split(ctx context.Context, entries []Claimed, cause error) {
 	if len(entries) == 1 {
 		rn.processOne(ctx, entries[0])
@@ -315,8 +263,7 @@ func (rn *run) processOne(ctx context.Context, entry Claimed) {
 
 	jobs, err := rn.store.Jobs(callCtx, []int64{entry.JobID})
 	if err != nil {
-		// A corrupted row (XX001) can never load — dead-letter it immediately rather
-		// than burning the attempt budget across cron runs (mirrors embed/enrich).
+		// A corrupted row (XX001) can never load: dead-letter it now instead of burning attempts.
 		if pgerr.IsDataCorrupted(err) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
 			return
@@ -325,10 +272,8 @@ func (rn *run) processOne(ctx context.Context, entry Claimed) {
 		return
 	}
 	if len(jobs) == 0 {
-		// A missing row (hard-deleted, or excluded from the claim because it closed
-		// or became a repost) is just as deterministic as a corrupted one — no future
-		// run can load it either. Dead-letter immediately rather than burning the
-		// attempt budget across cron runs.
+		// A missing row (hard-deleted, closed, or a repost) is as deterministic as a corrupted one:
+		// dead-letter it now.
 		rn.failN(entry, fmt.Errorf("job %d not found", entry.JobID), 1)
 		return
 	}
@@ -343,7 +288,7 @@ func (rn *run) processOne(ctx context.Context, entry Claimed) {
 	rn.stats.Indexed++
 }
 
-// callContext derives the per-batch timeout context (no-op when CallTimeout is 0).
+// callContext derives the per-batch timeout context (a no-op when CallTimeout is 0).
 func (rn *run) callContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if rn.opt.CallTimeout <= 0 {
 		return context.WithCancel(ctx)
@@ -351,24 +296,18 @@ func (rn *run) callContext(ctx context.Context) (context.Context, context.Cancel
 	return context.WithTimeout(ctx, rn.opt.CallTimeout)
 }
 
-// fail records a failed attempt against one entry — unless the call context ended first,
-// in which case nothing was learned about the entry at all. A wave abandoned mid-flight
-// (CallTimeout, or SIGTERM stopping the service before a rebuild) must not be charged an
-// attempt: the write goes through on a background context, so three ordinary stops would
-// dead-letter a perfectly good job, and the enqueue's ON CONFLICT DO NOTHING means nothing
-// re-adds it.
+// fail records a failed attempt against one entry, unless the call context ended first: an
+// abandoned wave (CallTimeout, or SIGTERM before a rebuild) must not be charged an attempt,
+// or three ordinary stops would dead-letter a good job that nothing re-adds.
 func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
 	if ctxErr := callCtx.Err(); ctxErr != nil {
 		log.Printf("search-drain: outbox=%d abandoned (%v), leaving claimed for lease-expiry "+
 			"retry: %v", entry.OutboxID, ctxErr, cause)
 		return
 	}
-	// ErrSkipWave says the entry is not at fault — a dependency the indexer needed was
-	// unreadable, so the document it would push is not the one we mean to publish. It has
-	// to be honoured HERE and not only where processBatch reads it: a batch that fell back
-	// for an unrelated reason re-enters the indexer per entry, meets the same failing
-	// dependency, and would spend a healthy row's whole attempt budget three runs in a row
-	// — which is the dead letter this sentinel exists to prevent.
+	// ErrSkipWave means the entry is not at fault (a dependency the indexer needed was
+	// unreadable). Honour it here too, not only in processBatch: a batch that fell back for another
+	// reason would meet the same dependency per entry and burn a healthy row's attempt budget.
 	if errors.Is(cause, ErrSkipWave) {
 		log.Printf("search-drain: outbox=%d not indexed, leaving claimed for lease-expiry "+
 			"retry: %v", entry.OutboxID, cause)
@@ -377,12 +316,10 @@ func (rn *run) fail(callCtx context.Context, entry Claimed, cause error) {
 	rn.failN(entry, cause, rn.opt.MaxAttempts)
 }
 
-// failN records a failure with an explicit attempt ceiling. fail uses the run's
-// MaxAttempts; the corrupted/missing-row paths pass 1 to force an immediate
-// dead-letter.
+// failN records a failure with an explicit attempt ceiling; the corrupted/missing-row paths
+// pass 1 to dead-letter immediately.
 func (rn *run) failN(entry Claimed, cause error, maxAttempts int) {
-	// Fail bookkeeping runs on the run's background context, not the per-call one: a
-	// timed-out/cancelled call must still record its own failure.
+	// Runs on a background context so a timed-out or cancelled call still records its failure.
 	dead, err := rn.store.Fail(context.Background(), entry.OutboxID, cause.Error(), maxAttempts)
 	if err != nil {
 		log.Printf("search-drain: outbox=%d fail-bookkeeping error: %v", entry.OutboxID, err)

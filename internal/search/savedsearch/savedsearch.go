@@ -1,8 +1,7 @@
-// Package savedsearch is the per-user saved-search use case: a signed-in user names a
-// snapshot of their job-search filter state (the canonical search query string) and can
-// list, re-apply, overwrite, and delete those snapshots. It owns validation (name bounds,
-// the per-user cap); the Repository owns persistence and maps the relevant Postgres
-// conditions (unique violation, no row) onto the package sentinels.
+// Package savedsearch is the per-user saved-search use case: a signed-in user names a snapshot of
+// their job-search filter state (the canonical search query string) and can list, re-apply,
+// overwrite and delete it. It owns validation (name bounds, per-user cap); the Repository owns
+// persistence and maps Postgres conditions onto the package sentinels.
 package savedsearch
 
 import (
@@ -40,25 +39,14 @@ const (
 	maxNameLen = 100
 	// maxPerUser caps how many saved searches a single user may keep.
 	maxPerUser = 50
-	// maxQueryLen bounds the stored query string, the same way maxNameLen bounds name.
-	// query is a URL-encoded SPA filter state (facet params, not prose), so real values
-	// run to a few hundred characters even with many facets selected; 4000 leaves
-	// generous headroom while keeping a stored query far short of the point where
-	// re-parsing it on every internal/engage/notify pass (url.ParseQuery, once per distinct
-	// query per pass) becomes the cost this bound exists to avoid. Raised from the
-	// original 2000 (migration 0168) once a real profile-derived query — "notify me
-	// about jobs matching my profile", built from a rich skills list — tripped it; the
-	// frontend (facetModel.ts's skillCharBudget) separately bounds how much of a
-	// profile's own skills it ever feeds into that query, so this ceiling is headroom
-	// for a legitimately large filter, not a substitute for that cap. The migration's
-	// CHECK is the backstop.
+	// maxQueryLen bounds the stored query string. 4000 leaves headroom for a rich filter (a
+	// profile-derived query with many skills) while keeping the per-pass url.ParseQuery in
+	// internal/engage/notify cheap. The migration's CHECK is the backstop.
 	maxQueryLen = 4000
 )
 
-// SavedSearch is a stored named filter snapshot: the package domain type, decoupled from
-// the generated db row. The internal owner column (user_id) is dropped — it is never on the
-// wire and scoping is enforced in SQL — while created_at/updated_at are kept as *time.Time
-// because the handler serializes them.
+// SavedSearch is a stored named filter snapshot, decoupled from the generated db row. The owner
+// column (user_id) is dropped; created_at/updated_at are kept as *time.Time for the handler.
 type SavedSearch struct {
 	ID                 int64
 	Name               string
@@ -68,11 +56,9 @@ type SavedSearch struct {
 	UpdatedAt          *time.Time
 }
 
-// Repository is the persistence contract for saved searches. Every method is
-// user-scoped. Create maps a unique violation to ErrDuplicateName; Update maps a
-// unique violation to ErrDuplicateName and a missing owner-scoped row to ErrNotFound;
-// Delete maps "no row affected" to ErrNotFound. Implementations map the generated db
-// rows to SavedSearch, so the use case never sees db.*.
+// Repository is the persistence contract for saved searches. Every method is user-scoped.
+// Unique violations map to ErrDuplicateName, a missing owner-scoped row to ErrNotFound, and
+// implementations return SavedSearch so the use case never sees db.*.
 type Repository interface {
 	List(ctx context.Context, userID int64) ([]SavedSearch, error)
 	Count(ctx context.Context, userID int64) (int64, error)
@@ -97,10 +83,8 @@ func (s *Service) List(ctx context.Context, userID int64) ([]SavedSearch, error)
 	return s.repo.List(ctx, userID)
 }
 
-// Create validates and stores a saved search for the user. The name is trimmed and
-// bounded; the per-user cap is checked before the insert; a duplicate name surfaces as
-// ErrDuplicateName (mapped by the repository). An empty query is valid — it is the
-// unfiltered "show all" view.
+// Create validates and stores a saved search. The name is trimmed and bounded, and the per-user
+// cap is checked before the insert. An empty query is valid: the unfiltered "show all" view.
 func (s *Service) Create(ctx context.Context, userID int64, name, query string, derivedFromProfile bool) (SavedSearch, error) {
 	name, err := validName(name)
 	if err != nil {
@@ -119,10 +103,8 @@ func (s *Service) Create(ctx context.Context, userID int64, name, query string, 
 	return s.repo.Create(ctx, userID, name, query, derivedFromProfile)
 }
 
-// Update overwrites a saved search's name and/or query, scoped to its owner. A nil field
-// is left unchanged (partial update). A provided name and query are validated; an empty
-// query is a real "show all" value. A missing or non-owned row
-// surfaces as ErrNotFound (mapped by the repository).
+// Update overwrites a saved search's name and/or query, scoped to its owner. A nil field is left
+// unchanged; provided values are validated, and an empty query is a real "show all" value.
 func (s *Service) Update(ctx context.Context, userID, id int64, name, query *string) (SavedSearch, error) {
 	if name != nil {
 		valid, err := validName(*name)
@@ -139,15 +121,13 @@ func (s *Service) Update(ctx context.Context, userID, id int64, name, query *str
 	return s.repo.Update(ctx, id, userID, name, query)
 }
 
-// Delete removes one of the user's saved searches. A missing or non-owned row surfaces as
-// ErrNotFound (mapped by the repository).
+// Delete removes one of the user's saved searches; a missing or non-owned row is ErrNotFound.
 func (s *Service) Delete(ctx context.Context, userID, id int64) error {
 	return s.repo.Delete(ctx, id, userID)
 }
 
-// validName trims the name and enforces the 1..maxNameLen bound (counted in runes, to
-// match the DB CHECK's character semantics — names are often Cyrillic), returning the
-// trimmed value or ErrInvalidName.
+// validName trims the name and enforces 1..maxNameLen runes (rune-counted to match the DB CHECK;
+// names are often Cyrillic).
 func validName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > maxNameLen {
@@ -156,15 +136,14 @@ func validName(name string) (string, error) {
 	return name, nil
 }
 
-// validQuery bounds the stored query and checks its free-text syntax with the same
-// parser the search and notification matcher use. The stored URL-encoded filter state
-// stays unchanged, including an empty query for the unfiltered "show all" view.
+// validQuery bounds the stored query and checks its free-text syntax with the parser search and the
+// notify matcher use. The stored filter state itself stays unchanged.
 func validQuery(query string) error {
 	if utf8.RuneCountInString(query) > maxQueryLen {
 		return ErrQueryTooLong
 	}
-	// Match notify's reading of partially malformed filter state: retain every pair
-	// url.ParseQuery can read, then validate the q that will actually execute.
+	// Match notify's reading of partially malformed state: keep every pair url.ParseQuery can read,
+	// then validate the q that will execute.
 	values, _ := url.ParseQuery(query)
 	_, err := search.ParseQuery(values.Get("q"))
 	return err

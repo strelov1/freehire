@@ -11,10 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
-// JobViewsByID reads the served shape of the given jobs straight from the live jobs
-// index, keyed by job id. A job with no document is simply absent from the map — the
-// caller decides whether that is a gap. It exists for cmd/serve-probe, which compares
-// what a posting stores with what the index serves for it.
+// JobViewsByID reads the served shape of the given jobs from the live index, keyed by
+// job id. A job with no document is absent from the map. Used by cmd/serve-probe.
 func (c *Client) JobViewsByID(ctx context.Context, ids []int64) (map[int64]jobview.Job, error) {
 	if len(ids) == 0 {
 		return map[int64]jobview.Job{}, nil
@@ -39,8 +37,8 @@ func (c *Client) JobViewsByID(ctx context.Context, ids []int64) (map[int64]jobvi
 	return out, nil
 }
 
-// IndexedJobIDs reports which of ids have a document in the live jobs index. It reads only
-// the primary key, so asking about a wave costs one small request.
+// IndexedJobIDs reports which of ids have a document in the live jobs index, reading
+// only the primary key.
 func (c *Client) IndexedJobIDs(ctx context.Context, ids []int64) ([]int64, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -49,8 +47,7 @@ func (c *Client) IndexedJobIDs(ctx context.Context, ids []int64) ([]int64, error
 	for i, id := range ids {
 		keys[i] = strconv.FormatInt(id, 10)
 	}
-	// A filter on the filterable id rather than the `ids` field, which servers before 1.14
-	// (the integration tests' image among them) reject.
+	// Filter on id: the `ids` field is rejected by servers before 1.14.
 	var resp meilisearch.DocumentsResult
 	q := &meilisearch.DocumentsQuery{
 		Filter: "id IN [" + strings.Join(keys, ",") + "]", Fields: []string{"id"}, Limit: int64(len(ids)),

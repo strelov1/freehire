@@ -20,10 +20,10 @@ import (
 //	POST {base}/distinct {"filter": F, "attr": "company_slug"}
 //	  200 {"count": 42}
 //
-// F is null, a string, an array of strings, or an array of arrays of strings
-// (the Meilisearch filter shapes). 422 {"error": "..."} means the filter or
-// attribute is unsupported (ErrEngineUnsupported); 503 means not ready
-// (ErrEngineNotReady); 400 to a /write is ErrFacetdRejected; anything else is a plain error. The deadline is the ctx's.
+// F is null, a string, an array of strings, or an array of arrays of strings (the
+// Meilisearch filter shapes). 422 {"error": "..."} means an unsupported filter or
+// attribute (ErrEngineUnsupported); 503 means not ready (ErrEngineNotReady); 400 to a
+// /write is ErrFacetdRejected; anything else is a plain error. The deadline is the ctx's.
 type FacetdClient struct {
 	base string
 	hc   *http.Client
@@ -176,9 +176,9 @@ func (w FacetdWrite) Empty() bool {
 	return len(w.Upserts)+len(w.Close)+len(w.Duplicate)+len(w.Delete) == 0
 }
 
-// Write applies one batch to facetd (POST /write). The documents go without their
-// `_vectors`: facetd indexes none, and the description chunks are most of a document's bytes.
-// A not-ready facetd answers ErrEngineNotReady.
+// Write applies one batch to facetd (POST /write). Documents go without `_vectors`: facetd
+// indexes none and the chunks are most of a document's bytes. A not-ready facetd answers
+// ErrEngineNotReady.
 func (c *FacetdClient) Write(ctx context.Context, w FacetdWrite) error {
 	slim := make([]JobDocument, len(w.Upserts))
 	for i, d := range w.Upserts {

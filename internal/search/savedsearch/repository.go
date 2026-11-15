@@ -15,10 +15,8 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository adapts *db.Queries to the Repository. It maps the relevant Postgres
-// conditions onto package sentinels: a unique violation on create/update → duplicate
-// name, no row on an owner-scoped update → not found, no row affected on delete → not
-// found.
+// QueriesRepository adapts *db.Queries to the Repository, mapping Postgres conditions onto package
+// sentinels (unique violation to duplicate name, no row to not found).
 type QueriesRepository struct {
 	q *db.Queries
 }
@@ -46,9 +44,8 @@ func (r *QueriesRepository) Count(ctx context.Context, userID int64) (int64, err
 	return r.q.CountSavedSearches(ctx, userID)
 }
 
-// Create inserts a saved search. The UNIQUE (user_id, name) violation maps to
-// ErrDuplicateName; the partial UNIQUE (user_id) WHERE derived_from_profile violation
-// (at most one profile-derived row per user) maps to ErrProfileSearchExists.
+// Create inserts a saved search. UNIQUE (user_id, name) maps to ErrDuplicateName; the partial
+// UNIQUE (user_id) WHERE derived_from_profile maps to ErrProfileSearchExists.
 func (r *QueriesRepository) Create(ctx context.Context, userID int64, name, query string, derivedFromProfile bool) (SavedSearch, error) {
 	row, err := r.q.CreateSavedSearch(ctx, db.CreateSavedSearchParams{
 		UserID:             userID,
@@ -68,9 +65,8 @@ func (r *QueriesRepository) Create(ctx context.Context, userID int64, name, quer
 	return fromRow(row), nil
 }
 
-// Update overwrites a saved search scoped to its owner. A nil name/query is left unchanged
-// (NULL param). No matching row (wrong id or another user's) returns no row → ErrNotFound;
-// a name collision → ErrDuplicateName.
+// Update overwrites a saved search scoped to its owner. A nil name/query is left unchanged. No
+// matching row (wrong id or another user's) returns ErrNotFound; a name collision ErrDuplicateName.
 func (r *QueriesRepository) Update(ctx context.Context, id, userID int64, name, query *string) (SavedSearch, error) {
 	row, err := r.q.UpdateSavedSearch(ctx, db.UpdateSavedSearchParams{
 		ID:     id,
@@ -90,8 +86,7 @@ func (r *QueriesRepository) Update(ctx context.Context, id, userID int64, name, 
 	return fromRow(row), nil
 }
 
-// Delete removes a saved search scoped to its owner, mapping "no row affected" (missing
-// or non-owned) to ErrNotFound.
+// Delete removes a saved search scoped to its owner; a missing or non-owned row is ErrNotFound.
 func (r *QueriesRepository) Delete(ctx context.Context, id, userID int64) error {
 	affected, err := r.q.DeleteSavedSearch(ctx, db.DeleteSavedSearchParams{ID: id, UserID: userID})
 	if err != nil {
@@ -103,8 +98,7 @@ func (r *QueriesRepository) Delete(ctx context.Context, id, userID int64) error 
 	return nil
 }
 
-// fromRow maps the generated db row to the package domain type, dropping the owner
-// column the use case does not need.
+// fromRow maps the generated db row to the domain type, dropping the owner column.
 func fromRow(row db.SavedSearch) SavedSearch {
 	return SavedSearch{
 		ID:                 row.ID,
@@ -116,9 +110,8 @@ func fromRow(row db.SavedSearch) SavedSearch {
 	}
 }
 
-// textPtr maps an optional string to the pgtype a partial update expects: nil becomes the
-// zero (NULL, "leave unchanged") value, a non-nil pointer a valid text (an empty string is
-// a real "show all" query value, so it stays valid).
+// textPtr maps an optional string to the pgtype a partial update expects: nil is NULL (leave
+// unchanged), and an empty string stays a valid value because it is a real "show all" query.
 func textPtr(s *string) pgtype.Text {
 	if s == nil {
 		return pgtype.Text{}

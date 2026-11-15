@@ -7,22 +7,13 @@ import (
 	"strings"
 )
 
-// The schema declares every facet as an array of strings and both bounds as integers,
-// and a gateway honouring strict mode makes the shims below unreachable. They exist
-// because one does not.
-//
-// Observed against the live gateway: asked for "seniority": ["senior"], the model
-// answered "seniority": "senior". encoding/json aborts the WHOLE unmarshal on the first
-// type mismatch, so a single scalar in a single field discarded the entire
-// interpretation — the caller got a 500 for an answer that was perfectly usable.
-//
-// This is the same standing guard resumeextract keeps for the same reason: a provider
-// that quietly stops honouring a schema answers 200 with ordinary JSON, and nothing
-// else on the path would notice.
+// The schema makes these decoders unreachable on a gateway that honours strict mode.
+// They exist because some do not: the model has answered "seniority": "senior" for an
+// array field, and encoding/json aborts the whole unmarshal on the first type mismatch.
+// resumeextract keeps the same guard.
 
-// flexStrings is a []string that also accepts a bare scalar, reading it as a
-// single-element list. Null and an empty string read as no values, not as [""] — a
-// model saying "nothing here" must not become a filter on the empty string.
+// flexStrings is a []string that also accepts a bare scalar as a single-element list.
+// Null and "" read as no values, not as [""].
 type flexStrings []string
 
 func (f *flexStrings) UnmarshalJSON(b []byte) error {
@@ -32,10 +23,7 @@ func (f *flexStrings) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	if b[0] == '[' {
-		// Element by element, because one odd element must not cost the list. Decoded
-		// straight into []string, a single number in "skills":["go",5] made
-		// encoding/json abandon the whole field — the same over-reaction, one level
-		// down, that this type exists to stop.
+		// Element by element, so one odd element ("skills":["go",5]) does not cost the list.
 		var raw []json.RawMessage
 		if err := json.Unmarshal(b, &raw); err != nil {
 			return err
@@ -59,21 +47,17 @@ func (f *flexStrings) UnmarshalJSON(b []byte) error {
 		}
 		return nil
 	}
-	// A bare number or other scalar token: keep it verbatim. Whether it means anything
-	// is the resolvers' question, not this one's.
+	// A bare number or other scalar token is kept verbatim; the resolvers judge it.
 	*f = flexStrings{string(b)}
 	return nil
 }
 
-// flexInt is a bound that reads a number however the model writes it — bare, quoted, or
-// as empty/absent text meaning "not set". Unparseable text is "not set" too rather than
-// an error: one confused bound must not cost the caller their whole search.
+// flexInt is a bound read as a bare number, quoted number, or empty/absent text meaning
+// "not set". Unparseable text is also "not set", not an error.
 //
-// Empty text is the point. The model writes 0 for a bound it does not mean to set, and
-// for the experience CEILING zero is a real filter — it selects postings that ask for no
-// prior experience. Observed live: asked for senior roles, the model wrote 0 and
-// inverted the search. That field is therefore declared as text (see requestSchema), so
-// "" and "0" are different answers rather than the same one.
+// The model writes 0 for a bound it does not mean to set, but for the experience ceiling
+// 0 is a real filter (no prior experience required), so the field is declared as text
+// (see requestSchema) to keep "" and "0" distinct.
 type flexInt struct {
 	value int
 	set   bool
@@ -109,8 +93,7 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// plain hands the bound on as an ordinary *int, so nothing past the decode boundary has
-// to know this type exists.
+// plain returns the bound as a *int, nil when unset.
 func (f *flexInt) plain() *int {
 	if f == nil || !f.set {
 		return nil
@@ -119,15 +102,11 @@ func (f *flexInt) plain() *int {
 	return &n
 }
 
-// flexBool is the proposal's one boolean, read however the model writes it. It exists
-// for the same reason flexStrings does: asked for false, the gateway has answered
-// "false", and encoding/json abandons the whole object on that first mismatch — so one
-// quoted word discarded an interpretation that was otherwise perfectly usable.
+// flexBool is the proposal's one boolean, tolerating a quoted "false" for the same
+// reason flexStrings exists.
 //
-// Unlike the others, this one gates a filter that HIDES postings. Sponsorship is asked
-// for by people who need it; switching it on when nobody asked strips every posting
-// that does not mention sponsorship, and they cannot tell it happened. So an answer
-// this cannot read must leave the filter OFF, never on.
+// It gates a filter that hides postings (every one not mentioning sponsorship), so an
+// answer it cannot read must leave the filter off.
 type flexBool bool
 
 func (f *flexBool) UnmarshalJSON(b []byte) error {
@@ -152,19 +131,14 @@ func (f *flexBool) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// plain hands the flag on as an ordinary bool, so nothing past the decode boundary has
-// to know this type exists.
+// plain returns the flag as a bool.
 func (f *flexBool) plain() bool {
 	return f != nil && bool(*f)
 }
 
-// readsAsTrue decides which written answers mean yes.
-//
-// A closed list rather than a rule, because the two mistakes are not symmetrical: a yes
-// misread as no widens the search, which the person can see and correct; a no misread as
-// yes strips every posting that does not mention sponsorship, which they cannot. So this
-// knows a handful of spellings and calls everything else no — "maybe", "required" and
-// "depends" are all answers the model has no business turning into a filter.
+// readsAsTrue reports which written answers mean yes. A closed list, everything else is
+// no: a yes misread as no only widens the search, but a no misread as yes silently hides
+// postings.
 func readsAsTrue(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "true", "yes", "y", "1":

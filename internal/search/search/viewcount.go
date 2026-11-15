@@ -8,16 +8,14 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// setViewCount reads the figure from the task context by the document's id, so one task
-// carries a whole chunk. retireDescVectors goes first for the reason markJobs gives.
+// setViewCount reads the figure from the task context by document id, so one task carries a
+// whole chunk. retireDescVectors goes first, as in markJobs.
 const setViewCount = retireDescVectors +
 	`let n = context.counts[doc.id.to_string()]; if n != () { doc.view_count = n; }`
 
-// SetViewCounts writes jobs' current view_count into the documents that are already in
-// the index, leaving their text, facets and vectors alone. view_count only backs the
-// "Most viewed" sort, so it does not go through search_outbox: rebuilding a whole
-// document for one counter flooded the drain (2026-11-14). Like markJobs, an id that is
-// not indexed is skipped rather than created as a skeleton document.
+// SetViewCounts writes view_count into documents already in the index, leaving text, facets
+// and vectors alone. It bypasses search_outbox because rebuilding a whole document for one
+// counter floods the drain. As in markJobs, an unindexed id is skipped, not created.
 func (c *Client) SetViewCounts(ctx context.Context, counts map[int64]int64) error {
 	if len(counts) == 0 {
 		return nil

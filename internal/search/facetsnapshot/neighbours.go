@@ -25,13 +25,10 @@ type facetCounter interface {
 	FacetCounts(ctx context.Context, p search.FacetParams) (search.FacetResult, error)
 }
 
-// Neighbours computes, for every skill, the skills listed most often beside it. It asks
-// the engine the same question the glossary page used to ask on every render — the
-// skills distribution under `skills = <skill>`, one exact value (the query-string
-// parser would split a value at commas), so the snapshot matches what the page showed
-// for every real skill. Open, canonical postings only, as everywhere. One query at a
-// time: this runs nightly and must not compete with the site for the engine. Any error
-// aborts the pass so the previous snapshot keeps serving.
+// Neighbours computes, for every skill, the skills listed most often beside it, from the skills
+// distribution under `skills = <skill>` (one exact value, since the query-string parser would split
+// at commas). Open, canonical postings only. Queries run one at a time so the nightly pass does
+// not compete with the site; any error aborts it so the previous snapshot keeps serving.
 func Neighbours(ctx context.Context, fc facetCounter, skills []string, limit int) ([]NeighbourRow, error) {
 	attr := search.StringFacets["skills"]
 	var rows []NeighbourRow

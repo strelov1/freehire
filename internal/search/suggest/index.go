@@ -6,11 +6,8 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// meiliIndex adapts the search client to the narrow Index the service needs.
-//
-// It lives on this side of the boundary because the DOCUMENT type is mined here: the
-// engine package stays generic over it (SearchSuggestions is generic for exactly that
-// reason) and never learns what a suggestion is.
+// meiliIndex adapts the search client to Index. It lives here because Document is defined
+// here; the engine package stays generic over it.
 type meiliIndex struct{ c *search.Client }
 
 // NewIndex wraps a search client as the service's index.

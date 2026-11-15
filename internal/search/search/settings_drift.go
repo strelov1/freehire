@@ -7,25 +7,16 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// SettingsDrift reports every way the LIVE jobs and companies indexes lag what this
-// binary's own facetSettings()/companySettings() expect: a sortable or filterable
-// attribute this binary may request that the live index has not declared, or an
-// embedder this binary may query that the live index does not carry. Each entry is a
-// human-readable line naming the index and the missing attribute or embedder; a nil,
-// nil result means both indexes are current.
+// SettingsDrift reports how the LIVE jobs and companies indexes lag this binary's
+// facetSettings()/companySettings(): a sortable or filterable attribute or an embedder the
+// binary may use that the live index lacks. Each entry names the index and the missing
+// item; nil, nil means both are current.
 //
-// This exists because nothing checked it. AGENTS.md documents the hazard by hand for
-// both indexes ("Adding a filterable/sortable attribute", "Skill vectors and the match
-// sort"): a binary rolled out before its settings patch reaches the live index turns
-// every request for the new attribute or embedder into a Meili 400, which this
-// package's error mapping turns into a 500 for every caller — not just the one who
-// asked for the new sort, filter, or the match ranking. There was no operator script
-// for it; this is that script's read side, meant to run on a schedule and publish what
-// it finds rather than wait for someone to notice a broken page.
+// A binary rolled out before its settings patch turns every request for the new attribute
+// or embedder into a Meili 400 and then a 500 (see AGENTS.md). Meant to run on a schedule.
 //
-// It only reports THIS direction. A live index still declaring an attribute or
-// embedder this binary no longer asks for is the other, harmless direction — see
-// AGENTS.md: only a binary that asks for what the live index lacks breaks.
+// Only this direction is reported: a live index declaring more than the binary asks for is
+// harmless.
 func (c *Client) SettingsDrift(ctx context.Context) ([]string, error) {
 	var drift []string
 
@@ -44,12 +35,8 @@ func (c *Client) SettingsDrift(ctx context.Context) ([]string, error) {
 	return drift, nil
 }
 
-// diffSettings is the pure comparison SettingsDrift's I/O wraps: given what the live
-// index actually declares and what this binary expects, it names every sortable
-// attribute, filterable attribute, and embedder the binary may ask for that the live
-// index does not yet carry. Kept separate from the network call so the interesting
-// cases (a missing sort, a missing filter, a missing embedder, nothing missing) are
-// unit-testable against fabricated settings instead of a running engine.
+// diffSettings is the pure comparison behind SettingsDrift: every sortable attribute,
+// filterable attribute and embedder in want that live lacks.
 func diffSettings(indexUID string, live, want *meilisearch.Settings) []string {
 	var drift []string
 

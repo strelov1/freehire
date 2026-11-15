@@ -1,8 +1,7 @@
 // Package search provides Meilisearch-backed full-text and faceted keyword search
-// over jobs. It owns the document shape and the single facet/keyword index
-// configuration and read/write helpers. The jobs index carries userProvided skill
-// vectors for the match sort. TEI embedding calls (embed.go) feed job_semantic_chunks
-// in Postgres; those description vectors stay there and never reach Meilisearch.
+// over jobs: the document shape, the index configuration and read/write helpers. The
+// index carries userProvided skill vectors for the match sort; TEI description vectors
+// (embed.go) stay in Postgres (job_semantic_chunks) and never reach Meilisearch.
 package search
 
 import (
@@ -20,91 +19,53 @@ import (
 )
 
 const (
-	// facetIndexUID is the production search index: keyword + facets, plus the
-	// `userProvided` skill embedder behind the match sort. No model is called at index
-	// time — that is what kept a full rebuild ~25x faster than embedding every document
-	// — but building the vector index is no longer free, so a rebuild is materially
-	// slower and larger than when the index carried no embedder at all. It serves all
-	// default (keyword) traffic and the facet analytics.
+	// facetIndexUID is the production index: keyword search, facets, and the `userProvided`
+	// skill embedder behind the match sort.
 	facetIndexUID = "jobs"
-	// facetRebuildUID is the throwaway index a full rebuild streams into before
-	// atomically swapping over the live index (see Rebuild).
+	// facetRebuildUID is the index a full rebuild streams into before swapping over the
+	// live one (see Rebuild).
 	facetRebuildUID = "jobs_rebuild"
 	primaryKey      = "id"
-	// embedderModel is the identity of the embedding model+passage-shape, stored beside a
-	// job's vector so a change marks it stale and drives EnqueuePendingSemanticJobs'
-	// staleness check — bumping this string is what forces a full re-embed through the
-	// current pipeline (openspec/changes/drop-hybrid-search-pgvector-similar's ops step
-	// 8.3), not a separate backfill tool.
-	// Embedding runs on a self-hosted Text-Embeddings-Inference (TEI) service — NOT
-	// in-engine and NOT OpenAI — reached over TEI's native /embed route (embedderURL).
-	// Multilingual e5 gives far sharper skill matching than the old in-engine MiniLM, and
-	// offloading the compute keeps it off Meilisearch's single task queue.
-	// "-chunked-v1": the passage shape changed (HTML-stripped, full-length, chunked —
-	// see internal/search/plaintext.go/chunk.go) even though the underlying e5 model did
-	// not, so this identity must change too or a job already stamped under the OLD
-	// (truncated, HTML-laden) passage would never be re-enqueued. Bumped 2026-08-14 as
-	// its own scheduled deploy (openspec/changes/drop-hybrid-search-pgvector-similar's
-	// ops step 8.3), triggering the full-catalogue re-embed through the chunking
-	// pipeline — not bundled into the deploy that shipped the pipeline itself.
+	// embedderModel identifies the embedding model and passage shape, stored beside a job's
+	// vector. Changing it marks vectors stale, so EnqueuePendingSemanticJobs re-embeds the
+	// catalogue; bump it on a passage-shape change even when the model is the same.
+	// Embedding runs on a self-hosted TEI service (not in-engine, not OpenAI) over its native
+	// /embed route (embedderURL), which keeps it off Meilisearch's task queue.
 	embedderModel = "intfloat/multilingual-e5-base-chunked-v1"
-	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
-	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
-	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend
-	// serving the same e5 model — e.g. an HF Inference Endpoint for a bulk reindex —
-	// without changing the vector space.
+	// embedderURL is the default TEI /embed endpoint (loopback on the production host).
+	// WithEmbedURL overrides it, but the backend must serve the same e5 model.
 	embedderURL = "http://127.0.0.1:8090/embed"
 
-	// maxTotalHits caps how high a search counts its results: below it,
-	// estimatedTotalHits is the true filtered total, so it is set well above the
-	// index size to keep the reported count honest. It is NOT the pagination guard
-	// — deep offset paging is bounded separately by maxPageWindow in the handler
-	// handler — so a large value here costs nothing beyond an accurate total.
-	// Keep it comfortably above the open-job catalogue (which crossed 1M in
-	// 2026-06): once the real total exceeds this cap, every count saturates at it.
+	// maxTotalHits caps the counted results; below it estimatedTotalHits is the true filtered
+	// total. Keep it well above the open-job catalogue or every count saturates at it. Deep
+	// paging is bounded separately by maxPageWindow in the handler.
 	maxTotalHits = 10000000
 
-	// maxValuesPerFacet raises the per-facet value cap above Meili's default of
-	// 100 so the analytics facet distribution is not truncated for high-cardinality
-	// facets (skills, cities, countries).
-	// Meili truncates to this cap ALPHABETICALLY (sortFacetValuesBy defaults to
-	// "alpha") BEFORE the client sorts by count, so a cap below the value count
-	// silently drops the busiest values past the alphabetical cut — the failure
-	// leaves no trace, which is why the headroom is generous rather than measured.
-	// It was sized for the retired role catalogue (~1,200 values) and is kept there
-	// on purpose: lowering it buys nothing and the mistake it prevents is silent.
+	// maxValuesPerFacet raises Meili's per-facet cap of 100. A cap below a facet's value count
+	// silently drops values, so keep generous headroom.
 	maxValuesPerFacet = 1200
 
 	taskPollInterval = 50 * time.Millisecond
 )
 
-// rawClient serves the package's raw Meilisearch calls that bypass the SDK (the
-// swap-indexes POST). http.DefaultClient has no timeout of its own, so a hung
-// engine would otherwise block a reindex indefinitely. (The TEI embed calls in
-// embed.go are a different backend with their own per-attempt timeout — see
-// embedAttemptTimeout.)
+// rawClient serves raw Meilisearch calls that bypass the SDK (swap-indexes).
+// http.DefaultClient has no timeout, so a hung engine would block a reindex.
 var rawClient = &http.Client{Timeout: 30 * time.Second}
 
-// Client is a thin wrapper over the Meilisearch service scoped to the facet
-// (keyword, facets and userProvided vectors) job index. url/key are kept for the one raw call
-// (swap-indexes) the SDK cannot make against our engine version — see swapIndexes.
+// Client wraps the Meilisearch service scoped to the facet job index. url/key are kept
+// for the raw swap-indexes call the SDK cannot make (see swapIndexes).
 type Client struct {
 	manager meilisearch.ServiceManager
 	facet   meilisearch.IndexManager
 	url     string
 	key     string
-	// embedURL is the TEI native /embed endpoint this client embeds against (jobs
-	// and CVs alike). It defaults to embedderURL (the host2 TEI); WithEmbedURL points a
-	// worker at a faster backend — e.g. a GPU endpoint for a bulk reindex — as long as
-	// it serves the SAME e5 model (same vector space). Tests set it directly.
+	// embedURL is the TEI /embed endpoint for jobs and CVs. Defaults to embedderURL; it must
+	// serve the same e5 model.
 	embedURL string
-	// embedKey is the optional bearer token for embedURL (WithEmbedAPIKey). Empty for
-	// the authless host2 TEI; set when pointing at an authenticated endpoint (HF, etc.).
+	// embedKey is the optional bearer token for embedURL (WithEmbedAPIKey).
 	embedKey string
-	// embedConcurrency is how many embed calls a batch runs in flight
-	// (WithEmbedConcurrency, default 1). The CPU-bound host2 TEI gains nothing from
-	// concurrency, but a remote GPU endpoint does (it hides per-call latency) — a bulk
-	// reindex sets it high.
+	// embedConcurrency is how many embed calls a batch runs in flight (default 1). Only a
+	// remote GPU endpoint gains from more.
 	embedConcurrency int
 	// router sends facet requests without query text to a second engine; nil means
 	// Meilisearch only (WithFacetEngine).
@@ -114,10 +75,8 @@ type Client struct {
 // Option customizes a Client at construction (see NewClient).
 type Option func(*Client)
 
-// WithEmbedURL points the embedding backend at a TEI-compatible /embed endpoint other
-// than the default host2 TEI — e.g. an HF Inference Endpoint for a bulk reindex. The
-// endpoint must serve the SAME e5 model (same vector space). An empty url keeps the
-// default.
+// WithEmbedURL points embedding at another TEI-compatible /embed endpoint serving the
+// same e5 model. An empty url keeps the default.
 func WithEmbedURL(url string) Option {
 	return func(c *Client) {
 		if url != "" {
@@ -126,17 +85,13 @@ func WithEmbedURL(url string) Option {
 	}
 }
 
-// WithEmbedAPIKey sets the bearer token for the embedding endpoint. Empty (the
-// default) suits the authless host2 TEI; set it when pointing at an authenticated
-// endpoint (HF, etc.).
+// WithEmbedAPIKey sets the bearer token for the embedding endpoint; empty means none.
 func WithEmbedAPIKey(key string) Option {
 	return func(c *Client) { c.embedKey = key }
 }
 
-// WithEmbedConcurrency sets how many embed calls a batch runs in flight (default 1).
-// The CPU-bound host2 TEI gains nothing from concurrency, but a remote GPU endpoint
-// does (it hides per-call latency) — a bulk reindex sets it high. A value below 1
-// keeps the default.
+// WithEmbedConcurrency sets how many embed calls a batch runs in flight (default 1;
+// remote GPU endpoints gain from more). A value below 1 keeps the default.
 func WithEmbedConcurrency(n int) Option {
 	return func(c *Client) {
 		if n > 0 {
@@ -145,17 +100,13 @@ func WithEmbedConcurrency(n int) Option {
 	}
 }
 
-// NewClient connects to Meilisearch at url authenticated by key. It does no I/O
-// — the connection is exercised lazily by the first request (or EnsureIndex). The
-// embedding backend defaults to the host2 TEI (embedderURL — the loopback TEI of the
-// production topology) with no auth and concurrency 1; callers that embed override it
-// via the WithEmbed* options (wired from the EMBED_* env in internal/platform/config, so this
-// package stays env-free).
+// NewClient connects to Meilisearch at url with key; no I/O happens until the first
+// request. Embedding defaults to embedderURL with no auth and concurrency 1; the
+// WithEmbed* options override it, keeping this package env-free.
 func NewClient(url, key string, opts ...Option) *Client {
-	// The SDK's retry loop is off because v0.36.3 re-sends a consumed POST body, turning
-	// a transient 502/503/504 into 400 missing_payload. idempotentRetryTransport covers the
-	// body-less requests. A failed POST surfaces its real status: workers retry or requeue
-	// their batches, and a read on a request path (search, documents/fetch) fails once.
+	// SDK retries are off: v0.36.3 re-sends a consumed POST body, turning a transient
+	// 502/503/504 into 400 missing_payload. idempotentRetryTransport retries body-less
+	// requests; a failed POST surfaces its real status for workers to retry or requeue.
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries())
 	c := &Client{
 		manager:          m,
@@ -171,52 +122,38 @@ func NewClient(url, key string, opts ...Option) *Client {
 	return c
 }
 
-// EnsureIndex creates the facet/keyword jobs index and applies its settings,
-// including the userProvided skill embedder behind the match sort. It is idempotent — safe to call on every reindex. This is the fast
-// production index that all default (keyword) traffic and faceting hit.
+// EnsureIndex creates the jobs index and applies its settings, including the skill
+// embedder. Idempotent.
 func (c *Client) EnsureIndex(ctx context.Context) error {
-	// ensure() clears inherited embedders before applying these settings, so the live
-	// set ends up as exactly the one facetSettings declares — the skill embedder and
-	// nothing else. See ensure() for why the order is load-bearing.
+	// ensure clears inherited embedders first, so the live set is exactly what
+	// facetSettings declares.
 	return c.ensure(ctx, c.facet, facetIndexUID, primaryKey, facetSettings())
 }
 
 // ensure creates the named index (keyed by pk) if absent and applies its settings.
-// Shared by every ensure/prepare path — the jobs indexes (id-keyed) and the companies
-// index (slug-keyed, see company.go) differ only in uid, primary key, and settings.
+// Shared by the jobs and companies indexes.
 func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, pk string, settings *meilisearch.Settings) error {
 	if err := c.createIndex(ctx, idx, uid, pk); err != nil {
 		return err
 	}
-	// Reset embedders BEFORE applying the settings, never after.
-	//
-	// Meilisearch merges settings updates, and it merges `embedders` BY KEY: an update
-	// naming one embedder leaves any other in place. So the reset is still needed — an
-	// index that a prior version gave a model-backed embedder would otherwise keep
-	// embedding every document forever — but doing it afterwards deletes the embedder
-	// the settings just declared. That is exactly what used to happen here, and it made
-	// a rebuild ship an index with no skill embedder while every unit test still passed.
-	//
-	// Ordering it first means the live embedder set ends up as EXACTLY what `settings`
-	// declares: nothing inherited, nothing dropped. An index with no embedder is
-	// unaffected either way.
+	// Reset embedders BEFORE applying settings, never after. Meilisearch merges `embedders`
+	// by key, so an index that once had a model-backed embedder would keep embedding every
+	// document without the reset, while a reset afterwards deletes the embedder the settings
+	// just declared.
 	reset, err := idx.ResetEmbeddersWithContext(ctx)
 	if err != nil {
 		return fmt.Errorf("search: reset embedders on %s: %w", uid, err)
 	}
-	// Queue the settings WITHOUT awaiting the reset. Meilisearch runs one serial task
-	// queue per index, so submission order IS execution order — the reset still lands
-	// first. Awaiting it here instead would leave a live index embedder-less for the
-	// round trip between the two, and a match-sort query arriving in that window gets a
-	// 400. Every task id is awaited below, in the order it was queued.
+	// Queue settings without awaiting the reset: the per-index task queue is serial, so
+	// submission order is execution order, and awaiting would leave the index embedder-less
+	// for a round trip (a match-sort query then 400s). All task ids are awaited below.
 	st, err := idx.UpdateSettingsWithContext(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("search: update settings: %w", err)
 	}
-	// facetSearch goes on its own: the client's Settings tags it `omitempty`, so a false
-	// never leaves UpdateSettings, and a fresh index defaults it to true. Nothing calls
-	// /facet-search (counts come from facets, value lookup from list_filter_values in
-	// Go), yet while it is on Meilisearch rebuilds its facet-search data on every write.
+	// facetSearch goes on its own: the SDK tags it omitempty, so false never goes out, and a
+	// fresh index defaults to true. Nothing uses /facet-search, and while on, Meili rebuilds
+	// its data on every write.
 	fs, err := idx.UpdateFacetSearchWithContext(ctx, settings.FacetSearch)
 	if err != nil {
 		return fmt.Errorf("search: update facet search on %s: %w", uid, err)
@@ -278,10 +215,9 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 		return err
 	}
 	pk := primaryKey
-	// Submit every part before awaiting any. Meilisearch only merges additions that are
-	// already queued when it picks the next batch, and an idle engine starts on the
-	// first part at once, so each extra part usually costs its own indexing pass
-	// (~2.5 min on prod, 2026-11-07). That is still far cheaper than a rejected request.
+	// Submit every part before awaiting any: Meilisearch merges only additions already
+	// queued, so an idle engine usually spends a separate indexing pass per part. Still far
+	// cheaper than a rejected request.
 	var firstErr error
 	uids := make([]int64, 0, len(parts))
 	for _, part := range parts {
@@ -303,8 +239,7 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 }
 
 // maxPushBytes keeps one documents request under Meilisearch's http_payload_size_limit
-// (100 MB by default). A wave of older jobs reached ~240 MB on 2026-11-06, when each
-// carried its ~9.5 KB-per-chunk description vectors, and was rejected whole.
+// (100 MB default).
 var maxPushBytes = 64 << 20 // a var only so a test can force a split
 
 // ndjsonParts encodes docs as NDJSON bodies of at most limit bytes each. A document
@@ -329,13 +264,9 @@ func ndjsonParts(docs []JobDocument, limit int) ([][]byte, error) {
 	return parts, nil
 }
 
-// SubmitJobs replaces complete documents in the live facet index WITHOUT awaiting the
-// indexing task. The incremental ingest indexer uses this instead of IndexJobs so
-// it never blocks the crawl on Meilisearch's per-batch indexing (which the reindex
-// passes do await); Meilisearch auto-batches the submitted tasks and processes them
-// even after the worker exits. The submission (HTTP) error is returned and tallied;
-// the async task result is not awaited — best-effort, the batch reindex reconciles
-// a task that fails server-side.
+// SubmitJobs replaces complete documents in the live index without awaiting the task, so
+// the ingest indexer never blocks the crawl on Meilisearch. Only the submission error is
+// returned; a task failing server-side is reconciled by the batch reindex.
 func (c *Client) SubmitJobs(ctx context.Context, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
@@ -386,30 +317,23 @@ type SearchParams struct {
 	// LiteralQuery treats stored text as words, without the user-query DSL or
 	// Meilisearch's phrase/exclusion syntax. Similar jobs pass an employer's title.
 	LiteralQuery bool
-	// PhraseQuery sends Query as one Meilisearch phrase: its words adjacent and in
-	// order, with no typo tolerance — "W-2", "contract to hire". A backfill gathering
-	// candidates for a term needs that; as separate words "W-2" matches every "2".
+	// PhraseQuery sends Query as one Meilisearch phrase: words adjacent, in order, no typo
+	// tolerance ("W-2", "contract to hire"). As separate words "W-2" matches every "2".
 	PhraseQuery bool
 	Query       string
 	Filter      any
 	Sort        []string
 	Limit       int
 	Offset      int
-	// Vector, when set, ranks results by cosine against it using SkillEmbedder rather
-	// than by text relevance — the match sort. It composes with Filter: the engine
-	// applies both in one query, so the facets need no separate pass and pagination
-	// stays ordinary.
-	//
-	// Sort must be empty when this is set. An explicit sort directive takes precedence
-	// over vector ranking in Meilisearch, so sending both silently discards the match
-	// order rather than erroring.
+	// Vector ranks results by cosine against it using SkillEmbedder instead of text
+	// relevance (the match sort); it composes with Filter in one query.
+	// Sort must be empty with it: an explicit sort silently overrides vector ranking.
 	Vector []float32
 	// QFields restricts Query matching to these searchable attributes (see
 	// QFieldsFromValues). Nil means Meilisearch's default: all of them.
 	QFields []string
-	// Prefix lets the last word of Query match as the start of a longer word, for a
-	// query someone is still typing ("data eng" → engineer). Off, the last word is read
-	// as complete, which is what a submitted search means and far cheaper: see wholeWords.
+	// Prefix lets the last word of Query match as a word prefix, for a query still being
+	// typed. Off, the last word is read as complete, which is cheaper (see wholeWords).
 	Prefix bool
 }
 
@@ -423,10 +347,9 @@ type SearchResult struct {
 	TotalIsLowerBound bool
 }
 
-// ErrBadQuery marks a search request Meilisearch rejected as malformed — a 400,
-// e.g. an unparseable filter value passed through from client input. It is a
-// client mistake, not an engine fault, so handlers map it to 400 and do not report it
-// (see internal/api/handler.classify). Callers match it with errors.Is.
+// ErrBadQuery marks a request Meilisearch rejected as malformed (400, e.g. an unparseable
+// filter value from client input). A client mistake, not an engine fault: handlers map it
+// to 400 without reporting it (see handler.classify). Match with errors.Is.
 var ErrBadQuery = errors.New("bad query")
 
 // isBadRequest reports whether err is a Meilisearch API rejection with a 400
@@ -437,19 +360,11 @@ func isBadRequest(err error) bool {
 	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
 }
 
-// queryErr is how every query against every index reports a failure, under the op
-// prefix the caller names.
-//
-// It exists because the classification is not obvious twice over. A cancelled or
-// expired context surfaces here wrapped in a Meilisearch communication error that does
-// NOT chain to context.Canceled (the SDK's *Error has no Unwrap), so the sentinel has
-// to be re-raised directly or errors.Is stops working upstream and a client disconnect
-// reads as a fault. And a 400 is the engine refusing input that came from the caller,
-// so it is tagged ErrBadQuery for handlers to render as 400 without reporting it.
-//
-// A package-level function rather than a method: disjunctiveFacetCounts is deliberately
-// a free function (it takes its searcher, so it is testable without an engine) and has
-// no client in scope.
+// queryErr reports a query failure under the caller's op prefix. A cancelled or expired
+// context arrives wrapped in a Meilisearch communication error that does not chain to
+// context.Canceled (the SDK's *Error has no Unwrap), so the context error is re-raised
+// directly; otherwise a client disconnect reads as a fault. A 400 is tagged ErrBadQuery.
+// A free function because disjunctiveFacetCounts is one and has no client in scope.
 func queryErr(ctx context.Context, op string, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("%s: %w", op, ctxErr)
@@ -460,9 +375,8 @@ func queryErr(ctx context.Context, op string, err error) error {
 	return fmt.Errorf("%s: %w", op, err)
 }
 
-// buildSearchRequest translates SearchParams into the SDK's request. It is split out
-// of Search so the vector/embedder pairing is unit-testable without a live engine: a
-// Vector sent without an embedder name is a 400, so the two must never drift apart.
+// buildSearchRequest translates SearchParams into the SDK request. Split out so the
+// vector/embedder pairing is testable: a Vector without an embedder name is a 400.
 func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 	req := &meilisearch.SearchRequest{
 		Filter:               p.Filter,
@@ -473,8 +387,8 @@ func buildSearchRequest(p SearchParams) *meilisearch.SearchRequest {
 	}
 	if len(p.Vector) > 0 {
 		req.Vector = p.Vector
-		// SemanticRatio 1.0 asks for pure vector ranking. Anything less blends in the
-		// keyword score, which for the empty query this sort runs under is noise.
+		// SemanticRatio 1 is pure vector ranking; less blends in keyword score, which is noise
+		// for this sort's empty query.
 		req.Hybrid = &meilisearch.SearchRequestHybrid{Embedder: SkillEmbedder, SemanticRatio: 1}
 	}
 	return req
@@ -557,87 +471,53 @@ func (c *Client) awaitManagerTask(ctx context.Context, taskUID int64) error {
 	return nil
 }
 
-// facetSettings is the single source of truth for the facet/keyword index
-// configuration. Indexing into it costs no per-document embedding, so a full
-// rebuild is fast.
+// facetSettings is the single source of truth for the jobs index configuration.
 func facetSettings() *meilisearch.Settings {
 	return &meilisearch.Settings{
 		SearchableAttributes: []string{"title", "company", "description", "location"},
-		// Enrichment facets are nested, so they are filtered via dot paths. The
-		// resolved geography facet (regions/countries), work_mode, and skills are
-		// served top-level — the union of parsed-location/column and enrichment
-		// values — so they are filtered on a bare attribute, not the enrichment
-		// dot path.
+		// Enrichment facets are nested and filtered via dot paths; geography (regions,
+		// countries), work_mode and skills are served top-level and filtered on the bare attribute.
 		FilterableAttributes: []string{
-			// id backs the swipe deck's `id NOT IN [...]` per-user exclusion. Adding
-			// a new filterable attribute needs a reindex before it takes effect —
-			// reindex first on deploy, or /jobs 500s on the new attribute.
+			// id backs the swipe deck's `id NOT IN [...]` exclusion. A new filterable attribute
+			// needs a reindex, and must be declared in the live settings BEFORE a binary that filters
+			// on it, or /jobs 500s. That applies to every attribute below.
 			"id", "is_closed", "is_duplicate",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
-			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on
-			// the bare attribute; an unknown value is absent so it filters as empty.
+			// is_tech is served top-level; an unknown value is absent, so it filters as empty.
 			"is_tech",
-			// ai_interview is true-or-absent like is_tech: written only when the job's
-			// company carries at least one un-retracted report, so the negative is asked
-			// as NOT of the positive rather than an equality that would match nothing.
+			// ai_interview is true-or-absent (written only when the company has an un-retracted
+			// report), so the negative is NOT of the positive.
 			"ai_interview",
-			// auto_apply_available is true-or-absent like ai_interview: written only
-			// when the job's source is one of the four ATS providers auto-apply can
-			// currently attempt (see JobDocument.AutoApplyAvailable). Adding a
-			// filterable attribute is the one hazardous part of shipping this: until
-			// the LIVE index declares it, a binary that requests the facet hard-500s
-			// /api/v1/jobs/facets for every caller, so the settings patch goes out
-			// BEFORE the binary flips.
+			// auto_apply_available is true-or-absent: written only for sources auto-apply can
+			// attempt (see JobDocument.AutoApplyAvailable).
 			"auto_apply_available",
-			// ai_archetype is derived at index time (aiarchetype) from skills+category
-			// and served top-level like the other bare facets, so it filters on the
-			// plain attribute, not a dot path.
+			// ai_archetype is derived at index time (aiarchetype) from skills and category.
 			"ai_archetype",
-			// role_type is derived at index time (roletype) from the title alone, same
-			// pattern again — no jobs column, so a reindex is what reaches existing
-			// postings. Adding a filterable attribute is the one hazardous part of
-			// shipping this: until the LIVE index declares it, a binary that requests
-			// the facet hard-500s /api/v1/jobs/facets for every caller, so the settings
-			// patch goes out BEFORE the binary flips.
+			// role_type is derived at index time (roletype) from the title alone; no jobs column,
+			// so only a reindex reaches existing postings.
 			"role_type",
-			// source_type is written at index time from the job's source (see
-			// JobDocument.SourceType). The settings-before-binary order above applies.
+			// source_type is written at index time from the source (see JobDocument.SourceType).
 			"source_type",
-			// requires_clearance is a jobs column served top-level, so it filters on the
-			// bare attribute like is_tech. It is written true-or-absent, never false: a
-			// posting with no stated requirement omits the attribute entirely, which is
-			// why the "exclude clearance jobs" filter negates the positive instead of
-			// testing for a false (see clearanceFragment in query_filter.go).
-			//
-			// The settings-before-binary warning above applies to this attribute too.
+			// requires_clearance is true-or-absent, never false, so the "exclude clearance jobs"
+			// filter negates the positive (see clearanceFragment in query_filter.go).
 			"requires_clearance",
-			// via_recruiter: a jobs column served top-level, true-or-absent like
-			// requires_clearance. Same settings-before-binary order.
+			// via_recruiter is a top-level column, true-or-absent like requires_clearance.
 			"via_recruiter",
-			// equity: a jobs column served top-level, a closed string vocabulary that is
-			// ABSENT when not stated (see EquityNotStated). Same settings-before-binary order.
+			// equity is a closed string vocabulary, absent when not stated (see EquityNotStated).
 			"equity",
-			// clearance_levels is the multi-value level facet beside it (a jobs column,
-			// vocab.ClearanceLevelValues), present exactly when requires_clearance is
-			// (see ClearanceLevelUnspecified in query_filter.go). Settings before binary.
+			// clearance_levels is present exactly when requires_clearance is (see
+			// ClearanceLevelUnspecified in query_filter.go).
 			"clearance_levels",
-			// perks is a jobs text[] column served top-level (internal/dict/perks), a
-			// multi-value facet like skills. It is enrolled in /jobs/facets through
-			// StringFacets, so the settings-before-binary warning above applies, and a
-			// full rebuild must follow the backfill-derive that fills existing rows.
+			// perks is a multi-value text[] facet enrolled through StringFacets; a full rebuild must
+			// follow the backfill-derive that fills existing rows.
 			"perks",
-			// engagement is the jobs text[] column beside it (internal/dict/engagement:
-			// IR35, W-2, B2B, CLT...), a multi-value facet enrolled through StringFacets,
-			// with the same settings-before-binary order. Existing rows reach the index
-			// through cmd/backfill-engagement, which queues them for the drain.
+			// engagement is a multi-value text[] facet enrolled through StringFacets; existing rows
+			// reach the index via cmd/backfill-engagement.
 			"engagement",
-			// apply_questions is the captured application form's required-question
-			// count (jobview.Job.ApplyQuestions), attached at index time from apply_forms
-			// and ABSENT when no form was captured, so `apply_questions <= N` never
-			// matches a posting whose form we have not read. Numeric, behind the
-			// `apply_questions_max` bound. Same settings-before-binary order: a binary
-			// filtering on it before the live index declares it gets a Meili 400.
+			// apply_questions is the captured form's required-question count, attached at index time
+			// and ABSENT when no form was captured, so `apply_questions <= N` never matches an unread
+			// form. Numeric, behind `apply_questions_max`.
 			"apply_questions",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
@@ -645,102 +525,60 @@ func facetSettings() *meilisearch.Settings {
 			"enrichment.salary_currency", "enrichment.salary_period",
 			"enrichment.salary_min", "enrichment.salary_max", "enrichment.experience_years_min",
 			"enrichment.relocation", "enrichment.english_level", "enrichment.posting_language",
-			// posted_ts is the effective posting date in unix seconds — the numeric
-			// field the "posted within N days" range filter needs (Meili range operators
-			// require a number; the string posted_at below is sort-only).
+			// posted_ts is the effective posting date in unix seconds; range filters need a number
+			// (the string posted_at is sort-only).
 			"posted_ts",
-			// created_ts is the first-seen date in unix seconds, backing the second date
-			// bound ("open within N days"). created_at is already on the document as a
-			// sortable string, but a range filter needs the number.
-			//
-			// The settings-before-binary warning applies here in both directions: this
-			// declaration must reach the LIVE index before a binary that filters on it
-			// (an undeclared attribute is a 400 that the handler maps to 500), and a full
-			// rebuild must follow, because the incremental drain only pushes documents
-			// whose content_hash moved and this field is not in that hash. Until then the
-			// filter matches almost nothing — a thin feed nothing alerts on, which is why
-			// the SPA control ships behind a flag. See AGENTS.md in this package.
+			// created_ts is the first-seen date in unix seconds for the "open within N days" bound.
+			// A full rebuild must follow declaring it: the drain pushes only documents whose
+			// content_hash moved and this field is not in that hash, so until then the filter matches
+			// almost nothing. See AGENTS.md in this package.
 			"created_ts",
-			// reality.class is the job-reality signal (fresh/stale/likely-evergreen),
-			// nested under the served reality object; the "hide likely-evergreen" filter
-			// matches on this dot path.
+			// reality.class is the job-reality signal (fresh/stale/likely-evergreen), nested under
+			// the served reality object.
 			"reality.class",
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
-		// view_count backs the "Most viewed" ordering. It needs no document change: the
-		// document embeds the public job projection, which has carried the counter since
-		// the counter existed — declaring it sortable is the whole index-side change.
-		// The settings-before-binary warning above applies to it as well, and here it is
-		// the SORT that breaks: Meilisearch rejects the whole query for an undeclared
-		// sort attribute, so a binary accepting ?sort=view_count first 500s the page.
+		// view_count backs the "Most viewed" order. An undeclared sort attribute makes Meili
+		// reject the whole query, so declare it before a binary accepts ?sort=view_count.
 		SortableAttributes: []string{"posted_at", "created_at", "view_count", "enrichment.salary_min", "enrichment.salary_max"},
-		// posted_ts:desc is a freshness tie-breaker appended AFTER exactness: relevance
-		// (and any explicit sort) always decides first, and among results otherwise tied
-		// on every relevance rule the fresher posting wins. It uses the numeric
-		// effective-posting field (posted_ts, unix seconds) — the reliable date jobview
-		// derives, not the raw posted_at — and needs no sortable declaration (custom
-		// ranking rules are independent of SortableAttributes).
+		// posted_ts:desc is a freshness tie-breaker after exactness: relevance and any explicit
+		// sort decide first. It uses the numeric posted_ts; custom ranking rules need no sortable
+		// declaration.
 		RankingRules: []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "posted_ts:desc"},
-		// The match sort's embedder. `userProvided` means Meilisearch never calls a
-		// model: the vectors are arithmetic over a finite dictionary
-		// (internal/dict/skillvec), written by the indexers into each document's
-		// reserved `_vectors` object.
+		// The match sort's embedder. `userProvided`: Meilisearch calls no model; indexers write
+		// vectors (arithmetic over internal/dict/skillvec) into each document's `_vectors`.
+		// Dimensions is the registry's width and cannot change without a full rebuild; until then
+		// the index rejects documents with the new width. Adding this embedder to a live index is
+		// rebuild-only and must land BEFORE a binary that sends a query vector, else a vector
+		// search is a 400.
 		//
-		// Dimensions is the registry's declared width and CANNOT change without a full
-		// rebuild — until one completes, the index rejects every document carrying the
-		// new width. Adding this embedder to a live index is itself a rebuild-only
-		// operation, and it must land in the LIVE settings BEFORE a binary that sends a
-		// query vector: a vector search against an index with no such embedder is a 400,
-		// which surfaces as a failing /jobs/search for everyone who picked the sort.
-		// Same ordering hazard role_type documents below.
-		//
-		// BinaryQuantized is deliberately absent (false). These vectors carry 2-12
-		// non-zeros out of 749, and a sign-bit quantiser leaves 749 bits in which nearly
-		// every zero agrees across every document: measured recall@20 collapsed from 95%
-		// to 10%, and the rare skills the weighting exists to surface disappeared
-		// entirely.
+		// BinaryQuantized stays false: these vectors have 2-12 non-zeros out of 749, so a
+		// sign-bit quantiser leaves nearly every bit agreeing across documents and recall
+		// collapses, losing the rare skills the weighting surfaces.
 		Embedders: map[string]meilisearch.Embedder{
 			SkillEmbedder: {
 				Source:     meilisearch.UserProvidedEmbedderSource,
 				Dimensions: skillvec.Dimensions,
 			},
 		},
-		// Typo tolerance is left at Meilisearch's defaults (on, with sensible min
-		// word sizes). We deliberately do not send a TypoTolerance struct: the SDK
-		// always serializes newer fields (e.g. disableOnNumbers) that older
-		// Meilisearch versions reject, and the spec only requires typo tolerance to
-		// exist, not specific thresholds. Re-add explicit tuning when the pinned
-		// server and SDK fields align.
+		// Typo tolerance stays at Meilisearch defaults: the SDK always serializes newer fields
+		// (e.g. disableOnNumbers) that older server versions reject. Re-add tuning when the pinned
+		// server and SDK align.
 		Pagination: &meilisearch.Pagination{MaxTotalHits: maxTotalHits},
-		// Raise the per-facet value cap above Meili's default of 100 so the
-		// distribution is not truncated for high-cardinality facets. And keep the
-		// TOP values BY COUNT, not alphabetically: cities has far more than
-		// maxValuesPerFacet distinct values, so with the default alpha ordering Meili
-		// drops the busiest cities that sort late (e.g. "Florianópolis", 1000+ jobs)
-		// from the distribution even though filtering by them works — client-side
-		// count sorting can't recover a value the engine never returned. `count`
-		// ordering makes the cap keep the most-common values and also sheds the
-		// long-tail noise (zip fragments, one-off strings). sortFacetValuesBy is a
-		// query-time setting supported since Meili v0.28, so unlike the TypoTolerance
-		// note above it is safe on the pinned server.
+		// Raise the per-facet cap above Meili's default of 100 and keep the top values BY COUNT:
+		// high-cardinality facets (cities) exceed maxValuesPerFacet, and the default alpha order
+		// drops busy values that sort late, which client-side sorting cannot recover.
+		// sortFacetValuesBy needs Meili 0.28+.
 		Faceting: &meilisearch.Faceting{
 			MaxValuesPerFacet: maxValuesPerFacet,
 			SortFacetValuesBy: map[string]meilisearch.SortFacetType{"*": meilisearch.SortFacetTypeCount},
 		},
-		// byAttribute skips computing exact word-to-word distance across the index —
-		// a local benchmark showed Meilisearch's "merging word proximity" indexing
-		// phase alone costing up to ~10s per 200-document batch (search-drain's push
-		// size), backed by a wordPairProximityDocids structure larger than the
-		// documents themselves. Job descriptions are long-form prose, not short
-		// phrases where word adjacency is load-bearing for ranking, so the relevancy
-		// trade-off is negligible. NOTE: prefixSearch was deliberately NOT disabled
-		// here despite being the other half of that same benchmark's savings —
-		// HeaderSearch.svelte and the /jobs list's filters.ts both debounce a
-		// query-as-you-type search through this same index, relying on Meilisearch's
-		// default last-word prefix matching to return results mid-word.
-		//
-		// Like FilterableAttributes above, this setting only takes effect on data
-		// written AFTER a reindex — a full `cmd/reindex` run is required post-deploy.
+		// byAttribute skips computing exact word-to-word distance, whose "merging word
+		// proximity" indexing phase dominated batch time; job descriptions are long prose where
+		// adjacency barely matters for ranking. prefixSearch is deliberately left on: header
+		// search and the /jobs filters debounce query-as-you-type and rely on last-word prefix
+		// matching.
+		// Like FilterableAttributes, it applies only to data written after a reindex.
 		ProximityPrecision: meilisearch.ByAttribute,
 	}
 }
