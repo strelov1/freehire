@@ -40,18 +40,24 @@ for an audience SHALL NOT appear in that audience's document.
 #### Scenario: One source feeds all outputs
 
 - **WHEN** an operation or parameter is added or edited in `typespec/`
-- **THEN** after `make api-contract` and `gen:api-docs`, both Scalar documents, both
-  Markdown files and `web/static/openapi.yaml` reflect it, with no hand edit of any
+- **THEN** after `make api-contract` and `gen:api-docs`, every output that includes it
+  under the audience rule below (its audience's Scalar document and Markdown file, and
+  `web/static/openapi.yaml` when it is one of that schema's operations) reflects it,
+  with no hand edit of any
 
 #### Scenario: An operation's auth decides its document
 
 - **WHEN** an operation is declared `@useAuth(NoAuth)` or `@useAuth(SessionOrKey)`
+  and carries no `x-audience`
 - **THEN** it appears only in the external document (`/docs/api`, `docs/API.md`)
 
 - **WHEN** an operation keeps the default cookie auth, or carries
   `x-audience: moderator` or `x-audience: extension`
 - **THEN** it appears only in the internal document (`/docs/api/internal`,
   `docs/API.internal.md`)
+
+- **WHEN** an operation carries `x-audience: hidden`
+- **THEN** it appears in neither document
 
 #### Scenario: Filter vocabulary derives from the facet source
 
