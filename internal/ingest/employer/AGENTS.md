@@ -122,7 +122,7 @@ for the full design record.
   `description`/`website` as absent too. See `internal/api/handler/employer.go`'s
   `companyInfoField`.
 
-## The company team (migration 0271)
+## The company team (`team.go`, migration 0271)
 - **A vacancy belongs to the company team, not to its author.** `employer_team(actor)` (a SQL
   function in 0271) is everyone who acts for the actor's company — the claimant and the
   members — and it is the ONE ownership rule: every actor-scoped vacancy query
@@ -137,13 +137,36 @@ for the full design record.
   with `Member` set and `WorkEmail` the member's OWN address — where their vacancies'
   applications go and what candidates reply to. `UserID` stays the claimant's: it is the
   account's address in the moderator/admin routes.
-- **No roles.** Every member acts exactly as the claimant does; the claimant is not a member
-  row. How members join and leave (invitations, removal with its hand-over) is the team
-  service's.
+- **No roles.** Every member does everything the claimant does, including inviting and
+  removing; the one exception is structural — the claimant is not a member row, so cannot be
+  removed. Removing a member (or leaving) hands their vacancies to the claimant in the same
+  statement (`RemoveCompanyMember`), because a vacancy created by somebody outside the team
+  would stop taking applications and vanish from every dashboard.
 - **One company per user, across both tables.** `company_account_members.user_id` is the
-  primary key, and a claim refuses a member (`InsertPendingCompanyAccount` writes no row),
-  under the user's `LockEmployerActor` advisory lock (`asActor`), which the team service's
-  acceptance takes too.
+  primary key; a claim refuses a member (`InsertPendingCompanyAccount` writes no row) and an
+  acceptance refuses a claimant (`AcceptCompanyInvitation`'s guard). The two checks read
+  different tables, so each write runs in a transaction that first takes the user's
+  `LockEmployerActor` advisory lock (`asActor`) — without it a concurrent claim and
+  acceptance would each pass on a snapshot missing the other's row.
+- **Joining is by link, not by domain.** The invitation is mailed to the address the team
+  typed; following it is the proof the joiner reads that address, the role the claim's code
+  plays. The token is 256 random bits, stored only as its SHA-256, single-use (the acceptance
+  deletes the row it consumes) and expires in seven days. Re-inviting an address replaces its
+  token, so a resend never leaves two working links; open invitations are capped at 20 per
+  company because each is a letter freehire sends to an address the account typed. A letter
+  that fails withdraws its invitation, so the list never shows somebody as invited who was
+  never told. The joiner may accept under any freehire account — their sign-in address does
+  not matter, the invited one is what they act under.
+- **Every change to a team runs under the company's lock** (`LockEmployerCompany`, a
+  transaction advisory lock): an invitation (which also rechecks, under the lock, that the
+  inviter still acts for the company), an acceptance (after the joiner's actor lock — always
+  that order) and a removal. So the 20-invitation cap cannot be passed by two invitations at
+  once, and a member being removed cannot slip an invitation in after the removal withdrew
+  theirs. Renewing an invitation bypasses the cap only while it is still live; reviving an
+  expired one needs a free slot. A failed letter withdraws its invitation by token
+  (`WithdrawToken`), so a resend that replaced the token meanwhile keeps its working link.
+- **Removal also withdraws the member's invitations** — otherwise someone about to be
+  removed could invite an address of their own and walk back in.
 - **A member deleting their freehire account hands their vacancies over too**, by the
   `users_employer_hand_over` BEFORE DELETE trigger (0271). It must run before the row goes:
   `jobs.created_by` is ON DELETE SET NULL and that action fires before the member row's own

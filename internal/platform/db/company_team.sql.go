@@ -11,6 +11,78 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acceptCompanyInvitation = `-- name: AcceptCompanyInvitation :one
+WITH inv AS (
+    DELETE FROM company_account_invitations i
+    USING company_accounts ca
+    WHERE i.token_hash = $2
+      AND i.expires_at > now()
+      AND ca.company_slug = i.company_slug
+      AND ca.status = 'active'
+      AND NOT EXISTS (SELECT 1 FROM company_accounts own WHERE own.user_id = $1)
+    RETURNING i.company_slug, i.email, i.invited_by
+)
+INSERT INTO company_account_members (user_id, company_slug, work_email, invited_by)
+SELECT $1, inv.company_slug, inv.email, inv.invited_by FROM inv
+RETURNING company_slug
+`
+
+type AcceptCompanyInvitationParams struct {
+	UserID    int64  `json:"user_id"`
+	TokenHash []byte `json:"token_hash"`
+}
+
+// Consumes a live invitation to an active account and makes user_id a member, in one
+// statement, so a link cannot be accepted twice. Refused (no row) when the token is unknown
+// or expired, the account is not active, or the user already acts for a company — as its
+// claimant here, or as a member through company_account_members' primary key, which a
+// concurrent acceptance hits as a unique violation.
+func (q *Queries) AcceptCompanyInvitation(ctx context.Context, arg AcceptCompanyInvitationParams) (string, error) {
+	row := q.db.QueryRow(ctx, acceptCompanyInvitation, arg.UserID, arg.TokenHash)
+	var company_slug string
+	err := row.Scan(&company_slug)
+	return company_slug, err
+}
+
+const deleteCompanyInvitation = `-- name: DeleteCompanyInvitation :execrows
+DELETE FROM company_account_invitations
+WHERE id = $1 AND company_slug = $2
+`
+
+type DeleteCompanyInvitationParams struct {
+	ID          int64  `json:"id"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// Withdraws one of a company's invitations; its link stops working at once.
+func (q *Queries) DeleteCompanyInvitation(ctx context.Context, arg DeleteCompanyInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCompanyInvitation, arg.ID, arg.CompanySlug)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteCompanyInvitationByToken = `-- name: DeleteCompanyInvitationByToken :execrows
+DELETE FROM company_account_invitations
+WHERE company_slug = $1 AND token_hash = $2
+`
+
+type DeleteCompanyInvitationByTokenParams struct {
+	CompanySlug string `json:"company_slug"`
+	TokenHash   []byte `json:"token_hash"`
+}
+
+// Withdraws the invitation a failed letter carried — only while it still holds that token:
+// a resend that replaced the token in the meantime mailed a link that must keep working.
+func (q *Queries) DeleteCompanyInvitationByToken(ctx context.Context, arg DeleteCompanyInvitationByTokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCompanyInvitationByToken, arg.CompanySlug, arg.TokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const employerTeamIncludes = `-- name: EmployerTeamIncludes :one
 SELECT ($1::bigint = $2::bigint OR EXISTS (
     SELECT 1 FROM employer_team($1::bigint) AS t(user_id)
@@ -58,7 +130,7 @@ type GetCompanyAccountForUserRow struct {
 	Member           bool               `json:"member"`
 }
 
-// A company account's team: who acts for it
+// A company account's team: its members and the invitations that bring them in
 // (migration 0271). The claimant stays the account (company_accounts); members act for it.
 // The account a user acts for, as its claimant or as a member, in whatever status the account
 // is in. acting_email is the user's own work address — the claimant's work_email, or the one
@@ -81,6 +153,145 @@ func (q *Queries) GetCompanyAccountForUser(ctx context.Context, userID int64) (G
 		&i.Member,
 	)
 	return i, err
+}
+
+const getCompanyInvitationByToken = `-- name: GetCompanyInvitationByToken :one
+SELECT i.email, i.company_slug, ca.company_name, ca.status
+FROM company_account_invitations i
+JOIN company_accounts ca ON ca.company_slug = i.company_slug
+WHERE i.token_hash = $1 AND i.expires_at > now()
+`
+
+type GetCompanyInvitationByTokenRow struct {
+	Email       string `json:"email"`
+	CompanySlug string `json:"company_slug"`
+	CompanyName string `json:"company_name"`
+	Status      string `json:"status"`
+}
+
+// The live invitation a link names, with the company and the status of the account it
+// invites to. No row: no such token (never issued, already accepted, withdrawn or replaced by
+// a resend), or it has expired.
+func (q *Queries) GetCompanyInvitationByToken(ctx context.Context, tokenHash []byte) (GetCompanyInvitationByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyInvitationByToken, tokenHash)
+	var i GetCompanyInvitationByTokenRow
+	err := row.Scan(
+		&i.Email,
+		&i.CompanySlug,
+		&i.CompanyName,
+		&i.Status,
+	)
+	return i, err
+}
+
+const isCompanyActor = `-- name: IsCompanyActor :one
+SELECT EXISTS (
+    SELECT 1 FROM company_accounts ca WHERE ca.company_slug = $1 AND ca.user_id = $2
+    UNION ALL
+    SELECT 1 FROM company_account_members m WHERE m.company_slug = $1 AND m.user_id = $2
+)::boolean AS acts
+`
+
+type IsCompanyActorParams struct {
+	CompanySlug string `json:"company_slug"`
+	UserID      int64  `json:"user_id"`
+}
+
+// Whether the user acts for the company — as its claimant or a member — right now. Read
+// under LockEmployerCompany, so a removal that committed first is seen.
+func (q *Queries) IsCompanyActor(ctx context.Context, arg IsCompanyActorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isCompanyActor, arg.CompanySlug, arg.UserID)
+	var acts bool
+	err := row.Scan(&acts)
+	return acts, err
+}
+
+const listCompanyInvitations = `-- name: ListCompanyInvitations :many
+SELECT id, email, created_at, expires_at
+FROM company_account_invitations
+WHERE company_slug = $1 AND expires_at > now()
+ORDER BY created_at DESC
+`
+
+type ListCompanyInvitationsRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+// A company's invitations that can still be accepted, newest first.
+func (q *Queries) ListCompanyInvitations(ctx context.Context, companySlug string) ([]ListCompanyInvitationsRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyInvitations, companySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyInvitationsRow{}
+	for rows.Next() {
+		var i ListCompanyInvitationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCompanyTeam = `-- name: ListCompanyTeam :many
+SELECT t.user_id, t.work_email, t.joined_at, t.holder
+FROM (
+    SELECT ca.user_id, ca.work_email, COALESCE(ca.verified_at, ca.created_at) AS joined_at, true AS holder
+    FROM company_accounts ca
+    WHERE ca.company_slug = $1
+    UNION ALL
+    SELECT m.user_id, m.work_email, m.joined_at, false AS holder
+    FROM company_account_members m
+    WHERE m.company_slug = $1
+) t
+ORDER BY t.holder DESC, t.joined_at, t.user_id
+`
+
+type ListCompanyTeamRow struct {
+	UserID    int64              `json:"user_id"`
+	WorkEmail string             `json:"work_email"`
+	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
+	Holder    bool               `json:"holder"`
+}
+
+// Everyone who acts for a company: the claimant first (holder), then members by when they
+// joined. The claimant joined when the account was verified.
+func (q *Queries) ListCompanyTeam(ctx context.Context, companySlug string) ([]ListCompanyTeamRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyTeam, companySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyTeamRow{}
+	for rows.Next() {
+		var i ListCompanyTeamRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.WorkEmail,
+			&i.JoinedAt,
+			&i.Holder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockActingMembership = `-- name: LockActingMembership :one
@@ -140,4 +351,111 @@ SELECT pg_advisory_xact_lock(hashtextextended('employer_actor:' || $1::bigint::t
 func (q *Queries) LockEmployerActor(ctx context.Context, userID int64) error {
 	_, err := q.db.Exec(ctx, lockEmployerActor, userID)
 	return err
+}
+
+const lockEmployerCompany = `-- name: LockEmployerCompany :exec
+SELECT pg_advisory_xact_lock(hashtextextended('employer_company:' || $1::text, 0))
+`
+
+// Serialises every change to one company's team — inviting, accepting, removing — so the
+// invitation cap holds, and a member being removed cannot have an invitation of theirs
+// inserted after the removal withdrew the others. Transaction-scoped.
+func (q *Queries) LockEmployerCompany(ctx context.Context, companySlug string) error {
+	_, err := q.db.Exec(ctx, lockEmployerCompany, companySlug)
+	return err
+}
+
+const removeCompanyMember = `-- name: RemoveCompanyMember :one
+WITH removed AS (
+    DELETE FROM company_account_members m
+    WHERE m.user_id = $1 AND m.company_slug = $2
+    RETURNING m.user_id AS removed_id
+), handed AS (
+    UPDATE jobs
+    SET created_by = (SELECT ca.user_id FROM company_accounts ca WHERE ca.company_slug = $2)
+    WHERE created_by IN (SELECT removed.removed_id FROM removed)
+      AND source = 'employer'
+), withdrawn AS (
+    DELETE FROM company_account_invitations i
+    WHERE i.invited_by IN (SELECT removed.removed_id FROM removed)
+      AND i.company_slug = $2
+)
+SELECT count(*)::bigint AS removed FROM removed
+`
+
+type RemoveCompanyMemberParams struct {
+	MemberID    int64  `json:"member_id"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// Removes a member from a company's team, and in the same statement hands the vacancies they
+// published to the account's claimant — a vacancy belongs to the team, and one left created
+// by somebody outside it would stop taking applications and drop out of every teammate's
+// dashboard — and withdraws the invitations they sent, which would otherwise let them invite
+// an address of their own and walk straight back in. The claimant is never a member row, so
+// cannot be removed here. Returns how many members were removed (0 or 1).
+func (q *Queries) RemoveCompanyMember(ctx context.Context, arg RemoveCompanyMemberParams) (int64, error) {
+	row := q.db.QueryRow(ctx, removeCompanyMember, arg.MemberID, arg.CompanySlug)
+	var removed int64
+	err := row.Scan(&removed)
+	return removed, err
+}
+
+const upsertCompanyInvitation = `-- name: UpsertCompanyInvitation :one
+INSERT INTO company_account_invitations (company_slug, email, token_hash, invited_by, expires_at)
+SELECT $1, $2, $3, $4, $5
+WHERE EXISTS (
+        SELECT 1 FROM company_account_invitations
+        WHERE company_slug = $1 AND lower(email) = lower($2)
+          AND expires_at > now()
+    )
+   OR (
+        SELECT count(*) FROM company_account_invitations
+        WHERE company_slug = $1 AND expires_at > now()
+    ) < $6::bigint
+ON CONFLICT (company_slug, lower(email)) DO UPDATE
+SET email = EXCLUDED.email, token_hash = EXCLUDED.token_hash, invited_by = EXCLUDED.invited_by,
+    created_at = now(), expires_at = EXCLUDED.expires_at
+RETURNING id, email, created_at, expires_at
+`
+
+type UpsertCompanyInvitationParams struct {
+	CompanySlug string             `json:"company_slug"`
+	Email       string             `json:"email"`
+	TokenHash   []byte             `json:"token_hash"`
+	InvitedBy   int64              `json:"invited_by"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	MaxLive     int64              `json:"max_live"`
+}
+
+type UpsertCompanyInvitationRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+// Invites an address to a company's team, or replaces the token and expiry of the live or
+// expired invitation already sent to it — a resend leaves exactly one working link. It is
+// refused (no row) once the company holds max_live invitations that can still be accepted,
+// unless it renews one that is itself still live; reviving an expired one needs a free slot.
+// The cap bounds how much mail one account can make freehire send. Callers hold the
+// company's lock (LockEmployerCompany), so two invitations cannot both pass the count.
+func (q *Queries) UpsertCompanyInvitation(ctx context.Context, arg UpsertCompanyInvitationParams) (UpsertCompanyInvitationRow, error) {
+	row := q.db.QueryRow(ctx, upsertCompanyInvitation,
+		arg.CompanySlug,
+		arg.Email,
+		arg.TokenHash,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+		arg.MaxLive,
+	)
+	var i UpsertCompanyInvitationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
 }
