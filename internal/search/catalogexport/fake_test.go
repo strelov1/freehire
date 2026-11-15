@@ -3,12 +3,13 @@ package catalogexport
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/minio/minio-go/v7"
 )
 
 // fakeBucket is an in-memory blobstore.Bucket.
@@ -36,7 +37,7 @@ func (f *fakeBucket) Get(_ context.Context, key string) (io.ReadCloser, error) {
 	defer f.mu.Unlock()
 	b, ok := f.objs[key]
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(b)), nil
 }

@@ -53,6 +53,9 @@ func List(ctx context.Context, b blobstore.Store) ([]Manifest, error) {
 	out := make([]Manifest, 0, len(dates))
 	for _, d := range dates {
 		m, err := readManifest(ctx, b, d)
+		if blobstore.IsNotFound(err) {
+			continue // Prune removed it after the listing
+		}
 		if err != nil {
 			return nil, err
 		}

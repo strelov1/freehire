@@ -20,12 +20,18 @@ import (
 // keyset position (a job id), so memory stays one batch whatever the catalogue's size.
 type Batch func(ctx context.Context, after int64) (lines [][]byte, next int64, err error)
 
+// ErrPublished is returned by Write, with the day's manifest, when the day already has one.
+var ErrPublished = errors.New("catalogexport: snapshot already published")
+
 // Write streams every batch through gzip into the bucket as the snapshot of day, then writes
-// the manifest. A previous manifest of the same day is deleted first, and a failure leaves no
-// manifest, so the day is not listed with a checksum that no longer matches the file.
+// the manifest. A published day is never rewritten: a client may hold its checksum and a
+// download link, so a rerun returns ErrPublished instead. A failure leaves no manifest, so an
+// unfinished day is neither listed nor counted.
 func Write(ctx context.Context, b blobstore.Bucket, day string, now time.Time, next Batch) (Manifest, error) {
-	if err := b.Delete(ctx, ManifestKey(day)); err != nil {
-		return Manifest{}, fmt.Errorf("catalogexport: unpublish %s: %w", day, err)
+	if m, err := readManifest(ctx, b, day); err == nil {
+		return m, ErrPublished
+	} else if !blobstore.IsNotFound(err) {
+		return Manifest{}, fmt.Errorf("catalogexport: check %s: %w", day, err)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

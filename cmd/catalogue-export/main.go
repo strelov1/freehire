@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -55,11 +56,15 @@ func run() int {
 
 	now := time.Now()
 	m, err := catalogexport.Write(ctx, bucket, catalogexport.Day(now), now, batches(db.New(analytics), now))
-	if err != nil {
+	switch {
+	case errors.Is(err, catalogexport.ErrPublished):
+		log.Printf("catalogue-export: %s is already published, leaving it as is", m.Date)
+	case err != nil:
 		log.Printf("catalogue-export: %v", err)
 		return 1
+	default:
+		log.Printf("catalogue-export: %s: %d rows, %d bytes, sha256 %s", m.Date, m.Rows, m.Bytes, m.SHA256)
 	}
-	log.Printf("catalogue-export: %s: %d rows, %d bytes, sha256 %s", m.Date, m.Rows, m.Bytes, m.SHA256)
 
 	n, err := catalogexport.Prune(ctx, bucket, cfg.ExportKeep)
 	if err != nil {

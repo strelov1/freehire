@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"testing"
 	"time"
@@ -112,17 +111,10 @@ func TestPruneKeepsNewestFinishedAndInProgress(t *testing.T) {
 	}
 }
 
-// flaky fails Put/Delete of chosen keys.
+// flaky fails Delete of chosen keys.
 type flaky struct {
 	*fakeBucket
-	failPut, failDel map[string]bool
-}
-
-func (f *flaky) Put(ctx context.Context, key, ct string, r io.Reader, n int64) error {
-	if f.failPut[key] {
-		return errors.New("put failed")
-	}
-	return f.fakeBucket.Put(ctx, key, ct, r, n)
+	failDel map[string]bool
 }
 
 func (f *flaky) Delete(ctx context.Context, key string) error {
@@ -132,40 +124,47 @@ func (f *flaky) Delete(ctx context.Context, key string) error {
 	return f.fakeBucket.Delete(ctx, key)
 }
 
-func TestRerunUnpublishesDayWhenManifestPutFails(t *testing.T) {
+func TestRerunLeavesPublishedDayUntouched(t *testing.T) {
 	ctx := context.Background()
-	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
-	if _, err := Write(ctx, b, "2026-11-13", now, batches(3, 10)); err != nil {
-		t.Fatal(err)
-	}
-	b.failPut[ManifestKey("2026-11-13")] = true
-	if _, err := Write(ctx, b, "2026-11-13", now, batches(5, 10)); err == nil {
-		t.Fatal("want manifest put error")
-	}
-	if got, _ := List(ctx, b); len(got) != 0 {
-		t.Fatalf("day still listed with a stale manifest: %+v", got)
-	}
-}
-
-func TestRerunStopsWhenManifestDeleteFails(t *testing.T) {
-	ctx := context.Background()
-	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
-	if _, err := Write(ctx, b, "2026-11-13", now, batches(3, 10)); err != nil {
+	b := newFake()
+	first, err := Write(ctx, b, "2026-11-13", now, batches(3, 10))
+	if err != nil {
 		t.Fatal(err)
 	}
 	old := string(b.objs[DataKey("2026-11-13")])
-	b.failDel[ManifestKey("2026-11-13")] = true
-	if _, err := Write(ctx, b, "2026-11-13", now, batches(5, 10)); err == nil {
-		t.Fatal("want delete error")
+	m, err := Write(ctx, b, "2026-11-13", now, batches(5, 10))
+	if !errors.Is(err, ErrPublished) || m != first {
+		t.Fatalf("rerun = %+v, %v; want the published manifest and ErrPublished", m, err)
 	}
 	if string(b.objs[DataKey("2026-11-13")]) != old {
-		t.Fatal("data replaced although the manifest could not be deleted")
+		t.Fatal("published data replaced by a rerun")
+	}
+}
+
+// ghostManifest lists a manifest that is gone by the time it is read, as when Prune runs
+// between List and Get.
+type ghostManifest struct{ *fakeBucket }
+
+func (g ghostManifest) List(ctx context.Context, prefix string) ([]string, error) {
+	keys, err := g.fakeBucket.List(ctx, prefix)
+	return append(keys, ManifestKey("2026-11-01")), err
+}
+
+func TestListSkipsManifestDeletedMidList(t *testing.T) {
+	ctx := context.Background()
+	b := newFake()
+	if _, err := Write(ctx, b, "2026-11-13", now, batches(1, 1)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := List(ctx, ghostManifest{b})
+	if err != nil || len(got) != 1 || got[0].Date != "2026-11-13" {
+		t.Fatalf("List = %+v, %v; want only 2026-11-13", got, err)
 	}
 }
 
 func TestPruneKeepsDataWhenManifestDeleteFails(t *testing.T) {
 	ctx := context.Background()
-	b := &flaky{fakeBucket: newFake(), failPut: map[string]bool{}, failDel: map[string]bool{}}
+	b := &flaky{fakeBucket: newFake(), failDel: map[string]bool{}}
 	for _, d := range []string{"2026-11-09", "2026-11-10", "2026-11-11"} {
 		if _, err := Write(ctx, b, d, now, batches(1, 1)); err != nil {
 			t.Fatal(err)
