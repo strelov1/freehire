@@ -277,7 +277,7 @@ var coreCategoryTable8 = []aliasEntry{
 	// "Инженер-программист") and a hyphen is a word boundary, so no qualified alias can stand in for the bare one. The more
 	// specific role words (backend, аналитик, тестировщик) are declared far above, so they still win.
 	{"сетевой администратор", "network_engineering"},
-	{"системный администратор", "devops"},
+	{"системный администратор", "system_administration"},
 	{"администратор баз данных", "devops"},
 	{"программист", "software_engineering"},
 	{"разработчик", "software_engineering"},
@@ -285,6 +285,6 @@ var coreCategoryTable8 = []aliasEntry{
 	// German administration/technician/tester/developer fused compounds. German joins role words into one word with no
 	// separator, so the spaced English aliases cannot reach them and the alias must be the fused form itself. A hyphen or
 	// space BEFORE the compound is still a boundary, so each bare alias already reaches an "IT-"/"IT "-prefixed title.
-	{"systemadministrator", "devops"},
+	{"systemadministrator", "system_administration"},
 	{"netzwerkadministrator", "network_engineering"},
 }

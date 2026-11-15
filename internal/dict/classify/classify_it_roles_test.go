@@ -177,12 +177,12 @@ func TestParse_HungarianOperationsTitles(t *testing.T) {
 	cases := []struct{ title, wantCategory string }{
 		// Systems administration. "rendszergazda" is a closed compound with no
 		// non-IT sense: all 17 live occurrences are this role.
-		{"Rendszergazda", "devops"},
-		{"Linux rendszergazda", "devops"},
-		{"IT Rendszergazda (Microsoft)", "devops"},
-		{"Junior kliens rendszergazda", "devops"},
-		{"Üzemeltető Rendszergazda – Windows (Linux)", "devops"},
-		{"Junior / medior IT-rendszergazda", "devops"},
+		{"Rendszergazda", "system_administration"},
+		{"Linux rendszergazda", "system_administration"},
+		{"IT Rendszergazda (Microsoft)", "system_administration"},
+		{"Junior kliens rendszergazda", "system_administration"},
+		{"Üzemeltető Rendszergazda – Windows (Linux)", "system_administration"},
+		{"Junior / medior IT-rendszergazda", "system_administration"},
 		// The qualified "üzemeltető" compounds, closed and spaced. Hungarian writes
 		// both, so both are entries — a closed compound does not contain its spaced
 		// twin on a word boundary.

@@ -22,7 +22,7 @@ func TestFrenchHeadsAndFields(t *testing.T) {
 		{"Assistante de vie (H/F)", "healthcare", ""},
 		{"Infirmière de nuit H/F", "healthcare", ""},
 		{"Chargée administration des ventes H/F", "administration", ""},
-		{"ADMINISTRATEUR/RICE SYSTEMES ET RESEAUX (H/F)", "devops", ""},
+		{"ADMINISTRATEUR/RICE SYSTEMES ET RESEAUX (H/F)", "system_administration", ""},
 		{"SECRETAIRE MEDICAL(E) CONFIRME(E) EN CABINET D’OPHTALMOLOGIE (H/F)", "administration", "middle"},
 		{"Vendeuse en Lingerie Itinérante H/F", "sales", ""},
 		// The main table already carries the alias; only the notice hid it.

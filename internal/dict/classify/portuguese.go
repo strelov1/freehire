@@ -91,7 +91,7 @@ var portugueseCategoryTable = []aliasEntry{
 	{"infraestrutura de ti", "devops"},
 	{"analista de redes", "network_engineering"},
 	{"engenheiro de redes", "network_engineering"},
-	{"telecomunicacoes", "network_engineering"},
+	{"telecomunicacoes", "telecommunications_engineering"},
 	{"analista de suporte", "it_support"},
 	{"tecnico de suporte", "it_support"},
 	{"tecnica de suporte", "it_support"},

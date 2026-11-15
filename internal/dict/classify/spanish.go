@@ -117,8 +117,8 @@ var spanishCategoryTable = []aliasEntry{
 	{"tester", "qa"},
 	{"calidad de software", "qa"},
 	{"calidad del software", "qa"},
-	{"administrador de sistemas", "devops"}, // the main table files the system administrator here
-	{"administradora de sistemas", "devops"},
+	{"administrador de sistemas", "system_administration"}, // the main table files the system administrator here
+	{"administradora de sistemas", "system_administration"},
 	{"tecnico de sistemas", "it_support"},
 	{"tecnica de sistemas", "it_support"},
 	{"administrador de redes", "network_engineering"},

@@ -108,22 +108,24 @@ var coreCategoryTable1 = []aliasEntry{
 	// The estate-facing analyst titles.
 	{"infrastructure analyst", "devops"},
 	{"cloud analyst", "devops"},
-	{"system administrator", "devops"},
+	{"system administrator", "system_administration"},
 	// The plural ("Systems Administrator") lacks the "system administrator" word boundary,
 	// so it needs its own entry.
-	{"systems administrator", "devops"},
-	{"sysadmin", "devops"},
+	{"systems administrator", "system_administration"},
+	{"sysadmin", "system_administration"},
+	{"system administration", "system_administration"},
+	{"systems administration", "system_administration"},
 	{"database administrator", "devops"},
-	{"linux administrator", "devops"},
-	{"windows administrator", "devops"},
-	{"it administrator", "devops"},
+	{"linux administrator", "system_administration"},
+	{"windows administrator", "system_administration"},
+	{"it administrator", "system_administration"},
 	// Hungarian. "rendszergazda" is the sysadmin, a closed compound with no second sense.
 	//
 	// The operator noun "üzemeltető" is NOT here bare: it is whoever runs a thing (machines,
 	// electrical plant, buildings, fuel stations). Only the qualified forms resolve. Both the
 	// closed compound and the spaced pair are listed, since a compound never contains its
 	// spaced twin on a word boundary ("szoftverüzemeltető" needs its own entry too).
-	{"rendszergazda", "devops"},
+	{"rendszergazda", "system_administration"},
 	{"rendszerüzemeltető", "devops"},
 	{"alkalmazásüzemeltető", "devops"},
 	{"alkalmazás üzemeltető", "devops"},
@@ -138,6 +140,13 @@ var coreCategoryTable1 = []aliasEntry{
 	{"ml ops", "devops"},
 	{"sre", "sre"},
 	{"site reliability", "sre"},
+	{"telecommunications network engineer", "telecommunications_engineering"},
+	{"telecommunications engineer", "telecommunications_engineering"},
+	{"telecommunication engineer", "telecommunications_engineering"},
+	{"telecom engineer", "telecommunications_engineering"},
+	{"telecommunications engineering", "telecommunications_engineering"},
+	{"telecoms engineer", "telecommunications_engineering"},
+	{"инженер связи", "telecommunications_engineering"},
 	{"network engineer", "network_engineering"},
 	{"network engineering", "network_engineering"},
 	{"network administrator", "network_engineering"},

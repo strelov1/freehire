@@ -95,7 +95,7 @@ var dutchCategoryTable = []aliasEntry{
 	{"-netwerkengineer", "network_engineering"},
 	{"-netwerk-engineer", "network_engineering"},
 	{"-netwerkspecialist", "network_engineering"},
-	{"-systeembeheerder", "devops"}, // the main table files the system administrator here
+	{"-systeembeheerder", "system_administration"}, // the main table files the system administrator here
 	{"-databasebeheerder", "devops"},
 	{"-ict-beheerder", "devops"},
 	{"ict beheerder", "devops"},

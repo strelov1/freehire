@@ -176,8 +176,8 @@ var frenchCategoryTable = []aliasEntry{
 	{"dba", "devops"},
 	{"ingenieur systeme linux", "devops"},
 	{"ingenieur systemes linux", "devops"},
-	{"administrateur systeme", "devops"}, // the main table files the system administrator here
-	{"administrateur systemes", "devops"},
+	{"administrateur systeme", "system_administration"}, // the main table files the system administrator here
+	{"administrateur systemes", "system_administration"},
 	{"ingenieur systeme et reseau", "devops"},
 	{"ingenieur systemes et reseaux", "devops"},
 	{"ingenieur cloud", "devops"},
@@ -191,8 +191,8 @@ var frenchCategoryTable = []aliasEntry{
 	{"administrateur reseaux", "network_engineering"},
 	{"ingenieur reseau", "network_engineering"},
 	{"ingenieur reseaux", "network_engineering"},
-	{"ingenieur telecom", "network_engineering"},
-	{"ingenieur telecoms", "network_engineering"},
+	{"ingenieur telecom", "telecommunications_engineering"},
+	{"ingenieur telecoms", "telecommunications_engineering"},
 	{"technicien reseau", "network_engineering"},
 	{"technicien reseaux", "network_engineering"},
 	{"technicien informatique", "it_support"},
