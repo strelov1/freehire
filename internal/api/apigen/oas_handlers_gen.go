@@ -11057,7 +11057,7 @@ func (s *Server) handleGetCVCoverLetterEvidenceRequest(args [1]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetCVCoverLetterEvidenceOperation,
-			OperationSummary: "",
+			OperationSummary: "Review the confirmed evidence for a cover letter.",
 			OperationID:      "getCVCoverLetterEvidence",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -29099,7 +29099,9 @@ func (s *Server) handleSaveBankedAnswerRequest(args [0]string, argsEscaped bool,
 
 // handleSaveCVCoverLetterEvidenceRequest handles saveCVCoverLetterEvidence operation.
 //
-// Save up to 50 confirmed achievement ids with an expected revision.
+// Save up to 50 confirmed achievement ids with an expected revision. An empty atom_ids array
+// explicitly prevents drafting until facts are selected. Returns 409 when the expected revision is
+// stale, or 422 for invalid evidence.
 //
 // PUT /me/cvs/{id}/cover-letter/evidence
 func (s *Server) handleSaveCVCoverLetterEvidenceRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -29147,7 +29149,7 @@ func (s *Server) handleSaveCVCoverLetterEvidenceRequest(args [1]string, argsEsca
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SaveCVCoverLetterEvidenceOperation,
-			OperationSummary: "",
+			OperationSummary: "Save the confirmed evidence selection for a cover letter.",
 			OperationID:      "saveCVCoverLetterEvidence",
 			Body:             request,
 			RawBody:          rawBody,

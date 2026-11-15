@@ -6101,12 +6101,14 @@
     "/me/cvs/{id}/cover-letter/evidence": {
       "get": {
         "operationId": "getCVCoverLetterEvidence",
+        "summary": "Review the confirmed evidence for a cover letter.",
         "description": "Review confirmed evidence without a model call or allowance charge.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "The tailored CV id.",
             "schema": {
               "type": "string"
             }
@@ -6126,6 +6128,16 @@
                     "data": {}
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "revision": 0,
+                    "explicit": false,
+                    "atom_ids": [],
+                    "suggested_ids": [],
+                    "invalid_ids": [],
+                    "available": []
+                  }
                 }
               }
             }

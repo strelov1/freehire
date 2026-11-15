@@ -2941,16 +2941,29 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/<id>/cover-letter" -b cookies.tx
 
 **Auth:** Session only
 
+Save the confirmed evidence selection for a cover letter.
+
 Save up to 50 confirmed achievement ids with an expected revision.
+An empty atom_ids array explicitly prevents drafting until facts are selected.
+Returns 409 when the expected revision is stale, or 422 for invalid evidence.
 
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | string | yes |  |
+| `id` | string | yes | The tailored CV id. |
 
 ```bash
-curl -X PUT "https://freehire.me/api/v1/me/cvs/<id>/cover-letter/evidence" -b cookies.txt
+curl -X PUT "https://freehire.me/api/v1/me/cvs/<id>/cover-letter/evidence" -b cookies.txt -H 'Content-Type: application/json' -d '{"revision":0,"atom_ids":[]}'
+```
+
+```json
+{
+  "data": {
+    "revision": 1,
+    "atom_ids": []
+  }
+}
 ```
 
 ### `POST /me/cvs/{id}/duplicate`

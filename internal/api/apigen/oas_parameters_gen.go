@@ -5566,6 +5566,7 @@ func decodeGetCVCoverLetterParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // GetCVCoverLetterEvidenceParams is parameters of getCVCoverLetterEvidence operation.
 type GetCVCoverLetterEvidenceParams struct {
+	// The tailored CV id.
 	ID string
 }
 
@@ -16811,6 +16812,7 @@ func decodeRunMatchAnalysisParams(args [1]string, argsEscaped bool, r *http.Requ
 
 // SaveCVCoverLetterEvidenceParams is parameters of saveCVCoverLetterEvidence operation.
 type SaveCVCoverLetterEvidenceParams struct {
+	// The tailored CV id.
 	ID string
 }
 

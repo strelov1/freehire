@@ -16062,7 +16062,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 														switch method {
 														case "GET":
 															r.name = GetCVCoverLetterEvidenceOperation
-															r.summary = ""
+															r.summary = "Review the confirmed evidence for a cover letter."
 															r.operationID = "getCVCoverLetterEvidence"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/cover-letter/evidence"
@@ -16071,7 +16071,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 															return r, true
 														case "PUT":
 															r.name = SaveCVCoverLetterEvidenceOperation
-															r.summary = ""
+															r.summary = "Save the confirmed evidence selection for a cover letter."
 															r.operationID = "saveCVCoverLetterEvidence"
 															r.operationGroup = ""
 															r.pathPattern = "/me/cvs/{id}/cover-letter/evidence"

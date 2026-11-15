@@ -2941,9 +2941,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Review confirmed evidence without a model call or allowance charge. */
+        /**
+         * Review the confirmed evidence for a cover letter.
+         * @description Review confirmed evidence without a model call or allowance charge.
+         */
         get: operations["getCVCoverLetterEvidence"];
-        /** @description Save up to 50 confirmed achievement ids with an expected revision. */
+        /**
+         * Save the confirmed evidence selection for a cover letter.
+         * @description Save up to 50 confirmed achievement ids with an expected revision.
+         *     An empty atom_ids array explicitly prevents drafting until facts are selected.
+         *     Returns 409 when the expected revision is stale, or 422 for invalid evidence.
+         */
         put: operations["saveCVCoverLetterEvidence"];
         post?: never;
         delete?: never;
@@ -18106,6 +18114,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
@@ -18118,6 +18127,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "revision": 0,
+                     *         "explicit": false,
+                     *         "atom_ids": [],
+                     *         "suggested_ids": [],
+                     *         "invalid_ids": [],
+                     *         "available": []
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };
@@ -18139,12 +18160,20 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tailored CV id. */
                 id: string;
             };
             cookie?: never;
         };
+        /** @description revision is the expected saved revision (0 before the first save); atom_ids contains up to 50 unique, owned, confirmed achievement UUIDs. */
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "revision": 0,
+                 *       "atom_ids": []
+                 *     }
+                 */
                 "application/json": unknown;
             };
         };
@@ -18155,6 +18184,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "revision": 1,
+                     *         "atom_ids": []
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: unknown;
                     };

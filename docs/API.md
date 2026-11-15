@@ -4616,16 +4616,31 @@ curl "https://freehire.me/api/v1/me/cvs/<id>/cover-letter" -H "Authorization: Be
 
 **Auth:** Session or API key
 
+Review the confirmed evidence for a cover letter.
+
 Review confirmed evidence without a model call or allowance charge.
 
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | string | yes |  |
+| `id` | string | yes | The tailored CV id. |
 
 ```bash
 curl "https://freehire.me/api/v1/me/cvs/<id>/cover-letter/evidence" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "revision": 0,
+    "explicit": false,
+    "atom_ids": [],
+    "suggested_ids": [],
+    "invalid_ids": [],
+    "available": []
+  }
+}
 ```
 
 ### `PUT /me/cvs/{id}/session`

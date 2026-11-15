@@ -811,14 +811,32 @@ op getCVATSDelta(/** The tailored CV id. */ @path id: string): Data<CvAtsDelta> 
 op getCVJobMatch(/** The tailored CV id. */ @path id: string): Data<CvJobMatch> | Problem;
 
 /** Review confirmed evidence without a model call or allowance charge. */
+@summary("Review the confirmed evidence for a cover letter.")
+@opExample(#{
+  parameters: #{ id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90" },
+  returnType: #{ data: #{ revision: 0, explicit: false, atom_ids: #[], suggested_ids: #[], invalid_ids: #[], available: #[] } },
+})
 @useAuth(SessionOrKey)
 @tag("CV")
 @route("/me/cvs/{id}/cover-letter/evidence")
 @get
-op getCVCoverLetterEvidence(@path id: string): Data<unknown> | Problem;
+op getCVCoverLetterEvidence(/** The tailored CV id. */ @path id: string): Data<unknown> | Problem;
 
-/** Save up to 50 confirmed achievement ids with an expected revision. */
+/**
+ * Save up to 50 confirmed achievement ids with an expected revision.
+ * An empty atom_ids array explicitly prevents drafting until facts are selected.
+ * Returns 409 when the expected revision is stale, or 422 for invalid evidence.
+ */
+@summary("Save the confirmed evidence selection for a cover letter.")
+@opExample(#{
+  parameters: #{ id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90", body: #{ revision: 0, atom_ids: #[] } },
+  returnType: #{ data: #{ revision: 1, atom_ids: #[] } },
+})
 @tag("CV")
 @route("/me/cvs/{id}/cover-letter/evidence")
 @put
-op saveCVCoverLetterEvidence(@path id: string, @body body: unknown): Data<unknown> | Problem;
+op saveCVCoverLetterEvidence(
+  /** The tailored CV id. */ @path id: string,
+  /** revision is the expected saved revision (0 before the first save); atom_ids contains up to 50 unique, owned, confirmed achievement UUIDs. */
+  @body body: unknown,
+): Data<unknown> | Problem;

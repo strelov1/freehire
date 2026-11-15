@@ -139,6 +139,8 @@ func letterFailureMessage(err error) string {
 		return "drafting is unavailable on this deployment"
 	case errors.Is(err, coverletter.ErrNoPublishableEvidence):
 		return "nothing in your experience bank is yours to cite yet: confirm an achievement first"
+	case errors.Is(err, coverletter.ErrInvalidSelection):
+		return "select between 1 and 50 confirmed achievements; review unavailable facts"
 	case errors.Is(err, fitanalysis.ErrNoAnalysis):
 		return "run the fit analysis first"
 	default:

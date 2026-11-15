@@ -192,3 +192,20 @@ func TestEvidenceReviewIncludesEmploymentContext(t *testing.T) {
 		t.Fatal("employment context missing")
 	}
 }
+
+func TestAssistantLetterPreparationGivesActionableRecovery(t *testing.T) {
+	f := newCoverLetterFixture(t, startPostgres(t))
+	h := &assistantHandlers{jobs: f.h.jobReader, fit: f.h.fit, letter: f.h.letter}
+	ctx := context.Background()
+	tool := h.coverLetterDraftTool(f.jobID)
+	if _, err := tool.Run(ctx, f.userID, json.RawMessage(`{}`)); err == nil || err.Error() != "run the fit analysis first" {
+		t.Fatalf("missing-analysis recovery = %v", err)
+	}
+	seedAnalysis(t, f.h, f.userID, f.jobID)
+	if _, err := f.letters.SaveSelection(ctx, f.userID, f.jobID, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Run(ctx, f.userID, json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "review unavailable facts") {
+		t.Fatalf("evidence recovery = %v", err)
+	}
+}

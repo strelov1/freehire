@@ -56,3 +56,17 @@ migration collision in PR #4667. The duplicate-prefix baseline remains unchanged
 Post-fix verification: full Go unit suite and vet passed, as did the database selection
 integration test, all ten cover-letter workspace tests, changed-file ESLint, migration-number
 tests, and Svelte check (zero errors; 50 existing warnings). sqlc regeneration produced no drift.
+
+## CodeRabbit review follow-up
+
+Added operation summaries, parameter/body documentation and operation examples to the
+evidence contract, then regenerated API references and server/client artifacts. The save
+curl example now includes its required JSON body and content type.
+
+Regression tests reproduced the pending-save close/write race and the assistant's raw
+missing-analysis error. The picker now shares pending-save state with its parent, and the
+assistant uses the shared recovery messages while retaining selection guidance. All eleven
+workspace tests and the assistant preparation integration test passed. Full Go unit tests,
+vet and integration-tag vet passed after stabilizing two existing test assumptions: password
+hashing needs more than Fiber's default one-second test timeout under load, and an SSE ping
+may precede the next live job frame.

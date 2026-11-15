@@ -31,6 +31,7 @@
   // of looking hung.
   let stage = $state('');
   let reviewing = $state(false);
+  let evidenceSaving = $state(false);
   let alive = true;
   let loadSequence = 0;
   onDestroy(() => {
@@ -79,7 +80,7 @@
   async function draft() {
     // Guarded here as well as by the disabled attribute: a second run would spend a second
     // allowance and race the first one's write.
-    if (drafting) return;
+    if (drafting || evidenceSaving) return;
     drafting = true;
     error = '';
     stage = 'select';
@@ -192,10 +193,10 @@
   {:else}
     <button
       type="button"
-      disabled={drafting}
+      disabled={drafting || evidenceSaving}
       class="mb-3 text-xs font-medium text-primary underline disabled:opacity-50"
       onclick={() => {
-        reviewing = !reviewing;
+        if (!drafting && !evidenceSaving) reviewing = !reviewing;
       }}
     >
       {reviewing ? 'Close evidence' : letter ? 'Change evidence' : 'Review evidence'}
@@ -203,6 +204,7 @@
     {#if reviewing}
       <CoverLetterEvidence
         {cvId}
+        bind:saving={evidenceSaving}
         onsaved={() => void load()}
         onwrite={() => {
           reviewing = false;
@@ -223,7 +225,7 @@
     <div class="mb-3 flex flex-wrap items-center gap-2">
       <button
         type="button"
-        disabled={drafting || reviewing || view?.evidence_blocked}
+        disabled={drafting || evidenceSaving || reviewing || view?.evidence_blocked}
         onclick={() => void draft()}
         class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
       >

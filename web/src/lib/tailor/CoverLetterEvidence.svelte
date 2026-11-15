@@ -5,11 +5,15 @@
   import { announce } from '#lib/announce.svelte.js';
   import type { CoverLetterEvidenceView } from '#lib/cv.js';
 
-  let { cvId, onwrite, onsaved = () => {} }: { cvId: string; onwrite: () => void; onsaved?: () => void } = $props();
+  let {
+    cvId,
+    onwrite,
+    onsaved = () => {},
+    saving = $bindable(false),
+  }: { cvId: string; onwrite: () => void; onsaved?: () => void; saving?: boolean } = $props();
   let view = $state.raw<CoverLetterEvidenceView | null>(null);
   let selected = $state<string[]>([]);
   let loading = $state(true);
-  let saving = $state(false);
   let error = $state('');
   let message = $state('');
   let sequence = 0;
@@ -53,6 +57,7 @@
       const saved = await api.saveCoverLetterEvidence(id, view.revision, choices);
       if (!alive || request !== sequence || id !== cvId) return;
       view = { ...view, revision: saved.revision, explicit: true, atom_ids: saved.atom_ids };
+      saving = false;
       message = 'Selection saved';
       announce(message);
       onsaved();

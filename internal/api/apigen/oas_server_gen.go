@@ -2072,7 +2072,9 @@ type Handler interface {
 	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
 	// SaveCVCoverLetterEvidence implements saveCVCoverLetterEvidence operation.
 	//
-	// Save up to 50 confirmed achievement ids with an expected revision.
+	// Save up to 50 confirmed achievement ids with an expected revision. An empty atom_ids array
+	// explicitly prevents drafting until facts are selected. Returns 409 when the expected revision is
+	// stale, or 422 for invalid evidence.
 	//
 	// PUT /me/cvs/{id}/cover-letter/evidence
 	SaveCVCoverLetterEvidence(ctx context.Context, req jx.Raw, params SaveCVCoverLetterEvidenceParams) (*SaveCVCoverLetterEvidenceOK, error)

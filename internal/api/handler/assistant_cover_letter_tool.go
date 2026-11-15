@@ -48,7 +48,7 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 
 			prepared, err := drafter.prepare(ctx, userID, jobID)
 			if err != nil {
-				return nil, err
+				return nil, errors.New(letterFailureMessage(err))
 			}
 			attempt := letterAttempt(ctx, h.letter.letters, userID, jobID)
 			charge, refused, _ := chargeLetter(ctx, h.plans, userID, jobID, attempt)
