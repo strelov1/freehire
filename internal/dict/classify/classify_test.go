@@ -292,7 +292,7 @@ func TestParse_RoleExpansionBatch(t *testing.T) {
 		{"Platform Engineer", "devops"},
 		{"Cloud Engineer", "devops"},
 		{"Infrastructure Engineer", "devops"},
-		{"System Administrator", "devops"},
+		{"System Administrator", "system_administration"},
 		{"SDET", "qa"},
 		{"Test Automation Engineer", "qa"},
 

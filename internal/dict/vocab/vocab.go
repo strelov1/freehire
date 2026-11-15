@@ -115,7 +115,7 @@ var (
 		// instead of leaving it unfilterable.
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"network_engineering",
+		"network_engineering", "system_administration", "telecommunications_engineering",
 		// "it_support" is the help desk and service desk: desktop, deskside and
 		// end-user support, the L1/L2/L3 tiers, the technical support engineer of a
 		// software product. It was split out of `support` in 2026-10, which held it
@@ -226,7 +226,7 @@ var (
 	TechCategories = []string{
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"network_engineering", "it_support",
+		"network_engineering", "system_administration", "telecommunications_engineering", "it_support",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		"design", "creative", "product", "project_management",

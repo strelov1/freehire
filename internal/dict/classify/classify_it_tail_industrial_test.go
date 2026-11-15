@@ -21,7 +21,7 @@ func TestParse_ITTailCoverage(t *testing.T) {
 		{"Python-разработчик", "software_engineering", ""},
 		{"Инженер-программист", "software_engineering", ""},
 		{"Техник-программист", "software_engineering", ""},
-		{"Системный администратор", "devops", ""},
+		{"Системный администратор", "system_administration", ""},
 		{"Администратор баз данных", "devops", ""},
 		{"Сетевой администратор", "network_engineering", ""},
 
@@ -68,9 +68,9 @@ func TestParse_ITTailCoverage(t *testing.T) {
 		// unbroken word with no separator, so the word-boundary matcher that
 		// resolves a hyphenated Russian title or a spaced English one can never
 		// reach the German spelling unless the fused form is its own alias.
-		{"Systemadministrator (m/w/d)", "devops", ""},
-		{"IT-Systemadministrator (m/w/d)", "devops", "a hyphen is a word boundary, so the bare alias reaches this"},
-		{"IT Systemadministrator (m/w/d)", "devops", "a space is a word boundary too"},
+		{"Systemadministrator (m/w/d)", "system_administration", ""},
+		{"IT-Systemadministrator (m/w/d)", "system_administration", "a hyphen is a word boundary, so the bare alias reaches this"},
+		{"IT Systemadministrator (m/w/d)", "system_administration", "a space is a word boundary too"},
 		{"Netzwerkadministrator (m/w/d)", "network_engineering", ""},
 		{"Datenbankadministrator (m/w/d)", "devops", ""},
 		{"Netzwerktechniker (m/w/d)", "network_engineering", ""},

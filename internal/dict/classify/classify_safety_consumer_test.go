@@ -231,7 +231,7 @@ func TestParse_ConsumerIndustries(t *testing.T) {
 		{"Sales Engineer", "solutions_engineering", ""},
 		{"Support Engineer", "support", ""},
 		{"Программист", "software_engineering", ""},
-		{"Системный администратор", "devops", ""},
+		{"Системный администратор", "system_administration", ""},
 		{"Video Editor", "creative", ""},
 		{"Sound Designer", "creative", ""},
 	}

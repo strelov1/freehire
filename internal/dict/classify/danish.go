@@ -36,7 +36,7 @@ var danishCategoryTable = []aliasEntry{
 	{"-it-udvikler", "software_engineering"},
 	{"-programmør", "software_engineering"},
 	{"-softwareingeniør", "software_engineering"},
-	{"-systemadministrator", "devops"}, // the main table files the system administrator here
+	{"-systemadministrator", "system_administration"}, // the main table files the system administrator here
 	{"-netværksadministrator", "network_engineering"},
 	{"-dataanalytiker", "data_analytics"},
 	{"-it-arkitekt", "architecture"},

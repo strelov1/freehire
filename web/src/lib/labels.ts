@@ -128,6 +128,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   devops: 'DevOps',
   sre: 'SRE',
   network_engineering: 'Network Engineering',
+  system_administration: 'System Administration',
+  telecommunications_engineering: 'Telecommunications Engineering',
   it_support: 'IT Support / Help Desk',
   data_engineering: 'Data Engineering',
   data_science: 'Data Science',
