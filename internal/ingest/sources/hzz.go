@@ -81,6 +81,12 @@ func (hzz) boardless() {}
 // Thousands of employers post here, each named per vacancy.
 func (hzz) aggregator() {}
 
+// The 21 county feeds name every domestic vacancy on each run and any one failing fails the
+// crawl, so a stored vacancy no feed names is gone. Without this the company-scoped sweep never
+// reaches the vacancies of an employer that left the feeds entirely (3.6k of 10.7k open on
+// 2026-11-15, freehire#4412).
+func (hzz) fullCatalog() {}
+
 // One country's market (see nationalMarket).
 func (hzz) marketCountries(CompanyEntry) []string { return []string{"hr"} }
 

@@ -219,6 +219,15 @@ func TestHZZCountyFeedFailureFailsTheCrawl(t *testing.T) {
 	}
 }
 
+func TestHZZIsAFullCatalog(t *testing.T) {
+	src := Source(hzz{})
+	fc, ok := src.(fullCatalog)
+	if !ok {
+		t.Fatal("hzz lists the whole exchange each run, so it must be swept by source")
+	}
+	fc.fullCatalog() // the marker is an empty method; the changed-line coverage gate wants it run
+}
+
 func TestHZZTechFeedFailureCostsOnlyTheMark(t *testing.T) {
 	f := &hzzFake{techErr: errors.New("boom")}
 	jobs, err := newTestHZZ(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
