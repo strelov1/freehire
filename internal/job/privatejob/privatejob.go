@@ -1,8 +1,8 @@
 // Package privatejob creates jobs rows visible only to their creator: the
 // jd-tailor-intake private-JD path (pasted text, or a URL only a generic scrape could
-// read). Unlike every other job write path (see internal/ingest/moderation, internal/ingest/pipeline)
-// it never enqueues enrichment — a private, single-tailoring-session row doesn't recoup
-// that cost.
+// read). Unlike other job write paths (see internal/ingest/moderation,
+// internal/ingest/pipeline) it never enqueues enrichment: a single-tailoring-session
+// row doesn't recoup that cost.
 package privatejob
 
 import (
@@ -56,12 +56,10 @@ type Writer struct{ q Queries }
 // NewWriter constructs a Writer backed by q (typically *db.Queries).
 func NewWriter(q Queries) *Writer { return &Writer{q: q} }
 
-// Create derives facets from in (see internal/job/jobderive) and persists a new private job
-// owned by userID. source must be SourcePasted or SourceWeblink. The description is
-// sanitized to the same HTML allowlist every other write path uses (see
-// internal/platform/htmltext.Sanitize) before derivation and storage — a private submission
-// can carry a scraped third-party page's markup, and the job-detail view renders
-// jobs.description as trusted HTML.
+// Create derives facets from in (see internal/job/jobderive) and persists a new private
+// job owned by userID. source must be SourcePasted or SourceWeblink. The description is
+// sanitized with htmltext.Sanitize before derivation and storage: a scraped page can
+// carry markup, and the job-detail view renders jobs.description as trusted HTML.
 func (w *Writer) Create(ctx context.Context, userID int64, source string, in Input) (job.Job, error) {
 	description := htmltext.Sanitize(in.Description)
 	title := strings.TrimSpace(in.Title)

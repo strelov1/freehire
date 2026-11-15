@@ -1,25 +1,16 @@
 package jobview
 
 // AutoApplyProviders is a manually-synced mirror of internal/api/atsapply's
-// fillProviders (greenhouse, lever — chromedp) union browserUseProviders
-// (ashby, workable — cloud-agent fallback). This package cannot import
-// atsapply: job is layer 5 and api is layer 8, strictly above it, per this
-// repo's layering rule.
+// fillProviders (greenhouse, lever) union browserUseProviders (ashby, workable). This
+// package cannot import atsapply (job is layer 5, api layer 8).
 //
-// It lives here, not in internal/search (which computed it before), so that
-// jobview.FromDomain — the single projection every list/detail/search
-// response goes through — can serve AutoApplyAvailable directly on the
-// public wire shape. search.FromJob now reuses the value already computed
-// here (via jobview.FromRow) rather than re-deriving it, which is one fewer
-// place for the two copies to drift apart.
+// It lives here so jobview.FromDomain, the one projection every list/detail/search
+// response goes through, serves AutoApplyAvailable directly.
 //
-// Exported so atsapply's own tests — which CAN import jobview, since api sits
-// above job — can assert this actually matches fillProviders/
-// browserUseProviders. A same-package edit that drifts from that real source
-// of truth fails TestAutoApplyProviders_ExactExpectedSet here; an unmatched
-// edit on atsapply's own side fails
-// TestAutoApplyFacetProvidersMatchThisPackagesOwnMaps there. Neither test
-// alone would catch both directions.
+// Exported so atsapply's tests can assert it matches the real sets. Drift fails
+// TestAutoApplyProviders_ExactExpectedSet here or
+// TestAutoApplyFacetProvidersMatchThisPackagesOwnMaps there; neither alone catches
+// both directions.
 var AutoApplyProviders = map[string]bool{
 	"greenhouse": true,
 	"lever":      true,

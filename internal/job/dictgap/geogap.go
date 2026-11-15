@@ -8,24 +8,21 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// LocationCountries is one group of jobs sharing a raw location string AND the same
-// list of countries LLM enrichment recorded for them, with how many jobs it covers.
-// The caller may pass the same location more than once (one row per distinct
-// country list, per chunk); GeoGapCandidates folds them together.
+// LocationCountries is one group of jobs sharing a raw location string and the same
+// LLM-recorded country list. The same location may repeat (one row per country list, per
+// chunk); GeoGapCandidates folds them together.
 type LocationCountries struct {
 	Location     string
 	LLMCountries []string
 	Count        int
 }
 
-// GeoGapCandidate is one location string where internal/dict/location and LLM
-// enrichment answer the country question differently.
+// GeoGapCandidate is one location string where the location dictionary and LLM enrichment
+// answer the country question differently.
 //
-// LLMCountry is the country the model named most often for this location, and
-// LLMShare the fraction of the location's jobs that named it — the curator's
-// confidence signal, since the model is also asked about postings whose location is
-// only "Remote" and answers those with a guess. DictionaryCountries is what
-// location.Parse resolves today; empty on a gap.
+// LLMShare is the fraction of the location's jobs that named LLMCountry, the most-named
+// country. It is the confidence signal, since the model guesses for bare "Remote"
+// locations. DictionaryCountries is what location.Parse resolves; empty on a gap.
 type GeoGapCandidate struct {
 	Location            string
 	Count               int
@@ -34,30 +31,26 @@ type GeoGapCandidate struct {
 	DictionaryCountries []string
 }
 
-// GeoGapReport separates the two findings because they call for opposite fixes:
-// a gap is a name the dictionary is missing, a conflict is a name it may be
-// resolving wrongly (the `georgia` state-versus-country shape).
+// GeoGapReport separates two findings with opposite fixes: a gap is a name the dictionary
+// is missing, a conflict is a name it may resolve wrongly (the `georgia` shape).
 type GeoGapReport struct {
-	// Gaps are locations location.Parse places nowhere — no country AND no region —
-	// while the model named a country. A region-only answer ("Europe") is a
-	// placement, not a gap.
+	// Gaps are locations location.Parse places nowhere (no country and no region) while
+	// the model named a country. A region-only answer ("Europe") is a placement.
 	Gaps []GeoGapCandidate
-	// Conflicts are locations where location.Parse names countries and most of the
-	// location's jobs name none of them.
+	// Conflicts are locations where location.Parse names countries but most jobs name
+	// none of them.
 	Conflicts []GeoGapCandidate
 }
 
-// GeoGapCandidates recomputes location.Parse for every distinct location — the
-// dictionary as it stands today, not whichever version derived the stored
-// jobs.countries — and compares it with the countries LLM enrichment recorded.
-// Locations are folded case- and space-insensitively, the same normalization Parse
-// applies. Both lists are ranked by job count, then by location for a stable order.
+// GeoGapCandidates recomputes location.Parse for every distinct location, so it reflects
+// the dictionary as it stands today, and compares it with the LLM-recorded countries.
+// Locations fold case- and space-insensitively, as Parse does. Lists rank by job count,
+// then location.
 func GeoGapCandidates(rows []LocationCountries) GeoGapReport {
 	type tally struct {
 		total     int
 		byCountry map[string]int
-		// rows are kept whole so each job group can be judged against the
-		// dictionary's answer, which is only known once the location is folded.
+		// rows stay whole so each group can be judged against the dictionary's answer.
 		rows []LocationCountries
 	}
 	byLocation := make(map[string]*tally)
@@ -116,9 +109,8 @@ func GeoGapCandidates(rows []LocationCountries) GeoGapReport {
 }
 
 // normalizeCountryCodes lowercases and trims the model's codes and drops blanks and
-// repeats. It deliberately does NOT route them through location.NormalizeCountry:
-// that returns "" for a country outside the dictionary's curated set, and a country
-// the dictionary cannot place at all is exactly what this report must surface.
+// repeats. It must not use location.NormalizeCountry, which returns "" for a country
+// outside the curated set, the very countries this report must surface.
 func normalizeCountryCodes(codes []string) []string {
 	out := make([]string, 0, len(codes))
 	for _, c := range codes {
@@ -130,8 +122,7 @@ func normalizeCountryCodes(codes []string) []string {
 	return out
 }
 
-// mostNamed returns the country named by the most jobs, breaking a tie by code so
-// the report is deterministic.
+// mostNamed returns the country named by the most jobs, ties broken by code.
 func mostNamed(byCountry map[string]int) (string, int) {
 	best, bestCount := "", 0
 	for c, n := range byCountry {

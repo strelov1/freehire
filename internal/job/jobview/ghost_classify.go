@@ -7,10 +7,7 @@ import (
 )
 
 // GhostInput is what a ghost classification reads. It takes scalars rather than a
-// db.Job because the signal is served from two different shapes: the Postgres read
-// paths, which hold the row, and the search path, whose hits come back from
-// Meilisearch. One function over scalars keeps a single rule; a row-shaped one would
-// have forced the search path to reconstruct a row it never had.
+// db.Job because the signal is served from both Postgres rows and Meilisearch hits.
 type GhostInput struct {
 	Now          time.Time
 	Closed       bool
@@ -21,10 +18,9 @@ type GhostInput struct {
 }
 
 // ClassifyGhost derives a job's ghost signal. It returns nil when there is nothing
-// to say — level `none` — so the field is omitted rather than served empty.
+// to say (level `none`) so the field is omitted.
 //
-// A CLOSED job carries no signal at all, whatever its evidence: the posting is
-// already down, so there is nobody left to warn and no decision left to inform.
+// A CLOSED job carries no signal at all, whatever its evidence.
 func ClassifyGhost(in GhostInput) *Ghost {
 	if in.Closed {
 		return nil
@@ -53,9 +49,8 @@ func ClassifyGhost(in GhostInput) *Ghost {
 		contributors := ev.Contributors
 		out.Contributors = &contributors
 	}
-	// Served only when the criterion actually fired, so the checklist can say "checked
-	// N days ago" beside a criterion that is standing on that check — and says nothing
-	// where the cross-check never ran, rather than implying a check that did not happen.
+	// Served only when the criterion fired, so the checklist never implies a check
+	// that did not happen.
 	for _, c := range res.Criteria {
 		if c == ghost.CriterionATSAbsent {
 			checked := in.ATSAbsentAt

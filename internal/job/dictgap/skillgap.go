@@ -1,8 +1,7 @@
 // Package dictgap turns LLM enrichment facts already sitting in the catalogue into
-// ranked candidate gaps in the deterministic dictionaries (internal/dict/skilltag,
-// internal/dict/classify). It reads nothing itself and writes nothing: every function
-// here is a pure transform from already-fetched data to a ranked report, so a curator
-// deciding what to add stays the only writer of any dictionary source file.
+// ranked candidate gaps in the deterministic dictionaries (skilltag, classify). Every
+// function is a pure transform from fetched data to a ranked report; a curator stays the
+// only writer of any dictionary source.
 package dictgap
 
 import (
@@ -20,17 +19,11 @@ type SkillGapCandidate struct {
 	Count  int
 }
 
-// SkillGapCandidates ranks the raw enrichment.skills phrases that
-// internal/dict/skilltag.Parse resolves to nothing, given each phrase's occurrence
-// count exactly as recorded. Phrases differing only in case, a hyphen/underscore
-// used as a word separator, surrounding/internal whitespace, or a trailing
-// sentence-punctuation mark are treated as one candidate; its count is their sum
-// and its display form is whichever original spelling occurred most often. A
-// symbol that is part of a technology's own name (e.g. the "++" in C++, the "#" in
-// C#/F#) is never stripped — doing so would fold distinct, already-individually-
-// resolvable skills into the same bucket as an unrelated bare-letter gap. Blank
-// phrases are dropped. The result is sorted by count descending, then by phrase
-// for a deterministic order among ties.
+// SkillGapCandidates ranks the raw enrichment.skills phrases that skilltag.Parse resolves
+// to nothing. Phrases differing only in case, hyphen/underscore separators, whitespace or
+// trailing sentence punctuation are one candidate: counts sum, and the display form is the
+// most frequent spelling. Symbols in a technology's name ("++", "#") are never stripped.
+// Blank phrases are dropped. Sorted by count descending, then phrase.
 func SkillGapCandidates(counts map[string]int) []SkillGapCandidate {
 	type bucket struct {
 		total   int
@@ -71,23 +64,14 @@ func SkillGapCandidates(counts map[string]int) []SkillGapCandidate {
 	return candidates
 }
 
-// normalizeSkillPhrase collapses only the punctuation this codebase already treats
-// as insignificant, never a character that can carry a technology's identity.
-// Two passes:
+// normalizeSkillPhrase collapses only punctuation that never carries a technology's
+// identity, in two passes:
 //
-//  1. Trim trailing sentence-punctuation (a stray period, comma, etc. an LLM's list
-//     formatting can leave glued to the last word) — but never a trailing '+' or
-//     '#', since those END identity-bearing names (C++, C#, F#) rather than
-//     punctuating a sentence.
-//  2. Lowercase, and collapse '-'/'_'/whitespace runs into a single space — the
-//     same separator-insensitivity internal/dict/skilltag itself applies when
-//     resolving a multi-word phrase (see its package doc: hyphenated, underscored,
-//     and spaced forms of a term all resolve alike). Every other character
-//     (including '+', '#', '.', '/') is kept exactly as written.
+//  1. Trim trailing sentence punctuation, but never '+' or '#' (C++, C#, F#).
+//  2. Lowercase and collapse '-'/'_'/whitespace runs into one space, the separator
+//     insensitivity skilltag applies itself. Every other character is kept.
 //
-// This is deliberately narrower than "strip all punctuation": widening it invited
-// bare "C" and "C++" (or "F" and "F#") into the same bucket, corrupting or hiding
-// the report's real signal for two actually-distinct technologies.
+// Stripping all punctuation would merge "C" with "C++" and "F" with "F#".
 func normalizeSkillPhrase(phrase string) string {
 	trimmed := strings.TrimRightFunc(phrase, func(r rune) bool {
 		return r != '+' && r != '#' && !unicode.IsLetter(r) && !unicode.IsDigit(r)

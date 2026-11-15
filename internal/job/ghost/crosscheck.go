@@ -7,34 +7,23 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobhash"
 )
 
-// The gates a batch must pass before any posting in it is stamped. Measured on prod dry
-// runs (2026-11-01, 1.74M open aggregator postings): with every gate below in place the
-// run would stamp 2,978 postings, against 87,120 before any of them; the per-reason
-// skip counts in the report are each gate's share.
+// The gates a batch must pass before any posting in it is stamped.
 const (
-	// minCorroborated is how many of a batch's postings the board must carry before
-	// the rest may be called absent from it. A board that carries none of what a
-	// source lists for the company is not evidence about that source's postings:
-	// it is another tenant behind the same slug, a regional board of a company with
-	// several, or a source that rewrites every title. Without this gate 69% of the
-	// would-be stamps (21,055 of 30,356) sat in such batches; with the others in
-	// place it still declines 8,563.
+	// minCorroborated is how many of a batch's postings the board must carry before the
+	// rest may be called absent. A board carrying none of a source's postings is not
+	// evidence: it may be another tenant behind the slug, a regional board, or a source
+	// that rewrites every title.
 	minCorroborated = 1
-	// maxAbsentShare is the largest share of a batch that may be absent. Above it
-	// absence is the rule for that company and source rather than the exception —
-	// an agency advertising clients' roles, or a board we only partly crawl — and an
-	// individual posting's absence says nothing. It declines 4,126, and is what took
-	// the staffing agencies (square-one-resources, itfs, manpower, tek-systems,
-	// adecco) off the top of the list.
+	// maxAbsentShare is the largest share of a batch that may be absent. Above it absence
+	// is the rule for that company and source (an agency, or a partly crawled board), so
+	// one posting's absence says nothing.
 	maxAbsentShare = 0.5
-	// minBoardTitles is the smallest board treated as the company's catalogue. A
-	// board of one or two titles is as often a stray tenant sharing the slug or a
-	// job-centre listing as the employer's own careers page.
+	// minBoardTitles is the smallest board treated as the company's catalogue; a tiny one
+	// is as often a stray tenant or job-centre listing as the careers page.
 	minBoardTitles = 5
-	// minRecruiterPostings is how many of a company's open postings must say they
-	// are published on a client's behalf before the company is treated as an
-	// intermediary. Two rather than one, so a single employer posting that mentions
-	// "our client" in passing does not cost the company its verdict.
+	// minRecruiterPostings is how many open postings must say they are published on a
+	// client's behalf before the company counts as an intermediary. Two, so one passing
+	// "our client" mention does not cost the company its verdict.
 	minRecruiterPostings = 2
 )
 
@@ -59,24 +48,18 @@ type Posting struct {
 	ViaRecruiter bool
 }
 
-// Skips counts the postings a cross-check declined to judge, by reason. Each reason
-// is reported on its own because they mean different things to the person reading
-// the calibration report: NoBoard and Uncorroborated are our crawl coverage,
-// MostlyAbsent is a company whose aggregator footprint is not its board's, and the
-// rest are postings that can never be evidence however good the coverage gets.
+// Skips counts the postings a cross-check declined to judge, by reason. NoBoard and
+// Uncorroborated are our crawl coverage, MostlyAbsent is a company whose aggregator
+// footprint is not its board's, and the rest can never be evidence.
 type Skips struct {
 	// NoCompany: the posting names no employer. An empty slug is not a company, and
-	// grouping every such posting as one would check them all against whatever
-	// boards also lack a company — measured on prod (2026-10-31) that made the
-	// empty slug the single largest "company" in the stamp list, at 10,559.
+	// grouping them would check all against whatever boards also lack one.
 	NoCompany int
-	// ViaRecruiter: the posting says it is an intermediary advertising a client's
-	// role. Such a role is legitimately absent from the intermediary's own board —
-	// the failure mode this signal is known for.
+	// ViaRecruiter: the posting says it advertises a client's role, which is legitimately
+	// absent from the intermediary's own board.
 	ViaRecruiter int
-	// RecruiterCompany: a posting of a company that has stated, in other postings,
-	// that it publishes clients' roles (see minRecruiterPostings). An agency's
-	// postings advertise clients' roles whether or not each one says so.
+	// RecruiterCompany: a posting of a company that says in other postings that it
+	// publishes clients' roles (see minRecruiterPostings).
 	RecruiterCompany int
 	// NoBoard: we crawl no board of this company's (the coverage gate), or one too
 	// small to stand for its catalogue (see minBoardTitles).
@@ -108,10 +91,9 @@ func (s Skips) Total() int {
 		s.Uncorroborated + s.MostlyAbsent
 }
 
-// CrosscheckResult is the writes one company's cross-check implies, plus how many
-// postings it declined to judge. Skips are reported rather than swallowed: a run
-// that silently judged nothing looks identical to one that judged everything
-// present, and those two mean opposite things.
+// CrosscheckResult is the writes one company's cross-check implies, plus how many postings
+// it declined to judge. Skips are reported so a run that judged nothing is distinguishable
+// from one that found everything present.
 type CrosscheckResult struct {
 	Stamp []int64
 	Clear []int64
@@ -121,28 +103,21 @@ type CrosscheckResult struct {
 // Crosscheck decides, for one company's postings from ONE aggregator source, which to
 // stamp as absent from the company's own board and which to clear.
 //
-// An empty (or near-empty, see minBoardTitles) board is the coverage gate: we do not
-// crawl this company's board, so nothing here is evidence and every posting is skipped. Treating an empty board as
-// "absent from everywhere" would report our own coverage gaps as the employer's
-// fault — which is how the previous attempt at this feature failed, by measuring our
-// data instead of the world.
+// An empty or near-empty board (see minBoardTitles) is the coverage gate: we do not crawl
+// this company's board, so nothing is evidence and every posting is skipped. Treating it
+// as "absent from everywhere" would blame the employer for our coverage gaps.
 //
-// A board we crawl is not yet a board that covers what this source lists, so two
-// more gates judge the batch as a whole before any posting in it is stamped
-// (minCorroborated, maxAbsentShare). The batch is one source's postings because
-// sources differ in how faithfully they carry an employer's title: a source that
-// rewrites every title fails corroboration for that company without costing the
-// company its verdict from a source that copies titles verbatim.
+// Two more gates (minCorroborated, maxAbsentShare) judge the batch as a whole before any
+// posting is stamped. A batch is one source's postings because sources differ in how
+// faithfully they carry titles; a title-rewriting source must not cost the company its
+// verdict from a verbatim one.
 //
-// The stamps are the latest run's verdict and nothing else: every stamped posting
-// this run does not re-stamp — present, unjudged, or judged by a gate — is cleared.
-// A stamp left in place on a posting the current rules no longer accuse would go on
-// accusing until it aged out, and a rule tightened after a stamp was written is
-// exactly the case where that is wrong.
+// Stamps are the latest run's verdict only: every stamped posting this run does not
+// re-stamp (present, unjudged, or gated) is cleared, so a rule tightened after a stamp was
+// written stops accusing at once.
 //
-// A stamp that is still absent is RE-stamped rather than left alone: the reader
-// ignores a stamp that has aged out, so refreshing it is what keeps a true absence
-// true. A posting already unstamped and not stamped now produces no write.
+// A still-absent stamp is re-stamped, because the reader ignores an aged-out stamp.
+// A posting unstamped and not stamped now produces no write.
 func Crosscheck(postings []Posting, b Board) CrosscheckResult {
 	var out CrosscheckResult
 	board := newBoardIndex(b.Titles)
@@ -161,9 +136,7 @@ func Crosscheck(postings []Posting, b Board) CrosscheckResult {
 		case intermediary:
 			out.Skips.RecruiterCompany++
 		case len(jobhash.TitleKeys(p.Title)) == 0:
-			// No usable title means no key, and a posting that cannot match also
-			// cannot be judged absent. Stamping it would make every untitled
-			// posting evidence against its employer.
+			// No key means it cannot match, so it cannot be judged absent either.
 			out.Skips.NoTitle++
 		case board.carries(p.Title):
 			present++
@@ -192,8 +165,7 @@ func Crosscheck(postings []Posting, b Board) CrosscheckResult {
 	return out
 }
 
-// clearAll withdraws the stamps of postings a gate declined to judge and returns
-// nothing left to stamp.
+// clearAll withdraws the stamps of postings a gate declined to judge and returns nil.
 func clearAll(out *CrosscheckResult, postings []Posting) []Posting {
 	for _, p := range postings {
 		if p.Stamped {
@@ -203,17 +175,13 @@ func clearAll(out *CrosscheckResult, postings []Posting) []Posting {
 	return nil
 }
 
-// boardIndex answers whether a company's board carries a role, matching the ways the
-// same role is retitled between an employer's board and an aggregator. Measured on a
-// 35-posting sample of prod's stamps (2026-11-01), exact title keys left most of them
-// false: an aggregator drops a dash or a gender marker, inflects a word ("Operadora
-// de Caixa" against the board's "Operador(a) de Caixa"), or adds a pitch to the
-// title ("Data Engineer: Build Data Lakehouse & AI Pipelines" against "Data Engineer
-// (m/w/d) 100%"). So a posting is carried when its key equals a board title's
-// (jobhash.TitleKeys) or when the two titles share most of their words (overlaps).
+// boardIndex answers whether a company's board carries a role, allowing for how an
+// aggregator retitles it: dropped dashes or gender markers, inflected words ("Operadora" vs
+// "Operador(a)"), an added pitch. A posting is carried when its key equals a board title's
+// (jobhash.TitleKeys) or the two titles share most of their words (overlaps).
 //
-// Every choice here leans toward "carried": a match too generous costs one ghost we
-// miss, a match too strict accuses the employer of a role it is advertising.
+// Every choice leans toward "carried": too generous misses one ghost, too strict accuses
+// the employer of a role it is advertising.
 type boardIndex struct {
 	keys  map[string]struct{}
 	words []map[string]struct{}
@@ -251,19 +219,15 @@ func (b boardIndex) carries(title string) bool {
 }
 
 const (
-	// minOverlapWords is the fewest significant words a title needs before word
-	// overlap may match it. One: a one-word title is then carried only by a title
-	// containing that word, so the board's "Hôte - H/F" carries the aggregator's
-	// "Hôte - H/F ANNIVERSAIRES / ANIMATIONS" — and its "Developer" carries every
-	// developer role, the generous direction this index is built to err in.
+	// minOverlapWords is the fewest significant words a title needs before word overlap
+	// may match it. At one, a board's "Developer" carries every developer role, the
+	// generous direction this index errs in.
 	minOverlapWords = 1
-	// stemRunes truncates every word to its first runes, a crude stem that is
-	// enough to meet an inflection or a plural: "operadora"/"operador",
-	// "services"/"service", "repositora"/"repositor".
+	// stemRunes truncates every word to its first runes, a crude stem that meets an
+	// inflection or plural ("operadora"/"operador", "services"/"service").
 	stemRunes = 5
-	// minWordRunes drops shorter words: articles and prepositions ("de", "of",
-	// "la"), gender markers once their slashes are folded ("m w d", "h f",
-	// "k m n"), and a stray letter. They are what two unrelated titles share most.
+	// minWordRunes drops shorter words (articles, folded gender markers like "m w d"),
+	// which are what unrelated titles share most.
 	minWordRunes = 3
 )
 
@@ -284,9 +248,8 @@ func overlaps(a, b map[string]struct{}) bool {
 	return 3*shared >= 2*len(small)
 }
 
-// titleWords is a title's significant words, stemmed: lower-cased and
-// punctuation-folded (jobhash.TitleKeys), digits-only words and words shorter than
-// minWordRunes dropped, each cut to stemRunes.
+// titleWords is a title's significant words, stemmed: folded via jobhash.TitleKeys, with
+// digits-only and short words dropped, each cut to stemRunes.
 func titleWords(title string) map[string]struct{} {
 	keys := jobhash.TitleKeys(title)
 	if len(keys) == 0 {

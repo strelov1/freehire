@@ -32,22 +32,18 @@ func mismatch(r Record, company Company) string {
 }
 
 // Headcount bounds on how many postings a member can plausibly hold open at once.
-// A company rarely has more open roles than a few times its staff. The floor is there
-// because the directory's headcounts go stale — it lists ShipBob as a team of one — so
-// below it a small mismatch is more likely an old number than another company, while
-// every false match the rule exists for held hundreds of postings.
+// A company rarely has more open roles than a few times its staff. The floor exists because
+// directory headcounts go stale, so below it a mismatch is more likely an old number than
+// another company; the false matches the rule targets held hundreds of postings.
 const (
 	maxOpenJobsPerHead = 3
 	openJobsFloor      = 50
 )
 
 // plausibleSize reports whether a member of the given published headcount can be the
-// catalogue company holding openJobs postings. Measured on the YC directory: every
-// false match leading the YC tag on 2026-10-22 was a large same-named employer —
-// Pennant (a team of 2) against the Pennant Group's 693 nursing postings, Arrow (18)
-// against Arrow Electronics' 534 — at 8x to 350x its team, while the busiest real
-// member hired at 2.3x (Finni Health, 91 postings for 40 people). An unknown
-// headcount says nothing and refuses nothing.
+// catalogue company holding openJobs postings. The false matches were large same-named
+// employers at 8x to 350x the team (a team of 2 against 693 postings); the busiest real
+// member hired at 2.3x. An unknown headcount refuses nothing.
 func plausibleSize(teamSize string, openJobs int) bool {
 	n, err := strconv.Atoi(strings.TrimSpace(teamSize))
 	if err != nil || n <= 0 {

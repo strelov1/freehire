@@ -85,15 +85,11 @@ export interface Requirement {
 
 /**
  * Card is the list-row projection of a job: what a card draws, and nothing else.
- * It lives beside Job rather than in the package that lists, because both answer the same
- * question — what of a posting is public — and answering it in two places is how the wire
- * shapes drift. Card is a strict subset of Job's fields, with the same names and the same
- * derivations, so a row and a detail page cannot disagree about a job's work mode or where it
- * is open.
- * The difference is what is absent. Card has no description, and the tracking listing's query
- * does not read one: over 500 applications the descriptions were 2.37 MB of a 2.83 MB response
- * and 13 ms of a 40 ms query, for text no list row renders. A caller that wants the posting
- * reads the one application it opened.
+ * It lives beside Job because both answer what of a posting is public, and two places
+ * answering it is how wire shapes drift. Card is a strict subset of Job's fields with
+ * the same names and derivations.
+ * It has no description: the tracking listing's query does not read one, and the text
+ * dominated the response size for something no list row renders.
  */
 export interface Card {
   /**
@@ -105,13 +101,12 @@ export interface Card {
   company: string;
   closed_at?: string;
   /**
-   * Location is the posting's own location line as it states it — what tells one employer's
-   * postings in different cities apart on a row whose flags all name the same country.
+   * Location is the posting's own location line, which tells one employer's postings
+   * in different cities apart on a row whose flags all name the same country.
    */
   location?: string;
   /**
-   * The stated facets of the tag row. Empty means unstated, and the row simply omits it —
-   * the same rule the full projection follows.
+   * The stated facets of the tag row. Empty means unstated and the row omits it.
    */
   work_mode?: string;
   seniority?: string;
@@ -121,29 +116,24 @@ export interface Card {
   skills?: string[];
   collections?: string[];
   /**
-   * AIInterviewReports mirrors Job.AIInterviewReports — omitted at zero for the same
-   * reason: the badge is the count, so no reports must be an absent field.
+   * AIInterviewReports mirrors Job.AIInterviewReports: omitted at zero, since the
+   * badge is the count.
    */
   ai_interview_reports?: number /* int32 */;
   /**
-   * PostedAt is the effective posting date, the same derivation the full projection makes:
-   * the stated date, or the row's creation when the source never gave one.
+   * PostedAt is the effective posting date: the stated date, or the row's creation
+   * when the source gave none.
    */
   posted_at?: string;
   /**
-   * Blurb is the line a row shows under the title — the enrichment's summary, or the
-   * opening of the description with its tags stripped. Cut server-side: a row displays
-   * about 220 characters, and shipping the whole posting to reach them was 84% of this
-   * listing's payload.
+   * Blurb is the line under the title: the enrichment's summary, or the opening of
+   * the description with tags stripped. Cut server-side to about 220 characters.
    */
   blurb?: string;
   /**
-   * Ghost is the ghost-job signal, mirroring Job.Ghost exactly — computed at read time
-   * by ClassifyGhost, never stored, and never a bare accusation: the level plus the
-   * criteria that fired. Omitted (nil) when there is nothing to say. Unlike Job, Card
-   * carries no Reality field: no listing surface in this app serves Reality on a card
-   * today, only the detail page does — Reality is only ever an internal ingredient of
-   * ClassifyGhost here, the same convention the other two listings already follow.
+   * Ghost mirrors Job.Ghost: computed at read time by ClassifyGhost, never stored.
+   * Omitted (nil) when there is nothing to say. Unlike Job, Card carries no Reality
+   * field; Reality is only an internal ingredient of ClassifyGhost here.
    */
   ghost?: Ghost;
 }
@@ -154,14 +144,11 @@ export interface Card {
 /**
  * Ghost is the served ghost signal: a hedged level, the criteria that produced it,
  * and the denominator of the scale the interface shows. It carries facts so the UI
- * can state them, never a bare accusation — the same doctrine as Reality.
- * Contributors is the number of DISTINCT people behind the outcome criteria, and it
- * is ABSENT below the anonymity gate rather than zeroed or rounded. Absence is what
- * makes the guarantee structural: with a single witness there is no count to serve,
- * so no later caller can forget to redact one. (A count of one would identify that
- * applicant to the employer.)
- * The signal is computed on read and never stored — it is time-dependent, and a
- * stored level would go stale sitting still.
+ * can state them, never a bare accusation.
+ * Contributors is the number of distinct people behind the outcome criteria. It is
+ * ABSENT below the anonymity gate rather than zeroed or rounded, so no caller can
+ * forget to redact it (a count of one would identify that applicant to the employer).
+ * Computed on read and never stored: it is time-dependent.
  */
 export interface Ghost {
   level: string;
@@ -174,28 +161,23 @@ export interface Ghost {
 //////////
 // source: jobview.go
 /*
-Package jobview defines the single public wire shape of a job — the JSON
-representation served by the list, detail, and search endpoints and stored in
-the search index. Keeping one type (instead of parallel per-endpoint structs)
-makes drift between the API surfaces impossible.
+Package jobview defines the single public wire shape of a job, served by the list,
+detail and search endpoints and stored in the search index. One type keeps the
+surfaces from drifting.
 */
 
 /**
- * Job is the public wire shape of a job. It carries the public_slug and
- * deliberately omits the internal numeric id, which must never be exposed: the
- * id is enumerable and its growth leaks inventory size and fill rate.
- * Enrichment is nested (not flattened) and typed; an unenriched job serializes
- * it as `{}`. Timestamps are RFC3339 UTC strings (or null) — the lexicographic
- * order is chronological, which the search index relies on for sorting.
+ * Job is the public wire shape of a job. It carries public_slug and deliberately omits
+ * the numeric id, which is enumerable and its growth leaks inventory size and fill rate.
+ * Enrichment is nested and typed; an unenriched job serializes it as `{}`. Timestamps
+ * are RFC3339 UTC strings (or null), which sort chronologically as the index relies on.
  */
 export interface Job {
   public_slug: string;
   source: string;
   /**
-   * ManuallyAdded marks a hand-curated posting added by a moderator (created_by is
-   * set), as opposed to an automated source. It is the provenance signal, decoupled
-   * from Source (which is the real origin); the authoring user id itself is internal
-   * and never exposed.
+   * ManuallyAdded marks a hand-curated posting added by a moderator (created_by set),
+   * decoupled from Source. The authoring user id is never exposed.
    */
   manually_added: boolean;
   external_id: string;
@@ -207,37 +189,28 @@ export interface Job {
   description: string;
   /**
    * DirectApply marks an employer vacancy that takes applications on freehire instead
-   * of linking out (job.IsDirectApply); its URL is empty. Omitted for every other
-   * posting rather than served false, so the flag adds nothing to the search index
-   * for the catalogue it does not describe.
+   * of linking out (job.IsDirectApply); its URL is empty. Omitted rather than served
+   * false, to keep the search index small.
    */
   direct_apply?: boolean;
   /**
-   * WorkMode/Skills are served from the jobs dictionary columns ONLY — the
-   * deterministic dictionaries are the sole production source for these facets. The
-   * LLM's enrichment values for them are deliberately excluded from the served object
-   * (they remain raw in the stored enrichment JSONB), so the LLM can later run free as
-   * a discovery signal without corrupting production data.
-   * Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
-   * columns win whenever they pinned a place, but an unpinned geography (no country,
-   * and at most the "global" bucket an explicit open-anywhere marker resolves to)
-   * falls back to the LLM's enrichment.countries/regions — catching a restriction
-   * stated only in the prose ("Remote (SPAIN only)") that the location string never
-   * carried.
-   * All four are served top-level and once; the same fields are folded out of the
-   * nested Enrichment to avoid duplication.
+   * WorkMode/Skills are served from the jobs dictionary columns ONLY; the LLM's values
+   * stay raw in the stored enrichment JSONB, so the LLM can run free as a discovery
+   * signal without corrupting production data.
+   * Countries/Regions are a hybrid facet, like Cities (see geoFacet): the dictionary
+   * columns win whenever they pinned a place; otherwise the LLM's enrichment.countries/
+   * regions fill in, catching a restriction stated only in prose ("Remote (SPAIN only)").
+   * All four are served top-level and folded out of the nested Enrichment.
    */
   countries: string[];
   regions: string[];
   work_mode?: string;
   skills: string[];
   /**
-   * Cities is a HYBRID facet (the one deliberate dict+LLM exception): the
-   * deterministic jobs.cities column when it resolved a beacon city, otherwise a
-   * normalized fallback to the LLM's enrichment.cities — cities are high-cardinality
-   * and the dictionary is only a beacon list, so a pure-dict facet would be too
-   * sparse. Values are canonical display names (Title case); the LLM copy is folded
-   * out of the nested Enrichment like the other geography facets.
+   * Cities is a hybrid facet (the one deliberate dict+LLM exception): the dictionary
+   * column when it resolved a beacon city, otherwise a normalized fallback to the LLM's
+   * enrichment.cities, since the dictionary is only a beacon list and would be too
+   * sparse. Values are canonical display names (Title case).
    */
   cities: string[];
   /**
@@ -245,84 +218,68 @@ export interface Job {
    */
   metros: string[];
   /**
-   * Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
-   * job's company belongs to, denormalized from the company onto the job. It is a
-   * deterministic source fact (no LLM counterpart) served straight from the jobs
-   * column; an untagged job serializes it as [].
+   * Collections is the curated-collection slugs (e.g. yc, bigtech) of the job's
+   * company, denormalized onto the job. A deterministic source fact; an untagged job
+   * serializes it as [].
    */
   collections: string[];
   /**
-   * Perks are the benefits the description states it offers, from the closed
-   * vocabulary vocab.PerkValues and in its order (internal/dict/perks, never the LLM).
-   * Indexed as a filterable Meili facet. Always an array: [] means the description
-   * names none of them, not that the job offers none.
+   * Perks are the benefits the description states it offers, from vocab.PerkValues in
+   * its order (internal/dict/perks, never the LLM). Always an array: [] means the
+   * description names none, not that the job offers none.
    */
   perks: string[];
   /**
-   * Engagement names the legal terms the posting states it engages its worker on,
-   * from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
-   * the LLM), each in its market's own term (ir35_outside, w2, b2b, clt, gph...), every
-   * one the posting offers. Indexed as a filterable Meili facet. Always an
-   * array: [] means the posting does not say, not that neither applies.
+   * Engagement names the legal terms the posting states it engages its worker on, from
+   * vocab.EngagementValues (internal/dict/engagement, never the LLM), each in its
+   * market's own term (ir35_outside, w2, b2b, clt, gph...). Always an array: [] means
+   * the posting does not say.
    */
   engagement: string[];
   /**
-   * AIInterviewReports is how many people have reported that this job's company
-   * screens candidates with an AI interviewer (internal/engage/processreport),
-   * denormalized from the company onto the job. Omitted at zero: the count is what
-   * the label must always be shown with, so "no reports" has to be the absence of
-   * the field rather than a zero a badge could render beside.
+   * AIInterviewReports is how many people reported that this job's company screens with
+   * an AI interviewer (internal/engage/processreport), denormalized from the company.
+   * Omitted at zero, so "no reports" is an absent field rather than a zero a badge
+   * could render.
    */
   ai_interview_reports?: number /* int32 */;
   /**
-   * IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
-   * omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
-   * indexed as a filterable Meili facet; an unknown value is absent so it filters as
-   * empty. Derived from title + category (jobderive), never from the LLM.
+   * IsTech is the deterministic "tech" or "non_tech" facet, derived from title +
+   * category (jobderive), never the LLM. Omitted when unknown (jobs.is_tech NULL) so it
+   * filters as empty.
    */
   is_tech?: string;
   /**
    * RequiresClearance marks a posting that states a government security-clearance
-   * requirement (UK SC/DV, US Secret/TS-SCI, AU NV1). Deterministic, derived from
-   * the description (internal/dict/location), never from the LLM.
-   * A plain bool with omitempty rather than the tri-state IsTech renders as: the
-   * stored column only ever holds true or NULL, so the key is present exactly when
-   * a requirement was detected. There is no serialized false, because "we detected
-   * nothing" must not reach a reader as "this job needs no clearance".
+   * requirement (UK SC/DV, US Secret/TS-SCI, AU NV1), derived from the description
+   * (internal/dict/location), never the LLM.
+   * A plain bool with omitempty: the column only holds true or NULL, and a serialized
+   * false would read as "this job needs no clearance".
    */
   requires_clearance?: boolean;
   /**
-   * ViaRecruiter marks a posting that states it is published by an intermediary on
-   * a client's behalf — a staffing agency or recruiter ("on behalf of our client").
-   * Deterministic, from the description (internal/job/jobfacts). True-or-absent like
-   * RequiresClearance: a recruiter who never says so is not detected, so an absent
-   * key does not mean "posted by the employer".
+   * ViaRecruiter marks a posting published by an intermediary on a client's behalf
+   * ("on behalf of our client"), from the description (internal/job/jobfacts).
+   * True-or-absent like RequiresClearance: an absent key does not mean "posted by the
+   * employer".
    */
   via_recruiter?: boolean;
   /**
-   * Equity is what the posting states about equity compensation:
-   * "salary_and_equity" (offered beside cash pay, with or without a salary figure)
-   * or "equity_only" (the posting says equity is the whole pay). Deterministic, from
-   * the title and description (internal/job/jobfacts). Absent when the posting states
-   * neither — "not stated", never "no equity".
+   * Equity is what the posting states about equity compensation: "salary_and_equity"
+   * or "equity_only", from the title and description (internal/job/jobfacts). Absent
+   * means "not stated", never "no equity".
    */
   equity?: string;
   /**
-   * ClearanceLevels names the clearance levels the posting states, from the closed
-   * vocabulary vocab.ClearanceLevelValues — the US ladder (confidential, secret,
-   * top_secret, ts_sci, public_trust), interim, and other (a non-US scheme, or a
-   * clearance stated with no level). Present exactly when RequiresClearance is true
-   * and omitted otherwise: an empty list would read as a claim about levels the
-   * posting never made.
+   * ClearanceLevels names the clearance levels the posting states, from
+   * vocab.ClearanceLevelValues (the US ladder, interim, and other). Present exactly when
+   * RequiresClearance is true; an empty list would claim levels the posting never made.
    */
   clearance_levels?: string[];
   /**
-   * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
-   * internal/api/atsapply can currently attempt to fill and submit for (see
-   * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
-   * never a guarantee that a real attempt would succeed. True-or-absent like
-   * RequiresClearance: omitted rather than false, because "not one of the
-   * providers we can drive" must not be read as "checked and ineligible".
+   * AutoApplyAvailable marks a posting whose ATS provider (Source) internal/api/atsapply
+   * can attempt (see AutoApplyProviders): a provider-level signal, not a guarantee.
+   * True-or-absent: omitted must not be read as "checked and ineligible".
    */
   auto_apply_available?: boolean;
   /**
@@ -330,90 +287,73 @@ export interface Job {
    */
   application_deadline?: string;
   /**
-   * Team is the department or team the source ATS files the posting under (Greenhouse, Lever
-   * and Ashby state one), verbatim. Omitted when the source states none — not a taxonomy.
+   * Team is the department or team the source ATS files the posting under (Greenhouse,
+   * Lever and Ashby state one), verbatim. Omitted when the source states none.
    */
   team?: string;
   /**
-   * ApplyQuestions is how many questions the posting's application form REQUIRES
-   * beyond the standard fields every form asks for (name, contact details, CV) —
-   * counted from the form captured for it (applyform.Form.RequiredQuestions), so the
-   * job card can say "3 questions" and the `apply_questions_max` filter can find the
-   * short forms.
-   * nil, and omitted, when no form has been captured — which is most postings: the
-   * platforms whose forms can be read at all are a minority of the catalogue. 0 is a
-   * real answer ("nothing beyond the basics") and is serialized; an absent key is
-   * "we do not know", and the two must never read alike. Not set by FromRow, which
-   * sees only the jobs row: the search-index writers and the detail endpoint attach
-   * it from apply_forms, so a list served straight from Postgres omits it.
+   * ApplyQuestions is how many questions the application form REQUIRES beyond the
+   * standard fields (name, contact details, CV), counted from the captured form
+   * (applyform.Form.RequiredQuestions); it feeds the `apply_questions_max` filter.
+   * nil and omitted when no form was captured (most postings). 0 is a real answer and is
+   * serialized; the two must never read alike. Not set by FromRow, which sees only the
+   * jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
    */
   apply_questions?: number /* int */;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;
   /**
-   * LastSeenAt is when a re-crawl last confirmed this posting still live — see
-   * docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
-   * JobPosting.validThrough for an open job (seo.ts), since most sources carry
-   * no real listing-expiry date of their own.
+   * LastSeenAt is when a re-crawl last confirmed the posting live (see
+   * docs/agents/job-lifecycle.md). The SPA uses it to estimate a rolling
+   * JobPosting.validThrough (seo.ts) for sources with no expiry date.
    */
   last_seen_at?: string;
   /**
-   * ClosedAt is non-null when the posting is no longer open. Lists and the
-   * search index never contain closed jobs; only the detail endpoint serves
-   * them, and the SPA renders the closed state from this field.
+   * ClosedAt is non-null when the posting is no longer open. Lists and the search index
+   * never contain closed jobs; only the detail endpoint serves them.
    */
   closed_at?: string;
   enrichment: Enrichment;
   enriched_at?: string;
   enrichment_version: number /* int32 */;
   /**
-   * ViewCount/AppliedCount are the job's materialized engagement counters —
-   * distinct signed-in users who viewed and who marked applied — served straight
-   * from the jobs columns (no read-time counting). Displayed on the detail page.
+   * ViewCount/AppliedCount are the materialized counters of distinct signed-in users who
+   * viewed and who marked applied, served straight from the jobs columns.
    */
   view_count: number /* int32 */;
   applied_count: number /* int32 */;
   /**
-   * UpvoteCount/DownvoteCount are the job's materialized public thumbs counters —
-   * distinct signed-in users whose current vote is up / down — served straight from
-   * the jobs columns on every read.
+   * UpvoteCount/DownvoteCount are the materialized public thumbs counters, served
+   * straight from the jobs columns.
    */
   upvote_count: number /* int32 */;
   downvote_count: number /* int32 */;
   /**
-   * MyVote is the caller's own vote (-1, 0, 1). It is caller-scoped, so it is only
-   * populated on auth-aware detail reads (GetJob with OptionalAuth); list, search,
-   * and the index-build path leave it 0 and never persist a real user's vote.
+   * MyVote is the caller's own vote (-1, 0, 1). Caller-scoped: only auth-aware detail
+   * reads populate it; list, search and index-build leave it 0.
    */
   my_vote: number /* int32 */;
   /**
-   * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
-   * computed at index/read time and attached by ClassifyReality — never stored, as
-   * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
+   * Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence), attached
+   * by ClassifyReality, never stored. Nil when not computed.
    */
   reality?: Reality;
   /**
-   * Ghost is the ghost-job signal (level + the criteria that fired + the scale's
-   * denominator), computed at read time by ClassifyGhost — never stored, and never
-   * present on a closed job. Nil at level `none`, which is most of the catalogue:
-   * the field appears only when the system has something to say.
+   * Ghost is the ghost-job signal, computed at read time by ClassifyGhost, never stored
+   * and never present on a closed job. Nil at level `none`, most of the catalogue.
    */
   ghost?: Ghost;
   /**
-   * ReferralAvailable is true when the job's company has at least one approved employee
-   * referrer, so the detail page can show the "ask for a referral" affordance. A
-   * read-time projection attached only by the detail handler (omitted on list rows,
-   * where FromRow leaves it false).
+   * ReferralAvailable is true when the job's company has an approved employee referrer.
+   * Attached only by the detail handler; list rows leave it false.
    */
   referral_available?: boolean;
   /**
-   * AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
-   * live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
-   * — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
-   * detail handler overlays it, keyed by (caller_id, job_id), never joined into the
-   * primary job query every anonymous reader also pays for.
-   * See openspec/changes/auto-apply-submit-trigger.
+   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
+   * "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
+   * caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
+   * (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
 }
@@ -422,11 +362,9 @@ export interface Job {
 // source: reality.go
 
 /**
- * Reality is the served job-reality signal: the class plus the observable facts that
- * produced it, so the UI states facts ("open 240 days · reposted 6×") rather than a
- * bare accusation. It is computed at index/read time (never stored — it is
- * time-dependent) and attached via ClassifyReality; a job with no computed signal
- * omits the field.
+ * Reality is the served job-reality signal: the class plus the observable facts behind
+ * it, so the UI states facts ("open 240 days · reposted 6×") rather than a bare
+ * accusation. Computed at index/read time, never stored; omitted when not computed.
  */
 export interface Reality {
   class: string;

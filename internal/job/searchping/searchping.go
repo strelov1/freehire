@@ -1,19 +1,15 @@
 // Package searchping announces job URLs to the external search engines that offer a
 // way to be told, instead of waiting to be crawled.
 //
-// It exists because waiting does not work at this catalogue's size. Measured
-// 2026-09-14 on prod: Googlebot fetched 65 distinct job pages in a day against ~690k
-// in the sitemap, and URL Inspection answers "URL is unknown to Google" for postings
-// sampled from it — pages Google has never once fetched. A posting is closed as soon
-// as the employer's listing disappears, so a page first crawled months later is stale
-// before it is reachable.
+// Waiting to be crawled does not work at this catalogue's size: Googlebot fetches a tiny
+// fraction of the sitemap per day, and a posting closes as soon as the employer's listing
+// disappears, so a page first crawled months later is stale before it is reachable.
 //
-// The budget is the design constraint, not the plumbing. Google's Indexing API grants
-// 200 publish calls a day by default against thousands of new postings a day, so
-// this package can never announce everything and must not pretend otherwise: it
-// chooses the newest eligible postings each run — technical ones first, then the rest
-// of the catalogue with whatever that left — and records what it sent, rather than
-// draining a queue that would only grow. See migrations/0162_job_search_pings.sql.
+// The budget is the design constraint. Google's Indexing API grants 200 publish calls a
+// day by default, so this package can never announce everything: it picks the newest
+// eligible postings each run (technical first, then the rest with what that left) and
+// records what it sent rather than draining a queue that would only grow. See
+// migrations/0162_job_search_pings.sql.
 package searchping
 
 import (
@@ -24,21 +20,16 @@ import (
 	"strings"
 	"time"
 
-	// Embeds the IANA zone database. Required, not defensive: the budget day is
-	// Google's, measured in Pacific time with its daylight saving rule, and a host
-	// without tzdata would otherwise make LoadLocation fail — see pacific below for
-	// what each stand-in gets wrong.
+	// Embeds the IANA zone database. Required: the budget day is Google's, in Pacific time
+	// with DST, and a host without tzdata would make LoadLocation fail (see pacific).
 	_ "time/tzdata"
 )
 
 // Engine is one external search engine that accepts a URL announcement.
 //
-// Announce takes a batch and returns the URLs the engine ACCEPTED, because the two
-// engines disagree about what a send is: Google's Indexing API takes one URL per HTTP
-// call, so a batch is a loop and a partial failure is normal; IndexNow takes up to
-// 10,000 in one POST and answers for all of them at once. Returning the accepted
-// subset lets each engine do the right thing while the ledger stays exact — it
-// records what an engine took, never what it was offered.
+// Announce takes a batch and returns the URLs the engine ACCEPTED: Google's Indexing API
+// takes one URL per call, so partial failure is normal; IndexNow takes up to 10,000 in
+// one POST. The ledger records what an engine took, never what it was offered.
 type Engine interface {
 	// Name identifies the engine in the ledger and in logs. It is STORED, so it must
 	// stay stable across releases: the anti-join that keeps a budget from being spent
@@ -50,11 +41,9 @@ type Engine interface {
 
 	// Accepts reports whether this engine may be told about a kind of page at all.
 	//
-	// It exists because the restriction is real and one-sided: Google's Indexing API
-	// admits only JobPosting and BroadcastEvent pages, so a company page sent there is
-	// a terms violation whose penalty is the quota. IndexNow has no such rule. Asking
-	// the engine rather than branching on its name keeps that fact where it belongs and
-	// makes the next engine state its own answer.
+	// Google's Indexing API admits only JobPosting and BroadcastEvent pages, so a company
+	// page sent there is a terms violation whose penalty is the quota. IndexNow has no such
+	// rule. Asking the engine beats branching on its name.
 	Accepts(kind Kind) bool
 
 	// Announce sends the URLs and returns those the engine accepted, in any order.
@@ -74,10 +63,9 @@ type Candidate struct {
 }
 
 // Kind is which event about a posting is being announced. Both are URL_UPDATED to the
-// engine — a closed posting's page stays at HTTP 200 with its JobPosting markup and a
-// retired validThrough, which is one of the three ways Google documents for taking a
-// posting down, so a closure is a RE-CRAWL and never a deletion. Sending URL_DELETED for
-// a page that is still online is a misuse of the API, and its penalty is the quota.
+// engine: a closed posting's page stays at HTTP 200 with a retired validThrough, so a
+// closure is a re-crawl, never a deletion. URL_DELETED for a live page is a misuse whose
+// penalty is the quota.
 //
 // The values are STORED in the ledger, so they must stay stable across releases.
 type Kind string
@@ -97,15 +85,11 @@ const (
 	KindCompany Kind = "company"
 )
 
-// Tier is which half of the catalogue a new-posting pass draws from. It is not stored —
-// the ledger records the event, and a posting belongs to exactly one tier — it exists to
-// order the passes and to name them in the run's report.
+// Tier is which half of the catalogue a new-posting pass draws from. It is not stored; it
+// orders the passes and names them in the report.
 //
-// The split is a PRIORITY, not an eligibility rule. Every posting the search index holds
-// is eligible to be announced, technical or not; what differs is who gets a scarce
-// budget first. Google's 200 calls a day go to the technical tier, and the rest of the
-// catalogue — healthcare, retail, logistics and the other categories beyond IT — is
-// offered only what that left.
+// The split is a PRIORITY, not an eligibility rule: every indexed posting is eligible, but
+// the technical tier gets Google's scarce budget first and the rest gets what that left.
 type Tier string
 
 const (
@@ -148,23 +132,18 @@ type Repository interface {
 	PingsSince(ctx context.Context, engine string, since time.Time) (int64, error)
 }
 
-// pacific is where Google's Indexing API quota resets — midnight Pacific, not UTC and
-// not the host's clock. A budget day measured in UTC would let a run just after 00:00
-// UTC spend an allowance that, for eight or nine months of the year, Google still
-// considers yesterday's.
+// pacific is where Google's Indexing API quota resets: midnight Pacific, not UTC or the
+// host's clock.
 //
-// The zone must be the real one, with its daylight saving rule, and NOT a fixed -8
-// offset standing in for it. During DST a fixed PST puts the boundary an hour LATE, so
-// the pings sent in that hour are not counted while Google counts them — the run reads
-// more allowance left than it has and overspends. (A fixed -7 fails the same way in
-// winter, in the opposite hour.) Hence time/tzdata below: it embeds the zone database
-// in the binary, so this cannot depend on whether the host happens to carry one.
+// The zone must be the real one with DST, NOT a fixed offset: a fixed -8 puts the boundary
+// an hour late during DST (pings in that hour go uncounted and the run overspends), and a
+// fixed -7 fails the same way in winter. time/tzdata embeds the zone database so this does
+// not depend on the host.
 var pacific = func() *time.Location {
 	loc, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
-		// Unreachable with time/tzdata imported, and a panic rather than a fallback on
-		// purpose: every stand-in for this zone is wrong for part of the year, and being
-		// wrong here is silent — it looks like budget that was never spent.
+		// Unreachable with time/tzdata imported. Panic rather than fall back: every stand-in
+		// is wrong for part of the year, silently, as budget that was never spent.
 		panic("searchping: America/Los_Angeles unavailable despite time/tzdata: " + err.Error())
 	}
 	return loc
@@ -197,11 +176,9 @@ type Report struct {
 
 // spent is how much of an engine's day this pass consumed.
 //
-// ACCEPTED, not recorded: the engine consumed a call the moment it took the URL, whether
-// or not the ledger write that followed succeeded. Charging only for recorded ones would
-// let a failed write hand the next pass budget the engine has already counted against
-// the day. Preview accepts nothing and fills URLs instead, and exactly one of the two is
-// ever non-zero.
+// ACCEPTED, not recorded: the engine consumed a call when it took the URL, so charging only
+// recorded ones would let a failed ledger write hand the next pass already-counted budget.
+// Preview accepts nothing and fills URLs instead; exactly one of the two is non-zero.
 func (r Report) spent() int { return r.Accepted + len(r.URLs) }
 
 // Runner announces the newest eligible postings to every configured engine.
@@ -218,10 +195,8 @@ func New(repo Repository, origin string, engines ...Engine) *Runner {
 	return &Runner{repo: repo, origin: strings.TrimRight(strings.TrimSpace(origin), "/"), engines: engines}
 }
 
-// pageURL is the public address of a posting or of a company. Announcing anything else —
-// a redirect, an old domain — spends budget teaching an engine a URL it will only have to
-// follow away from, which is the exact waste this fleet already measured on Googlebot
-// (64% of its visits on 2026-09-14 answered 301 from retired hostnames).
+// pageURL is the public address of a posting or company. Announcing a redirect or an old
+// domain wastes budget teaching an engine a URL it must follow away from.
 func (r *Runner) pageURL(kind Kind, slug string) string {
 	if kind.isCompany() {
 		return r.origin + "/companies/" + slug
@@ -235,22 +210,16 @@ type pass struct {
 	tier Tier // KindCreated only
 }
 
-// passes is the order the events compete for one engine's day, and the order is the
-// policy.
+// passes is the order the events compete for one engine's day; the order is the policy.
 //
-// A new posting first: it is what brings a visitor. Within that, a technical posting
-// before one beyond IT — the catalogue's core before its breadth — so Google's 200 calls
-// go to the technical tier and the rest of the catalogue gets what that left. Then the
-// company page, which is the page that actually WINS — measured 2026-09-15, Bing's
-// highest-impression pages are /companies/<slug> and the queries behind them are all
-// "<company name> careers", and Google's own August data agrees. It sits after the
-// postings only because a posting is perishable
-// and a company page is not: the posting's moment passes, the employer's page keeps.
-// Closures last: they tidy an index we do not own.
+// A new posting first (it brings a visitor), technical before beyond-IT so Google's 200
+// calls go to the core and the rest gets what that left. Then the company page, the page
+// that actually wins impressions ("<company name> careers"); it sits after postings
+// because a posting is perishable and a company page is not. Closures last: they tidy an
+// index we do not own.
 //
-// Google never reaches the company pass at all — Accepts declines it, because its
-// Indexing API admits only JobPosting pages. The ordering matters for IndexNow, which
-// accepts everything and has no quota, and for whatever engine comes next.
+// Google never reaches the company pass: Accepts declines it. The ordering matters for
+// IndexNow, which accepts everything and has no quota.
 //
 // An unbounded engine is not rationed by this order at all: walk gives each of its
 // passes a full batch, so IndexNow hears about both tiers every run.
@@ -262,23 +231,19 @@ var passes = []pass{
 }
 
 // Run announces one batch per engine, per event. An engine that fails does not stop
-// another: the engines are independent services and a shared run is an implementation
-// detail, not a transaction.
+// another.
 func (r *Runner) Run(ctx context.Context, batch int) []Report {
 	return r.walk(ctx, batch, r.runPass)
 }
 
-// Preview resolves exactly what Run would send, and sends nothing. It reads the same
-// budget the real run would, so a dry run against an engine whose day is spent reports
-// an empty batch rather than the batch it would have sent yesterday.
+// Preview resolves what Run would send, and sends nothing. It reads the same budget, so a
+// dry run against a spent engine reports an empty batch.
 func (r *Runner) Preview(ctx context.Context, batch int) []Report {
 	return r.walk(ctx, batch, r.previewPass)
 }
 
-// walk runs every (engine, event) pair, threading one engine's remaining allowance
-// through its passes in order. Shared for Run and Preview so a dry run cannot drift from
-// what the real one would choose — the budget arithmetic is the part most worth seeing
-// before it spends anything.
+// walk runs every (engine, event) pair, threading one engine's remaining allowance through
+// its passes in order. Shared by Run and Preview so a dry run cannot drift from the real one.
 func (r *Runner) walk(ctx context.Context, batch int, run func(context.Context, Engine, pass, int) Report) []Report {
 	reports := make([]Report, 0, len(r.engines)*len(passes))
 	for _, engine := range r.engines {
@@ -288,14 +253,13 @@ func (r *Runner) walk(ctx context.Context, batch int, run func(context.Context, 
 			continue
 		}
 		for _, p := range passes {
-			// An engine that will not take this kind of page is not offered it, and the
-			// pass is not reported either — a line saying "google/company: nothing to
-			// announce" would read like an empty catalogue rather than a rule.
+			// An engine that will not take this kind of page is not offered it, and the pass is
+			// not reported: "google/company: nothing to announce" would read like an empty
+			// catalogue rather than a rule.
 			if !engine.Accepts(p.kind) {
 				continue
 			}
-			// An unbounded engine is not spending anything shared, so each of its passes
-			// gets the full batch rather than the leftovers of the one before.
+			// An unbounded engine shares nothing, so each pass gets the full batch.
 			limit := batch
 			if engine.DailyBudget() > 0 {
 				limit = left
@@ -303,12 +267,10 @@ func (r *Runner) walk(ctx context.Context, batch int, run func(context.Context, 
 			report := run(ctx, engine, p, limit)
 			reports = append(reports, report)
 			left -= report.spent()
-			// The passes are in priority order, so a budgeted engine whose candidate
-			// lookup failed stops there: the empty answer would otherwise hand the day's
-			// allowance to the tiers meant to get only what technical postings left. A
-			// pass that failed AFTER offering something (a send or a ledger write) has
-			// already been charged for what the engine took, so it does not stop the
-			// rest. An unbounded engine shares nothing between passes, so it carries on.
+			// Passes are in priority order, so a budgeted engine whose candidate lookup failed
+			// stops there: the empty answer would hand the day's allowance to the lower tiers.
+			// A pass that failed after offering something was already charged, so it does not
+			// stop the rest. An unbounded engine carries on.
 			if report.Err != nil && report.Offered == 0 && engine.DailyBudget() > 0 {
 				break
 			}
@@ -328,16 +290,14 @@ func (r *Runner) candidates(ctx context.Context, engine Engine, p pass, limit in
 	}
 }
 
-// plan opens a pass: the report it will be reported under, and what it may send. An
-// empty candidate slice covers all three ways a pass has nothing to do — the day's
-// budget is spent, the query failed, or nothing is eligible — so neither caller needs to
-// tell them apart, and the one that did is the report's own Err.
+// plan opens a pass: its report and what it may send. An empty candidate slice covers every
+// way a pass has nothing to do (budget spent, query failed, nothing eligible); the report's
+// own Err tells them apart.
 func (r *Runner) plan(ctx context.Context, engine Engine, p pass, limit int) (Report, []Candidate) {
 	report := Report{Engine: engine.Name(), Kind: p.kind, Tier: p.tier, Remaining: -1}
 	if engine.DailyBudget() > 0 {
-		// Clamped, though walk never passes a negative: Remaining is a tri-state where
-		// -1 means "unbounded", so a negative leaking in here would make a spent engine
-		// report the opposite of the truth.
+		// Clamped: Remaining is a tri-state where -1 means unbounded, so a negative leaking in
+		// would make a spent engine read as unbounded.
 		report.Remaining = max(limit, 0)
 	}
 	if limit <= 0 {
@@ -380,16 +340,12 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, p pass, limit int) 
 	report.Accepted = len(accepted)
 	report.Err = err
 
-	// Record whatever was accepted even when the batch also failed. A send that
-	// happened and was not written down is the one outcome that costs budget twice.
+	// Record whatever was accepted even when the batch also failed: a send that was not
+	// written down is the one outcome that costs budget twice.
 	//
-	// This is AT-LEAST-ONCE and deliberately so: an HTTP call cannot join the
-	// transaction that records it, so one of the two orderings has to lose. Sending
-	// first and failing to record costs a duplicate announcement — bounded, visible in
-	// the run's error, and harmless to the engine. Recording first and failing to send
-	// would cost the posting its announcement permanently and silently, because a
-	// recorded row is never selected again. The loud, bounded failure is the one to
-	// keep.
+	// AT-LEAST-ONCE on purpose: an HTTP call cannot join the transaction that records it.
+	// Sending first costs a bounded, visible duplicate; recording first would lose the
+	// announcement permanently and silently, since a recorded row is never selected again.
 	var recordErrs []error
 	for _, url := range accepted {
 		c, ok := bySlug[url]
@@ -415,10 +371,8 @@ func (r *Runner) runPass(ctx context.Context, engine Engine, p pass, limit int) 
 }
 
 // remainingToday is how many URLs this engine may still be sent, bounded by both the
-// caller's batch size and what the day's budget has left. Reading the ledger rather
-// than trusting a run to be the day's only one: the budget resets at midnight Pacific
-// on Google's side and the timer here fires more than once a day, so a run that
-// assumed it had the whole allowance would spend it again every time.
+// caller's batch size and what the day's budget has left. It reads the ledger because the
+// timer fires more than once a day and the budget resets at midnight Pacific.
 func (r *Runner) remainingToday(ctx context.Context, engine Engine, batch int) (int, error) {
 	budget := engine.DailyBudget()
 	if budget <= 0 {

@@ -10,11 +10,10 @@ import (
 )
 
 // Upsert is the one full write of a posting: the generated UpsertJob, then the observation of the
-// posting's job_activity row, in the caller's transaction. They are two commands because the
-// insert trigger creates the activity row at the end of the INSERT statement, where no CTE of
-// that statement can see it; a later command can. A caller that stopped after UpsertJob would
-// leave a new row's hydration NULL (read as "stale body") and an existing row's last_seen_at
-// frozen, so a test walks the module and allows only this file to call it.
+// posting's job_activity row, in the caller's transaction. Two commands because the insert trigger
+// creates the activity row at the end of the INSERT, where no CTE of that statement can see it.
+// Stopping after UpsertJob leaves hydration NULL and last_seen_at frozen, so a test allows only
+// this file to call it.
 //
 // The transaction is a pgx.Tx by type: both commands must commit together, and the jobs row is
 // locked before the activity row (the one global lock order).
@@ -25,9 +24,7 @@ func Upsert(ctx context.Context, tx pgx.Tx, p db.UpsertJobParams) (db.UpsertJobR
 	}
 	// A new row always read its body; an existing one did too unless the pipeline substituted the
 	// stored body for a failed fetch (nothing was read, so the hydration stamp stays).
-	// ResetStrikes is the old row's state under the write's own lock (it was closed), so the
-	// observation clears the strikes exactly when the old single statement did, an expired row
-	// that stays closed included.
+	// ResetStrikes is the old row's state under the write's own lock (it was closed).
 	if err := Observe(ctx, tx, row.ID, row.Inserted.Bool || !p.BodyFromCatalogue, row.ResetStrikes); err != nil {
 		return db.UpsertJobRow{}, err
 	}

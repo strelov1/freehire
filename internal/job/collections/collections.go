@@ -1,10 +1,8 @@
-// Package collections defines the fixed, code-owned set of curated company tags —
-// facts about a company that are not derivable from a job's text or its ATS
-// source. A tag is one of two Kinds: an editorial theme we curate (Y Combinator,
-// Big Tech) or a credential drawn from an authoritative public register. The
-// registry here is the single source of truth for which tags exist and how their
-// members are resolved; cmd/import-collections populates the membership, and the
-// search facet (jobs.collections) serves it.
+// Package collections defines the fixed, code-owned set of curated company tags: facts about
+// a company not derivable from a job's text or its ATS source. The registry here is the single
+// source of truth for which tags exist and how their members are resolved;
+// cmd/import-collections populates the membership, and the search facet (jobs.collections)
+// serves it.
 package collections
 
 import (
@@ -23,24 +21,20 @@ import (
 )
 
 // Record is one member of a dataset: the company's name as the source publishes
-// it, plus whatever per-member attributes that source carries (a sponsorship
-// route, a locality, a registry number). Meta is untyped on purpose — every
-// register has its own columns, and only that entry's own Gate reads its own keys,
-// so a typed union across sources would grow a field per source and be read by
-// nobody else.
+// it, plus per-member attributes the source carries (a sponsorship route, a locality, a
+// registry number). Meta is untyped on purpose: every register has its own columns and only
+// that entry's own Gate reads them.
 type Record struct {
 	Name string
 	Meta map[string]string
 }
 
 // Dataset is a source of member records for a collection, resolved by the import
-// worker via its pure Parse (matching to our catalogue happens via
-// normalize.CompanySlug in Collection.Members). The payload is either fetched from URL (an external dataset we
-// control) or supplied inline via Data (a file embedded in the binary, for a list
-// that is our own curated fact rather than a third-party feed) — exactly one is set.
-// ResolveURL is set instead of URL by a source that republishes at a new address
-// per snapshot (the GOV.UK sponsor register embeds the snapshot date in its CSV
-// path), so the address has to be discovered at fetch time rather than pinned.
+// worker via its pure Parse (matching to our catalogue happens via normalize.CompanySlug in
+// Collection.Members). The payload is either fetched from URL or supplied inline via Data (an
+// embedded file, for a list that is our own curated fact) — exactly one is set. ResolveURL is
+// set instead of URL by a source that republishes at a new address per snapshot, so the
+// address is discovered at fetch time.
 type Dataset struct {
 	URL        string
 	Data       []byte
@@ -60,9 +54,9 @@ type Dataset struct {
 	IdentityKey string
 }
 
-// Valid reports whether the dataset declares exactly one payload source. Declaring
-// none leaves the collection unresolvable; declaring two leaves which one wins to
-// the reader of the import worker, so both are rejected here and by a registry test.
+// Valid reports whether the dataset declares exactly one payload source. None leaves the
+// collection unresolvable; two leave the winner ambiguous, so both are rejected (and by a
+// registry test).
 func (d Dataset) Valid() bool {
 	n := 0
 	if d.URL != "" {
@@ -80,10 +74,8 @@ func (d Dataset) Valid() bool {
 	return n == 1
 }
 
-// names adapts a name-only parser to the record shape. The editorial datasets
-// publish nothing but a name, so their parsers stay as they are and are wrapped
-// here; only a register that carries per-member attributes writes a Record parser
-// of its own.
+// names adapts a name-only parser to the record shape; only a register with per-member
+// attributes writes a Record parser of its own.
 func names(parse func([]byte) ([]string, error)) func([]byte) ([]Record, error) {
 	return func(data []byte) ([]Record, error) {
 		parsed, err := parse(data)
@@ -98,16 +90,14 @@ func names(parse func([]byte) ([]string, error)) func([]byte) ([]Record, error) 
 	}
 }
 
-// Kind separates the three sorts of company tag the registry carries. An editorial
-// collection is our own curated theme (Big Tech, Unicorns) — a judgement call. A
-// credential is a verifiable fact drawn from an authoritative public register (a
-// visa-sponsor licence), which carries an issuing body and a snapshot date and is
-// presented differently because a user may act on it. A backer names the outside
-// accelerator or fund that selected the company (Y Combinator, a16z), which is why
-// it renders as that brand's own mark rather than as another filter chip.
+// Kind separates the three sorts of company tag. An editorial collection is our own curated
+// theme (Big Tech, Unicorns). A credential is a verifiable fact from an authoritative public
+// register (a visa-sponsor licence), with an issuing body and snapshot date, presented
+// differently because a user may act on it. A backer names the outside accelerator or fund
+// that selected the company (Y Combinator, a16z) and renders as that brand's mark.
 //
-// The zero value is deliberately invalid: Kind decides which group a tag renders
-// in, so a forgotten one must fail the registry test rather than default silently.
+// The zero value is deliberately invalid: Kind decides the render group, so a forgotten one
+// must fail the registry test rather than default silently.
 type Kind string
 
 const (
@@ -151,9 +141,8 @@ type Collection struct {
 
 // Company is the subset of a catalogue company a Gate may consult: its canonical
 // slug, the countries it has open jobs in (job-derived, maintained by
-// RefreshCompanyFacets), and its headquarters country. Deliberately narrow — a gate
-// is a pure decision over facts already loaded by the import worker, not a hook
-// with database access.
+// RefreshCompanyFacets), and its headquarters country. Deliberately narrow: a gate is a pure
+// decision over already-loaded facts, with no database access.
 type Company struct {
 	Slug      string
 	Countries []string
@@ -170,19 +159,16 @@ func (c Collection) Admits(company Company, r Record) bool {
 	return c.Gate == nil || c.Gate(company, r)
 }
 
-// HandList reports whether this collection's membership is authored in this repo —
-// a static Slugs list or an embedded membership file — rather than fetched from a
-// third party. Only a hand list's unmatched entries are worth naming: they are ours
-// to fix, and there are few enough to read. The distinction lived in the import
-// worker and was drawn as "Slugs != nil", which silenced the embedded files (the
-// largest hand lists we have) and made a typo in one of them invisible.
+// HandList reports whether this collection's membership is authored in this repo (a static
+// Slugs list or an embedded file) rather than fetched from a third party. Only a hand list's
+// unmatched entries are worth naming: they are ours to fix. Embedded files count, so a typo in
+// one is visible.
 func (c Collection) HandList() bool {
 	return c.Slugs != nil || (c.Dataset != nil && len(c.Dataset.Data) > 0)
 }
 
-// All is the fixed registry, in display order. Adding a collection is one entry
-// here — a static Slugs list or a Dataset; the import worker resolves whichever is
-// set.
+// All is the fixed registry, in display order. Adding a collection is one entry here, with a
+// static Slugs list or a Dataset.
 var All = []Collection{
 	{
 		Slug:        "yc",
@@ -402,10 +388,9 @@ var All = []Collection{
 	},
 }
 
-// Default dataset URLs (overridable per collection via <SLUG>_DATASET_URL in the
-// import worker). yc-oss is the maintained open mirror of the YC company
-// directory; the unicorn and fortune500 CSVs are open snapshots with the company
-// name in a "Company" column (see ParseCompanyCSV).
+// Default dataset URLs (overridable per collection via <SLUG>_DATASET_URL in the import
+// worker). The unicorn and fortune500 CSVs carry the name in a "Company" column (see
+// ParseCompanyCSV).
 const (
 	ycDatasetURL         = "https://yc-oss.github.io/api/companies/all.json"
 	unicornDatasetURL    = "https://raw.githubusercontent.com/elmoallistair/datasets/main/unicorn_startups.csv"
@@ -414,13 +399,11 @@ const (
 	europeanDatasetURL   = "https://raw.githubusercontent.com/nickbiird/icp-radar/main/public/data/startups_processed.json"
 )
 
-// AICompanySlugs is a hand-curated list of prominent AI-native companies —
-// foundation-model labs, ML infrastructure/platforms, and applied-AI products.
-// "AI company" is a fact about the company (so all of its roles belong here),
-// distinct from the job-level `enrichment.category = ml_ai` facet (a single ML/AI
-// role at any company). Entries are canonical company slugs (normalize.CompanySlug);
-// where a name is commonly written several ways, the variants are both listed so
-// the match lands whatever name our adapters use. Unmatched entries are logged.
+// AICompanySlugs is a hand-curated list of prominent AI-native companies. "AI company" is a
+// fact about the company (all its roles belong here), distinct from the job-level
+// `enrichment.category = ml_ai` facet. Entries are canonical company slugs
+// (normalize.CompanySlug); commonly variant names are all listed so the match lands whatever
+// name our adapters use. Unmatched entries are logged.
 var AICompanySlugs = []string{
 	// Foundation-model labs.
 	"openai", "anthropic", "mistral", "mistral-ai", "cohere",
@@ -437,14 +420,11 @@ var AICompanySlugs = []string{
 	"anysphere", "cursor",
 }
 
-// AINativeSlugs is the curated AI-native cohort sourced from the remotepilot.dev
-// directory — model/inference APIs, vector databases, and agent/dev tooling built
-// around AI. Entries are canonical company slugs (normalize.CompanySlug), each verified
-// against the exact name our adapters ingest (the board-file company), e.g.
-// "openrouter.ai" → openrouter-ai, "trmlabs" → trmlabs, "qdrant.tech" → qdrant-tech.
-// Only the exact ingested form is listed: a brand-name variant (openrouter,
-// qdrant, …) resolves to a separate duplicate company row and would double the
-// cohort. It overlaps AICompanySlugs by design — a company may belong to both.
+// AINativeSlugs is the curated AI-native cohort sourced from the remotepilot.dev directory.
+// Entries are canonical company slugs (normalize.CompanySlug) verified against the exact name
+// our adapters ingest, e.g. "openrouter.ai" → openrouter-ai. Only that form is listed: a
+// brand-name variant (openrouter) resolves to a duplicate company row and would double the
+// cohort. It overlaps AICompanySlugs by design.
 var AINativeSlugs = []string{
 	// Model & inference APIs.
 	"deepgram", "cohere", "together-ai", "fireworks-ai", "openrouter-ai",
@@ -457,26 +437,19 @@ var AINativeSlugs = []string{
 	"infinity-constellation", "vclusterlabs", "urun", "tollbit",
 }
 
-// Mag7Slugs is the Magnificent Seven — the 2025 canonical mega-cap tech cohort.
-// Name variants (alphabet/google, meta/facebook) are both listed so a company
-// matches whichever name our adapters use. It is a deliberate subset of
-// BigTechSlugs, surfaced as its own focused collection.
+// Mag7Slugs is the Magnificent Seven mega-cap tech cohort. Name variants (alphabet/google,
+// meta/facebook) are both listed. A deliberate subset of BigTechSlugs.
 var Mag7Slugs = []string{
 	"apple", "microsoft", "google", "alphabet",
 	"amazon", "meta", "facebook", "nvidia", "tesla",
 }
 
 // BigTechSlugs is the hand-curated company-slug list for the bigtech collection.
-// "Big Tech" is taken in the broad "tech giants" sense: the canonical Magnificent
-// Seven (the 2025 standard — Apple, Microsoft, Alphabet/Google, Amazon, Meta,
-// Nvidia, Tesla) plus the next tier of large, established public technology
-// companies. It deliberately excludes high-growth startups/unicorns (Stripe,
-// Airbnb, Uber, …) — those are not Big Tech and several are YC, so they surface in
-// the `yc` collection instead. Name variants (alphabet/google, meta/facebook) are
-// both listed so a company matches whichever name our adapters use.
-// Entries are canonical company slugs (as produced by normalize.CompanySlug), matched
-// against the companies present in the catalogue at import time; unmatched entries
-// are simply logged.
+// "Big Tech" is the broad "tech giants" sense: the Magnificent Seven plus the next tier of
+// large, established public technology companies. It deliberately excludes high-growth
+// startups/unicorns (Stripe, Airbnb, Uber, …), which surface in `yc` instead. Name variants
+// are all listed. Entries are canonical company slugs (normalize.CompanySlug), matched against
+// the catalogue at import time; unmatched entries are logged.
 var BigTechSlugs = []string{
 	// Magnificent Seven (+ name variants).
 	"apple",
@@ -506,21 +479,16 @@ var BigTechSlugs = []string{
 
 // easternRootsData is the embedded membership file for the eastern-roots collection:
 // companies with Eastern European / Russian-speaking founding roots that operate
-// internationally (a hand-curated seed plus the larger eastern-roots company list).
-// "Eastern roots" is a fact about the company, so all of its roles belong here. It is
-// our own curated fact, not a third-party feed, so it is committed to the repo and
-// embedded rather than fetched. One canonical company slug (normalize.CompanySlug)
-// per line; the list is matched against the catalogue at import time and unmatched
-// slugs are logged by name.
+// internationally. It is our own curated fact, so it is embedded rather than fetched. One
+// canonical company slug (normalize.CompanySlug) per line; matched against the catalogue at
+// import time, unmatched slugs are logged by name.
 //
 //go:embed eastern_roots.txt
 var easternRootsData []byte
 
-// indianRootsData is the same shape for the indian-roots collection: the IT-services
-// majors, the domestic product ecosystem, and the Indian-founder companies
-// headquartered abroad. Embedded rather than fetched for the same reason, and here
-// there is no alternative — no maintained open dataset of Indian-founded companies
-// exists, only forks of one stale Kaggle funding CSV.
+// indianRootsData is the same shape for the indian-roots collection (IT-services majors, the
+// domestic product ecosystem, and Indian-founder companies headquartered abroad). No
+// maintained open dataset of these exists, so it is embedded too.
 //
 //go:embed indian_roots.txt
 var indianRootsData []byte
@@ -563,10 +531,9 @@ func Slugs() []string {
 }
 
 // RetiredSlugs are collection slugs no longer in All but that may still be tagged on
-// companies from a past run — e.g. after a rename (russian-roots → eastern-roots).
-// import-collections adds them to the managed set so Reconcile strips them on the next
-// run (they have no wanted members), a self-healing cleanup that needs no manual SQL.
-// An entry is safe to drop once a production import has run and cleared the tag.
+// companies from a past run, e.g. after a rename. import-collections adds them to the managed
+// set so Reconcile strips them on the next run. An entry is safe to drop once an import has
+// cleared the tag.
 var RetiredSlugs = []string{"russian-roots"}
 
 // MaxLoggedUnmatched bounds the unmatched entries a hand list reports by name, so a
@@ -596,18 +563,16 @@ type MatchStat struct {
 // deduplicated and sorted; unmatched names are returned verbatim, in input order,
 // for logging.
 //
-// Both kinds match on normalize.CompanySlug, because both look the result up in a map
-// keyed by the CATALOGUE's company slug, and that is what the catalogue keys by. What
-// still differs by kind is the ambiguity drop: a credential first discards rows whose
-// name identifies more than one organisation.
+// Both kinds match on normalize.CompanySlug, the catalogue's key. They differ in the
+// ambiguity drop: a credential first discards rows whose name identifies more than one
+// organisation.
 //
 // A record the source describes as a different organisation — another website, or a
 // headcount the company's postings outgrow — is refused before the gate (see
 // mismatch): the name matched, the organisation did not.
 //
 // A company is tagged when ANY of its records passes the gate: a register lists an
-// organisation once per route it holds, so a work-route row must win even when a
-// temporary-route row for the same body is listed first.
+// organisation once per route, so a work-route row must win over an earlier temporary one.
 func (c Collection) Members(records []Record, companies map[string]Company) ([]string, MatchStat) {
 	var stat MatchStat
 	// Both kinds slug the same way, because both look the result up in a map keyed by the
@@ -744,10 +709,9 @@ func ParseEUStartups(data []byte) ([]string, error) {
 }
 
 // ParseYC reads a yc-oss dataset payload (a JSON array of company objects) into
-// records carrying each company's website. Companies YC lists as Inactive or Acquired
-// are dropped, for the reason every portfolio drops its exits (see portfolios.go):
-// the directory still names them, so their names matched whatever later company took
-// them — Y Combinator's shut-down "Meta" tagged Meta Platforms.
+// records carrying each company's website. Companies YC lists as Inactive or Acquired are
+// dropped, for the reason every portfolio drops its exits (see portfolios.go): their names
+// would match whatever later company took them.
 func ParseYC(data []byte) ([]Record, error) {
 	var raw []ycCompany
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -780,8 +744,8 @@ func ParseTechstarsCSV(data []byte) ([]string, error) {
 }
 
 // parseCSVColumn extracts the named column from a CSV with the given delimiter: it
-// locates the column by header (not a fixed index, so an upstream column reorder
-// doesn't silently read the wrong field) and returns each non-empty value.
+// locates the column by header, so an upstream reorder cannot silently read the wrong field,
+// and returns each non-empty value.
 func parseCSVColumn(data []byte, delim rune, colName string) ([]string, error) {
 	rows, err := csvColumns(data, delim, colName)
 	if err != nil {

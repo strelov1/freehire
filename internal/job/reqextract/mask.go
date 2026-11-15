@@ -7,38 +7,27 @@ import (
 	xhtml "golang.org/x/net/html"
 )
 
-// MaskPreferred returns the description with the WORDS inside recognized
-// preferred-only sections blanked and everything else — markup, punctuation, layout
-// — left in place. It exists so the deterministic fact matchers in
-// internal/job/jobfacts read the same section vocabulary Derive does instead of each
-// guessing on its own where a nice-to-have section ends.
+// MaskPreferred returns the description with the WORDS inside recognized preferred-only
+// sections blanked and everything else (markup, punctuation, layout) left in place, so
+// the fact matchers in internal/job/jobfacts share Derive's section vocabulary.
 //
-// Blanking rather than deleting is the whole point. Those matchers read punctuation
-// as structure: EnglishLevel binds a level word to an English keyword only when no
-// "." or newline sits between them, so a masker that removed a clause and rejoined
-// the halves would introduce a boundary that was never in the posting and silently
-// drop the level from "English, B2 required". Replacing letters and digits with
-// spaces leaves every boundary exactly where the posting put it.
+// It blanks rather than deletes because those matchers read punctuation as structure:
+// EnglishLevel binds a level word to an English keyword only when no "." or newline sits
+// between them, so rejoining halves of a removed clause would drop the level from
+// "English, B2 required".
 //
-// It differs from Derive in one deliberate way: Derive closes a section on prose,
-// because it wants only the list under a heading, while a preferred SECTION is
-// preferred throughout — the issue this fixes was reported against a posting whose
-// nice-to-have section is ordinary paragraphs. Only another heading closes a masked
-// section here. A preferred section a posting never closes therefore masks the rest
-// of the description, which understates requirements rather than overstating them —
-// the direction a reader can detect.
+// Unlike Derive, which closes a section on prose, a preferred SECTION is preferred
+// throughout: only another heading closes it. A section never closed masks the rest of
+// the description, which understates requirements (the detectable direction).
 //
-// A description with no preferred section comes back byte-identical: the re-render is
-// skipped entirely, so nothing downstream can shift for a posting this has no opinion
-// about.
+// A description with no preferred section comes back byte-identical.
 func MaskPreferred(descriptionHTML string) string {
 	if strings.TrimSpace(descriptionHTML) == "" {
 		return descriptionHTML
 	}
 	doc, err := xhtml.Parse(strings.NewReader(descriptionHTML))
 	if err != nil {
-		// x/net/html does not reject malformed markup, so this is unreachable in
-		// practice; an unparseable description is simply left as it is.
+		// x/net/html does not reject malformed markup, so this is effectively unreachable.
 		return descriptionHTML
 	}
 
@@ -48,30 +37,24 @@ func MaskPreferred(descriptionHTML string) string {
 	walk = func(n *xhtml.Node) {
 		if n.Type == xhtml.ElementNode {
 			switch {
-			// A container holding the section's list is a wrapper, not a heading —
-			// the same trap Derive's walk names.
+			// A container holding the section's list is a wrapper, not a heading.
 			case wrapsAList(n):
 
 			case isHeadingCandidate(n):
-				// Only a RECOGNIZED title (or a structural h1–h6) decides anything. An
-				// unrecognized short line — the lead-in `<p>You will need:</p>`, or a
-				// one-sentence paragraph inside a nice-to-have section — is content,
-				// and falling through is what masks the words it carries.
+				// Only a RECOGNIZED title (or h1–h6) decides anything; an unrecognized
+				// short line is content, and falling through masks its words.
 				next, recognized := headingDecision(n, openSection(preferred))
 				if !recognized {
 					break
 				}
 				preferred = next == "preferred"
 				if !preferred {
-					// A required or closing title is outside the section it ends, so its
-					// own words stay.
+					// A required or closing title's own words stay.
 					return
 				}
-				// A preferred title's words are blanked with the section it opens, and
-				// the walk descends to do it. Leaving "Nice to have" legible would put
-				// the marker phrase back in the text for the caller's second, clause-level
-				// pass to find — which then blanks the sentence around it, requirements
-				// and all.
+				// A preferred title is blanked with its section; left legible, the
+				// caller's clause-level pass would find the marker and blank the
+				// sentence around it, requirements included.
 			}
 		}
 		if n.Type == xhtml.TextNode && preferred {
@@ -96,26 +79,17 @@ func MaskPreferred(descriptionHTML string) string {
 	return restoreLiterals.Replace(b.String())
 }
 
-// restoreLiterals undoes the escaping the re-render ADDS. A description carries an
-// apostrophe, a quote and often a bare ">" as literal characters; x/net/html escapes
-// all three on the way out, and the matchers reading this text see `bachelor&#39;s`,
-// which their vocabulary does not contain. That broke exactly the postings this masker
-// exists for — only a posting WITH a preferred section is re-rendered at all — and
-// every unit test stayed green, because none of them spelled a degree with an
-// apostrophe inside a document that had a preferred section.
-//
-// `&amp;` and `&lt;` are deliberately not here: those are escapes the SOURCE already
-// wrote, which the parser decoded and the renderer restored. Undoing them would not be
-// a round trip, it would be a change.
+// restoreLiterals undoes the escaping the re-render ADDS: x/net/html escapes the literal
+// apostrophe, quote and ">" of a description, and the matchers would then miss
+// `bachelor&#39;s`. `&amp;` and `&lt;` are deliberately absent: the source already wrote
+// those, so undoing them would change the text.
 var restoreLiterals = strings.NewReplacer(
 	"&#39;", "'",
 	"&#34;", `"`,
 	"&gt;", ">",
 )
 
-// openSection expresses the walk's boolean state in headingDecision's vocabulary, so
-// the two callers share one decision function rather than one of them re-deciding
-// what a heading means.
+// openSection expresses the walk's boolean state in headingDecision's vocabulary.
 func openSection(preferred bool) string {
 	if preferred {
 		return "preferred"
@@ -124,14 +98,10 @@ func openSection(preferred bool) string {
 }
 
 // BlankWords replaces every letter and digit with a space, leaving punctuation and
-// whitespace alone. Unicode-aware, because a preferred section is as often Hungarian,
-// Polish or Russian as English.
+// whitespace alone. Unicode-aware.
 //
-// It is exported because [MaskPreferred] is only half of what internal/job/jobfacts
-// needs — a posting states optionality as a section OR as a clause inside a sentence —
-// and the two passes have to blank identically. Blanking is what makes either pass
-// safe: the matchers downstream read punctuation as structure, so a pass that DELETED
-// its span would move a sentence boundary and change what the other pass sees.
+// Exported because jobfacts also blanks optional clauses inside sentences, and both
+// passes must blank identically (deleting would move sentence boundaries).
 func BlankWords(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))

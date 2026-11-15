@@ -56,12 +56,10 @@ func Of(p db.UpsertJobParams) string {
 // it is rewriting rows the ingest path already wrote. The description is separate because a
 // backfill's whole job is to replace it, and jobs.description is the column being changed.
 //
-// It lives here, beside Of, because the two are one decision split in half: Of names the fields
-// that make up the fingerprint, and this names where each comes from on a row. Kept apart, a
-// field added to Of leaves the mapping behind, and a backfill then rewrites rows carrying a hash
-// the ingest path will not reproduce — so the next crawl of each reports `changed` once for
-// nothing. That is not hypothetical: this mapping existed twice, byte-identical, in two backfill
-// commands. TestOfRow_CarriesEveryFieldTheHashReads is what now fails instead.
+// It lives beside Of because the two are one decision: Of names the fields, this names where each
+// comes from on a row. Kept apart, a field added to Of leaves the mapping behind and a backfill
+// writes a hash the ingest path will not reproduce. TestOfRow_CarriesEveryFieldTheHashReads
+// fails in that case.
 func OfRow(j db.Job, description string) string {
 	return Of(db.UpsertJobParams{
 		URL:                j.URL,

@@ -8,9 +8,8 @@ import (
 )
 
 // nlSponsorURL is the IND public register of recognised sponsors for the "work"
-// residence purpose (which covers the highly-skilled-migrant scheme). Unlike the UK
-// register it is a single stable page rather than a dated snapshot, and it
-// publishes no route breakdown — recognition is the whole fact.
+// residence purpose (which covers the highly-skilled-migrant scheme). A single stable page,
+// with no route breakdown: recognition is the whole fact.
 const nlSponsorURL = "https://ind.nl/en/public-register-recognised-sponsors/public-register-work"
 
 // nlSponsorRow matches one register row: the organisation as a row header, its KvK
@@ -23,9 +22,8 @@ var tagPattern = regexp.MustCompile(`<[^>]*>`)
 
 // ParseNLSponsors reads the IND register page into one record per recognised
 // sponsor, keeping the KvK number as the identity field that tells two same-named
-// organisations apart. A page that yields no rows is an error, not an empty
-// register: the table failing to render means the source changed, and returning
-// nothing would reconcile the credential off every company.
+// organisations apart. A page that yields no rows is an error, not an empty register:
+// returning nothing would reconcile the credential off every company.
 func ParseNLSponsors(page []byte) ([]Record, error) {
 	matches := nlSponsorRow.FindAllStringSubmatch(string(page), -1)
 	records := make([]Record, 0, len(matches))

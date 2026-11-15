@@ -4,19 +4,16 @@ import "github.com/strelov1/freehire/internal/job/jobhash"
 
 // AggregationThreshold is the minimum number of same-role postings claimed in one
 // poll batch before Group collapses them into a single aggregated Entry instead of
-// one Entry per posting. A code constant rather than an env var: this is product
-// behavior (what a visitor sees), not an operational safety valve for a one-off
-// run — see design.md, "Aggregation threshold is a code constant".
+// one Entry per posting. A code constant, not an env var: it is product behavior,
+// not an operational valve.
 const AggregationThreshold = 5
 
 // Posting is what Group needs from one claimed outbox row.
 type Posting struct {
 	Title       string
 	CompanyName string
-	// CompanySlug is the canonical company identity Group's company-aggregation
-	// pass keys on — never CompanyName, which is free text and varies in
-	// spelling/punctuation for one employer (see AGENTS.md, "Company key:
-	// normalize.CompanySlug", and docs/agents/company-identity.md).
+	// CompanySlug is the canonical company identity Group's company pass keys on,
+	// never the free-text CompanyName.
 	CompanySlug string
 	JobSlug     string
 }
@@ -34,10 +31,8 @@ type Posting struct {
 //     KindCompanyAggregate entry. Everything still left over becomes a
 //     KindSingle entry.
 //
-// Buckets in each pass are emitted in first-seen order. Because pass 2 only
-// ever sees postings pass 1 did not already aggregate, the result partitions
-// the input exactly — role-aggregates first, then company-aggregates and
-// remaining singles.
+// Buckets in each pass are emitted in first-seen order; the result partitions the
+// input: role-aggregates, then company-aggregates and remaining singles.
 func Group(postings []Posting) []Entry {
 	if len(postings) == 0 {
 		return nil
@@ -68,8 +63,7 @@ func Group(postings []Posting) []Entry {
 // bucket at or above AggregationThreshold becomes one Entry of the given kind,
 // naming a representative posting from it; every posting in a smaller bucket is
 // returned as leftover instead, for the caller to aggregate further or emit as
-// KindSingle. The two Group passes differ only in kind and key — this is the
-// bucket-or-leave-for-later shape both share.
+// KindSingle.
 func aggregateBy(postings []Posting, kind Kind, key func(Posting) string) (aggregates []Entry, leftover []Posting) {
 	var order []string
 	buckets := make(map[string][]Posting, len(postings))

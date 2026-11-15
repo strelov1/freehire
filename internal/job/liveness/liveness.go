@@ -1,13 +1,11 @@
 // Package liveness classifies whether a job posting URL is still live, from a plain
-// HTTP probe (no headless browser, no LLM). Classify is a pure function over the
-// fetch outcome; the cmd/liveness worker owns fetching and acting on the verdict.
+// HTTP probe (no headless browser, no LLM). Classify is a pure function over the fetch
+// outcome; the cmd/liveness worker owns fetching and acting on the verdict.
 //
-// The heuristics are ported from career-ops's liveness-core: a posting is judged
-// expired only on a positive death signal (HTTP gone, an error/listing redirect, a
-// curated closed-posting phrase, or a near-empty body). Anything else — transient
-// status, healthy content, or a JS-only shell whose closed message never renders
-// server-side — is not-expired and takes no action. Without a browser we under-detect
-// closures rather than risk closing a live posting.
+// A posting is judged expired only on a positive death signal (HTTP gone, an
+// error/listing redirect, a curated closed-posting phrase, or a near-empty body).
+// Anything else, including a JS-only shell, is not-expired: without a browser we
+// under-detect closures rather than risk closing a live posting.
 package liveness
 
 import (
@@ -17,10 +15,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
-// Verdict is the outcome of a probe. Three states, not two, so the worker can tell a
-// posting that is alive (reset its strikes) apart from one it could not judge — a
-// transient status or a fetch failure (leave strikes untouched: no evidence either
-// way). Only Expired ever advances a job toward closing.
+// Verdict is the outcome of a probe. Three states so the worker can tell a live
+// posting (reset strikes) from one it could not judge (leave strikes untouched). Only
+// Expired advances a job toward closing.
 type Verdict int
 
 const (
@@ -33,19 +30,15 @@ const (
 	Expired
 )
 
-// minContentChars is the VISIBLE-text length below which a 2xx response is treated as an
-// empty shell (nav/footer only) rather than a real posting. Measured against extracted
-// text (see htmltext.ToText), not the raw HTML body: a JS-only shell still ships a full
-// <head> — meta tags, <link>/<script> references, framework bundle URLs — that alone
-// routinely exceeds this threshold in raw markup even with zero visible content, and a
-// large commented-out block or hidden boilerplate can inflate raw length without adding
-// anything a visitor (or a human reading the diff) would call content.
+// minContentChars is the visible-text length below which a 2xx response is treated as
+// an empty shell rather than a real posting. It is measured against extracted text
+// (htmltext.ToText), not raw HTML: a JS-only shell's <head> alone can exceed it.
 const minContentChars = 300
 
 // hardExpired matches phrases an employer page shows when a posting is closed
-// (EN/DE/FR/RU). A match on a 2xx body is a definitive death signal. The sub-patterns
-// are top-level alternatives, so a plain "|" join is the whole pattern. The (?i) flag
-// folds case for Cyrillic too, so one lowercase RU pattern covers "Вакансия"/"вакансия".
+// (EN/DE/FR/RU); a match on a 2xx body is a definitive death signal. The
+// sub-patterns are top-level alternatives, so a plain "|" join is the whole pattern.
+// (?i) folds Cyrillic case too.
 var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`job (is )?no longer available`,
 	`job.*no longer open`,
@@ -55,22 +48,19 @@ var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`no longer accepting applications`,
 	`this (position|role|job) (is )?no longer`,
 	`this job (listing )?is closed`,
-	// remoteok's own closed-posting banner: "This job post is closed and the position is
-	// probably filled." — the extra "post" between "job" and "is closed" is why the more
-	// general pattern above doesn't already cover it.
+	// remoteok's closed-posting banner ("This job post is closed and the position is
+	// probably filled."); the extra "post" is why the pattern above does not cover it.
 	`this job post is closed`,
-	// djinni's alert on a removed posting, which still answers 200 with the full page around
-	// it. Measured 2026-10-29: on all 94 such pages in a 120-posting sample of stale djinni
-	// rows, and on none of the live ones.
+	// djinni's alert on a removed posting, which still answers 200 with the full page.
 	`the job ad is no longer active`,
 	`job (listing )?not found`,
 	`the page you are looking for doesn.t exist`,
 	`applications?\s+(?:(?:have|are|is)\s+)?closed`,
 	`diese stelle (ist )?(nicht mehr|bereits) besetzt`,
 	`offre (expirée|n'est plus disponible)`,
-	// A RU-language orphan source (any source the probe reaches — habr_career/geekjob are
-	// registered providers and excluded) can serve a closed posting as a healthy 200 whose
-	// only death signal is a Russian archived/closed banner.
+	// A RU-language orphan source (not habr_career/geekjob, which are registered
+	// providers) can serve a closed posting as a healthy 200 whose only death signal is
+	// a Russian archived/closed banner.
 	`ваканси\S* (в архиве|закрыта|неактивна)`,
 }, "|"))
 

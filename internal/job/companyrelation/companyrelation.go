@@ -1,5 +1,5 @@
 // Package companyrelation decides the company relations a signed-in person proposes and a
-// moderator approves (freehire#3895).
+// moderator approves.
 //
 // There are two kinds, and they differ on purpose:
 //
@@ -13,8 +13,7 @@
 //     names the other while keeping its own jobs, URL and name.
 //
 // A proposal changes nothing on its own. A wrong merge moves a public URL onto the wrong
-// employer, so every check runs again inside the approval's transaction, against the
-// registry as it stands then.
+// employer, so every check reruns inside the approval's transaction.
 package companyrelation
 
 import (
@@ -84,9 +83,8 @@ type Proposal struct {
 	Note        string
 }
 
-// Propose records a proposal for a moderator to decide. The registry checks run now as well
-// as at approval, so a proposal that could never be approved is refused while the person who
-// made it is still looking.
+// Propose records a proposal for a moderator to decide. The registry checks run here too, so
+// a proposal that could never be approved is refused up front.
 func (s *Service) Propose(ctx context.Context, userID int64, p Proposal) (db.CompanyRelationProposal, error) {
 	p.Note = strings.TrimSpace(p.Note)
 	p.TargetSlug = strings.TrimSpace(p.TargetSlug)
@@ -212,9 +210,8 @@ func (s *Service) decide(ctx context.Context, id, moderatorID int64, approve boo
 	return p, tx.Commit(ctx)
 }
 
-// check refuses a relation the registry as it stands cannot take, and returns the name a
-// merge's folded key is built from. Each refusal is something that would otherwise go wrong
-// silently.
+// check refuses a relation the registry cannot take, and returns the name a merge's folded
+// key is built from.
 func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) (string, error) {
 	c, err := company(ctx, q, slug)
 	if err != nil {
@@ -233,10 +230,9 @@ func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) (
 	return name, checkSame(ctx, q, slug, name, target)
 }
 
-// spelling is the name the retiring slug's newest posting carries, the one the next crawl
-// sends and ingest folds to look the alias up, as cmd/merge-companies reads it from jobs.
-// companies.name can be a curated display name that folds elsewhere. A company with no
-// posting falls back to it.
+// spelling is the name the retiring slug's newest posting carries, which is what the next
+// crawl sends and ingest folds to look up the alias. companies.name can be a curated display
+// name that folds elsewhere, so it is only the fallback for a company with no posting.
 func spelling(ctx context.Context, q *db.Queries, slug, fallback string) (string, error) {
 	name, err := q.LatestCompanySpelling(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -311,8 +307,7 @@ func apply(ctx context.Context, q *db.Queries, kind Kind, slug, name, target str
 }
 
 // move re-keys the retiring slug's jobs onto the canon and reconciles the companies rows,
-// the same procedure cmd/merge-companies runs. The search index catches up on the scheduled
-// reindex, as it does after a merge wave.
+// as cmd/merge-companies does. The search index catches up on the scheduled reindex.
 func (s *Service) move(ctx context.Context, alias, canon string) (int64, error) {
 	moved, err := companymerge.MoveJobs(ctx, companymerge.Rekey(s.q), alias, canon, companymerge.Chunk)
 	if err != nil {
@@ -330,10 +325,8 @@ func company(ctx context.Context, q *db.Queries, slug string) (db.Company, error
 	return c, err
 }
 
-// foldedKey is the key ingest will look the retiring spelling up by: the fold of its NAME,
-// as cmd/merge-companies writes it (see docs/agents/company-identity.md, "It folds the
-// NAME, not the slug"). A name that folds to nothing falls back to the slug's own fold, so
-// the row is at least reachable from the slug.
+// foldedKey is the key ingest looks the retiring spelling up by: the fold of its NAME, as
+// cmd/merge-companies writes it. A name that folds to nothing falls back to the slug's fold.
 func foldedKey(slug, name string) string {
 	if k := normalize.CompanyKey(name); k != "" {
 		return k

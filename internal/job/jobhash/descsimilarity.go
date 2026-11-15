@@ -34,11 +34,9 @@ func DescriptionSignature(description string) map[string]struct{} {
 // is undefined (0/0), and treating it as 1 would merge every posting whose description failed
 // to normalize into a single cluster — the exact failure the caller cannot detect afterwards.
 //
-// This is the signal a spike VALIDATED where embedding cosine failed: per-city variants of one
-// role score ≥0.95 while genuinely distinct roles in the same bucket score ≤0.5, because
-// boilerplate dominates an embedding but shared vocabulary still tracks the specialty. It is
-// only sound INSIDE a company+title bucket: across buckets, two boilerplate-heavy postings of
-// unrelated roles at one company can score 0.98.
+// Chosen over embedding cosine, where boilerplate dominates; shared vocabulary still tracks the
+// specialty. It is only sound INSIDE a company+title bucket: across buckets, two
+// boilerplate-heavy postings of unrelated roles at one company can score near 1.
 func DescriptionSimilarity(a, b map[string]struct{}) float64 {
 	if len(a) == 0 || len(b) == 0 {
 		return 0

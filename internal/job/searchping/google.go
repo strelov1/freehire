@@ -15,9 +15,7 @@ import (
 	"golang.org/x/oauth2/jwt"
 )
 
-// serviceAccountKey is the part of a Google service account key file this needs. The
-// file also carries project_id, client_id and the certificate URLs, none of which
-// matter to a two-legged JWT exchange.
+// serviceAccountKey is the part of a service account key file a two-legged JWT exchange needs.
 type serviceAccountKey struct {
 	Type         string `json:"type"`
 	ClientEmail  string `json:"client_email"`
@@ -28,19 +26,14 @@ type serviceAccountKey struct {
 
 // jwtConfigFromServiceAccountKey builds the token source from the key file.
 //
-// oauth2/jwt rather than oauth2/google, though the latter has a one-line helper for
-// exactly this: google's package reaches for cloud.google.com/go/compute/metadata so it
-// can also authenticate from inside a GCE instance, a path this fleet has no use for,
-// and the module is not otherwise a dependency. The four fields below are the whole of
-// what the helper would have read.
+// It uses oauth2/jwt rather than oauth2/google, which would pull in
+// cloud.google.com/go/compute/metadata (GCE auth) as a new dependency.
 func jwtConfigFromServiceAccountKey(raw []byte) (*jwt.Config, error) {
 	var key serviceAccountKey
 	if err := json.Unmarshal(raw, &key); err != nil {
 		return nil, err
 	}
-	// A key file for the wrong credential kind parses fine and then fails at the token
-	// exchange with a signing error, which reads like a bug here rather than the wrong
-	// file having been copied to the host.
+	// A wrong-kind key file parses fine but fails later with a misleading signing error.
 	if key.Type != "service_account" {
 		return nil, fmt.Errorf("credential type is %q, want service_account", key.Type)
 	}
@@ -62,15 +55,11 @@ func jwtConfigFromServiceAccountKey(raw []byte) (*jwt.Config, error) {
 
 // GoogleEngine announces a URL through Google's Indexing API.
 //
-// The API is open to exactly two kinds of page — JobPosting, and BroadcastEvent inside
-// a VideoObject — which is why it is available to this site at all and why nothing but
-// a job URL may be sent through it. Submitting anything else is a terms violation, and
-// the penalty is the quota, so the eligibility gate lives in SQL where it cannot be
-// bypassed by a caller with a URL in hand.
+// The API is open only to JobPosting and BroadcastEvent-in-VideoObject pages, so only job
+// URLs may be sent. Anything else is a terms violation penalized with the quota, so the
+// eligibility gate lives in SQL where a caller with a URL cannot bypass it.
 //
-// It requests a CRAWL, not an index entry: Google still decides whether the page is
-// worth holding. That is the honest ceiling on what this can do — it removes the
-// discovery delay, not Google's judgement.
+// It requests a CRAWL, not an index entry.
 type GoogleEngine struct {
 	client   *http.Client
 	budget   int
@@ -82,20 +71,16 @@ const (
 	googleIndexingAPI = "https://indexing.googleapis.com/v3/urlNotifications:publish"
 	googleIndexScope  = "https://www.googleapis.com/auth/indexing"
 
-	// The documented default. An approved increase raises it, so it is configurable —
-	// but it is not discoverable: the API answers 429 when the day is spent and offers
-	// no way to ask what the allowance is, so this number has to be told to us.
+	// The documented default. An approved increase raises it, but the API cannot be
+	// asked for its allowance (it only answers 429), so the number is configured.
 	googleDefaultDailyBudget = 200
 )
 
 // NewGoogleEngine builds the engine from a service account key file, or returns nil
-// when none is configured — the fleet's convention for "this channel is off", which is
-// also how the feature ships before the credential exists and how it is rolled back.
+// when none is configured (the fleet's "this channel is off").
 //
-// A FILE rather than the JSON itself in the environment: the key is multi-line and the
-// host passes configuration through /opt/freehire/.env, where a newline ends the
-// value. A truncated credential fails at the first call with an error about signing,
-// which reads like a bug in this code rather than a mangled secret.
+// A FILE rather than JSON in the environment: the key is multi-line and a newline ends a
+// value in /opt/freehire/.env.
 func NewGoogleEngine(ctx context.Context, keyPath string, dailyBudget int, timeout time.Duration) (*GoogleEngine, error) {
 	keyPath = strings.TrimSpace(keyPath)
 	if keyPath == "" {
@@ -123,20 +108,15 @@ func (g *GoogleEngine) Name() string { return googleEngineName }
 func (g *GoogleEngine) DailyBudget() int { return g.budget }
 
 // Accepts admits only the posting events. The Indexing API is open to exactly two kinds
-// of page — JobPosting, and BroadcastEvent inside a VideoObject — so a company page sent
-// here is a terms violation, and the API's penalty is the quota this whole package is
-// budgeted around. The refusal lives here rather than in the caller because it is a fact
-// about Google, not about the run.
+// of page, so a company page sent here is a terms violation penalized with the quota.
+// The refusal lives here because it is a fact about Google, not about the run.
 func (g *GoogleEngine) Accepts(kind Kind) bool { return !kind.isCompany() }
 
-// Announce publishes each URL in turn. One HTTP call per URL is the API's own shape —
-// batching there saves HTTP overhead and NOT quota, which is counted per URL, so the
-// loop costs nothing a batch would have saved.
+// Announce publishes each URL in turn; quota is counted per URL, so batching would save
+// nothing.
 //
-// A 429 stops the run for this engine rather than walking the rest of the batch: the
-// day's allowance is gone, every further call would fail the same way, and a failed
-// call still consumes quota on every status BUT 429 — so continuing past the one
-// status that is free would start spending tomorrow's.
+// A 429 stops the run for this engine: the day's allowance is gone, and a failed call
+// consumes quota on every status BUT 429, so continuing would spend tomorrow's.
 func (g *GoogleEngine) Announce(ctx context.Context, urls []string) ([]string, error) {
 	accepted := make([]string, 0, len(urls))
 	for _, url := range urls {
@@ -186,9 +166,8 @@ func (g *GoogleEngine) publish(ctx context.Context, url string) error {
 	case http.StatusTooManyRequests:
 		return &quotaError{body: strings.TrimSpace(string(body))}
 	default:
-		// The body carries Google's own words, and for the failure an operator will
-		// actually meet — a 403 from a service account that is a full user rather than
-		// an owner — those words are the only thing that names the cause.
+		// Google's body is the only thing naming the cause (e.g. a 403 for a service
+		// account that is a full user rather than an owner).
 		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 }

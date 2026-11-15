@@ -13,19 +13,14 @@ import (
 )
 
 // The USCIS H-1B Employer Data Hub bulk-file archive: one CSV per completed fiscal
-// year, published at a stable index page. Unlike the GOV.UK register (one current
-// snapshot resolved per run) this credential combines several years, so the set of
-// year files is discovered fresh each run rather than pinning literal year numbers
-// — USCIS adds a new file roughly annually, and a pinned year would silently stop
-// meaning "the most recent window" within one cycle.
+// year, published at a stable index page. The credential combines several years, so the year
+// files are discovered each run: a pinned year would stop meaning "the most recent window"
+// within one cycle.
 const (
 	ush1bIndexURL   = "https://www.uscis.gov/archive/h-1b-employer-data-hub-files"
 	ush1bYearWindow = 5
 
-	// uscis.gov's bot filter 403s a request carrying Go's default User-Agent
-	// ("Go-http-client/1.1") and 200s an identical request with a browser-like one
-	// — confirmed against the live site during design, and against the production
-	// import-collections run on 2026-08-05, which failed outright without this.
+	// uscis.gov's bot filter 403s Go's default User-Agent and accepts a browser-like one.
 	ush1bUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 )
 
@@ -37,16 +32,13 @@ type fyFile struct {
 
 // fyLinkPattern matches the index page's per-year download links, e.g.
 // <a href="/sites/default/files/document/data/h1b_datahubexport-2023.csv" ...>.
-// Anchored on the file-name pattern rather than the link text, because the text
-// ("FY 2023 H-1B Employer Data") is decorative — the URL is what identifies the
-// year.
+// Anchored on the file name, not the decorative link text.
 var fyLinkPattern = regexp.MustCompile(`(?is)<a\s+href="([^"]*h1b_datahubexport-(\d{4})\.csv)"[^>]*>`)
 
 // discoverRecentFYFiles extracts every (year, URL) pair from the archive index
 // page and returns the n most recent, sorted descending. Fewer than n years
-// listed is an error, not a shorter result: a shrunk index is indistinguishable
-// from a genuine drop in USCIS's published coverage and must not silently narrow
-// the window this credential is built on.
+// listed is an error, not a shorter result: a shrunk index is indistinguishable from a real
+// drop in coverage and must not silently narrow the window.
 func discoverRecentFYFiles(page []byte, n int) ([]fyFile, error) {
 	matches := fyLinkPattern.FindAllStringSubmatch(string(page), -1)
 	files := make([]fyFile, 0, len(matches))
@@ -74,10 +66,7 @@ func ParseUSH1BSponsorsCSV(data []byte) ([]Record, error) {
 	rows, err := csvColumns(data, ',',
 		"Employer", "Initial Approval", "Initial Denial", "Continuing Approval", "Continuing Denial", "Tax ID")
 	if err != nil {
-		// USCIS pluralized these four column names at some point in its own export
-		// history — the live FY2023 file has "Initial Approval", the live FY2019 file
-		// has "Initial Approvals" — so a singular miss falls back to the older
-		// spelling before giving up.
+		// Older files (FY2019) pluralize these column names, so fall back to that spelling.
 		rows, err = csvColumns(data, ',',
 			"Employer", "Initial Approvals", "Initial Denials", "Continuing Approvals", "Continuing Denials", "Tax ID")
 		if err != nil {
@@ -90,9 +79,8 @@ func ParseUSH1BSponsorsCSV(data []byte) ([]Record, error) {
 		if name == "" {
 			continue
 		}
-		// A malformed count reads as 0 rather than aborting the row: the Data Hub is
-		// a clean machine-generated export, and csvColumns already tolerates ragged
-		// rows the same way.
+		// A malformed count reads as 0 rather than aborting the row, as csvColumns does for
+		// ragged rows.
 		initial, _ := strconv.Atoi(row[1])
 		continuing, _ := strconv.Atoi(row[3])
 		if initial+continuing < 1 {
@@ -108,10 +96,9 @@ func ParseUSH1BSponsorsCSV(data []byte) ([]Record, error) {
 
 // fetchUSH1BSponsors fetches the archive index at indexURL, discovers the
 // ush1bYearWindow most recent fiscal-year files, fetches and parses each, and
-// concatenates them into one member list. Any single year's fetch or parse
-// failure fails the whole call — a partial read is indistinguishable from a
-// shrunk source and would reconcile the credential off every company it failed to
-// reach. Parameterized on indexURL so it can be exercised against a test server.
+// concatenates them into one member list. Any single year failing fails the whole call: a
+// partial read would reconcile the credential off every company it failed to reach.
+// Parameterized on indexURL for tests.
 func fetchUSH1BSponsors(ctx context.Context, client *http.Client, indexURL string) ([]Record, error) {
 	page, err := getWithUserAgent(ctx, client, indexURL, ush1bUserAgent)
 	if err != nil {
@@ -151,10 +138,8 @@ func FetchUSH1BSponsors(ctx context.Context, client *http.Client) ([]Record, err
 	return fetchUSH1BSponsors(ctx, client, ush1bIndexURL)
 }
 
-// getWithUserAgent is get (see uksponsor.go) with an overridable User-Agent header,
-// kept local to this source rather than added to the shared helper: the UK and NL
-// registers have never needed one, and a request header only this source requires
-// should not ripple into call sites that don't.
+// getWithUserAgent is get (see uksponsor.go) with a custom User-Agent, kept local because only
+// this source needs one.
 func getWithUserAgent(ctx context.Context, client *http.Client, url, userAgent string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

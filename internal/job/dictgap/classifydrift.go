@@ -6,10 +6,8 @@ import (
 	"github.com/strelov1/freehire/internal/dict/classify"
 )
 
-// TitleClassification is one distinct job title's enrichment facts, aggregated
-// across every job that carries it: how many jobs shared the title, and what LLM
-// enrichment recorded for seniority/category on those jobs. Empty enrichment
-// fields mean the model stated no opinion for that facet.
+// TitleClassification is one distinct job title's enrichment facts, aggregated across
+// its jobs. An empty enrichment field means the model stated no opinion for that facet.
 type TitleClassification struct {
 	Title               string
 	Count               int
@@ -17,9 +15,8 @@ type TitleClassification struct {
 	EnrichmentCategory  string
 }
 
-// DriftCandidate is one title where the title-classification dictionary's answer
-// for one facet (seniority or category) disagrees with what LLM enrichment
-// recorded for jobs carrying that title.
+// DriftCandidate is one title where the dictionary's answer for a facet (seniority or
+// category) disagrees with what LLM enrichment recorded.
 type DriftCandidate struct {
 	Title           string
 	Count           int
@@ -27,21 +24,16 @@ type DriftCandidate struct {
 	EnrichmentValue string
 }
 
-// DriftReport ranks the titles where internal/dict/classify.Parse disagrees with
-// LLM enrichment, tracked separately per facet.
+// DriftReport ranks the titles where classify.Parse disagrees with LLM enrichment, per facet.
 type DriftReport struct {
 	Seniority []DriftCandidate
 	Category  []DriftCandidate
 }
 
-// ClassifyDriftCandidates recomputes internal/dict/classify.Parse for every given
-// title — reflecting the dictionary as it stands today, not whatever version
-// derived the stored jobs.seniority/jobs.category columns — and reports every
-// title where that recomputed value disagrees with what LLM enrichment recorded,
-// for seniority and for category independently. A title is skipped for a facet
-// when enrichment recorded no opinion (empty) or when the dictionary agrees with
-// it. Each list is sorted by count descending, then by title for a deterministic
-// order among ties.
+// ClassifyDriftCandidates recomputes classify.Parse for every title, so it reflects the
+// dictionary as it stands today rather than the version that derived the stored columns.
+// A facet is skipped when enrichment recorded no opinion or agrees. Lists are sorted by
+// count descending, then title.
 func ClassifyDriftCandidates(rows []TitleClassification) DriftReport {
 	var report DriftReport
 	for _, row := range rows {

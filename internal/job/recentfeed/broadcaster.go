@@ -2,20 +2,15 @@ package recentfeed
 
 import "sync"
 
-// subscriberBuffer bounds how many published entries a subscriber's channel holds
-// before Publish starts dropping for it rather than blocking. The feed is cosmetic
-// and entries arrive in small batches (see AggregationThreshold), so this only
-// matters for a stalled or unusually slow client — losing an entry it never picked
-// up costs nothing correctness-wise, unlike blocking every other connected client
-// on one slow reader.
+// subscriberBuffer bounds how many entries a subscriber's channel holds before Publish
+// drops for it rather than blocking every other client on one slow reader. The feed is
+// cosmetic, so a dropped entry costs nothing.
 const subscriberBuffer = 32
 
 // Broadcaster fans newly produced feed Entry values out to every connected SSE
 // client and replays a short backlog to a client that has just connected, so a new
-// connection never starts on an empty feed. It holds no reference to Postgres or
-// any other durable store: losing its state on a process restart or a blue/green
-// flip is an accepted, purely cosmetic gap (see design.md, "In-process ring buffer
-// + fan-out, no persistence").
+// connection never starts on an empty feed. It is in-memory only: losing state on a
+// restart or blue/green flip is an accepted, cosmetic gap.
 type Broadcaster struct {
 	mu   sync.Mutex
 	cap  int
