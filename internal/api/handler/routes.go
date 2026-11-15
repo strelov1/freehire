@@ -172,6 +172,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	// Filter subscriptions (see subscriptionHandlers).
 	h.subscriptionHandlers.register(api, mw, contract)
 	h.webhook.register(api, mw)
+	h.changeWebhookHandlers.register(api, mw, contract)
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	h.telegram.register(api, mw)
