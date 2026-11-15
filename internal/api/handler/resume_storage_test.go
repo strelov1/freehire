@@ -178,7 +178,7 @@ func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 	return app, token
 }
 
-func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, resumeMetaResponse) {
+func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, resume.MetaResponse) {
 	t.Helper()
 	req := httptest.NewRequestWithContext(context.Background(), method, "/api/v1/me/resume", strings.NewReader(body))
 	if body != "" {
@@ -193,7 +193,7 @@ func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, r
 	}
 	defer resp.Body.Close()
 	var out struct {
-		Data resumeMetaResponse `json:"data"`
+		Data resume.MetaResponse `json:"data"`
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out.Data

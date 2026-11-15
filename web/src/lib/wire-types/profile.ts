@@ -92,58 +92,13 @@ export type { Structured as ResumeStructured, Experience as ResumeExperience } f
 
 export type { ResumeEducation };
 
-/** Candidate-owned overrides, editable independently of the CV parse that seeded them
- *  (`GET /me/resume`'s `contacts`, and the body of `PUT /me/resume/contacts`). Despite
- *  the name (kept for the route/wire field, `contacts`), this covers identity
- *  (full_name/email/phone/location/links) *and* the flat part of the semantic body
- *  (headline/summary/languages/certifications/education) — see
- *  `internal/resume/owned.go`. A PUT replaces the whole block, so a caller editing only
- *  some of these fields goes through resumeStore.saveContacts, which builds each save
- *  from the current object (see resume.svelte.ts). */
-export interface CandidateContacts {
-  full_name?: string;
-  email?: string;
-  phone?: string;
-  location?: string;
-  links?: string[];
-  headline?: string;
-  summary?: string;
-  languages?: string[];
-  certifications?: string[];
-  education?: ResumeEducation[];
-  /** Years of experience as the CANDIDATE states them, overlaying whatever the CV extract
-   *  computed. Captured on the onboarding wizard's experience step, pre-filled from the
-   *  extract's own figure. */
-  total_years?: number;
-  // The five body fields above are owned per field, and a non-empty value has always
-  // implied that. But clearing one to "" leaves no non-empty value to signal it, so the
-  // editor that owns that field sends its *_set flag alongside a save that empties it —
-  // see internal/resume/owned.go's Owned for why identity fields need no equivalent.
-  headline_set?: boolean;
-  summary_set?: boolean;
-  languages_set?: boolean;
-  certifications_set?: boolean;
-  education_set?: boolean;
-  /** The same explicit-clear signal for the numeric field, where it matters more: 0 is a
-   *  real answer ("less than a year"), so without this flag a deliberate zero would be
-   *  indistinguishable from never having answered and the CV's figure would come back. */
-  total_years_set?: boolean;
-}
+/** Candidate-owned overrides (`GET /me/resume`'s `contacts`, the body of
+ *  `PUT /me/resume/contacts`), generated from Go `resume.Owned`. A PUT replaces the whole
+ *  block, so a caller editing only some fields goes through resumeStore.saveContacts. */
+export type CandidateContacts = import('../generated/contracts').Owned;
 
-/** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,
- *  and the structured résumé (current semantic sections when stamped). */
-export interface ResumeMeta {
-  enabled: boolean;
-  present: boolean;
-  uploaded_at: string | null;
-  structured: import('../generated/contracts').Structured | null;
-  /** True when a résumé is stored but its structured parse stamp does not match yet. */
-  structure_pending?: boolean;
-  /** pending | ok | failed — omit when no résumé. */
-  parse_status?: string;
-  parse_detail?: string;
-  contacts?: CandidateContacts | null;
-}
+/** The résumé status (`GET /me/resume`), generated from Go `resume.MetaResponse`. */
+export type ResumeMeta = import('../generated/contracts').MetaResponse;
 
 /** The caller's profile headshot: `enabled` is false when object storage is unconfigured
  *  (the upload control is then not offered at all), `present` says whether one is stored,

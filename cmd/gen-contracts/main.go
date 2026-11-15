@@ -87,6 +87,7 @@ func genStructs() (string, error) {
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
 	coverletterTS := filepath.Join(tmp, "coverletter.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
+	resumeTS := filepath.Join(tmp, "resume.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
 	applyformTS := filepath.Join(tmp, "applyform.ts")
@@ -220,6 +221,17 @@ func genStructs() (string, error) {
 				TypeMappings: map[string]string{"perioddate.PeriodDate": "{ year: number; month?: number }"},
 			},
 			{
+				// GET /me/resume and the owned overrides PUT /me/resume/contacts takes and
+				// returns. Only wire.go — the overlay rules and the store stay server-only.
+				Path:         "github.com/strelov1/freehire/internal/candidate/resume",
+				OutputPath:   resumeTS,
+				IncludeFiles: []string{"wire.go"},
+				TypeMappings: map[string]string{
+					"resumeextract.Structured": "Structured",
+					"resumeextract.Education":  "Education",
+				},
+			},
+			{
 				// The editable CV-builder document wire shape (Document + Header +
 				// Experience + Education + SkillGroup + Language + Project +
 				// Certification) and the tailoring Patch. Only the wire files — seed/store/
@@ -308,6 +320,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	resumeBody, err := readBody(resumeTS)
+	if err != nil {
+		return "", err
+	}
 	cvBody, err := readBody(cvTS)
 	if err != nil {
 		return "", err
@@ -332,7 +348,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody + "\n" + talentnetworkBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + coverletterBody + "\n" + resumeextractBody + "\n" + resumeBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody + "\n" + surveyBody + "\n" + talentnetworkBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

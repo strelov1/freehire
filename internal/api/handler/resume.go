@@ -285,27 +285,13 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": data})
 }
 
-// resumeMetaResponse is the wire shape for résumé status: whether storage is enabled at
+// resume.MetaResponse is the wire shape for résumé status: whether storage is enabled at
 // all, whether the caller has a résumé stored, and when it was uploaded (RFC3339, nil
 // when absent). Structured carries the read-only structured résumé for the profile view
 // (banked experience + current or provisional contacts). StructurePending is true when a
 // résumé is present but its structured stamp does not match the upload yet.
-type resumeMetaResponse struct {
-	Enabled          bool                      `json:"enabled"`
-	Present          bool                      `json:"present"`
-	UploadedAt       *string                   `json:"uploaded_at"`
-	Structured       *resumeextract.Structured `json:"structured"`
-	StructurePending bool                      `json:"structure_pending"`
-	ParseStatus      string                    `json:"parse_status,omitempty"`
-	ParseDetail      string                    `json:"parse_detail,omitempty"`
-	// Contacts is the wire name for historical/API-stability reasons; the Go/DB concept
-	// underneath is resume.Owned, which now also carries headline/summary/languages/
-	// certifications — see resume/owned.go.
-	Contacts *resume.Owned `json:"contacts,omitempty"`
-}
-
-func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
-	out := resumeMetaResponse{Enabled: enabled, Present: m.Present}
+func newResumeMeta(enabled bool, m resume.Meta) resume.MetaResponse {
+	out := resume.MetaResponse{Enabled: enabled, Present: m.Present}
 	if m.UploadedAt != nil {
 		s := m.UploadedAt.UTC().Format(time.RFC3339)
 		out.UploadedAt = &s
