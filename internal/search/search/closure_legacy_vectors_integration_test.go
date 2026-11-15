@@ -33,7 +33,7 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Recreate the pre-#4417 state: declare `desc`, store chunk vectors under it,
-			// then retire the embedder exactly as production did (EnsureIndex resets it).
+			// then retire the embedder so its vectors move into the documents, as in production.
 			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
 				return c.facet.UpdateEmbeddersWithContext(ctx, map[string]meilisearch.Embedder{
 					SkillEmbedder: {Source: meilisearch.UserProvidedEmbedderSource, Dimensions: 1280},
@@ -60,6 +60,10 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
 				return c.facet.AddDocumentsWithContext(ctx, []map[string]any{doc(1, 13), doc(2, 14), doc(3, 40)}, nil)
 			})
+			// Await the reset alone: when the engine batches it with EnsureIndex's settings, it
+			// applies only the net change and keeps the desc vectors out of the documents, where
+			// the edit function cannot reach them.
+			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) { return c.facet.ResetEmbeddersWithContext(ctx) })
 			if err := c.EnsureIndex(ctx); err != nil {
 				t.Fatal(err)
 			}
