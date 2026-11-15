@@ -5,9 +5,7 @@ import (
 	"strings"
 )
 
-// Curated from Maintenance/Technical Manager postings at Flora Food, Swan Global,
-// Bridge Talent, KBR, Applus+ and Nova. These disciplines and plant tools name
-// industrial work; none corroborates an ambiguous software word such as "react".
+// These disciplines and plant tools name industrial work; none corroborates an ambiguous software word such as "react".
 var industrialMaintenancePhraseAliases = []phraseAlias{
 	{"sap pm", "sap-pm"}, {"sap plant maintenance", "sap-pm"},
 	{"preventive maintenance", "preventive-maintenance"},

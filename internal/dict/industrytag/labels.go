@@ -3,8 +3,7 @@ package industrytag
 import "slices"
 
 // displayNames is the canonical set and the text each value renders as. A slug
-// absent from this map is not a canonical value — Canonicalize consults it to
-// decide whether an unrecognized-but-slug-shaped input is a real canonical, and an
+// absent from this map is not canonical; Canonicalize consults it, and an
 // invariant test asserts every alias target appears here.
 var displayNames = map[string]string{
 	"accounting":              "Accounting",
@@ -84,8 +83,7 @@ var displayNames = map[string]string{
 }
 
 // Label returns the display text for a canonical slug. An unknown slug returns
-// itself rather than empty, so a value stored before a dictionary edit still
-// renders as something readable instead of vanishing from the UI.
+// itself, so a value stored before a dictionary edit still renders.
 func Label(canonical string) string {
 	if name, ok := displayNames[canonical]; ok {
 		return name
@@ -93,11 +91,9 @@ func Label(canonical string) string {
 	return canonical
 }
 
-// Labels returns a copy of the canonical-to-display-text map. cmd/gen-contracts
-// emits it for the SPA, mirroring skilltag.Labels, so the filter's option text is
-// generated from this dictionary rather than retyped in TypeScript.
-//
-// The copy matters: the caller must not be able to mutate the package's table.
+// Labels returns a copy of the canonical-to-display-text map, which
+// cmd/gen-contracts emits for the SPA (mirroring skilltag.Labels). The copy keeps
+// callers from mutating the package's table.
 func Labels() map[string]string {
 	out := make(map[string]string, len(displayNames))
 	for canonical, name := range displayNames {

@@ -2,16 +2,12 @@ package classify
 
 // coreCategoryTable3 is part 3 of 17 of coreCategoryTable; the parts concatenate in order.
 var coreCategoryTable3 = []aliasEntry{
-	// The hyphenated spelling is the industry's own and a hyphen is a word boundary, so
-	// it needs its own entry — the same trap "middle-east" and "ai-product engineer"
-	// document elsewhere in this file.
+	// The hyphenated spelling is the industry's own and a hyphen is a word boundary, so it needs its own entry (same trap
+	// as "middle-east" and "ai-product engineer" elsewhere in this file).
 	{"mixed-signal design engineer", "hardware"},
 	{"digital design engineer", "hardware"},
-	// "Digital design" alone names three crafts in this catalogue — chip RTL, screen
-	// graphics, and BIM building design — so the bare phrase stays with the bare
-	// "design" below and only the forms that state the chip side are listed here.
-	// Measured 2026-10-25 over 619 open titles: these were the chip spellings the bare
-	// alias was filing as product design.
+	// "Digital design" alone names three crafts here (chip RTL, screen graphics, BIM building design), so the bare phrase
+	// stays with the bare "design" below and only the forms that state the chip side are listed.
 	{"digital design engineers", "hardware"},
 	{"digital design engineering", "hardware"},
 	{"digital design verification", "hardware"},
@@ -74,20 +70,15 @@ var coreCategoryTable3 = []aliasEntry{
 	// Design disciplines of their own, on the product side of the split.
 	{"service design engineer", "design"},
 	{"experience design engineer", "design"},
-	// The two audio spellings that have to be declared here, above the draughting
-	// block: both end in "design engineer", so left below they fall through to the bare
-	// alias and land in draughting. They move out of `design` with the rest of audio —
-	// leaving them behind would scatter one craft across three categories.
+	// The two audio spellings must be declared here, above the draughting block: both end in "design engineer", so
+	// left below they would fall to the bare alias and land in draughting. They move out of `design` with the rest of audio.
 	{"sound design engineer", "creative"},
 	{"audio design engineer", "creative"},
 	{"game design engineer", "design"},
-	// Then engineering design. The bare "design engineer" closes the block, and it
-	// carries every qualified "<discipline> design engineer" form with it — those need
-	// no entry of their own, since they resolve to the same category. Only the titles
-	// the bare alias CANNOT see are listed: the "…designer" nouns, the design-less
-	// phrases ("pcb design"), and the draughting words. The bare form routes here
-	// because that population is overwhelmingly mechanical and industrial in this
-	// catalogue — a product hybrid has to state one of the markers above.
+	// Then engineering design. The bare "design engineer" closes the block and carries every qualified "<discipline>
+	// design engineer" form with it. Only titles the bare alias cannot see are listed: the "…designer" nouns, design-less
+	// phrases ("pcb design") and the draughting words. The bare form routes here because that population is
+	// overwhelmingly mechanical and industrial; a product hybrid has to state one of the markers above.
 	{"mechanical designer", "engineering_design"},
 	{"electrical designer", "engineering_design"},
 	{"civil designer", "engineering_design"},
@@ -97,18 +88,16 @@ var coreCategoryTable3 = []aliasEntry{
 	{"hvac designer", "engineering_design"},
 	{"cad designer", "engineering_design"},
 	{"design technician", "engineering_design"},
-	// The BIM / architectural-draughting family. "architectural" does not contain the
-	// whole word "architect", so it cannot reach the software-architecture category
-	// below. Bare "drafter"/"draftsman" is the profession itself, in any discipline.
+	// The BIM / architectural-draughting family. "architectural" does not contain the whole word "architect", so it
+	// cannot reach the software-architecture category below. Bare "drafter"/"draftsman" is the profession itself.
 	{"architectural designer", "engineering_design"},
 	{"bim designer", "engineering_design"},
 	{"bim coordinator", "engineering_design"},
 	{"bim modeler", "engineering_design"},
 	{"bim specialist", "engineering_design"},
 	{"revit designer", "engineering_design"},
-	// "Digital design" is also what consultancies call BIM delivery of a building's
-	// engineering systems ("Electrical Digital Design Lead (Buildings)"). Only the
-	// forms that name a building discipline are listed; the bare phrase stays design.
+	// "Digital design" is also what consultancies call BIM delivery of building engineering systems. Only forms that
+	// name a building discipline are listed; the bare phrase stays design.
 	{"electrical digital design", "engineering_design"},
 	{"structural digital design", "engineering_design"},
 	{"civil digital design", "engineering_design"},
@@ -127,24 +116,20 @@ var coreCategoryTable3 = []aliasEntry{
 	{"digital design lead (buildings)", "engineering_design"},
 	{"digital design coordinator (electrical", "engineering_design"},
 	{"buildings design delivery", "engineering_design"},
-	// No bare "layout designer": magazine and print layout is the product-design craft,
-	// and the phrase names both.
+	// No bare "layout designer": magazine and print layout is the product-design craft, and the phrase names both.
 	{"tool designer", "engineering_design"},
 	{"mold designer", "engineering_design"},
 	{"die designer", "engineering_design"},
 	{"drafter", "engineering_design"},
 	{"draftsman", "engineering_design"},
 	{"draughtsman", "engineering_design"},
-	// Russian: the draughting profession. "инженер-конструктор" needs no entry of its
-	// own — the hyphen is a word boundary, so the bare form resolves it.
+	// Russian: the draughting profession. "инженер-конструктор" needs no entry: the hyphen is a word boundary, so the
+	// bare form resolves it.
 	{"конструктор", "engineering_design"},
 	{"design engineer", "engineering_design"},
 
-	// Audio is the only media-production craft that has to be declared HERE, above the
-	// bare "designer" alias: it is the only one whose title contains that word, which
-	// is the whole reason a Sound Designer was filed with product designers. Every
-	// other creative alias is declared at the very END of this table — see the block
-	// there for why.
+	// Audio is the only media-production craft declared HERE, above the bare "designer" alias, because it is the only
+	// one whose title contains that word. Every other creative alias is declared at the END of this table.
 	{"sound designer", "creative"},
 	{"audio designer", "creative"},
 	{"designer", "design"},
@@ -170,40 +155,27 @@ var coreCategoryTable3 = []aliasEntry{
 	{"release train engineer", "project_management"},
 	{"agile transformation lead", "project_management"},
 	{"agile transformation manager", "project_management"},
-	// Only qualified SAFe phrases resolve — bare "safe" is a common English word
-	// (e.g. "Safe Driving Instructor"), a false-positive risk not worth taking.
-	// "SAFe Scrum Master" needs no entry of its own: it already contains "scrum
-	// master" above.
+	// Only qualified SAFe phrases resolve: bare "safe" is a common English word ("Safe Driving Instructor").
+	// "SAFe Scrum Master" needs no entry; it contains "scrum master" above.
 	{"scaled agile framework", "project_management"},
 	{"safe practitioner", "project_management"},
 	{"проджект", "project_management"},
 	{"проект-менеджер", "project_management"},
 	{"скрам-мастер", "project_management"},
 	{"скрам мастер", "project_management"},
-	// "IT Infrastructure" names an ESTATE, not a role, and its slot is the whole
-	// ruling. It sits BELOW the technical role nouns, so the security engineer and the
-	// project manager who happen to work on that estate keep their own discipline
-	// ("IT Infrastructure Security Engineer", "IT Infrastructure Project Manager") —
-	// in the devops block it outran both. It sits ABOVE the business functions, so
-	// what is left over stays with the estate rather than drifting into back-office
-	// ("IT Infrastructure & Operations Manager" is devops, not operations; "IT
-	// Infrastructure Asset and Contract Manager" is devops, not legal). The residue
-	// this costs is the handful of genuine sales titles on the estate ("Pre Sales
-	// Specialist IT Infrastructure"), measured at ~4 against ~13 saved. Bare
-	// "infrastructure" gets no entry at all: it names civil, rail, energy and telecom
-	// work.
+	// "IT Infrastructure" names an ESTATE, not a role, and its slot is the ruling. It sits BELOW the technical role
+	// nouns, so "IT Infrastructure Security Engineer" and "IT Infrastructure Project Manager" keep their own discipline.
+	// It sits ABOVE the business functions, so the rest stays with the estate rather than drifting into back-office
+	// ("IT Infrastructure & Operations Manager" is devops, not operations). The cost is a handful of genuine sales
+	// titles ("Pre Sales Specialist IT Infrastructure"). Bare "infrastructure" gets no entry: it names civil, rail,
+	// energy and telecom work.
 	{"it infrastructure", "devops"},
-	// The engineering manager. On this board the unqualified title manages a SOFTWARE
-	// team far more often than anything else, so it resolves `software_engineering` — the
-	// craft the team practises, the same answer "Software Engineering Manager" gives —
-	// and the `role_type` facet (internal/dict/roletype) is what says it manages people.
-	// There is no management category: it was a seniority statement filed as a craft.
-	//
-	// The physical disciplines name their own craft between the two words, and the bare
-	// alias would otherwise read every one of them as software. Each spelling below is
-	// one the open catalogue carries; a discipline named elsewhere in the title
-	// ("Engineering Manager (Food Manufacturing)") is not reachable by a phrase and stays
-	// with the bare reading.
+	// The engineering manager. The unqualified title manages a SOFTWARE team far more often than anything else, so it
+	// resolves `software_engineering`; the `role_type` facet (internal/dict/roletype) says it manages people. There is no
+	// management category.
+	// The physical disciplines name their own craft between the two words, and the bare alias would read every one as
+	// software, so each spelling carried by the catalogue is listed. A discipline named elsewhere in the title
+	// ("Engineering Manager (Food Manufacturing)") is not reachable by a phrase and stays with the bare reading.
 	{"sales engineering manager", "solutions_engineering"},
 	{"solutions engineering manager", "solutions_engineering"},
 	{"security engineering manager", "security"},
@@ -240,11 +212,9 @@ var coreCategoryTable3 = []aliasEntry{
 	{"content writer", "marketing"},
 	{"brand manager", "marketing"},
 	{"public relations", "marketing"},
-	// The disciplines the coarse block did not name. Most were not merely unresolved
-	// — the generic "manager" alias that used to sit further down claimed them. Each
-	// is a phrase on purpose: the bare nouns ("growth", "content", "performance",
-	// "geo") name technical roles too, and a standalone alias would take "Growth
-	// Engineer" out of the tech categories and off the enrichment budget.
+	// The disciplines the coarse block did not name; the generic "manager" alias that used to sit further down claimed
+	// them. Each is a phrase on purpose: the bare nouns ("growth", "content", "performance", "geo") name technical roles
+	// too, and a standalone alias would take "Growth Engineer" out of the tech categories and off the enrichment budget.
 	{"demand generation", "marketing"},
 	{"growth marketer", "marketing"},
 	{"paid social", "marketing"},
@@ -256,22 +226,18 @@ var coreCategoryTable3 = []aliasEntry{
 	{"link building", "marketing"},
 	{"content creator", "marketing"},
 	{"growth hacker", "marketing"},
-	// Event marketing: bare "event"/"events" is too common a word to trust alone
-	// (an "Event-Driven Architecture Engineer" would false-positive), so only the
+	// Event marketing: bare "event"/"events" is too common to trust alone ("Event-Driven Architecture Engineer"), so only
 	// role-noun-qualified forms resolve.
 	{"event manager", "marketing"},
 	{"event coordinator", "marketing"},
 	{"events manager", "marketing"},
 	{"events coordinator", "marketing"},
-	// App store growth (mobile) and web conversion growth. Bare "aso"/"cro" are both
-	// overloaded elsewhere (ASO also names an Application Security Officer, CRO a
-	// Chief Revenue Officer or a Contract Research Organization), so only the
-	// spelled-out and fully role-qualified forms resolve.
+	// App store growth (mobile) and web conversion growth. Bare "aso" and "cro" are overloaded (Application Security
+	// Officer; Chief Revenue Officer, Contract Research Organization), so only spelled-out and role-qualified forms resolve.
 	{"app store optimization", "marketing"},
 	{"aso specialist", "marketing"},
 	{"conversion rate optimization", "marketing"},
-	// Generative-engine optimization: the industry names one job three ways. Only the
-	// spelled-out forms and the bound abbreviation resolve — a bare "geo" is
+	// Generative-engine optimization: only the spelled-out forms and the bound abbreviation resolve; a bare "geo" is
 	// geography, and "Geo Data Analyst" must stay with the analysts.
 	{"generative engine optimization", "marketing"},
 	{"answer engine optimization", "marketing"},
@@ -280,9 +246,7 @@ var coreCategoryTable3 = []aliasEntry{
 	{"geo manager", "marketing"},
 	{"aeo specialist", "marketing"},
 	{"aeo manager", "marketing"},
-	// Russian marketing titles, as full surface forms — the matcher needs word
-	// boundaries, so a stem would not match. The hyphenated compounds were claimed
-	// by the bare "менеджер" alias before this block existed.
+	// Russian marketing titles as full surface forms: the matcher needs word boundaries, so a stem would not match.
 	{"таргетолог", "marketing"},
 	{"контент-менеджер", "marketing"},
 	{"бренд-менеджер", "marketing"},

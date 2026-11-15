@@ -3,10 +3,7 @@ package location
 import "strings"
 
 // frenchWorkModePhrases is the French counterpart of spanishWorkModePhrases, built from the
-// French-language crawl (wttj, flatchr, werecruit, smartrecruiters, teamtailor, workday,
-// eures, recruitee, lever, join, workable, greenhouse, personio: 24,609 open postings on
-// 2026-10-28, of which 69% carried no structured work mode and 0.4% stated one any reader
-// understood).
+// French-language crawl.
 //
 // French lists home working as a BENEFIT, as German does — "télétravail partiel possible",
 // "jusqu'à 2 jours de télétravail par semaine", "accord télétravail", "subvention
@@ -23,7 +20,7 @@ import "strings"
 //   - bare "télétravail": "outils de télétravail" sells software, and the arrangement is
 //     stated by the forms around it.
 //   - bare "à distance", "100 % à distance" and "distanciel": "formation à distance" (an
-//     apprenticeship's school days, ~900 postings), "une formation flexible, 100 % à
+//     apprenticeship's school days), "une formation flexible, 100 % à
 //     distance", "vente à distance", "assistance à distance".
 //   - "télétravail : 100" and "télétravail à 100" without the percent sign: "prime
 //     télétravail : 100 € / mois", "télétravail : 100 % présentiel pendant les 3 premiers

@@ -1,8 +1,6 @@
 // Package wordmatch reports whether a term occurs as a standalone token in a
-// string. The scan is shared; the notion of a token boundary is supplied by the
-// caller (plain Unicode letters/digits for title classification, the same plus a
-// leading dot/hyphen guard for curated technology terms), so the dictionaries that
-// need whole-word matching no longer hand-roll the same loop.
+// string. The scan is shared; the caller supplies the token boundary (plain Unicode
+// letters/digits for titles, plus a leading dot/hyphen guard for technology terms).
 package wordmatch
 
 import (
@@ -70,11 +68,9 @@ func isWordRune(r rune) bool {
 // "objective-c" must not match "c developer"), while a TRAILING '.' is a sentence
 // period and is a valid right boundary ("We use C#.").
 //
-// The word test is Unicode, not ASCII, even though every curated spelling is ASCII.
-// A byte-level test reads a letter outside ASCII as a separator, which makes a
-// curated term a "whole word" inside any accented or non-Latin one — "elk" inside
-// the Hungarian "elkészítése", because the byte after it is the first of "é". The
-// term being ASCII says nothing about its NEIGHBOURS.
+// The word test is Unicode, not ASCII: a byte-level test reads a non-ASCII letter as
+// a separator, so "elk" would match inside the Hungarian "elkészítése". The term
+// being ASCII says nothing about its neighbours.
 func TechTermBoundary(s string, start, end int) bool {
 	if start > 0 {
 		if r, _ := utf8.DecodeLastRuneInString(s[:start]); r == '.' || r == '-' {

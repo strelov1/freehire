@@ -1,10 +1,4 @@
-// Package classify derives a job's seniority and role category deterministically
-// from its title. It is a curated dictionary, not a model: it resolves known
-// English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Japanese and Chinese title terms and emits nothing for what it cannot resolve
-// (it never guesses). Canonical values are drawn from the same controlled
-// vocabularies the enrichment contract defines (vocab.SeniorityValues /
-// vocab.CategoryValues), so the parser, the enrichment payload, and the search
-// facet all speak one set of values — the same doctrine as internal/dict/location.
+// Package classify derives a job's seniority and role category deterministically from its title. It is a curated dictionary, not a model: it resolves known English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Japanese and Chinese title terms and emits nothing for what it cannot resolve. Canonical values come from the vocabularies the enrichment contract defines (vocab.SeniorityValues / vocab.CategoryValues), so the parser, the enrichment payload and the search facet share one set of values.
 package classify
 
 import (
@@ -27,33 +21,20 @@ type Classification struct {
 func Parse(title string) Classification {
 	lower := strings.ToLower(title)
 	return Classification{
-		// The grade is read from the title with the grade-blind role names cut out,
-		// so a grade word owned by a role name ("Member of Technical Staff") cannot
-		// be mistaken for the grade itself. The category reads the untouched title:
-		// no categoryTable alias hides inside those phrases.
+		// The grade is read with the grade-blind role names cut out, so a grade word owned by a role name ("Member of Technical Staff") is not mistaken for the grade. The category reads the untouched title.
 		Seniority: matchSeniority(lower),
 		Category:  matchCategory(lower),
 	}
 }
 
-// matchCategory resolves the role category of an already-lowercased title. It is the
-// ordered table walk plus one translation: categoryNone, the sentinel a blind alias
-// carries, is served as "" (see the categoryNone doc comment).
+// matchCategory resolves the role category of an already-lowercased title: the ordered table walk plus one translation, categoryNone (the sentinel a blind alias carries) is served as "".
 //
-// The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds
-// them: "Operador(a) de Caixa" is the common written form, and a category reader that
-// saw it differently from the non-tech reader would leave the posting recognised as
-// non-technical but filed nowhere — which the ingest filter refuses.
+// The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere, which the ingest filter refuses.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
 	c := matchOrdered(cutBackEndShifts(lower), categoryTable)
 	if c == "" {
-		// Nothing in the main table: try the German compound heads (german.go),
-		// then the Dutch ones (dutch.go), then the Danish ones (danish.go), then the
-		// Spanish heads and fields (spanish.go), then the Portuguese ones
-		// (portuguese.go) — unless the Spanish table vetoed the title — then the
-		// French ones (french.go), then the Polish ones (polish.go), then the Croatian and
-		// Serbian ones (bcs.go).
+		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish and Croatian/Serbian (bcs.go) heads in that order.
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
 			return c
 		}
@@ -83,30 +64,15 @@ func matchCategory(lower string) string {
 	return c
 }
 
-// backEndShiftPatterns are the "back end" that names a SHIFT, not server-side software.
-// A US plant, hospital or care home running a compressed work week splits it into a
-// front end (Sunday to Wednesday) and a back end (Wednesday to Saturday), and its
-// titles carry the half beside the day or night it works: "Registered Nurse - Back End
-// Days", "Direct Support Professional Back End (Night)", "Manufacturing Technician
-// (Nights - Back End)", "Machine Operator - Back End Relief". Measured 2026-10-29, the
-// shift was the largest non-software population the bare "back end" alias filed as
-// backend.
+// backEndShiftPatterns are the "back end" that names a SHIFT, not server-side software: a plant or hospital on a compressed week splits it into a front end and a back end, and titles carry the half beside the day or night ("Registered Nurse - Back End Days", "Machine Operator - Back End Relief").
 //
-// The shift is cut before the category match, so the rest of the title decides —
-// the opposite of a categoryNone pin, and on purpose: categoryNone stops the walk
-// because exposing the aliases below would be wrong, while a shift names no category
-// at all and the role noun beside it ("Registered Nurse", "Machine Operator") is
-// exactly what should be read. Each span is matched whole on word boundaries, so a
-// software title is untouched unless "back end" sits directly beside a shift word:
-// "Backend Developer - Night Shift" keeps its reading.
+// The shift is cut before the category match so the rest of the title decides, unlike a categoryNone pin, which stops the walk. Each span is matched whole on word boundaries, so "Backend Developer - Night Shift" keeps its reading.
 var backEndShiftPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bback[\s-]?end[\s,()-]*(?:days?|nights?|shift|relief)\b`),
 	regexp.MustCompile(`\b(?:days?|nights?|cww)[\s,()-]*back[\s-]?end\b`),
 }
 
-// cutBackEndShifts replaces every backEndShiftPatterns span with a space, keeping the
-// word boundaries of the surrounding terms. Parse and Categories both apply it, so a
-// CV line "Registered Nurse - Back End Days" is not read as backend either.
+// cutBackEndShifts replaces every backEndShiftPatterns span with a space, keeping the surrounding word boundaries. Parse and Categories both apply it.
 func cutBackEndShifts(lower string) string {
 	for _, shift := range backEndShiftPatterns {
 		lower = shift.ReplaceAllString(lower, " ")
@@ -114,13 +80,7 @@ func cutBackEndShifts(lower string) string {
 	return lower
 }
 
-// matchSeniority resolves the grade of an already-lowercased title, first cutting
-// out every gradeBlindPhrases occurrence. Each phrase is replaced by a space rather
-// than removed, so the word boundaries of the surrounding terms survive and
-// "senior member of technical staff" still offers a matchable "senior". Plain
-// substring replacement suffices: every phrase is multi-word, so it cannot occur
-// inside a single token the way a bare alias could. The early-careers desks
-// (earlyCareersDeskPatterns) are cut the same way, by shape rather than by phrase.
+// matchSeniority resolves the grade of an already-lowercased title after cutting every gradeBlindPhrases occurrence, replaced by a space so word boundaries survive ("senior member of technical staff" still offers "senior"). Plain substring replacement suffices: every phrase is multi-word. The early-careers desks (earlyCareersDeskPatterns) are cut the same way, by shape.
 func matchSeniority(lower string) string {
 	for _, phrase := range gradeBlindPhrases {
 		lower = strings.ReplaceAll(lower, phrase, " ")
@@ -141,11 +101,7 @@ func matchSeniority(lower string) string {
 	if s := matchOrdered(lower, chineseSeniorityTable); s != "" {
 		return s
 	}
-	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go),
-	// then the German grade words and heads (german.go), then the Dutch ones (dutch.go),
-	// then the Danish ones (danish.go), then the Spanish ones (spanish.go), then the
-	// Portuguese ones (portuguese.go), then the French and the Polish ones, then the
-	// Croatian and Serbian ones (bcs.go).
+	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go), then the German, Dutch, Danish, Spanish, Portuguese, French, Polish and Croatian/Serbian grade words in that order.
 	if s := matchOrdered(lower, indianSeniorityTable); s != "" {
 		return s
 	}
@@ -191,31 +147,17 @@ var (
 	ssrTechniques = regexp.MustCompile(`\b(?:ssg|csr|isr|server[\s-]side|rendering)\b`)
 )
 
-// Categories resolves every category the text mentions — each alias that occurs as a
-// whole word — distinct and in precedence order (the primary category first). Unlike
-// Parse, which keeps only the single strongest category, this surfaces the full set a
-// résumé spans (a backend engineer who also does ML). Empty when nothing resolves; it
-// never guesses.
+// Categories resolves every category the text mentions (each alias that occurs as a whole word), distinct and in precedence order. Unlike Parse, which keeps the single strongest, it surfaces the full set a résumé spans (a backend engineer who also does ML). Empty when nothing resolves.
 //
-// A blind alias contributes nothing here either: categoryNone is not a category, so it
-// is dropped rather than surfaced as a value in a CV profile.
+// A blind alias contributes nothing: categoryNone is not a category.
 func Categories(text string) []string {
 	out := matchAllOrdered(cutBackEndShifts(strings.ToLower(text)), categoryTable)
 	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
 }
 
-// matchAllOrdered returns the distinct canonical values of every alias (in priority
-// order) that occurs as a whole word in title. Several aliases can share a canonical
-// ("backend"/"back-end"), so results are deduplicated while preserving first-seen order.
+// matchAllOrdered returns the distinct canonical values of every alias, in priority order, that occurs as a whole word in title. Aliases sharing a canonical ("backend"/"back-end") are deduplicated, first seen wins.
 //
-// An occurrence lying wholly inside the span an EARLIER alias already matched does not
-// count. That is the table's precedence, applied per occurrence rather than per title:
-// "Front End Cashier" is the checkout lane, and its "front end" was read by the retail
-// alias declared above the frontend one, so it cannot be read again as a developer.
-// Without it every pin in the table would hold for Parse and leak through here — the
-// infosec "Information Security Officer" would come back carrying the guard category
-// of the "security officer" it contains. A shorter alias that also occurs OUTSIDE every
-// claimed span still counts: "Security Officer, Information Security" names both.
+// An occurrence wholly inside the span an EARLIER alias already matched does not count: the table's precedence applied per occurrence. "Front End Cashier" was read by the retail alias declared above the frontend one, and "Information Security Officer" must not pick up the guard category of the "security officer" it contains. A shorter alias that also occurs OUTSIDE every claimed span still counts: "Security Officer, Information Security" names both.
 func matchAllOrdered(title string, table []aliasEntry) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -264,22 +206,11 @@ func within(span [2]int, claimed [][2]int) bool {
 	return false
 }
 
-// CategoryAliases maps each category canonical to the title aliases that resolve
-// to it (the inverse of the internal alias table); SeniorityAliases does the same
-// for grades. Exposed so the web role picker can search roles by shorthand — the
-// same curated terms used to tag titles, so "sre"/"sysadmin"/"sr" find their role
-// rather than only its display label.
+// CategoryAliases maps each category canonical to the title aliases that resolve to it (the inverse of the alias table); SeniorityAliases does the same for grades. Exposed so the web role picker can search roles by shorthand ("sre"/"sysadmin"/"sr").
 //
-// The vocabulary is not English-only and has not been for some time: the table
-// carries Hungarian, German, Spanish, Portuguese, French, Russian, Polish, Czech,
-// Slovak, Slovenian, Croatian, Serbian, Ukrainian and Bulgarian forms where prod
-// titles showed them in use. A caller that matches these terms against
-// anything but a title should say so — matching them against a URL slug, say,
-// means transliterating them first (see internal/ingest/sources' Profession
-// prefilter), because a slug is ASCII and "szoftverfejlesztő" is not.
+// The vocabulary is multilingual (Hungarian, German, Spanish, Portuguese, French, Russian, Polish, Czech, Slovak, Slovenian, Croatian, Serbian, Ukrainian, Bulgarian), so a caller matching these terms against anything but a title should say so: a URL slug is ASCII and needs them transliterated first (see internal/ingest/sources' Profession prefilter).
 //
-// The blind aliases are omitted: their sentinel is not a category, and it feeds the
-// generated web contracts, where it would show up as a pickable value.
+// The blind aliases are omitted: their sentinel is not a category and would show up as a pickable value in the generated web contracts.
 func CategoryAliases() map[string][]string {
 	out := invertAliases(categoryTable)
 	delete(out, categoryNone)

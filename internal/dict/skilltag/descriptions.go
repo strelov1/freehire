@@ -8,56 +8,43 @@ import (
 	"strings"
 )
 
-// Plain-language descriptions for the canonical skill slugs — what the thing IS, for a
-// reader who does not already know.
+// Plain-language descriptions for the canonical skill slugs: what the thing IS, for a reader who
+// does not already know. The slug is what the parser resolves to, the label is how it is written
+// (labels.go), the description is what it means; none can be derived from the others.
 //
-// This is the vocabulary's third side. The slug is what the parser resolves to
-// (dictionaries.go), the label is how it is written for a reader (labels.go), and the
-// description is what it means. None of the three can be derived from the others: no
-// amount of casing turns "dbt" into "a SQL transformation tool for data warehouses".
-//
-// The text is a static, reviewed artifact. cmd/gen-skill-descriptions drafts a wave with
-// an LLM and PRINTS it; a human edits and commits. Nothing here is produced at request
-// time, which is the same rule every other dictionary in internal/dict keeps.
-//
-// It lives in a TSV rather than a Go map because the vocabulary is hundreds of entries
-// whose value is a sentence: one unquoted line per skill is what a reviewer can actually
-// read a wave of. internal/dict/location ships its largest dictionary the same way.
+// The text is a static, reviewed artifact: cmd/gen-skill-descriptions drafts a wave with an LLM
+// and PRINTS it; a human edits and commits. Nothing is produced at request time. It lives in a
+// TSV rather than a Go map because each value is a sentence, and one unquoted line per skill is
+// what a reviewer can read.
 
 //go:embed descriptions.tsv
 var descriptionsTSV string
 
 var descriptions = mustLoadDescriptions(descriptionsTSV)
 
-// Description is the curated sentence for a canonical skill, or "" when no wave has
-// described it yet and for a slug that is not a skill at all.
-//
-// The two answer alike on purpose. Every surface renders a described skill differently
-// from an undescribed one — no tooltip, no glossary page — so the absence has to be a
-// value a caller can test, never a placeholder that could reach a reader.
+// Description is the curated sentence for a canonical skill, or "" when no wave has described it
+// yet or the slug is not a skill. Both answer alike on purpose: surfaces render a described skill
+// differently (tooltip, glossary page), so the absence must be a testable value, never a
+// placeholder that could reach a reader.
 func Description(canonical string) string {
 	return descriptions[canonical]
 }
 
-// Descriptions is every described canonical, for the catalog cmd/gen-contracts emits
-// and for the glossary's own index. A copy: the shipped dictionary is process-wide and
-// a caller that ranges over it must not be able to edit it for everyone else.
+// Descriptions is every described canonical, for the catalog cmd/gen-contracts emits and the
+// glossary index. A copy: callers must not be able to edit the process-wide dictionary.
 func Descriptions() map[string]string {
 	return maps.Clone(descriptions)
 }
 
-// loadDescriptions parses the embedded TSV, rejecting anything malformed rather than
-// skipping it. The file is hand-written here, so a bad row is a mistake in this
-// repository and not noise in someone else's dataset — the opposite of
-// internal/dict/location, which tolerates what GeoNames hands it.
+// loadDescriptions parses the embedded TSV, rejecting anything malformed rather than skipping
+// it: the file is hand-written here, so a bad row is a mistake in this repository.
 func loadDescriptions(tsv string) (map[string]string, error) {
 	out := map[string]string{}
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	for line := 1; sc.Scan(); line++ {
 		row := strings.TrimSuffix(sc.Text(), "\r") // tolerate a CRLF checkout
-		// The only two shapes skipped rather than judged. No canonical begins with '#'
-		// — the one skill whose name carries it is slugged "csharp" — so a comment
-		// cannot swallow a real row.
+		// The only two shapes skipped rather than judged. No canonical begins with '#' (the "C#" skill
+		// is slugged "csharp"), so a comment cannot swallow a real row.
 		if row == "" || strings.HasPrefix(row, "#") {
 			continue
 		}
@@ -67,9 +54,8 @@ func loadDescriptions(tsv string) (map[string]string, error) {
 			return nil, fmt.Errorf("line %d: no tab separating slug from description", line)
 		case slug == "":
 			return nil, fmt.Errorf("line %d: blank slug", line)
-		// Symmetric with the description's own trim check below. Without it a row with
-		// a stray leading space parses into the key " dbt" and only the orphan test
-		// notices, three files away and with a message about a skill that does not exist.
+		// Symmetric with the description's trim check below: a stray leading space would parse into the
+		// key " dbt" and only the orphan test would notice, far from the cause.
 		case strings.TrimSpace(slug) != slug:
 			return nil, fmt.Errorf("line %d: slug %q has surrounding space", line, slug)
 		case slug != strings.ToLower(slug):
@@ -92,9 +78,8 @@ func loadDescriptions(tsv string) (map[string]string, error) {
 	return out, nil
 }
 
-// mustLoadDescriptions panics on a malformed file. The input is embedded at build time
-// and the package's tests parse it, so this can only fire on a file that never passed
-// them — a state worth failing loudly rather than serving a dictionary with a hole.
+// mustLoadDescriptions panics on a malformed file. The input is embedded at build time and the
+// package's tests parse it, so this fires only on a file that never passed them.
 func mustLoadDescriptions(tsv string) map[string]string {
 	out, err := loadDescriptions(tsv)
 	if err != nil {

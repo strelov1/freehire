@@ -16,31 +16,18 @@ type aliasEntry struct {
 	canonical string
 }
 
-// gradeBlindPhrases are role names that CONTAIN a seniority word without stating a
-// grade: "Member of Technical Staff" is the generic IC title at Oracle/xAI/Pure
-// Storage, not the staff grade, and "Lead Generation" names a marketing function.
-// They are cut from the title before the seniority match, so the remaining words
-// state the real grade — "Senior Member of Technical Staff" is senior, and a bare
-// MTS carries no grade at all. Without the mask the table's precedence made this
-// actively wrong: "staff" outranks "senior", so SMTS resolved to staff.
+// gradeBlindPhrases are role names that CONTAIN a seniority word without stating a grade: "Member of Technical Staff" is the generic IC title at Oracle/xAI/Pure Storage, not the staff grade, and "Lead Generation" is a marketing function. They are cut before the seniority match so the remaining words state the real grade ("Senior Member of Technical Staff" is senior; a bare MTS has none). Without the mask "staff" outranks "senior" and SMTS resolved to staff.
 //
-// Only phrases that shadow a seniorityTable alias belong here — the abbreviations
-// (MTS/SMTS/DMTS) contain no grade word, so masking them would remove nothing.
-// The longer form is listed first so it is cut whole.
+// Only phrases that shadow a seniorityTable alias belong here: MTS/SMTS/DMTS contain no grade word. The longer form is listed first so it is cut whole.
 var gradeBlindPhrases = []string{
 	"member of the technical staff",
 	"member of technical staff",
 	"lead generation",
-	// A model-training stage, the sibling of pre-/post-training. AI labs post
-	// "Member of Technical Staff, Mid-training"; the hyphen is a word boundary, so
-	// the bare "mid" alias matched inside it and read the posting as middle grade.
+	// A model-training stage ("Member of Technical Staff, Mid-training"): the hyphen is a word boundary, so the bare "mid" alias would read it as middle grade.
 	"mid-training",
-	// A region, not a grade — and the costliest of these by far: 142 of 217 prod
-	// titles carrying "Middle East" were graded middle on the geography alone.
+	// A region, not a grade: "Middle East" would otherwise grade the posting middle.
 	"middle east",
-	// The hyphenated spellings of the two phrases above. A hyphen is a word boundary,
-	// so the spaced forms cannot mask them and the grade word inside stays exposed
-	// ("Enterprise Account Executive (Middle-East & Africa)" read as middle).
+	// The hyphenated spellings of the two phrases above: a hyphen is a word boundary, so the spaced forms cannot mask them ("... (Middle-East & Africa)").
 	"middle-east",
 	"lead-generation",
 	// Corporate titles a rung below Vice President — an AVP leads a desk at a bank or an
@@ -53,46 +40,19 @@ var gradeBlindPhrases = []string{
 	"第二新卒",
 }
 
-// earlyCareersDeskPatterns are the grade-blind phrases of the early-careers vocabulary,
-// stated as a SHAPE rather than a list: the staff who run graduate programmes and
-// placements — university offices, graduate recruiting, placement officers — carry
-// "graduate"/"placement" right next to the desk they name, and the catalogue (broader
-// than IT) holds real postings for all of them: "Assistant Director of Graduate
-// Admissions", "Graduate Recruiting Manager", "Graduate Medical Education Coordinator",
-// "Work Placement Officer", "Placement Year Manager". Masked, they state no grade,
-// exactly as the "graduate"/"placement" aliases would never have matched them.
+// earlyCareersDeskPatterns are the grade-blind phrases of the early-careers vocabulary, stated as a SHAPE: staff who run graduate programmes and placements (university offices, graduate recruiting, placement officers) carry "graduate"/"placement" beside the desk they name ("Graduate Recruiting Manager", "Work Placement Officer"). Masked, they state no grade.
 //
-// The first shape is the word FOLLOWED by the desk (optionally through "program(me)"):
-// "Graduate Program Manager", "Industrial Placement Coordinator". The second is a desk
-// in charge OF "graduate programs": "Director of Graduate Programs", "Manager,
-// Graduate Programs". A hire's own title never has that shape — "Graduate Project
-// Manager" puts its craft between the two, and "Software Engineering Graduate
-// Programme" names no desk — and a real grade elsewhere in the title survives the cut
-// ("Senior Graduate Recruiter" is senior).
+// The first shape is the word FOLLOWED by the desk (optionally through "program(me)"): "Graduate Program Manager". The second is a desk in charge OF "graduate programs": "Director of Graduate Programs". A hire's own title never has that shape ("Graduate Project Manager" puts its craft between the two), and a real grade elsewhere survives the cut ("Senior Graduate Recruiter" is senior).
 var earlyCareersDeskPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\b(?:graduate|(?:(?:industrial|industry|work|summer|student|sandwich) )?placement(?: year| student)?)(?: program(?:me)?s?)? (?:co-?ordinator|manager|director|officer|advis[eo]r|administrator|recruiter|recruiting|recruitment|admissions|school|studies|office|medical education|student cent(?:er|re))\b`),
 	regexp.MustCompile(`\b(?:director|manager|co-?ordinator|officer|head|dean|advis[eo]r|administrator)(?: of| for|,)? graduate program(?:me)?s\b`),
 }
 
-// categoryNone is the sentinel canonical for a "blind" alias: a phrase that CONTAINS a
-// categoryTable alias while naming no category of its own. "Software Design Engineer"
-// is software engineering — "design" qualifies what is engineered, it is not the craft
-// — and this vocabulary has no value for a software generalist (a bare "Staff Software
-// Engineer" resolves none either). Emitting nothing is the honest answer; is_tech comes
-// from the tech-title detector instead.
+// categoryNone is the sentinel canonical for a "blind" alias: a phrase that CONTAINS a categoryTable alias while naming no category of its own. "Software Design Engineer" is software engineering ("design" qualifies what is engineered) and the vocabulary has no value for a software generalist. Emitting nothing is the honest answer; is_tech comes from the tech-title detector.
 //
-// It is a table entry rather than a pre-match mask on purpose. A mask (the shape
-// gradeBlindPhrases uses for grades) is wrong here on both counts: cutting the span
-// would expose whatever alias sits further down the table, so "Software Design
-// Engineer - Sales Tools" resolved to `sales` and lost its enrichment, and cutting is
-// boundary-blind where every matcher in this package is boundary-aware. As an entry it
-// simply wins the first-match walk, and matchCategory translates it to "".
+// A table entry rather than a pre-match mask on purpose: cutting the span would expose whatever alias sits further down ("Software Design Engineer - Sales Tools" would resolve to `sales`), and cutting is boundary-blind where every matcher here is boundary-aware. As an entry it wins the first-match walk and matchCategory translates it to "".
 //
-// Only phrases with no better category belong here. Where one exists, route the title
-// to it instead — "cloud design engineer" → devops, "design engineer in test" → qa.
-// And keep the phrases narrow: "systems design engineer" was listed here once, which
-// blanked the category of every "HVAC/Mechanical Systems Design Engineer" and, with it,
-// the placement that vetoes deletion in ConfirmedNonTech.
+// Only phrases with no better category belong here; otherwise route the title ("cloud design engineer" → devops, "design engineer in test" → qa). Keep phrases narrow: a broad "systems design engineer" would blank the category of every "HVAC/Mechanical Systems Design Engineer" and the placement that vetoes deletion in ConfirmedNonTech.
 const categoryNone = "-"
 
 // seniorityTable lists seniority aliases in precedence order (most specific /
@@ -151,13 +111,7 @@ var seniorityTable = []aliasEntry{
 	{"стажёр", "intern"},
 	{"стажер", "intern"},
 	{"стажировка", "intern"},
-	// UK early-careers vocabulary (gradcracker, and the UK employers' own boards). A
-	// placement there is a student's paid year or summer inside the employer, which is
-	// what an internship is. Every alias is a PHRASE: a bare "placement" names the
-	// recruiter's job ("Placement Coordinator") and the marketing one ("Product
-	// Placement"), and a bare "undergraduate" names most of a university's admissions
-	// and faculty titles — measured on prod, the majority of the unresolved titles
-	// carrying it were "The Undergraduate School - Adjunct Faculty" and its siblings.
+	// UK early-careers vocabulary. A placement there is a student's paid year or summer inside the employer, which is what an internship is. Every alias is a PHRASE: a bare "placement" names the recruiter's job ("Placement Coordinator") and the marketing one ("Product Placement"), and a bare "undergraduate" names most of a university's admissions and faculty titles ("The Undergraduate School - Adjunct Faculty").
 	{"industrial placement", "intern"},
 	{"industry placement", "intern"},
 	{"placement year", "intern"},
@@ -173,13 +127,7 @@ var seniorityTable = []aliasEntry{
 	{"month placement", "intern"},
 	{"vacation scheme", "intern"},
 	{"summer analyst", "intern"},
-	// "Graduate" is the entry-level hire (a graduate scheme, "Graduate Software
-	// Engineer", a hospital's "New Graduate RN") — the same reading the description
-	// matcher gives "graduate position". It is LAST, below every intern alias, because
-	// it is the weakest evidence in the table: "Graduate Summer Internship" is an
-	// internship, and any explicit grade a title also states outranks it. The
-	// staff desks that merely contain the word are masked by
-	// earlyCareersDeskPatterns.
+	// "Graduate" is the entry-level hire (a graduate scheme, "New Graduate RN"), as the description matcher reads "graduate position". It is LAST, below every intern alias, as the weakest evidence in the table: "Graduate Summer Internship" is an internship, and any explicit grade in the title outranks it. Staff desks that merely contain the word are masked by earlyCareersDeskPatterns.
 	{"graduate", "junior"},
 }
 

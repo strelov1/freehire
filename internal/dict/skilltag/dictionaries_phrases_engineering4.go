@@ -22,8 +22,7 @@ var engineeringPhraseAliases4 = []phraseAlias{
 	{"bezpieczeństwo aplikacji", "application-security"}, {"bezpieczeństwa aplikacji", "application-security"}, {"bezpieczeństwem aplikacji", "application-security"},
 	{"sieci komputerowe", "networking"}, {"sieci komputerowych", "networking"}, {"sieciach komputerowych", "networking"},
 
-	// batch 12 (2026-10-29, Croatian, Serbian and Bosnian market), the BCS names of English
-	// canonicals measured over the open postings placed in hr/rs/ba/me. BCS inflects, so
+	// Croatian, Serbian and Bosnian market: the BCS names of English canonicals. BCS inflects, so
 	// each term is listed in the cases a posting writes it in, in both standards
 	// (strojno/mašinsko učenje, sustav/sistem, sigurnost/bezbednost), with and without the
 	// diacritics (đ as "dj" and as "d"). Left out, as in the other languages: bare "baze

@@ -5,11 +5,10 @@
 // can share it without a low-level package depending up on a feature package.
 package skilladjacency
 
-// adjacentTo maps a role skill to the candidate skills that are genuinely
-// substitutable/transferable for it — a curated, conservative dictionary (only real
-// swaps, so `adjacent` never over-triggers). A role skill the CV lacks but for which
-// it holds a listed neighbour reads as `adjacent` (close, reframe-able) rather than a
-// hard `missing`. Keys and values are canonical skilltag slugs.
+// adjacentTo maps a role skill to the candidate skills genuinely substitutable for it: a
+// conservative curated dictionary (only real swaps, so `adjacent` never over-triggers). A role
+// skill the CV lacks but has a listed neighbour for reads as `adjacent` rather than `missing`.
+// Keys and values are canonical skilltag slugs.
 var adjacentTo = map[string][]string{
 	// ML frameworks
 	"pytorch":    {"tensorflow"},

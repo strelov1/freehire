@@ -180,18 +180,14 @@ var coreCategoryTable11 = []aliasEntry{
 	// stays with the personal services.
 	{"vigilante", "public_safety"},
 
-	// THE REMOTE TAIL. Measured 2026-10-19: of 462k open remote postings, 183k resolved
-	// no category, and a posting without one never reaches search. Every spelling below
-	// was read against that corpus and then against a 3% sample of the whole open
-	// catalogue; together they place ~26k of the remote postings and ~107k overall. What
-	// is left is long and flat, or names no craft at all ("General Application",
-	// "Talent Pool", the "work from home opportunity" funnels), and stays unresolved.
+	// THE REMOTE TAIL: remote postings that resolved no category never reach search, so the
+	// spellings below place them. What stays unresolved is long and flat or names no craft
+	// ("General Application", "Talent Pool").
 	//
-	// Left out on purpose: "AI Trainer" is the domain it trains in ("CAD Engineer - AI
-	// Trainer"), not a craft of its own; "Product Engineer", "Tech Lead" and "Engineering
-	// Lead" split between software and the plant floor, the same reason "Product Engineer"
-	// is pinned elsewhere; bare "counselor" is financial, camp and admissions as often as
-	// clinical; bare "journeyman" is also a US federal pay grade.
+	// Left out on purpose: "AI Trainer" is the domain it trains in, not a craft; "Product
+	// Engineer", "Tech Lead" and "Engineering Lead" split between software and the plant floor;
+	// bare "counselor" is financial, camp and admissions as often as clinical; bare "journeyman"
+	// is also a US federal pay grade.
 	//
 	// Selling: real estate, insurance and the benefits funnels, which sell policies.
 	{"real estate agent", "sales"},
@@ -276,21 +272,14 @@ var coreCategoryTable11 = []aliasEntry{
 	{"english trainer", "education"},
 	{"profesor", "education"},
 
-	// CENTRAL AND EASTERN EUROPE (freehire#3513). Measured 2026-10-24 over the open,
-	// canonical postings located in si/pl/ua/bg/hu/cz/hr/rs/sk/ba: 43% resolved no
-	// category, and almost every Polish, Czech, Slovak, Slovenian, Croatian, Serbian,
-	// Ukrainian and Bulgarian title among them was one this table had no word for —
-	// a pharmaceutical employer's company page showed 12 of its 82 open postings.
+	// CENTRAL AND EASTERN EUROPE: Polish, Czech, Slovak, Slovenian, Croatian, Serbian, Ukrainian
+	// and Bulgarian titles that had no word in this table.
 	//
-	// Declared at the END, behind every block above, so a title any earlier alias
-	// resolves keeps exactly the category it had: these lines only reach a title that
-	// named nothing else. Each alias files the role the way its English twin is filed
-	// above ("Medical Representative" with the pharmaceutical sales rep, the
-	// storekeeper with the warehouse, the controller with finance), and where the
-	// English twin is deliberately unresolved — the bare quality, compliance, tax and
-	// audit specialists, the generic "specialist"/"associate" nouns (specjalista,
-	// фахівець, sodelavec, suradnik, munkatárs), interns and student work, the talent
-	// pools — the native one is left unresolved too.
+	// Declared at the END, so a title any earlier alias resolves keeps its category. Each alias
+	// files the role the way its English twin is filed above, and where the English twin is
+	// deliberately unresolved (bare quality, compliance, tax and audit specialists, generic
+	// "specialist"/"associate" nouns such as specjalista, фахівець, sodelavec, suradnik,
+	// munkatárs, interns, talent pools) the native one is left unresolved too.
 	//
 	// The matcher has no morphology, and these languages inflect for case and gender,
 	// so every alias is a surface form the catalogue carries: the masculine and the

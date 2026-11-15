@@ -1,7 +1,7 @@
 package location
 
 // dutchWorkModePhrases is the Dutch counterpart of germanWorkModePhrases, built from the
-// Dutch crawl (eures, recruitee, whatjobs-nl: ~42k open postings on 2026-10-25).
+// Dutch crawl.
 //
 // Dutch postings share the German register: home working is mostly a BENEFIT — "hybride
 // werken", "2 dagen thuiswerken", "thuiswerkvergoeding", "mogelijkheid tot thuiswerken" —
@@ -22,7 +22,7 @@ package location
 //   - "op kantoor", "op locatie": each says where the work is, alongside a home-working
 //     offer as often as not, never the arrangement on its own.
 //   - "vanuit het buitenland werken": a bounded work-from-abroad perk, the Dutch shape
-//     of the "work from anywhere" false positive (freehire#2696).
+//     of the "work from anywhere" false positive.
 //   - "volledig thuis" alone: "je volledig thuis voelen" is feeling at home.
 //   - "hybride functie"/"hybride rol": as often a role split between office and field
 //     ("een hybride functie en bent daarom mobiel") as one split with home.
@@ -80,7 +80,7 @@ var dutchRefusals = []string{"niet mogelijk", "niet toegestaan", "niet van toepa
 // dutchPerks, in the same sentence as a remote or hybrid phrase, make it a BOUNDED perk
 // rather than the arrangement: "twee weken per jaar remote werken vanuit het
 // buitenland", "volledig remote werken vanuit het buitenland is niet mogelijk". This is
-// the Dutch shape of the travel-perk guard on "work from anywhere" (freehire#2696).
+// the Dutch shape of the travel-perk guard on "work from anywhere".
 var dutchPerks = []string{"buitenland", "per jaar"}
 
 // dutchGuards bundles the Dutch qualifiers for guardedPhraseMatches.

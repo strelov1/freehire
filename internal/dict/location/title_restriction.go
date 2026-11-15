@@ -14,9 +14,9 @@ var bracketSuffixPattern = regexp.MustCompile(`\[([^\[\]]*)\]|\(([^()]*)\)`)
 
 // titleRestrictionAnchor matches the ATS convention that states a geography
 // restriction inside a title's bracket/parenthetical suffix, as opposed to an
-// unrelated bracket ("(React)", "(Contract)", a seniority band). Deliberately
-// narrow — see design.md's precision-over-recall rationale, the same stance
-// eligibility.go's phrase lists take.
+// titleRestrictionAnchor matches the ATS convention that states a geography restriction inside
+// a title's bracket/parenthetical suffix, as opposed to an unrelated bracket ("(React)",
+// "(Contract)", a seniority band). Deliberately narrow: precision over recall.
 var titleRestrictionAnchor = regexp.MustCompile(`\b(remote|location)\b`)
 
 // RestrictionFromTitle reports the geography a job title's bracketed or

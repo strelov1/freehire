@@ -14,9 +14,7 @@ var coordTail = regexp.MustCompile(`\s*(\|\s*-?\d+(\.\d+)?\s*)+$`)
 
 // Some postings carry the form label inside the value ("Locations: San Francisco",
 // "Location Preferences: Minneapolis, MN"). The geography parser reads the label as
-// part of the first place, so a single-place location resolved to nothing — measured
-// 2026-10-20, 34 stored rows across greenhouse, aijobs, paylocity and herp, most of
-// them with empty countries (freehire#3281).
+// part of the first place, so a single-place location resolved to nothing.
 var labelHead = regexp.MustCompile(`(?i)^\s*locations?(\s+preferences?)?\s*:\s*`)
 
 // CleanLocation strips a source's coordinate tail and a leading "Location:" label

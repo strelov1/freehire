@@ -5,12 +5,10 @@ import (
 	"unicode"
 )
 
-// japanesePrefectures are Japan's 47 prefectures in Japanese script, each with its
-// 都/道/府/県 suffix. HRMOS writes every location as "<ward or city>, <prefecture>" ("港区,
-// 東京都", "大阪市北区, 大阪府") and HERP writes a postal address, which in Japanese opens
-// with the prefecture and runs on with no separator ("東京都渋谷区渋谷2-24-12 …"), often
-// behind the postal mark (see japanesePostalMark). Neither placed a posting anywhere:
-// measured 2026-10-30, all ~43.8k open HRMOS postings and ~20k of HERP's had no country.
+// japanesePrefectures are Japan's 47 prefectures in Japanese script, each with its 都/道/府/県
+// suffix. HRMOS writes locations as "<ward or city>, <prefecture>" ("港区, 東京都") and HERP a
+// postal address that opens with the prefecture and runs on with no separator
+// ("東京都渋谷区渋谷2-24-12 …"), often behind the postal mark (see japanesePostalMark).
 //
 // The suffixed form is what makes the name unambiguous: 県 is the Japanese character
 // (Chinese writes 县 or 縣), and 東京都/京都府/大阪府/北海道 name nothing else. The bare forms

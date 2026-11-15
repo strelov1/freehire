@@ -12,9 +12,8 @@ import (
 )
 
 // aliases maps a normalized (lowercase, separator-collapsed) certification name or
-// shorthand to its canonical slug. Grown from what curators observe missing in real
-// CVs, the same way skilltag's own alias table grows — not meant to be exhaustive on
-// day one.
+// shorthand to its canonical slug. Grown from what curators see missing in real CVs; not
+// exhaustive.
 var aliases = map[string]string{
 	// AWS.
 	"aws certified solutions architect associate": "aws-solutions-architect",
@@ -46,12 +45,9 @@ var aliases = map[string]string{
 	"certified maintenance & reliability professional":   "cmrp",
 	"certified maintenance and reliability professional": "cmrp",
 
-	// Occupational safety. This is the first non-IT family in the vocabulary, and it is
-	// here rather than in skilltag because these name credentials, not skills — a
-	// distinction skilltag enforces itself: a scoped acronym there must resolve to a
-	// canonical that already exists, since an acronym is another alias and never a new
-	// facet value. Measured on 2,500 live HSE descriptions (2026-09-24): NEBOSH 11%,
-	// CSP 11%, IOSH 5%, CIH 5%, CHMM 4%, HAZWOPER 1%.
+	// Occupational safety. Here rather than in skilltag because these name credentials,
+	// not skills: skilltag only lets a scoped acronym resolve to an existing canonical,
+	// never mint a new facet value.
 	"nebosh":                     "nebosh",
 	"nebosh general certificate": "nebosh",
 	"nebosh international general certificate": "nebosh",

@@ -7,10 +7,7 @@ import "regexp"
 // "Técnico de Segurança do Trabalho", "Operador/a de Armazém") — and they reach the
 // Spanish fallback already: where the two languages spell a word alike ("vendedor",
 // "programador", "comercial", "administrativo", "logística") the Spanish table reads
-// it. Measured 2026-10-27 over 37,600 open Brazilian and Portuguese postings (gupy,
-// solides, quickin, catho, empregos, vagas, inhire, recrutei, pandape, smartrecruiters,
-// workday, teamtailor, recruitee, personio, landingjobs), 57% of the Brazilian titles
-// resolved no category, and the unresolved mass was the Portuguese spelling of the
+// it. What it misses is the Portuguese spelling of the
 // same heads and fields — "vendas" not "ventas", "manutenção" not "mantenimiento",
 // "limpeza" not "limpieza", "serviços gerais", "departamento pessoal".
 //

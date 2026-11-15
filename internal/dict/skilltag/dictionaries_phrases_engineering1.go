@@ -13,8 +13,8 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"objective-c", "objective-c"},
 	{"ci/cd", "ci-cd"}, {"ci cd", "ci-cd"},
 	{"c developer", "c"}, {"c programming", "c"}, {"ansi c", "c"},
-	// Cyrillic 1С (the RU market's spelling) — wordAliases has no Cyrillic "1с" key (the
-	// Latin "1c" is the gated word alias), so it resolves here as a strong phrase.
+	// Cyrillic 1С (the RU market's spelling): wordAliases has no Cyrillic "1с" key (the Latin "1c"
+	// is the gated word alias), so it resolves here as a strong phrase.
 	{"1с", "1c"},
 	{"machine learning", "machine-learning"},
 	// additional phrases
@@ -66,10 +66,8 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"generative ai", "generative-ai"}, {"gen ai", "generative-ai"},
 	{"deep learning", "deep-learning"},
 	{"six sigma", "six-sigma"},
-	// Lightcast-diffed gaps (security/qa/data). Ambiguous English words (burp, druid,
-	// pinot, presto, iceberg) are emitted ONLY via a qualifying phrase, so a bare
-	// non-tech use ("a druid", "pinot noir", "a loud burp") never tags — same doctrine
-	// as c/r above.
+	// Ambiguous English words (burp, druid, pinot, presto, iceberg) are emitted ONLY via a qualifying
+	// phrase, so a bare non-tech use ("a druid", "pinot noir") never tags; same doctrine as c/r above.
 	{"burp suite", "burp-suite"},
 	{"robot framework", "robot-framework"},
 	{"apache druid", "druid"},
@@ -77,10 +75,9 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"prestodb", "presto"}, {"presto db", "presto"},
 	{"delta lake", "delta-lake"},
 	{"apache iceberg", "iceberg"},
-	// LLM-mined batch (jobs.enrichment->skills, freq >= 1500). Multi-word or
-	// punctuated concepts the word pass can't see. Separator-insensitive, so only the
-	// space form is listed; distinct word forms (warehouse/warehousing) each need an
-	// entry. Variant spellings collapse to one canonical to keep the facet un-fragmented.
+	// Multi-word or punctuated concepts the word pass can't see. Separator-insensitive, so only the
+	// space form is listed; distinct word forms (warehouse/warehousing) each need an entry. Variant
+	// spellings collapse to one canonical to keep the facet un-fragmented.
 	{"data pipeline", "data-pipelines"}, {"data pipelines", "data-pipelines"},
 	{"infrastructure as code", "infrastructure-as-code"},
 	{"sql server", "sql-server"}, {"t-sql", "sql-server"},
@@ -194,23 +191,18 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"data governance", "data-governance"},
 	{"data quality", "data-quality"},
 	{"e commerce", "ecommerce"},
-	// IT-company role skills (expand-role-taxonomy) — multi-word phrases only, so they
-	// stay precision-safe (no false match inside a larger word). Seed set; expand later.
+	// IT-company role skills, multi-word phrases only so they stay precision-safe.
 	//
-	// Two kinds of term are deliberately absent, because a job description is not only
-	// its requirements:
-	//   - Boilerplate sections. The pay-transparency block ("Compensation and
-	//     Benefits"), the GDPR notice ("Data Privacy Notice"), the ATS footer
-	//     ("Powered by Greenhouse", "Apply via Lever") and the culture blurb
-	//     ("employee engagement", "due diligence") appear for EVERY role, so matching
-	//     them tags the whole corpus instead of describing the job.
-	//   - ATS product names whose bare token is an English word (lever, workday) —
-	//     "a key lever", "a flexible workday". Same doctrine as burp/druid above: such
-	//     a name may only return through a qualifying phrase, never as a bare token.
+	// Two kinds of term are deliberately absent, because a job description is not only its
+	// requirements:
+	//   - Boilerplate sections. The pay-transparency block ("Compensation and Benefits"), the GDPR
+	//     notice, the ATS footer ("Powered by Greenhouse") and the culture blurb ("employee
+	//     engagement", "due diligence") appear for EVERY role, so matching them tags the whole corpus.
+	//   - ATS product names whose bare token is an English word (lever, workday): "a key lever".
+	//     Same doctrine as burp/druid above: only through a qualifying phrase.
 	//
-	// The recruiting/HR/finance/legal/operations/customer-success/sales/support half of
-	// this seed set lives in professionalPhraseAliases below — same matching, separate
-	// list.
+	// The recruiting/HR/finance/legal/operations/customer-success/sales/support half of this set
+	// lives in professionalPhraseAliases below.
 	// business analysis
 	{"requirements gathering", "requirements-gathering"},
 	{"requirements elicitation", "requirements-elicitation"},
@@ -236,42 +228,37 @@ var engineeringPhraseAliases1 = []phraseAlias{
 	{"structured authoring", "structured-authoring"},
 	{"information architecture", "information-architecture"},
 	{"madcap flare", "madcap-flare"},
-	// design — the multi-word tools and the named practices. They sit with the
-	// engineering vocabulary (not the professional one) for the same reason technical
-	// writing does: design is craft a technical employer posts.
+	// design: the multi-word tools and named practices. They sit with the engineering vocabulary for
+	// the same reason technical writing does: design is craft a technical employer posts.
 	// "adobe illustrator"/"adobe indesign" need no phrase: the word pass already sees
 	// the product name inside them. "xd" alone is far too short to be safe.
 	{"adobe xd", "adobe-xd"},
 	// "adobe after effects" only: bare "after effects" is clinical prose, and
 	// healthcare is the largest non-technical mass this dictionary runs over.
 	{"adobe after effects", "after-effects"},
-	// No "design system"/"design systems": that is the ordinary verb phrase of every
-	// backend, embedded and architecture posting ("you will design systems that scale",
-	// "design system architecture"). A phrase match is always strong, so tagging it
-	// would not merely mislabel those postings — it would lift the corroboration gate
-	// off every weak word beside it, which is how a maintenance posting once came back
-	// tagged {react, sap}. The practice is still reachable through the job title
-	// ("Design Systems Engineer" → the design category and the design_engineer role).
+	// No "design system"/"design systems": it is the ordinary verb phrase of every backend, embedded
+	// and architecture posting ("you will design systems that scale"). A phrase match is always
+	// strong, so it would also lift the corroboration gate off every weak word beside it (a
+	// maintenance posting came back tagged {react, sap}). The practice stays reachable through the
+	// job title ("Design Systems Engineer" → the design category and design_engineer role).
 	{"design thinking", "design-thinking"},
 	{"user research", "user-research"}, {"ux research", "user-research"},
 	{"usability testing", "usability-testing"},
 	{"interaction design", "interaction-design"},
 	{"ux design", "ux-design"}, {"user experience design", "ux-design"},
-	// No "visual design" either: "visual design of the store" is retail prose, and a
-	// phrase always matches strong, so it would corroborate the gated words beside it.
+	// No "visual design" either: "visual design of the store" is retail prose, and a phrase always
+	// matches strong, so it would corroborate the gated words beside it.
 	{"motion design", "motion-design"},
 	{"motion graphics", "motion-graphics"},
 	{"user flows", "user-flows"},
-	// media production — the multi-word products and the two practices. Both British
-	// and American spellings of the grade are listed: neither is the odd one out in a
-	// catalogue this international. "final cut" without "pro" is left out — it is
-	// ordinary prose ("the final cut of the budget").
+	// media production: the multi-word products and two practices. Both British and American
+	// spellings of the grade are listed. "final cut" without "pro" is left out ("the final cut of the
+	// budget").
 	{"davinci resolve", "davinci-resolve"}, {"da vinci resolve", "davinci-resolve"},
 	{"final cut pro", "final-cut-pro"},
 	{"cinema 4d", "cinema-4d"},
-	// Substance 3D Painter and Substance 3D Designer are two products with two job
-	// descriptions — texture painting and procedural material authoring. Folding the
-	// second into the first would have the glossary render "substance designer" as a
-	// spelling of Painter, which is the dictionary guessing.
+	// Substance 3D Painter and Designer are two products (texture painting vs procedural material
+	// authoring). Folding the second into the first would make the glossary render "substance
+	// designer" as a spelling of Painter, which is the dictionary guessing.
 	{"substance painter", "substance-painter"},
 }

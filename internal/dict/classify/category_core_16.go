@@ -237,22 +237,15 @@ var coreCategoryTable16 = []aliasEntry{
 	{"računalnikar", "it_support"},
 	{"plakatiranje", "marketing"},
 
-	// CROATIAN AND SERBIAN JOB-BOARD TITLES (freehire#3778, contributed by @josepowera
-	// from the titles of the main Croatian and Serbian job boards, curated here). The
-	// contribution filed 3,512 whole titles; what is kept is the role noun or phrase
-	// inside them, so one alias reads every title that names that role. Both standards
-	// are listed where they differ — ijekavian Croatian and ekavian Serbian (savjetnik/
-	// savetnik, njegovatelj/negovatelj), and the Serbian vocabulary (magacin, viljuškarista,
-	// vaspitač, obezbeđenje). As with the Slovenian list, the catch-all nouns (voditelj,
-	// specijalist, radnik, djelatnik, operater, savjetnik, referent, suradnik/saradnik,
-	// koordinator, menadžer, direktor, poslovođa, tehničar, majstor, pripravnik) are
-	// dropped, and each role is filed where its English twin is, not where the list put
-	// it: the receptionist is administration, the site manager skilled_trades, the
-	// building architect and surveyor engineering_design, the quality inspector the floor.
-	//
-	// Measured 2026-10-28 over the 12,945 open postings placed in hr/rs/ba/me: category
-	// 66.8% → 68.8% (most of the rest is English); every newly resolved title was
-	// hand-checked.
+	// CROATIAN AND SERBIAN JOB-BOARD TITLES, curated from a contributed list: the role noun or
+	// phrase inside each title, so one alias reads every title naming that role. Both standards
+	// are listed where they differ (ijekavian savjetnik/ekavian savetnik; Serbian magacin,
+	// viljuškarista, vaspitač, obezbeđenje). As with the Slovenian list, the catch-all nouns
+	// (voditelj, specijalist, radnik, djelatnik, operater, savjetnik, referent, suradnik/saradnik,
+	// koordinator, menadžer, direktor, poslovođa, tehničar, majstor, pripravnik) are dropped,
+	// and each role is filed where its English twin is: receptionist administration, site
+	// manager skilled_trades, building architect and surveyor engineering_design, quality
+	// inspector the floor.
 	// Hospitality. The receptionist is administration, as "Receptionist" is, and the
 	// gerontological home carer is healthcare, as "Caregiver" is.
 	{"šef kuhinje", "hospitality"},

@@ -1,8 +1,6 @@
-// Package skillbundle groups skills into a curated set of market-recognised bundles
-// (a candidate is expected to hold combinations, not isolated skills — e.g. GenAI+Ops
-// appears in most AI-engineering roles) and reports a CV's coverage of each. It is a
-// curated dictionary, not a derived co-occurrence graph (mirrors internal/dict/skilltag):
-// pure, deterministic, no LLM.
+// Package skillbundle groups skills into curated market bundles (a candidate is expected to
+// hold combinations, e.g. GenAI+Ops) and reports a CV's coverage of each. A curated dictionary,
+// not a derived co-occurrence graph: pure, deterministic, no LLM.
 package skillbundle
 
 // BundleCoveredPct is the share of a bundle's member skills a CV must hold for the

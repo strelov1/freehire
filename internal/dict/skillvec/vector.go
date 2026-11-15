@@ -2,28 +2,19 @@ package skillvec
 
 import "math"
 
-// ballastPosition is the vector slot the JOB side fills and the profile never does.
-// It sits past the registry, in the headroom Dimensions leaves — so it can never
-// collide with a skill, and adding skills to the registry can never reach it.
+// ballastPosition is the vector slot only the JOB side fills. It sits in the headroom
+// past the registry, so no skill can collide with it.
 const ballastPosition = Dimensions - 1
 
 // ballastPerSkill and ballastFloorSkills shape how hard a posting dilutes itself.
 //
-// Without ballast, the cosine rewards the SIZE of the overlap: a vacancy sitting almost
-// entirely inside a large profile scores about √(overlap) / ‖profile‖, so one listing 79
-// skills of which the reader holds 63 beats one listing 5 they hold entirely. Measured
-// on production against a 162-skill profile, the whole top ten was postings with 52-92
-// skills — from a catalogue whose median is 7.
+// Without ballast the cosine rewards the SIZE of the overlap, so a 79-skill listing the
+// reader mostly holds beats a 5-skill one they hold entirely. With it the score reduces
+// to roughly overlap / |B| (coverage), because the ballast dominates the job vector's
+// length.
 //
-// With it, the score reduces to roughly (overlap / |B|) — coverage — because the ballast
-// dominates the job vector's length. That is the whole point: coverage decides.
-//
-// The floor is not a detail. A single tag the reader holds is 100% covered, so without
-// it the feed fills with one-skill postings; swept over real data, the top ten became
-// single-skill nursing vacancies. Six prices that out while leaving real postings alone.
-//
-// Values come from sweeping k ∈ [2,12] and floor ∈ [5,12] over a stratified production
-// sample; results plateau from k=4, so this is the gentlest setting that reaches it.
+// The floor stops one-skill postings from winning: a single held tag is 100% covered.
+// Both values come from a parameter sweep; results plateau from k=4.
 const (
 	ballastPerSkill    = 4.0
 	ballastFloorSkills = 6
@@ -40,11 +31,9 @@ func JobVector(skills []string) []float32 { return vector(skills, true) }
 // set it, every pair would match on it and the ranking would flatten.
 func ProfileVector(skills []string) []float32 { return vector(skills, false) }
 
-// ballast is how much a posting asking for n skills dilutes itself by.
-//
-// n counts what actually REACHED the vector, not the raw slice: unknown slugs and
-// repeats contribute no component, so charging for them would push a posting down for
-// asking more than it does. ["go","go","retired-slug"] asks for one skill.
+// ballast is how much a posting asking for n skills dilutes itself by. n counts what
+// REACHED the vector: unknown slugs and repeats add no component, so ["go","go","retired-slug"]
+// asks for one skill.
 func ballast(n int) float64 {
 	if n < ballastFloorSkills {
 		n = ballastFloorSkills
@@ -52,9 +41,8 @@ func ballast(n int) float64 {
 	return ballastPerSkill * float64(n)
 }
 
-// vector is the shared construction. Every recognised skill contributes the SAME
-// amount — see the package doc for why the rarity weighting was removed — and
-// withBallast places a value at ballastPosition before normalisation.
+// vector is the shared construction: every recognised skill contributes the SAME amount
+// (see the package doc), and withBallast sets ballastPosition before normalisation.
 func vector(skills []string, withBallast bool) []float32 {
 	if len(skills) == 0 {
 		return nil
@@ -64,15 +52,14 @@ func vector(skills []string, withBallast bool) []float32 {
 	for _, s := range skills {
 		pos, ok := Position(s)
 		if !ok || v[pos] != 0 {
-			// Unknown slugs contribute nothing, and a slug listed twice must not
-			// weigh double.
+			// Unknown slugs add nothing; a repeated slug must not weigh double.
 			continue
 		}
 		v[pos] = 1
 		placed++
 	}
 	if placed == 0 {
-		// Nothing recognised: the ballast alone would be a vector about nothing.
+		// Ballast alone would be a vector about nothing.
 		return nil
 	}
 	sumSq := float64(placed)

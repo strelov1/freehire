@@ -14,12 +14,9 @@ import (
 // whichever case and gender the phrase puts them: a programista, programistka,
 // programisty and programistów are one word, and the field after "ds." stands in the
 // genitive ("sprzedaży", "logistyki", "księgowości"). The main table carries a block of
-// Polish surface forms (the CEE block, freehire#3513) and they hold what they list,
-// but measured 2026-10-29 over 5,096 open postings with a Polish title (erecruiter,
-// traffit, nofluffjobs, solidjobs, smartrecruiters, teamtailor, recruitee, eures, read
-// per source with `countries @> {pl}` where the source spans countries), 35.5% still
-// resolved no category and 95.6% no grade, and the unresolved titles were the same few
-// dozen stems in cases and genders the block did not spell.
+// Polish surface forms (the CEE block) and they hold what they list, but the
+// unresolved titles are the same few dozen stems in cases and genders the block did
+// not spell.
 //
 // So the Polish tables match a STEM. Every alias is a sequence of whole words on the
 // folded title (foldPolish: lowercased, the diacritics dropped, "ł" → "l"); a word

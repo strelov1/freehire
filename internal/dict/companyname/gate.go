@@ -70,9 +70,8 @@ func NumericPlaceholder(name string) bool {
 	return true
 }
 
-// ExtractTitleName pulls a company name out of careers-page <title> shapes first validated
-// against Pinpoint boards (PR #825): a "<lead-in> at {Name}" prefix (Jobs/Careers/Employment
-// Opportunities at …) or a trailing "{Name} Careers". SuccessFactors' placeholder resolver
+// ExtractTitleName pulls a company name out of careers-page <title> shapes
+// (Pinpoint): a "<lead-in> at {Name}" prefix (Jobs/Careers/Employment Opportunities at …) or a trailing "{Name} Careers". SuccessFactors' placeholder resolver
 // reuses the observed "Jobs at {Name}" case. The function then cleans a stray "| …" section and
 // collapsed whitespace off the result. Returns "" when neither shape matches. Other ATSes title
 // their careers pages differently (see ExtractSuffixName, ExtractBareTitle).

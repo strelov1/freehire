@@ -8,17 +8,14 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// India is the catalogue's largest audience, and its location lines have shapes no other
-// market writes. Measured 2026-10-25 over 63,305 Indian postings (naukri, zohorecruit,
-// keka, freshteam, whatjobs, workday, oracle, greenhouse and 30 more sources): 97.7% already
-// resolved the country, but only 78.3% a city. The gap was the shapes below, not missing
-// city names — GeoNames knows nearly every Indian town.
+// Indian location lines have shapes no other market writes (exports, revenue divisions,
+// office suffixes). The gap they close is in parsing, not missing city names: GeoNames
+// knows nearly every Indian town.
 
 // foldIndianName drops the transliteration marks GeoNames keeps on Indian names
-// ("Thāne", "Ghāziābād", "Rājkot"). Nobody in India writes them — not the postings, not
-// the searchers — so a facet value carrying them is a value nobody types. Applied to the
-// display name of every Indian place, in the city table, the search index and the metro
-// table alike, so all three keep agreeing on one name.
+// ("Thāne", "Ghāziābād", "Rājkot"). Nobody writes them, so a facet value carrying them
+// is one nobody types. Applied to every Indian place name in the city table, the search
+// index and the metro table, so all three agree.
 func foldIndianName(name string) string {
 	if isASCII(name) {
 		return name
@@ -44,8 +41,7 @@ func isASCII(s string) bool {
 // cityAliasPins point one alias at the RIGHT place where GeoNames hands it to a
 // neighbour, without renaming the neighbour (which a cityOverrides entry would do). In
 // GeoNames' population order "visakhapatnam" is first listed by Rasapūdipalem, a locality
-// of the city, and "secunderabad" by Raniganj, an unrelated town in West Bengal — so both
-// cities were filed under the wrong name.
+// of the city, and "secunderabad" by Raniganj, an unrelated town in West Bengal.
 var cityAliasPins = map[string]cityEntry{
 	"visakhapatnam": {Name: "Visakhapatnam", Country: "in"},
 	"secunderabad":  {Name: "Secunderabad", Country: "in"},

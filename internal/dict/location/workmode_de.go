@@ -7,8 +7,7 @@ import (
 )
 
 // germanWorkModePhrases is the German counterpart of descriptionWorkModePhrases, built
-// from the German ATS crawl (coveto, rexx, dvinci, xing, concludis, onlyfy, kenjo:
-// ~124k open postings on 2026-10-25, 99% of them with no work mode at all).
+// from the German ATS crawl.
 //
 // The German register differs from the English one in a way that decides the ORDER.
 // English prose names the arrangement ("hybrid role", "fully remote"). German prose

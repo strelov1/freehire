@@ -2,11 +2,7 @@ package location
 
 import "regexp"
 
-// Polish location lines, measured 2026-10-29 over 15,488 open postings placed in Poland
-// (nofluffjobs, whatjobs-pl, erecruiter, traffit, solidjobs, smartrecruiters,
-// teamtailor, recruitee, eures). The country was already read on 99.6% of them, and a
-// city on 97% of the lines that name more than "Poland". What the parser missed came in
-// a few shapes:
+// Polish location lines come in a few shapes the parser used to miss:
 //
 //   - eures writes a street address with the Polish postcode before the town
 //     ("Klimczaka 2, 02-797 Warszawa, Polska, Poland"), which postalPrefixRE now cuts;
@@ -15,8 +11,6 @@ import "regexp"
 //   - a voivodeship alone ("Mazowieckie", "Lesser Poland Voivodeship"), which stated no
 //     country, now in foreignSubdivisionNames;
 //   - Łódź without one of its diacritics ("Lódz", "Łodź"), in cityOverrides.
-//
-// "Lublin, US", "Warsaw, IN" and "Opole" already resolved to their own countries.
 
 // polishMetroRegions name a metropolitan region rather than a city. They state the
 // country and the metro and no city: a Trójmiasto posting may sit in Gdańsk, Gdynia or

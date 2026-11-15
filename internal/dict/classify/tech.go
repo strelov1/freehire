@@ -8,16 +8,14 @@ import (
 
 // techTitleTerms is a curated set of confidently technical (software/IT) role
 // terms found in job titles, the positive counterpart to nonTechTitleTerms. It
-// exists because is_tech's `true` was otherwise set only by a recognized tech
-// CATEGORY, so generic software titles that resolve no sub-discipline ("Software
-// Engineer", "Web3 Developer", "System Administrator") fell into `unknown`,
-// undercounting tech.
+// exists because is_tech's `true` otherwise comes only from a tech CATEGORY, and
+// generic titles that resolve no sub-discipline ("Software Engineer", "Web3
+// Developer", "System Administrator") would stay `unknown`.
 //
 // Same doctrine as the rest of classify: whole-word match, never guess. The
-// governing rule is the "engineer"/"developer" trap: prod titles show bare
-// "engineer" is dominated by NON-software roles (mechanical, manufacturing,
-// civil, drainage, optical, project) and bare "developer" also names non-tech
-// roles (business/real-estate developer). So every term here is ANCHORED to the
+// governing rule is the "engineer"/"developer" trap: bare "engineer" is mostly
+// NON-software (mechanical, civil, optical, project) and bare "developer" also names
+// non-tech roles (business/real-estate developer). So every term here is ANCHORED to the
 // discipline — no bare "engineer"/"developer"/"analyst"/"architect"/"administrator"
 // — and a non-software "…Engineer" stays `unknown` rather than being mislabelled
 // tech. The anchor is usually the word "software" or a language name; IT support
@@ -67,14 +65,11 @@ var techTitleTerms = []string{
 	// a term in this list wins OUTRIGHT in jobderive.deriveIsTech, while a technical
 	// category yields to a non-tech title term or to a non-tech category an earlier
 	// alias resolved ("IT Help Desk - Customer Service" still runs an IT estate).
-	// Before 2026-10 they were the one family whose category could not say what they
-	// were: the help desk sat in the non-technical `support` beside customer service.
 	//
 	// What makes a term safe here is an anchor that names the estate, not the mood of
 	// the work. "it support", "desktop support" and "deskside support" are IT by
-	// definition; sampled against live titles they are unanimous. Bare "technical
-	// support" is NOT and gets no entry: the same sample gives AGV, automotive,
-	// controls, logistics and instructional support, so only the analyst form —
+	// definition. Bare "technical support" is NOT and gets no entry (it also names
+	// AGV, automotive, controls, logistics and instructional support), so only the analyst form —
 	// already the office-IT title in practice — carries the claim. Bare "support" is
 	// the whole customer-service population and stays out too.
 	//
@@ -100,14 +95,11 @@ var techTitleTerms = []string{
 	// them no category and only this list can lift them out of `unknown`. Each is
 	// anchored the same way as the forms above — never a bare "engineer".
 	//
-	// "Member of Technical Staff" reads as software on the evidence: of 300 sampled
-	// prod postings, 294 are software or AI (xAI, Perplexity, Pure Storage, Cockroach
-	// Labs, Microsoft) and 6 are semiconductor fab work, which carries its own
-	// suffixes ("Process Development", "NAND", "Dry Etch").
+	// "Member of Technical Staff" reads as software: the rare semiconductor fab
+	// roles carry their own suffixes ("Process Development", "NAND", "Dry Etch").
 	//
 	// "Product Engineer" is deliberately ABSENT despite belonging to the same family:
-	// the same sample splits 142 software against 64 manufacturing (ABB, Howmet
-	// Aerospace, Texas Instruments, Flextronics), so it is not software-anchored and
+	// it splits between software and manufacturing, so it is not software-anchored and
 	// stays unknown rather than dragging plant engineers into tech.
 	"member of technical staff", "member of the technical staff", "founding engineer",
 	// "AI-native"/"AI-enabled" describe the toolchain the engineer works with, not
@@ -117,15 +109,9 @@ var techTitleTerms = []string{
 	// Unambiguous single words
 	"programmer", "sre", "devops",
 
-	// --- The forms prod said were missing -------------------------------------
-	//
-	// Measured 2026-09-23: 2,232,773 open canonical postings carried NO is_tech
-	// signal, and 71,314 of them read as software or IT outright. A posting in that
-	// state is absent three times over — search.CategoryUnresolved keeps it out of
-	// the index, jobSitemapFilter out of every sitemap, and EnqueuePendingJobs' is_tech
-	// gate out of enrichment, so nothing downstream can rescue it. The terms below
-	// are the four families the 160 commonest lost titles fell into, and every
-	// counterexample they raised is a negative case in tech_lost_test.go.
+	// Forms that were missing. A posting with no is_tech signal is kept out of the
+	// index, the sitemaps and enrichment, so nothing downstream can rescue it. Every
+	// counterexample these terms raised is a negative case in tech_lost_test.go.
 	//
 	// Vendor platforms. A platform names the discipline as surely as a language does,
 	// which is why these are anchored and bare "developer" still is not.
@@ -144,10 +130,8 @@ var techTitleTerms = []string{
 	// miss: the match is a PHRASE on word boundaries, so "senior developer" cannot
 	// occur inside "Senior Business Developer" — the two words are not adjacent
 	// there. The seniority word is therefore as real an anchor as a language name.
-	// Checked against prod: of the twenty commonest open titles carrying one of
-	// these phrases, all twenty are software roles, and the corpus's own
-	// non-software "…Developer" titles (Business, Job, Product, Project) carry a
-	// different qualifier and stay out.
+	// The non-software "…Developer" titles (Business, Job, Product, Project)
+	// carry a different qualifier and stay out.
 	"senior developer", "lead developer", "junior developer",
 	//
 	// IT-anchored roles, always TWO words. Bare "it" is the English pronoun once
@@ -161,16 +145,16 @@ var techTitleTerms = []string{
 	"head of it", "director of it", "it-projektmanager", "it projektmanager",
 	// A word between "IT" and the role breaks adjacency, so the qualified spellings
 	// the catalogue carries need their own entries — the same trap the spaced
-	// "service now developer" above needed one for. These two are what prod actually
-	// says: "IT Field Technician" and "Senior IT Internal Auditor".
+	// "service now developer" above needed one for. These two are
+	// "IT Field Technician" and "Senior IT Internal Auditor".
 	"it field technician", "it internal auditor",
 	//
 	// Surface forms. Word boundaries cannot see past themselves, so a plural and an
 	// abbreviation are each their own entry — the same argument "software design
 	// engineering" already carries beside its singular.
 	//
-	// "software engr", never bare "engr": the same corpus carries "Project Engr II"
-	// and "Field Service Engr II", which are construction and field service. The
+	// "software engr", never bare "engr": "Project Engr II" and
+	// "Field Service Engr II" are construction and field service. The
 	// anchor is "software", not the abbreviation.
 	"software engr", "software eng", "software engineers", "data engineers",
 	// "software engineering" for the same boundary reason its "design" sibling above
@@ -180,9 +164,7 @@ var techTitleTerms = []string{
 	//
 	// Spellings the terms already here cannot reach, because a hyphen, a slash, a
 	// space or a comma is a word boundary and wordmatch requires adjacency. Each of
-	// these has a sibling above that looks like it should already cover it, and does
-	// not — which is why they were found by probing the corpus rather than by reading
-	// the list.
+	// these has a sibling above that looks like it should already cover it, and does not.
 	"it-administrator", "it-specialist", "it-специалист", "it специалист",
 	"it specialist", "dot net developer", "j2ee developer", "react js developer",
 	"website developer", "engineer, software",
@@ -201,11 +183,8 @@ var techTitleTerms = []string{
 	"software consultant", "software team lead", "sql dba", "database analyst",
 	"cyber intelligence",
 	//
-	// Third pass, from re-probing the corpus after the two above. The list stops
-	// here on purpose: the catalogue holds 1,563,954 distinct unrecognised titles,
-	// so the tail is endless and a dictionary chasing it would never converge. What
-	// is worth adding is what the corpus shows in VOLUME, and the way to find the
-	// next batch is to re-probe, not to keep guessing.
+	// The list stops here on purpose: the tail of unrecognised titles is endless, so
+	// add only what the corpus shows in VOLUME, found by re-probing, not by guessing.
 	"it business partner", "it-supporter", "it apprentice", "it lead",
 	"cyber sec", "software intern", "software verification",
 	"principal engineer software", "algorithm developer",
@@ -216,9 +195,8 @@ var techTitleTerms = []string{
 	// NOT here, deliberately: the "Systems Engr" abbreviation. "Systems Engineer" is
 	// resolved by the CATEGORY dictionary, which carries a blindness rule holding back
 	// "Control Systems Engineer", "Power Systems Engineer" and the rest of the
-	// industrial family (openspec/specs/it-title-coverage). A term here would reach
-	// past that rule and sweep them in, because this detector wins outright over any
-	// category. The abbreviation belongs beside its full spelling, not here.
+	// industrial family. A term here would reach past
+	// that rule and sweep them in, because this detector wins outright over any category. The abbreviation belongs beside its full spelling, not here.
 }
 
 // IsTech reports whether a job title states a confidently technical (software/IT)

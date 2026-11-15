@@ -2,19 +2,13 @@
 // how it is worded, so an answer the candidate gives once serves every later posting that
 // asks the same thing.
 //
-// Two passes, in order, and the order is the point. A dictionary of known topics runs
-// first because it collapses phrasings a fold cannot ("compensation expectations" and
-// "desired salary" share no words). Everything else falls back to a fold of the question
-// text — so a question nobody anticipated still gets a stable key, and a missing
-// dictionary entry costs a coarser key rather than a lost answer.
+// Two passes, in order. A dictionary of known topics runs first because it collapses
+// phrasings a fold cannot ("compensation expectations" and "desired salary" share no
+// words). Everything else falls back to a fold of the question text, so an unanticipated
+// question still gets a stable key and a missing dictionary entry costs a coarser key,
+// not a lost answer. A curated list as the sole route would hide its own gaps.
 //
-// That fallback is why this is not another curated list. A hand-maintained list that is
-// the SOLE route is a list whose gaps are invisible: internal/api/atsapply's own
-// labelAnswerKeyFor had no salary rule for months, and nothing reported the questions it
-// was failing to match.
-//
-// Pure and deterministic — no model, no I/O. A model proposing a topic for an awkwardly
-// folded question is deliberately out of scope.
+// Pure and deterministic: no model, no I/O.
 package answertopic
 
 import (
@@ -23,10 +17,8 @@ import (
 )
 
 // dictionary maps a topic to the keyword sets that name it. ALL keywords in a set must
-// appear for that set to fire; any one set firing is enough.
-//
-// Kept small on purpose: it exists for phrasings the fold genuinely cannot unify, not as
-// the place every question is expected to be listed.
+// appear for that set to fire; any one set firing is enough. Kept small: only for
+// phrasings the fold cannot unify.
 var dictionary = []struct {
 	topic string
 	sets  [][]string
@@ -48,12 +40,9 @@ var dictionary = []struct {
 		{"start", "date"},
 		{"when can you start"},
 	}},
-	// The single most common question on any application form — ~314 of the 12 352
-	// question labels measured across 4 000 live forms on 2026-09-16. Employers write it
-	// a dozen ways AND drop their own name into it ("How did you hear about Appian?"), so
-	// the fold alone gives every company its own topic and an answer stored for one is
-	// never recalled for another. The sets below deliberately do not name what is being
-	// asked about, only the asking.
+	// The most common form question. Employers drop their own name into it ("How did you
+	// hear about Appian?"), so the fold alone gives each company its own topic. The sets
+	// match the asking, not what is asked about.
 	{"how_did_you_hear", [][]string{
 		{"how did you hear"},
 		{"how did you find out"},
@@ -61,9 +50,7 @@ var dictionary = []struct {
 		{"where did you hear"},
 		{"how you heard"},
 	}},
-	// ~150 of that same sample, in three phrasings — and the candidate has already
-	// answered it (screening_answers.age_18_or_older). A question whose answer is on file
-	// and still parks an application is the worst kind of gap.
+	// The candidate already answers this on file (screening_answers.age_18_or_older).
 	{"age_18_or_older", [][]string{
 		{"at least 18"},
 		{"over the age of 18"},
@@ -87,17 +74,12 @@ var politeWrappers = []string{
 
 // Of returns the topic a question is keyed by, and whether it could be keyed at all.
 //
-// A question that folds to nothing — an empty label, or one that is pure punctuation, both
-// of which real forms produce — is refused. A key derived from nothing cannot be recalled,
-// so storing one would silently mark a question answered forever.
+// A question that folds to nothing (empty label, pure punctuation) is refused: a key
+// derived from nothing cannot be recalled, so storing one would mark it answered forever.
 //
-// "Readable text" is Unicode's answer, not ASCII's: this catalogue aggregates Russian- and
-// Hungarian-language sources, so a screening question genuinely arrives in one of those.
-// An ASCII-only fold refused every one of them as unreadable — and, worse, kept whatever
-// Latin fragment they happened to contain, so "Зарплата (USD)" folded to "usd" and pulled
-// every other question mentioning that currency onto one topic. That is the collapse
-// TestOf_DifferentQuestionsKeepDifferentTopics exists to prevent, arriving through the
-// alphabet rather than through the dictionary.
+// "Readable text" is Unicode's answer, not ASCII's: sources include Russian and Hungarian.
+// An ASCII-only fold kept stray Latin fragments, so "Зарплата (USD)" folded to "usd" and
+// merged every question mentioning that currency (TestOf_DifferentQuestionsKeepDifferentTopics).
 func Of(question string) (string, bool) {
 	folded := fold(question)
 	if folded == "" {
@@ -143,13 +125,9 @@ func fold(question string) string {
 
 // containsAll reports whether every keyword appears in the folded question.
 //
-// Substring, not whole-word, and therefore NOT internal/dict/wordmatch — which exists in
-// this same block so dictionaries stop hand-rolling this loop, and is the right answer for
-// a dictionary of whole terms. This one is a dictionary of STEMS: "relocat" has to match
-// "relocation" and "relocate", "expect" has to match "expectations". wordmatch.Contains with
-// either boundary refuses all three, because a stem is by definition not a whole word.
-// Measured, not assumed. Adding a stem-mode boundary to wordmatch would be a boundary that
-// answers "always true" on the right-hand side, which is not a boundary.
+// Substring, not whole-word, so NOT internal/dict/wordmatch: these are STEMS ("relocat"
+// must match "relocation", "expect" must match "expectations"), which wordmatch's
+// boundaries refuse.
 func containsAll(folded string, keywords []string) bool {
 	for _, kw := range keywords {
 		if !strings.Contains(folded, kw) {

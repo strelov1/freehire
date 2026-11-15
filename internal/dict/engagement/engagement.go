@@ -13,11 +13,8 @@
 // states it, never inferred from the rate, the client, the source or the country. An
 // empty result means "the posting does not say".
 //
-// Every rule was measured, not reasoned about. On 2026-11-03 a corpus of 10,496 postings
-// was pulled from the live search index — up to 400 per term, each with its own query
-// and country — and the wording around every term read by hand; the IR35 rules come
-// from the 1,354 postings the search returns for "IR35" the same day. Most terms are
-// ambiguous without the words around them, so a rule asks for its ANCHOR — "rodzaj
+// Every rule was checked against real postings. Most terms are ambiguous without the
+// words around them, so a rule asks for its ANCHOR — "rodzaj
 // umowy:", "contratação", "оформление по", "statut" — and never for the bare term:
 //
 //   - "B2B" is mostly "B2B sales"; only "B2B:" before a salary, "umowa B2B", "na B2B"
@@ -38,10 +35,9 @@
 // do. A DUTY rejects a term the work is about rather than the deal ("prepare W-2s",
 // "sporządzanie umów", "ведение договоров ГПХ").
 //
-// Dropped after measurement: Australia's ABN (27 postings, mostly ABN Group and ABN
-// AMRO), Ukraine's ФОП and гіг-контракт (19 and 4 Ukrainian postings, swamped by the
-// Russian curriculum), and the Czech and Romanian freelance statuses (živnostenský list,
-// PFA: none and six).
+// Dropped: Australia's ABN (mostly ABN Group and ABN AMRO), Ukraine's ФОП and
+// гіг-контракт (swamped by the Russian curriculum), and the Czech and Romanian freelance
+// statuses (živnostenský list, PFA) for lack of postings.
 package engagement
 
 import (
@@ -94,7 +90,7 @@ func re(s string) *regexp.Regexp { return regexp.MustCompile(`(?i)` + s) }
 // ir35 is the name as postings spell it: "IR35", "IR 35", "IR-35". What follows it may
 // not be a digit, which keeps a part number like "IR350" out, but may be a letter: a
 // feed that dropped the markup between two lines glues the next word on ("Outside
-// IR35We are looking", "Inside IR35November start") — three postings in the sample.
+// IR35We are looking", "Inside IR35November start").
 const ir35 = `ir\s?-?35(?:\b|[^0-9])`
 
 // ir35Field is the name used as a field label, with the room a label leaves before its
@@ -136,9 +132,8 @@ var (
 
 var rules = []rule{
 	// ---- United Kingdom ----
-	// IR35, from its own 1,354-posting sample: 886 inside, 435 outside, one both.
 	{slug: "ir35_outside", label: "Outside IR35", market: "United Kingdom", patterns: []*regexp.Regexp{
-		// "outsdie" is a misspelling read in the sample; "out of scope" is HMRC's own
+		// "outsdie" is a misspelling seen in postings; "out of scope" is HMRC's own
 		// wording for the same determination.
 		re(`\b(?:outside|outsdie|out[- ]of[- ]scope)` + ir35Scope + ir35),
 		re(ir35Field + `(?:outside|out[- ]of[- ]scope)\b`),
@@ -197,7 +192,7 @@ var rules = []rule{
 			re(B + `b2b\s*(?:contract|agreement|basis|cooperation|engagement|umow|kontrakt|współprac|-?\s*tätigkeit|-?\s*vertrag)`),
 			re(`(?:umow[aęy]|kontrakt(?:u|em)?|contract|współprac[aęy]|cooperation|engagement|forma\s+(?:zatrudnienia|współpracy)\s*:?|rodzaj\s+umowy\s*:?|typ\s+umowy\s*:?|type\s+of\s+(?:contract|employment|agreement)\s*:?|contract\s+type\s*:?|employment\s+type\s*:?|zatrudnienie|na|on|via|through|form\s+of\s+(?:cooperation|employment)\s*:?)\s+(?:a\s+)?b2b` + E),
 			// The salary label: "B2B: 20000 – 24000 PLN / mies. netto" (justjoin.it
-			// writes every offer's contract types this way), "B2B (netto)".
+			// writes contract types this way), "B2B (netto)".
 			re(B + `b2b\s*(?:[:–-]\s*(?:od\s+|from\s+|up to\s+|do\s+)?\d|\(\s*(?:netto|net|\+\s*vat))`),
 			re(B + `b2b` + either + `(?:uop|umow[aęy]\s+o\s+prac|employment contract|permanent|umow[aęy]\s+zleceni)`),
 			re(`(?:uop|umow[aęy]\s+o\s+prac[ęe]|employment contract|permanent contract)` + either + `b2b` + E),
@@ -217,7 +212,7 @@ var rules = []rule{
 		patterns:     []*regexp.Regexp{re(B + `umow[aęy]\s*(?:-\s*)?zleceni[ea]` + E)},
 		rejectBefore: plDuty,
 	},
-	// A rare contract (23 of 400 sampled), offered mostly beside the mandate one.
+	// A rare contract, offered mostly beside the mandate one.
 	{slug: "umowa_o_dzielo", label: "Umowa o dzieło", market: "Poland",
 		patterns:     []*regexp.Regexp{re(B + `umow[aęy]\s+o\s+dzie[łl]o` + E)},
 		rejectBefore: plDuty,

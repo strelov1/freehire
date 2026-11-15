@@ -1,41 +1,14 @@
 package classify
 
-// chineseCategoryTable is the Chinese block of categoryTable — Simplified from the
-// mainland ATS crawl (mokahr) and Traditional from the Taiwanese boards (job104, cake,
-// foxconn, asus, realtek, quanta, mediatek). Measured 2026-10-26 over the 94,254 open
-// postings of those sources, the table without it resolved a category for 3.3% of them,
-// so the rest were hidden from search by search.CategoryUnresolved and never enriched.
+// chineseCategoryTable is the Chinese block of categoryTable: Simplified from the mainland ATS crawl (mokahr) and Traditional from the Taiwanese boards (job104, cake, foxconn, asus, realtek, quanta, mediatek). Without it almost no such title resolves a category, so search.CategoryUnresolved hides it.
 //
-// Chinese writes no spaces, so these aliases match glued to whatever qualifies them
-// (titleBoundary, cjk.go), and the choice of alias is the whole safety margin. Every alias
-// is a compound that names the ROLE (會計 accounting, 倉管 warehouse keeping, 韌體
-// firmware), never one of the heads every title ends in: 工程師 ("engineer"), 人員
-// ("staff"), 專員 ("specialist"), 助理 ("assistant"), 開發 ("development") and 設計
-// ("design") resolve nothing on their own — 研發工程師 is an R&D engineer of any
-// discipline, and 軟內飾開發 develops a car's soft interior trim. Every alias also carries
-// a Han character: a purely Latin one ("cnc", "cad") would reach Latin titles too, and
-// the core table already reads the Latin fragments of a Chinese title ("Java开发工程师"),
-// since a Han neighbour is a boundary.
+// Chinese writes no spaces, so these aliases match glued to whatever qualifies them (titleBoundary, cjk.go), and the choice of alias is the whole safety margin. Every alias is a compound that names the ROLE (會計 accounting, 倉管 warehouse keeping, 韌體 firmware), never a head every title ends in: 工程師 ("engineer"), 人員 ("staff"), 專員 ("specialist"), 助理 ("assistant"), 開發 ("development"), 設計 ("design"). Those resolve nothing alone: 研發工程師 is an R&D engineer of any discipline, 軟內飾開發 develops a car's soft interior trim. Every alias also carries a Han character: a purely Latin one ("cnc", "cad") would reach Latin titles too, and the core table already reads the Latin fragments of a Chinese title ("Java开发工程师"), since a Han neighbour is a boundary.
 //
-// It sits LAST in categoryTable, behind the core and both Japanese blocks, so a title the
-// rest of the table resolves keeps its answer and a Japanese title is read as Japanese
-// first. Within it, precedence is table order, and that order matters here more than
-// anywhere: the Taiwanese titles are often whole advertisements ("…門市人員【新北】月薪35K
-// 歡迎二度就業"), so the role heads that outrank a domain qualifier come first —
-// 大模型销售经理 is a salesperson and AI产品经理 a product manager.
+// It sits LAST in categoryTable, behind the core and both Japanese blocks, so a title the rest of the table resolves keeps its answer and a Japanese title is read as Japanese first. Within it, precedence is table order: Taiwanese titles are often whole advertisements ("…門市人員【新北】月薪35K 歡迎二度就業"), so the role heads that outrank a domain qualifier come first (大模型销售经理 is a salesperson, AI产品经理 a product manager).
 //
-// Japanese shares the characters, and a Japanese title the Japanese blocks leave
-// unresolved still falls through to this one. That population was measured — the 57,839
-// open Japanese titles carrying Han on hrmos, herp, engage and mynavi — and what it reaches
-// mostly means the same role in both languages (法務, 人事, 看護師, 店長候補, 機械設計).
-// Where the meaning differs the alias is vetoed or narrowed: 保全 is a security guard in
-// Taiwan and plant maintenance in Japan (設備保全), and 業務 is sales in Taiwan and
-// "duties" in Japan (法務業務, 業務委託), which is why only its Taiwanese compounds are
-// listed. A new alias that is also a Japanese word needs the same check.
+// A Japanese title the Japanese blocks leave unresolved still falls through to this one. Most of what it reaches means the same role in both languages (法務, 人事, 看護師, 店長候補, 機械設計). Where the meaning differs the alias is vetoed or narrowed: 保全 is a security guard in Taiwan and plant maintenance in Japan (設備保全), and 業務 is sales in Taiwan and "duties" in Japan (法務業務, 業務委託), so only its Taiwanese compounds are listed. A new alias that is also a Japanese word needs the same check.
 //
-// Traditional and Simplified forms are listed separately, because the two scripts spell
-// most of these compounds differently (會計/会计, 軟體/软件) and no fold between them is
-// safe — 后 and 後 are one character in Simplified and two in Traditional.
+// Traditional and Simplified forms are listed separately: the two scripts spell most compounds differently (會計/会计, 軟體/软件) and no fold between them is safe, since 后 and 後 are one character in Simplified and two in Traditional.
 
 // chineseSeniorityTable lists the grade words of a Chinese title, highest first.
 // Traditional 高級 is deliberately absent: Taiwanese titles use it for luxury as often

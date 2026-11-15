@@ -6,11 +6,6 @@ package location
 // every path that reads a place name — the comma tokens, the dash segments, the
 // city-of-country check — sees them without a second lookup.
 //
-// Found by cmd/report-geo-gaps (2026-10-21): a location line naming only the
-// region ("Свердловская область", "Belfast, Northern Ireland", "Canberra region,
-// Australian Capital Territory") placed the posting nowhere, while the model named
-// the country for 100% of them.
-//
 // Names only, never codes — a code would collide with subdivisionToCountry (see
 // AGENTS.md). Deliberately absent, because the name has a second reading this
 // catalogue meets: "Punjab" (India and Pakistan), "Victoria" (the Australian state,
@@ -330,7 +325,7 @@ var foreignSubdivisionNames = map[string]string{
 
 // regionNotCity are the subdivision names the city table ALSO lists as an alias of a
 // DIFFERENT city: the Land Brandenburg is an alternate name of Brandenburg an der Havel,
-// so every "Schönefeld, Brandenburg" posting (hundreds in the German crawl) was named a
+// so every "Schönefeld, Brandenburg" posting was named a
 // posting in that one city. Such a token states its country and no city. A subdivision
 // that shares its name with its own capital ("Bern", "Luzern", "Schaffhausen") is not
 // here: the city reading is the same place. TestSubdivisionCityAliasesAreDecided makes

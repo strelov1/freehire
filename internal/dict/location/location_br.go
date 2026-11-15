@@ -7,16 +7,11 @@ import (
 )
 
 // brazilianStateCodes are the two-letter codes of Brazil's 26 states and federal district,
-// which every Brazilian ATS writes after the town: "Curitiba, PR", "Belo Horizonte/MG",
-// "São Paulo - SP". Most of them spell something else too — PR is Puerto Rico, SC South
-// Carolina, BA Bosnia, ES Spain, PE Peru and Prince Edward Island, AM Armenia, MT Malta and
-// Montana, RS Serbia, MA Morocco and Massachusetts, MS Mississippi, MG Madagascar, PA
-// Panama and Pennsylvania, AL Albania and Alabama, RO Romania, SE Sweden, TO Tonga, DF
-// Mexico's federal district — and the parser read them that way: measured 2026-10-27, 14%
-// of 30,677 open Brazilian postings carried a second, wrong country (4,235 rows), and the
-// Fortaleza, Natal and Santo André postings none at all.
+// which Brazilian ATSs write after the town ("Curitiba, PR", "São Paulo - SP"). Most also
+// spell something else (PR Puerto Rico, SC South Carolina, PA Panama and Pennsylvania, MA
+// Morocco and Massachusetts, DF Mexico's federal district).
 //
-// So a code is read as the Brazilian state when the line places it in Brazil: it names
+// A code is read as the Brazilian state only when the line places it in Brazil: it names
 // Brazil ("Curitiba, PR, Brasil"), or the town before the code has a Brazilian reading
 // (brazilianStateAccepted). A line that also names the United States keeps the US state.
 var brazilianStateCodes = map[string]bool{
@@ -60,11 +55,10 @@ func brazilianStateAccepted(code, prevTok string, namesBrazil bool) bool {
 	return namesBrazil || isBrazilianPlace(prevTok)
 }
 
-// brazilianStateOpening reports whether tok is a Brazilian state code opening a location
-// whose next place is Brazil written out: "RS, Brasil", the line gupy and solides write for
-// a posting with a state and no town. With no town before it the code has no other context,
-// and the word after it is what places it. Only the word counts, not the code "br": two bare
-// codes ("PE, BR") are a list of countries.
+// brazilianStateOpening reports whether tok is a Brazilian state code opening a location whose
+// next place is Brazil written out ("RS, Brasil", as gupy and solides write a posting with a
+// state and no town). Only the word counts, not the code "br": two bare codes ("PE, BR") are a
+// list of countries.
 func brazilianStateOpening(tok string, toks []string, segs []tokenLocation, i int) bool {
 	if !brazilianStateCodes[tok] {
 		return false

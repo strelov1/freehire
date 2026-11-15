@@ -8,26 +8,19 @@
 // offers none of these" — most employers list only some of their benefits, and the
 // filter's own copy says so.
 //
-// Every rule here was measured, not reasoned about. On 2026-10-31 two random samples
-// of OPEN canonical postings (closed_at IS NULL AND duplicate_of IS NULL) were pulled
-// from prod with TABLESAMPLE SYSTEM — 9,406 rows across the whole catalogue (5,103 of
-// them English) and 2,342 is_tech rows — and every pattern was matched locally, with
-// at least ten random hits per perk read by hand. The per-perk figures sit beside
-// each rule as "N% of the catalogue / N% of technical postings". Meilisearch counts
-// were not used: its quoted search is not a phrase search on this index.
+// Every rule was measured on a prod sample of open canonical postings, with at least ten random
+// hits per perk read by hand. Meilisearch counts were not used: its quoted search is not a
+// phrase search on this index.
 //
-// The sample also fixed the two guards every rule shares:
+// Two guards every rule shares:
 //
-//   - A DENIAL. "Relocation Assistance: Not offered", "Sign-on Bonus: Not
-//     Authorized", "the rate displayed does not include benefits such as health
-//     insurance" — a phrase list alone marks each of these. Only a governing negation
-//     counts (a "not" next to offer/provide/include/eligible…, or a "no"/"without"
-//     directly in front), because the loose form ("any not in the sentence") threw
-//     away "includes, but is not limited to, a 401(k)", "at no cost to you" and
-//     "no vesting period", which were most of what it caught.
-//   - A DUTY. "knowledge of health insurance benefits", "experience in
-//     superannuation", "develop expertise in tuition assistance programs" — the perk's
-//     words describing the WORK, not the package.
+//   - A DENIAL. "Relocation Assistance: Not offered", "Sign-on Bonus: Not Authorized", "the rate
+//     displayed does not include benefits such as health insurance". Only a governing negation
+//     counts (a "not" next to offer/provide/include/eligible…, or a "no"/"without" directly in
+//     front); the loose form (any "not" in the sentence) threw away "includes, but is not
+//     limited to, a 401(k)", "at no cost to you" and "no vesting period".
+//   - A DUTY. "knowledge of health insurance benefits", "experience in superannuation": the
+//     perk's words describing the WORK, not the package.
 package perks
 
 import (
@@ -65,7 +58,7 @@ const retirementAccount = `(?:401\s?\(?k\)?|403\s?\(?b\)?|457\s?\(?b\))`
 func re(s string) *regexp.Regexp { return regexp.MustCompile(`(?i)` + s) }
 
 var rules = []rule{
-	// 4.6% / 6.6%. "Generous" is the employer's own word, so the chip states the
+	// "Generous" is the employer's own word, so the chip states the
 	// employer's claim — the rule asks for that word (or unlimited/flexible/
 	// discretionary, the policies that have no cap) or a stated allowance at least as
 	// large as a generous one in the markets that state a number: 25+ days, five or
@@ -77,12 +70,12 @@ var rules = []rule{
 		re(`\b(?:[5-9]|five|six|seven|eight)\s*weeks'?\s*(?:of\s+)?(?:paid\s+)?(?:annual leave|holidays?|vacation|pto|paid time off|time off)\b`),
 		re(`\b(?:2[5-9]|3\d) (?:tage urlaub|urlaubstage)\b`),
 	}},
-	// 0.1% / 0.1%. Only the week itself: "30-hour work week" was tried and was a
+	// Only the week itself: "30-hour work week" was tried and was a
 	// part-time physician schedule three times in eight.
 	{slug: "four_day_week", label: "Four Day Work Week", patterns: []*regexp.Regexp{
 		re(`\b(?:4|four)[- ]day (?:work ?week|week|working week)\b`),
 	}},
-	// 7.2% / 5.5%. The match must sit in the same clause as the plan, either order.
+	// The match must sit in the same clause as the plan, either order.
 	{slug: "401k_match", label: "401(k) Matching", patterns: []*regexp.Regexp{
 		re(`\bmatch\w*`),
 	},
@@ -90,26 +83,25 @@ var rules = []rule{
 		contextAfter:  re(`^[^.;•]{0,40}\b` + retirementAccount),
 		deniedBefore:  re(`\b(?:no|not|without|n't)\s+(?:(?:an?|any|employer|company|contribution|` + retirementAccount + `)\s+)*$`),
 	},
-	// 3.0% / 4.9%. Any stated parental leave, not only a "generous" one: outside the
+	// Any stated parental leave, not only a "generous" one: outside the
 	// statutory minimum the US does not have, offering it at all is the signal.
 	{slug: "parental_leave", label: "Parental Leave", patterns: []*regexp.Regexp{
 		re(`\b(?:parental|maternity|paternity|adoption)\s+leave\b|\bmaternity pay\b|\bshared parental\b`),
 	}},
-	// 17.3% / 15.7%. The international forms of the same perk: a UK/EU pension, an
+	// The international forms of the same perk: a UK/EU pension, an
 	// Australian super, a Canadian RRSP, NZ KiwiSaver, an Indian provident fund, German
 	// Altersvorsorge, Brazilian previdência privada.
 	{slug: "retirement_plan", label: "Retirement Plan", patterns: []*regexp.Regexp{
 		re(`\bretirement (?:plans?|savings|benefits?|contributions?|accounts?|programs?|package)\b|\bpensions?\b|\b` + retirementAccount + `|\bsuperannuation\b|\brrsp\b|\bkiwisaver\b|\bprovident fund\b|\baltersvorsorge\b|\bprevid[eê]ncia privada\b`),
 	}},
-	// 4.2% / 3.5%.
 	{slug: "tuition_reimbursement", label: "Tuition Reimbursement", patterns: []*regexp.Regexp{
 		re(`\btuition (?:reimbursement|assistance|support|aid|benefits?)\b|\beducation(?:al)? (?:assistance|reimbursement)\b`),
 	}},
-	// 0.3% / 0.8%. A subset of generous_pto, and a posting carries both.
+	// A subset of generous_pto, and a posting carries both.
 	{slug: "unlimited_pto", label: "Unlimited PTO", patterns: []*regexp.Regexp{
 		re(`\b(?:unlimited|uncapped)\s+(?:paid\s+)?` + pto + `\b`),
 	}},
-	// 14.9% / 15.3%. "Medical, Dental, Vision" is how most US postings state it, so the
+	// "Medical, Dental, Vision" is how most US postings state it, so the
 	// medical-then-dental run counts. A French mutuelle or a Brazilian plano de saúde is
 	// not here: both are near-universal by law or collective agreement and would not
 	// narrow anything.
@@ -121,26 +113,26 @@ var rules = []rule{
 		},
 		notAfter: re(`^\s*(?:portability|claims?|billing|verification|compan|carriers?|industry|providers?|payers?|plans? members)`),
 	},
-	// 0.7% / 0.8%. An Employee Assistance Program is NOT counted on its own: it is
+	// An Employee Assistance Program is NOT counted on its own: it is
 	// benefits-list boilerplate at every large US employer. "mental health services"
 	// is not either — on a clinic's posting it is the work.
 	{slug: "mental_health", label: "Mental Health Support", patterns: []*regexp.Regexp{
 		re(`\bmental health (?:support|benefits?|days?|resources|coverage|app|platform|stipend|counsel+ing)\b|\b(?:headspace|lyra health|modern health|spring health|talkspace)\b`),
 	}},
-	// 0.3% / 1.0%. A bare "development fund" was a UN agency and a Saudi government
+	// A bare "development fund" was a UN agency and a Saudi government
 	// programme in a sample of eight, so the kind of development is named.
 	{slug: "learning_budget", label: "Learning Budget", patterns: []*regexp.Regexp{
 		re(`\b(?:learning|training|education(?:al)?|professional development|personal development|l&d|learning (?:and|&) development|conference|cpd|continuing education) (?:budget|stipend|allowance|fund)\b`),
 	}},
-	// 0.1% / 0.4%. A plain "setup stipend" was an IN-office desk.
+	// A plain "setup stipend" was an IN-office desk.
 	{slug: "home_office_stipend", label: "Home Office Stipend", patterns: []*regexp.Regexp{
 		re(`\b(?:home[- ]office|remote[- ]work(?:ing)?|work[- ]from[- ]home|wfh)\s(?:equipment |setup )?(?:stipend|allowance|budget|reimbursement)\b`),
 	}},
-	// 0.2% / 0.4%. The word reads the same in German and Dutch postings.
+	// The word reads the same in German and Dutch postings.
 	{slug: "sabbatical", label: "Sabbatical", patterns: []*regexp.Regexp{
 		re(`\bsabbaticals?\b`),
 	}},
-	// 0.9% / 0.3%. Mostly healthcare and the trades.
+	// Mostly healthcare and the trades.
 	{slug: "sign_on_bonus", label: "Sign-On Bonus", patterns: []*regexp.Regexp{
 		re(`\b(?:sign[- ]?on|signing|joining) bonus(?:es)?\b`),
 	}},

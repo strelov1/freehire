@@ -7,9 +7,8 @@ import (
 
 // Indian postings state the arrangement in a register of their own: "WFO" (work from
 // office) for an office job, "WFH" for a remote one, and a hybrid one by counting office
-// days — "Hybrid (3 days office)", "3 days WFO". Measured 2026-10-25 over 48,568 Indian
-// descriptions: "work from office" appears in 852 and "WFO" in 225, and the English
-// phrase list read none of them.
+// days — "Hybrid (3 days office)", "3 days WFO". The English phrase list reads none of
+// these.
 //
 // This list is read only when none of the English, German and Dutch ones matched, so it
 // never changes an answer they gave. It is matched on folded markup (foldMarkup).
