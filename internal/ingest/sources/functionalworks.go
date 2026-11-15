@@ -20,7 +20,7 @@ type functionalWorks struct {
 const (
 	functionalWorksURL = "https://functional.works-hub.com/api/graphql"
 	// functionalWorksQuery pulls the whole board in one request: page_size is set well above the
-	// live catalogue (~900 postings) because the endpoint exposes no pagination argument.
+	// catalogue size because the endpoint exposes no pagination argument.
 	functionalWorksQuery = `{ jobs(page_size:2000, vertical:"functional", published:true) { ` +
 		`title slug remote firstPublished descriptionHtml company { name } ` +
 		`location { city country } tags { label } } }`

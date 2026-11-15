@@ -13,16 +13,14 @@ import (
 )
 
 // gupyJobsURL is Gupy's public job-publication API — the one every career page
-// (<subdomain>.gupy.io) renders from. Gupy is the dominant Brazilian ATS (Creditas, Afya,
-// Cogna, Omie, …). Queried with ?subdomain=<board> it lists that career page's published
-// postings; /<id> is one posting's sectioned detail.
+// (<subdomain>.gupy.io) renders from. Gupy is the dominant Brazilian ATS. Queried with
+// ?subdomain=<board> it lists that career page's published postings; /<id> is one posting's
+// sectioned detail.
 //
-// The board is the career-page SUBDOMAIN, not the numeric companyId it used to be: the
-// companyId-keyed listing (employability-portal.gupy.io/api/v1/jobs) began answering an nginx
-// 404 to every query on 2026-09-30, and nothing public lists by companyId any more (the
-// portal's own /api/job-search/jobs ignores a companyId parameter). One company may own
-// several career pages — an internal-mobility page, a confidential one — and each is its own
-// board. A one-time rekey moved the catalog and the stored postings over.
+// The board is the career-page SUBDOMAIN, not a numeric companyId: the companyId-keyed listing
+// (employability-portal.gupy.io/api/v1/jobs) answers an nginx 404 to every query, and nothing
+// public lists by companyId. One company may own several career pages (internal mobility, a
+// confidential one) and each is its own board.
 const gupyJobsURL = "https://private-api.gupy.io/job-publication/public/jobs"
 
 // gupy adapts Gupy career pages. The listing carries title, address and workplace type but
@@ -38,8 +36,7 @@ func NewGupy(c JSONGetter) Source { return gupy{http: c} }
 func (gupy) Provider() string { return "gupy" }
 
 // fullBoardListing: the career-page listing is one unpaginated response carrying every
-// published posting (measured 2026-10-19: 3,486 distinct postings on restaurantemc in one
-// answer), and a failed listing fails the Fetch. See the fullBoardListing interface for the bar.
+// published posting, and a failed listing fails the Fetch. See the fullBoardListing interface for the bar.
 func (gupy) fullBoardListing() {}
 
 // gupyPosting is one entry of a career page's listing.
@@ -63,12 +60,11 @@ func (g gupy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// FetchNew is Fetch that spends a detail request only on postings the catalogue does not hold.
-// The detail is this adapter's whole cost: re-reading every stored body on every run was ~72k
-// detail requests across 3,324 career pages (2026-10-19), which no run could finish. A seen
-// posting is re-listed as a SeenRefresh carrying the listing's identity — the listing itself
-// proves the posting is still published — so its liveness refreshes and its hydrated body and
-// facets are kept.
+// FetchNew is Fetch that spends a detail request only on postings the catalogue does not hold:
+// the detail is this adapter's whole cost, and re-reading every stored body on every run is
+// more requests than a run can finish. A seen posting is re-listed as a SeenRefresh carrying the
+// listing's identity — the listing itself proves the posting is still published — so its
+// liveness refreshes and its hydrated body and facets are kept.
 func (g gupy) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := g.list(ctx, e.Board)
 	if err != nil {

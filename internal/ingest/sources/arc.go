@@ -19,23 +19,22 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// arc adapts Arc (arc.dev), a remote-jobs board. Besides a few dozen postings of its own it
-// mirrors ~7.5k "external" remote postings — LinkedIn listings it re-publishes for about a
-// month, each under its real employer — and those are what this crawls. Boardless and
-// multi-company, like workatastartup.
+// arc adapts Arc (arc.dev), a remote-jobs board. Besides a few postings of its own it mirrors
+// "external" remote postings: LinkedIn listings it re-publishes for about a month, each under its
+// real employer. Those are what this crawls. Boardless and multi-company, like workatastartup.
 //
-// The complete list is session-gated. The public /remote-jobs pages render only the newest
-// ~30 postings of a category with no pagination (658 category pages reach ~47% of the total),
-// while the signed-in site's own search (SEARCH_EXTERNAL_JOBS in its bundle) pages through all
-// of them: POST api.arc.dev/p/job-posts/search, once per job type, answering 401 to a request
-// without the session cookie. So the crawl needs ARC_SESSION_COOKIE — the whole Cookie header
-// of a signed-in browser session — and is registered only where it is set (see All).
+// The complete list is session-gated. The public /remote-jobs pages render only the newest ~30
+// postings of a category with no pagination, while the signed-in site's own search
+// (SEARCH_EXTERNAL_JOBS in its bundle) pages through all of them: POST
+// api.arc.dev/p/job-posts/search, once per job type, answering 401 without the session cookie. So
+// the crawl needs ARC_SESSION_COOKIE (the whole Cookie header of a signed-in browser session) and
+// is registered only where it is set (see All).
 //
-// The listing carries title, employer, required countries, levels and date but no body; the
-// body lives only on the public job page's __NEXT_DATA__. So this is a HydratingSource that
-// buys a page only for postings the catalogue lacks, and CoverageGated because a large share
-// re-lists employers freehire already crawls first-party (~40% measured 2026-10-30). The apply
-// link on every sampled posting was a linkedin.com URL, so the stored URL is Arc's own page.
+// The listing carries title, employer, required countries, levels and date but no body; the body
+// lives only on the public job page's __NEXT_DATA__. So this is a HydratingSource that buys a page
+// only for postings the catalogue lacks, and CoverageGated because many postings re-list employers
+// freehire already crawls first-party. The apply link is a linkedin.com URL, so the stored URL is
+// Arc's own page.
 type arc struct {
 	http    arcHTTP
 	session string
@@ -56,23 +55,22 @@ const (
 	// else was redirected away from a posting Arc no longer carries.
 	arcJobPathPrefix = "/remote-jobs/j/"
 
-	// arcPageSize is served as asked; 100 keeps the full walk to ~76 requests.
+	// arcPageSize is served as asked.
 	arcPageSize = 100
-	// arcMaxPages is a ceiling ~13x the measured catalogue (72 full-time pages), never the
-	// expected end. Reaching it fails the crawl: the provider is swept by source, so a
-	// truncated walk must not pass.
+	// arcMaxPages is a ceiling far above the catalogue's page count, never the expected end.
+	// Reaching it fails the crawl: the provider is swept by source, so a truncated walk must not
+	// pass.
 	arcMaxPages = 1000
 )
 
 // arcJobTypes are the two listings the site's search splits the catalogue into; their stated
-// totals summed to the catalogue's (7,148 + 358 = 7,506 on 2026-10-30).
+// totals sum to the catalogue's.
 var arcJobTypes = []string{"fulltime", "freelance"}
 
-// One request a second through one limiter for the listing and the pages alike: the session is
-// a person's account, and a crawl that hammers it is a crawl that gets it banned. A cold
-// catalogue is ~7.5k pages, so one run hydrates at most arcDetailBudget of them and the rest
-// accrete over the next runs instead of one run outliving its unit timeout and saving nothing.
-// At ~250 new postings a day a warm daily run spends a small fraction of it.
+// One request a second through one limiter for the listing and the pages alike: the session is a
+// person's account, and a crawl that hammers it gets it banned. A cold catalogue is thousands of
+// pages, so one run hydrates at most arcDetailBudget of them and the rest accrete over the next
+// runs instead of one run outliving its unit timeout and saving nothing.
 const (
 	arcRequestInterval = time.Second
 	arcRequestBurst    = 1
@@ -292,8 +290,8 @@ var arcMarkdown = goldmark.New(goldmark.WithRendererOptions(gmhtml.WithUnsafe())
 var arcStrongRun = regexp.MustCompile(`(?s)<strong>(\s*)(.*?)(\s*)</strong>`)
 
 // withDetail adds the job page's body. ok=false with a nil error is Arc's own answer that the
-// posting is gone: a redirect away from the job page (what an unknown key gets, measured), a
-// 404/410, or a page marking the posting closed. An error is the absence of an answer.
+// posting is gone: a redirect away from the job page (what an unknown key gets), a 404/410, or a
+// page marking the posting closed. An error is the absence of an answer.
 func (s arc) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	root, final, err := s.http.GetHTMLResolved(ctx, base.URL)
 	if err != nil {
@@ -367,10 +365,9 @@ func (r arcListing) toJob() (Job, bool) {
 	return j, true
 }
 
-// arcStateCollisions are the country codes a US location can turn into: every state
-// abbreviation that is also an ISO 3166 code (IL Israel, VA Vatican, GA Gabon, CA Canada…), plus
-// GE and JE, which the sample shows standing for Georgia and New Jersey beside "US" (measured
-// 2026-10-30: 866 of 4,300 postings listed "US" beside one of these).
+// arcStateCollisions are the country codes a US location can turn into: every state abbreviation
+// that is also an ISO 3166 code (IL Israel, VA Vatican, GA Gabon, CA Canada…), plus GE and JE,
+// which stand for Georgia and New Jersey beside "US".
 var arcStateCollisions = func() map[string]bool {
 	m := map[string]bool{"GE": true, "JE": true}
 	for _, s := range strings.Fields("AL AR AZ CA CO DE GA ID IL IN KY LA MA MD ME MN MO MS MT NC NE PA SC TN VA") {

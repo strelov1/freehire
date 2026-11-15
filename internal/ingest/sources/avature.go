@@ -11,17 +11,14 @@ import (
 
 // avature adapts Avature career sites (e.g. EA's jobs.ea.com, canonically ea.avature.net).
 // The board is the career-site host. A sitemap index advertises one sitemap per locale; the
-// adapter crawls the en_US one (the other locales list the same postings) and reads its
-// JobDetail URLs. Each job page is server-rendered HTML with no schema.org JSON-LD, so the
-// title comes from og:title and the location/work-model/description from the page's
-// article__content__view__field label/value blocks (description = the richest value).
+// adapter crawls the en_US one (other locales list the same postings) and reads its JobDetail
+// URLs. Each job page is server-rendered HTML with no JSON-LD: the title comes from og:title and
+// the location/work-model/description from the article__content__view__field label/value blocks.
 //
-// Almost every tenant names its public portal "careers", so that path is tried first at no
-// extra request. A handful front their listing behind a differently-named portal instead (Qatar
-// Airways: "global") — robots.txt enumerates every portal Avature registered for the host, so
-// when /careers/ carries no postings each same-host Sitemap: line it advertises is tried in
-// turn until one does. A tenant whose portals all wall off requisitions (Bain: real portals,
-// zero listed postings in any of them) legitimately exhausts every candidate and errors.
+// Almost every tenant names its public portal "careers", so that path is tried first at no extra
+// request. Some use another name (Qatar Airways: "global"); robots.txt lists every portal for the
+// host, so when /careers/ has no postings each same-host Sitemap: line is tried in turn. A tenant
+// whose portals all wall off requisitions (Bain) exhausts every candidate and errors.
 type avatureHTTP interface {
 	XMLGetter
 	HTMLGetter
@@ -276,11 +273,10 @@ func avatureLabeledValue(root *html.Node, label string) string {
 }
 
 // avatureDescription returns the inner HTML of the job ad body: every field that has no
-// sidebar label and is not an inline-labeled value ("<strong>Locations</strong>: …"),
-// joined in page order. Most tenants render the body as one such field (EA); UNOPS splits it
-// into a dozen sections, each opening with its own <style>, and picking the "richest" one
-// kept only the closing disclaimer, its length inflated by CSS. A page with no field
-// wrappers falls back to avatureRichestValue.
+// sidebar label and is not an inline-labeled value, joined in page order. Tenants like UNOPS split
+// the body into many sections, each opening with its own <style>, so picking the "richest" one
+// would keep only a closing disclaimer. A page with no field wrappers falls back to
+// avatureRichestValue.
 func avatureDescription(root *html.Node) string {
 	var parts []string
 	walk(root, func(n *html.Node) bool {

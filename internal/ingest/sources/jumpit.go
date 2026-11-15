@@ -14,16 +14,16 @@ import (
 
 // jumpit adapts Jumpit (jumpit.saramin.co.kr), Saramin's IT-only job board for South Korea.
 // The site's own frontend reads a keyless JSON API on jumpit-api.saramin.co.kr: one listing
-// names the whole open catalogue (792 postings measured 2026-11-04) and a per-posting detail
+// names the whole open catalogue and a per-posting detail
 // carries the body, so the provider is boardless and hydrates a posting only when the
 // catalogue lacks it.
 //
-// The listing is read in pages of jumpitPageSize, large enough that today the whole catalogue
-// is ONE page. That is not an optimisation: the listing's order is unstable between requests,
-// so at its default 16 rows a page every walk measured repeated some rows and lost as many
-// (779-791 distinct of 792, whatever the sort). One page has no boundary to drift across, and
-// is what lets the adapter claim fullCatalog: any page failing, the stated total moving, or
-// the distinct ids falling short of it fails the crawl. See the Jumpit traps in AGENTS.md.
+// The listing is read in pages of jumpitPageSize, large enough that the whole catalogue is ONE
+// page. That is not an optimisation: the listing's order is unstable between requests, so at its
+// default 16 rows a page every walk repeats some rows and loses as many. One page has no boundary
+// to drift across, and is what lets the adapter claim fullCatalog: any page failing, the stated
+// total moving, or the distinct ids falling short of it fails the crawl. See the Jumpit traps in
+// AGENTS.md.
 type jumpit struct {
 	http JSONGetter
 }
@@ -34,14 +34,13 @@ const (
 	jumpitDetailURL  = jumpitAPI + "/position/%d"
 	jumpitPostingURL = "https://jumpit.saramin.co.kr/position/%d"
 	jumpitPageSize   = 1000
-	// jumpitMaxPages is a ceiling, not an expected end: it admits 20,000 postings against
-	// 792 measured. Reaching it fails the crawl.
+	// jumpitMaxPages is a ceiling, not an expected end: it admits 20,000 postings, far above the
+	// catalogue. Reaching it fails the crawl.
 	jumpitMaxPages = 20
 )
 
-// The budget is unmeasured: robots.txt states no Crawl-delay and no request was refused while
-// the adapter was written. Every request is held to one a second; a first run is one listing
-// request and ~800 detail requests, ~14 minutes. Tune from the first runs.
+// The budget is unmeasured: robots.txt states no Crawl-delay. Every request is held to one a
+// second; tune from the first runs.
 const (
 	jumpitRequestInterval = time.Second
 	jumpitRequestBurst    = 2
@@ -279,8 +278,8 @@ func jumpitDescription(d jumpitDetail) string {
 	return b.String()
 }
 
-// jumpitCategories maps the platform's own job categories, a closed picklist of 22 measured
-// 2026-11-04, each to the category the title dictionary gives its English equivalent. Two are
+// jumpitCategories maps the platform's own job categories, a closed picklist,
+// each to the category the title dictionary gives its English equivalent. Two are
 // deliberately absent: HW/임베디드 files hardware and embedded software under one name, and
 // VR/AR/3D names a medium rather than a role, so neither says which category a posting is in.
 var jumpitCategories = map[string]string{
@@ -325,7 +324,7 @@ func jumpitCategory(names []string) string {
 }
 
 // jumpitRegions maps the region a listing row's location starts with — the platform's own
-// picklist, measured over the whole catalogue 2026-11-04 — to the English name the location
+// picklist — to the English name the location
 // dictionary reads. 전남광주 is the platform's label for the merged South Jeolla and Gwangju
 // region. The special self-governing provinces are listed under both of their labels.
 var jumpitRegions = map[string]string{

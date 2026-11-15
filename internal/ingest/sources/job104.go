@@ -24,21 +24,18 @@ import (
 // The job categories would not: a posting carries up to three, and the pipeline namespaces a
 // posting's identity by board, so a category board would store it up to three times.
 //
-// Measured live on 2026-10-25 (see the "104 traps" section of AGENTS.md):
+// See the "104 traps" section of AGENTS.md. In short:
 //
 //   - The search reads at most 100 pages of ~30 rows, and its total saturates at 1001. A board
 //     whose first page reports 100 pages is split over the five disjoint experience brackets
-//     and then the job categories (18 families, 44 groups, 619 leaves), until every slice ends
-//     before page 100. A posting under several categories is met in several slices and kept
-//     once.
-//   - The listing row already carries the full description (the detail endpoint's is the same
-//     text), so a crawl is listing pages only.
+//     and then the job categories, until every slice ends before page 100. A posting under
+//     several categories is met in several slices and kept once.
+//   - The listing row already carries the full description, so a crawl is listing pages only.
 //   - The filters are soft: promoted rows from anywhere are mixed into a page. A row is kept
 //     only when its own address code lies inside the board's area.
-//   - Both crawl hosts' IPs are refused by Cloudflare — a plain client and the proxies alike,
-//     and a Go Chrome-fingerprint client is shown the challenge — while the Scrapling
-//     service's impersonating fetcher is served. It is reached through the service's rotating
-//     proxy, because the site rate-limits per address (scraplingtier.go).
+//   - Cloudflare refuses both crawl hosts' IPs, plain and Go Chrome-fingerprint clients alike,
+//     while the Scrapling service's impersonating fetcher is served. It is reached through the
+//     service's rotating proxy, because the site rate-limits per address (scraplingtier.go).
 type job104 struct {
 	http    HeaderJSONGetter
 	static  JSONGetter
@@ -58,17 +55,14 @@ const (
 
 // job104RequestInterval paces every search request of ONE run through one limiter; the
 // scheduler runs several shards at once, each with its own. The platform rate-limits per
-// address — from the crawl host's own IP, concurrent shards drew 429s at one request every
-// 0.8 s each and still did at 4 s — so the crawl leaves through the Scrapling service's
-// rotating proxy (scraplingtier.go), where each request has its own exit; through it the
-// sharded passes drew no 429 at all. The pace is then courtesy toward the site and the run
-// budget: at 2 s a shard holding two of the largest districts outlasted its 4500 s.
+// address, so the crawl leaves through the Scrapling service's rotating proxy
+// (scraplingtier.go), where each request has its own exit. The pace is courtesy toward the site
+// and the run budget: a slower one makes a shard holding two of the largest districts outlast it.
 const job104RequestInterval = 1200 * time.Millisecond
 
 // job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429), failed (5xx) or
-// unanswered search, the wait
-// doubling from 5 s up to retryDelayCap. The Scrapling client retries nothing itself (see
-// newScraplingClient), so without this one 429 fails the whole board.
+// unanswered search, the wait doubling from 5 s up to retryDelayCap. The Scrapling client retries
+// nothing itself (see newScraplingClient), so without this one 429 fails the whole board.
 const (
 	job104RateLimitRetries = 4
 	job104RateLimitBackoff = 5 * time.Second
@@ -202,9 +196,8 @@ func (s job104) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	// walk reads a slice, or splits it when it reaches the page cap: first over the experience
 	// brackets, then down the category tree (nodes are the categories at this depth). The
-	// brackets go first because they are disjoint — each posting is fetched in one of them —
-	// while a posting under three categories is fetched three times, which made a large
-	// district's crawl outlast its run budget.
+	// brackets go first because they are disjoint, while a posting under three categories is
+	// fetched three times, which made a large district's crawl outlast its run budget.
 	var walk func(params url.Values, nodes []job104Code, expSplit bool) error
 	walk = func(params url.Values, nodes []job104Code, expSplit bool) error {
 		first, err := s.search(ctx, params, 1)

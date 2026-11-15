@@ -26,12 +26,12 @@ func NewCareerPage(c HTMLGetter) Source { return careerspage{http: c} }
 func (careerspage) Provider() string { return "careerspage" }
 
 // careerspageMaxPages caps the ?page=N walk so a listing that never yields an empty/repeat
-// page cannot loop forever (the boards seen are ~10 pages; this is ample headroom).
+// page cannot loop forever (ample headroom).
 const careerspageMaxPages = 100
 
 // careerspageDetailWorkers throttles the per-board detail fan-out well below the shared
 // defaultDetailWorkers (8): careers-page.com rate-limits by request volume, and a wide burst
-// trips a 429 window after ~8 requests — starving large boards even through the proxy egress
+// trips a 429 window — starving large boards even through the proxy egress
 // (see proxiedProviders). A narrow pool keeps the crawl under the window; the standard client's
 // 429-retry backoff absorbs the occasional overshoot, so a full board converges in one run.
 const careerspageDetailWorkers = 2

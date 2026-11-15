@@ -34,18 +34,17 @@ const (
 	// stable public location; an ad with its own jobAdUrl (external postings) prefers that.
 	jobnetJobURL = "https://job.jobnet.dk/CV/FindWork/Details/%s"
 	// jobnetPageSize is the most ResultsPerPage the API honours: 100 is served, 500 and 1000
-	// are refused (measured 2026-10-31).
+	// are refused.
 	jobnetPageSize = 100
-	// jobnetWindow is how many results the search serves for any one query: with 23,169 ads
-	// stated, page 100 of 100 was full and page 101 empty (measured 2026-10-31). The unfiltered
-	// walk this replaced took that empty page for the catalogue's end, so it never listed the
-	// oldest ~13k ads, and ~17k stored ones went unseen for a week while still shown.
+	// jobnetWindow is how many results the search serves for any one query: page 101 of
+	// 100-per-page comes back empty. An unfiltered walk took that empty page for the catalogue's
+	// end, never listed the oldest ads, and left stored ones unseen.
 	jobnetWindow = 10000
 	// jobnetSliceAds bounds how many ads (by the facet's counts) one occupation slice may hold,
 	// below the window so the ads published while a slice is walked still fit in it.
 	jobnetSliceAds = 9000
 	// jobnetSliceOccupations bounds how many occupation ids one slice names, keeping its URL a
-	// few KB (an id is a 36-character GUID; 880 occupations were listed on 2026-10-31).
+	// few KB (an id is a 36-character GUID).
 	jobnetSliceOccupations = 100
 )
 
@@ -102,9 +101,8 @@ type jobnetAd struct {
 
 // Fetch lists the whole catalogue. The search serves only jobnetWindow results of a query, so
 // the catalogue is read in slices: one request for the occupations facet (every ad carries
-// exactly one occupation — the facet's counts summed to the stated total, 23,169, on
-// 2026-10-31), the occupations packed into slices that each fit the window, and each slice
-// walked freshest-first to its natural end, the first empty page. An ad that shifted across a
+// exactly one occupation, so the facet's counts sum to the stated total), the occupations packed
+// into slices that each fit the window, and each slice walked freshest-first to its natural end, the first empty page. An ad that shifted across a
 // page boundary while a slice was walked is kept once.
 //
 // jobnet is swept by source, so a partial list would close every ad the walk missed, and

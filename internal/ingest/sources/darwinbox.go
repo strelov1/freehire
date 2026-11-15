@@ -19,8 +19,8 @@ import (
 // /ms/candidateapi/job/alljobs. It pages at 100 postings whatever limit is asked for, carries
 // the board's total as job_counts, and every row already holds the posting's whole description
 // (jd), so no per-posting request is needed. The API sits behind Cloudflare, which refuses Go's
-// default TLS+HTTP/2 fingerprint with a 403 and serves the Chrome one (measured 2026-10-25 from
-// the crawl host), hence the fingerprint transport in the registry.
+// default TLS+HTTP/2 fingerprint with a 403 and serves the Chrome one, hence the fingerprint
+// transport in the registry.
 type darwinbox struct {
 	http JSONPoster
 }
@@ -37,8 +37,8 @@ func (darwinbox) fullBoardListing() {}
 // darwinboxPageSize is the page the API serves whatever larger limit is requested.
 const darwinboxPageSize = 100
 
-// darwinboxMaxPages bounds the walk at 50k postings, well past the largest board measured
-// (684); reaching it fails the crawl instead of ending it as a success.
+// darwinboxMaxPages bounds the walk at 50k postings, well past any real board; reaching it fails
+// the crawl instead of ending it as a success.
 const darwinboxMaxPages = 500
 
 // darwinboxHostPattern is the shape of a board: one tenant label on one of the two regional
@@ -140,8 +140,7 @@ func darwinboxJob(base, company string, p darwinboxPosting) Job {
 var darwinboxDoubleEncodedTagOpener = regexp.MustCompile(`&amp;lt;/?[a-zA-Z]`)
 
 // darwinboxDescription decodes the jd before sanitizing it. Most postings serve it
-// entity-encoded ("&lt;p&gt;"), some encoded twice ("&amp;lt;p&amp;gt;") and a few as live HTML —
-// measured 2026-10-29 over seven tenants' first pages: 441 once, 5 twice, 6 live. A body whose
+// entity-encoded ("&lt;p&gt;"), some encoded twice ("&amp;lt;p&amp;gt;") and a few as live HTML. A body whose
 // twice-encoded openers outweigh every other kind loses its outer layer first; unescapeEncodedHTML
 // then decodes a once-encoded body and leaves live HTML (and an encoded example inside it) alone.
 // sanitizeHTML must run last: decoding is what turns the text into live markup.

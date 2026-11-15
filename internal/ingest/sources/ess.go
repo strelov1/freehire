@@ -17,9 +17,9 @@ import (
 
 // ess adapts the job search of the Employment Service of Slovenia (Zavod Republike Slovenije za
 // zaposlovanje, www.ess.gov.si): every vacancy a Slovenian employer registers with the public
-// service, ~3.6k open at a time, every trade, mostly local employers and the public sector. It
-// is boardless and an aggregator — the employer is read per posting. See the "ESS traps" section
-// of AGENTS.md for the measurements behind each rule.
+// service, every trade, mostly local employers and the public sector. It is boardless and an
+// aggregator: the employer is read per posting. See the "ESS traps" section of AGENTS.md for the
+// measurements behind each rule.
 //
 // The site's search page is an Angular app over a public JSON API behind a 3scale gateway. The
 // listing endpoint pages the whole Slovenian catalogue with each vacancy's title, employer,
@@ -51,18 +51,18 @@ const (
 	// panel also needs the /#/pdm/<id> fragment appended in essBaseJob; idp alone opens the list.
 	essPostingURL = "https://www.ess.gov.si/iskalci-zaposlitve/iskanje-zaposlitve/iskanje-dela/?idp="
 
-	// essPageSize is the listing page size. The API caps a page at 2,000; a page of 500 answered
-	// in ~8 s (2026-10-29), so the long-timeout client is used and a full walk is 8 pages.
+	// essPageSize is the listing page size. The API caps a page at 2,000; 500 answers slowly, so the
+	// long-timeout client is used.
 	essPageSize = 500
-	// essMaxPages is a ceiling far past the catalogue's size (~3.6k = 8 pages); reaching it
-	// before the listing's end fails the crawl rather than accepting a truncated walk.
+	// essMaxPages is a ceiling far past the catalogue's size; reaching it before the listing's
+	// end fails the crawl rather than accepting a truncated walk.
 	essMaxPages = 40
 	// essSortNewest is the listing's "Po datumu objave" order (newest first); "0" is relevance.
 	essSortNewest = 7
 	// essITField is the occupational field "Računalništvo, programiranje, IT".
 	essITField = "0020"
 	// essPartTime is the working-time filter "Krajši delovni čas"; "1" is full time. The two
-	// partition the catalogue exactly (3,419 + 202 = 3,621 on 2026-10-29).
+	// partition the catalogue exactly.
 	essPartTime = "2"
 
 	// essRequestInterval paces every request of a run, listing and detail alike, at one a
@@ -70,9 +70,8 @@ const (
 	essRequestInterval = time.Second
 	essDetailWorkers   = 2
 	// essMaxNewPerRun bounds the detail requests one run buys: 1,200 at one a second is 20
-	// minutes, plus ~10 listing requests and the writes that follow, inside the scheduler's
-	// default 2,400 s crawl budget. ~170 vacancies arrive each weekday, so a cold catalogue
-	// (~3.6k) is taken in three runs, newest first, and every later run keeps up.
+	// minutes, plus the listing and the writes that follow, inside the scheduler's default 2,400 s
+	// crawl budget. A cold catalogue is taken over a few runs, newest first, and later runs keep up.
 	essMaxNewPerRun   = 1200
 	essDeadlineMargin = 5 * time.Minute
 
@@ -280,8 +279,8 @@ func (s ess) list(ctx context.Context) ([]essPosting, error) {
 		}
 	}
 	var partTime map[string]bool
-	// The slice normally holds ~200 vacancies: an empty one is a fault, and reading it would call
-	// every vacancy full time.
+	// The slice normally holds a couple of hundred vacancies: an empty one is a fault, and reading
+	// it would call every vacancy full time.
 	if pt, err := s.walk(ctx, essSlice{workingTime: essPartTime}); err != nil || len(pt) == 0 {
 		log.Printf("ess: part-time slice failed or came back empty; no working time is stated this run: %v", err)
 	} else {

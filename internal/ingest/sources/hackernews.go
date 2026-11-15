@@ -141,11 +141,9 @@ func (s hackernews) threads(ctx context.Context) ([]int64, error) {
 		return nil, fmt.Errorf("hackernews: no \"Who is hiring?\" thread among the newest %d whoishiring stories", len(resp.Hits))
 	}
 	if len(ids) < hackernewsThreads {
-		// Not an error — a fresh deploy racing the new month's post, or the account simply
-		// not having posted a second thread yet, are both legitimate. But it's a real
-		// coverage reduction on a fullCatalog source (a post from an unread thread closes on
-		// the next sweep as if withdrawn), so it's worth a line distinguishing it from the
-		// intended two-thread read rather than passing silently.
+		// Not an error (a fresh deploy racing the new month's post, or the account not having
+		// posted a second thread yet), but a real coverage reduction on a fullCatalog source: a post
+		// from an unread thread closes on the next sweep. Worth a log line.
 		log.Printf("hackernews: found only %d of %d hiring threads this run", len(ids), hackernewsThreads)
 	}
 	return ids, nil
@@ -156,10 +154,9 @@ func (s hackernews) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The (up to two) thread fetches are independent ~500KB requests; run them concurrently
-	// rather than doubling the crawl's wall-clock latency for no correctness reason. Any
-	// single failure still fails the whole crawl (fullCatalog), so the result only needs
-	// collecting once every goroutine has finished.
+	// The (up to two) thread fetches are independent; run them concurrently. Any single failure
+	// still fails the whole crawl (fullCatalog), so the result is collected once every goroutine
+	// has finished.
 	threadsData := make([]hackernewsItem, len(ids))
 	errs := make([]error, len(ids))
 	var wg sync.WaitGroup
@@ -212,12 +209,10 @@ func hackernewsParseHeader(text string) (hackernewsHeader, bool) {
 	if len(parts) < 2 || parts[0] == "" {
 		return hackernewsHeader{}, false
 	}
-	// A post that opens with the ROLE has shifted every segment by one: the role lands in the
-	// employer's place and the location in the role's. Filing it writes a job title as a
-	// company, which is worse than not filing it at all — it invents an employer, and the
-	// company_slug that dedup and the company page are keyed on is then a role. Nothing here
-	// can recover the real employer (a post in this shape names it only in prose, if at all),
-	// so the post is dropped, the same answer a post with no second segment already gets.
+	// A post that opens with the ROLE has shifted every segment by one: filing it would write a
+	// job title as a company, and the company_slug that dedup and the company page key on would
+	// be a role. Nothing here can recover the real employer, so the post is dropped, as one with
+	// no second segment is.
 	if hackernewsSeniority.MatchString(parts[0]) && hackernewsRoleNoun.MatchString(parts[0]) {
 		return hackernewsHeader{}, false
 	}
@@ -292,12 +287,10 @@ func (c hackernewsItem) toJob() (Job, bool) {
 	if link == "" {
 		link = fmt.Sprintf(hackernewsPermalink, c.ID)
 	}
-	// WorkMode is left unset on purpose: h.Remote comes from a free-text scan of the whole
-	// header tail (title, commitment, salary — not just Location), which is exactly the
-	// "location heuristic" source.go's Job.WorkMode contract says must never reach this
-	// field. The pipeline gives a set WorkMode precedence over its own location/description
-	// dictionary, so setting it here from this heuristic would override that dictionary's
-	// more careful resolution with a cruder guess — worse than leaving it empty.
+	// WorkMode is left unset on purpose: h.Remote comes from a free-text scan of the whole header
+	// tail, which is the "location heuristic" source.go's Job.WorkMode contract says must never
+	// reach this field. A set WorkMode takes precedence over the pipeline's own location and
+	// description dictionary, so it would override its more careful resolution with a cruder guess.
 	return Job{
 		ExternalID:  strconv.FormatInt(c.ID, 10),
 		URL:         link,

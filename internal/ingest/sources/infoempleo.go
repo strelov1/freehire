@@ -21,10 +21,9 @@ import (
 )
 
 // infoempleo adapts Infoempleo (www.infoempleo.com), one of Spain's large general job boards:
-// ~8k public postings across every trade, most of them posted by staffing agencies (ETTs) and
-// recruitment consultancies, a few percent technical. It is boardless and an aggregator — the
-// employer is read per posting. See the "Infoempleo traps" section of AGENTS.md for the
-// measurements behind each rule.
+// every trade, most postings from staffing agencies (ETTs) and recruitment consultancies.
+// Boardless and an aggregator; the employer is read per posting. See the "Infoempleo traps"
+// section of AGENTS.md.
 //
 // The listing is the site's own paginated /trabajo/ walk, 20 cards a page, which spell each
 // posting's title, employer, place, contract and remote arrangement — everything but the body.
@@ -51,13 +50,13 @@ const (
 	// infoempleoDetailWorkers keeps enough pages in flight that the limiter, not latency, sets
 	// the pace.
 	infoempleoDetailWorkers = 2
-	// infoempleoMaxPages is a safety ceiling on the walk: the listing ran to ~390 pages on
-	// 2026-10-27 and answers an empty page (HTTP 200, no cards) past its end.
+	// infoempleoMaxPages is a safety ceiling on the walk; the listing answers an empty page (HTTP
+	// 200, no cards) past its end.
 	infoempleoMaxPages = 800
-	// infoempleoMaxNewPerRun bounds how many unseen postings one run reads: the ~390-page walk
-	// takes ~7 minutes at one a second and 900 posting pages ~15 more, well inside the
-	// scheduler's default 2,400 s crawl budget. The first runs face the whole catalogue, so it is
-	// taken in slices, newest first; a posting past the bound is read by a later run.
+	// infoempleoMaxNewPerRun bounds how many unseen postings one run reads, so the listing walk plus
+	// the page reads fit the scheduler's default 2,400 s crawl budget. The first runs face the whole
+	// catalogue, so it is taken in slices, newest first; a posting past the bound is read by a later
+	// run.
 	infoempleoMaxNewPerRun   = 900
 	infoempleoDeadlineMargin = 5 * time.Minute
 )

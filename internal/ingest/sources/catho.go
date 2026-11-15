@@ -15,10 +15,9 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// catho adapts Catho (www.catho.com.br), Brazil's largest general job board: ~214k public
-// postings from tens of thousands of employers, almost none of them IT. It is boardless and an
-// aggregator — the employer is read per posting. See the "Catho traps" section of AGENTS.md for
-// the measurements behind each rule.
+// catho adapts Catho (www.catho.com.br), Brazil's largest general job board, almost none of it IT. It is
+// boardless and an aggregator: the employer is read per posting. See the "Catho traps" section of
+// AGENTS.md.
 //
 // The posting set comes from the job sitemaps (robots.txt disallows the search, /buscar/vagas/),
 // which carry nothing but each posting's URL, so every fact is bought with the posting page:
@@ -44,23 +43,20 @@ const (
 	cathoSitemapNeedle = "/sitemap2/sitemap_vagas_"
 )
 
-// cathoRequestInterval paces every request of a run, sitemap and posting page alike, through
-// one limiter. A posting page answered in ~0.75 s from the crawl host and 52 pages at ~1/s drew
-// no refusal; two a second is courtesy toward a large site, not a limit we measured.
+// cathoRequestInterval paces every request of a run, sitemap and posting page alike, through one
+// limiter. Two a second is courtesy toward a large site, not a measured limit.
 const cathoRequestInterval = 500 * time.Millisecond
 
 // cathoDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 const cathoDetailWorkers = 3
 
-// cathoMaxNewPerRun bounds how many unseen postings one run hydrates: 3000 pages at two a second
-// is ~25 minutes, inside the 50-minute run timeout with room for a slow origin. The first runs
-// face the whole ~214k catalogue, so it is taken in slices, newest first; a posting past the
-// bound is not stored this run and is hydrated by a later one.
+// cathoMaxNewPerRun bounds how many unseen postings one run hydrates, so the first runs (the whole
+// catalogue is unseen) fit the 50-minute run timeout. Taken newest first; a posting past the bound is
+// hydrated by a later run.
 const cathoMaxNewPerRun = 3000
 
-// cathoConfidential is the label Catho shows when the employer chose to stay hidden (~16% of
-// sampled postings). It is a placeholder, not a company, so such a posting is dropped rather
-// than filed under one bogus employer collecting every anonymous posting on the site.
+// cathoConfidential is the label Catho shows when the employer chose to stay hidden. It is a
+// placeholder, not a company, so such a posting is dropped rather than filed under one bogus employer.
 const cathoConfidential = "Empresa Confidencial"
 
 // NewCatho builds the adapter over the given client (see compatibleUASource for why it is not
@@ -182,8 +178,8 @@ func (s catho) list(ctx context.Context) ([]cathoPosting, error) {
 
 // detail fetches one posting page. A page that redirected away from the posting is the site's
 // answer that the posting closed (it lands on the search page for the slug) and is dropped by
-// that answer, not by whatever the landing page happens to hold: today it carries no ld+json,
-// but a JobPosting block there would describe some other posting.
+// that answer, not by what the landing page holds: a JobPosting block there would describe some other
+// posting.
 func (s catho) detail(ctx context.Context, p cathoPosting) (Job, bool) {
 	if err := s.limiter.Wait(ctx); err != nil {
 		return Job{}, false

@@ -16,8 +16,7 @@ import (
 // instahyre adapts Instahyre (instahyre.com), an Indian hiring platform for technical roles whose
 // postings each name their own employer. Board-based aggregator: a board is one of the search's
 // COMPANY-SIZE buckets ("1" small, "3" medium, "2" large), the one filter that partitions the
-// catalogue into slices the search can page through whole (it stops at 10,000 rows; the whole
-// catalogue held 12,724 on 2026-10-25).
+// catalogue into slices the search can page through whole (it stops at 10,000 rows).
 //
 // The listing is the JSON search the site's own app calls (/api/v1/job_search), which carries no
 // body, so this is a HydratingSource that reads a posting's schema.org JobPosting from its public
@@ -46,10 +45,8 @@ const (
 	instahyreRequestInterval = time.Second
 	instahyreRequestBurst    = 1
 	instahyreDetailWorkers   = 2
-	// instahyreDetailBudget bounds one run's page reads (~10 minutes at the pace above). The
-	// ~365 search pages of a full walk answer in ~3 s each (61 pages took 183 s), ~18 minutes, and
-	// both must fit the scheduler's default 2,400 s crawl budget. A cold start is ~12.7k pages,
-	// ~21 runs.
+	// instahyreDetailBudget bounds one run's page reads; with the search pages of a full walk
+	// (~3 s each) it must fit the scheduler's default 2,400 s crawl budget. A cold start takes many runs.
 	instahyreDetailBudget = 600
 )
 

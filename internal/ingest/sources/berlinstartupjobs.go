@@ -7,7 +7,7 @@ import (
 )
 
 // berlinstartupjobs adapts Berlin Startup Jobs (berlinstartupjobs.com), a board of Berlin startup
-// postings: ~140 at a time, its terms allowing Berlin only. It is boardless and an aggregator —
+// postings, its terms allowing Berlin only. It is boardless and an aggregator —
 // the employer is read per posting.
 //
 // robots.txt leaves the site open to generic crawlers, and the terms for job ads acknowledge that

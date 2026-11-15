@@ -17,32 +17,23 @@ import (
 // echojobs adapts echojobs.io, a large multi-employer tech-jobs aggregator. Boardless: one
 // global feed, sorted newest-first, no per-tenant board.
 //
-// echojobs.io retired its public JSON API (the list+detail endpoints this adapter used to call)
-// around 2026-08-13 — both 404 now, verified from prod's own egress IP as well as externally.
-// Two other public, SEO-maintained surfaces replace it: a paginated XML sitemap
-// (https://echojobs.io/sitemap.xml -> sitemap-jobs/N.xml shards, confirmed live to be sorted
-// newest-first by <lastmod>) for discovery, and a schema.org JobPosting ld+json block embedded
+// echojobs.io retired its public JSON API (the list and detail endpoints now 404). Two other
+// public, SEO-maintained surfaces replace it: a paginated XML sitemap
+// (https://echojobs.io/sitemap.xml -> sitemap-jobs/N.xml shards, sorted newest-first by
+// <lastmod>) for discovery, and a schema.org JobPosting ld+json block embedded
 // in each posting's server-rendered detail page (/job/<slug>) for every structured field a
 // posting has (title, company, description, remote signal, location, skills, posting date).
 // Neither needs JavaScript execution — a plain GET reaches both.
 //
-// Job.URL now points at that echojobs.io page, NOT the employer's own ATS link the old adapter
-// used to store (its list JSON carried the employer's apply URL directly; a real Workday/
-// Greenhouse/etc. link, and jobview/JobView.svelte opens it as the "Apply" target). This is a
-// real, unavoidable regression, not an oversight: the employer link is no longer present in the
-// server-rendered page at all — verified live by diffing a fetched page's full text against the
-// dead-code's expectation, then searching it for every http(s) URL — it now only ships client-
-// side (the page even prompts a visitor to "Sign in to apply", which reads as an echojobs.io
-// account gate ahead of the outbound link, not merely a JS-hydration delay). Recovering it would
-// need a headless browser (and possibly an echojobs.io session) for every posting, which defeats
-// the plain-GET design this rewrite exists to keep. See design.md's Risks section.
+// Job.URL points at the echojobs.io page, NOT the employer's own ATS link: that link is absent
+// from the server-rendered page (it ships client-side, behind a "Sign in to apply" prompt).
+// Recovering it would need a headless browser and possibly a session per posting, which defeats
+// the plain-GET design.
 //
-// The sitemap carries nothing beyond a posting's URL and last-modified time — unlike the old
-// list JSON, it cannot supply even a title without a detail fetch — so the "list vs detail"
-// split this adapter used to have collapsed into one tier: every posting FetchNew or Fetch
-// reports has its full JobPosting fetched (FetchNew still skips that fetch for a posting the
-// catalogue already has — see its doc). A detail fetch that fails, or a page carrying no usable
-// JobPosting, simply drops that posting: there is no list-only fallback left to fall back to.
+// The sitemap carries only a posting's URL and last-modified time, not even a title, so every
+// posting FetchNew or Fetch reports has its full JobPosting fetched (FetchNew still skips that
+// fetch for a posting the catalogue already has). A detail fetch that fails, or a page with no
+// usable JobPosting, drops that posting: there is no list-only fallback.
 type echojobs struct {
 	http echojobsHTTP
 	// maxNewPerRun bounds how many unseen postings one run hydrates; non-positive takes
@@ -69,11 +60,9 @@ const (
 	// the sweepGrace type doc in source.go.
 	echojobsSweepGrace = echojobsFreshnessWindow
 	// echojobsMaxNewPerRun is the default hydration budget. A posting page is a browser
-	// navigation through the Scrapling tier, measured at ~2 pages/s across the detail workers,
-	// so 2 000 is ~15 minutes against the unit's 50. The window holds ~4k new postings a day
-	// and the timer runs every 2 h, so the budget keeps up with the inflow and drains the ~60k
-	// backlog a run faces after an outage in a few days instead of pushing one run past its
-	// timeout with nothing written.
+	// navigation through the Scrapling tier (~2 pages/s), so 2 000 is ~15 minutes against the
+	// unit's 50. The budget keeps up with the daily inflow and drains the backlog after an outage
+	// over several runs instead of pushing one run past its timeout with nothing written.
 	echojobsMaxNewPerRun = 2000
 )
 
@@ -164,11 +153,10 @@ func (s echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 	}
 	// A run that listed postings and read NONE of them is a board failure, not an empty crawl.
 	//
-	// This is the guard freehire#2588 was missing. A dropped posting never reaches the pipeline
+	// A dropped posting never reaches the pipeline
 	// — Stats counts saveOne failures, not candidates an adapter discarded — so from every side
 	// but this one, a total outage and a source with nothing to offer produce the same line:
-	// ingested=0, failed=0, exit 0, green unit. echojobs published that line every four hours
-	// for 19 days while its pages were behind a bot firewall, and nothing anywhere noticed.
+	// ingested=0, failed=0, exit 0, green unit — which hid a bot-firewall outage for weeks.
 	//
 	// Only FetchNew knows it walked the sitemap and came back empty-handed, so only FetchNew
 	// can say so. There is deliberately no threshold: "some candidates, none read" is the whole
@@ -189,7 +177,7 @@ type echojobsPosting struct {
 }
 
 // crawl discovers postings by walking the sitemap index's job shards in order, stopping once a
-// shard's postings age past echojobsFreshnessWindow — the shards are confirmed sorted
+// shard's postings age past echojobsFreshnessWindow — the shards are sorted
 // newest-first, so this is the "stop once stale" walk the old page-based crawl used, over a
 // different data source. Per the house pagination rule, a failure fetching the sitemap index
 // itself or the FIRST shard is a board-level error; a later shard failing ends the walk with
@@ -244,11 +232,11 @@ type echojobsURLSet struct {
 
 // echojobsJobShardRE matches a job-postings sitemap shard's URL, as opposed to the index's
 // other shards (sitemap-nav.xml, sitemap-categories.xml, sitemap-blog.xml,
-// sitemap-companies.xml) — verified live.
+// sitemap-companies.xml).
 var echojobsJobShardRE = regexp.MustCompile(`/sitemap-jobs/\d+\.xml$`)
 
 // sitemapShards fetches the sitemap index and returns the job shard URLs, in the order the
-// index lists them (verified live: shard 1 is newest).
+// index lists them (shard 1 is newest).
 func (s echojobs) sitemapShards(ctx context.Context) ([]string, error) {
 	var idx echojobsSitemapIndex
 	if err := s.http.GetXML(ctx, echojobsSitemapURL, &idx); err != nil {
@@ -299,8 +287,8 @@ func echojobsJobURL(slug string) string {
 
 // echojobsJobPosting is the schema.org JobPosting decoded from a /job/<slug> page's ld+json
 // block. jobLocation and applicantLocationRequirements both use the shared object-or-array
-// schema types (schemaPlaces, schemaNamedAreas): every live sample so far has shipped a single
-// object (JLL on-site, Doowii remote), but the schema.org spec allows either shape for both
+// schema types (schemaPlaces, schemaNamedAreas): samples ship a single
+// object, but the schema.org spec allows either shape for both
 // fields, and decoding them as a bare object would fail the WHOLE posting's ld+json the day
 // echojobs (or any single tenant) emits the array form — see schemaNamedAreas' doc. skills is a
 // comma-separated string, not an array, unlike the old list JSON's required_skills.

@@ -42,11 +42,10 @@ func NewAlignerr(c TextGetter, referral string) Source {
 var alignerrReferralCodePattern = regexp.MustCompile(
 	`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// applyURL hangs the configured referral code off the posting page, which is all Alignerr needs:
-// the page reads the parameter and builds its OWN apply links from it, pointing at
-// app.alignerr.com/signin?job=<posting id>&referral-code=<code> (verified live — the id it uses
-// is the same posting id we already store, so nothing has to be looked up). An unset code leaves
-// the plain posting URL alone.
+// applyURL hangs the configured referral code off the posting page: the page reads the parameter
+// and builds its OWN apply links from it (app.alignerr.com/signin?job=<posting
+// id>&referral-code=<code>, using the posting id we already store). An unset code leaves the plain
+// posting URL alone.
 func (a alignerr) applyURL(jobURL string) string {
 	if a.referral == "" {
 		return jobURL

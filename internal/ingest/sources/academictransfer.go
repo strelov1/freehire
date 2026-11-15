@@ -11,14 +11,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// academicTransfer adapts AcademicTransfer (www.academictransfer.com), where the Dutch
-// universities, university medical centres and research institutes publish their academic and
-// support positions, ~770 at a time. It is boardless and an aggregator — the institution is named
-// per posting. See the "Dutch public boards" section of AGENTS.md for the measurements behind
-// each rule.
+// academicTransfer adapts AcademicTransfer (www.academictransfer.com), where Dutch universities,
+// medical centres and research institutes publish academic and support positions. Boardless
+// aggregator: the institution is named per posting.
 //
-// The posting set is one sitemap, which names only each posting's URL; the body is the posting
-// page's schema.org JobPosting, so the adapter hydrates only the postings the catalogue lacks.
+// The posting set is one sitemap naming only each posting's URL; the body is the posting page's
+// schema.org JobPosting, so the adapter hydrates only the postings the catalogue lacks.
 type academicTransfer struct {
 	http         academicTransferHTTP
 	limiter      waiter
@@ -37,8 +35,7 @@ const academicTransferSitemapURL = "https://www.academictransfer.com/sitemap-vac
 const academicTransferRequestInterval = 10 * time.Second
 
 // academicTransferMaxNewPerRun bounds how many unseen postings one run hydrates: 240 pages at the
-// crawl delay is 40 minutes, inside the 50-minute run timeout. The first runs face the whole
-// catalogue (~770), so it takes four; after that a run meets the few dozen a day publishes.
+// crawl delay is 40 minutes, inside the 50-minute run timeout.
 const academicTransferMaxNewPerRun = 240
 
 // NewAcademicTransfer builds the adapter over the given client.

@@ -21,11 +21,10 @@ import (
 // computrabajo adapts Computrabajo (<cc>.computrabajo.com), the general job board Redarbor runs
 // in each Spanish-speaking Latin American country — not its Pandapé ATS (pandapelatam), whose
 // tenants publish here among thousands of other employers. The board is the country's subdomain
-// ("ar"); every trade, mostly staffing agencies, a few percent technical. It is an aggregator —
-// the employer is read per posting. See the "Computrabajo traps" section of AGENTS.md for the
-// measurements behind each rule.
+// ("ar"); every trade, mostly staffing agencies. It is an aggregator — the employer is read per
+// posting. See the "Computrabajo traps" section of AGENTS.md.
 //
-// A country's listing stops at 500 pages (10k postings) while Argentina alone holds ~15k, so the
+// A country's listing stops at 500 pages (10k postings), which a large country exceeds, so the
 // walk reads it province by province — the site's own location filter, each slice far under the
 // cap — taking the province list and sizes from the filter itself. The cards spell each
 // posting's title, employer, place, salary and arrangement — everything but the body, which is
@@ -45,9 +44,9 @@ const (
 	// at one a second — a courtesy ceiling, not a measured limit.
 	computrabajoRequestInterval = time.Second
 	computrabajoDetailWorkers   = 2
-	// computrabajoMaxNewPerRun bounds the posting pages one run reads: Argentina's ~770 listing
-	// pages already take ~15 minutes at one a second, so 600 posting pages and the writes after
-	// them fit the scheduler's 2,400 s crawl budget. A cold catalogue is taken in slices.
+	// computrabajoMaxNewPerRun bounds the posting pages one run reads so that the listing walk, the
+	// posting pages and the writes after them fit the scheduler's 2,400 s crawl budget. A cold catalogue
+	// is taken in slices.
 	computrabajoMaxNewPerRun   = 600
 	computrabajoDeadlineMargin = 5 * time.Minute
 )
@@ -451,7 +450,7 @@ func computrabajoBaseJob(c computrabajoCard, country string) Job {
 }
 
 // computrabajoLD is the part of the posting page's schema.org JobPosting the adapter reads. Not
-// every page carries one (one in seven sampled did not), so it only adds to what the page shows.
+// every page carries one, so it only adds to what the page shows.
 type computrabajoLD struct {
 	DatePosted         string `json:"datePosted"`
 	HiringOrganization struct {

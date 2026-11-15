@@ -19,15 +19,14 @@ import (
 )
 
 // infojobsBR adapts InfoJobs Brasil (www.infojobs.com.br), a general Brazilian job board. It is
-// not infojobs.net: the Spanish site is the `infojobs` adapter, a different catalogue on a
-// different stack, so this one is keyed `infojobsbr`. See the "InfoJobs Brasil traps" section
-// of AGENTS.md for the measurements behind each rule.
+// not infojobs.net: that is the `infojobs` adapter, a different catalogue on a different stack.
+// See the "InfoJobs Brasil traps" section of AGENTS.md.
 //
 // A board is a federative unit ("sp", "ac", ...) or "todo-brasil", the postings that name no
-// place. There is no sitemap; the crawl walks the site's own state listings, cutting a listing
-// the site would truncate into category and filter slices, and hydrates each new posting from
-// its page. It is an aggregator — the employer is the company each card names — and much of
-// it is the employers' own Pandapé career sites republished, which the coverage gate drops.
+// place. There is no sitemap; the crawl walks the state listings, cutting one the site would
+// truncate into category and filter slices, and hydrates each new posting from its page. It is
+// an aggregator (the employer is the company each card names) and much of it is employers' own
+// Pandapé career sites republished, which the coverage gate drops.
 type infojobsBR struct {
 	http           infojobsBRHTTP
 	limiter        waiter
@@ -50,18 +49,16 @@ const (
 	// infojobsBRNationalBoard holds the postings whose place is "Todo Brasil".
 	infojobsBRNationalBoard = "todo-brasil"
 	// infojobsBRNationalListing is the listing the national board is read from. Every state
-	// listing pads its own postings with the same ~1.9k others (~930 from other states and ~840
-	// "Todo Brasil"); Acre's is the shortest walk to them (54 of its own ahead of them on
-	// 2026-10-24).
+	// listing pads its own postings with the same national and other-state ones; Acre's is the
+	// shortest walk to them.
 	infojobsBRNationalListing = "acre"
 	// infojobsBRHiddenEmployer is the card's label for an employer that chose not to be named.
 	infojobsBRHiddenEmployer = "Empresa confidencial"
 )
 
 // infojobsBRSliceMax is the largest listing walked whole. A listing stops serving new results
-// past ~10,000 (page ~490 answers the same page over and over); a listing stating more than this
-// is cut into slices instead. The stated count includes the ~1.9k padding appended to every
-// state listing, so the margin is deliberate.
+// past ~10,000 (a later page repeats the same page); a bigger one is cut into slices. The stated
+// count includes the padding appended to every state listing, so the margin is deliberate.
 const infojobsBRSliceMax = 9000
 
 // infojobsBRMaxPages is the walk's safety ceiling, 20 cards a page. A slice under
@@ -73,22 +70,17 @@ const infojobsBRMaxPages = 480
 // options it can be cut into, so the cut reads them rather than restating them.
 var infojobsBRCuts = []string{"categoria", "im", "tipocontrato", "wo"}
 
-// infojobsBRRequestInterval paces every request of a run through one limiter. Measured
-// 2026-10-24 from the fsn host: two walkers at ~3.2 requests a second for ~1,000 listing
-// requests drew no refusal, and neither did a full listing pass at this rate (~6k requests). The origin is the same Azure stack as Pandapé, which answers a
-// burst with 403 (~6-7 a second), so this is the rate observed to pass, not a limit we know.
+// infojobsBRRequestInterval paces every request of a run through one limiter. The origin is
+// the same Azure stack as Pandapé, which answers a burst with 403, so this is a rate observed to
+// pass, not a known limit.
 const infojobsBRRequestInterval = 333 * time.Millisecond
 
-// infojobsBRSliceWorkers walks a board's slices in parallel: one walk is sequential and a page
-// takes ~0.6 s, so a single walker cannot reach the limiter's rate.
+// infojobsBRSliceWorkers walks a board's slices in parallel: one walk is sequential and slow,
+// so a single walker cannot reach the limiter's rate.
 const infojobsBRSliceWorkers = 3
 
-// infojobsBRMaxNewPerBoard bounds how many unseen postings one board's crawl hydrates. A full
-// listing pass of all 28 boards, eight at a time, read 115,140 postings in 36.6 minutes from the
-// fsn host (2026-10-24; São Paulo alone 60,139 in 26 minutes). 80 new postings on each board is
-// at most ~2.2k detail requests (~12 minutes at the run's pace) and ~5 minutes of writes at the
-// ~7 a second a new posting measured from the crawl host, so a run needs a 4500 s budget, not
-// the default 3000 s. The rest wait for later runs.
+// infojobsBRMaxNewPerBoard bounds how many unseen postings one board's crawl hydrates, so a run
+// fits a 4500 s budget (not the default 3000 s). The rest wait for later runs.
 const infojobsBRMaxNewPerBoard = 80
 
 // infojobsBRStates maps a board to the state's listing slug. Rio de Janeiro's slug drops "de";
@@ -197,8 +189,7 @@ func (s infojobsBR) FetchNewGated(ctx context.Context, e CompanyEntry, seen func
 			return Job{}, false
 		}
 		// A posting closed since the listing was read answers 200 with "Esta vaga não está mais
-		// disponível" — the site's own answer that it is gone, so it is not stored. It was never
-		// stored before either (it is unseen), so there is nothing for a close to reach.
+		// disponível"; it is unseen, so it is not stored and there is nothing for a close to reach.
 		if firstByClass(root, "js_VacancyNotFound") != nil {
 			gone.Add(1)
 			return Job{}, false
@@ -588,9 +579,8 @@ func infojobsBREmploymentType(v string) string {
 
 var infojobsBRMoney = regexp.MustCompile(`R\$ ?([\d.]+),\d\d`)
 
-// infojobsBRMonthlyFloor separates a monthly wage from anything else. The card states an amount
-// and no period; Brazilian wages are quoted monthly, and the figures on 300 sampled São Paulo
-// cards (2026-10-24) cluster at R$ 1.6k-3k. Below the floor nothing is published.
+// infojobsBRMonthlyFloor separates a monthly wage from anything else. The card states an
+// amount and no period; Brazilian wages are quoted monthly.
 const infojobsBRMonthlyFloor = 1000
 
 // infojobsBRSalary parses the card's "R$ 1.625,00 a R$ 2.000,00" or "R$ 2.120,00"; "A combinar"

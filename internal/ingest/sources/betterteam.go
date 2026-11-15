@@ -19,8 +19,7 @@ import (
 // (bounded-concurrency), like the other schema.org detail adapters (freshteam/softgarden).
 //
 // The listing is a single page: Betterteam renders the whole board on the site root, so a
-// tenant with more postings than the root holds is truncated. In practice Betterteam
-// tenants (small businesses) are small.
+// tenant with more postings than the root holds is truncated.
 type betterteam struct {
 	http HTMLGetter
 }
@@ -58,7 +57,7 @@ func (b betterteam) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			links = append(links, link{btJobID(u), u})
 		}
 	}
-	// The live CareersPage loader stops at 300 entries (Turing, 2026-11-11)
+	// The live CareersPage loader stops at a fixed entry cap
 	// without a total or a continuation cursor. Even the company-scoped sweep
 	// must not mistake that prefix for everything the board published.
 	if len(links) >= 300 {

@@ -11,8 +11,7 @@ import (
 )
 
 // joinPageSize is the list-API page size. Join's public API caps pageSize at 5; any larger
-// value is rejected with HTTP 422. Pagination is driven by pagination.pageCount, so a smaller
-// page just means more list pages — the per-job detail fetches (the bulk of the work) are unaffected.
+// value is rejected with HTTP 422. Pagination is driven by pagination.pageCount.
 const (
 	joinPageSize = 5
 )

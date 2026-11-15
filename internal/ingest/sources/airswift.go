@@ -9,24 +9,19 @@ import (
 	"golang.org/x/net/html"
 )
 
-// airswift adapts Airswift (airswift.com), an international oil & gas / engineering
-// recruitment agency. Boardless: one flat sitemap enumerates the whole catalogue. NOT an
-// aggregator — hiringOrganization.name is confirmed live to be the literal string
-// "Airswift" on every posting (standard recruitment-agency anonymization), so every
-// posting is attributed to the agency itself.
+// airswift adapts Airswift (airswift.com), an oil & gas / engineering recruitment agency.
+// Boardless: one flat sitemap enumerates the catalogue. NOT an aggregator: hiringOrganization.name
+// is the literal "Airswift" on every posting, so every posting is attributed to the agency.
 //
-// Roughly 55-60% of the sitemap's entries are expired postings that still answer
-// HTTP 200 with no JobPosting block — the page instead renders a
-// "c-jobs-article-expired" element ("...we are no longer accepting applicants.",
-// confirmed live). detail treats that as a confirmed closure and drops the posting
-// outright, the same category as a 404/410, rather than an unreadableDetail stub:
-// marking that large a fraction of every crawl Unreadable would permanently withhold
-// the board's stale-job close (see fetchDetails/Unreadable's documented contract).
+// Many sitemap entries are expired postings that still answer HTTP 200 with no JobPosting block,
+// rendering a "c-jobs-article-expired" element instead. detail treats that as a confirmed closure
+// and drops the posting, like a 404/410, rather than an unreadableDetail stub: marking that many
+// postings Unreadable would permanently withhold the board's stale-job close (see
+// fetchDetails/Unreadable).
 //
-// The sitemap and the detail pages need different transports (see
-// airswiftRequestInterval — the detail path 429s under an unpaced burst), so, like
-// clinch and energyjobline, the two are separate parameters rather than one combined
-// client.
+// The sitemap and detail pages need different transports (the detail path 429s under an unpaced
+// burst; see airswiftRequestInterval), so, like clinch and energyjobline, they are separate
+// parameters.
 type airswift struct {
 	sitemap XMLGetter  // the sitemap.xml (one request per run)
 	pages   HTMLGetter // per-posting detail pages, rate-paced
@@ -34,10 +29,8 @@ type airswift struct {
 
 const (
 	airswiftSitemapURL = "https://www.airswift.com/sitemap.xml"
-	// airswiftCompany is the employer for every posting — hiringOrganization.name is
-	// confirmed live to be this literal string on every posting, not a real end client,
-	// so this is set as a constant rather than read from the configured entry or the
-	// posting's own (uninformative) hiringOrganization field.
+	// airswiftCompany is the employer for every posting: hiringOrganization.name is this literal
+	// string, not a real end client, so it is a constant.
 	airswiftCompany = "Airswift"
 )
 

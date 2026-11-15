@@ -14,10 +14,9 @@ import (
 // helixjobs adapts helixjobs.com, the job portal Perbility runs for the employers on its
 // concludis ATS. The portal names an employer by its concludis instance id (iid), and a
 // posting by "<iid>P<position id>" — the position id is the one the employer's own
-// <tenant>.concludis.de list shows (Vitanas: iid 147, concludis position 130755, portal
-// posting 147P130755). The portal reaches the employers the concludis adapter cannot: it lists
-// 590 iids and 25,021 postings (2026-10-25), against 23 tenants whose concludis label is known,
-// because a tenant's label is on no page the portal serves. So the board is the iid.
+// <tenant>.concludis.de list shows (iid 147, position 130755 -> 147P130755). The portal reaches
+// employers the concludis adapter cannot, because a tenant's label is on no page the portal
+// serves. So the board is the iid.
 //
 // The list is https://helixjobs.com/_/joblist?iid=<board>&page=N, server-rendered, 25 lines a
 // page, stating its extent ("Suchergebnis: 62 Treffer"); a page past the end carries no line,
@@ -45,8 +44,8 @@ func (helixjobs) fullBoardListing() {}
 
 const helixjobsHost = "helixjobs.com"
 
-// helixjobsMaxPages is a safety ceiling on the ?page=N walk. The largest iid measured (95, 2,899
-// postings at 25 a page) needs 116; reaching the ceiling fails the crawl.
+// helixjobsMaxPages is a safety ceiling on the ?page=N walk (25 postings a page); reaching
+// it fails the crawl.
 const helixjobsMaxPages = 400
 
 var (
@@ -230,8 +229,8 @@ func (s helixjobs) detail(ctx context.Context, e CompanyEntry, l helixjobsLine) 
 		}
 		return unreadableDetail(l.ID, l.URL, e.Company), true
 	}
-	// No sampled posting (119, 2026-10-25) states jobLocationType; TELECOMMUTE is still read as
-	// the remote statement schema.org defines it to be, and its absence says nothing.
+	// TELECOMMUTE is read as the remote statement schema.org defines it to be; jobLocationType
+	// is rarely stated, and its absence says nothing.
 	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
 	loc, countries := concludisPlaces(jp.JobLocation)
 	return Job{

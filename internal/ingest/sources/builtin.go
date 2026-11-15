@@ -20,16 +20,15 @@ import (
 // (builtinnyc.com, builtinsf.com, ...) serves the same platform and the same posting ids, and
 // builtin.com with allLocations=true lists all of them.
 //
-// The whole catalogue cannot be walked. The listing stops at page 1000 (~12-25 cards a page)
-// whatever the filter, the unfiltered tech categories alone outgrow that within a week, and the
-// edge challenges an IP that exceeds ~40 requests a minute. So a run reads a WINDOW: each tech
+// The whole catalogue cannot be walked. The listing stops at page 1000 whatever the filter,
+// the unfiltered tech categories alone outgrow that quickly, and the edge challenges an IP that
+// exceeds its request budget. So a run reads a WINDOW: each tech
 // category's postings updated in the last 24 hours, to that listing's natural end. A posting is
 // therefore refreshed on the runs inside its first day and again whenever Built In reposts it,
 // and the sweep waits builtinSweepGrace — the 30 days Built In itself states as a posting's
 // validThrough — before calling an unseen posting gone.
 //
-// Most postings belong to employers freehire already crawls first-party (≥70% of a 168-posting
-// sample on 2026-10-15), so the adapter is CoverageGated: their bodies are never bought. See the
+// Most postings belong to employers freehire already crawls first-party, so the adapter is CoverageGated: their bodies are never bought. See the
 // Built In traps in AGENTS.md.
 type builtin struct {
 	http HTMLGetter
@@ -45,8 +44,8 @@ const (
 	builtinMaxPages = 1000
 	// builtinWindowDays is the listing's narrowest "posted/updated within" option.
 	builtinWindowDays = 1
-	// builtinSweepGrace is Built In's own posting lifetime: every sampled JobPosting states a
-	// validThrough exactly 30 days after its datePosted.
+	// builtinSweepGrace is Built In's own posting lifetime: every JobPosting states a
+	// validThrough 30 days after its datePosted.
 	builtinSweepGrace = 30 * 24 * time.Hour
 
 	builtinDefaultMaxNewPerRun = 500
@@ -55,12 +54,9 @@ const (
 )
 
 // Built In's Cloudflare edge answers a managed challenge (HTTP 429, cf-mitigated: challenge)
-// once an IP exceeds its budget: measured 2026-10-15 from a residential IP, one request every
-// 0.5s was refused from the 44th request, ~0.85 req/s from the ~140th, while one every 1.5s
-// (200 requests) and one every 3s (100 requests) were never refused. The pace sits below the
-// highest rate that held, because the shared client retries a refused request beneath this
-// limiter. At this pace one live run listed 4,001 postings in 10 minutes; at most
-// builtinDefaultMaxNewPerRun posting pages add ~17 more.
+// once an IP exceeds its budget (about 2 req/s gets refused within a few dozen requests; one every
+// 1.5s or slower was never refused). The pace sits below the highest rate that held, because the
+// shared client retries a refused request beneath this limiter.
 const (
 	builtinRequestInterval = 2 * time.Second
 	builtinRequestBurst    = 1
@@ -68,9 +64,7 @@ const (
 
 // builtinCategories are the listing's top-level job families (its own category pages,
 // /jobs/<family>), in the order hydration spends its budget on them: the technical families
-// first, then the rest, since the catalogue is broader than IT. The first version walked six
-// technical sub-categories (engineering ~326 pages a day, data-analytics ~60 on 2026-10-15);
-// every family answered its window on 2026-10-22. Each family's day must stay inside the
+// first, then the rest, since the catalogue is broader than IT. Each family's day must stay inside the
 // listing's 1000-page ceiling.
 var builtinCategories = []string{
 	"dev-engineering",
@@ -425,8 +419,8 @@ var builtinSalaryPeriods = map[string]string{
 	"YEAR":  "year",
 }
 
-// builtinMaxHourlyUSD rejects Built In's own data error: an annual range filed as HOUR (a PwC
-// internship states 29250-48000 USD/HOUR, which its card renders as "29K-48K Hourly"). Nobody
+// builtinMaxHourlyUSD rejects Built In's own data error: an annual range filed as HOUR (e.g. 29250-48000 USD/HOUR,
+// which its card renders as "29K-48K Hourly"). Nobody
 // is paid $500 an hour on a job board, and the figure cannot be reinterpreted without guessing
 // which period was meant, so such a salary is dropped.
 const builtinMaxHourlyUSD = 500

@@ -130,14 +130,11 @@ func herpPath(board, href string) string {
 	return strings.TrimPrefix(u.Path, prefix)
 }
 
-// herpNonJobSegments are single-segment paths under "/v1/<board>/" that are the platform's
-// own machinery, never a job id — "top" is the board's optional distinct landing page, linked
-// from the career-page-header__link on every listing and job page of a board that has one
-// (confirmed live, e.g. herp.careers/v1/clueitinc/top). Left unexcluded it is indistinguishable
-// in shape from a real opaque HERP job id, and — because a listing page carries no JobPosting
-// block — its detail fetch would be marked Unreadable on every single crawl, permanently
-// withholding that board's stale-job close (see internal/ingest/pipeline's Unreadable-ratio
-// gate).
+// herpNonJobSegments are single-segment paths under "/v1/<board>/" that are platform machinery,
+// never a job id. "top" is the board's optional landing page, linked from every listing and job
+// page; left unexcluded, its detail fetch would be marked Unreadable on every crawl and
+// permanently withhold that board's stale-job close (see internal/ingest/pipeline's
+// Unreadable-ratio gate).
 var herpNonJobSegments = map[string]bool{"top": true}
 
 // isHerpJobLink reports whether href is a direct job posting link for board: exactly one path

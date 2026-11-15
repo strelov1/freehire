@@ -46,7 +46,7 @@ func (s careerplug) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// clamps ?page=N past its last page — de-dup turns the repeat into zero new). Uses
 	// crawlAllPagedLinks, not crawlPagedLinks: a mid-listing failure or a cap-truncated walk
 	// must fail the whole Fetch rather than return a partial listing as a success, which is
-	// what earns careerplug the fullBoardListing marker (freehire#2328).
+	// what earns careerplug the fullBoardListing marker.
 	urls, err := crawlAllPagedLinks(ctx, s.http, careerplugMaxPages,
 		func(page int) string {
 			if page > 1 {

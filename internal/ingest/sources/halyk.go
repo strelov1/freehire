@@ -18,11 +18,10 @@ import (
 // single-company source with no per-tenant board id (boardless). One server-rendered
 // listing, then one HTML page per vacancy. There is no API and no JobPosting markup.
 //
-// The number in /vacancies-inner/N is a position in the current list, not a vacancy id.
-// Measured 2026-10-14 the list ran 1..77; 2026-10-17 it was 1..76, and the apply form's
-// data-id is the same on every page. A stored URL therefore goes stale the moment the
-// list shifts, which is why this adapter is not a HydratingSource: SeenRefresh would
-// keep touching a link that now belongs to a different posting. Every crawl refetches
+// The number in /vacancies-inner/N is a position in the current list, not a vacancy id, and
+// the apply form's data-id is the same on every page. A stored URL therefore goes stale the
+// moment the list shifts, which is why this adapter is not a HydratingSource: SeenRefresh
+// would keep touching a link that now belongs to a different posting. Every crawl refetches
 // the page and writes the URL it just opened.
 //
 // Identity is the title and the city, both on the card, so the id is known before the
@@ -168,9 +167,8 @@ func halykAbsURL(href string) (string, error) {
 	return halykBase.ResolveReference(u).String(), nil
 }
 
-// halykExternalID is the stable identity. The path number is not: it moves when the
-// list grows or shrinks. Title and city were unique across all 76 live cards on
-// 2026-10-17.
+// halykExternalID is the stable identity. The path number is not: it moves when the list
+// grows or shrinks. Title and city are unique across the live cards.
 func halykExternalID(title, city string) string {
 	key := strings.ToLower(halykText(title)) + "\n" + strings.ToLower(halykText(city))
 	sum := sha256.Sum256([]byte(key))

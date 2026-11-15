@@ -31,9 +31,8 @@ const (
 	// jobdanmarkSearchURL is the POST search, paged in the path. An empty filter body returns
 	// the whole catalogue freshest-first.
 	jobdanmarkSearchURL = "https://jobdanmark.dk/api/jobsearch/search/%d"
-	// jobdanmarkMaxPages bounds pagination so a wrong or missing totalPages cannot loop. At
-	// 30/page it covers ~30k ads, well above the live catalogue (~14k); the empty page the API
-	// returns past the end is the real terminator.
+	// jobdanmarkMaxPages bounds pagination so a wrong or missing totalPages cannot loop; the empty
+	// page the API returns past the end is the real terminator.
 	jobdanmarkMaxPages = 1000
 )
 

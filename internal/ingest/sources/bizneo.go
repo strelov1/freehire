@@ -27,7 +27,7 @@ import (
 // title, the body in one or more .general-content blocks, and a side card of labelled fields
 // (Ubicación, Modalidad de trabajo, Jornada laboral …) whose labels sit in the title attribute.
 // Some sites also emit a schema.org JobPosting, the only place a posting's date appears; most do
-// not (measured 2026-10-27: 1 of 33 live sites), so the page itself is what the adapter reads and
+// not, so the page itself is what the adapter reads and
 // the JobPosting only adds to it.
 //
 // The posting slug is the identity: the card links to nothing else, so it is the only id a
@@ -43,12 +43,10 @@ func NewBizneo(c HTMLGetter) Source { return bizneo{http: c} }
 func (bizneo) Provider() string { return "bizneo" }
 
 // bizneoRequestInterval paces the whole provider: every career site is served by one edge,
-// which answered 429 to three listings and thirteen posting pages in the first crawl
-// (2026-10-27) at the shared client's eight detail workers. Two requests a second covers the
-// ~600 postings and their pages in a few minutes.
+// which answers 429 at the shared client's eight detail workers.
 const bizneoRequestInterval = 500 * time.Millisecond
 
-// bizneoMaxPages caps the ?page=N walk; the largest site seen (somos-grupo-mas) has 19 pages.
+// bizneoMaxPages caps the ?page=N walk.
 const bizneoMaxPages = 100
 
 // bizneoBoard is a career-site host: one or more labels under bizneo.cloud, or a customer's own

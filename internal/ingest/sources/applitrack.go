@@ -24,58 +24,44 @@ import (
 //
 // # This adapter crawls the whole board
 //
-// A school district's ATS is almost entirely teaching and school-support work. It used to be
-// crawled through an allowlist of the district's technology categories only, back when the
-// catalogue was IT-only; the catalogue is broader now, and the pipeline's own dictionaries decide
-// what a posting is. So the crawl reads the site's own "All Vacancies" listing ("?all=1"): one
-// request per board, measured 2026-10-20 at 8-130 postings and 0.9-1.6 s on three live boards.
+// A school district's ATS is almost entirely teaching and school-support work, so the crawl reads
+// the site's own "All Vacancies" listing ("?all=1"), one request per board, and the pipeline's
+// dictionaries decide what a posting is.
 //
-// Traps, all verified live against the platform:
+// Traps of the platform:
 //
 //   - Nothing is served as HTML. view.asp is a shell that document.writes a script from
 //     Output.asp in the same directory, and Output.asp answers "text/javascript" whose
-//     document.write('…') arguments carry the whole page — listing rows, posting bodies and
-//     all. So both halves of a crawl are read as raw text, unescaped, and only then parsed
-//     (applitrackPage). Output.asp is what this adapter asks for: view.asp merely re-emits it
-//     inside a <script>, so reading the shell would mean digging the same payload back out.
-//   - The unfiltered listing renders the CATEGORY MENU and no postings. "?all=1" is the site's own
-//     "All Vacancies" link and is what lists a whole board. No listing paginates in any form.
-//     "AppliTrackLayoutMode=condensed" is what keeps a response to its rows: the detailed layout
-//     inlines every posting's BODY (737 KB for 14 postings on one board), and an unrecognised
-//     layout value is not rejected — it silently serves the detailed one, so a typo there buys
-//     every body rather than failing.
-//   - There is no feed and no second listing endpoint. rss.asp, rss.xml, feed.asp and
-//     JobPostings.asp all 404 under and beside /onlineapp/jobpostings/, and
-//     /onlineapp/default.aspx — the other path a posting URL suggests — is the applicant
-//     sign-in portal, carrying no posting link at all. Output.asp is the whole API.
-//   - The listing STATES a count above its rows ("Viewing All Types (116 openings)") and it
-//     counts ROWS, not postings, so it cannot be read as a posting total. A statewide
-//     consortium lists one requisition once per participating district and all of those rows
-//     carry the SAME AppliTrackJobId — Alaska's pool states 1,229 and links 870 distinct ids.
-//     Both the walk and this list collapse them, because they are one requisition with one
-//     posting page behind them; it is the number that is not what it looks like.
-//   - The pages declare no character set anywhere and are served as windows-1252, so the body
-//     goes through charset.NewReader before it is parsed. Most are
-//     pure ASCII; the ones that are not are text pasted in from a word processor, so it is
-//     exactly the smart quotes and dashes that would otherwise arrive as U+FFFD.
-//   - An id the board no longer carries is answered 200 with an EMPTY posting list rather than
-//     a 404, so the posting block is selected by the id that was ASKED for ("p<id>_"): a
-//     response about anything else simply has no such node.
-//   - The listing carries a posting's title and identity but no body, which only the posting
-//     page holds — hence HydratingSource.
-//   - A posting's "Location" is the SITE inside the district it belongs to ("Central Maintenance
-//     and Operations", "Various Locations", "Petersburg High School"), never a town. What does
-//     place a board is its footer: every page links the district's state on the platform's
-//     sister board, K12JobSpot ("You can also view <a href='…/illinois-teaching-jobs'>Illinois
-//     teaching jobs</a>"), rendered from the tenant's own state setting; a Canadian tenant's
-//     reads "Canad- Saskatchewan". So the state is appended to the site and its country set as
-//     the posting's structured country (applitrackBoardState) — "Georgia" there is the state,
-//     which a location line alone could never say. A state no dictionary knows (one tenant's
-//     renders as "Californicredential or") places nothing. Before this the site went out alone
-//     and ~96% of the open postings had no country (2026-10-29); the few the dictionary did
-//     place were as often an artifact as a place ("(PATTAN)" read as Pattan, India).
-//   - A steady-state crawl is small and stays small: one listing request per board and a detail
-//     request only for a posting the catalogue has not seen.
+//     document.write('…') arguments carry the whole page, listing rows and posting bodies alike.
+//     So both halves of a crawl are read as raw text, unescaped, and only then parsed
+//     (applitrackPage). Output.asp is what this adapter asks for.
+//   - The unfiltered listing renders the CATEGORY MENU and no postings; "?all=1" (the site's own
+//     "All Vacancies" link) lists a whole board. No listing paginates. "AppliTrackLayoutMode=condensed"
+//     keeps a response to its rows: the detailed layout inlines every posting's BODY, and an
+//     unrecognised layout value is not rejected but silently serves the detailed one.
+//   - There is no feed and no second listing endpoint: rss.asp, rss.xml, feed.asp and
+//     JobPostings.asp all 404, and /onlineapp/default.aspx is the applicant sign-in portal with no
+//     posting link. Output.asp is the whole API.
+//   - The listing STATES a count above its rows ("Viewing All Types (116 openings)") that counts
+//     ROWS, not postings, so it is not a posting total. A statewide consortium lists one
+//     requisition once per participating district, all rows carrying the SAME AppliTrackJobId;
+//     both the walk and this list collapse them.
+//   - The pages declare no character set and are served as windows-1252, so the body goes
+//     through charset.NewReader before it is parsed. Text pasted in from a word processor is what
+//     would otherwise arrive as U+FFFD (smart quotes, dashes).
+//   - An id the board no longer carries is answered 200 with an EMPTY posting list rather than a
+//     404, so the posting block is selected by the id that was ASKED for ("p<id>_"): a response
+//     about anything else simply has no such node.
+//   - The listing carries a posting's title and identity but no body, which only the posting page
+//     holds, hence HydratingSource.
+//   - A posting's "Location" is the SITE inside the district ("Central Maintenance and
+//     Operations", "Petersburg High School"), never a town. What places a board is its footer:
+//     every page links the district's state on the sister board K12JobSpot ("You can also view
+//     <a href='…/illinois-teaching-jobs'>Illinois teaching jobs</a>"), rendered from the tenant's
+//     own state setting; a Canadian tenant's reads "Canad- Saskatchewan". So the state is appended
+//     to the site and its country set as the posting's structured country (applitrackBoardState);
+//     "Georgia" there is the state, which a location line alone could never say. A state no
+//     dictionary knows (one tenant's renders as "Californicredential or") places nothing.
 type applitrack struct {
 	http applitrackHTTP
 }
@@ -150,11 +136,11 @@ func (s applitrack) list(ctx context.Context, e CompanyEntry) ([]applitrackPosti
 }
 
 // detail fetches one posting page and returns the listing row's job with everything that page
-// states filled in. It reports ok=false — so the caller skips just this posting — when the page
-// cannot be fetched, when it carries no block for the id that was asked for, or when it yields no
-// body at all. Deferring a posting by one crawl is recoverable; storing it body-less is not,
-// because a stored row is `seen` and so is never hydrated again once it ages past the pipeline's
-// hydration-retry window, leaving a posting no search can reach.
+// states filled in. It reports ok=false, so the caller skips just this posting, when the page
+// cannot be fetched, carries no block for the id that was asked for, or yields no body at all.
+// Deferring a posting by one crawl is recoverable; storing it body-less is not: a stored row is
+// `seen` and is never hydrated again once it ages past the pipeline's hydration-retry window,
+// leaving a posting no search can reach.
 func (s applitrack) detail(ctx context.Context, e CompanyEntry, p applitrackPosting, state applitrackState) (Job, bool) {
 	root, err := s.page(ctx, applitrackDetailURL(e.Board, p.id))
 	if err != nil {
@@ -290,11 +276,10 @@ func applitrackWritten(body string) (markup string, complete bool) {
 // separator arrives there as "%3D" and in an ordinary permalink as "="; accepting both lets one
 // pattern read either.
 //
-// The id is digits, and taking only the digits is deliberate rather than lax. A consortium's
-// posting is linked from OUTSIDE the platform as "AppliTrackJobId=6536_37241", where the suffix
-// selects which member district's page to land on — and the endpoint ignores it: both spellings
-// answer the identical posting, "JobID: 6536" (confirmed live). Keying on the whole token would
-// store one requisition once per district that links it.
+// The id is digits, and taking only the digits is deliberate. A consortium's posting is linked
+// from OUTSIDE the platform as "AppliTrackJobId=6536_37241", where the suffix selects a member
+// district's page, and the endpoint ignores it: both spellings answer the identical posting.
+// Keying on the whole token would store one requisition once per district that links it.
 var applitrackJobIDPattern = regexp.MustCompile(`(?i)AppliTrackJobId(?:=|%3D)(\d+)`)
 
 // applitrackJobID extracts the native posting id from a posting link, or "" when it carries none.

@@ -85,21 +85,12 @@ func SourceTypes(reg map[string]Source) func(source string) string {
 }
 
 // EmployerURLProviders names the providers whose stored job URL really is the employer's own
-// page for the posting.
+// page for the posting: an ATS or a company's own careers site, not an aggregator, whose URL points at
+// the aggregator. This lets a surface publish source attribution honestly.
 //
-// True for an ATS and for a company's own careers site, false for an aggregator — whose URL
-// points at the aggregator, not at the employer. The distinction is what lets a surface
-// publish source attribution honestly: calling an aggregator's link the employer's own is a
-// claim we cannot vouch for, and a consumer that domain-verifies or deduplicates on it would
-// be misled by every one of them.
-//
-// It lives here rather than beside a consumer because it is a fact about SOURCES, and a
-// second surface asking the same question must not answer it from its own copy of the rule.
-//
-// It answers for ALL providers at once, and that shape is the point. A per-provider
-// predicate reads better at the call site and costs a full Taxonomy() build every time —
-// measured on this tree, 35µs and 394 allocations to construct 223 adapters, which a
-// ten-result search would pay ten times over. Callers resolve this once and keep the map.
+// It lives here because it is a fact about SOURCES; a second surface must not answer it from its own
+// copy of the rule. It answers for ALL providers at once because a per-provider predicate would build a
+// full Taxonomy() on every call; callers resolve it once and keep the map.
 func EmployerURLProviders() map[string]bool {
 	taxonomy := Taxonomy()
 	publishes := make(map[string]bool, len(taxonomy))

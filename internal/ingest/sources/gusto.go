@@ -18,11 +18,10 @@ import (
 //	https://jobs.gusto.com/boards/grupo-ei-el-paso-7feb4b68-5288-41cc-b169-f56b3ec26120
 //
 // The whole segment is the id, not the uuid it ends with: the uuid alone and the slug alone both
-// 404 (verified live). Everything is server-rendered HTML — there is no JSON endpoint, no
-// embedded page state and no ld+json anywhere on either page — so the listing and the body are
-// both read off the DOM.
+// 404. Everything is server-rendered HTML — there is no JSON endpoint, no embedded page state
+// and no ld+json anywhere on either page — so the listing and the body are both read off the DOM.
 //
-// Traps, all verified live against the platform:
+// Traps:
 //
 //   - Cloudflare answers a managed challenge (403) to Go's default TLS+HTTP/2 fingerprint on
 //     every path, so this adapter is wired with the shared Chrome-fingerprint transport
@@ -57,10 +56,9 @@ func (gusto) fullBoardListing() {}
 
 const (
 	gustoBaseURL = "https://jobs.gusto.com"
-	// gustoMaxPages caps the per-board pagination. The listing serves 25 postings a page and
-	// the largest board seen live holds 35, so the cap sits far above anything the platform
-	// produces; it is here so a markup change that keeps yielding "new" links cannot loop
-	// unboundedly.
+	// gustoMaxPages caps the per-board pagination. The listing serves 25 postings a page, so the
+	// cap sits far above anything the platform produces; it is here so a markup change that keeps
+	// yielding "new" links cannot loop unboundedly.
 	gustoMaxPages = 40
 )
 
@@ -86,12 +84,12 @@ var gustoBoardUUIDPattern = regexp.MustCompile(
 	`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\.[a-z]+)?$`)
 
 // gustoBoardIdentity folds every spelling of a board onto the company uuid it addresses — the
-// entry sources.boardIdentity needs for gusto. Two spellings of one board both answer 200, and
-// both were met live: a renamed employer keeps its OLD slug resolving against the same uuid, and
-// a trailing ".json" is accepted because the route ignores the format suffix. Left unfolded they
-// would be crawled as two boards, and since external ids are namespaced by board, every posting
-// of that employer would be stored twice — the failure icimsHost exists for, met again. A board
-// carrying no uuid folds to itself, so a malformed entry is never quietly merged into another.
+// entry sources.boardIdentity needs for gusto. A renamed employer keeps its OLD slug resolving
+// against the same uuid, and a trailing ".json" is accepted because the route ignores the
+// format suffix. Left unfolded they would be crawled as two boards and, since external ids are
+// namespaced by board, every posting would be stored twice (the failure icimsHost exists for).
+// A board carrying no uuid folds to itself, so a malformed entry is never quietly merged into
+// another.
 func gustoBoardIdentity(board string) string {
 	if uuid := firstSubmatch(gustoBoardUUIDPattern, board); uuid != "" {
 		return uuid
@@ -149,10 +147,9 @@ func (s gusto) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 
 // list walks a board's paginated listing and returns every posting it advertises. It restates the
 // shared crawlPagedLinks loop because it needs each item's whole listing row — title, location,
-// pay and employment type — and not just its link. Every page failing, and reaching gustoMaxPages
-// without a genuinely empty page, are now hard Fetch failures rather than a partial success — the
-// empty page is the only proof of completeness this walk has. See the fullBoardListing interface
-// (source.go) for the bar.
+// pay and employment type — and not just its link. A failing page, or reaching gustoMaxPages
+// without a genuinely empty page, is a hard Fetch failure: the empty page is the only proof of
+// completeness this walk has. See the fullBoardListing interface (source.go) for the bar.
 func (s gusto) list(ctx context.Context, e CompanyEntry) ([]gustoPosting, error) {
 	var out []gustoPosting
 	listed := make(map[string]bool)
@@ -296,9 +293,9 @@ func gustoMetaLine(line string) (salary, employmentType string) {
 	return salary, strings.TrimSpace(parts[len(parts)-1])
 }
 
-// gustoEmploymentType maps Gusto's employment-type label onto the freehire vocabulary. A full
-// live crawl of the platform rendered exactly four labels; anything else maps to "" so the
-// description parser decides, per the structured-signal-only rule.
+// gustoEmploymentType maps Gusto's employment-type label onto the freehire vocabulary. The
+// platform renders four labels; anything else maps to "" so the description parser decides, per
+// the structured-signal-only rule.
 func gustoEmploymentType(label string) string {
 	switch label {
 	case "Full time":
@@ -314,17 +311,15 @@ func gustoEmploymentType(label string) string {
 	}
 }
 
-// gustoPayPattern matches the board's rendered pay line. Every pay line a full live crawl
-// produced had exactly this shape: a two-sided range, thousands-separated, optionally
-// fractional, and a period word.
+// gustoPayPattern matches the board's rendered pay line: a two-sided range,
+// thousands-separated, optionally fractional, and a period word.
 var gustoPayPattern = regexp.MustCompile(`^\$([\d,]+(?:\.\d+)?) - \$([\d,]+(?:\.\d+)?) per ([a-z]+)$`)
 
 // applySalary maps the board's rendered pay line onto the job's structured salary fields,
 // writing nothing when the line is absent, is shaped differently, or states a period freehire
-// has no value for ("per week", which two live postings used). The line is the platform's own
-// compensation field rendered to a fixed grammar rather than free text, which is what makes
-// reading it structured signal; anything that does not match that grammar is left to the
-// enrichment pass rather than guessed at.
+// has no value for ("per week"). The line is the platform's own compensation field rendered to
+// a fixed grammar, which is what makes reading it structured signal; anything that does not
+// match is left to the enrichment pass rather than guessed at.
 //
 // The currency is stated rather than read off the "$": the board renders no currency code, and
 // Gusto Payroll runs US employers only, so the glyph is never another country's dollar.

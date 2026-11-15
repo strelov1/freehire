@@ -15,14 +15,13 @@ import (
 )
 
 // freework adapts Free-Work (www.free-work.com), France's largest IT-only job board: freelance
-// missions (~55% of the board states a day rate) beside permanent and fixed-term roles, posted
-// mostly by IT consultancies and staffing agencies. It is boardless and an aggregator — the
-// employer is read per posting. See the "Free-Work traps" section of AGENTS.md for the
-// measurements behind each rule.
+// missions beside permanent and fixed-term roles, posted mostly by IT consultancies and staffing
+// agencies. It is boardless and an aggregator — the employer is read per posting. See the
+// "Free-Work traps" section of AGENTS.md.
 //
 // The listing is the site's own public API (API Platform, asked for plain JSON), walked
-// with a property filter that keeps a 300-posting page at ~120 KB; with every field a page of 50
-// takes ~15 s to render, so the whole board in one shape would outlast a run. The body comes from
+// with a property filter that keeps pages small; with every field a page renders too slowly
+// for the whole board to fit in a run. The body comes from
 // the posting's own resource, bought only for postings the catalogue lacks, within a per-run
 // budget; the rest are refreshed by identity.
 type freework struct {
@@ -47,16 +46,13 @@ const (
 	freeworkPageSize  = 300
 
 	// freeworkRequestInterval paces every request of a run at one a second — a courtesy ceiling,
-	// not a measured limit (no refusal was drawn at that pace).
+	// not a known limit.
 	freeworkRequestInterval = time.Second
 	freeworkDetailWorkers   = 2
-	// freeworkMaxPages is a safety ceiling: the board held 11,642 postings (39 pages) on
-	// 2026-10-28.
+	// freeworkMaxPages is a safety ceiling well above the board's size.
 	freeworkMaxPages = 200
-	// freeworkMaxNewPerRun bounds the posting requests of one run: ~40 listing requests (~4 s
-	// each) and 1,500 posting requests at one a second, plus the writes that follow, sit inside
-	// the scheduler's default 2,400 s crawl budget. ~400 postings are created a day, so after the
-	// first ~8 runs drain the board a run reads a few dozen.
+	// freeworkMaxNewPerRun bounds the posting requests of one run so the listing, the posting
+	// requests at one a second and the writes fit the scheduler's default 2,400 s crawl budget.
 	freeworkMaxNewPerRun   = 1500
 	freeworkDeadlineMargin = 5 * time.Minute
 )
@@ -202,9 +198,8 @@ func (s freework) nearDeadline(ctx context.Context) bool {
 // list with no total and no "next" link, and answers any page past the end with the LAST page
 // again. So the walk ends at a short page, or at a page that names no posting it had not already
 // read. The API refuses every ordering parameter, and its default order is the publication
-// date, which a republished posting moves to the top mid-walk: a walk sees ~0.1% of the board
-// twice (deduplicated here) and, in exchange, misses as many, which is far inside the unseen
-// sweep's 48 h. Any page failing fails the crawl — a partial listing would let the
+// date, which a republished posting moves to the top mid-walk: a walk sees a few postings
+// twice (deduplicated here) and misses as many, which the 48 h unseen sweep absorbs. Any page failing fails the crawl — a partial listing would let the
 // company-scoped sweep close the postings of the employers it did see on the pages it did not.
 func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	listed := make(map[int64]bool) // every id a page named, for the end-of-list test
@@ -336,7 +331,7 @@ func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 }
 
 // freeworkWorkMode reads the posting's structured remote mode: "full" is remote, "partial"
-// hybrid (two thirds of the board), "none" on-site. A null mode states nothing.
+// hybrid, "none" on-site. A null mode states nothing.
 func freeworkWorkMode(s string) string {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "full":

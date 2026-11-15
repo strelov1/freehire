@@ -90,9 +90,9 @@ func (hibob) job(e CompanyEntry, ad hibobJobAd) Job {
 // and adjacent blocks whose text ran together would glue the last word of one section to the
 // first of the next (see role_fingerprint, which hashes the visible text).
 //
-// HiBob also carries a sectionLabels object for tenants that rename the section headings. Every
-// tenant seen so far leaves it empty, so the headings are the platform's own defaults; the seam
-// to honour custom labels is this function.
+// HiBob also carries a sectionLabels object for tenants that rename the section headings. It is
+// empty on every tenant seen, so the headings are the platform's defaults; this function is the
+// seam to honour custom labels.
 func hibobDescription(ad hibobJobAd) string {
 	sections := []struct{ heading, body string }{
 		{"", ad.Description},

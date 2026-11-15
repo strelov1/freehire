@@ -194,8 +194,7 @@ func (d dayforce) listWithFreshToken(ctx context.Context, b dayforceBoard) ([]da
 }
 
 // list pages the site's listing until maxCount postings have been collected. maxCount is
-// exact (confirmed live against a 3,508-posting site: the last page is short and the next one
-// is empty), and an empty page also stops the walk, so a count that ever went wrong cannot
+// exact (the last page is short and the next one is empty), and an empty page also stops the walk, so a count that ever went wrong cannot
 // spin the loop. The first page failing is a board-level error; a later page failing ends the
 // walk with what was gathered, the repo-wide rule for a paginated listing.
 func (d dayforce) list(ctx context.Context, token string, b dayforceBoard) ([]dayforcePosting, error) {

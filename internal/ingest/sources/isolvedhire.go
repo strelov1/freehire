@@ -54,17 +54,10 @@ var isolvedJobID = regexp.MustCompile(`/jobs/(\d+)`)
 const isolvedNoticePeek = 512
 
 // isolvedNotices are the platform's own answers for a board it does not serve, each held as
-// the stable fragment of its sentence rather than the whole line: the notices are wrapped in
-// marketing markup that changes, and a predicate matching the full sentence would silently
-// stop matching after a reword — which is the failure this whole check exists to end.
-//
-// Both count as gone, though they do not mean the same thing. The first is a subdomain that
-// resolves to no tenant at all. The second is a tenant whose site the vendor switched off,
-// which an unpaid invoice and a departed company produce alike, so it may return. It is
-// counted anyway because the alternative is worse in both directions: the 39 prod boards in
-// that state have been failing since July under a message that explains nothing, and a board
-// retired by mistake is one command to restore, whereas one that keeps failing quietly is
-// only ever found by an audit like the one that produced this list.
+// the stable fragment of its sentence, since the surrounding marketing markup changes. Both
+// count as gone: the first is a subdomain with no tenant, the second a tenant the vendor
+// switched off, which may return, but a board retired by mistake is one command to restore
+// while one failing quietly is never noticed.
 var isolvedNotices = []string{
 	"typed the url for this website incorrectly",
 	"career site has been disabled",
@@ -86,9 +79,8 @@ func isolvedBoardGone(head string) bool {
 func (s isolvedFamily) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	smURL := fmt.Sprintf("https://%s.%s/sitemap.xml", e.Board, s.host)
 
-	// The sitemap is streamed and scanned <loc>-by-<loc> rather than buffered whole: a large
-	// tenant's sitemap runs past the buffered-body size cap (35 MiB+ seen in prod), which would
-	// truncate it mid-element and fail the XML decode. Streaming reads it in full at any size.
+	// The sitemap is streamed and scanned <loc>-by-<loc> rather than buffered: a large tenant's
+	// sitemap runs past the buffered-body cap and would truncate mid-element.
 	seen := map[string]struct{}{}
 	var ids []string
 	err := s.http.GetStream(ctx, smURL, "application/xml", func(r io.Reader) error {

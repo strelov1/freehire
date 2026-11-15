@@ -8,17 +8,13 @@ import (
 	"strings"
 )
 
-// ibm adapts IBM's careers catalogue, a single-company source with no per-tenant board id
-// (boardless). The postings live on IBM's Avature tenant (careers.ibm.com), but that host is
-// unusable to a crawler: every page, the sitemap included, answers an AWS WAF JavaScript
-// challenge (HTTP 202, x-amzn-waf-action: challenge), and the untouched ibmglobal.avature.net
-// sitemap lists no postings at all. What the ibm.com/careers/search page itself calls instead is
-// IBM's site-search API — an Elasticsearch front door at www-api.ibm.com — whose careers index
-// holds every open posting WITH its full text in a `body` field. One paged POST therefore yields
-// the whole catalogue, descriptions included, and no posting page is ever fetched.
-//
-// Measured live 2026-10-15: 2,434 postings, all English, one row per posting (2,434 distinct
-// job ids), across 36 countries.
+// ibm adapts IBM's careers catalogue, a single-company source with no board id. The postings live
+// on IBM's Avature tenant (careers.ibm.com), which is unusable to a crawler: every page, the
+// sitemap included, answers an AWS WAF JavaScript challenge (HTTP 202, x-amzn-waf-action:
+// challenge), and the ibmglobal.avature.net sitemap lists no postings. What ibm.com/careers/search
+// itself calls is IBM's site-search API (an Elasticsearch front door at www-api.ibm.com), whose
+// careers index holds every open posting WITH its full text in a `body` field. One paged POST
+// yields the whole catalogue and no posting page is fetched.
 type ibm struct {
 	http JSONPoster
 }
@@ -206,8 +202,8 @@ func ibmLocation(city, country string) string {
 	return city
 }
 
-// ibmCountries reads the structured country: the country facet's name, else the alpha-2 code
-// the city facet ends in — which is what places the 17 "Korea, Republic of" postings.
+// ibmCountries reads the structured country: the country facet's name, else the alpha-2 code the
+// city facet ends in (which places "Korea, Republic of" postings).
 func ibmCountries(city, country string) []string {
 	if c := countryFromCode(country); c != nil {
 		return c
@@ -219,17 +215,17 @@ func ibmCountries(city, country string) []string {
 }
 
 // ibmBulletGlyph matches an inline bullet: the index flattens the page to one line, so a list
-// survives only as "• item • item" — or "·", "*", "●", "▪", the five glyphs the 2,434 bodies
-// use — between whitespace that is as often a no-break space as an ASCII one. Dashes are left
-// alone: between spaces they are far more often prose than a list.
+// survives only as "• item • item" (or "·", "*", "●", "▪") between whitespace that is as often a
+// no-break space as an ASCII one. Dashes are left alone: between spaces they are far more often
+// prose than a list.
 var ibmBulletGlyph = regexp.MustCompile(`[\s\p{Zs}]+[•·*●▪][\s\p{Zs}]+`)
 
 // ibmDescription rebuilds the posting body. The index stores the page text with every newline
-// collapsed and the posting's own facet values appended after it ("... Netherlands Consulting
-// Remote Professional AMSTERDAM, NL (0096) IBM Nederland B.V."); that suffix is the non-empty
-// facets joined by single spaces — true of all 2,434 postings on 2026-10-15 — and is cut, or it
-// would read as the last sentence of the description. The inline bullets are put back on their
-// own lines so plainTextToHTML can rebuild the lists; headings are not recoverable.
+// collapsed and the posting's own facet values appended ("... Netherlands Consulting Remote
+// Professional AMSTERDAM, NL (0096) IBM Nederland B.V."); that suffix is the non-empty facets
+// joined by single spaces and is cut, or it would read as the last sentence. The inline bullets
+// are put back on their own lines so plainTextToHTML can rebuild the lists; headings are not
+// recoverable.
 func ibmDescription(p ibmPosting) string {
 	body := strings.TrimSpace(p.Body)
 	var facets []string
@@ -244,10 +240,9 @@ func ibmDescription(p ibmPosting) string {
 	if body == "" {
 		return ""
 	}
-	// About a fifth of the bodies carry the right single quote double-encoded (UTF-8 read as
-	// Windows-1252: "Youâ€™ll"), often beside correctly encoded ones in the same text, so the
-	// string as a whole cannot be re-decoded. Across all 2,434 postings that sequence was the
-	// only mojibake present (1,351 occurrences, nothing else), so exactly it is repaired.
+	// Some bodies carry the right single quote double-encoded (UTF-8 read as Windows-1252:
+	// "Youâ€™ll"), often beside correctly encoded ones in the same text, so the string as a whole
+	// cannot be re-decoded. That sequence was the only mojibake seen, so exactly it is repaired.
 	body = strings.ReplaceAll(body, "â€™", "’")
 	body = ibmBulletGlyph.ReplaceAllString(body, "\n• ")
 	return sanitizeHTML(plainTextToHTML(body))

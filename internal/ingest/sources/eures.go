@@ -15,13 +15,11 @@ import (
 // service (PES) and partner job boards. Keyless. Board-based (one board per EURES-covered
 // country); multi-company (each posting's employer comes from the posting itself).
 //
-// It is registered as an aggregator: verified live that a posting's `source` field and
-// `applicationInstructions` trace back to a national PES feed already reachable through another
-// freehire adapter (Germany's `DE001` links to the exact reference number `arbeitsagentur`
-// already ingests directly) or a private partner board, never a first-party listing of EURES's
-// own — the same re-listing shape `whatjobs`/`adzuna` carry the marker for. The cross-source
-// dedup pass suppresses an EURES copy wherever a more authoritative source already carries it,
-// while EURES postings for a country/employer nothing else reaches still stand on their own.
+// It is registered as an aggregator: a posting's `source` and `applicationInstructions` trace back
+// to a national PES feed already reachable through another adapter (Germany's `DE001` links to the
+// reference number `arbeitsagentur` ingests directly) or a private partner board, never a
+// first-party listing. The cross-source dedup pass suppresses an EURES copy wherever a more
+// authoritative source carries it; postings nothing else reaches still stand on their own.
 //
 // The search endpoint already returns each posting's full HTML description, translated to
 // requestLanguage when a translation exists — no detail fetch needed for title/company/
@@ -33,21 +31,16 @@ import (
 // The IT scope (ICT professionals + ICT technicians) is fixed in code as an ESCO/ISCO occupation
 // filter, never board-selectable, so every yielded Job carries IsTechHint.
 //
-// Every crawl lists a country's WHOLE catalogue, never a publication window. Until 2026-10-28
-// the search was narrowed to LAST_THREE_DAYS, so a posting older than three days was never
-// listed again by any crawl: measured that day, 40,170 of eures' 42,914 open postings were
-// posted before the window, and 22,356 Netherlands postings stood open against the 9,283 the
-// country actually carried. The unseen sweep could not tell those apart from removed postings,
-// so it closed the live ones of any company that happened to post again inside the window and
-// left the rest open forever. A full listing is ~52k postings across all countries, ~1,050
-// search pages answering in ~0.3 s each from the crawl host.
+// Every crawl lists a country's WHOLE catalogue, never a publication window. A window
+// (LAST_THREE_DAYS) left older postings never listed again, so the unseen sweep could not tell
+// them from removed ones: it closed the live postings of any company that posted again inside the
+// window and left the rest open forever.
 //
-// The API pages no deeper than euresDepthCap results, and Germany alone carries ~21k. A
-// country past the cap is therefore listed through the sub-regions its own POSITION_LOCATION
-// facet names — NUTS-1 codes plus "<cc>-NS" for a posting that names no region, each queryable
-// as a location code (measured: every child's count matches its own query's total) — and the
-// deduplicated union must cover the country's total. That check, and the per-walk check
-// against the total the search states, are what earn the fullBoardListing marker.
+// The API pages no deeper than euresDepthCap results. A country past the cap is therefore listed
+// through the sub-regions its own POSITION_LOCATION facet names (NUTS-1 codes plus "<cc>-NS" for a
+// posting naming no region, each queryable as a location code), and the deduplicated union must
+// cover the country's total. That check, and the per-walk check against the total the search
+// states, are what earn the fullBoardListing marker.
 type eures struct {
 	http euresHTTP
 	// depthCap is the deepest result the search pages to (euresDepthCap; a field so tests can
@@ -72,8 +65,8 @@ const (
 	euresPortalURL = "https://europa.eu/eures/portal/jv-se/jv-details/"
 	// euresPageSize is the API's own maximum resultsPerPage.
 	euresPageSize = 50
-	// euresDepthCap is the API's measured result-depth cap (confirmed live: page*resultsPerPage
-	// beyond 10,000 answers "Too many results were requested" instead of a page of results).
+	// euresDepthCap is the API's result-depth cap: page*resultsPerPage beyond 10,000 answers
+	// "Too many results were requested" instead of a page of results.
 	// A query stating more than this is split by region, never walked part-way.
 	euresDepthCap        = 10000
 	euresSortSearch      = "MOST_RECENT"
@@ -93,7 +86,7 @@ var euresOccupationURIs = []string{
 	"http://data.europa.eu/esco/isco/C35",
 }
 
-// euresCountryNames maps a board's country code to a display name, for the ~31 EURES-covered
+// euresCountryNames maps a board's country code to a display name, for the EURES-covered
 // countries (EU member states plus Iceland, Liechtenstein, Norway, Switzerland). Used to build
 // Location when no city/address text is available (or as the whole Location when the detail
 // fetch fails). "el" is EURES's own code for Greece, not the ISO 3166-1 "gr" — the EU convention
@@ -219,20 +212,14 @@ type euresVacancy struct {
 	Employer              euresEmployer       `json:"employer"`
 }
 
-// euresEmployer is null for most postings of some national feeds, and then Company stays empty
-// on purpose. Measured 2026-10-30: 10,166 of the Netherlands' 10,242 open postings (the UWV
-// werk.nl feed, documentId WERKNL…) and 269 of Spain's 529 carry no employer, and the detail
-// response has no employer block for them either — it carries one exactly when the search does.
-// What the Dutch detail does carry is a contact person whose familyName is sometimes an agency
-// ("Spilberg"), plus an email and a webProfiles link that mostly point at a recruiter or a job
-// board (joof.nl, actiever.nl); none of them names the employer, so none is read as one.
+// euresEmployer is null for most postings of some national feeds (the Dutch UWV werk.nl feed,
+// part of Spain's), and then Company stays empty on purpose: the detail response has no employer
+// block for them either. The Dutch detail does carry a contact person, an email and a webProfiles
+// link, but they mostly point at a recruiter or job board, so none is read as the employer.
 //
-// When the employer IS named, the block often states its website too. Measured 2026-11-03 over
-// 50 recent postings each: 32 in Austria, 33 in Belgium, 18 in Germany, 6 in France, none in
-// Slovenia, Poland or Sweden. Sampled, it is the named employer's own site (Tesla's
-// tesla.com, Hays' hays.de, each Forum Jobs branch's forumjobs.be), so it is carried as
-// Job.CompanyWebsite. The block also has a legalID field, which was empty in every posting
-// sampled across eight countries, so it is not read.
+// When the employer IS named, the block often states its website too, which is the employer's own
+// site, so it is carried as Job.CompanyWebsite. The block's legalID field was empty on every
+// sampled posting, so it is not read.
 type euresEmployer struct {
 	Name    string `json:"name"`
 	Website string `json:"website"`
@@ -341,10 +328,10 @@ func (e eures) list(ctx context.Context, country string) ([]euresVacancy, error)
 
 // walk pages one location from its already-fetched first page to the search's natural end — a
 // short page — and fails unless the positions read reach the total the search states. It counts
-// POSITIONS, not distinct postings, because the search counts a posting it indexes twice twice:
-// measured live 2026-10-28, region "dea" stated 4,731 results and served 4,730 distinct ids on
-// every walk. The lowest total any page stated is the bar: a posting withdrawn mid-walk shifts
-// the pages and lowers the total together, while a truncated walk falls short of either. It
+// POSITIONS, not distinct postings, because the search counts a posting it indexes twice twice
+// (a region stated one more result than it served distinct ids). The lowest total any page stated
+// is the bar: a posting withdrawn mid-walk shifts the pages and lowers the total together, while
+// a truncated walk falls short of either. It
 // returns the distinct postings and how many positions repeated one already read.
 func (e eures) walk(ctx context.Context, location string, first euresSearchResponse) ([]euresVacancy, int, error) {
 	var out []euresVacancy

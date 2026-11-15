@@ -10,8 +10,7 @@ import (
 // garena adapts Garena's careers site (careers.garena.com), a single-company source with no
 // per-tenant board id (boardless). The site is a Nuxt app over a small keyless JSON API: one
 // POST lists the whole catalogue, and a GET per posting returns its body. The listing's own
-// `description` is only the summary paragraph — empty on 53 of 86 postings measured 2026-10-15 —
-// while the responsibilities and requirements live in the detail alone, so every posting is
+// `description` is only the summary paragraph, often empty, while the responsibilities and requirements live in the detail alone, so every posting is
 // fetched.
 type garena struct {
 	http garenaHTTP

@@ -23,10 +23,10 @@ import (
 // most of them in German-speaking Switzerland. Every customer's postings live on the one host,
 // either under its careers portal (/portal/<code>/<uuid>/detail) or as a bare link
 // (/link/<uuid>/detail), and robots.txt advertises a sitemap index with one sitemap per customer
-// (472 on 2026-10-29, ~8.9k postings). The adapter is boardless: the posting set is that index,
+// (hundreds of customers, thousands of postings). The adapter is boardless: the posting set is that index,
 // and the employer is read per posting.
 //
-// robots.txt disallows every apply form and a list of ~550 portals; the sitemap index names
+// robots.txt disallows every apply form and a list of portals; the sitemap index names
 // none of those portals, so walking it reads only what robots allows.
 //
 // The sitemaps carry each posting's URL and lastmod, so every fact is bought with the posting
@@ -49,13 +49,13 @@ const (
 	dualooHost         = "jobs.dualoo.com"
 	dualooSitemapIndex = "https://" + dualooHost + "/sitemap_index.xml"
 
-	// dualooRequestInterval paces every request — the ~470 customer sitemaps and the posting
-	// pages alike — at one a second, so a run's listing costs about eight minutes.
+	// dualooRequestInterval paces every request — the customer sitemaps and the posting
+	// pages alike — at one a second.
 	dualooRequestInterval = time.Second
 	dualooDetailWorkers   = 2
 	// dualooFreshPerRun and dualooBacklogPerRun bound one run's page reads to twenty minutes,
-	// which with the listing fits the default 50-minute run. The ~8.9k postings of 2026-10-29
-	// take the first runs in slices.
+	// which with the listing fits the default 50-minute run; the initial backlog drains over
+	// several runs.
 	dualooFreshPerRun    = 900
 	dualooBacklogPerRun  = 300
 	dualooDeadlineMargin = 5 * time.Minute
@@ -86,9 +86,8 @@ func (dualoo) aggregator() {}
 var dualooPostingPath = regexp.MustCompile(`^/(?:portal/[a-z0-9-]+|link)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/detail$`)
 
 // dualooTestSitemap matches the customer sitemaps of the vendor's own test tenants, which publish
-// to the live index: "michele-testing-ag" (39 duplicated postings on 2026-10-29),
-// "test-language-prod", and smoke tests named by date ("smoketest-9-3-226-dualoo-ag",
-// "25-1-26-dualoo-ag"). Dualoo AG's own sitemap ("dualoo-ag") is a real employer and is kept, and
+// to the live index: "michele-testing-ag" (duplicates postings),
+// "test-language-prod", and smoke tests named by date ("smoketest-9-3-226-dualoo-ag"). Dualoo AG's own sitemap ("dualoo-ag") is a real employer and is kept, and
 // "test" must be a whole slug word, so an employer such as Testo is not mistaken for one.
 var dualooTestSitemap = regexp.MustCompile(`^/sitemap_(?:(?:.*-)?(?:smoketest|testing|test)(?:-.*)?|[0-9-]+-dualoo-ag)\.xml$`)
 

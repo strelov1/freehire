@@ -10,15 +10,12 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
-// emagine adapts portal.emagine.org, the consultant portal of emagine Consulting A/S — a
-// European freelance-contract marketplace (~1k live assignments across DE/PL/FR/PT/SE/UK and
-// India). Boardless: one public API, no per-tenant board. It is NOT an aggregator: the portal
-// never names the end client, so every posting is contracted through emagine itself and the
-// source facet would only duplicate the company filter.
+// emagine adapts portal.emagine.org, emagine Consulting's freelance-contract portal. Boardless:
+// one public API. Not an aggregator: the portal never names the end client, so a source facet
+// would only duplicate the company filter.
 //
-// The listing is POST-only and omits the description, which lives behind a per-posting detail
-// call, so the adapter hydrates (HydratingSource) — a detail request is spent only on a posting
-// the catalogue does not already hold.
+// The listing is POST-only and omits the description, so the adapter hydrates (HydratingSource):
+// a detail request is spent only on a posting the catalogue does not already hold.
 type emagine struct {
 	list   JSONPoster // the search listing (three requests per crawl)
 	detail JSONGetter // per-posting detail, bounded in-flight (see limitedEmagineGetter)
@@ -26,9 +23,8 @@ type emagine struct {
 
 const (
 	emagineSearchURL = "https://portal-api.emagine.org/api/JobAds/Search"
-	// emagineDetailURL carries the description the listing omits. The trailing language
-	// segment selects the UI language only — an ad is served in the language it was written
-	// in (a German posting stays German under /EN), so it is fixed rather than per-posting.
+	// emagineDetailURL carries the description the listing omits. The trailing language segment
+	// only selects the UI language; an ad is served in the language it was written in.
 	emagineDetailURL = "https://portal-api.emagine.org/api/JobAds/details/%d/EN"
 	// emagineJobURL is the public posting page. The slug segment is decorative — the portal
 	// routes on the id alone — but the canonical link carries it.
@@ -36,8 +32,8 @@ const (
 	// emagineCompany is the employer for every posting: emagine contracts the consultant and
 	// keeps the end client anonymous.
 	emagineCompany = "emagine"
-	// emaginePageSize is the listing page size. The API honours it verbatim up to at least
-	// 1000; 500 keeps a page's response comfortably inside the client's body cap.
+	// emaginePageSize is the listing page size. The API honours it up to at least 1000; 500 keeps
+	// a response inside the client's body cap.
 	emaginePageSize = 500
 	// emagineMaxPages bounds pagination as a backstop (totalCount is the primary stop).
 	emagineMaxPages = 40
@@ -53,9 +49,8 @@ func (emagine) Provider() string { return "emagine" }
 
 func (emagine) boardless() {}
 
-// emagineSearchRequest is the listing request. Sorting is by ascending id: a stable order under
-// concurrent publishing, unlike the portal's own recency sort, where an ad created mid-crawl
-// shifts every later page down by one and pushes a posting across the page boundary unseen.
+// emagineSearchRequest is the listing request. Sorted by ascending id: stable under concurrent
+// publishing, unlike the recency sort, where a mid-crawl ad shifts later pages and hides a posting.
 type emagineSearchRequest struct {
 	SkipCount           int           `json:"skipCount"`
 	MaxResultCount      int           `json:"maxResultCount"`

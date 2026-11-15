@@ -35,16 +35,14 @@ import (
 // The listing takes any page size, so a site is one request and its stated count is checked
 // exactly (fullBoardListing). It carries no body, so postings are hydrated, new ones only.
 //
-// A site may AGGREGATE other sites' postings (recrute.ouicare.com lists 3,802, of which 208 are
-// its own and 3,098 are emploi.o2recrute.fr's); each item names the site that owns it in
+// A site may AGGREGATE other sites' postings (recrute.ouicare.com lists emploi.o2recrute.fr's); each item names the site that owns it in
 // career_domain, and only a board's own postings are read — the owner's board carries the rest,
 // and two boards storing one posting would be a duplicate the pipeline cannot see.
 //
 // The API host publishes no robots.txt; the sites declare "Crawl-delay: 10" and are not read.
 // Every request of the run goes through one limiter at drVendorRate, so the run's posting reads
-// are bounded across ALL boards (runBudget), not only per board: the first crawl spent its 40
-// minutes hydrating the first ~45 sites, 300 postings each, and 160 sites never got their
-// listing read before the deadline (2026-10-28).
+// are bounded across ALL boards (runBudget), not only per board, or the first sites hydrated
+// would starve the rest of their listing read before the deadline.
 type digitalrecruiters struct {
 	http           digitalrecruitersHTTP
 	limiter        waiter
@@ -80,17 +78,17 @@ const (
 	drAPI = "https://api.digitalrecruiters.com"
 	// drVendorRate is one request a second across the whole run: one API host serves every site.
 	drVendorRate = rate.Limit(1)
-	// drPageSize is the listing page. The API honours any size, but answers slowly: the
-	// 3,802-posting recrute.ouicare.com took 33 s in one page and 6 s for a page of 1,000.
+	// drPageSize is the listing page. The API honours any size, but answers slowly: a
+	// several-thousand-posting site took 33 s in one page and 6 s for a page of 1,000.
 	drPageSize = 1000
 	// drMaxPages bounds the walk; needing more fails the crawl.
 	drMaxPages = 50
-	// drMaxNewPerBoard bounds the postings one site hydrates in a run, so a 3,000-posting site
+	// drMaxNewPerBoard bounds the postings one site hydrates in a run, so a huge site
 	// does not spend the run's whole budget.
 	drMaxNewPerBoard = 150
-	// drMaxNewPerRun bounds the postings the whole run hydrates. At one request a second the
-	// ~350 sites' listings take two requests each (~12 minutes); 1,200 posting reads (20
-	// minutes) leave the rest of the 50-minute run for the pipeline's writes and slow pages.
+	// drMaxNewPerRun bounds the postings the whole run hydrates. At one request a second,
+	// 1,200 posting reads (20 minutes) plus every site's listing leave the rest of the 50-minute
+	// run for the pipeline's writes and slow pages.
 	drMaxNewPerRun = 1200
 	// drDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	drDeadlineMargin = 5 * time.Minute
@@ -350,8 +348,7 @@ func (s digitalrecruiters) list(ctx context.Context, board, locale, pathLocale s
 		if !strings.EqualFold(strings.TrimSpace(it.CareerDomain), board) || seen[it.JobAdID] {
 			continue // another site's posting this one aggregates, or a second address of one
 		}
-		// A listed ad can be an empty shell — no slug and no title (emploi.o2recrute.fr's
-		// 4636315, 2026-10-28) — whose page the site cannot render. Failing the board over it
+		// A listed ad can be an empty shell — no slug and no title — whose page the site cannot render. Failing the board over it
 		// would stop the site's every other posting too, so it is kept as a shell: if the
 		// catalogue already holds that id (a posting whose slug went missing later) its liveness
 		// is refreshed, and otherwise nothing is bought for it.

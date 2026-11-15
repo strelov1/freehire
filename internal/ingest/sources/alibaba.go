@@ -14,10 +14,9 @@ import (
 // Lazada, Amap, ...) under one index. Single-company and boardless; the business is the title's
 // prefix ("阿里云智能-…"). Campus hiring is a separate site and is not read.
 //
-// The crawl is scoped to the portal's own 技术类 (Technology) job category, asked for by its
-// sub-category codes: our title dictionary cannot read Chinese titles (classify resolved a
-// category for 29 of 1,488 technology titles and confirmed none non-technical), so the source's
-// category is what states a posting is technical, and it sets IsTechHint.
+// The crawl is scoped to the portal's own 技术类 (Technology) category, asked for by its sub-category
+// codes: our title dictionary cannot read Chinese titles, so the source's category is what states
+// a posting is technical, and it sets IsTechHint.
 //
 // The search is a POST behind a stateless double-submit CSRF check: any request whose
 // XSRF-TOKEN cookie matches its X-XSRF-TOKEN header is served, so each run mints one token.
@@ -43,9 +42,9 @@ const (
 	alibabaMaxPages = 15
 )
 
-// alibabaTechSubcategories are the codes under 技术类 (130) in the portal's own category list
-// (POST /category/list). Asking for the parent code alone matches only the handful of postings
-// filed under the parent itself (5 of 4,165), so the children are named.
+// alibabaTechSubcategories are the codes under 技术类 (130) in the portal's own category list (POST
+// /category/list). Asking for the parent code alone matches only the few postings filed under the
+// parent itself, so the children are named.
 const alibabaTechSubcategories = "133,135,136,137,407,408,409,410,411,511,702,703,704,747,764,769,798,811"
 
 // NewAlibaba builds the Alibaba careers adapter over the given HTTP client.

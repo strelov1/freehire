@@ -18,9 +18,8 @@ import (
 // and carries its primary job as structured Nuxt SSR state, including the employer, body,
 // compensation, work arrangement and (when the employer supplied one) the official ATS apply URL.
 //
-// The sitemap and /jobs count are close but not identical (290 posting URLs vs 294 jobs measured
-// live 2026-09-12), so this adapter deliberately does NOT claim fullCatalog/fullBoardListing.
-// Missing a URL from this listing must never be treated as structural proof that the posting died.
+// The sitemap and /jobs count are close but not identical, so this adapter deliberately does NOT
+// claim fullCatalog/fullBoardListing. A URL missing from the listing is no proof the posting died.
 type japandev struct {
 	http japandevHTTP
 }
@@ -115,8 +114,7 @@ func japanDevJobID(raw string) string {
 }
 
 // hydrate spends a page request only on a posting the catalogue does not already hold. A detail
-// failure defers that new posting rather than storing a body-less row which would become permanently
-// SeenRefresh on the next crawl and never get another chance to hydrate.
+// failure defers that posting: a stored body-less row would be SeenRefresh forever and never hydrate.
 func (s japandev) hydrate(ctx context.Context, list []japanDevListing, seen func(string) bool) []Job {
 	return fetchDetails(list, defaultDetailWorkers, func(item japanDevListing) (Job, bool) {
 		if seen(item.ExternalID) {

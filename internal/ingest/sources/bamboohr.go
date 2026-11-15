@@ -31,18 +31,17 @@ func (bambooHR) Provider() string { return "bamboohr" }
 // See the fullBoardListing interface for the bar.
 func (bambooHR) fullBoardListing() {}
 
-// emptyBoardListing: an unknown board redirects to an HTML page (ErrBoardGone
-// or a decode failure), and an emptied one answers 200 with "result": [] (2026-10-29); an
-// envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+// emptyBoardListing: an unknown board redirects to an HTML page (ErrBoardGone or a decode
+// failure), and an emptied one answers 200 with "result": []; an envelope without the array fails
+// Fetch. See the emptyBoardListing interface for the bar.
 func (bambooHR) emptyBoardListing() {}
 
 // bambooHRBoardGone reports whether a careers-list request was redirected off the board's
 // own careers path, and to where. That is how BambooHR says it is not serving a board: the
 // request answers 302, the client follows it, and the JSON decode fails on HTML.
 //
-// The rule is the redirect itself, not a list of destinations, because the destination
-// varies with WHY the board is not served and the reasons keep their own vocabulary. All
-// four seen in prod on 2026-09-06, across 135 boards, are covered without naming any:
+// The rule is the redirect itself, not a list of destinations: the destination varies with WHY
+// the board is not served. Known cases:
 //
 //	https://www.bamboohr.com                          no such tenant (an invented board
 //	                                                  subdomain lands here too)
@@ -50,14 +49,12 @@ func (bambooHR) emptyBoardListing() {}
 //	https://<board>.bamboohr.com/settings/account/expired.php   account lapsed
 //	https://<board>.bamboohr.com/settings/account/{,temporarily_}suspended
 //
-// A destination is included in the error rather than folded away: they do not mean the same
-// thing to a curator deciding whether to retire, and learning them the first time cost 138
-// hand-run probes. "temporarily_suspended" in particular is a board to leave alone.
+// The destination is kept in the error because they mean different things to a curator deciding
+// whether to retire the board; "temporarily_suspended" is one to leave alone.
 //
-// Staying on the careers path is the success condition, so a redirect BambooHR may add later
-// — a host change, a trailing-slash canonicalisation — is not mistaken for a dead board as
-// long as it still serves the board. An empty final URL (no response at all) is not a
-// verdict: a transport failure must keep reading as one.
+// Staying on the careers path is the success condition, so a later host change or trailing-slash
+// canonicalisation is not mistaken for a dead board. An empty final URL (no response at all) is
+// not a verdict: a transport failure must keep reading as one.
 func bambooHRBoardGone(board, final string) (string, bool) {
 	if final == "" {
 		return "", false
@@ -149,11 +146,10 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 	}
 
 	jo := d.Result.JobOpening
-	// A 200 is not the same as an answer: an empty body, a `null`, or an interstitial decodes
-	// without error and leaves every detail field zero. The LISTING already supplied the id,
-	// the name and the location, so such a posting would go on looking read while carrying no
-	// URL and no description — counted toward the board's coverage and closed by the sweep all
-	// the same. jobOpeningShareUrl is the tell, since every real jobOpening carries one.
+	// A 200 is not an answer: an empty body, a `null` or an interstitial decodes without error and
+	// leaves every detail field zero. The listing already supplied id, name and location, so such a
+	// posting would look read while carrying no URL or description, yet count toward coverage and be
+	// closed by the sweep. jobOpeningShareUrl is the tell: every real jobOpening carries one.
 	if strings.TrimSpace(jo.ShareURL) == "" {
 		return unreadableDetail(p.ID, url, e.Company), true
 	}

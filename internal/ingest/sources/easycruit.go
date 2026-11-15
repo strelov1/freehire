@@ -83,8 +83,8 @@ type easycruitCategory struct {
 	ID   string `xml:"id,attr"`
 }
 
-// version is the vacancy's text. 1,834 of 1,837 vacancies across 158 sites (2026-10-25) carry
-// exactly one; the three that carry two are one opening in two languages, and the first is kept.
+// version is the vacancy's text. Almost every vacancy carries exactly one; one that carries two
+// is one opening in two languages, and the first is kept.
 func (v easycruitVacancy) version() easycruitVersion {
 	if len(v.Versions) == 0 {
 		return easycruitVersion{}
@@ -243,7 +243,7 @@ func easycruitCountries(v easycruitVersion) []string {
 }
 
 // easycruitEmploymentType maps the two picklists EasyCruit keys in English whatever language the
-// site writes their labels in, measured across 1,837 vacancies: "duration" (permanent, contract,
+// site writes their labels in: "duration" (permanent, contract,
 // temporary, fixed-term-contract, extra-help, seasonal, probation, internship, trainee) and
 // "extent" (fulltime, parttime, casual-work, internship, project-based, volunteer). A training
 // placement is an internship whatever its extent; a fixed or temporary engagement is a contract,

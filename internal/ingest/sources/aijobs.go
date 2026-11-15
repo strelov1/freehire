@@ -14,19 +14,15 @@ import (
 	"golang.org/x/net/html"
 )
 
-// aijobs adapts aijobs.net, a large AI/ML job aggregator (~47k postings). It is boardless
-// (one global feed, no per-tenant board) and multi-company, so it stays in the source facet
-// and takes each posting's company from the feed. The listing is a Django CSRF-protected
-// POST endpoint (not a public JSON API), so the adapter needs a cookie-jar-backed client
-// (built with newCookieClient in the registry, mirroring taleo's session-bound flow) rather
-// than the shared client.
+// aijobs adapts aijobs.net, an AI/ML job aggregator. Boardless (one global feed) and
+// multi-company, so it stays in the source facet and takes each posting's company from the feed.
+// The listing is a Django CSRF-protected POST endpoint, not a public JSON API, so the adapter
+// needs a cookie-jar-backed client (newCookieClient in the registry) rather than the shared one.
 type aijobs struct {
 	http aijobsHTTP
-	// maxNewPerRun bounds how many unseen postings FetchNew hydrates in one run (see
-	// crawlListing's newBudget and design.md Decision 3). Always positive: NewAijobs
-	// substitutes aijobsDefaultMaxNewPerRun for a zero/negative value, because
-	// crawlListing reads newBudget <= 0 as "unlimited," not "nothing" — forwarding a raw
-	// zero here would mean "crawl the whole backlog in one run," not "crawl nothing new."
+	// maxNewPerRun bounds how many unseen postings FetchNew hydrates per run. Always positive:
+	// NewAijobs substitutes aijobsDefaultMaxNewPerRun for zero or negative, because crawlListing
+	// reads newBudget <= 0 as "unlimited".
 	maxNewPerRun int
 }
 
@@ -38,11 +34,8 @@ type aijobsHTTP interface {
 	CookieReader
 }
 
-// aijobsDefaultMaxNewPerRun is AIJOBS_MAX_NEW_PER_RUN's default when unset (see
-// aijobsMaxNewPerRunFromEnv below): the day-one backlog is aijobs.net's whole
-// ~47k-posting catalogue, and each unseen posting costs one detail-page GET, so a run
-// needs a bound well short of "all of it" (mirrors APPLY_FORM_MAX_PER_RUN's shape in
-// cmd/capture-apply-form for the same kind of backlog).
+// aijobsDefaultMaxNewPerRun is AIJOBS_MAX_NEW_PER_RUN's default when unset: each unseen posting
+// costs one detail-page GET, so a run needs a bound well short of the whole catalogue.
 const aijobsDefaultMaxNewPerRun = 500
 
 // NewAijobs builds the aijobs adapter over the given HTTP client (a cookie-jar-backed
@@ -63,10 +56,9 @@ func (aijobs) boardless() {}
 // aijobs aggregates postings from many companies, so it stays in the source facet.
 func (aijobs) aggregator() {}
 
-// FetchNew is the hydrating crawl cmd/ingest actually drives: it walks the listing
-// (crawlListing, bounded by maxNewPerRun and the seen-page stop) and fetches detail only
-// for a posting seen reports as not already in the catalogue; a re-listed posting seen
-// already has is refreshed instead, matching every other HydratingSource adapter.
+// FetchNew is the hydrating crawl cmd/ingest drives: it walks the listing (crawlListing) and
+// fetches detail only for postings seen reports as new; a re-listed posting seen already has is
+// refreshed instead.
 func (a aijobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	links, refreshed, err := a.crawlListing(ctx, seen, a.maxNewPerRun)
 	if err != nil {
@@ -78,18 +70,16 @@ func (a aijobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(external
 	return append(jobs, refreshed...), nil
 }
 
-// Fetch is the list-only fallback HydratingSource specifies for a caller that cannot
-// supply a seen predicate. aijobs has no such thing as a list-only Job — the listing
-// carries no company, and Job.Company is required (see detail) — so this hydrates
-// everything the listing yields (as if nothing were seen yet), still bounded by
-// maxNewPerRun.
+// Fetch is the list-only fallback HydratingSource specifies. aijobs has no list-only Job (the
+// listing carries no company, and Job.Company is required), so this hydrates everything the
+// listing yields, still bounded by maxNewPerRun.
 func (a aijobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return a.FetchNew(ctx, e, func(string) bool { return false })
 }
 
 // aijobsMaxNewPerRunFromEnv reads AIJOBS_MAX_NEW_PER_RUN, falling back to
-// aijobsDefaultMaxNewPerRun when unset or not a positive integer — read once at registry
-// construction (see registry.go), not per crawl.
+// aijobsDefaultMaxNewPerRun when unset or not a positive integer. Read once at registry
+// construction.
 func aijobsMaxNewPerRunFromEnv() int {
 	v := os.Getenv("AIJOBS_MAX_NEW_PER_RUN")
 	if v == "" {
@@ -135,10 +125,8 @@ func aijobsListingLinks(root *html.Node) []string {
 	return hrefs
 }
 
-// aijobsMaxPages is the hard pagination safety cap, independent of the seen-based stop
-// (see crawlListing): ~47k postings at 50/page is ~956 pages, so this leaves headroom
-// while still bounding a run if the feed's sort order or markup ever silently changes.
-// A var, not a const, so a test can shrink it rather than paginate to the real cap.
+// aijobsMaxPages is the hard pagination cap, independent of the seen-based stop: it bounds a run
+// if the feed's sort order or markup silently changes. A var so a test can shrink it.
 var aijobsMaxPages = 1200
 
 // bootstrapSession GETs the aijobs.net home page to obtain the csrftoken cookie the
@@ -155,10 +143,9 @@ func (a aijobs) bootstrapSession(ctx context.Context) (string, error) {
 	return token, nil
 }
 
-// listPage requests one listing page, authorized by the session's csrfToken (echoed as
-// both the x-csrftoken header and the csrfmiddlewaretoken form field — the value the
-// cookie already carries, so no separate per-page token scrape is needed). Referer is
-// required: aijobs.net's CSRF check rejects a same-value token without it.
+// listPage requests one listing page, authorized by the session's csrfToken (echoed as the
+// x-csrftoken header and the csrfmiddlewaretoken form field). Referer is required: aijobs.net's
+// CSRF check rejects the token without it.
 func (a aijobs) listPage(ctx context.Context, csrfToken string, page int) (*html.Node, error) {
 	values := url.Values{
 		"csrfmiddlewaretoken": {csrfToken},
@@ -166,28 +153,25 @@ func (a aijobs) listPage(ctx context.Context, csrfToken string, page int) (*html
 	headers := map[string]string{
 		"x-csrftoken": csrfToken,
 		"referer":     aijobsBaseURL + "/",
-		// The site's own frontend paginates this endpoint via htmx (confirmed live), which
-		// marks every one of its requests this way; sent for parity with the real client.
+		// The site's frontend paginates via htmx, which marks every request this way; sent for
+		// parity.
 		"hx-request": "true",
 	}
 	return a.http.PostFormWithHeaders(ctx, fmt.Sprintf("%s/?page=%d", aijobsBaseURL, page), headers, values)
 }
 
-// crawlListing walks the listing pages (newest posting first) and returns the job-detail
-// hrefs of postings seen reports as NOT already in the catalogue, in discovery order, plus
-// a SeenRefresh-only Job for every already-catalogued posting it encounters along the way —
-// without this, a still-open posting's last_seen_at would never advance past its first
-// crawl, and the company-scoped 48h sweep would eventually close it as unseen with no way
-// back in (ExistingExternalIDs counts a closed row as seen, so it can never re-upsert).
-// The walk stops — without requesting a further page — as soon as either condition holds:
-//   - a whole page's postings are all already seen: the feed has been caught up to, so
-//     every following page (older still) would be too;
-//   - newBudget unseen postings have been found (0 means unbounded): this run's
-//     per-run detail-fetch budget (see AIJOBS_MAX_NEW_PER_RUN); the postings past the
-//     cap remain unseen and are picked up on a later run.
+// crawlListing walks the listing pages (newest first) and returns the detail hrefs of postings
+// seen reports as NOT in the catalogue, plus a SeenRefresh-only Job for every already-catalogued
+// posting it meets. Without those, a still-open posting's last_seen_at would never advance and the
+// company-scoped 48h sweep would close it with no way back in (ExistingExternalIDs counts a closed
+// row as seen).
 //
-// A first-page failure is a board-level error; a later page failing ends the walk with
-// what was gathered so far (a partial crawl survives a mid-listing hiccup).
+// The walk stops without requesting a further page when either holds:
+//   - a whole page is already seen: the feed is caught up, older pages would be too;
+//   - newBudget unseen postings have been found (0 means unbounded); the rest wait for a later run.
+//
+// A first-page failure is a board-level error; a later page failing ends the walk with what was
+// gathered.
 func (a aijobs) crawlListing(ctx context.Context, seen func(externalID string) bool, newBudget int) (unseen []string, refreshed []Job, err error) {
 	csrfToken, err := a.bootstrapSession(ctx)
 	if err != nil {
@@ -233,10 +217,9 @@ func (a aijobs) crawlListing(ctx context.Context, seen func(externalID string) b
 // the trailing "-<id>" suffix every such link carries.
 var aijobsCompanySlugPattern = regexp.MustCompile(`^/company/(.+)-\d+/?$`)
 
-// aijobsCompanyName finds the detail page's company-profile link and derives a display
-// name from its slug — the page's own visible label is masked behind a PRO paywall
-// ("@ M..."), but the slug in the href is not (see design.md Decision 5). "" if the page
-// carries no such link.
+// aijobsCompanyName derives a display name from the detail page's company-profile link slug: the
+// visible label is masked behind a PRO paywall, the slug is not. "" if the page carries no such
+// link.
 func aijobsCompanyName(root *html.Node) string {
 	var slug string
 	walk(root, func(n *html.Node) bool {
@@ -347,17 +330,15 @@ func aijobsAnchorTexts(n *html.Node) []string {
 	return texts
 }
 
-// aijobsIsPlaceholder reports whether a section's only item is the literal text N/A —
-// the site's own placeholder for "nothing here", observed on every sampled posting with
-// no real perks.
+// aijobsIsPlaceholder reports whether a section's only item is the literal text N/A, the site's
+// placeholder for nothing.
 func aijobsIsPlaceholder(items []string) bool {
 	return len(items) == 1 && items[0] == "N/A"
 }
 
-// aijobsDescription renders the Tasks section as a bullet list (there is no free-text
-// prose anywhere on the page — the site pre-processes every posting into these structured
-// sections), followed by a Perks/Benefits bullet list when it carries real content (the
-// literal-N/A placeholder is omitted rather than rendered as noise).
+// aijobsDescription renders the Tasks section as a bullet list (the page has no free-text prose;
+// every posting is structured sections), then a Perks/Benefits list when it has real content (the
+// N/A placeholder is omitted).
 func aijobsDescription(sections map[string]*html.Node) string {
 	var b strings.Builder
 	for _, task := range aijobsListItems(sections["Tasks"]) {
@@ -375,11 +356,8 @@ func aijobsDescription(sections map[string]*html.Node) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// aijobsPostedPrefixes are the two labels observed live for the same relative-time
-// element: "Found X ago" on a posting crawled recently, "Published X ago" on an older one
-// with a recorded original date (confirmed against
-// https://aijobs.net/job/statistics-expert-phd-remote-238344/, which reads "Published
-// 15d ago" — a shape task 4's single-sample fixture never exercised).
+// aijobsPostedPrefixes are the two labels for the same relative-time element: "Found X ago" on a
+// recently crawled posting, "Published X ago" on an older one with a recorded original date.
 var aijobsPostedPrefixes = []string{"Found ", "Published "}
 
 // aijobsPostedText extracts the detail page's relative-posting-time text (e.g. "8h ago"
@@ -449,15 +427,14 @@ func (a aijobs) detail(ctx context.Context, href string) (Job, bool) {
 	}, true
 }
 
-// aijobsPostedTimePattern captures a relative-time value and its unit from text like
-// "8h ago", "3d ago", "2w ago", "5mo ago", "1y ago" — only "h"/"d"/"w" were observed live,
-// but the site's own broader vocabulary implies "mo"/"y" exist for older postings.
+// aijobsPostedTimePattern captures a relative-time value and unit from text like "8h ago", "3d
+// ago", "2w ago", "5mo ago", "1y ago". Only h/d/w are confirmed; mo/y are assumed for older
+// postings.
 var aijobsPostedTimePattern = regexp.MustCompile(`^(\d+)(h|d|w|mo|y)\s+ago$`)
 
-// aijobsParsePostedAt converts the detail page's relative-time text (see aijobsPostedText)
-// into an absolute PostedAt relative to now. An unrecognized shape returns nil rather than
-// failing the whole posting (see spec Requirement "Posted time is parsed from the
-// relative-time string").
+// aijobsParsePostedAt converts the detail page's relative-time text (see aijobsPostedText) into an
+// absolute PostedAt relative to now. An unrecognized shape returns nil rather than failing the
+// whole posting.
 func aijobsParsePostedAt(text string, now time.Time) *time.Time {
 	m := aijobsPostedTimePattern.FindStringSubmatch(strings.TrimSpace(text))
 	if m == nil {

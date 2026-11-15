@@ -21,9 +21,8 @@ import (
 )
 
 // infostud adapts Poslovi Infostud (poslovi.infostud.com), Serbia's largest general job board:
-// every trade, ~3% technical, thousands of employers each named per posting. It is boardless and
-// an aggregator. See the "Infostud traps" section of AGENTS.md for the measurements behind each
-// rule.
+// every trade, thousands of employers each named per posting. It is boardless and an aggregator.
+// See the "Infostud traps" section of AGENTS.md.
 //
 // The listing is the site's own server-rendered search, 30 postings a page, whose __NEXT_DATA__
 // carries every structured fact but the body. The body and the structured salary come from the
@@ -49,12 +48,10 @@ const (
 	// infostudRequestInterval paces every request of a run at one a second — a courtesy
 	// ceiling, not a measured limit.
 	infostudRequestInterval = time.Second
-	// infostudMaxPages is a safety ceiling: the search held 3,171 postings (106 pages) on
-	// 2026-10-28. Reaching it fails the crawl rather than ending it.
+	// infostudMaxPages is a safety ceiling; reaching it fails the crawl rather than ending it.
 	infostudMaxPages = 500
-	// infostudMaxNewPerRun bounds the posting pages of one run: ~106 listing pages and 1,000
-	// posting pages at one a second, plus the writes, sit inside the scheduler's default 2,400 s
-	// crawl budget. A cold catalogue is taken in slices over a few runs.
+	// infostudMaxNewPerRun bounds the posting pages of one run so listing, detail and writes fit
+	// the scheduler's default 2,400 s crawl budget. A cold catalogue is taken over a few runs.
 	infostudMaxNewPerRun   = 1000
 	infostudDeadlineMargin = 5 * time.Minute
 )

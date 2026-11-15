@@ -44,13 +44,12 @@ const (
 	apponeJobURL     = "https://apply.appone.com/job/"
 )
 
-// apponeAttempts and apponeRetryDelay bound the adapter's own retry of a 403. The platform's
-// edge answers a bare "Forbidden" — never a 429 — when it judges a client too fast, and also
-// to a scattering of requests at a gentle pace (measured 2026-10-20: 5 of 30 at one request a
-// second, the same URL answering 200 before and after). The shared client treats a 403 as
-// final, which would fail a board's listing or mark a posting unreadable on a stray refusal,
-// so the adapter tries again after a pause that doubles each time. A posting still refused
-// after that is an Unreadable marker and is simply asked for again on the next run.
+// apponeAttempts and apponeRetryDelay bound the adapter's own retry of a 403. The platform's edge
+// answers a bare "Forbidden", never a 429, when it judges a client too fast, and also to a
+// scattering of requests at a gentle pace (the same URL answers 200 before and after). The shared
+// client treats a 403 as final, which would fail a board's listing or mark a posting unreadable on
+// a stray refusal, so the adapter tries again after a pause that doubles each time. A posting
+// still refused after that is an Unreadable marker, asked for again on the next run.
 const (
 	apponeAttempts   = 3
 	apponeRetryDelay = 2 * time.Second
@@ -112,10 +111,9 @@ func (a appone) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 // list reads a portal's listing in one unpaginated answer. An unknown portal is a 404, which
 // fails the board — never an empty board.
 //
-// The answer is capped at the 100 most recent postings and accepts no paging parameter
-// (measured 2026-10-20: page, pageNumber, pageSize, skip and offset all return the same 100 on
-// a portal holding exactly 100). That is why appone does not claim fullBoardListing: a portal
-// at the cap may hold more than it shows.
+// The answer is capped at the 100 most recent postings and accepts no paging parameter (page,
+// pageNumber, pageSize, skip and offset are all ignored). That is why appone does not claim
+// fullBoardListing: a portal at the cap may hold more than it shows.
 func (a appone) list(ctx context.Context, board string) ([]apponePosting, error) {
 	var resp struct {
 		JobPosts []apponePosting `json:"jobPosts"`

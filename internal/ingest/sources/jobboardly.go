@@ -17,9 +17,8 @@ import (
 // is the subdomain, the shape getro has.
 //
 // Every board serves its whole catalogue as one unpaginated JSON array at /jobs.json, bodies
-// inline, so there is no detail request. ?page=2 is ignored and returns the identical array; on
-// every board measured the array held exactly as many postings as the board's sitemap.xml lists
-// (141, 173, 1,332).
+// inline, so there is no detail request. ?page=2 is ignored and returns the identical array; it
+// holds as many postings as the board's sitemap.xml lists.
 type jobboardly struct {
 	http JSONGetter
 }

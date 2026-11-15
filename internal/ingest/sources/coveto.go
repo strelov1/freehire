@@ -18,16 +18,14 @@ import (
 //
 // Every tenant publishes its whole board as one RSS document, /public/rss/, one <item> per
 // open posting (title, link, publication date, and a "job-id-<n>" guid), unpaginated — the same
-// postings, measured on a 71-posting board, that its paged /public/jobs/ listing walks — and not
-// capped on the largest tenants (k61491: 4,375 items, 175 listing pages of 25). An item
+// postings its paged /public/jobs/ listing walks — and not capped on the largest tenants. An item
 // carries no body: that is on the posting page, as a schema.org JobPosting with the employer
 // (a tenant can post for a subsidiary), the workplace address, the employment type, a salary
 // and — rarely — jobLocationType TELECOMMUTE. So this is a HydratingSource.
 //
 // A white-labelled tenant's feed links its postings on the tenant's own domain
-// (jobs.rocket-match.de for k43552); the link is the posting's address and is fetched as given.
-// 131 of 850 live tenants do, mostly recruitment agencies, holding a third of the postings.
-//
+// (jobs.rocket-match.de for k43552, mostly recruitment agencies); the link is the posting's address and
+// is fetched as given.
 // A switched-off tenant answers its RSS address with an HTML page titled "Diese Seite ist
 // nicht mehr aktiv." under HTTP 200 (ErrBoardGone); a tenant that never enabled the feed
 // answers "Diese Funktion wurde nicht aktiviert.", which is NOT gone — its postings are live,
@@ -185,8 +183,8 @@ func (s coveto) detail(ctx context.Context, e CompanyEntry, p covetoPosting) (Jo
 	}
 	var jp covetoJobPosting
 	if !ldJobPosting(root, &jp) || strings.TrimSpace(jp.Description) == "" {
-		// coveto withholds the JobPosting from an open application's page — 40 of 40 sampled
-		// across 158 tenants that list one — since it is not a posting. Its feed title says
+		// coveto withholds the JobPosting from an open application's page, since it is not a
+		// posting. Its feed title says
 		// what it is, and only then is the missing block an answer rather than a page this
 		// crawl could not read: a marker for it would recur every run (a dropped item is never
 		// stored, so never seen) and hold the board's unseen sweep shut.
@@ -196,9 +194,8 @@ func (s coveto) detail(ctx context.Context, e CompanyEntry, p covetoPosting) (Jo
 		return unreadableDetail(p.ID, p.URL, e.Company), true
 	}
 	// TELECOMMUTE is the only work-arrangement statement the page makes, and it is a remote one:
-	// measured 2026-10-25, all 17 sampled "(Remote) …" titles and the "100% Home Office" ones
-	// carry it, while "Homeoffice möglich" postings and the 85 postings of a random sample do
-	// not. Its absence says nothing, so it never yields "onsite".
+	// "(Remote)" and "100% Home Office" postings carry it, "Homeoffice möglich" ones do not.
+	// Its absence says nothing, so it never yields "onsite".
 	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
 	j := Job{
 		ExternalID:     p.ID,

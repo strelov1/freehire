@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// getinit adapts Get in IT (www.get-in-it.de), the German entry-level IT job board: ~1.2k
-// postings, most for students, trainees and career starters. It is boardless and an aggregator —
+// getinit adapts Get in IT (www.get-in-it.de), the German entry-level IT job board, mostly
+// for students, trainees and career starters. It is boardless and an aggregator —
 // the employer is read per posting.
 //
 // The posting set is the public sitemap (robots.txt leaves /jobsuche/p<id> and the sitemap open
@@ -17,8 +17,7 @@ type getinit struct{ sitemapBoard }
 
 const (
 	getinitSitemapURL = "https://www.get-in-it.de/sitemap.xml"
-	// getinitRequestInterval is a courtesy ceiling, not a measured limit: a run is ~1.2k pages on
-	// the first crawl and a handful afterwards.
+	// getinitRequestInterval is a courtesy ceiling, not a known limit.
 	getinitRequestInterval = time.Second
 	getinitMaxNewPerRun    = 1500
 )

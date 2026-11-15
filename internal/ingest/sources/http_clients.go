@@ -12,33 +12,25 @@ import (
 // NewClient builds the default ingest HTTP client.
 func NewClient() *Client { return newClientWithProxy(nil) }
 
-// NewProxyClient builds an ingest client whose requests egress through proxy. It is
-// identical to NewClient but for the proxied transport, and is handed only to the
-// curated set of providers whose prod-IP is anti-bot-blocklisted (see All). The proxy
-// URL — including its host and credentials — comes entirely from configuration
-// (SOURCES_PROXY_URL); no proxy endpoint is hardcoded here.
+// NewProxyClient builds an ingest client whose requests egress through proxy, handed only to the
+// curated providers whose prod IP is anti-bot-blocklisted (see All). The proxy URL, host and
+// credentials come from configuration (SOURCES_PROXY_URL).
 func NewProxyClient(proxy *url.URL) *Client { return newClientWithProxy(proxy) }
 
-// NewRefusalRetryClient builds a client that crawls on the DIRECT IP and falls back to proxy
-// only for a request the platform refused (429/403). It suits a platform that serves the prod
-// IP perfectly well until our own hourly fleet floods it — measured on teamtailor, where a
-// direct request returns 200 on demand and yet 1207 of 1208 board failures fell inside the
-// crawl hour. Routing such a platform entirely through the proxy (NewProxyClient) would move
-// that same flood onto one shared address; sending it only what was already refused spends the
-// proxy on requests that are otherwise pure loss.
+// NewRefusalRetryClient builds a client that crawls on the DIRECT IP and falls back to proxy only
+// for a request the platform refused (429/403). It suits a platform that serves the prod IP fine
+// until our own hourly fleet floods it; routing it entirely through the proxy would move that
+// flood onto one shared address.
 func NewRefusalRetryClient(proxy *url.URL) *Client {
 	c := NewClient()
 	c.refusalClient = safehttp.NewClientWithProxy(15*time.Second, proxy)
 	return c
 }
 
-// NewRotatingProxyClient is NewProxyClient for a ROTATING gateway, one that hands out a fresh
-// exit IP per connection. Go's transport keeps a proxy tunnel open and reuses it, and a reused
-// tunnel keeps its exit: measured 2026-10-25 through the Webshare gateway, four requests over one
-// connection all left from 145.223.45.39 while three separate connections left from three
-// addresses. So a pooled client turns "a fresh IP per request" into one IP for the whole run, and
-// a platform that rate-limits by IP refuses it exactly as it refused the fixed exit. Closing the
-// connection after every request is what makes the gateway rotate.
+// NewRotatingProxyClient is NewProxyClient for a ROTATING gateway that hands out a fresh exit IP
+// per connection. Go's transport reuses a proxy tunnel and a reused tunnel keeps its exit, so a
+// pooled client would use one IP for the whole run. Closing the connection after every request
+// makes the gateway rotate.
 func NewRotatingProxyClient(proxy *url.URL) *Client {
 	c := newClientWithProxy(proxy)
 	freshConnectionPerRequest(c.httpClient)
@@ -76,12 +68,9 @@ func newClientWithProxy(proxy *url.URL) *Client {
 	}
 }
 
-// longTimeout bounds a NewLongTimeoutClient request — generous enough for a legitimately
-// large single-page fetch (a listing that inlines every posting rather than paginating),
-// unlike streamTimeout's many-minute allowance for a throttled bulk feed trickling in.
-// Sized against a real measurement: HumanBit's ~5.6 MB listing page took ~18s to fetch
-// (curl -w, 2026-09-13), past the standard 15s httpClient timeout, which made every crawl
-// of that board fail intermittently with "context deadline exceeded" in production.
+// longTimeout bounds a NewLongTimeoutClient request: long enough for a legitimately large single-
+// page listing (HumanBit's ~5.6 MB page takes ~18s), past the standard 15s timeout, unlike
+// streamTimeout's allowance for a throttled bulk feed.
 const longTimeout = 45 * time.Second
 
 // NewLongTimeoutClient builds an ingest client identical to NewClient but with a longer
@@ -94,14 +83,10 @@ func NewLongTimeoutClient() *Client {
 	return c
 }
 
-// NewSingleUseConnClient builds a client that dials a fresh connection per request, for a
-// platform whose server mishandles one it has already answered on. It is exposed for host
-// tools (harvest-boards' Profession prober, which reads the same sitemaps the crawl does
-// and hits the same wall).
-//
-// Everything else about it is NewClient: same guard, same User-Agent, same retry budget.
-// See safehttp.NewTransportWithoutKeepAlive for what the failure looks like and why a
-// truncated body makes it worth a dedicated client rather than a retry.
+// NewSingleUseConnClient builds a client that dials a fresh connection per request, for a platform
+// whose server mishandles a connection it has already answered on (see
+// safehttp.NewTransportWithoutKeepAlive). Exposed for host tools such as harvest-boards'
+// Profession prober. Otherwise identical to NewClient.
 func NewSingleUseConnClient() *Client { return newSingleUseConnClient() }
 
 func newSingleUseConnClient() *Client {
@@ -111,29 +96,17 @@ func newSingleUseConnClient() *Client {
 	return c
 }
 
-// BrowserUserAgent is a plain desktop Chrome string, for the one provider whose edge refuses
-// every client that identifies itself.
+// BrowserUserAgent is a plain desktop Chrome string, for the one provider (4dayweek.io) whose
+// Cloudflare edge refuses every client that identifies itself, even on a path its robots.txt
+// ALLOWS.
 //
-// This is not a preference. Measured against 4dayweek.io on 2026-09-07, on the path its own
-// robots.txt explicitly ALLOWS (/api/v2), Cloudflare answered 403 to every honest form —
-// "freehire/0.1 (+https://freehire.me)", the same wrapped as
-// "Mozilla/5.0 (compatible; freehire/0.1; +...)", and "freehire-aggregator/0.1" — and 200 only
-// to a browser string carrying no identity at all. The managed rule refuses self-identification
-// as such, not our name, so staying identifiable and staying readable turned out to be
-// mutually exclusive there.
-//
-// Keep this for providers that ALLOW the path in robots.txt and refuse the client anyway. It is
-// not a way around a Disallow: the fix for a disallowed path is to use an allowed one, which is
-// exactly what the 4dayweek adapter now does.
-//
-// Exported for cmd/liveness, whose 4dayweek probe reads the same allowed /api/v2 path from
-// behind the same edge.
+// Use it only for providers that allow the path in robots.txt and refuse the client anyway; it is
+// not a way around a Disallow. Exported for cmd/liveness, whose 4dayweek probe sits behind the
+// same edge.
 const BrowserUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
 
-// newBrowserUAClient is NewClient with BrowserUserAgent — same guarded transport, same retry
-// budget, same everything else. Unexported, unlike newCookieClient's and
-// newSingleUseConnClient's wrappers: those are exported because host tools reuse them, and
-// nothing outside this package needs this one.
+// newBrowserUAClient is NewClient with BrowserUserAgent. Unexported: nothing outside this package
+// needs it.
 func newBrowserUAClient() *Client {
 	c := NewClient()
 	c.userAgent = BrowserUserAgent
@@ -141,11 +114,9 @@ func newBrowserUAClient() *Client {
 }
 
 // macBrowserUserAgent is a desktop Chrome string on macOS, for Feishu Hire (feishujobs), whose
-// edge filters on the operating system in the string. Measured 2026-10-15 against the job
-// search on both jobs.bytedance.com and a customer's <tenant>.jobs.feishu.cn: the project's own
-// string, BrowserUserAgent (Linux), a Windows Chrome string and Go's default were all answered
-// 405 with an empty body, while "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" alone was
-// served. Neither robots.txt disallows the API path; the same line as BrowserUserAgent holds.
+// edge filters on the operating system in the string: the project string, Linux and Windows Chrome
+// strings and Go's default are all answered 405 with an empty body. The same robots.txt rule as
+// BrowserUserAgent holds.
 const macBrowserUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 
 // newMacBrowserUAClient is NewClient with macBrowserUserAgent — same guarded transport, same
@@ -171,12 +142,9 @@ func withUserAgent(c HTTPClient, ua string) HTTPClient {
 	return &cp
 }
 
-// compatibleUserAgent is the project's own identity in the browser-compatible form, for an edge
-// that refuses any string not starting with a browser token yet does not ask for a browser.
-// Measured 2026-10-15 against OCC Mundial's search pages (www.occ.com.mx/empleos/, which
-// robots.txt allows): "freehire/0.1 (+https://freehire.me)", a bare "Mozilla/5.0" and the
-// project string with "Mozilla/5.0" appended were all answered 403, while this string was
-// served. It still names us, so prefer it to BrowserUserAgent wherever it is enough.
+// compatibleUserAgent is the project's own identity in browser-compatible form, for an edge that
+// refuses any string not starting with a browser token (OCC Mundial) yet does not ask for a
+// browser. It still names us, so prefer it to BrowserUserAgent wherever it is enough.
 const compatibleUserAgent = "Mozilla/5.0 (compatible; freehire/0.1; +https://freehire.me)"
 
 // NewCompatibleUAClient is NewClient with compatibleUserAgent — same guarded transport, same
@@ -188,14 +156,10 @@ func NewCompatibleUAClient() *Client {
 	return c
 }
 
-// crawlerUserAgent identifies as Googlebot, for the one provider whose edge does the OPPOSITE
-// of blocking bots: energyjobline.com's job-detail pages server-render their schema.org
-// JobPosting ld+json only for a recognised search-crawler User-Agent. Both the project's own
-// "freehire/0.1 (+https://freehire.me)" and a plain desktop browser string (BrowserUserAgent)
-// get a client-rendered shell with no ld+json at all — verified live 2026-10-07. The site's own
-// robots.txt does not disallow the /job/ path, and SSR'ing only for crawlers is how it gets
-// Google's job rich snippets in the first place, so this is the intended way to read exactly
-// the content it already publishes for search engines, not a bypass of a restriction.
+// crawlerUserAgent identifies as Googlebot, for energyjobline.com, whose job-detail pages server-
+// render their schema.org JobPosting ld+json only for a recognised search-crawler User-Agent; any
+// other string gets a client-rendered shell. Its robots.txt does not disallow /job/, so this reads
+// content it already publishes for search engines.
 const crawlerUserAgent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 
 // newCrawlerUAClient is NewClient with crawlerUserAgent — same guarded transport, same retry

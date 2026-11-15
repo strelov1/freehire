@@ -26,8 +26,8 @@ type flatchr struct {
 
 // flatchrGetter is the transport the adapter needs: the board document as JSON, and — only
 // when that fails to decode — the same address as text, to recognise the switched-off page.
-// The document cannot be read as text in the first place: one board (albconciergerie, 2,264
-// vacancies) is 22 MB, past GetText's cap.
+// The document cannot be read as text up front: a large board runs to tens of MB, past
+// GetText's cap.
 type flatchrGetter interface {
 	JSONGetter
 	TextGetter

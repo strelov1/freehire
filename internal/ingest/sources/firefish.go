@@ -7,10 +7,9 @@
 //
 // Every Firefish site publishes an RSS listing at /rss/adverts/latest.aspx — one unpaginated
 // document carrying every open vacancy with its full HTML body and structured facets
-// (reference number, job type, location area, posted/closing dates, structured pay bounds with
-// currency and rate). One GET per board, no detail request; that completeness is what earns
-// fullBoardListing. Verified live 2026-11-07 on careers.arnoldclark.com (342 vacancies, mixed
-// years of history) and on the vendor's own jobs.firefishsoftware.com.
+// (reference number, job type, location area, posted/closing dates, pay bounds with currency
+// and rate). One GET per board, no detail request; that completeness is what earns
+// fullBoardListing.
 //
 // An unknown tenant label does not resolve (NXDOMAIN), and a site with no openings answers a
 // well-formed channel with no items.
@@ -187,9 +186,8 @@ func firefishDeadline(s string) *time.Time {
 	return nil
 }
 
-// firefishEmploymentType maps the feed's JobType onto the employment-type vocabulary. The
-// measured corpus spells Permanent and Contract; anything else leaves the field to the
-// pipeline's dictionaries rather than guessing.
+// firefishEmploymentType maps the feed's JobType onto the employment-type vocabulary. Sites
+// spell Permanent and Contract; anything else is left to the pipeline's dictionaries.
 func firefishEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "permanent", "full time", "full-time":

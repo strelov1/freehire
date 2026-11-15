@@ -30,8 +30,8 @@ import (
 // (edeka → verbund.edeka/karriere): leaving <board>.concludis.de is read as ErrBoardGone, the
 // destination named in the error, because nothing this adapter can read is served any more.
 // A tenant can also do that for single postings: the list stays on concludis while a posting's
-// address redirects to the tenant's site, which mostly states no JobPosting (smurfitkappa: 239
-// of 251; transdev routes some to its subsidiaries' sites). Such a posting is dropped.
+// address redirects to the tenant's site, which mostly states no JobPosting (smurfitkappa; transdev
+// routes some to its subsidiaries' sites). Such a posting is dropped.
 type concludis struct {
 	http concludisGetter
 }
@@ -54,8 +54,7 @@ func (concludis) fullBoardListing() {}
 // concludisListPath is the complete-list address every tenant serves.
 const concludisListPath = "/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"
 
-// concludisMaxPages is a safety ceiling on the ?page=N walk. The largest tenant measured
-// (edeka-rr, 668 positions at 25 a page) needs 27; reaching the ceiling fails the crawl.
+// concludisMaxPages is a safety ceiling on the ?page=N walk; reaching it fails the crawl.
 const concludisMaxPages = 200
 
 // concludisBoard is the shape of a tenant label.
@@ -238,9 +237,8 @@ func (s concludis) detail(ctx context.Context, e CompanyEntry, l concludisLine) 
 		}
 		return unreadableDetail(l.ID, l.URL, e.Company), true
 	}
-	// No sampled posting (90, across every live tenant) states jobLocationType; TELECOMMUTE is
-	// still read as the remote statement schema.org defines it to be, and its absence says
-	// nothing — the description parser decides.
+	// jobLocationType is not stated in practice; TELECOMMUTE is still read as the remote statement
+	// schema.org defines it to be, and its absence says nothing — the description parser decides.
 	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
 	loc, countries := concludisPlaces(jp.JobLocation)
 	return Job{

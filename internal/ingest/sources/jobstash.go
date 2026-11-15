@@ -43,12 +43,11 @@ func (jobstash) boardless() {}
 // jobstash aggregates postings from many companies, so it stays in the source facet.
 func (jobstash) aggregator() {}
 
-// jobstash lists its whole catalogue every run: the list endpoint pages through every posting
-// (measured 2026-10-31: 85 pages of 200, 16,963 postings), and list fails a walk that ends
-// short of the reported total or on a page that states none. So the sweep may close by source,
-// which reaches the postings of an employer with nothing left in the feed — the company scope
-// never names that employer again, and on 2026-10-31 ~3k open postings under such employers
-// had gone unseen for a week. See the fullCatalog interface (source.go) for the bar.
+// jobstash lists its whole catalogue every run: the list endpoint pages through every posting,
+// and list fails a walk that ends short of the reported total or on a page that states none. So
+// the sweep may close by source, which reaches the postings of an employer with nothing left in
+// the feed (the company scope never names that employer again). See the fullCatalog interface
+// (source.go) for the bar.
 func (jobstash) fullCatalog() {}
 
 // jobstashPosting is one posting with its body inline (no detail call). url is already the

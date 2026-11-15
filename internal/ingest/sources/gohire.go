@@ -21,7 +21,7 @@ import (
 // gohire adapts GoHire career sites (jobs.gohire.io). A board is the site's path segment,
 // "<name slug>-<8-character code>" (jobs.gohire.io/dexerto-de5jlhjo), stored as the platform
 // spells it. Only the code addresses the site: any other slug in front of it 301s onto the
-// canonical one, and so does the bare code (measured 2026-10-24), so two spellings differing in
+// canonical one, and so does the bare code, so two spellings differing in
 // the slug are one crawl target and boardIdentity folds them onto the code. An older numeric
 // form (dexerto-19265) still appears in crawled links and answers 404 — it is not a board.
 //
@@ -65,8 +65,7 @@ func (gohire) Provider() string { return "gohire" }
 
 const gohireBase = "https://jobs.gohire.io/"
 
-// gohireMaxPages is a safety ceiling on the ?page=N walk. The largest of 108 sites measured
-// held 21 postings (3 pages); the walk normally ends on the listing's own page count.
+// gohireMaxPages is a safety ceiling on the ?page=N walk. Real sites are far smaller; the walk normally ends on the listing's own page count.
 const gohireMaxPages = 100
 
 // gohireBoardPattern is the site segment: a slug ending in the 8-character site code.
@@ -285,14 +284,10 @@ func gohireSiteCode(board string) string {
 }
 
 // gohireRequestInterval paces every GoHire request in a run. GoHire meters a request QUOTA,
-// not a rate: measured 2026-10-24 from the crawl host, one request every ~1.3s was served 400
-// times in a row and refused with 429 from the 401st, and a residential IP refused at ~270
-// requests was still refused 30 minutes later. So the pace is set by the quota, not by the
-// origin's speed: one request every 10s is 360 an hour, under 400 even if the window is an
-// hour, and a 3000s run spends at most ~300 — the fleet's ~110 listing pages plus the new
-// postings' pages, with a first crawl's backlog carried over a few runs (each board persists
-// as it finishes). If the quota is longer than an hour, the refusal latch (gohire.refused)
-// is what keeps a run from spending the rest of it on retries.
+// not a rate: it serves about 400 requests and then refuses with 429, for a window that can
+// outlast 30 minutes. One request every 10s is 360 an hour, under that quota; a first crawl's
+// backlog carries over a few runs (each board persists as it finishes). If the quota window is
+// longer than an hour, the refusal latch (gohire.refused) stops a run retrying into it.
 const (
 	gohireRequestInterval = 10 * time.Second
 	gohireRequestBurst    = 1

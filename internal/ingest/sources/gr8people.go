@@ -18,7 +18,7 @@ import (
 // tenant's own /graphql endpoint with that token as a Bearer credential. The default, unfiltered
 // search already returns only what a public visitor sees — open, externally-visible postings —
 // so unlike jobappnetwork's shared search proxy, no extra visibility filter is needed. See
-// internal/ingest/sources/providers/gr8people.md for what was verified live.
+// internal/ingest/sources/providers/gr8people.md for what the platform serves.
 type gr8peopleHTTP interface {
 	TextGetter
 	HeaderJSONPoster
@@ -40,8 +40,7 @@ const gr8peoplePageSize = 50
 // its Next.js __NEXT_DATA__ blob.
 var gr8peopleTokenPattern = regexp.MustCompile(`"token"\s*:\s*"(eyJ[^"]+)"`)
 
-// gr8peopleSearchQuery is a trimmed selection of the platform's own searchJobs query (verified
-// live against the full jobPostingFields fragment) — only the fields this adapter maps.
+// gr8peopleSearchQuery is a trimmed selection of the platform's own searchJobs query — only the fields this adapter maps.
 const gr8peopleSearchQuery = `query searchJobs($query: String, $start: Int, $first: Int, $after: String, $filters: JobPostingSearchFiltersInput) {
   searchJobs: searchJobPostings(query: $query, start: $start, first: $first, after: $after, filters: $filters) {
     results {

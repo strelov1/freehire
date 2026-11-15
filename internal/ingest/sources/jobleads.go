@@ -21,11 +21,11 @@ type jobleadsHTTP interface {
 // jobleads adapts jobleads.com, a multi-country job aggregator. Its search API is
 // keyword-first and POST-only: an entry's BOARD is the search keyword, its REGION the
 // country filter (alpha-2 code), the same board-as-slice shape as whatjobs/hh. Cloudflare
-// rejects the default Go TLS+HTTP2 fingerprint (403 for plain-Go, 200 to a Chrome-shaped
-// one — verified live 2026-08-30), so the transport is fingerprintHTTP; keyless, no
-// cookies. `totalResultCount` is page-scoped, the vdb ranking rotates between runs, and
-// on-topic density decays fast (96% topical p1 → ~0% p50, measured) — hence the walk's
-// `added == 0`/`jobleadsMaxPages` bounds and the 14-day sweepGrace.
+// country filter (alpha-2 code), the same board-as-slice shape as whatjobs/hh. Cloudflare
+// rejects the default Go TLS+HTTP2 fingerprint, so the transport is fingerprintHTTP; keyless, no
+// cookies. `totalResultCount` is page-scoped, the vdb ranking rotates between runs and on-topic
+// density decays fast with page depth, hence the walk's `added == 0`/`jobleadsMaxPages` bounds
+// and the 14-day sweepGrace.
 //
 // The detail API is paywalled for a logged-out caller: `description` is always "" and
 // `company` the "Solo per membri registrati" placeholder, so neither is read. The body is
@@ -46,21 +46,15 @@ const (
 	jobleadsDetailURL  = jobleadsBaseURL + "/api/v3/job/detailsForAppNew/en/%s"
 	jobleadsPageSize   = 100
 	jobleadsSweepGrace = 14 * 24 * time.Hour
-	// jobleadsMaxPages bounds the page walk, measured live 2026-08-30. (1) The loop-safety
-	// every paged adapter carries (adp's "bound the paging so a tenant that ignores $skip
-	// can't loop"). (2) The relevance cutoff: the vdb's on-topic density decays fast
-	// ("Frontend Developer" IT: 96% p1 → 7% p25 → ~0% p50), so page 50 keeps the walk inside
-	// the genuinely-dev pool — a posting cut here reappears near the top of another
-	// keyword's window, and the 14-day sweepGrace absorbs the partial walk. The walk still
-	// ends on an empty page before this when a real window is shallower.
+	// jobleadsMaxPages bounds the page walk: loop safety, and a relevance cutoff since on-topic
+	// density decays fast with depth. A posting cut here reappears in another keyword's window and
+	// the 14-day sweepGrace absorbs the partial walk. A real, shallower window ends the walk on an
+	// empty page first.
 	jobleadsMaxPages = 50
-	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. Every board's search
-	// pages and details share one ~1 req/s limiter (pacedJobleadsPoster), and a board writes
-	// nothing until its crawl returns: after twelve days unread (2026-10-09 to 10-21) the 19
-	// boards' new postings outlasted the unit's 50 minutes on every run, so none finished and
-	// nothing was stored. 19 boards x 60 details plus up to 50 search pages each is ~35
-	// minutes; the rest are deferred — not yielded, so not stored and still new — to the run
-	// three hours later.
+	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. All boards share one
+	// ~1 req/s limiter (pacedJobleadsPoster) and a board writes nothing until its crawl returns, so
+	// an unbounded backlog outlasts the unit's time budget and stores nothing. The rest are
+	// deferred (not yielded, still new) to a later run.
 	jobleadsMaxNewPerBoard = 60
 )
 
@@ -82,7 +76,7 @@ func (jobleads) aggregator() {}
 func (jobleads) sweepGrace() time.Duration { return jobleadsSweepGrace }
 
 // jobleadsSearchReq is the site's own frontend request. engineOptions IS load-bearing:
-// every 200 verified live carried engineType "vdbSearch", so the adapter always states it.
+// every 200 carried engineType "vdbSearch", so the adapter always states it.
 type jobleadsSearchReq struct {
 	Keywords      []string         `json:"keywords"`
 	Filters       []jobleadsFilter `json:"filters,omitempty"`
@@ -102,7 +96,7 @@ type jobleadsFilter struct {
 }
 
 // jobleadsCountryFilter is the location filter that scopes a search to one market; the
-// bare alpha-2 code suffices (a geo circle is optional — verified live).
+// bare alpha-2 code suffices (a geo circle is optional).
 func jobleadsCountryFilter(alpha2 string) jobleadsFilter {
 	return jobleadsFilter{
 		Key:      "location",
@@ -132,7 +126,7 @@ type jobleadsPosting struct {
 }
 
 // walk pages a board's keyword search, calling handle for every usable posting. The walk
-// ends on a page with none (a post-window page answers empty — measured), on a later page's
+// ends on a page with none (a post-window page answers empty), on a later page's
 // failure (canonical rule: first-page failure is board-level, a later one ends the walk
 // with what it has), or at jobleadsMaxPages.
 func (s jobleads) walk(ctx context.Context, e CompanyEntry, handle func(jobleadsPosting) bool) error {
@@ -242,7 +236,7 @@ func (s jobleads) search(ctx context.Context, e CompanyEntry, page int) ([]joble
 // fetchDetail reads one posting's public detail payload, keyed on the canonical hash the
 // posting's own slug carries. The feed's "external-<hex>" id is NOT that key — it is a
 // variant-scoped internal handle (the slug hash serves 200 while the feed id serves 404 on
-// the same posting, verified live 2026-08-30).
+// the same posting).
 func (s jobleads) fetchDetail(ctx context.Context, detailID string) (jobleadsDetail, error) {
 	var resp struct {
 		Payload struct {
@@ -255,12 +249,11 @@ func (s jobleads) fetchDetail(ctx context.Context, detailID string) (jobleadsDet
 	return resp.Payload.Content, nil
 }
 
-// jobleadsDetailID extracts the slug's canonical hash — the maximal trailing hex run of
-// the path's last segment ("/it/job/<title>--<hex>"). The slug hash is 33 hex while the
-// feed id (confirmed 32 hex) equals it minus one leading char for the canonical variant, so
-// a fixed-length cut truncates and the feed id must never be used (see fetchDetail). A
-// link whose trailing run is too short to be a hash answers "" and the caller skips the
-// detail call rather than burning a 404.
+// jobleadsDetailID extracts the slug's canonical hash: the maximal trailing hex run of the
+// path's last segment ("/it/job/<title>--<hex>"). The feed id is the hash minus one leading
+// char, so a fixed-length cut truncates and the feed id must never be used (see fetchDetail). A
+// run too short to be a hash answers "" and the caller skips the detail call rather than burning
+// a 404.
 func jobleadsDetailID(jobLink string) string {
 	s := strings.TrimSuffix(jobLink, "/")
 	i := len(s)
@@ -363,12 +356,9 @@ func (d jobleadsDetail) description() string {
 }
 
 // pacedJobleadsPoster wraps the fingerprint transport with ONE fresh limiter shared across
-// one registry build, so every board's search pages and detail fan-out compete for the same
-// token bucket (both paths hit the same Cloudflare-scored edge). The rate is deliberately
-// gentle: the true window budget is unknown — under-shooting only lengthens a run, while
-// over-shooting re-enters the bot-scoring that 403s/429s the edge (~2 req/s served clean;
-// a burstier ~20 req/s verification run 429'd the detail endpoint on the spot, measured
-// 2026-09-04). The pace stays on the clean side of that.
+// one registry build, so every board's search pages and detail fan-out share one token bucket
+// (both hit the same Cloudflare-scored edge). The rate is deliberately gentle: a burst
+// re-enters the bot-scoring that 403s/429s the edge, while under-shooting only lengthens a run.
 func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 	return pacedJobleads{
 		c:   c,

@@ -16,10 +16,9 @@ import (
 // tenant, which the jobvite adapter already crawls.
 //
 // The site is server-rendered ASP.NET with no JSON listing: /Jobs pages five postings at a time
-// (688 postings, 138 pages, on 2026-10-25) and ignores every page-size parameter tried. The
-// walk reads pages until one comes back empty. A posting page carries the duties, the
-// requirements and the posting's facets, so a posting the catalogue does not hold yet is
-// hydrated from it (HydratingSource); a seen one costs no request.
+// and ignores every page-size parameter. The walk reads pages until one comes back empty. A
+// posting page carries the duties, the requirements and the posting's facets, so a posting the
+// catalogue does not hold yet is hydrated from it (HydratingSource); a seen one costs no request.
 //
 // The site is bilingual, but the language is a session cookie the server mints and the URL
 // cannot select, so the crawl reads the default Traditional Chinese.

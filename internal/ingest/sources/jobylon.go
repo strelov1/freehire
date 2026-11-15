@@ -8,9 +8,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// jobylon adapts Jobylon (jobylon.com), a Nordic ATS powering ~1000 employers' career sites. Its
+// jobylon adapts Jobylon (jobylon.com), a Nordic ATS powering many employers' career sites. Its
 // per-company embed widget caps at ~32 postings, so instead the adapter enumerates Jobylon's
-// single global jobs sitemap (emp.jobylon.com/sitemap.xml → sitemap-jobs.xml, ~8600 URLs) and
+// single global jobs sitemap (emp.jobylon.com/sitemap.xml → sitemap-jobs.xml) and
 // hydrates each posting from its canonical page's schema.org JobPosting ld+json — the
 // sitemap-plus-ld+json-detail shape shared with isolvedhire/successfactors/clinch.
 //
