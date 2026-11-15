@@ -78,6 +78,38 @@ model DirectApplySent {
 @summary("The application form of a vacancy that takes applications on freehire.")
 @useAuth(NoAuth)
 @tag("DirectApply")
+@opExample(#{
+  returnType: #{
+      data: #{
+        company_name: "Acme",
+        questions: #[
+          #{
+            id: "q1",
+            label: "Do you hold an EU work permit?",
+            type: DirectApplyQuestionType.boolean,
+            required: true,
+          },
+          #{
+            id: "q2",
+            label: "Preferred stack",
+            type: DirectApplyQuestionType.select,
+            required: false,
+            options: #[
+              "Go",
+              "Rust",
+            ],
+          },
+        ],
+        open: true,
+        applied: false,
+        prefill: #{},
+        cvs: #{
+          tailored: null,
+          has_resume: true,
+        },
+      },
+    },
+})
 @route("/jobs/{slug}/direct-apply")
 @get
 op getDirectApplyForm(/** The job `public_slug`. (e.g. `platform-engineer-acme-9f3c`) */ @path slug: string): Data<DirectApplyForm> | Problem;

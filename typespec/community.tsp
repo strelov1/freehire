@@ -105,6 +105,24 @@ model CreateReplyRequest {
 @summary("Public discussion threads.")
 @useAuth(NoAuth)
 @tag("Community")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 31,
+          subject_type: ThreadSubjectType.company,
+          subject_slug: "acme",
+          title: "Anyone interviewed at Acme lately?",
+          body: "Thanks for the update.",
+          author: "quiet-falcon-42",
+          reply_count: 1,
+          status: ThreadStatus.open,
+          created_at: utcDateTime.fromISO("2026-07-25T10:00:00Z"),
+        },
+      ],
+      meta: #{},
+    },
+})
 @route("/threads")
 @get
 op listThreads(
@@ -139,6 +157,34 @@ op countThreads(@query subject_type?: string, @query subject_slug?: string): Dat
 @summary("One thread with its replies.")
 @useAuth(NoAuth)
 @tag("Community")
+@opExample(#{
+  returnType: #{
+      data: #{
+        thread: #{
+          id: 1,
+          subject_type: ThreadSubjectType.company,
+          subject_slug: "acme",
+          title: "Senior Go Engineer",
+          body: "Thanks for the update.",
+          author: "quiet-falcon-42",
+          reply_count: 1,
+          status: ThreadStatus.open,
+          created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        },
+        replies: #[
+          #{
+            id: 88,
+            thread_id: 1,
+            parent_id: 1,
+            author: "quiet-falcon-42",
+            body: "Thanks for the update.",
+            created_at: utcDateTime.fromISO("2026-07-25T12:00:00Z"),
+          },
+        ],
+      },
+      meta: #{},
+    },
+})
 @route("/threads/{id}")
 @get
 op getThread(/** The thread id. */ @path id: string, @query cursor?: string): ThreadDetailPage | Problem;
@@ -146,6 +192,21 @@ op getThread(/** The thread id. */ @path id: string, @query cursor?: string): Th
 /** Opens a thread on a company or job. */
 @summary("Start a thread.")
 @tag("Community")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 31,
+        subject_type: ThreadSubjectType.company,
+        subject_slug: "acme",
+        title: "Senior Go Engineer",
+        body: "Thanks for the update.",
+        author: "quiet-falcon-42",
+        reply_count: 1,
+        status: ThreadStatus.open,
+        created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+      },
+    } },
+})
 @route("/threads")
 @post
 op createThread(@body body: CreateThreadRequest): {
@@ -156,6 +217,18 @@ op createThread(@body body: CreateThreadRequest): {
 /** Posts a reply to an open thread. */
 @summary("Reply to a thread.")
 @tag("Community")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 88,
+        thread_id: 1,
+        parent_id: 1,
+        author: "quiet-falcon-42",
+        body: "Thanks for the update.",
+        created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+      },
+    } },
+})
 @route("/threads/{id}/replies")
 @post
 op createReply(/** The thread id. */ @path id: string, @body body: CreateReplyRequest): {
@@ -167,6 +240,14 @@ op createReply(/** The thread id. */ @path id: string, @body body: CreateReplyRe
 @summary("Close a thread.")
 @extension("x-audience", "moderator")
 @tag("Community")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 31,
+        status: ThreadStatus.open,
+      },
+    },
+})
 @route("/threads/{id}/close")
 @post
 op closeThread(/** The thread id. */ @path id: string): Data<ThreadClosed> | Problem;

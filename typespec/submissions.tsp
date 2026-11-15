@@ -125,6 +125,19 @@ model RejectSubmissionRequest {
 @summary("Submit a vacancy for review.")
 @useAuth(SessionOrKey)
 @tag("Submissions")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 9,
+        url: "https://acme.com/careers/123",
+        title: "Senior Go Engineer",
+        company: "Acme",
+        remote: true,
+        status: SubmissionStatus.pending,
+        created_at: null,
+      },
+    } },
+})
 @route("/submissions")
 @post
 op createSubmission(@body body: SubmissionRequest): {
@@ -169,6 +182,21 @@ op prefillSubmission(@body body: PrefillRequest): Data<SubmissionPrefill> | Prob
 @summary("Your own submission queue.")
 @useAuth(SessionOrKey)
 @tag("Submissions")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 9,
+          url: "https://boards.greenhouse.io/acme/jobs/123",
+          title: "Senior Go Engineer",
+          company: "Acme",
+          remote: true,
+          status: SubmissionStatus.pending,
+          created_at: null,
+        },
+      ],
+    },
+})
 @route("/me/submissions")
 @get
 op listMySubmissions(): Data<Submission[]> | Problem;
@@ -178,6 +206,22 @@ op listMySubmissions(): Data<Submission[]> | Problem;
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Submissions")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 9,
+          url: "https://boards.greenhouse.io/acme/jobs/123",
+          title: "Senior Go Engineer",
+          company: "Acme",
+          remote: true,
+          status: SubmissionStatus.pending,
+          created_at: null,
+          submitter_email: "me@example.com",
+        },
+      ],
+    },
+})
 @route("/submissions")
 @get
 op listPendingSubmissions(): Data<Submission[]> | Problem;
@@ -187,6 +231,20 @@ op listPendingSubmissions(): Data<Submission[]> | Problem;
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Submissions")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 9,
+        url: "https://boards.greenhouse.io/acme/jobs/123",
+        title: "Senior Go Engineer",
+        company: "Acme",
+        remote: true,
+        status: SubmissionStatus.approved,
+        created_at: null,
+        job_slug: "senior-go-engineer-acme-1a2b",
+      },
+    },
+})
 @route("/submissions/{id}/approve")
 @post
 op approveSubmission(/** The submission id. (e.g. `9`) */ @path id: string): Data<Submission> | Problem;
@@ -196,6 +254,20 @@ op approveSubmission(/** The submission id. (e.g. `9`) */ @path id: string): Dat
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Submissions")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 9,
+        url: "https://boards.greenhouse.io/acme/jobs/123",
+        title: "Senior Go Engineer",
+        company: "Acme",
+        remote: true,
+        status: SubmissionStatus.rejected,
+        review_reason: "duplicate",
+        created_at: null,
+      },
+    },
+})
 @route("/submissions/{id}/reject")
 @post
 op rejectSubmission(/** The submission id. (e.g. `9`) */ @path id: string, @body body?: RejectSubmissionRequest): Data<Submission> | Problem;

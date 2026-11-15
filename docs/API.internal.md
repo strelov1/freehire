@@ -486,6 +486,22 @@ All of the caller's own reviews of the company, one per category; empty when non
 curl "https://freehire.me/api/v1/companies/<slug>/feedback/mine" -b cookies.txt
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "author": "quiet-falcon-42",
+      "rating": 4,
+      "feedback_type": "interview",
+      "body": "Thanks for the update.",
+      "created_at": "2026-06-18T09:12:00Z",
+      "updated_at": "2026-06-18T09:12:00Z"
+    }
+  ]
+}
+```
+
 ### `GET /company-feedback/reported`
 
 **Auth:** Moderator
@@ -496,6 +512,28 @@ Moderators only: every review with a report, most reported first.
 
 ```bash
 curl "https://freehire.me/api/v1/company-feedback/reported" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "author": "quiet-falcon-42",
+      "rating": 1,
+      "feedback_type": "culture",
+      "body": "Thanks for the update.",
+      "created_at": "2026-06-18T09:12:00Z",
+      "updated_at": "2026-06-18T09:12:00Z",
+      "company_slug": "acme",
+      "report_count": 3,
+      "report_reasons": [
+        "spam",
+        "off-topic"
+      ]
+    }
+  ]
+}
 ```
 
 ### `POST /company-feedback/{id}/hide`
@@ -558,6 +596,26 @@ Confirm the address with the mailed code.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/auth/verify/confirm" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 1,
+    "email": "me@example.com",
+    "role": "user",
+    "beta_tester": true,
+    "email_verified": true,
+    "has_password": true,
+    "created_at": null,
+    "timezone": null,
+    "language": "en",
+    "onboarding_completed_at": null,
+    "tier": "free",
+    "agent_connected": true,
+    "api_tier": ""
+  }
+}
 ```
 
 ### `POST /auth/verify/request`
@@ -640,6 +698,23 @@ Session cookie only.
 curl "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "inbox_digest_enabled": true,
+    "enabled": true,
+    "channels": [
+      "email"
+    ],
+    "digest_frequency": "daily",
+    "digest_time": null,
+    "digest_interval_hours": 1,
+    "quiet_hours_start": null,
+    "quiet_hours_end": null
+  }
+}
+```
+
 ### `PUT /me/notification-settings`
 
 **Auth:** Session only
@@ -663,6 +738,23 @@ An enabled rule needs a valid channel. Session cookie only.
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "inbox_digest_enabled": true,
+    "enabled": true,
+    "channels": [
+      "email"
+    ],
+    "digest_frequency": "daily",
+    "digest_time": null,
+    "digest_interval_hours": 1,
+    "quiet_hours_start": null,
+    "quiet_hours_end": null
+  }
+}
 ```
 
 ## Assistant
@@ -703,6 +795,23 @@ Moderators only.
 curl "https://freehire.me/api/v1/submissions" -b cookies.txt
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 9,
+      "url": "https://boards.greenhouse.io/acme/jobs/123",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "remote": true,
+      "status": "pending",
+      "created_at": null,
+      "submitter_email": "me@example.com"
+    }
+  ]
+}
+```
+
 ### `POST /submissions/{id}/approve`
 
 **Auth:** Moderator
@@ -719,6 +828,21 @@ Moderators only. 404 for an unknown id, 409 for one already decided.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/submissions/<id>/approve" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 9,
+    "url": "https://boards.greenhouse.io/acme/jobs/123",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "remote": true,
+    "status": "approved",
+    "created_at": null,
+    "job_slug": "senior-go-engineer-acme-1a2b"
+  }
+}
 ```
 
 ### `POST /submissions/{id}/reject`
@@ -746,6 +870,21 @@ Moderators only. The body is optional.
 curl -X POST "https://freehire.me/api/v1/submissions/<id>/reject" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 9,
+    "url": "https://boards.greenhouse.io/acme/jobs/123",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "remote": true,
+    "status": "rejected",
+    "review_reason": "duplicate",
+    "created_at": null
+  }
+}
+```
+
 ## Reports
 
 Any signed-in user can flag a problem with a live vacancy. Review actions are moderator-only; resolving may soft-close the reported job.
@@ -760,6 +899,22 @@ Moderators only.
 
 ```bash
 curl "https://freehire.me/api/v1/reports" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "reason": "no_response",
+      "details": "The posting is no longer open.",
+      "status": "pending",
+      "created_at": null,
+      "job_slug": "senior-go-engineer-acme-1a2b",
+      "job_title": "Senior Go Engineer"
+    }
+  ]
+}
 ```
 
 ### `POST /reports/{id}/dismiss`
@@ -787,6 +942,19 @@ Moderators only. The body is optional.
 curl -X POST "https://freehire.me/api/v1/reports/<id>/dismiss" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 3,
+    "reason": "no_response",
+    "details": "The posting is no longer open.",
+    "status": "dismissed",
+    "review_reason": "not an issue",
+    "created_at": null
+  }
+}
+```
+
 ### `POST /reports/{id}/resolve`
 
 **Auth:** Moderator
@@ -811,6 +979,19 @@ Moderators only. The body is optional. 404 for an unknown id, 409 for one alread
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/reports/<id>/resolve" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 3,
+    "reason": "no_response",
+    "details": "The posting is no longer open.",
+    "status": "resolved",
+    "created_at": null,
+    "notified": true
+  }
+}
 ```
 
 ## Feedback
@@ -1247,6 +1428,26 @@ Set your preferred interface language.
 curl -X PATCH "https://freehire.me/api/v1/me/language" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 1,
+    "email": "me@example.com",
+    "role": "user",
+    "beta_tester": true,
+    "email_verified": true,
+    "has_password": true,
+    "created_at": null,
+    "timezone": null,
+    "language": "en",
+    "onboarding_completed_at": null,
+    "tier": "free",
+    "agent_connected": true,
+    "api_tier": ""
+  }
+}
+```
+
 ### `GET /me/market-pulse`
 
 **Auth:** Session only
@@ -1304,6 +1505,35 @@ List your notification-center entries, newest first.
 curl "https://freehire.me/api/v1/me/notifications" -b cookies.txt
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "kind": "subscription_digest",
+      "title": "Senior Go remote",
+      "body": "3 new jobs",
+      "public_slug": null,
+      "jobs": [
+        {
+          "title": "Senior Go Engineer",
+          "company": "Acme",
+          "slug": "senior-go-engineer-acme-1a2b"
+        }
+      ],
+      "created_at": "2026-06-19T10:00:00Z",
+      "read_at": null
+    }
+  ],
+  "meta": {
+    "total": 12,
+    "unread_count": 3,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
 ### `POST /me/notifications/read-all`
 
 **Auth:** Session only
@@ -1338,6 +1568,20 @@ Another user's id, or one that does not exist, is a 404.
 
 ```bash
 curl "https://freehire.me/api/v1/me/notifications/<id>" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 5,
+    "kind": "reminder",
+    "title": "Senior Go Engineer",
+    "body": "Thanks for the update.",
+    "public_slug": "senior-go-engineer-acme-1a2b",
+    "created_at": "2026-06-19T10:00:00Z",
+    "read_at": null
+  }
+}
 ```
 
 ### `POST /me/notifications/{id}/read`
@@ -1428,6 +1672,30 @@ category), empty skills, or an out-of-vocabulary location value is a `400`.
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/profile" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "specializations": [
+      "backend"
+    ],
+    "skills": [
+      "go",
+      "postgresql"
+    ],
+    "seniorities": [],
+    "excluded_skills": [],
+    "excluded_sources": [],
+    "job_languages": [],
+    "excluded_companies": [],
+    "location_preferences": null,
+    "derived_location": null,
+    "cv": null,
+    "created_at": null,
+    "updated_at": null
+  }
+}
 ```
 
 ### `DELETE /me/profile`
@@ -1630,6 +1898,26 @@ Set your account’s IANA timezone.
 curl -X PATCH "https://freehire.me/api/v1/me/timezone" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 1,
+    "email": "me@example.com",
+    "role": "user",
+    "beta_tester": true,
+    "email_verified": true,
+    "has_password": true,
+    "created_at": null,
+    "timezone": "Europe/Berlin",
+    "language": "en",
+    "onboarding_completed_at": null,
+    "tier": "free",
+    "agent_connected": true,
+    "api_tier": ""
+  }
+}
+```
+
 ### `GET /me/username`
 
 **Auth:** Session only
@@ -1705,6 +1993,24 @@ List your saved searches.
 curl "https://freehire.me/api/v1/me/searches" -b cookies.txt
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 2,
+      "name": "Senior Go remote",
+      "query": "q=go&seniority=senior&work_mode=remote",
+      "derived_from_profile": true,
+      "created_at": null,
+      "updated_at": null
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
 ### `POST /me/searches`
 
 **Auth:** Session only
@@ -1723,6 +2029,19 @@ Save a search.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/searches" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 2,
+    "name": "Senior Go remote",
+    "query": "q=go&seniority=senior&work_mode=remote",
+    "derived_from_profile": true,
+    "created_at": null,
+    "updated_at": null
+  }
+}
 ```
 
 ### `PATCH /me/searches/{id}`
@@ -1746,6 +2065,19 @@ Rename or re-query a saved search.
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/me/searches/<id>" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 2,
+    "name": "Senior Go — EU remote",
+    "query": "q=go&seniority=senior",
+    "derived_from_profile": true,
+    "created_at": null,
+    "updated_at": null
+  }
+}
 ```
 
 ### `DELETE /me/searches/{id}`
@@ -1774,6 +2106,23 @@ List your subscriptions.
 curl "https://freehire.me/api/v1/me/subscriptions" -b cookies.txt
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "saved_search_id": 2,
+      "channel": "telegram",
+      "active": true,
+      "created_at": null
+    }
+  ],
+  "meta": {
+    "total": 1
+  }
+}
+```
+
 ### `POST /me/subscriptions`
 
 **Auth:** Session only
@@ -1793,6 +2142,18 @@ with 409.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/subscriptions" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 1,
+    "saved_search_id": 2,
+    "channel": "telegram",
+    "active": true,
+    "created_at": null
+  }
+}
 ```
 
 ### `PATCH /me/subscriptions/{id}`
@@ -1817,6 +2178,18 @@ Pauses or resumes.
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/me/subscriptions/<id>" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 1,
+    "saved_search_id": 1,
+    "channel": "telegram",
+    "active": false,
+    "created_at": null
+  }
+}
 ```
 
 ### `DELETE /me/subscriptions/{id}`
@@ -2060,6 +2433,22 @@ Opens a thread on a company or job.
 curl -X POST "https://freehire.me/api/v1/threads" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 31,
+    "subject_type": "company",
+    "subject_slug": "acme",
+    "title": "Senior Go Engineer",
+    "body": "Thanks for the update.",
+    "author": "quiet-falcon-42",
+    "reply_count": 1,
+    "status": "open",
+    "created_at": "2026-06-18T09:12:00Z"
+  }
+}
+```
+
 ### `POST /threads/{id}/close`
 
 **Auth:** Moderator
@@ -2076,6 +2465,15 @@ Moderators only: closes a thread.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/threads/<id>/close" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": 31,
+    "status": "open"
+  }
+}
 ```
 
 ### `POST /threads/{id}/replies`
@@ -2103,6 +2501,19 @@ Posts a reply to an open thread.
 curl -X POST "https://freehire.me/api/v1/threads/<id>/replies" -b cookies.txt
 ```
 
+```json
+{
+  "data": {
+    "id": 88,
+    "thread_id": 1,
+    "parent_id": 1,
+    "author": "quiet-falcon-42",
+    "body": "Thanks for the update.",
+    "created_at": "2026-06-18T09:12:00Z"
+  }
+}
+```
+
 ## Referrals
 
 Two sides of the same marketplace: an employee offers to refer into the company they work at (proof required, moderated), and a candidate asks one of that company's approved referrers for an intro. A candidate never sees who the referrer is, and a referrer sees the candidate's CV only through a short-lived view. Moderation of offers is moderator-gated.
@@ -2117,6 +2528,22 @@ Moderators only: the offers awaiting a decision.
 
 ```bash
 curl "https://freehire.me/api/v1/referrals/offers" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "company_slug": "acme",
+      "company_name": "Acme",
+      "linkedin_url": "https://linkedin.com/in/you",
+      "status": "pending",
+      "decided_at": null,
+      "created_at": null
+    }
+  ]
+}
 ```
 
 ### `POST /referrals/offers/{id}/decide`
@@ -2141,6 +2568,20 @@ Moderators only.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/referrals/offers/<id>/decide" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+    "company_slug": "acme",
+    "company_name": "Acme",
+    "linkedin_url": "https://www.linkedin.com/in/example",
+    "status": "approved",
+    "decided_at": "2026-07-28T21:00:00Z",
+    "created_at": null
+  }
+}
 ```
 
 ### `GET /referrals/offers/{id}/proof`
@@ -2181,6 +2622,16 @@ catalogue addresses you by.
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/talent-network" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "talent_network_visibility": "anonymous",
+    "talent_handle": "backend-7f2a",
+    "listed": true
+  }
+}
 ```
 
 ## CV
@@ -2321,6 +2772,18 @@ Replace a CV — title, template and document.
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/cvs/<id>" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+    "title": "Senior Go Engineer",
+    "template_id": "classic",
+    "created_at": "2026-06-18T09:12:00Z",
+    "updated_at": "2026-07-28T20:10:00Z"
+  }
+}
 ```
 
 ### `DELETE /me/cvs/{id}`

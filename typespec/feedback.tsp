@@ -37,6 +37,15 @@ model GhostReport {
 @summary("Vote on a job.")
 @useAuth(SessionOrKey)
 @tag("Feedback")
+@opExample(#{
+  returnType: #{
+      data: #{
+        upvote_count: 1,
+        downvote_count: 1,
+        my_vote: 1,
+      },
+    },
+})
 @route("/jobs/{slug}/vote")
 @post
 op voteJob(/** The job `public_slug`. */ @path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
@@ -44,6 +53,15 @@ op voteJob(/** The job `public_slug`. */ @path slug: string, @body body: VoteReq
 @summary("Clear your vote on a job.")
 @useAuth(SessionOrKey)
 @tag("Feedback")
+@opExample(#{
+  returnType: #{
+      data: #{
+        upvote_count: 1,
+        downvote_count: 1,
+        my_vote: 0,
+      },
+    },
+})
 @route("/jobs/{slug}/vote")
 @delete
 op clearJobVote(/** The job `public_slug`. */ @path slug: string): Data<VoteResult> | Problem;
@@ -51,6 +69,15 @@ op clearJobVote(/** The job `public_slug`. */ @path slug: string): Data<VoteResu
 @summary("Vote on a company.")
 @useAuth(SessionOrKey)
 @tag("Feedback")
+@opExample(#{
+  returnType: #{
+      data: #{
+        upvote_count: 1,
+        downvote_count: 1,
+        my_vote: 1,
+      },
+    },
+})
 @route("/companies/{slug}/vote")
 @post
 op voteCompany(/** The company slug. */ @path slug: string, @body body: VoteRequest): Data<VoteResult> | Problem;
@@ -58,6 +85,15 @@ op voteCompany(/** The company slug. */ @path slug: string, @body body: VoteRequ
 @summary("Clear your vote on a company.")
 @useAuth(SessionOrKey)
 @tag("Feedback")
+@opExample(#{
+  returnType: #{
+      data: #{
+        upvote_count: 1,
+        downvote_count: 1,
+        my_vote: 0,
+      },
+    },
+})
 @route("/companies/{slug}/vote")
 @delete
 op clearCompanyVote(/** The company slug. */ @path slug: string): Data<VoteResult> | Problem;

@@ -77,6 +77,23 @@ model SubscriptionList {
 
 @summary("List your saved searches.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 2,
+          name: "Senior Go remote",
+          query: "q=go&seniority=senior&work_mode=remote",
+          derived_from_profile: true,
+          created_at: null,
+          updated_at: null,
+        },
+      ],
+      meta: #{
+        total: 1,
+      },
+    },
+})
 @route("/me/searches")
 @get
 op listSavedSearches(): SavedSearchList | Problem;
@@ -84,6 +101,18 @@ op listSavedSearches(): SavedSearchList | Problem;
 /** 400 for a bad name, 409 for a duplicate name or the per-user cap. */
 @summary("Save a search.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 2,
+        name: "Senior Go remote",
+        query: "q=go&seniority=senior&work_mode=remote",
+        derived_from_profile: true,
+        created_at: null,
+        updated_at: null,
+      },
+    } },
+})
 @route("/me/searches")
 @post
 op createSavedSearch(@body body: SavedSearchCreate): {
@@ -93,6 +122,18 @@ op createSavedSearch(@body body: SavedSearchCreate): {
 
 @summary("Rename or re-query a saved search.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 2,
+        name: "Senior Go — EU remote",
+        query: "q=go&seniority=senior",
+        derived_from_profile: true,
+        created_at: null,
+        updated_at: null,
+      },
+    },
+})
 @route("/me/searches/{id}")
 @patch
 op updateSavedSearch(/** The saved-search id. (e.g. `2`) */ @path id: string, @body body: SavedSearchUpdate): Data<SavedSearch> | Problem;
@@ -105,6 +146,22 @@ op deleteSavedSearch(/** The saved-search id. (e.g. `2`) */ @path id: string): N
 
 @summary("List your subscriptions.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 1,
+          saved_search_id: 2,
+          channel: "telegram",
+          active: true,
+          created_at: null,
+        },
+      ],
+      meta: #{
+        total: 1,
+      },
+    },
+})
 @route("/me/subscriptions")
 @get
 op listSubscriptions(): SubscriptionList | Problem;
@@ -117,6 +174,17 @@ op listSubscriptions(): SubscriptionList | Problem;
  */
 @summary("Subscribe a saved search to a digest channel.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 1,
+        saved_search_id: 2,
+        channel: "telegram",
+        active: true,
+        created_at: null,
+      },
+    } },
+})
 @route("/me/subscriptions")
 @post
 op createSubscription(@body body: SubscriptionCreate): {
@@ -127,6 +195,17 @@ op createSubscription(@body body: SubscriptionCreate): {
 /** Pauses or resumes. */
 @summary("Pause or resume a subscription.")
 @tag("Alerts")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 1,
+        saved_search_id: 1,
+        channel: "telegram",
+        active: false,
+        created_at: null,
+      },
+    },
+})
 @route("/me/subscriptions/{id}")
 @patch
 op setSubscriptionActive(/** The subscription id. (e.g. `1`) */ @path id: string, @body body: SubscriptionActive): Data<Subscription> | Problem;

@@ -155,6 +155,23 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user",
+                    "beta_tester": true,
+                    "email_verified": true,
+                    "has_password": true,
+                    "created_at": null,
+                    "timezone": null,
+                    "language": "en",
+                    "onboarding_completed_at": null,
+                    "tier": "free",
+                    "agent_connected": true,
+                    "api_tier": ""
+                  }
                 }
               }
             }
@@ -574,6 +591,19 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 5,
+                      "author": "quiet-falcon-42",
+                      "rating": 4,
+                      "feedback_type": "interview",
+                      "body": "Thanks for the update.",
+                      "created_at": "2026-06-18T09:12:00Z",
+                      "updated_at": "2026-06-18T09:12:00Z"
+                    }
+                  ]
                 }
               }
             }
@@ -848,6 +878,25 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 5,
+                      "author": "quiet-falcon-42",
+                      "rating": 1,
+                      "feedback_type": "culture",
+                      "body": "Thanks for the update.",
+                      "created_at": "2026-06-18T09:12:00Z",
+                      "updated_at": "2026-06-18T09:12:00Z",
+                      "company_slug": "acme",
+                      "report_count": 3,
+                      "report_reasons": [
+                        "spam",
+                        "off-topic"
+                      ]
+                    }
+                  ]
                 }
               }
             }
@@ -4334,6 +4383,15 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                    "title": "Senior Go Engineer",
+                    "template_id": "classic",
+                    "created_at": "2026-06-18T09:12:00Z",
+                    "updated_at": "2026-07-28T20:10:00Z"
+                  }
                 }
               }
             }
@@ -5557,6 +5615,23 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user",
+                    "beta_tester": true,
+                    "email_verified": true,
+                    "has_password": true,
+                    "created_at": null,
+                    "timezone": null,
+                    "language": "en",
+                    "onboarding_completed_at": null,
+                    "tier": "free",
+                    "agent_connected": true,
+                    "api_tier": ""
+                  }
                 }
               }
             }
@@ -5679,6 +5754,20 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "inbox_digest_enabled": true,
+                    "enabled": true,
+                    "channels": [
+                      "email"
+                    ],
+                    "digest_frequency": "daily",
+                    "digest_time": null,
+                    "digest_interval_hours": 1,
+                    "quiet_hours_start": null,
+                    "quiet_hours_end": null
+                  }
                 }
               }
             }
@@ -5719,6 +5808,20 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "inbox_digest_enabled": true,
+                    "enabled": true,
+                    "channels": [
+                      "email"
+                    ],
+                    "digest_frequency": "daily",
+                    "digest_time": null,
+                    "digest_interval_hours": 1,
+                    "quiet_hours_start": null,
+                    "quiet_hours_end": null
+                  }
                 }
               }
             }
@@ -5782,6 +5885,32 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotificationPage"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 5,
+                      "kind": "subscription_digest",
+                      "title": "Senior Go remote",
+                      "body": "3 new jobs",
+                      "public_slug": null,
+                      "jobs": [
+                        {
+                          "title": "Senior Go Engineer",
+                          "company": "Acme",
+                          "slug": "senior-go-engineer-acme-1a2b"
+                        }
+                      ],
+                      "created_at": "2026-06-19T10:00:00Z",
+                      "read_at": null
+                    }
+                  ],
+                  "meta": {
+                    "total": 12,
+                    "unread_count": 3,
+                    "limit": 20,
+                    "offset": 0
+                  }
                 }
               }
             }
@@ -5880,6 +6009,17 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 5,
+                    "kind": "reminder",
+                    "title": "Senior Go Engineer",
+                    "body": "Thanks for the update.",
+                    "public_slug": "senior-go-engineer-acme-1a2b",
+                    "created_at": "2026-06-19T10:00:00Z",
+                    "read_at": null
+                  }
                 }
               }
             }
@@ -6086,6 +6226,27 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "specializations": [
+                      "backend"
+                    ],
+                    "skills": [
+                      "go",
+                      "postgresql"
+                    ],
+                    "seniorities": [],
+                    "excluded_skills": [],
+                    "excluded_sources": [],
+                    "job_languages": [],
+                    "excluded_companies": [],
+                    "location_preferences": null,
+                    "derived_location": null,
+                    "cv": null,
+                    "created_at": null,
+                    "updated_at": null
+                  }
                 }
               }
             }
@@ -6961,6 +7122,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SavedSearchList"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 2,
+                      "name": "Senior Go remote",
+                      "query": "q=go&seniority=senior&work_mode=remote",
+                      "derived_from_profile": true,
+                      "created_at": null,
+                      "updated_at": null
+                    }
+                  ],
+                  "meta": {
+                    "total": 1
+                  }
                 }
               }
             }
@@ -7001,6 +7177,16 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 2,
+                    "name": "Senior Go remote",
+                    "query": "q=go&seniority=senior&work_mode=remote",
+                    "derived_from_profile": true,
+                    "created_at": null,
+                    "updated_at": null
+                  }
                 }
               }
             }
@@ -7062,6 +7248,16 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 2,
+                    "name": "Senior Go — EU remote",
+                    "query": "q=go&seniority=senior",
+                    "derived_from_profile": true,
+                    "created_at": null,
+                    "updated_at": null
+                  }
                 }
               }
             }
@@ -7137,6 +7333,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubscriptionList"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "saved_search_id": 2,
+                      "channel": "telegram",
+                      "active": true,
+                      "created_at": null
+                    }
+                  ],
+                  "meta": {
+                    "total": 1
+                  }
                 }
               }
             }
@@ -7177,6 +7387,15 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "saved_search_id": 2,
+                    "channel": "telegram",
+                    "active": true,
+                    "created_at": null
+                  }
                 }
               }
             }
@@ -7239,6 +7458,15 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "saved_search_id": 1,
+                    "channel": "telegram",
+                    "active": false,
+                    "created_at": null
+                  }
                 }
               }
             }
@@ -7384,6 +7612,13 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "talent_network_visibility": "anonymous",
+                    "talent_handle": "backend-7f2a",
+                    "listed": true
+                  }
                 }
               }
             }
@@ -7435,6 +7670,23 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "email": "me@example.com",
+                    "role": "user",
+                    "beta_tester": true,
+                    "email_verified": true,
+                    "has_password": true,
+                    "created_at": null,
+                    "timezone": "Europe/Berlin",
+                    "language": "en",
+                    "onboarding_completed_at": null,
+                    "tier": "free",
+                    "agent_connected": true,
+                    "api_tier": ""
+                  }
                 }
               }
             }
@@ -8216,6 +8468,19 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                      "company_slug": "acme",
+                      "company_name": "Acme",
+                      "linkedin_url": "https://linkedin.com/in/you",
+                      "status": "pending",
+                      "decided_at": null,
+                      "created_at": null
+                    }
+                  ]
                 }
               }
             }
@@ -8277,6 +8542,17 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                    "company_slug": "acme",
+                    "company_name": "Acme",
+                    "linkedin_url": "https://www.linkedin.com/in/example",
+                    "status": "approved",
+                    "decided_at": "2026-07-28T21:00:00Z",
+                    "created_at": null
+                  }
                 }
               }
             }
@@ -8341,6 +8617,19 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 3,
+                      "reason": "no_response",
+                      "details": "The posting is no longer open.",
+                      "status": "pending",
+                      "created_at": null,
+                      "job_slug": "senior-go-engineer-acme-1a2b",
+                      "job_title": "Senior Go Engineer"
+                    }
+                  ]
                 }
               }
             }
@@ -8402,6 +8691,16 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 3,
+                    "reason": "no_response",
+                    "details": "The posting is no longer open.",
+                    "status": "dismissed",
+                    "review_reason": "not an issue",
+                    "created_at": null
+                  }
                 }
               }
             }
@@ -8473,6 +8772,16 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 3,
+                    "reason": "no_response",
+                    "details": "The posting is no longer open.",
+                    "status": "resolved",
+                    "created_at": null,
+                    "notified": true
+                  }
                 }
               }
             }
@@ -8537,6 +8846,20 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 9,
+                      "url": "https://boards.greenhouse.io/acme/jobs/123",
+                      "title": "Senior Go Engineer",
+                      "company": "Acme",
+                      "remote": true,
+                      "status": "pending",
+                      "created_at": null,
+                      "submitter_email": "me@example.com"
+                    }
+                  ]
                 }
               }
             }
@@ -8598,6 +8921,18 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 9,
+                    "url": "https://boards.greenhouse.io/acme/jobs/123",
+                    "title": "Senior Go Engineer",
+                    "company": "Acme",
+                    "remote": true,
+                    "status": "approved",
+                    "created_at": null,
+                    "job_slug": "senior-go-engineer-acme-1a2b"
+                  }
                 }
               }
             }
@@ -8659,6 +8994,18 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 9,
+                    "url": "https://boards.greenhouse.io/acme/jobs/123",
+                    "title": "Senior Go Engineer",
+                    "company": "Acme",
+                    "remote": true,
+                    "status": "rejected",
+                    "review_reason": "duplicate",
+                    "created_at": null
+                  }
                 }
               }
             }
@@ -8858,6 +9205,19 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 31,
+                    "subject_type": "company",
+                    "subject_slug": "acme",
+                    "title": "Senior Go Engineer",
+                    "body": "Thanks for the update.",
+                    "author": "quiet-falcon-42",
+                    "reply_count": 1,
+                    "status": "open",
+                    "created_at": "2026-06-18T09:12:00Z"
+                  }
                 }
               }
             }
@@ -8920,6 +9280,12 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 31,
+                    "status": "open"
+                  }
                 }
               }
             }
@@ -8973,6 +9339,16 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "id": 88,
+                    "thread_id": 1,
+                    "parent_id": 1,
+                    "author": "quiet-falcon-42",
+                    "body": "Thanks for the update.",
+                    "created_at": "2026-06-18T09:12:00Z"
+                  }
                 }
               }
             }

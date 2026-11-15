@@ -48,6 +48,28 @@ model AgentJobSearchPage {
 @summary("Full-text + faceted search over open jobs.")
 @useAuth(NoAuth)
 @tag("Search")
+@opExample(#{
+  returnType: #{
+    body: #{
+      data: #[
+          #{
+            public_slug: "senior-go-engineer-acme-1a2b",
+            title: "Senior Go Engineer",
+            company: "Acme",
+            company_slug: "acme",
+            location: "Berlin, Germany",
+            work_mode: "remote",
+            skills: #["go", "postgresql"],
+          },
+      ],
+      meta: #{
+        total: 137,
+        limit: 20,
+        offset: 0,
+      },
+    },
+  },
+})
 @route("/jobs/search")
 @get
 op searchJobs(
@@ -129,6 +151,29 @@ op searchJobs(
 @summary("Search with full descriptions, for programmatic/agent consumers.")
 @useAuth(NoAuth)
 @tag("Search")
+@opExample(#{
+  returnType: #{
+    body: #{
+      data: #[
+          #{
+            public_slug: "senior-go-engineer-acme-1a2b",
+            title: "Senior Go Engineer",
+            company: "Acme",
+            company_slug: "acme",
+            location: "Berlin, Germany",
+            work_mode: "remote",
+            skills: #["go", "postgresql"],
+            description: "## About the role\nYou will build the payments API.",
+          },
+      ],
+      meta: #{
+        total: 137,
+        limit: 20,
+        offset: 0,
+      },
+    },
+  },
+})
 @route("/agent/jobs/search")
 @get
 op agentSearchJobs(

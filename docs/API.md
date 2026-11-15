@@ -936,6 +936,33 @@ the full filter.
 curl "https://freehire.me/api/v1/companies"
 ```
 
+```json
+{
+  "data": [
+    {
+      "slug": "acme",
+      "name": "Acme",
+      "job_count": 12,
+      "tagline": "Payments for builders",
+      "industries": [
+        "payments"
+      ],
+      "hq_country": "DE",
+      "collections": [
+        "yc"
+      ],
+      "feedback_count": 1,
+      "feedback_rating_avg": null
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
 ### `GET /companies/subindustries`
 
 **Auth:** Public
@@ -1200,6 +1227,31 @@ Plus every filter in the "Filtering jobs" section.
 curl "https://freehire.me/api/v1/agent/jobs/search"
 ```
 
+```json
+{
+  "data": [
+    {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "company_slug": "acme",
+      "location": "Berlin, Germany",
+      "work_mode": "remote",
+      "skills": [
+        "go",
+        "postgresql"
+      ],
+      "description": "## About the role\nYou will build the payments API."
+    }
+  ],
+  "meta": {
+    "total": 137,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
 ### `GET /geo/cities`
 
 **Auth:** Public
@@ -1307,6 +1359,30 @@ dropped filter looks like a broad result.
 
 ```bash
 curl "https://freehire.me/api/v1/jobs/search"
+```
+
+```json
+{
+  "data": [
+    {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "company_slug": "acme",
+      "location": "Berlin, Germany",
+      "work_mode": "remote",
+      "skills": [
+        "go",
+        "postgresql"
+      ]
+    }
+  ],
+  "meta": {
+    "total": 137,
+    "limit": 20,
+    "offset": 0
+  }
+}
 ```
 
 ### `GET /jobs/{slug}/similar`
@@ -1452,6 +1528,26 @@ Readable with a session or an API key, narrow scope included.
 
 ```bash
 curl "https://freehire.me/api/v1/auth/me" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": 1,
+    "email": "me@example.com",
+    "role": "user",
+    "beta_tester": true,
+    "email_verified": true,
+    "has_password": true,
+    "created_at": null,
+    "timezone": null,
+    "language": "en",
+    "onboarding_completed_at": null,
+    "tier": "free",
+    "agent_connected": true,
+    "api_tier": ""
+  }
+}
 ```
 
 ### `GET /auth/oauth/providers`
@@ -1675,6 +1771,20 @@ before.
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": "2026-07-27T12:00:00Z",
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `POST /jobs/{slug}/dismiss`
 
 **Auth:** Session or API key
@@ -1694,6 +1804,20 @@ and search. Idempotent.
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": "2026-06-19T10:00:00Z",
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `DELETE /jobs/{slug}/dismiss`
 
 **Auth:** Session or API key
@@ -1710,6 +1834,20 @@ Undismiss the job (no-op if not dismissed).
 curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `POST /jobs/{slug}/save`
 
 **Auth:** Session or API key
@@ -1724,6 +1862,20 @@ Save (bookmark) the job.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": "2026-06-19T10:00:00Z",
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
 ```
 
 ### `DELETE /jobs/{slug}/save`
@@ -1744,6 +1896,20 @@ Unsaving a job that was never saved answers with the empty interaction.
 curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `DELETE /jobs/{slug}/stage`
 
 **Auth:** Session or API key
@@ -1760,6 +1926,20 @@ Drops the stage and the apply date; the saved mark, views and notes stay.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
 ```
 
 ### `PATCH /jobs/{slug}/track`
@@ -1790,6 +1970,20 @@ application nobody answered; nothing sets it for you.
 curl -X PATCH "https://freehire.me/api/v1/jobs/<slug>/track" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": "interview",
+    "notes": "call on Friday"
+  }
+}
+```
+
 ### `DELETE /jobs/{slug}/track`
 
 **Auth:** Session or API key
@@ -1808,6 +2002,20 @@ Takes the job off the board; the view history stays.
 curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/track" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 1,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `POST /jobs/{slug}/view`
 
 **Auth:** Session or API key
@@ -1822,6 +2030,20 @@ Record that you viewed the job.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/view" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": "2026-06-19T10:00:00Z",
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
 ```
 
 ### `PATCH /me/applications/{id}`
@@ -1851,6 +2073,20 @@ no slug left to address it by. Same `stage` vocabulary and body shape.
 curl -X PATCH "https://freehire.me/api/v1/me/applications/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": "interview",
+    "notes": null
+  }
+}
+```
+
 ### `DELETE /me/applications/{id}`
 
 **Auth:** Session or API key
@@ -1867,6 +2103,20 @@ Remove the interaction record entirely, addressed by row id.
 curl -X DELETE "https://freehire.me/api/v1/me/applications/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "job_id": 1,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
+```
+
 ### `DELETE /me/applications/{id}/stage`
 
 **Auth:** Session or API key
@@ -1881,6 +2131,20 @@ Clear the application stage, addressed by row id.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/me/applications/<id>/stage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job_id": 42,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": null,
+    "dismissed_at": null,
+    "stage": null,
+    "notes": null
+  }
+}
 ```
 
 ### `GET /me/interviews`
@@ -2015,6 +2279,47 @@ shrinks.
 
 ```bash
 curl "https://freehire.me/api/v1/me/tracking" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "added_to_board_at": null,
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "company_slug": "acme",
+      "role_title": "Senior Go Engineer",
+      "job": {
+        "public_slug": "senior-go-engineer-acme-1a2b",
+        "title": "Senior Go Engineer"
+      },
+      "viewed_at": "2026-06-19T10:00:00Z",
+      "saved_at": null,
+      "applied_at": "2026-06-19T11:00:00Z",
+      "stage": "interview",
+      "notes": "call on Friday",
+      "email_count": 1,
+      "last_activity_at": null,
+      "days_silent": null,
+      "silence_state": null,
+      "followed_up_at": null,
+      "cv_opened_at": null
+    }
+  ],
+  "meta": {
+    "total": 5,
+    "limit": 20,
+    "offset": 0,
+    "counts": {
+      "all": 12,
+      "viewed": 12,
+      "saved": 3,
+      "applied": 5,
+      "board": 7,
+      "dismissed": 1
+    }
+  }
+}
 ```
 
 ### `GET /me/tracking/applied-companies`
@@ -2550,6 +2855,22 @@ Your own submission queue.
 curl "https://freehire.me/api/v1/me/submissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 9,
+      "url": "https://boards.greenhouse.io/acme/jobs/123",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "remote": true,
+      "status": "pending",
+      "created_at": null
+    }
+  ]
+}
+```
+
 ### `POST /submissions`
 
 **Auth:** Session or API key
@@ -2586,6 +2907,20 @@ existing job (`/jobs/<public_slug>`) in its error.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/submissions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": 9,
+    "url": "https://acme.com/careers/123",
+    "title": "Senior Go Engineer",
+    "company": "Acme",
+    "remote": true,
+    "status": "pending",
+    "created_at": null
+  }
+}
 ```
 
 ### `POST /submissions/prefill`
@@ -2657,6 +2992,18 @@ Report a problem with a job.
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/reports" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 3,
+    "reason": "no_response",
+    "details": "The posting is no longer open.",
+    "status": "pending",
+    "created_at": null
+  }
+}
+```
+
 ## Feedback
 
 Votes on jobs and companies, and ghost reports: one person states they applied to a posting and were never answered, feeding the ghost-signal evidence used elsewhere in the API (see the `reality` field on a job). Nothing here reaches a moderator and nothing here closes the job directly.
@@ -2683,6 +3030,16 @@ Vote on a company.
 curl -X POST "https://freehire.me/api/v1/companies/<slug>/vote" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "upvote_count": 1,
+    "downvote_count": 1,
+    "my_vote": 1
+  }
+}
+```
+
 ### `DELETE /companies/{slug}/vote`
 
 **Auth:** Session or API key
@@ -2697,6 +3054,16 @@ Clear your vote on a company.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/companies/<slug>/vote" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "upvote_count": 1,
+    "downvote_count": 1,
+    "my_vote": 0
+  }
+}
 ```
 
 ### `POST /jobs/{slug}/ghost-report`
@@ -2774,6 +3141,16 @@ Vote on a job.
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/vote" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "upvote_count": 1,
+    "downvote_count": 1,
+    "my_vote": 1
+  }
+}
+```
+
 ### `DELETE /jobs/{slug}/vote`
 
 **Auth:** Session or API key
@@ -2788,6 +3165,16 @@ Clear your vote on a job.
 
 ```bash
 curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/vote" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "upvote_count": 1,
+    "downvote_count": 1,
+    "my_vote": 0
+  }
+}
 ```
 
 ## Résumé
@@ -2871,6 +3258,37 @@ Your career profile, or null if you have not saved one.
 
 ```bash
 curl "https://freehire.me/api/v1/me/profile" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "specializations": [
+      "backend"
+    ],
+    "skills": [
+      "go",
+      "postgresql"
+    ],
+    "seniorities": [],
+    "excluded_skills": [],
+    "excluded_sources": [],
+    "job_languages": [],
+    "excluded_companies": [],
+    "location_preferences": {
+      "work_modes": [
+        "remote"
+      ],
+      "base": {
+        "country": "DE"
+      }
+    },
+    "derived_location": null,
+    "cv": null,
+    "created_at": "2026-06-19T10:00:00Z",
+    "updated_at": "2026-06-19T10:00:00Z"
+  }
+}
 ```
 
 ### `GET /me/screening-answers`
@@ -3002,6 +3420,21 @@ false.
 curl "https://freehire.me/api/v1/stats/catalog"
 ```
 
+```json
+{
+  "data": {
+    "open_jobs": 42130,
+    "unique_open_jobs": 1,
+    "companies": 6210,
+    "sources": 48,
+    "ats_platforms": 22,
+    "telegram_channels": 340,
+    "computed_at": "2026-06-18T06:00:00Z",
+    "exact": true
+  }
+}
+```
+
 ### `GET /stats/catalog-history`
 
 **Auth:** Public
@@ -3106,6 +3539,31 @@ show "what's inside" without paying search for it.
 curl "https://freehire.me/api/v1/stats/facets"
 ```
 
+```json
+{
+  "data": {
+    "facets": {
+      "countries": {
+        "de": 18420,
+        "us": 15210
+      },
+      "skills": {
+        "go": 4210,
+        "python": 9830
+      },
+      "seniority": {
+        "senior": 9120,
+        "mid": 7340
+      },
+      "work_mode": {
+        "remote": 21000,
+        "hybrid": 8200
+      }
+    }
+  }
+}
+```
+
 ### `GET /stats/jobs-activity`
 
 **Auth:** Public
@@ -3203,6 +3661,37 @@ identifiers.
 curl "https://freehire.me/api/v1/status"
 ```
 
+```json
+{
+  "data": {
+    "overall": "operational",
+    "generated_at": "2026-06-18T09:12:00Z",
+    "last_job_added_at": null,
+    "providers": [
+      {
+        "provider": "greenhouse",
+        "kind": "ats",
+        "status": "operational",
+        "total_boards": 1,
+        "healthy_boards": 1,
+        "cooled_boards": 1,
+        "last_run": null,
+        "last_success": null,
+        "ingested_total": 1
+      }
+    ],
+    "site": {
+      "status": "operational",
+      "database": "up",
+      "error_rate": 1.5,
+      "pool_pressure": 1.5,
+      "window_minutes": 1,
+      "history": []
+    }
+  }
+}
+```
+
 ### `GET /stats/embeddings/stream`
 
 **Auth:** Public
@@ -3263,6 +3752,22 @@ The boards you contributed, and their onboarding state.
 curl "https://freehire.me/api/v1/me/contributions" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "url": "https://boards.greenhouse.io/acme",
+      "source": "greenhouse",
+      "board": "acme",
+      "status": "pending",
+      "surface": "web",
+      "created_at": "2026-07-20T12:00:00Z"
+    }
+  ]
+}
+```
+
 ## Community
 
 The lighter per-user surfaces: a vote on a job or company, the account-level notification rule (gates the saved-job apply reminder and both lifecycle nudges), and the public discussion threads. Votes and notification settings take a key; posting to a thread is browser-owned.
@@ -3285,6 +3790,25 @@ A subject's open threads, newest first, keyset-paged.
 
 ```bash
 curl "https://freehire.me/api/v1/threads"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 31,
+      "subject_type": "company",
+      "subject_slug": "acme",
+      "title": "Anyone interviewed at Acme lately?",
+      "body": "Thanks for the update.",
+      "author": "quiet-falcon-42",
+      "reply_count": 1,
+      "status": "open",
+      "created_at": "2026-07-25T10:00:00Z"
+    }
+  ],
+  "meta": {}
+}
 ```
 
 ### `GET /threads/count`
@@ -3354,6 +3878,35 @@ A thread with its first page of replies. The id is declared a string and parsed 
 curl "https://freehire.me/api/v1/threads/<id>"
 ```
 
+```json
+{
+  "data": {
+    "thread": {
+      "id": 1,
+      "subject_type": "company",
+      "subject_slug": "acme",
+      "title": "Senior Go Engineer",
+      "body": "Thanks for the update.",
+      "author": "quiet-falcon-42",
+      "reply_count": 1,
+      "status": "open",
+      "created_at": "2026-06-18T09:12:00Z"
+    },
+    "replies": [
+      {
+        "id": 88,
+        "thread_id": 1,
+        "parent_id": 1,
+        "author": "quiet-falcon-42",
+        "body": "Thanks for the update.",
+        "created_at": "2026-07-25T12:00:00Z"
+      }
+    ]
+  },
+  "meta": {}
+}
+```
+
 ## Referrals
 
 Two sides of the same marketplace: an employee offers to refer into the company they work at (proof required, moderated), and a candidate asks one of that company's approved referrers for an intro. A candidate never sees who the referrer is, and a referrer sees the candidate's CV only through a short-lived view. Moderation of offers is moderator-gated.
@@ -3404,6 +3957,23 @@ The open requests for every company the caller is an approved referrer of.
 curl "https://freehire.me/api/v1/me/referrals/incoming" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "company_slug": "acme",
+      "company_name": "Acme",
+      "job_id": null,
+      "cv_kind": "original",
+      "note": "Backend, 8 years Go",
+      "status": "sent",
+      "created_at": null
+    }
+  ]
+}
+```
+
 ### `POST /me/referrals/incoming/{id}/resolve`
 
 **Auth:** Session or API key
@@ -3426,6 +3996,20 @@ Mark an incoming request contacted or declined.
 curl -X POST "https://freehire.me/api/v1/me/referrals/incoming/<id>/resolve" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+    "company_slug": "acme",
+    "company_name": "Acme",
+    "job_id": null,
+    "cv_kind": "original",
+    "status": "contacted",
+    "created_at": null
+  }
+}
+```
+
 ### `GET /me/referrals/offers`
 
 **Auth:** Session or API key
@@ -3434,6 +4018,22 @@ Your referral offers and their moderation state.
 
 ```bash
 curl "https://freehire.me/api/v1/me/referrals/offers" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "company_slug": "acme",
+      "company_name": "Acme",
+      "linkedin_url": "https://www.linkedin.com/in/example",
+      "status": "approved",
+      "decided_at": "2026-07-28T21:00:00Z",
+      "created_at": null
+    }
+  ]
+}
 ```
 
 ### `POST /me/referrals/offers`
@@ -3496,6 +4096,23 @@ The intros you asked for, and where they stand.
 curl "https://freehire.me/api/v1/me/referrals/requests" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": [
+    {
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "company_slug": "acme",
+      "company_name": "Acme",
+      "job_id": null,
+      "cv_kind": "original",
+      "cv_id": null,
+      "status": "contacted",
+      "created_at": null
+    }
+  ]
+}
+```
+
 ### `POST /me/referrals/requests`
 
 **Auth:** Session or API key
@@ -3521,6 +4138,21 @@ many open requests answers 429.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/referrals/requests" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+    "company_slug": "acme",
+    "company_name": "Acme",
+    "job_id": null,
+    "cv_kind": "original",
+    "cv_id": null,
+    "status": "sent",
+    "created_at": "2026-07-28T20:05:00Z"
+  }
+}
 ```
 
 ### `GET /me/referrals/incoming/{id}/cv`
@@ -3558,6 +4190,16 @@ shared.
 curl "https://freehire.me/api/v1/me/talent-network" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "talent_network_visibility": "anonymous",
+    "talent_handle": "backend-7f2a",
+    "listed": true
+  }
+}
+```
+
 ### `GET /talent`
 
 **Auth:** Public
@@ -3587,6 +4229,53 @@ the answer.
 
 ```bash
 curl "https://freehire.me/api/v1/talent"
+```
+
+```json
+{
+  "data": [
+    {
+      "handle": "backend-7f2a",
+      "card": {
+        "seniority": "senior",
+        "category": "backend",
+        "total_years": 8,
+        "skills": [
+          "go",
+          "postgresql"
+        ],
+        "roles": [
+          {
+            "seniority": "senior",
+            "category": "backend",
+            "start": {
+              "year": 2024
+            },
+            "current": true,
+            "stack": [
+              "go"
+            ]
+          }
+        ]
+      },
+      "timezone": "Europe/Berlin",
+      "timezone_region": "Europe",
+      "cities": [
+        "berlin"
+      ],
+      "specializations": [
+        "platform"
+      ],
+      "updated_at": "2026-09-01T12:00:00Z",
+      "has_photo": true
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "limit": 24,
+    "offset": 0
+  }
+}
 ```
 
 ### `GET /talent/facets`
@@ -3668,6 +4357,31 @@ leaving takes effect immediately rather than when a cache expires.
 curl "https://freehire.me/api/v1/talent/<handle>"
 ```
 
+```json
+{
+  "data": {
+    "handle": "backend-7f2a",
+    "card": {
+      "seniority": "senior",
+      "category": "backend",
+      "total_years": 8,
+      "skills": [
+        "go"
+      ],
+      "roles": []
+    },
+    "timezone": "Europe/Berlin",
+    "timezone_region": "Europe",
+    "cities": [
+      "berlin"
+    ],
+    "specializations": [],
+    "updated_at": "2026-09-01T12:00:00Z",
+    "has_photo": false
+  }
+}
+```
+
 ### `GET /talent/{handle}/photo`
 
 **Auth:** Public
@@ -3698,6 +4412,24 @@ The caller's TAILORED CVs, newest edit first. With a session or an API key.
 
 ```bash
 curl "https://freehire.me/api/v1/me/cvs" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "title": "Backend engineer",
+      "template_id": "classic",
+      "created_at": "2026-07-01T10:00:00Z",
+      "updated_at": "2026-07-20T18:30:00Z",
+      "job_slug": "senior-go-engineer-acme-1a2b",
+      "job_title": "Senior Go Engineer",
+      "job_company": "Acme",
+      "agent_session_id": "s_9f2a41c7"
+    }
+  ]
+}
 ```
 
 ### `GET /me/cvs/bases`
@@ -3751,6 +4483,21 @@ and it is a 409 when there is nothing to seed from. Calls no LLM itself.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/cvs/tailor" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "tailor_cv_id": "7d1a3b5c-2e4f-4a6b-8c9d-0e1f2a3b4c5d",
+    "base_cv_id": "0f2c9d1e-7a3b-4e5f-8c6d-2b1a0e9f8d7c",
+    "analysis": {
+      "overall_score": 72,
+      "verdict": "worth_applying"
+    },
+    "session_id": "s_9f2a41c7",
+    "cold_start_running": true
+  }
+}
 ```
 
 ### `GET /me/cvs/{id}`
@@ -3926,6 +4673,30 @@ Your employments and their evidence atoms.
 
 ```bash
 curl "https://freehire.me/api/v1/me/experience" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "employments": [
+      {
+        "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+        "kind": "job",
+        "company": "Acme",
+        "atoms": [
+          {
+            "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+            "claim": "Cut p99 checkout latency by 40%",
+            "provenance": "cv_import",
+            "needs_context": true,
+            "needs_metrics": true
+          }
+        ]
+      }
+    ],
+    "unplaced": []
+  }
+}
 ```
 
 ### `POST /me/experience/atoms`
@@ -4128,6 +4899,25 @@ saw this", and this endpoint sets it.
 curl "https://freehire.me/api/v1/me/emails/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Speechify",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "status_signal": "acknowledgement",
+    "linked_slug": "tech-lead-web-core-speechify-a1b2"
+  }
+}
+```
+
 ### `POST /me/emails/{id}/application`
 
 **Auth:** Session or API key
@@ -4154,6 +4944,24 @@ the time the employer wrote.
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/application" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "linked_slug": "tech-lead-web-core-speechify-a1b2"
+  }
+}
+```
+
 ### `POST /me/emails/{id}/confirm`
 
 **Auth:** Session or API key
@@ -4172,6 +4980,25 @@ subject — links itself. A model's pick lands here as a suggestion instead, and
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/confirm" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "link_source": "confirmed",
+    "linked_slug": "tech-lead-web-core-speechify-a1b2"
+  }
+}
 ```
 
 ### `POST /me/emails/{id}/delete`
@@ -4215,6 +5042,25 @@ Attach a message to one of your applications.
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/link" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "link_source": "manual",
+    "linked_slug": "tech-lead-web-core-speechify-a1b2"
+  }
+}
+```
+
 ### `POST /me/emails/{id}/reject`
 
 **Auth:** Session or API key
@@ -4229,6 +5075,24 @@ Dismiss a suggested link without attaching it.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/reject" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "suggested_slug": ""
+  }
+}
 ```
 
 ### `POST /me/emails/{id}/restore`
@@ -4277,6 +5141,25 @@ never advances anything by itself.
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/triage" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "status_signal": "interview_invitation",
+    "linked_slug": "tech-lead-web-core-speechify-a1b2"
+  }
+}
+```
+
 ### `POST /me/emails/{id}/unlink`
 
 **Auth:** Session or API key
@@ -4293,6 +5176,25 @@ Clear a message's application link; its classification stays.
 curl -X POST "https://freehire.me/api/v1/me/emails/<id>/unlink" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "id": 4821,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Thank you for applying to Acme",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "status_signal": "acknowledgement",
+    "linked_slug": ""
+  }
+}
+```
+
 ### `GET /me/gmail`
 
 **Auth:** Session or API key
@@ -4306,6 +5208,20 @@ surface.
 
 ```bash
 curl "https://freehire.me/api/v1/me/gmail" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "connected": true,
+    "email": "you@gmail.com",
+    "status": "ok",
+    "available": true,
+    "calendar_connected": true,
+    "mentor_calendar_connected": true,
+    "mentor_busy_sync_connected": true
+  }
+}
 ```
 
 ### `DELETE /me/gmail`
@@ -4378,6 +5294,33 @@ unknown `source`, `status` or `link` value is a 400, never a silently empty page
 
 ```bash
 curl "https://freehire.me/api/v1/me/inbox" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 4821,
+      "source": "gmail",
+      "external_id": "<CAF...@mail.gmail.com>",
+      "from_addr": "no-reply@us.greenhouse-mail.io",
+      "from_name": "Speechify Recruiting",
+      "subject": "Thank you for applying to Speechify",
+      "snippet": "We have received your application.",
+      "received_at": "2026-07-24T09:12:00Z",
+      "read": false,
+      "status_signal": "acknowledgement",
+      "link_source": "thread",
+      "linked_slug": "tech-lead-web-core-speechify-a1b2"
+    }
+  ],
+  "meta": {
+    "total": 137,
+    "limit": 50,
+    "offset": 0,
+    "hidden": 1
+  }
+}
 ```
 
 ### `POST /me/inbox/read-all`
@@ -4497,6 +5440,50 @@ the full job view; the listing carries only a card. A slug you do not track is a
 
 ```bash
 curl "https://freehire.me/api/v1/me/tracking/<slug>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "job": null,
+    "viewed_at": null,
+    "saved_at": null,
+    "applied_at": "2026-07-24T09:00:00Z",
+    "stage": "interview",
+    "followed_up_at": null,
+    "emails": [
+      {
+        "id": 4821,
+        "source": "gmail",
+        "from_addr": "no-reply@us.greenhouse-mail.io",
+        "from_name": "Acme Recruiting",
+        "subject": "Thank you for applying to Acme",
+        "status_signal": "interview_invitation",
+        "received_at": "2026-06-18T09:12:00Z",
+        "read": true
+      }
+    ],
+    "events": [
+      {
+        "id": 991,
+        "kind": "employer_reply",
+        "signal": "interview_invitation",
+        "source": "mail_gmail",
+        "observed": true,
+        "occurred_at": "2026-07-29T11:04:00Z",
+        "company_slug": "acme"
+      },
+      {
+        "id": 802,
+        "kind": "applied",
+        "source": "user",
+        "observed": false,
+        "occurred_at": "2026-07-24T09:00:00Z",
+        "company_slug": "acme"
+      }
+    ]
+  }
+}
 ```
 
 ### `GET /me/tracking/{slug}/followup`
@@ -4619,6 +5606,25 @@ sync uses, so the response is the full message body, the same shape
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/tracking/<slug>/mail-recall/link" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "id": 4822,
+    "source": "gmail",
+    "external_id": "18c2f4a1b3d5e6f7",
+    "from_addr": "no-reply@us.greenhouse-mail.io",
+    "from_name": "Acme Recruiting",
+    "subject": "Interview invitation",
+    "body_text": "Dear candidate, thank you for applying.",
+    "body_html": "<p>Dear candidate, thank you for applying.</p>",
+    "received_at": "2026-06-18T09:12:00Z",
+    "read": true,
+    "link_source": "manual",
+    "linked_slug": "senior-go-engineer-acme-1a2b"
+  }
+}
 ```
 
 ## Answer bank
@@ -4761,6 +5767,39 @@ closed. `501` when this deployment cannot deliver applications.
 curl "https://freehire.me/api/v1/jobs/<slug>/direct-apply"
 ```
 
+```json
+{
+  "data": {
+    "company_name": "Acme",
+    "questions": [
+      {
+        "id": "q1",
+        "label": "Do you hold an EU work permit?",
+        "type": "boolean",
+        "required": true
+      },
+      {
+        "id": "q2",
+        "label": "Preferred stack",
+        "type": "select",
+        "required": false,
+        "options": [
+          "Go",
+          "Rust"
+        ]
+      }
+    ],
+    "open": true,
+    "applied": false,
+    "prefill": {},
+    "cvs": {
+      "tailored": null,
+      "has_resume": true
+    }
+  }
+}
+```
+
 ## Email preferences
 
 ### `GET /email-prefs`
@@ -4831,6 +5870,25 @@ Companies ranked by hiring activity.
 curl "https://freehire.me/api/v1/insights/companies"
 ```
 
+```json
+{
+  "data": [
+    {
+      "company_slug": "acme",
+      "company_name": "Acme",
+      "open_now": 1,
+      "open_prev_30d": 1,
+      "growth_30d": 1
+    }
+  ],
+  "meta": {
+    "sort": "open_count",
+    "min_open": 1,
+    "limit": 1
+  }
+}
+```
+
 ### `GET /insights/role-countries`
 
 **Auth:** Public
@@ -4885,6 +5943,26 @@ is then private.
 curl "https://freehire.me/api/v1/insights/roles"
 ```
 
+```json
+{
+  "data": [
+    {
+      "category": "backend",
+      "seniority": "senior",
+      "open_count": 1840,
+      "growth": 220
+    }
+  ],
+  "meta": {
+    "country": "de",
+    "category": "",
+    "seniority": "",
+    "sort": "open_count",
+    "limit": 20
+  }
+}
+```
+
 ### `GET /insights/salary`
 
 **Auth:** Public
@@ -4901,6 +5979,28 @@ Salary bands by category, seniority and country.
 
 ```bash
 curl "https://freehire.me/api/v1/insights/salary"
+```
+
+```json
+{
+  "data": [
+    {
+      "seniority": "senior",
+      "currency": "USD",
+      "period": "2026-06-22",
+      "sample_size": 1,
+      "p25": 130000,
+      "p50": 165000,
+      "p75": 200000,
+      "quantiles": []
+    }
+  ],
+  "meta": {
+    "category": "backend",
+    "seniority": "senior",
+    "country": "DE"
+  }
+}
 ```
 
 ### `GET /insights/salary/history`
@@ -4943,6 +6043,24 @@ single-dimensional, so asking for both is a 400.
 curl "https://freehire.me/api/v1/insights/skills"
 ```
 
+```json
+{
+  "data": [
+    {
+      "skill": "go",
+      "open_count": 1,
+      "growth": 1
+    }
+  ],
+  "meta": {
+    "category": "backend",
+    "country": "DE",
+    "sort": "open_count",
+    "limit": 1
+  }
+}
+```
+
 ### `GET /insights/velocity`
 
 **Auth:** Public
@@ -4962,6 +6080,25 @@ How fast a slice of the market is hiring, over time.
 
 ```bash
 curl "https://freehire.me/api/v1/insights/velocity"
+```
+
+```json
+{
+  "data": [
+    {
+      "period": "2026-07-20",
+      "added": 3120,
+      "removed": 2740
+    }
+  ],
+  "meta": {
+    "granularity": "week",
+    "from": "2026-06-01",
+    "to": "2026-06-28",
+    "facet_kind": "skill",
+    "facet_value": "go"
+  }
+}
 ```
 
 ## Mentorship

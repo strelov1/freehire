@@ -98,6 +98,21 @@ op listCompanyFeedback(
 /** All of the caller's own reviews of the company, one per category; empty when none. */
 @summary("Your own feedback on this company, across every category (empty if none).")
 @tag("Company feedback")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 5,
+          author: "quiet-falcon-42",
+          rating: 4,
+          feedback_type: "interview",
+          body: "Thanks for the update.",
+          created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+          updated_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        },
+      ],
+    },
+})
 @route("/companies/{slug}/feedback/mine")
 @get
 op myCompanyFeedback(/** The company slug. (e.g. `acme`) */ @path slug: string): Data<CompanyFeedback[]> | Problem;
@@ -178,6 +193,27 @@ op reportCompanyFeedback(/** The feedback entry id. (e.g. `5`) */ @path id: stri
 @summary("Every review with at least one report, most-reported first.")
 @extension("x-audience", "moderator")
 @tag("Company feedback")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 5,
+          author: "quiet-falcon-42",
+          rating: 1,
+          feedback_type: "culture",
+          body: "Thanks for the update.",
+          created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+          updated_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+          company_slug: "acme",
+          report_count: 3,
+          report_reasons: #[
+            "spam",
+            "off-topic",
+          ],
+        },
+      ],
+    },
+})
 @route("/company-feedback/reported")
 @get
 op listReportedCompanyFeedback(): Data<ReportedCompanyFeedback[]> | Problem;

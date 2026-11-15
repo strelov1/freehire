@@ -487,6 +487,27 @@
                       "$ref": "#/components/schemas/JobSearchMeta"
                     }
                   }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "senior-go-engineer-acme-1a2b",
+                      "title": "Senior Go Engineer",
+                      "company": "Acme",
+                      "company_slug": "acme",
+                      "location": "Berlin, Germany",
+                      "work_mode": "remote",
+                      "skills": [
+                        "go",
+                        "postgresql"
+                      ]
+                    }
+                  ],
+                  "meta": {
+                    "total": 137,
+                    "limit": 20,
+                    "offset": 0
+                  }
                 }
               }
             }
@@ -958,6 +979,28 @@
                     "meta": {
                       "$ref": "#/components/schemas/AgentJobSearchMeta"
                     }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "public_slug": "senior-go-engineer-acme-1a2b",
+                      "title": "Senior Go Engineer",
+                      "company": "Acme",
+                      "company_slug": "acme",
+                      "location": "Berlin, Germany",
+                      "work_mode": "remote",
+                      "skills": [
+                        "go",
+                        "postgresql"
+                      ],
+                      "description": "## About the role\nYou will build the payments API."
+                    }
+                  ],
+                  "meta": {
+                    "total": 137,
+                    "limit": 20,
+                    "offset": 0
                   }
                 }
               }
@@ -2163,6 +2206,30 @@
                     }
                   },
                   "description": "A list: `{\"data\": [...], \"meta\": {...}}`."
+                },
+                "example": {
+                  "data": [
+                    {
+                      "slug": "acme",
+                      "name": "Acme",
+                      "job_count": 12,
+                      "tagline": "Payments for builders",
+                      "industries": [
+                        "payments"
+                      ],
+                      "hq_country": "DE",
+                      "collections": [
+                        "yc"
+                      ],
+                      "feedback_count": 1,
+                      "feedback_rating_avg": null
+                    }
+                  ],
+                  "meta": {
+                    "total": 1,
+                    "limit": 20,
+                    "offset": 0
+                  }
                 }
               }
             }

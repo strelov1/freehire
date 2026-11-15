@@ -79,6 +79,18 @@ model Contribution {
 @summary("Hand freehire a link: import the posting, and the board behind it.")
 @useAuth(SessionOrKey)
 @tag("Contributions")
+@opExample(#{
+  returnType: #{
+    _: 201,
+    body: #{
+      data: #{
+        public_slug: "senior-backend-engineer-acme-1a2b",
+        status: ResolvedJobStatus.tracked,
+        company_slug: "acme",
+      },
+    },
+  },
+})
 @route("/jobs/resolve")
 @post
 op resolveJob(@body body: ResolveJobRequest):
@@ -99,6 +111,21 @@ op resolveJob(@body body: ResolveJobRequest):
 @summary("The boards you contributed, and their onboarding state.")
 @useAuth(SessionOrKey)
 @tag("Contributions")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 1,
+          url: "https://boards.greenhouse.io/acme",
+          source: "greenhouse",
+          board: "acme",
+          status: ContributionStatus.pending,
+          surface: "web",
+          created_at: utcDateTime.fromISO("2026-07-20T12:00:00Z"),
+        },
+      ],
+    },
+})
 @route("/me/contributions")
 @get
 op listMyContributions(): Data<Contribution[]> | Problem;

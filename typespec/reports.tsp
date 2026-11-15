@@ -69,6 +69,17 @@ model DismissJobReportRequest {
 @summary("Report a problem with a job.")
 @useAuth(SessionOrKey)
 @tag("Reports")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: 3,
+        reason: JobReportReason.no_response,
+        details: "The posting is no longer open.",
+        status: JobReportStatus.pending,
+        created_at: null,
+      },
+    } },
+})
 @route("/jobs/{slug}/reports")
 @post
 op createJobReport(/** The job `public_slug`. */ @path slug: string, @body body: JobReportRequest): {
@@ -81,6 +92,21 @@ op createJobReport(/** The job `public_slug`. */ @path slug: string, @body body:
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Reports")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 3,
+          reason: JobReportReason.no_response,
+          details: "The posting is no longer open.",
+          status: JobReportStatus.pending,
+          created_at: null,
+          job_slug: "senior-go-engineer-acme-1a2b",
+          job_title: "Senior Go Engineer",
+        },
+      ],
+    },
+})
 @route("/reports")
 @get
 op listPendingJobReports(): Data<JobReport[]> | Problem;
@@ -90,6 +116,18 @@ op listPendingJobReports(): Data<JobReport[]> | Problem;
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Reports")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 3,
+        reason: JobReportReason.no_response,
+        details: "The posting is no longer open.",
+        status: JobReportStatus.resolved,
+        created_at: null,
+        notified: true,
+      },
+    },
+})
 @route("/reports/{id}/resolve")
 @post
 op resolveJobReport(/** The report id. (e.g. `3`) */ @path id: string, @body body?: ResolveJobReportRequest): Data<JobReport> | Problem;
@@ -99,6 +137,18 @@ op resolveJobReport(/** The report id. (e.g. `3`) */ @path id: string, @body bod
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Reports")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 3,
+        reason: JobReportReason.no_response,
+        details: "The posting is no longer open.",
+        status: JobReportStatus.dismissed,
+        review_reason: "not an issue",
+        created_at: null,
+      },
+    },
+})
 @route("/reports/{id}/dismiss")
 @post
 op dismissJobReport(/** The report id. (e.g. `3`) */ @path id: string, @body body?: DismissJobReportRequest): Data<JobReport> | Problem;
