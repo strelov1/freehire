@@ -11,28 +11,20 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
-// ChatStream carries the per-delta callbacks of a streamed chat. Both are
-// optional. OnText receives the answer as it is produced; OnThinking receives the
-// model's reasoning, when the provider surfaces any — the two are kept apart
-// because the chat renders them differently, and reasoning must never be mistaken
-// for the answer.
+// ChatStream carries the optional per-delta callbacks of a streamed chat. OnText receives
+// the answer, OnThinking the model's reasoning; keep them apart, reasoning is not the answer.
 type ChatStream struct {
 	OnText     func(string)
 	OnThinking func(string)
 }
 
-// Chat is the conversational sibling of GenerateJSON: instead of one system+user
-// prompt in JSON mode it sends a whole conversation, offers the model a set of
-// tools, and returns the chosen completion — which may be text, tool calls, or
-// both. Deltas are forwarded through stream as they arrive (a zero ChatStream is
-// fine); the full text is also on the returned choice, so a caller that does not
-// stream loses nothing.
+// Chat sends a whole conversation with a set of tools and returns the chosen completion
+// (text, tool calls, or both). Deltas go through stream as they arrive; the full text is also
+// on the returned choice.
 //
-// The caller owns the loop: it inspects choice.ToolCalls, runs them, appends the
-// results to msgs, and calls Chat again. Bounded by the client timeout and
-// observed like the JSON helpers — including contextOverrules, so a gateway that
-// falls silent at our deadline and returns what it has is a failed call here too
-// rather than a completion the turn loop would store as an answer.
+// The caller owns the tool loop: run choice.ToolCalls, append the results to msgs, call again.
+// A gateway that goes silent at our deadline and returns partial output is a failed call
+// (contextOverrules), not a completion.
 func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, stream ChatStream) (*llms.ContentChoice, error) {
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
@@ -41,9 +33,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 	}
 
 	start := time.Now()
-	// The tracer's flat system/user shape predates conversations; label an
-	// observation with the conversation's system prompt and its latest user turn,
-	// which is what makes a trace recognisable in Langfuse.
+	// The tracer's flat shape gets the system prompt and the latest user turn.
 	gen := func() Generation {
 		return Generation{
 			Model:  c.modelID,
@@ -62,8 +52,7 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 		return nil
 	})}
 	opts = append(opts, c.temperatureOptions()...)
-	// Reasoning arrives on its own callback; the provider calls both, so this one
-	// reads only the reasoning half and leaves the content to OnText above.
+	// The provider calls this with both halves; read only the reasoning.
 	if stream.OnThinking != nil {
 		opts = append(opts, llms.WithStreamingReasoningFunc(func(_ context.Context, reasoning, _ []byte) error {
 			if len(reasoning) > 0 {
@@ -110,17 +99,10 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 
 // mergeToolCallFragments folds a streamed tool call back into one call.
 //
-// A gateway streams a tool call as a first delta carrying the id and name, then
-// deltas carrying only fragments of the argument JSON. langchaingo appends a
-// fragment to the open call ONLY when the delta's `type` is empty
-// (llms/openai/internal/openaiclient/chat.go, updateToolCalls) — but litellm sets
-// `type: "function"` on every delta, so each fragment is filed as its own
-// nameless call. The model's arguments then never reach the tool: it runs with an
-// empty object while three bogus "unknown tool" calls burn the step cap.
-//
-// A call with no function name is therefore a continuation of the one before it.
-// A leading nameless call has nothing to continue and is dropped — it cannot be
-// dispatched to anything.
+// langchaingo appends an argument fragment to the open call only when the delta's `type` is
+// empty (openaiclient updateToolCalls), but the gateway sets `type: "function"` on every delta,
+// so each fragment becomes its own nameless call. A nameless call is therefore a continuation
+// of the previous one; a leading nameless call is dropped.
 func mergeToolCallFragments(calls []llms.ToolCall) []llms.ToolCall {
 	if len(calls) == 0 {
 		return calls
@@ -137,24 +119,19 @@ func mergeToolCallFragments(calls []llms.ToolCall) []llms.ToolCall {
 			out[len(out)-1].FunctionCall.Arguments += call.FunctionCall.Arguments
 			continue
 		}
-		// Copy the function call so appending fragments never mutates the
-		// provider's own response value.
+		// Copy so appending fragments never mutates the provider's response.
 		fc := *call.FunctionCall
 		out = append(out, llms.ToolCall{ID: call.ID, Type: call.Type, FunctionCall: &fc})
 	}
 	return out
 }
 
-// isToolCallChunk reports whether a streamed chunk is a tool-call payload rather
-// than prose. langchaingo hands the SAME streaming callback the marshalled tool
-// calls in place of content when a delta carries them
-// (llms/openai/internal/openaiclient/chat.go), so forwarding every chunk verbatim
-// prints raw JSON into the user's chat. Nothing is lost by dropping these: the
-// tool calls arrive properly typed on the returned choice.
+// isToolCallChunk reports whether a streamed chunk is a marshalled tool-call payload rather
+// than prose; langchaingo passes those to the content callback, which would print raw JSON
+// into the chat. The calls still arrive typed on the returned choice.
 //
-// The check is by shape, and deliberately narrow — a JSON array or object whose
-// entries carry a `function` member. Prose that happens to look like that is
-// still recorded in the choice's full content; only the live delta is suppressed.
+// The check is by shape and deliberately narrow: a JSON array or object whose entries carry a
+// `function` member. Look-alike prose is only suppressed live; the full content keeps it.
 func isToolCallChunk(chunk []byte) bool {
 	trimmed := bytes.TrimSpace(chunk)
 	if len(trimmed) == 0 {
@@ -183,8 +160,7 @@ func isToolCallChunk(chunk []byte) bool {
 	return false
 }
 
-// firstMessageText returns the text of the first message with the given role,
-// joining its text parts. Empty when the conversation has no such message.
+// firstMessageText returns the text of the first message with the given role, or "".
 func firstMessageText(msgs []llms.MessageContent, role llms.ChatMessageType) string {
 	for _, m := range msgs {
 		if m.Role == role {

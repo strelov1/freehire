@@ -19,17 +19,9 @@ const HeavyIndexLockKey int64 = 0x66686978
 // HoldHeavyIndexLock takes HeavyIndexLockKey for as long as the returned release is not
 // called, or reports that somebody else is already doing catalogue-wide index work.
 //
-// It exists because the schedule could not stay correct on its own. Measured 2026-09-15: the
-// full rebuild started 03:15 and finished 07:47, and the next started 15:15 and was still
-// running at 18:57 — four and a half hours against a schedule laid out when it took about
-// three. The 06:45 suggestion build and the 16:30 and 19:30 dedup passes therefore land
-// inside a rebuild EVERY day, not on an unlucky one. That afternoon the overlap took the
-// site down: load average 701, 51 processes waiting on disk, the front page timing out
-// entirely, and an auto-apply attempt that could not even start a browser.
-//
-// Moving the clock times would fix today and break again at five hours. A lock fixes the
-// thing that is actually true — two of these must not run at once — and, unlike a systemd
-// condition, it also holds for a run started by hand.
+// Schedule times cannot keep these apart once a rebuild outgrows its slot, and an overlap
+// takes the site down. A lock, unlike a systemd condition, also holds for a run started by
+// hand.
 //
 // The caller decides what to do when it loses. Every current one SKIPS rather than waits:
 // each of these jobs is idempotent and scheduled again soon, so a skipped pass costs one
@@ -52,14 +44,9 @@ func HoldHeavyIndexLock(ctx context.Context, pool *pgxpool.Pool) (release func()
 }
 
 // composeRelease returns a release function that calls inner then cleanup exactly once.
-// Kept as its own step, rather than inlined as a closure assigned into HoldHeavyIndexLock's
-// named `release` return, because that inlined shape is what caused a fatal stack-overflow
-// crash on 2026-09-15: `return func() { release(); conn.Release() }, true, nil` builds a
-// closure that captures `release` by reference, and assigning that very closure BACK into
-// the named return `release` (which is exactly what a named-return `return` statement does)
-// made the closure call itself, forever, the moment anything invoked it. `composeRelease`
-// closes over two plain, never-reassigned local parameters instead, so there is no variable
-// left for the returned closure to alias onto itself.
+// Do not inline it as `return func() { release(); conn.Release() }, true, nil`: the closure
+// captures the named return `release` by reference, and the return statement assigns the
+// closure back into it, so it calls itself forever. Here it closes over plain parameters.
 func composeRelease(inner, cleanup func()) func() {
 	return func() {
 		inner()
@@ -77,9 +64,8 @@ type locker interface {
 func holdHeavyIndexLock(ctx context.Context, l locker) (func(), bool, error) {
 	got, err := l.tryLock(ctx, HeavyIndexLockKey)
 	if err != nil {
-		// Not permission. A database that cannot answer says nothing about whether a
-		// rebuild is running, and assuming it is free is how two of them end up running
-		// at once — the exact failure this prevents.
+		// Not permission: a database that cannot answer says nothing about whether a
+		// rebuild is running, and assuming it is free lets two run at once.
 		return nil, false, fmt.Errorf("heavy index lock: %w", err)
 	}
 	if !got {

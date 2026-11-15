@@ -7,11 +7,6 @@ import (
 
 // Layers places each block on a layer, counting up from 1 at the bottom. A block may
 // import only blocks on a strictly lower layer.
-//
-// ai sits low because what remains in it — enrich, embed, llmkey — reaches no further than
-// platform and dict; ingest sits high because submission/moderation reach into job and
-// linkimport reaches into search and enrich. The order was derived from the graph — see
-// docs/superpowers/specs/2026-08-22-internal-module-split-design.md.
 var Layers = map[string]int{
 	"platform":    1,
 	"dict":        2,
@@ -27,105 +22,71 @@ var Layers = map[string]int{
 }
 
 // blocks lists the packages each block owns, named relative to internal/. A package with a
-// parent (auth/oauth, hardconstraint/credentials) is named in full; it takes its parent's
-// block, because a sub-package on a different layer from its parent would be a lie about
-// where the concept lives.
+// parent (auth/oauth) is named in full and takes its parent's block.
 var blocks = map[string][]string{
-	// llm and llmschema are here, not in ai, because neither knows anything about the
-	// domain: llm wraps an OpenAI-compatible endpoint and llmschema derives a JSON Schema
-	// from a Go type. They import nothing of ours (llm imports only llmschema), which puts
-	// them in the same category as safehttp and blobstore. Placing them in ai instead would
-	// have made config -> llm an upward edge, and the only ways out were to scatter the
-	// config-to-Settings conversion across eight cmd/ entrypoints or to add a package
-	// holding one function. The classification was wrong, not the code.
+	// llm and llmschema are here, not in ai: neither knows anything about the domain, and
+	// they import nothing of ours (llm imports only llmschema), like safehttp and blobstore.
+	// In ai they would make config -> llm an upward edge.
 	"platform": {
-		// aigateway is here for the same reason as llm: it is the HTTP half of talking to
-		// the OpenAI-compatible gateway and knows nothing about the domain. Its two callers
-		// sit in different blocks (ai/speech and api/realtime), so anywhere else it would be
-		// an upward edge for one of them.
+		// aigateway is domain-free HTTP transport like llm. Its callers (ai/speech, api/realtime)
+		// sit in different blocks, so anywhere else it is an upward edge for one.
 		"aigateway",
 		"arch", "arch/layering", "blobstore",
-		// browser is the same "transport, not domain" category one step lower down: how this
-		// repository LAUNCHES a local headless Chrome. It is not browseruse below, which is
-		// an HTTP client for somebody else's hosted browser — this one is a process on our
-		// own host. Its one caller is api/atsapply (fills an application form); ingest/sources
-		// was the second until its crawls moved to scraplingfetch in 2026-10.
+		// browser launches a local headless Chrome (a process on our host), unlike browseruse,
+		// which is an HTTP client for a hosted browser. Its one caller is api/atsapply.
 		"browser",
-		// scraplingfetch is the transport to services/scrapling-fetch, the self-hosted fetch
-		// service on the crawl host — an http.RoundTripper and nothing more, the safehttp
-		// category. Its caller is ingest/sources, for the providers a plain client cannot reach.
+		// scraplingfetch is the http.RoundTripper to services/scrapling-fetch, the safehttp
+		// category. Its caller is ingest/sources.
 		"scraplingfetch",
-		// browseruse is the HTTP half of talking to the browser-use.com cloud agent API —
-		// create/poll/fetch one run — and knows nothing about ATS forms or resolved
-		// application plans, the same "transport, not domain" category as llm and
-		// aigateway. Its one caller sits in api/atsapply.
+		// browseruse is the HTTP client for the browser-use.com cloud agent API and knows nothing
+		// about ATS forms, like llm and aigateway. Its one caller is api/atsapply.
 		"browseruse",
 		"cache", "config", "database", "db",
 		"externalid", "flexjson", "htmltext", "isoweek", "jev", "llm", "llmschema", "migrate",
 		"mailmeta", "modroot", "observability", "outbox", "pgconv", "pgerr", "safehttp", "stringset", "testdb",
 		"tokencrypt",
-		// tracerlink names a CV and is still here, because what it holds is not the CV: link
-		// normalisation, an opaque token, a user-agent/device classifier and a salted visitor
-		// hash — the same category as tokencrypt, and like them it imports
-		// nothing of ours. Its only domain contact is Section, a two-value vocabulary saying
-		// WHERE in a document a link sat (header.links / projects) so the renderer can put
-		// each href back where it found it. That is a coordinate, not a model of a candidate.
-		//
-		// Unlike aigateway above, no layer forces it: candidate/cv renders with it and
-		// api/handler mints and resolves clicks, and both may import candidate. The choice is
-		// what the package IS. Moving it would carry a bot classifier and an HMAC of a
-		// visitor's IP into the block about a person's CV, where nothing else has a use for
-		// either, and it would not remove the one real cost — Hrefs mirrors cv.LinkHrefs
-		// because cv imports this package, and the dependency cannot point the other way.
+		// tracerlink names a CV but holds none of it: link normalisation, an opaque token, a
+		// user-agent classifier and a salted visitor hash, like tokencrypt, importing nothing of
+		// ours. Section is only a coordinate (header.links / projects) for the renderer. No layer
+		// forces the placement; moving it would carry a bot classifier and an IP HMAC into the
+		// CV block. Hrefs mirrors cv.LinkHrefs because cv imports this package.
 		"tracerlink",
 		"worker",
 	},
 	"dict": {
 		"answertopic", "certification", "classify", "companyname", "edulevel", "engagement", "industrytag",
 		"lang", "location", "normalize", "perks", "roletype", "skilladjacency", "skillbundle", "skilltag",
-		// skillvec/gen is the registry generator — a main package that reads skilltag
-		// and writes skillvec's source. It never ships in a binary, but it is a package
-		// in the repo, so it needs a block like any other.
+		// skillvec/gen is the registry generator, a main package that reads skilltag and writes
+		// skillvec's source. It never ships but needs a block like any package.
 		"skillvec", "skillvec/gen", "vocab", "wordmatch",
 	},
 	"ai": {
 		"aiarchetype", "assistant", "autofillagent", "browsertools", "embed",
 		"enrich", "llmkey",
-		// plan holds the plan a user is on and the per-day allowance each metered feature
-		// draws from. It reads users.pro_until, which argues for identity — but identity
-		// sits on this same layer, so a package there could not be called from assistant
-		// or speech, where two of the metered features live. The rule would be satisfied
-		// and the code impossible. It reads one column through platform/db rather than
-		// using identity's behaviour, which is what makes the placement honest as well as
-		// necessary.
+		// plan holds the user's plan and the per-day allowance of each metered feature. It reads
+		// users.pro_until, which argues for identity, but identity shares this layer and
+		// assistant and speech could not call it. It reads that column through platform/db.
 		"plan",
 		"speech",
 	},
 	"identity": {
 		"accountdelete", "accounts", "auth", "auth/apple", "auth/applejobs",
 		"apiusage", "auth/mobileauth", "auth/oauth", "auth/oauth2server", "auth/recentauth",
-		// billing is here and not in ai, where plan lives, because a subscription is an
-		// attribute of the ACCOUNT. The constraint that pushed plan out of this block —
-		// ai and identity share a layer, so ai/assistant could not import it — does not
-		// reach billing: plan reads users.pro_until through platform/db and never imports
-		// this package, and billing's only callers are the webhook handler in api and a
-		// binary in cmd.
+		// billing is here, not in ai: a subscription belongs to the ACCOUNT. plan reads
+		// users.pro_until through platform/db and never imports billing, so ai/identity sharing a
+		// layer is no constraint. Callers are the webhook handler in api and a cmd binary.
 		"billing",
-		// promo decides what discount an account is owed — a promo code it redeemed, the
-		// first-month discount an invited account is offered, the credit a referrer earned.
-		// It sits beside billing rather than inside it because billing's scope is the
-		// subscription itself, and neither imports the other: promo reads its own tables
-		// through platform/db and returns a plain value, and the handler and the worker that
-		// hold both are in api and cmd, which may import anything.
+		// promo decides what discount an account is owed (promo code, invited first-month
+		// discount, referrer credit). It sits beside billing, not inside it; neither imports the
+		// other, and promo reads its own tables through platform/db.
 		"promo",
 		"userprofile", "username",
 	},
 	"candidate": {
 		"answerbank",
 		"atscheck",
-		// coverletter drafts from the experience bank against a vacancy the caller supplies
-		// as a db.Job — the letter is about the candidate's evidence, so it sits here and
-		// not in job, which this block may not import.
+		// coverletter drafts from the experience bank against a db.Job the caller supplies; it
+		// sits here because job is not importable from this block.
 		"coverletter",
 		"cv", "cvedit", "cvmatch", "cvsection", "experience",
 		// fitanalysis orchestrates matchanalysis (cache, staleness, the credit rule,
@@ -133,74 +94,52 @@ var blocks = map[string][]string{
 		"fitanalysis",
 		"hardconstraint", "hardconstraint/credentials", "headshot", "jobmatch",
 		"matchanalysis", "perioddate", "resume", "resumeextract",
-		// survey holds the candidate's self-reported segmentation answers (job-search
-		// stage, biggest challenge, current income). It sits here rather than in engage,
-		// whose digests are its most likely future reader, because it states what a
-		// candidate IS — engage is layer 7 and may import this, but not the reverse.
+		// survey holds the candidate's self-reported segmentation answers. It states what a
+		// candidate IS, so it sits here; engage (layer 7) may import it, not the reverse.
 		"survey",
-		// talentnetwork is the public catalogue of candidates who opted into being found:
-		// membership, the minted handle, the projection snapshot and the filters over it.
-		// It sits here and not in engage — which is where the recruiter-facing half will
-		// go — because what it publishes is a projection of the candidate's own CV, and
-		// candidate is the block that owns what a candidate is made of. engage is layer 7
-		// and may import this; the reverse would be the inversion the guard exists to stop.
+		// talentnetwork is the public catalogue of opted-in candidates: membership, handle,
+		// projection snapshot and filters. It publishes a projection of the candidate's own CV,
+		// so it sits here and not in engage.
 		"talentnetwork",
 	},
 	"job": {
 		"applydate", "collections",
 		// companymerge is the write side of retiring one company slug into another, shared by
-		// cmd/merge-companies and companyrelation, which decides the merges and parent links
-		// people propose. Company identity, beside formeremployer and logodomain.
+		// cmd/merge-companies and companyrelation. Company identity, beside formeremployer.
 		"companymerge", "companyrelation",
-		// dictgap turns LLM enrichment facts already in the catalogue into ranked
-		// candidate gaps for the deterministic dict/skilltag and dict/classify
-		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment
-		// concern, the same footing reqextract and wikicompany take below.
+		// dictgap turns LLM enrichment facts in the catalogue into ranked candidate gaps for the
+		// skilltag and classify dictionaries: a fact about recorded facets, not an AI concern.
 		"dictgap",
-		// formeremployer resolves the free-text company names of a person's experience bank
-		// to catalogue company slugs for the "Hiring again" search filter. It reads the
-		// bank's rows through platform/db only, so it needs nothing from candidate; what it
-		// decides is a fact about company identity, beside logodomain.
+		// formeremployer resolves experience-bank company names to catalogue slugs for the
+		// "Hiring again" filter. It reads the bank through platform/db only; the decision is
+		// company identity, beside logodomain.
 		"formeremployer",
 		"ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
-		// qualityaudit samples the catalogue against the world (is a shown posting live, is a
-		// remote tag honest) and only measures; beside liveness and ghost, it is about whether a
-		// posting is what it claims to be.
+		// qualityaudit samples the catalogue against the world (is a posting live, is a remote
+		// tag honest) and only measures; beside liveness and ghost.
 		"qualityaudit",
-		// logodomain builds the company-name-to-domain map the logo proxy consults. It
-		// is here and not in dict because it is not a dictionary: it reads the stored
-		// company website and whatever spellings the catalogue happens to hold, which
-		// are facts about companies and postings — the same footing as wikicompany
-		// below.
+		// logodomain builds the company-name-to-domain map the logo proxy uses. It is not a
+		// dictionary: it reads stored company websites and catalogue spellings, like wikicompany.
 		"logodomain",
 		"outboundurl", "privatejob",
 		// recentfeed polls recent_feed_outbox and groups the batch by
-		// jobhash.NormalizedRoleTitle for the homepage's live "recently added"
-		// feed. It lives here rather than in api because grouping recently
-		// ingested postings by role is a fact about postings, not a transport
-		// concern - api (layer 8) imports it to start the poller and serve the
-		// SSE endpoint, the same relationship it has with jobview.
+		// jobhash.NormalizedRoleTitle for the homepage feed. Grouping postings by role is a fact
+		// about postings, not transport; api imports it to start the poller and serve SSE.
 		"recentfeed",
-		// reqextract reads a posting's requirements out of its own description markup
-		// and returns them in the enrichment contract's shape, so it takes enrich the
-		// way jobview does — the block below it, not the model.
+		// reqextract reads a posting's requirements from its description markup into the
+		// enrichment contract's shape, so it takes enrich the way jobview does.
 		"reqextract",
-		// salaryextract reads a labeled salary line out of the description. It is the
-		// read-path fill for a posting the model has not priced, the same footing as
-		// reqextract: a fact the posting states, not a guess at any number in it.
+		// salaryextract reads a labeled salary line from the description, the read-path fill for
+		// a posting the model has not priced; a fact the posting states, like reqextract.
 		"salaryextract",
-		// searchping announces a posting's public URL to the external search engines
-		// that accept being told (Google's Indexing API, IndexNow). It is here and not
-		// in search because search is OUR index — Meilisearch, the drain, saved
-		// searches — while this is a fact about a posting's public address and reaches
-		// no further than platform. Which postings are eligible lives in the SQL beside
-		// the query, so nothing above needs to be imported to decide it.
+		// searchping tells external engines (Google Indexing API, IndexNow) a posting's public
+		// URL. It is not in search, which is OUR index (Meilisearch); it reaches no further than
+		// platform. Eligibility lives in the SQL beside the query.
 		"searchping",
 		"silence", "verdict", "ycdir",
-		// wikicompany resolves a company name against Wikidata/Wikipedia's public APIs
-		// for the company-info-wikipedia-backfill worker — a fact-lookup about a
-		// company, the same footing as ycdir, not an AI/enrichment concern.
+		// wikicompany resolves a company name against Wikidata/Wikipedia for the
+		// company-info-wikipedia-backfill worker: a fact lookup, like ycdir, not an AI concern.
 		"wikicompany",
 	},
 	"application": {
@@ -213,86 +152,62 @@ var blocks = map[string][]string{
 		"embedprogress", "facetidx", "facetsnapshot", "savedsearch", "search", "searchdrain", "searchintent",
 		"serveprobe", "suggest",
 	},
-	// catalogstats is here, not in job, because it imports nothing from job at all: it
-	// takes cache, db and testdb from platform, sources from here, and reaches the
-	// catalogue's row counts through an injected Estimator. Its two headline figures are
-	// facts about the adapter registry — how many places the crawler can read, and how many
-	// of those are ATS platforms — and both are computed in-process on the READ path too
-	// (load.go), so they cannot be handed over in the snapshot.
+	// catalogstats is here, not in job, because it imports nothing from job: it takes cache,
+	// db and testdb from platform, sources from here, and row counts through an injected
+	// Estimator. Its headline figures are facts about the adapter registry and are also
+	// computed in-process on the READ path (load.go), so the snapshot cannot carry them.
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
 		"catalogstats", "contribution", "directapply", "employer", "ingestsched", "jdresolve", "linkimport",
 		"linksource", "moderation", "pipeline", "rederive", "screeninganswers", "sources", "sourcestats",
 		"submission", "sweep", "telegram",
 	},
-	// socialdigest is here and not in ingest because it is outbound engagement — the
-	// same shape as broadcast and notify, differing only in that its audience is the
-	// public rather than an account. It reads the catalogue (job) and the view rollup
-	// (application), both below it.
-	// discordlink is here rather than beside billing for the same reason: what it does is
-	// outbound engagement (a role on a community server), and it reaches identity/billing
-	// only to ask which tier an account holds. Placing it in identity would invert that —
-	// billing would import a community integration — and the guard would say so.
+	// socialdigest is outbound engagement like broadcast and notify, with a public audience.
+	// It reads the catalogue (job) and the view rollup (application).
+	// discordlink is outbound engagement (a community-server role) and reaches
+	// identity/billing only to ask an account's tier; in identity it would invert that.
 	"engage": {
 		"broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "discordlink", "emailevents", "emailnotify", "emailprefs",
-		// limitnudge is outbound engagement like prowelcome below, and needs even less
-		// reach than it: the trigger (a free-tier plan-ceiling refusal) is written by
-		// internal/ai/plan.Store directly into plan_limit_hits, so this package never
-		// imports ai/plan at all — only its own candidate query over that table and users.
+		// limitnudge is outbound engagement like prowelcome. The trigger (a free-tier ceiling
+		// refusal) is written by ai/plan.Store into plan_limit_hits, so it never imports ai/plan.
 		"limitnudge",
-		// maildaily is the one-optional-letter-a-day claim the four optional senders share
+		// maildaily is the one-optional-letter-a-day claim shared by the four optional senders
 		// (onboarding, limitnudge, broadcast, cvlifecycle); cvlifecycle is the CV letters
-		// sequence. Both are engage: they exist to reach the user, and read candidate,
-		// identity and search the way the other engage senders do.
+		// sequence. Both exist to reach the user.
 		"maildaily", "cvlifecycle",
 		"linkedinauth", "mailpreview", "mentorship", "messaging",
-		// mentorship/busysync is named in full, per the auth/oauth convention: it is a
-		// sub-package of mentorship and takes its parent's block, but the sync worker
-		// reaches into application (gmailsync) the way mentorship itself does for the
-		// calendar-write consent, so it is listed rather than left implicit.
+		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
+		// reaches into application (gmailsync) as mentorship does for calendar-write consent.
 		"mentorship/busysync",
 		"inboxdigest", "notify", "nudge", "onboarding", "problemreport",
-		// ga4mp sends one sign-up event to Google Analytics from the server. It imports
-		// nothing but the standard library and is called by the auth handlers; it sits in
-		// engage because the event is a growth measurement, like prowelcome and referral.
+		// ga4mp sends one sign-up event to Google Analytics, imports only the standard library,
+		// and is called by the auth handlers; a growth measurement, so engage.
 		"ga4mp",
-		// processreport holds candidate-reported facts about how a company hires (today:
-		// that it screens with an AI interviewer). It sits beside companyfeedback and not
-		// in job, because what it stores is what a PERSON reported, not a property the
-		// catalogue derived — the same reason report and vote are here.
+		// processreport holds candidate-reported facts about how a company hires (today: an AI
+		// interviewer). It sits beside companyfeedback, not in job: it stores what a PERSON
+		// reported, not a derived property.
 		"processreport", "pushnotify",
-		// prowelcome is here rather than beside billing for the same reason discordlink
-		// is: it is outbound engagement (a one-time email), not subscription logic. It
-		// reads a tier resolved elsewhere (plan.TierOf, same as discordlink) and never
-		// imports identity/billing at all — the reconciling worker that calls it reads
-		// the entitlement columns directly.
+		// prowelcome is outbound engagement (a one-time email), not subscription logic. It reads
+		// a tier resolved by plan.TierOf and never imports identity/billing.
 		"prowelcome",
 		"referral", "reminder", "report",
-		// slots is the pure availability engine (rules, expansion, slicing) that mentorship
-		// and buddy mock interviews both compute with. It imports nothing but the standard
-		// library; it sits in engage because both of its callers do.
+		// slots is the pure availability engine (rules, expansion, slicing) shared by mentorship
+		// and buddy mock interviews; standard library only.
 		"slots",
 		"socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},
-	// atsapply and candidateprofile sit here, not lower, because both need to reach
-	// ingest (applyform, screeninganswers) as well as candidate (experience, cv,
-	// resumeextract) — the only layer above ingest is api. candidateprofile was carved
-	// out of handler itself (the extension-autofill path and cmd/auto-apply share one
-	// assembler), so it keeps handler's own reach; atsapply is cmd/auto-apply's
-	// counterpart to handler — the orchestration layer a cron entrypoint composes
-	// ingest+candidate+ai through, the same role handler plays for an HTTP request.
-	// ojcp is the projection into the Open Job Context Protocol's wire shapes. It sits in
-	// api rather than in job beside jobview because it is a foreign schema's rendering of
-	// our catalogue, not a shape the catalogue itself owns — and because it reads job,
-	// ingest (the captured apply form) and search together, which only api may do.
-	// mcpapp is the OTHER MCP server — the one the ChatGPT app is built on. It is not a
-	// variant of ojcpmcp and does not import it: that one renders OJCP's schema for agents
-	// that branch on error codes, this one renders ours for a language model that reads
-	// prose. Both are adapters over the same Reader the handlers satisfy, which is why they
-	// sit in the same block rather than one reaching for the other.
-	// apigen is generated from typespec/ by ogen (`make api-contract`): the server half of
-	// the HTTP contract, implemented by handler. It imports nothing of ours.
+	// atsapply and candidateprofile sit here because both reach ingest (applyform,
+	// screeninganswers) and candidate; only api is above ingest. candidateprofile was carved
+	// out of handler (extension autofill and cmd/auto-apply share it); atsapply is cmd/auto-apply's
+	// counterpart to handler.
+	// ojcp renders our catalogue in the Open Job Context Protocol's wire shapes; it reads job,
+	// ingest and search together, which only api may do.
+	// mcpapp is the ChatGPT app's MCP server. It does not import ojcpmcp: that renders OJCP's
+	// schema for agents that branch on error codes, this one renders ours for a model that
+	// reads prose. Both adapt the same Reader.
+	// apigen is generated from typespec/ by ogen (`make api-contract`) and implemented by
+	// handler. It imports nothing of ours.
 	"api": {"apigen", "atsapply", "candidateprofile", "handler", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "realtime"},
 }
 

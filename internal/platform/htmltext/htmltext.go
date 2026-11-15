@@ -19,16 +19,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// maxInputRunes bounds request-facing conversions. Callers can supply a full stored
-// description, and neither third-party converter bounds its own work, so truncating
-// before conversion caps the cost of repeatedly rendering it on a request path.
+// maxInputRunes bounds request-facing conversions: neither converter bounds its own work, so
+// truncating first caps the cost of rendering a full description on a request path.
 const maxInputRunes = 50_000
 
-// cacheCapacity bounds the memory each per-format result cache can hold. A description
-// rarely changes, so the same content is very likely to be converted again — the same
-// job appears across multiple search-result pages, and AgentSearchJobs is public and
-// unauthenticated. Caching by content hash rather than by job id means a changed
-// description is simply a cache miss, with no invalidation to get wrong.
+// cacheCapacity bounds each per-format result cache. The same description is converted again
+// across result pages (AgentSearchJobs is public). Keying by content hash means a changed
+// description is a miss, with no invalidation to get wrong.
 const cacheCapacity = 128
 
 var (

@@ -2,70 +2,45 @@ package config
 
 import "time"
 
-// SearchDrain holds the tuning knobs for the incremental facet-search worker
-// (cmd/search-drain). Meilisearch is configured elsewhere — MEILI_URL/
-// MEILI_MASTER_KEY via the shared Settings (Load) — so this holds only the
-// queue-drain knobs, mirroring config.Embed.
+// SearchDrain holds the queue-drain tuning knobs for the incremental facet-search worker
+// (cmd/search-drain). Meilisearch is configured via the shared Settings.
 type SearchDrain struct {
 	BatchSize    int           // claim wave + index-push batch size (one Meili task per wave)
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
 	MaxAttempts  int           // failed attempts before an entry is dead-lettered
 	CallTimeout  time.Duration // bounds a single batch's index operation
-	// MaxPerRun independently bounds claimed entries from EACH queue; 0 is
-	// unbounded. The drain alternates one wave per queue and stops a queue after
-	// a short claim, allowing incoming trickles to accumulate until the next run.
-	// Deferred waves count toward the budget without spending retry attempts.
-	// Set a cap against measured arrival rates so it does not limit throughput.
+	// MaxPerRun independently bounds claimed entries from each queue; 0 is unbounded. The drain
+	// alternates one wave per queue and stops a queue after a short claim, letting trickles
+	// accumulate. Deferred waves count toward the budget without spending retry attempts. Set it
+	// against measured arrival rates so it does not limit throughput.
 	MaxPerRun int
 }
 
-// LoadSearchDrain reads the worker's tuning from the environment, all optional with
-// defaults. SEARCH_DRAIN_BATCH_SIZE is the wave/batch size — bigger collapses more
-// per-board pushes into fewer, fatter Meili tasks, which is the whole point of this
-// worker (see internal/search/searchdrain). There is no required field — the
-// MEILI_MASTER_KEY requirement is enforced at the cmd/search-drain call site (like
-// cmd/embed), so this never fails.
+// LoadSearchDrain reads the worker's tuning from the environment, all optional.
+// SEARCH_DRAIN_BATCH_SIZE: bigger collapses more per-board pushes into fewer Meili tasks (see
+// internal/search/searchdrain). MEILI_MASTER_KEY is enforced at the call site, so this never fails.
+//
+// A push costs about the same regardless of size, so batch size is throughput. A single push
+// takes 90-180s+ on a large index (whole-index re-merge): CallTimeout is a backstop against a
+// hung call, and too tight a value turns slow successes into per-item retries.
 func LoadSearchDrain() SearchDrain {
 	c := SearchDrain{
-		// 2500, measured rather than guessed. A push costs what it costs almost
-		// regardless of size (see CallTimeout below), so the batch is throughput:
-		// on prod 2026-09-04, with a 136k backlog, 200 rows per push drained a NET
-		// 38/min and the queue grew; 1000 drained 1234/min and it fell. The backlog
-		// had reached 136k with entries two days old, and no new vacancy was
-		// reaching search — a batch of 200 was most of why.
-		//
-		// The 200 was not a considered value either. It was set on the host on
-		// 2026-08-05 as "generous timeout + small batch while re-validating" after
-		// an incident whose actual cause was the client timeout (below), and it
-		// stayed a month after the re-validating ended.
 		BatchSize:    envInt("SEARCH_DRAIN_BATCH_SIZE", 2500),
 		LeaseSeconds: envInt("SEARCH_DRAIN_LEASE_SECONDS", 180),
 		MaxAttempts:  envInt("SEARCH_DRAIN_MAX_ATTEMPTS", 3),
-		// Prod measurement (2026-08-05, ~2.7M-doc jobs index): a single push costs
-		// 90-180s+, dominated by Meilisearch's whole-index re-merge, almost
-		// independent of batch size. 120s was too tight — it misclassified normal,
-		// successful-but-slow batches as failed, which (before the timeout/fallback
-		// split in internal/search/searchdrain.Runner) cascaded into per-item retries and
-		// caused a real outage. This is a genuine backstop against a truly hung call,
-		// not a normal-operation tripwire — set it generously.
-		CallTimeout: time.Duration(envInt("SEARCH_DRAIN_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
-		MaxPerRun:   envInt("SEARCH_DRAIN_MAX_PER_RUN", 0),
+		CallTimeout:  time.Duration(envInt("SEARCH_DRAIN_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
+		MaxPerRun:    envInt("SEARCH_DRAIN_MAX_PER_RUN", 0),
 	}
-	// A non-positive batch size would make the claim's LIMIT 0 (silently no-op) or
-	// feed a negative LIMIT to Postgres; floor it so the worker always makes progress.
+	// A non-positive size would make the claim's LIMIT 0 or negative; floor it.
 	if c.BatchSize < 1 {
 		c.BatchSize = 1
 	}
-	// The lease must outlast a single batch's processing, or an in-flight batch
-	// becomes re-claimable mid-push (double work) and a lease of 0 re-claims a
-	// just-failed entry in a tight loop, burning its whole retry budget in one run.
-	// Floor it to the per-call timeout — the longest one batch can hold the lease.
+	// The lease must outlast one batch, or an in-flight batch is re-claimed mid-push and a lease
+	// of 0 burns the retry budget in a tight loop. Floor it to the per-call timeout.
 	if floor := int(c.CallTimeout.Seconds()); c.LeaseSeconds < floor {
 		c.LeaseSeconds = floor
 	}
-	// A negative cap would read as "unbounded" through outbox's `<= 0` check, which is the
-	// right behaviour but the wrong reason to arrive at it; normalise so the field says what
-	// it means to anything that logs or reports it.
+	// A negative cap already reads as unbounded in outbox; normalise so logs say what it means.
 	if c.MaxPerRun < 0 {
 		c.MaxPerRun = 0
 	}

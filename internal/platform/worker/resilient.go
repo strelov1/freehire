@@ -65,11 +65,10 @@ type liveScanReader struct {
 // NewLiveScanReader adapts a job store to a PageReader over the rows that can still
 // surface: open postings, plus ones closed at or after closedSince.
 //
-// The cutoff is a parameter rather than a constant because the right value depends on
-// what is being re-derived, and the caller is the one that knows. A closed posting is
-// not permanently out of reach — ingest reopens it without rewriting its facets (see
-// the ListLiveJobsByIDAfter comment) — so a reader that stopped at `closed_at IS NULL`
-// would leave stale rows to drift back into the catalogue unannounced.
+// The cutoff is a parameter because the right value depends on what is being re-derived.
+// A closed posting can be reopened by ingest without rewriting its facets (see the
+// ListLiveJobsByIDAfter comment), so stopping at `closed_at IS NULL` would leave stale
+// rows to drift back into the catalogue.
 func NewLiveScanReader(q LiveScanQueries, closedSince time.Time) PageReader {
 	return liveScanReader{q: q, closedSince: closedSince}
 }

@@ -1,29 +1,17 @@
-// Package flexjson makes encoding/json survive a document it would otherwise abandon.
+// Package flexjson makes encoding/json survive a document it would otherwise abandon: it aborts
+// the whole unmarshal on the first wrong-typed field or stray byte, discarding the record.
 //
-// One premise runs through everything here: encoding/json aborts the WHOLE unmarshal on the
-// first thing it dislikes, so a single wrong-typed field or a single stray byte silently
-// discards an entire decoded record. The package answers that at two levels.
+// The scalar types (Int, Int64, Float, Bool) coerce number, string and bool at the decode boundary,
+// since LLM output writes a number as a string ("85") and vice versa. Use them in a shadow struct's
+// UnmarshalJSON and copy into plain fields. Non-numeric or empty input yields the zero value.
 //
-// The scalar types (Int, Int64, Float, Bool) handle a value of the wrong JSON type, which is
-// what LLM output produces: models non-deterministically write a number as a string ("85"), a
-// string as a number, a bool as "true"/1. They coerce number<->string<->bool at the decode
-// boundary; use them in a shadow struct's UnmarshalJSON and copy into the plain exported
-// fields, so the contract and every consumer stay untouched. Non-numeric or empty input
-// yields the zero value rather than an error (a best-effort field is better dropped than
-// crashing the record).
+// SanitizeControlChars runs earlier, over the bytes, for scraped HTML that interpolates raw text
+// into a JSON string literal without escaping newlines.
 //
-// SanitizeControlChars handles a byte no decoder should have been handed, which is what
-// scraped HTML produces: a page that template-renders embedded JSON by interpolating raw
-// text into a string literal without escaping its newlines. It runs one layer earlier, over
-// the bytes, before any decode. Its callers are HTML adapters, not model output — the shared
-// subject is the abandonment, not where the document came from.
-//
-// Siblings with deliberately DIFFERENT semantics keep their own package-local types, named
-// and commented to mark the difference: internal/ai/enrich (stringOrFirst / sliceOrWrap —
-// scalar<->array slips, which flexjson does not cover; roundInt — strict number-only, so a
-// string fails the decode instead of silently coercing), internal/candidate/resumeextract
-// (verbatimString — a bare scalar kept as written, not coerced; truncInt — leading integer,
-// truncating where flexjson.Int rounds).
+// Siblings with different semantics keep their own package-local types: internal/ai/enrich
+// (stringOrFirst / sliceOrWrap for scalar<->array slips; roundInt, strict number-only) and
+// internal/candidate/resumeextract (verbatimString keeps a bare scalar as written; truncInt
+// truncates where flexjson.Int rounds).
 package flexjson
 
 import (

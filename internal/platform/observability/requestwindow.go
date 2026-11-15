@@ -5,15 +5,9 @@ import (
 	"time"
 )
 
-// requestWindow tracks a short rolling window of total/5xx request counts,
-// bucketed per minute, so a caller can answer "what fraction of requests
-// failed in the last N minutes" without querying Prometheus.
-//
-// It exists for the public /api/v1/status page: unlike the Prometheus
-// counters above (persistent, scraped externally into a separate system),
-// this state is deliberately in-process and reset on deploy — the page is
-// reporting on the process serving it, not a historical record, and that
-// process is by definition live if it's the one answering the request.
+// requestWindow tracks a short rolling window of total/5xx request counts, bucketed per
+// minute, so the public /api/v1/status page can report a recent error fraction without
+// querying Prometheus. In-process and reset on deploy: it describes the serving process.
 type requestWindow struct {
 	mu      sync.Mutex
 	buckets []requestBucket
@@ -25,19 +19,12 @@ type requestBucket struct {
 	errors int64
 }
 
-// maxBucketAge bounds how long a bucket is kept, independent of the caller's
-// own query window. errorRate() prunes on every call, which is enough as
-// long as something polls it — but pruning ONLY there means a window that
-// goes unpolled (a misconfigured monitor, a deprioritized endpoint) grows
-// buckets forever while requests keep arriving. record() enforces this same
-// ceiling on every write so the window is bounded either way. Generous
-// relative to the 10-minute window /api/v1/status actually queries, so it
-// never trims data a real caller still wants.
+// maxBucketAge bounds how long a bucket is kept, independent of the caller's query window.
+// record() enforces it on every write so an unpolled window cannot grow forever; it is
+// generous relative to the 10-minute window /api/v1/status queries.
 const maxBucketAge = time.Hour
 
-// site is the process-wide window the status handler reads. A single
-// instance is enough: like the Prometheus counters, request accounting is
-// global to the process, not scoped per caller.
+// site is the process-wide window the status handler reads.
 var site = &requestWindow{}
 
 // RecordRequest tallies one response by its HTTP status code (>=500 counts
@@ -94,9 +81,6 @@ func (w *requestWindow) errorRate(window time.Duration, now time.Time) (rate flo
 }
 
 // pruneLocked drops every bucket older than cutoff. Callers must hold w.mu.
-// Shared by record() (bounding memory even when nothing ever reads the
-// window) and errorRate() (which additionally uses the query's own,
-// narrower window as its cutoff).
 func (w *requestWindow) pruneLocked(cutoff time.Time) {
 	kept := w.buckets[:0]
 	for _, b := range w.buckets {

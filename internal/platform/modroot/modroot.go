@@ -1,12 +1,8 @@
 // Package modroot locates the module root by walking up from the working directory to the
 // directory holding go.mod.
 //
-// It exists for the handful of tests that police a rule across the whole repository — that
-// only one package classifies a SQLSTATE, that background entrypoints never resolve a
-// user's LLM credential, that every pool-opening command shares one bootstrap. Each walks
-// a tree rooted somewhere above its own package, and each used to count "../" to get
-// there. A counted depth is silent when it is wrong in the safe-looking direction: the
-// walk simply covers less of the repo and the guard keeps passing.
+// Used by tests that police a rule across the whole repository. A counted "../" depth is
+// silent when wrong: the walk just covers less of the repo and the guard keeps passing.
 package modroot
 
 import (

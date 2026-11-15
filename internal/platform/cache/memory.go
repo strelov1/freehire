@@ -7,16 +7,13 @@ import (
 	"time"
 )
 
-// Memory is an in-process Cache. It exists for two callers: tests, which want a Cache
-// without a Redis backend, and a deployment running without Redis at all.
+// Memory is an in-process Cache for tests and for deployments without Redis.
 //
-// It is deliberately not a general-purpose cache — there is no eviction, so it suits a
-// bounded set of long-lived keys (the catalogue-scale snapshot is one key) and not an
-// unbounded keyspace. Expired entries are dropped when their key is read.
+// There is no eviction, so it suits a bounded set of long-lived keys, not an unbounded
+// keyspace. Expired entries are dropped when their key is read.
 //
-// A Memory is per-process, so two processes holding one do not agree with each other.
-// Where that matters — a figure published to users, which must not differ between two
-// web processes or reset on deploy — RedisCache is the implementation to use.
+// It is per-process, so two processes disagree. Use RedisCache for anything published to
+// users that must not differ between processes or reset on deploy.
 type Memory struct {
 	mu      sync.RWMutex
 	entries map[string]memoryEntry
@@ -45,8 +42,7 @@ func (m *Memory) Get(_ context.Context, key string) ([]byte, bool, error) {
 	}
 
 	if !m.now().Before(entry.expiresAt) {
-		// Drop it rather than leaving a dead entry pinning its value. Re-checking
-		// under the write lock keeps a concurrent Set from being discarded.
+		// Re-check under the write lock so a concurrent Set is not discarded.
 		m.mu.Lock()
 		if cur, still := m.entries[key]; still && !m.now().Before(cur.expiresAt) {
 			delete(m.entries, key)
@@ -55,10 +51,7 @@ func (m *Memory) Get(_ context.Context, key string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 
-	// Copy out for the same reason Set copies in: RedisCache round-trips through a
-	// socket, so its callers cannot reach its stored bytes. Memory must not be the
-	// implementation where they can, or code exercised against Memory in tests would
-	// behave differently against Redis in production.
+	// Copy out, as Set copies in: callers must not reach stored bytes, as with RedisCache.
 	return bytes.Clone(entry.val), true, nil
 }
 

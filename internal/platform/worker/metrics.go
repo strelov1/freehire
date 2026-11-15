@@ -12,11 +12,8 @@ import (
 // PromTextfileDirEnv names the environment variable that turns on per-run
 // Prometheus metrics for cron workers, written as a node_exporter textfile-
 // collector file (https://github.com/prometheus/node_exporter#textfile-collector).
-// A worker is a run-once-and-exit process — there is nothing for Prometheus to
-// scrape between runs — so this is the pull-model equivalent for it, reusing the
-// node_exporter already deployed on host-2 rather than standing up a
-// Pushgateway. Unset disables it, matching this repo's other optional,
-// env-gated integrations (OTLP, S3, search).
+// A worker exits after each run, so there is nothing to scrape between runs; this reuses
+// node_exporter instead of a Pushgateway. Unset disables it.
 const PromTextfileDirEnv = "PROM_TEXTFILE_DIR"
 
 // writeRunMetrics records the outcome of one worker run as a
@@ -24,8 +21,7 @@ const PromTextfileDirEnv = "PROM_TEXTFILE_DIR"
 // label is the running binary's name (os.Args[0]); when the binary was invoked
 // with a trailing path-like argument (cmd/ingest's per-board source file,
 // `sources/<board>.yml`), that argument's base name (extension stripped) becomes
-// the instance label, so ~140 independently-timered ingest boards land in
-// distinct series instead of overwriting one shared file. Errors are logged, not
+// the instance label, so each ingest board gets its own series. Errors are logged, not
 // fatal — a metrics file failing to write must not fail the worker's actual job.
 func writeRunMetrics(runDuration time.Duration, exitCode int) {
 	dir := os.Getenv(PromTextfileDirEnv)
@@ -97,11 +93,9 @@ freehire_worker_paused{%s} %d
 // RunMetricsFilename reports the textfile-collector file this process's run
 // outcome lands in: the binary's name, plus any board instance, plus ".prom".
 //
-// Exported because Main writes that file AFTER run() returns (main.go:29-30), so
-// a worker that ALSO publishes a textfile of its own would have its payload
-// silently overwritten on every single run if it picked the same name. A worker
-// in that position must own a distinct filename and assert it — see
-// cmd/queue-metrics.
+// Exported because Main writes that file AFTER run() returns, so a worker that also
+// publishes a textfile of its own must use a distinct filename and assert it, or its
+// payload is overwritten every run (see cmd/queue-metrics).
 func RunMetricsFilename() string {
 	name := filepath.Base(os.Args[0])
 	if instance := runInstance(os.Args[1:]); instance != "" {
@@ -116,12 +110,9 @@ func RunMetricsFilename() string {
 // publish at all — this writes unconditionally, so a worker gated on an unset
 // PROM_TEXTFILE_DIR must return before calling it.
 //
-// Write-then-rename: the textfile collector polls the directory on its own
-// schedule and skips a file it fails to fully parse, but a half-written file
-// (the worker killed mid-write) could still be picked up mid-write and read as
-// garbage. Renaming into place is atomic on the same filesystem, so the
-// collector only ever sees the old file or the complete new one — and a failed
-// write leaves the last good file untouched rather than truncating it.
+// Write-then-rename: renaming into place is atomic on the same filesystem, so the
+// collector never reads a half-written file, and a failed write leaves the last good
+// file untouched.
 func WriteTextfile(dir, name, body string) error {
 	path := filepath.Join(dir, name)
 	tmp := path + ".tmp"
