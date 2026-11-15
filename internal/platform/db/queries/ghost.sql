@@ -15,8 +15,9 @@
 -- the employer answered somewhere we cannot see. Absence of a reply is evidence only
 -- where a reply would have been observed.
 --
--- last_activity_at and has_pending_suggestion mirror ListTrackedJobs deliberately:
--- one definition of "when did this application last move", not two.
+-- last_activity_at (apply date, linked incoming mail, the employer's freehire pipeline moves)
+-- and has_pending_suggestion mirror ListTrackedJobs deliberately: one definition of "when did
+-- this application last move", not two.
 -- job_id is nullable on applications, but the filter below matches it against a page of
 -- real ids, so a row that reaches the select always carries one.
 SELECT a.job_id::bigint AS job_id,
@@ -27,7 +28,13 @@ SELECT a.job_id::bigint AS job_id,
                    FROM emails e
                   WHERE e.user_id = a.user_id
                     AND e.job_id = a.job_id
-                    AND e.deleted_at IS NULL AND e.direction = 'incoming'))::timestamptz AS last_activity_at,
+                    AND e.deleted_at IS NULL AND e.direction = 'incoming'),
+                (SELECT max(ev.occurred_at)
+                   FROM application_events ev
+                  WHERE ev.application_id = a.id
+                    AND ev.kind = 'stage_set'
+                    AND ev.source = 'employer'
+                    AND ev.retracted_at IS NULL))::timestamptz AS last_activity_at,
        (EXISTS (SELECT 1
                   FROM emails e
                  WHERE e.user_id = a.user_id

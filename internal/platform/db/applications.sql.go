@@ -133,15 +133,22 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
           FROM emails e
          WHERE e.application_id = a.id
            AND e.deleted_at IS NULL AND e.direction = 'incoming') AS email_count,
-       -- Same last-activity rule as the posting-backed rows: the apply date, or the newest
-       -- linked message when that is later. Mail is reached through the application, never
-       -- through the posting, which no longer exists.
+       -- Same last-activity rule as the posting-backed rows: the apply date, the newest
+       -- linked message, or the employer's newest freehire pipeline move, whichever is
+       -- latest. Mail and events are reached through the application, never through the
+       -- posting, which no longer exists.
        (CASE WHEN a.applied_at IS NOT NULL THEN
           GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.application_id = a.id
-                       AND e.deleted_at IS NULL AND e.direction = 'incoming'))
+                       AND e.deleted_at IS NULL AND e.direction = 'incoming'),
+                   (SELECT max(ev.occurred_at)
+                      FROM application_events ev
+                     WHERE ev.application_id = a.id
+                       AND ev.kind = 'stage_set'
+                       AND ev.source = 'employer'
+                       AND ev.retracted_at IS NULL))
         END)::timestamptz AS last_activity_at
   FROM applications a
  WHERE a.user_id = $1
