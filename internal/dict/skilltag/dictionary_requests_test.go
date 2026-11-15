@@ -49,3 +49,16 @@ func TestRequestedSkills(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestedOccupationalSkillsDoNotCorroborateTech(t *testing.T) {
+	for _, term := range []string{"Lightroom", "Etix", "data reconciliation", "SOP development", "event ticketing", "box office management", "POS terminals", "CCTV", "structured cabling"} {
+		t.Run(term, func(t *testing.T) {
+			got := Parse(term + ": pick up the slack, sketch out staffing plans for the assembly line.")
+			for _, unwanted := range []string{"slack", "sketch", "assembly"} {
+				if slices.Contains(got, unwanted) {
+					t.Errorf("Parse emitted unrelated %q: %v", unwanted, got)
+				}
+			}
+		})
+	}
+}

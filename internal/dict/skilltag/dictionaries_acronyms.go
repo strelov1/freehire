@@ -9,6 +9,17 @@ import "slices"
 // requirement).
 var nonCorroboratingPhrases = func() map[string]bool {
 	out := map[string]bool{
+		// Occupational tools and duties do not establish a software toolchain.
+		"lightroom":             true,
+		"etix":                  true,
+		"data-reconciliation":   true,
+		"sop-development":       true,
+		"event-ticketing":       true,
+		"box-office-management": true,
+		"pos-terminals":         true,
+		"cctv":                  true,
+		"structured-cabling":    true,
+
 		// An electrician installs "sieci komputerowe" too.
 		"networking":                     true,
 		"technical-seo":                  true,
