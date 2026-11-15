@@ -58,7 +58,7 @@ func run() int {
 	storeCfg := billing.RevenueCatConfigFromEnv()
 	if !stripeCfg.Enabled() && !storeCfg.Enabled() {
 		log.Print("billing-sync: no billing provider is configured, nothing to reconcile")
-		return worker.Skip("STRIPE_OR_REVENUECAT")
+		return worker.Skip("STRIPE_SECRET_KEY+STRIPE_WEBHOOK_SECRET+STRIPE_PRICE_IDS+REVENUECAT_API_KEY+REVENUECAT_WEBHOOK_SECRET+REVENUECAT_ENTITLEMENT")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
