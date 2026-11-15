@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Provide a public, accurate reference for the freehire HTTP API — generated from a
-single typed source so the rendered website pages and the repo `docs/API.md`/
-`docs/API.internal.md` cannot drift — covering every endpoint, the response
+Provide a public, accurate reference for the freehire HTTP API — generated from the
+HTTP contract (`typespec/`, compiled to `openapi/api.openapi.json`) so the rendered
+website pages, the repo `docs/API.md`/`docs/API.internal.md` and the ChatGPT Actions
+schema cannot drift from the API the server serves — covering every endpoint, the response
 envelope, and the job-search filter vocabulary, with a focus on querying jobs by
 filters.
 
@@ -17,52 +18,52 @@ reference (`/docs/api`) and an internal one (`/docs/api/internal`), generated
 from the same source so the two can never disagree about which endpoint belongs
 where.
 ## Requirements
-### Requirement: Single typed source of truth for API docs
+### Requirement: The HTTP contract is the source of the API docs
 
-The system SHALL describe the whole API as typed data in a single module
-(`web/src/lib/docs/api-spec.ts`) from which both rendered pages, both generated
-OpenAPI documents, and both `docs/API.md`/`docs/API.internal.md` files are
-produced, so the six representations cannot drift. Each endpoint's declared
-`auth` level SHALL be the sole input deciding which of the two documents it
-appears in: `none` and `cookie-or-key` (reachable from outside the browser) go
-to the external document; `cookie`, `moderator`, and `extension` (reachable only
-with the browser's own session cookie) go to the internal one. A group left
-with no endpoints for a given audience SHALL NOT appear in that audience's
-document.
+The system SHALL generate every API reference output from the HTTP contract: the
+TypeSpec in `typespec/`, compiled by `make api-contract` to `openapi/api.openapi.json`,
+plus `web/src/lib/docs/api-supplement/*.openapi.json` for the routes the contract does
+not describe (session-cookie auth, SSE streams, binary reads, OJCP). One generator,
+`web/scripts/gen-api-docs.mjs` (`pnpm run gen:api-docs` in `web/`), writes the two
+Scalar documents (`web/src/lib/docs/generated/api-reference*.openapi.json`), both
+Markdown files and `web/static/openapi.yaml`. None of them is edited by hand, and CI
+fails when a committed output differs from what the generator writes.
+
+An operation's audience SHALL come from the contract: an operation an API key or
+nobody can call (`@useAuth(SessionOrKey)`, `@useAuth(NoAuth)`) goes to the external
+document; one that needs the session cookie (the default) goes to the internal one.
+`x-audience` overrides that: `moderator` and `extension` are internal whatever the
+credential, `hidden` is in neither document. The contract's auth SHALL match the
+router's gates (`TestContractAuthMatchesRouter`). A group left with no operations
+for an audience SHALL NOT appear in that audience's document.
 
 #### Scenario: One source feeds all outputs
 
-- **WHEN** an endpoint or parameter is added or edited in `api-spec.ts`
-- **THEN** both generated OpenAPI documents reflect it on next generation, both
-  rendered pages (which render those generated OpenAPI documents) reflect it
-  once regenerated, and re-running the docs generators updates both
-  `docs/API.md` and `docs/API.internal.md` from the same data — with no
-  separate hand-edit of any of the six
+- **WHEN** an operation or parameter is added or edited in `typespec/`
+- **THEN** after `make api-contract` and `gen:api-docs`, both Scalar documents, both
+  Markdown files and `web/static/openapi.yaml` reflect it, with no hand edit of any
 
-#### Scenario: An endpoint's auth level decides its document
+#### Scenario: An operation's auth decides its document
 
-- **WHEN** an endpoint is added to `api-spec.ts` with `auth: 'none'` or
-  `auth: 'cookie-or-key'`
-- **THEN** it appears only in the external document (`/docs/api`,
-  `docs/API.md`) and never in the internal one
+- **WHEN** an operation is declared `@useAuth(NoAuth)` or `@useAuth(SessionOrKey)`
+- **THEN** it appears only in the external document (`/docs/api`, `docs/API.md`)
 
-- **WHEN** an endpoint is added with `auth: 'cookie'`, `auth: 'moderator'`, or
-  `auth: 'extension'`
+- **WHEN** an operation keeps the default cookie auth, or carries
+  `x-audience: moderator` or `x-audience: extension`
 - **THEN** it appears only in the internal document (`/docs/api/internal`,
-  `docs/API.internal.md`) and never in the external one
+  `docs/API.internal.md`)
 
-#### Scenario: Filter vocabulary derives from generated contracts
+#### Scenario: Filter vocabulary derives from the facet source
 
 - **WHEN** the documented job-search filter table is built
-- **THEN** its facet values come from `web/src/lib/generated/contracts.ts` and
-  `web/src/lib/facets.ts` (the existing source of truth mirrored from Go
-  `StringFacets`), not a hand-maintained duplicate list
+- **THEN** its facet values come from `web/src/lib/docs/filters.ts`, which reads
+  `web/src/lib/facets.ts` (the SPA's facet vocabulary), not a hand-maintained duplicate list
 
 ### Requirement: Public API documentation page
 
 The system SHALL serve a server-rendered documentation page at `/docs/api` that
 is publicly accessible (no authentication) and documents every endpoint
-reachable from outside the browser (`auth: 'none'` and `auth: 'cookie-or-key'`).
+reachable from outside the browser (`@useAuth(NoAuth)` and `@useAuth(SessionOrKey)`).
 It SHALL be indexable and linked from navigation.
 
 #### Scenario: Page is reachable and rendered server-side
@@ -81,8 +82,8 @@ It SHALL be indexable and linked from navigation.
 
 The system SHALL serve a server-rendered documentation page at
 `/docs/api/internal` that documents every endpoint reachable only with the
-browser's own session cookie (`auth: 'cookie'`, `auth: 'moderator'`, and
-`auth: 'extension'`) — none of which a personal API key or an anonymous request
+browser's own session cookie (the contract's default cookie auth, and
+`x-audience: moderator` / `extension`) — none of which a personal API key or an anonymous request
 can call. The page SHALL be reachable by direct link but SHALL NOT be indexed
 by search engines and SHALL NOT be linked from site navigation, the footer, or
 any agent-facing landing page, since nothing documented there is callable by an
@@ -121,13 +122,15 @@ requires a session cookie **and** a proof of recent credential control is unreac
 script by design: every scripted attempt answers `428` regardless of what the reader does, so
 documenting it — and in particular offering a copyable curl for it — describes a request that
 cannot succeed. The API-key management endpoints (`POST`, `GET` and `DELETE` under
-`/me/api-keys`) are such endpoints and SHALL be omitted from the endpoint reference.
+`/me/api-keys`) are such endpoints and SHALL be omitted from the endpoint reference
+(`x-audience: hidden` in the contract).
 
 Where such an endpoint is omitted, the documentation SHALL say so in its "what is not here"
 section rather than leave the reader to notice the absence, SHALL state why calling it directly
 is not possible, and SHALL name the product surface that performs the action, with a link to it.
 
-`web/static/openapi.yaml` is the integration contract, so every endpoint that
+`web/static/openapi.yaml` (the ChatGPT Actions schema, generated as above, keeping its
+operationIds and the Actions length limits) is the integration contract, so every endpoint that
 declares `experience_years_min` SHALL also declare its companion
 `experience_years_max`. The two SHALL be documented as a pair whose meaning is a
 range over the posting's stated experience requirement, and the documentation SHALL
@@ -142,7 +145,7 @@ state that either bound excludes postings that state no requirement.
 
 #### Scenario: Deprecated endpoint is marked with its replacement
 
-- **WHEN** an endpoint in `api-spec.ts` is marked deprecated with a replacement
+- **WHEN** an operation in the contract is marked `#deprecated` with a replacement
 - **THEN** the documentation displays it as deprecated and states which
   endpoint replaces it
 
@@ -178,14 +181,14 @@ state that either bound excludes postings that state no requirement.
 
 The system SHALL provide a generator script (run via a `gen:api-docs` npm
 script) that writes both `docs/API.md` (external) and `docs/API.internal.md`
-(internal) from the typed spec data. Each generated file SHALL carry a header
+(internal) from the contract. Each generated file SHALL carry a header
 marking it as generated and not to be hand-edited.
 
 #### Scenario: Generator produces both Markdown files
 
 - **WHEN** `gen:api-docs` is run
 - **THEN** `docs/API.md` and `docs/API.internal.md` are each written from
-  `api-spec.ts`, each split per the endpoint `auth` rule above, and each
+  the contract, each split per the audience rule above, and each
   begins with a "generated — do not edit" header
 
 #### Scenario: Regeneration is idempotent
