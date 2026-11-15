@@ -1,0 +1,92 @@
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+spec = importlib.util.spec_from_file_location(
+    "recovery", Path(__file__).with_name("pageup-clinch-recovery.py")
+)
+recovery = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(recovery)
+
+
+class RecoveryTest(unittest.TestCase):
+    def setUp(self):
+        self.rows = [
+            dict(
+                provider="pageup",
+                board=board,
+                company=name,
+                region="",
+                hub=False,
+                tenants={},
+            )
+            for board, name in [("893", "Mader Group"), ("784", "Armaguard Group")]
+        ]
+
+    def test_additions_preserve_company_and_repeat_is_empty(self):
+        commands = recovery.additions(self.rows)
+        self.assertEqual(len(commands), 2)
+        self.assertIn("--company=Mader Group", commands[0])
+        for row in list(self.rows):
+            self.rows.append(
+                dict(row, provider="clinch", board=recovery.DESTINATIONS[row["board"]])
+            )
+        self.assertEqual(recovery.additions(self.rows), [])
+
+    def test_conflicting_destination_aborts_entire_plan(self):
+        self.rows.append(
+            dict(
+                self.rows[0],
+                provider="clinch",
+                board=recovery.DESTINATIONS["893"],
+                company="Other",
+            )
+        )
+        with self.assertRaises(ValueError):
+            recovery.additions(self.rows)
+
+    def test_missing_origin_or_unexpected_metadata_aborts(self):
+        with self.assertRaises(ValueError):
+            recovery.additions(self.rows[:1])
+        self.rows[0]["hub"] = True
+        with self.assertRaises(ValueError):
+            recovery.additions(self.rows)
+
+    def test_dry_run_reads_catalog_without_running_writer(self):
+        response = subprocess.CompletedProcess([], 0, json.dumps(self.rows))
+        output = io.StringIO()
+        with (
+            patch.dict(os.environ, DATABASE_URL="postgresql:///hire"),
+            patch.object(sys, "argv", ["recovery"]),
+            patch.object(recovery.subprocess, "run", return_value=response) as run,
+            redirect_stdout(output),
+        ):
+            recovery.main()
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(
+            run.call_args.args[0][:3], ["psql", "--dbname", "postgresql:///hire"]
+        )
+        self.assertIn("BEGIN READ ONLY", run.call_args.args[0][-1])
+        self.assertNotIn("--apply", output.getvalue())
+
+    def test_database_error_does_not_print_connection_credentials(self):
+        response = subprocess.CompletedProcess([], 2, "", "connection failed")
+        with (
+            patch.dict(os.environ, DATABASE_URL="postgresql://user:secret@host/hire"),
+            patch.object(sys, "argv", ["recovery"]),
+            patch.object(recovery.subprocess, "run", return_value=response),
+            self.assertRaises(RuntimeError) as caught,
+        ):
+            recovery.main()
+        self.assertNotIn("secret", str(caught.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

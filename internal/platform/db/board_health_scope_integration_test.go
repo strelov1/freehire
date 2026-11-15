@@ -75,4 +75,23 @@ func TestProviderHealthQuietFreshnessKeepsActualSuccess(t *testing.T) {
 	if err != nil || !rolls[0].FreshnessAt.Time.Equal(r.LastSuccessAt.Time) || rolls[0].CooledBoards != 1 {
 		t.Fatalf("failed quiet rollup = %+v, %v", rolls, err)
 	}
+	if _, err := q.RecordBoardFailure(ctx, RecordBoardFailureParams{
+		Provider: "ukg", Board: "quiet", LastError: pgtype.Text{String: "upstream refused", Valid: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if cleared, err := q.ClearProviderCooldowns(ctx, "ukg"); err != nil || cleared != 1 {
+		t.Fatalf("cleared = %d, %v", cleared, err)
+	}
+	rolls, err = q.ProviderHealthRollup(ctx)
+	if err != nil || len(rolls) != 1 || !rolls[0].FreshnessAt.Time.Equal(r.LastSuccessAt.Time) {
+		t.Fatalf("cleared cooldown must not restore quiet freshness: %+v, %v", rolls, err)
+	}
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{Provider: "ukg", Board: "quiet"}); err != nil {
+		t.Fatal(err)
+	}
+	rolls, err = q.ProviderHealthRollup(ctx)
+	if err != nil || len(rolls) != 1 || time.Since(rolls[0].LastSuccessAt.Time) > time.Minute {
+		t.Fatalf("actual successful retry must restore freshness: %+v, %v", rolls, err)
+	}
 }

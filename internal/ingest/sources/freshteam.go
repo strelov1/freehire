@@ -144,6 +144,7 @@ func ftRenderedPosting(root *html.Node) (ftPosting, bool) {
 	}
 	title := firstByClass(header, "brand-color")
 	var body strings.Builder
+	var hasText bool
 	for n := content.FirstChild; n != nil; n = n.NextSibling {
 		if strings.HasPrefix(textContent(n), "Liquid error:") {
 			continue
@@ -151,8 +152,11 @@ func ftRenderedPosting(root *html.Node) (ftPosting, bool) {
 		if err := html.Render(&body, n); err != nil {
 			return ftPosting{}, false
 		}
+		if collapseSpace(textContent(n)) != "" {
+			hasText = true
+		}
 	}
-	if title == nil || textContent(title) == "" || strings.TrimSpace(body.String()) == "" {
+	if title == nil || collapseSpace(textContent(title)) == "" || !hasText {
 		return ftPosting{}, false
 	}
 	p := ftPosting{Title: textContent(title), Description: body.String()}

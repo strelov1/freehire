@@ -217,3 +217,12 @@ func TestFreshteamReadsRenderedDetailWhenTemplateBreaksJSONLD(t *testing.T) {
 		t.Fatalf("rendered posting = %+v, readable=%v", job, ok)
 	}
 }
+
+func TestFreshteamRenderedMarkupWithoutTextIsUnreadable(t *testing.T) {
+	page := `<div id="job-details-header"><h1 class="brand-color">Engineer</h1></div><div class="job-details-content"><div></div></div>`
+	fake := (&routedHTTP{}).route("/jobs/abcdefghijkl/engineer", page)
+	job, ok := NewFreshteam(fake).(freshteam).detail(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"}, "https://acme.freshteam.com/jobs/abcdefghijkl/engineer")
+	if !ok || !job.Unreadable {
+		t.Fatalf("empty rendered posting accepted: ok=%v unreadable=%v", ok, job.Unreadable)
+	}
+}

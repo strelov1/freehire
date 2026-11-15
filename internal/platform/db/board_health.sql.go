@@ -484,6 +484,7 @@ SELECT
     max(last_success_at)::timestamptz AS last_success_at,
     -- Internal policy only: a successful quiet pause can outlast the 48h freshness window.
     max(CASE WHEN quiet_until > now() AND consecutive_failures = 0 AND last_success_at IS NOT NULL
+                  AND (last_error_at IS NULL OR last_success_at > last_error_at)
              THEN now() ELSE last_success_at END)::timestamptz AS freshness_at,
     coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
 FROM board_health h
