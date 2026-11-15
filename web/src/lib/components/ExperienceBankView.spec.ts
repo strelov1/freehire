@@ -168,7 +168,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
-      structure_pending: false,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -206,7 +206,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValue({
       enabled: true,
       present: true,
-      structure_pending: false,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -226,7 +226,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
-      structure_pending: false,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -267,7 +267,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
     getResume.mockResolvedValueOnce({
       enabled: true,
       present: true,
-      structure_pending: false,
+      structure_pending: true,
       uploaded_at: '2026-10-01T00:00:00Z',
       structured: null,
       parse_status: 'failed',
@@ -284,7 +284,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getResume.mockResolvedValue({
         enabled: true,
         present: true,
-        structure_pending: false,
+        structure_pending: true,
         uploaded_at: '2026-10-01T00:00:00Z',
         structured: null,
         parse_status: 'pending',
