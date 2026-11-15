@@ -10,6 +10,8 @@
   // The citation list is the point of the surface, not decoration. It is what makes the claim
   // checkable — every sentence about the candidate's experience traces to something they
   // themselves asserted — so it renders even when it is empty, saying so.
+  import { onDestroy } from 'svelte';
+  import CoverLetterEvidence from './CoverLetterEvidence.svelte';
   import { Copy, Check, FileText, Loader2 } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, trackPlanRefusal } from '#lib/api.js';
@@ -28,6 +30,13 @@
   // Which step the chain is on — the progress that keeps a minutes-long wait legible instead
   // of looking hung.
   let stage = $state('');
+  let reviewing = $state(false);
+  let alive = true;
+  let loadSequence = 0;
+  onDestroy(() => {
+    alive = false;
+    loadSequence++;
+  });
 
   const stageLabels: Record<string, string> = {
     select: 'Choosing your evidence',
@@ -42,15 +51,19 @@
   const cited = $derived(view?.cited ?? []);
 
   async function load() {
+    const request = ++loadSequence;
+    const id = cvId;
     loading = true;
     error = '';
     try {
-      view = await api.getCoverLetter(cvId);
+      const next = await api.getCoverLetter(id);
+      if (alive && request === loadSequence && id === cvId) view = next;
     } catch (e) {
+      if (!alive || request !== loadSequence || id !== cvId) return;
       error = e instanceof Error ? e.message : 'Could not read the letter.';
       announce(error, 'assertive');
     } finally {
-      loading = false;
+      if (alive && request === loadSequence && id === cvId) loading = false;
     }
   }
 
@@ -86,6 +99,7 @@
         return;
       }
       await readStream(res.body);
+      if (alive && !error) await load();
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       // The chain runs detached on the server and stores what it finishes, so a dropped
@@ -123,6 +137,7 @@
   }
 
   function handleFrame(frame: string) {
+    if (!alive) return;
     const name = /^event: (.+)$/m.exec(frame)?.[1];
     const raw = /^data: (.+)$/m.exec(frame)?.[1];
     if (!name || !raw) return; // a keepalive comment, or a frame we do not know
@@ -168,18 +183,47 @@
   <header class="mb-3">
     <h3 class="text-sm font-semibold text-foreground">Cover letter</h3>
     <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
-      Written from achievements you have confirmed as your own. Nothing here is invented — every claim about your
-      experience traces to the evidence listed below it.
+      Drafted from your confirmed experience. Review the facts before writing, and check the letter before sending.
     </p>
   </header>
 
   {#if loading}
     <p class="text-sm text-muted-foreground">Loading…</p>
   {:else}
+    <button
+      type="button"
+      disabled={drafting}
+      class="mb-3 text-xs font-medium text-primary underline disabled:opacity-50"
+      onclick={() => {
+        reviewing = !reviewing;
+      }}
+    >
+      {reviewing ? 'Close evidence' : letter ? 'Change evidence' : 'Review evidence'}
+    </button>
+    {#if reviewing}
+      <CoverLetterEvidence
+        {cvId}
+        onsaved={() => void load()}
+        onwrite={() => {
+          reviewing = false;
+          void draft();
+        }}
+      />
+    {/if}
+    {#if view?.evidence_blocked}
+      <p class="mb-3 text-xs text-muted-foreground">
+        Review your evidence and select at least one available, confirmed fact before writing.
+      </p>
+    {/if}
+    {#if view?.evidence_changed}
+      <p class="mb-3 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+        Your evidence changed since this letter was written. Review it and write again when ready.
+      </p>
+    {/if}
     <div class="mb-3 flex flex-wrap items-center gap-2">
       <button
         type="button"
-        disabled={drafting}
+        disabled={drafting || reviewing || view?.evidence_blocked}
         onclick={() => void draft()}
         class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
       >

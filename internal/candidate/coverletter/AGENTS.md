@@ -64,6 +64,22 @@ only — the letter is still useful there, but by hand.
   stops at `len(kept) == MaxCited`, never true after the first append, so the cap does not
   default — it disappears.
 
+## Candidate-selected evidence
+
+`Store.GetSelection` / `SaveSelection` own a revisioned selection per `(user_id, job_id)`.
+Absence preserves automatic Gather behavior; an existing empty selection blocks drafting.
+The reference array intentionally survives atom deletion so invalid evidence requires review.
+Updates use optimistic revisions, including competing first saves, and accept at most 50
+unique owned publishable atoms. Review and save perform no model call or allowance charge.
+
+The shared handler drafter prepares and freezes evidence before charging on HTTP and assistant
+paths. Explicit mode also removes achievement prose from the professional projection and fit
+analysis; otherwise excluded facts could re-enter through those inputs. The chain's provenance
+and citation gates still apply. A stored draft records the selection revision and atom
+fingerprint used at generation, and changed explicit evidence marks it outdated. Legacy drafts
+without fingerprints have unknown evidence freshness. Citations identify letter-level support;
+they are not sentence-level verification.
+
 ## How it works
 
 ```

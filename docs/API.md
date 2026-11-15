@@ -4612,6 +4612,22 @@ Never calls a model. With a session or an API key.
 curl "https://freehire.me/api/v1/me/cvs/<id>/cover-letter" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+### `GET /me/cvs/{id}/cover-letter/evidence`
+
+**Auth:** Session or API key
+
+Review confirmed evidence without a model call or allowance charge.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/<id>/cover-letter/evidence" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
 ### `PUT /me/cvs/{id}/session`
 
 **Auth:** Session or API key

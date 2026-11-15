@@ -2937,6 +2937,22 @@ Drafts the letter (the paid gate runs before this); 402 when the allowance is sp
 curl -X POST "https://freehire.me/api/v1/me/cvs/<id>/cover-letter" -b cookies.txt
 ```
 
+### `PUT /me/cvs/{id}/cover-letter/evidence`
+
+**Auth:** Session only
+
+Save up to 50 confirmed achievement ids with an expected revision.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/cvs/<id>/cover-letter/evidence" -b cookies.txt
+```
+
 ### `POST /me/cvs/{id}/duplicate`
 
 **Auth:** Session only

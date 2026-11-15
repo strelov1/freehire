@@ -2951,6 +2951,7 @@ type Querier interface {
 	// language stamp is checked against the VACANCY, not the caller's profile, unlike
 	// GetUserJobAnalysis.
 	GetCoverLetter(ctx context.Context, arg GetCoverLetterParams) (GetCoverLetterRow, error)
+	GetCoverLetterEvidence(ctx context.Context, arg GetCoverLetterEvidenceParams) (GetCoverLetterEvidenceRow, error)
 	// One candidate's application to one vacancy, if any — whether it reached the employer is
 	// sent_at, whether a delivery is in flight is a sending_at younger than the claim's two
 	// minutes. Read by the apply form ("already applied") and by Apply to tell the three
@@ -7516,6 +7517,7 @@ type Querier interface {
 	// (source, id) open index can supply candidates without reading the catalogue's wide rows.
 	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
 	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
+	SaveCoverLetterEvidence(ctx context.Context, arg SaveCoverLetterEvidenceParams) (SaveCoverLetterEvidenceRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
@@ -8410,6 +8412,7 @@ type Querier interface {
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)
+	UpdateCoverLetterEvidence(ctx context.Context, arg UpdateCoverLetterEvidenceParams) (UpdateCoverLetterEvidenceRow, error)
 	// The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
 	// created_by is in the actor's company team (employer_team, migration 0271 — not merely IS
 	// NOT NULL) AND source = 'employer'. UpdateManualJob's

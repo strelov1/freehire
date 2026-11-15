@@ -2934,6 +2934,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/cvs/{id}/cover-letter/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Review confirmed evidence without a model call or allowance charge. */
+        get: operations["getCVCoverLetterEvidence"];
+        /** @description Save up to 50 confirmed achievement ids with an expected revision. */
+        put: operations["saveCVCoverLetterEvidence"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/cvs/{id}/duplicate": {
         parameters: {
             query?: never;
@@ -7261,6 +7279,8 @@ export interface components {
         };
         /** @description A stored cover letter; `present` is false, with no letter, when none was drafted. */
         CvCoverLetter: {
+            evidence_blocked?: boolean;
+            evidence_changed?: boolean;
             present: boolean;
             stale?: boolean;
             letter?: unknown;
@@ -18068,6 +18088,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CvPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCVCoverLetterEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    saveCVCoverLetterEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: unknown;
+                    };
                 };
             };
             /** @description An unexpected error response. */

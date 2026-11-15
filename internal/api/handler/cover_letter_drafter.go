@@ -10,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
+	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -18,6 +19,7 @@ import (
 // letterBankPort is the experience bank as this feature needs it: evidence retrieval and the
 // candidate projection, in one interface so a surface holds one field for one store.
 type letterBankPort interface {
+	ListEmployments(context.Context, int64) ([]experience.Employment, error)
 	coverletter.Retriever
 	candidateProfiler
 }
@@ -58,52 +60,25 @@ func (d letterDrafter) ready() bool {
 // caller reads as "release whatever was charged and say so". Every other failure comes back
 // as an error, so a caller can never overwrite a stored letter with an empty one.
 func (d letterDrafter) draft(
-	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, prepared letterPreparation,
 ) (*coverletter.Letter, error) {
-	return d.draftStream(ctx, caller, userID, jobID, band, func(string, bool) {})
+	return d.draftStream(ctx, caller, userID, jobID, band, prepared, func(string, bool) {})
 }
 
 // draftStream is draft with progress. The streaming endpoint needs it because the chain takes
 // minutes and a silent response is one a proxy closes at sixty seconds; every other caller
 // takes the no-op above.
 func (d letterDrafter) draftStream(
-	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, emit coverletter.Emit,
+	ctx context.Context, caller llm.Caller, userID, jobID int64, band coverletter.Band, prepared letterPreparation, emit coverletter.Emit,
 ) (*coverletter.Letter, error) {
-	job, err := d.jobs.GetJob(ctx, jobID)
-	if err != nil {
-		return nil, err
-	}
-	// REQUIRES a cached analysis; it does not produce one. An absent analysis surfaces as ErrNoAnalysis,
-	// which the shared error mapper renders as "run the fit analysis first".
-	// No posting requirements: the letter's prompt builds its own vacancy block (coverletter.vacancyBlock)
-	// and never reads that field. Wiring it in would change what the model is told.
-	tailoring, err := d.fit.TailoringContext(ctx, userID, job, nil)
-	if err != nil {
-		return nil, err
-	}
-	atoms, err := coverletter.Gather(ctx, d.bank, userID, tailoring.MissingHave)
-	if err != nil {
-		return nil, err
-	}
-	// The BANK layered over the structured résumé, not the file alone: a letter speaks for the candidate
-	// and may cite an achievement banked from chat.
-	candidate := candidateProfileFrom(ctx, d.resume, d.bank, userID)
-
-	// The atoms go in UNFILTERED: the provenance gate lives inside Draft so that no caller can
-	// apply a weaker one, or forget to apply it at all.
-	// Bound once: the same chain writes the letter and names the model stamped on it.
+	input := prepared.input
+	input.Band = band
 	chain := d.chain.As(caller)
-	letter, err := chain.DraftStream(ctx, coverletter.Input{
-		Context:         tailoring,
-		Candidate:       candidate,
-		Atoms:           atoms,
-		Band:            band,
-		PostingLanguage: job.PostingLanguage,
-	}, emit)
+	letter, err := chain.DraftStream(ctx, input, emit)
 	if err != nil || letter == nil {
 		return nil, err
 	}
-	if err := d.letters.Save(ctx, userID, jobID, *letter, chain.ModelID()); err != nil {
+	if err := d.letters.SaveSnapshot(ctx, userID, jobID, coverletter.Stored{Letter: *letter, Model: chain.ModelID(), EvidenceRevision: prepared.revision, EvidenceFingerprint: prepared.fingerprint}); err != nil {
 		return nil, err
 	}
 	return letter, nil
@@ -214,4 +189,52 @@ func citedAtomsOf(ctx context.Context, bank letterBankPort, userID int64, ids []
 		out = append(out, citedAtom{ID: id.String(), Claim: claims[id]})
 	}
 	return out
+}
+
+type letterPreparation struct {
+	input       coverletter.Input
+	revision    int64
+	fingerprint string
+}
+
+func (d letterDrafter) prepare(ctx context.Context, userID, jobID int64) (letterPreparation, error) {
+	selection, err := d.letters.GetSelection(ctx, userID, jobID)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	var atoms []experience.Atom
+	if selection != nil {
+		bank, e := d.bank.ListAtoms(ctx, userID)
+		if e != nil {
+			return letterPreparation{}, e
+		}
+		atoms, err = coverletter.ResolveSelection(selection.AtomIDs, bank)
+		if err != nil {
+			return letterPreparation{}, err
+		}
+	}
+	job, err := d.jobs.GetJob(ctx, jobID)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	tailoring, err := d.fit.TailoringContext(ctx, userID, job, nil)
+	if err != nil {
+		return letterPreparation{}, err
+	}
+	if selection == nil {
+		atoms, err = coverletter.Gather(ctx, d.bank, userID, tailoring.MissingHave)
+		if err != nil {
+			return letterPreparation{}, err
+		}
+	}
+	candidate := candidateProfileFrom(ctx, d.resume, d.bank, userID)
+	out := letterPreparation{fingerprint: coverletter.EvidenceFingerprint(atoms)}
+	if selection != nil {
+		candidate = coverletter.SelectedProfile(candidate)
+		// Analysis prose can repeat achievements the candidate explicitly excluded.
+		tailoring = fitanalysis.TailoringContext{Job: tailoring.Job}
+		out.revision = selection.Revision
+	}
+	out.input = coverletter.Input{Context: tailoring, Candidate: candidate, Atoms: atoms, PostingLanguage: job.PostingLanguage}
+	return out, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,6 +14,8 @@ import (
 // whether it still speaks for the pair it was written for.
 type Stored struct {
 	Letter
+	EvidenceRevision    int64  `json:"evidence_revision,omitempty"`
+	EvidenceFingerprint string `json:"evidence_fingerprint,omitempty"`
 	// Model produced the body. A gateway upgrade retires every letter written by the old one.
 	Model     string    `json:"model"`
 	CreatedAt time.Time `json:"created_at"`
@@ -33,6 +36,8 @@ func (s Stored) Stale(liveModel, livePostingLanguage string) bool {
 // method takes the caller's id, so an entry the caller does not own reports as missing, not
 // forbidden.
 type Repository interface {
+	GetSelection(context.Context, int64, int64) (Selection, error)
+	SaveSelection(context.Context, int64, int64, int64, []uuid.UUID) (Selection, error)
 	Get(ctx context.Context, userID, jobID int64) (Stored, error)
 	Upsert(ctx context.Context, userID, jobID int64, s Stored) error
 }
@@ -62,4 +67,9 @@ func (s *Store) Save(ctx context.Context, userID, jobID int64, l Letter, model s
 		return fmt.Errorf("coverletter: save draft: %w", err)
 	}
 	return nil
+}
+
+// SaveSnapshot replaces a letter together with the evidence snapshot used to write it.
+func (s *Store) SaveSnapshot(ctx context.Context, userID, jobID int64, row Stored) error {
+	return s.repo.Upsert(ctx, userID, jobID, row)
 }

@@ -164,6 +164,8 @@ model CvPlanRefusal {
 
 /** A stored cover letter; `present` is false, with no letter, when none was drafted. */
 model CvCoverLetter {
+ evidence_blocked?: boolean;
+ evidence_changed?: boolean;
   present: boolean;
   stale?: boolean;
   letter?: unknown;
@@ -807,3 +809,16 @@ op getCVATSDelta(/** The tailored CV id. */ @path id: string): Data<CvAtsDelta> 
 @route("/me/cvs/{id}/job-match")
 @get
 op getCVJobMatch(/** The tailored CV id. */ @path id: string): Data<CvJobMatch> | Problem;
+
+/** Review confirmed evidence without a model call or allowance charge. */
+@useAuth(SessionOrKey)
+@tag("CV")
+@route("/me/cvs/{id}/cover-letter/evidence")
+@get
+op getCVCoverLetterEvidence(@path id: string): Data<unknown> | Problem;
+
+/** Save up to 50 confirmed achievement ids with an expected revision. */
+@tag("CV")
+@route("/me/cvs/{id}/cover-letter/evidence")
+@put
+op saveCVCoverLetterEvidence(@path id: string, @body body: unknown): Data<unknown> | Problem;

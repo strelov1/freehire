@@ -19,8 +19,8 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 	return assistant.Tool{
 		Name: "cover_letter_draft",
 		Description: "Write the cover letter for the vacancy this CV is being tailored to, from the " +
-			"candidate's own banked achievements. Every claim about their experience comes from evidence they " +
-			"asserted — nothing is invented. Replaces any letter already drafted for this vacancy. " +
+			"candidate's confirmed achievements and any saved evidence selection. The candidate should review " +
+			"the result before sending. Replaces any letter already drafted for this vacancy. " +
 			"Optional \"band\": \"short\" or \"standard\" (default).",
 		Schema: map[string]any{
 			"type": "object",
@@ -46,6 +46,10 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				return nil, errors.New("drafting a cover letter is unavailable in this deployment")
 			}
 
+			prepared, err := drafter.prepare(ctx, userID, jobID)
+			if err != nil {
+				return nil, err
+			}
 			attempt := letterAttempt(ctx, h.letter.letters, userID, jobID)
 			charge, refused, _ := chargeLetter(ctx, h.plans, userID, jobID, attempt)
 			if refused {
@@ -59,7 +63,7 @@ func (h *assistantHandlers) coverLetterDraftTool(jobID int64) assistant.Tool {
 				releaseLetterCharge(h.plans, userID, charge)
 				return nil, errors.New(letterFailureMessage(err))
 			}
-			letter, err := drafter.draft(ctx, caller, userID, jobID, toolBand(in.Band))
+			letter, err := drafter.draft(ctx, caller, userID, jobID, toolBand(in.Band), prepared)
 			if err != nil || letter == nil {
 				// Every failing path gives the charge back, so it is given back once here.
 				releaseLetterCharge(h.plans, userID, charge)

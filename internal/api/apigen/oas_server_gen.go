@@ -709,6 +709,12 @@ type Handler interface {
 	//
 	// GET /me/cvs/{id}/cover-letter
 	GetCVCoverLetter(ctx context.Context, params GetCVCoverLetterParams) (*GetCVCoverLetterOK, error)
+	// GetCVCoverLetterEvidence implements getCVCoverLetterEvidence operation.
+	//
+	// Review confirmed evidence without a model call or allowance charge.
+	//
+	// GET /me/cvs/{id}/cover-letter/evidence
+	GetCVCoverLetterEvidence(ctx context.Context, params GetCVCoverLetterEvidenceParams) (*GetCVCoverLetterEvidenceOK, error)
 	// GetCVJobMatch implements getCVJobMatch operation.
 	//
 	// Deterministic and free — no model call, unlike the AI match analysis. Scored off the CV’s
@@ -2064,6 +2070,12 @@ type Handler interface {
 	//
 	// PUT /me/answer-bank
 	SaveBankedAnswer(ctx context.Context, req *SaveBankedAnswer) (*SaveBankedAnswerOK, error)
+	// SaveCVCoverLetterEvidence implements saveCVCoverLetterEvidence operation.
+	//
+	// Save up to 50 confirmed achievement ids with an expected revision.
+	//
+	// PUT /me/cvs/{id}/cover-letter/evidence
+	SaveCVCoverLetterEvidence(ctx context.Context, req jx.Raw, params SaveCVCoverLetterEvidenceParams) (*SaveCVCoverLetterEvidenceOK, error)
 	// SaveJob implements saveJob operation.
 	//
 	// Save (bookmark) the job.

@@ -5564,6 +5564,71 @@ func decodeGetCVCoverLetterParams(args [1]string, argsEscaped bool, r *http.Requ
 	return params, nil
 }
 
+// GetCVCoverLetterEvidenceParams is parameters of getCVCoverLetterEvidence operation.
+type GetCVCoverLetterEvidenceParams struct {
+	ID string
+}
+
+func unpackGetCVCoverLetterEvidenceParams(packed middleware.Parameters) (params GetCVCoverLetterEvidenceParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetCVCoverLetterEvidenceParams(args [1]string, argsEscaped bool, r *http.Request) (params GetCVCoverLetterEvidenceParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetCVJobMatchParams is parameters of getCVJobMatch operation.
 type GetCVJobMatchParams struct {
 	// The tailored CV id.
@@ -16737,6 +16802,71 @@ func decodeRunMatchAnalysisParams(args [1]string, argsEscaped bool, r *http.Requ
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// SaveCVCoverLetterEvidenceParams is parameters of saveCVCoverLetterEvidence operation.
+type SaveCVCoverLetterEvidenceParams struct {
+	ID string
+}
+
+func unpackSaveCVCoverLetterEvidenceParams(packed middleware.Parameters) (params SaveCVCoverLetterEvidenceParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeSaveCVCoverLetterEvidenceParams(args [1]string, argsEscaped bool, r *http.Request) (params SaveCVCoverLetterEvidenceParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
 			In:   "path",
 			Err:  err,
 		}

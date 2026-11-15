@@ -11022,6 +11022,101 @@ func (s *Server) handleGetCVCoverLetterRequest(args [1]string, argsEscaped bool,
 	}
 }
 
+// handleGetCVCoverLetterEvidenceRequest handles getCVCoverLetterEvidence operation.
+//
+// Review confirmed evidence without a model call or allowance charge.
+//
+// GET /me/cvs/{id}/cover-letter/evidence
+func (s *Server) handleGetCVCoverLetterEvidenceRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetCVCoverLetterEvidenceOperation,
+			ID:   "getCVCoverLetterEvidence",
+		}
+	)
+	params, err := decodeGetCVCoverLetterEvidenceParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetCVCoverLetterEvidenceOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetCVCoverLetterEvidenceOperation,
+			OperationSummary: "",
+			OperationID:      "getCVCoverLetterEvidence",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetCVCoverLetterEvidenceParams
+			Response = *GetCVCoverLetterEvidenceOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetCVCoverLetterEvidenceParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetCVCoverLetterEvidence(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetCVCoverLetterEvidence(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetCVCoverLetterEvidenceResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetCVJobMatchRequest handles getCVJobMatch operation.
 //
 // Deterministic and free — no model call, unlike the AI match analysis. Scored off the CV’s
@@ -28994,6 +29089,116 @@ func (s *Server) handleSaveBankedAnswerRequest(args [0]string, argsEscaped bool,
 	}
 
 	if err := encodeSaveBankedAnswerResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSaveCVCoverLetterEvidenceRequest handles saveCVCoverLetterEvidence operation.
+//
+// Save up to 50 confirmed achievement ids with an expected revision.
+//
+// PUT /me/cvs/{id}/cover-letter/evidence
+func (s *Server) handleSaveCVCoverLetterEvidenceRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SaveCVCoverLetterEvidenceOperation,
+			ID:   "saveCVCoverLetterEvidence",
+		}
+	)
+	params, err := decodeSaveCVCoverLetterEvidenceParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeSaveCVCoverLetterEvidenceRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *SaveCVCoverLetterEvidenceOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SaveCVCoverLetterEvidenceOperation,
+			OperationSummary: "",
+			OperationID:      "saveCVCoverLetterEvidence",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = jx.Raw
+			Params   = SaveCVCoverLetterEvidenceParams
+			Response = *SaveCVCoverLetterEvidenceOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSaveCVCoverLetterEvidenceParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SaveCVCoverLetterEvidence(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SaveCVCoverLetterEvidence(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSaveCVCoverLetterEvidenceResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
