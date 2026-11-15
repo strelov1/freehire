@@ -1,19 +1,14 @@
 // Package linkedinauth owns the credential the daily digest posts to LinkedIn with: how it is
 // minted, where it is kept, and when it must be renewed or re-granted by a person.
 //
-// It exists as its own package because that credential EXPIRES, which is the one thing every
-// other channel of this feature does not do. A Discord webhook URL is static configuration; a
+// It is its own package because the credential EXPIRES, unlike a Discord webhook URL: a
 // LinkedIn access token lasts 60 days, is renewed by a worker when LinkedIn permits it, and
-// otherwise has to be re-granted through a browser before it dies. None of that is knowledge
-// the digest's editorial rules should carry, so socialdigest asks only for a token string.
+// otherwise must be re-granted through a browser. socialdigest asks only for a token string.
 //
-// WHY THE RENEWAL PATH IS CONDITIONAL. LinkedIn issues programmatic refresh tokens to approved
-// Marketing Developer Platform partners only, and the Community Management API — the product
-// that lets us post to our own company page — is not that program. Whether our application
-// gets one is therefore not knowable from the documentation, only from the token response.
-// So both outcomes are first-class here: with a refresh token the worker renews silently, and
-// without one it warns while there is still time for a person to act. Shipping only the happy
-// path would mean discovering the answer as a digest that stopped publishing.
+// The renewal path is conditional: LinkedIn issues programmatic refresh tokens to approved
+// Marketing Developer Platform partners only, so whether we get one is known only from the
+// token response. With a refresh token the worker renews silently; without one it warns
+// while a person can still act.
 package linkedinauth
 
 import (
@@ -27,61 +22,48 @@ import (
 	"time"
 )
 
-// Channel is the name this credential is stored and logged under. It matches the publisher's
-// channel name in socialdigest, and both are read back from storage, so neither may be renamed
-// without a migration.
+// Channel is the name this credential is stored and logged under. It matches the
+// publisher's channel name in socialdigest and is read back from storage, so neither may
+// be renamed without a migration.
 const Channel = "linkedin"
 
-// Scope is what the digest needs and nothing more: permission to post on behalf of the
-// organization whose page we own. LinkedIn requires the member to consent to every requested
-// scope at once, so asking for a read scope we do not use would make the consent screen
-// broader than the feature.
-//
-// Note that changing this string invalidates every existing token — LinkedIn discards previous
-// grants when the requested scope changes — so a change here is a change that requires a
-// person to sign in again.
+// Scope is what the digest needs and nothing more: permission to post for the
+// organization whose page we own. Changing it invalidates every existing token (LinkedIn
+// discards previous grants), so a person must sign in again.
 const Scope = "w_organization_social"
 
-// Endpoints. LinkedIn's OAuth lives on www.linkedin.com while its APIs live on
-// api.linkedin.com; sending an OAuth request to the API host answers 404, which reads like a
-// retired endpoint rather than a wrong host.
+// LinkedIn's OAuth lives on www.linkedin.com, its APIs on api.linkedin.com; an OAuth
+// request to the API host answers 404.
 const authorizeURL = "https://www.linkedin.com/oauth/v2/authorization"
 
-// tokenEndpoint is where both grants are exchanged. A variable rather than a constant so the
-// tests can point it at a stub: what goes to it is form-encoded, and a wrong grant_type or a
-// dropped redirect_uri is invisible until LinkedIn refuses it in production.
+// tokenEndpoint is where both grants are exchanged. A variable so tests can point it at
+// a stub.
 var tokenEndpoint = "https://www.linkedin.com/oauth/v2/accessToken"
 
 // Credentials are the application's own identity, from configuration.
 //
-// RedirectURI must be one of the redirect URLs registered on the LinkedIn application, must be
-// absolute and HTTPS, and must be sent IDENTICALLY in both legs of the flow — LinkedIn
-// compares them and answers a mismatch with a 400 naming the redirect_uri rather than the
-// thing that is actually wrong.
+// RedirectURI must be registered on the LinkedIn application, absolute and HTTPS, and
+// sent IDENTICALLY in both legs of the flow; LinkedIn answers a mismatch with a 400.
 type Credentials struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURI  string
 }
 
-// Configured reports whether a sign-in can be attempted at all. Every field is load-bearing,
-// so a deployment holding two of three has not configured this channel — it has half-configured
-// it, which must look like "off" rather than like a flow that fails where somebody can see it.
+// Configured reports whether a sign-in can be attempted at all. A half-configured
+// deployment must look "off", not like a flow that fails visibly.
 func (c Credentials) Configured() bool {
 	return c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
 }
 
-// Token is a minted credential as this package hands it around: absolute times rather than the
-// "seconds remaining" LinkedIn returns, because everything downstream compares against a clock
-// and a duration would have to be re-anchored at every one of those comparisons.
+// Token is a minted credential with absolute times rather than the "seconds remaining"
+// LinkedIn returns, since everything downstream compares against a clock.
 type Token struct {
 	AccessToken string
 	ExpiresAt   time.Time
 
-	// RefreshToken is empty when LinkedIn did not issue one — the expected case outside the
-	// Marketing Developer Platform. Its emptiness is what decides whether renewal is possible,
-	// so it is a plain string rather than a pointer: there is no difference here between
-	// "absent" and "empty" worth representing.
+	// RefreshToken is empty when LinkedIn did not issue one, the expected case outside the
+	// Marketing Developer Platform. Its emptiness decides whether renewal is possible.
 	RefreshToken     string
 	RefreshExpiresAt time.Time
 
@@ -91,16 +73,14 @@ type Token struct {
 // Renewable reports whether this token can be exchanged for a fresh one without a person.
 func (t Token) Renewable() bool { return t.RefreshToken != "" }
 
-// AuthorizeURL is the address a person opens to grant the application access to the company
-// page. It is printed by cmd/linkedin-auth rather than served by the API, because this is run
-// once every sixty days by one operator — a route, a callback handler and a state cookie would
-// be a login page for an audience of one.
+// AuthorizeURL is the address a person opens to grant the application access to the
+// company page. cmd/linkedin-auth prints it rather than the API serving it: one operator
+// runs this every sixty days.
 //
-// state is passed through to LinkedIn and returned on the redirect. It is not verified on the
-// way back and this is deliberate: state defends a BROWSER SESSION against a substituted
-// authorization code, and this flow has no session — the same person opens the URL, reads the
-// code out of their own address bar and hands it to a command on a host only they can reach.
-// A value is still sent so the redirect is distinguishable in a log.
+// state is returned on the redirect but deliberately not verified: it defends a browser
+// session against a substituted code, and this flow has none (one person copies the code
+// from their own address bar into a command). It is sent so the redirect is identifiable
+// in a log.
 func (c Credentials) AuthorizeURL(state string) string {
 	q := url.Values{
 		"response_type": {"code"},
@@ -115,7 +95,7 @@ func (c Credentials) AuthorizeURL(state string) string {
 }
 
 // Exchange turns an authorization code into a token. The code is single-use and lives 30
-// minutes, so a failure here is ordinarily "you took too long", which the error says.
+// minutes, so a failure is ordinarily "you took too long".
 func (c Credentials) Exchange(ctx context.Context, httpc *http.Client, code string) (Token, error) {
 	return c.postToken(ctx, httpc, url.Values{
 		"grant_type":    {"authorization_code"},
@@ -128,8 +108,8 @@ func (c Credentials) Exchange(ctx context.Context, httpc *http.Client, code stri
 
 // Refresh exchanges a refresh token for a fresh access token.
 //
-// The refresh token's own expiry does NOT move: it keeps the life it was granted at sign-in
-// (365 days), so a deployment that renews forever still owes a person one sign-in a year.
+// The refresh token's own expiry does NOT move (365 days from sign-in), so a person still
+// owes one sign-in a year.
 func (c Credentials) Refresh(ctx context.Context, httpc *http.Client, refreshToken string) (Token, error) {
 	return c.postToken(ctx, httpc, url.Values{
 		"grant_type":    {"refresh_token"},
@@ -139,9 +119,8 @@ func (c Credentials) Refresh(ctx context.Context, httpc *http.Client, refreshTok
 	})
 }
 
-// tokenResponse is LinkedIn's answer to both grants. refresh_token and its expiry are absent
-// unless the application is authorized for programmatic refresh tokens, so they are read as
-// zero values rather than required.
+// tokenResponse is LinkedIn's answer to both grants. refresh_token and its expiry are
+// absent unless the application may use programmatic refresh tokens.
 type tokenResponse struct {
 	AccessToken           string `json:"access_token"`
 	ExpiresIn             int64  `json:"expires_in"`
@@ -149,16 +128,13 @@ type tokenResponse struct {
 	RefreshTokenExpiresIn int64  `json:"refresh_token_expires_in"`
 	Scope                 string `json:"scope"`
 
-	// The OAuth error shape, which LinkedIn returns with a 400 and a body worth repeating —
-	// "authorization code expired" and "redirect uri does not match" are the two failures this
-	// flow actually produces, and they are indistinguishable from the status alone.
+	// The OAuth error shape, returned with a 400; "authorization code expired" and
+	// "redirect uri does not match" look identical from the status alone.
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
 }
 
-// now is the clock these exchanges anchor expiry against. A package variable so the tests can
-// pin it: every value this package produces is a deadline, and a deadline computed from an
-// untestable clock is a deadline nobody has checked.
+// now is the clock expiry is anchored against; a variable so tests can pin it.
 var now = time.Now
 
 func (c Credentials) postToken(ctx context.Context, httpc *http.Client, form url.Values) (Token, error) {
@@ -177,8 +153,7 @@ func (c Credentials) postToken(ctx context.Context, httpc *http.Client, form url
 	}
 	defer resp.Body.Close()
 
-	// Bounded: this ends up in a log line and in an operator's terminal, and LinkedIn answers
-	// some failures with an HTML error page rather than JSON.
+	// Bounded: this reaches logs and a terminal, and some failures are HTML pages.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		return Token{}, fmt.Errorf("linkedin token endpoint: read body: %w", err)
@@ -197,9 +172,8 @@ func (c Credentials) postToken(ctx context.Context, httpc *http.Client, form url
 		return Token{}, fmt.Errorf("linkedin token endpoint: status %d: %s",
 			resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	// A 200 carrying no token is not a token. It has been seen when a required parameter is
-	// accepted but ignored, and treating it as success would store an empty credential that
-	// fails much later, at publish time, as a 401 nobody can trace back to here.
+	// A 200 without a token would store an empty credential that fails later, at publish
+	// time, as an untraceable 401.
 	if parsed.AccessToken == "" {
 		return Token{}, fmt.Errorf("linkedin token endpoint: status %d: no access_token in response", resp.StatusCode)
 	}
@@ -217,7 +191,6 @@ func (c Credentials) postToken(ctx context.Context, httpc *http.Client, form url
 	return tok, nil
 }
 
-// defaultClient is used when a caller passes none. A plain http.Client and not safehttp: the
-// host is a fixed vendor endpoint compiled into this file, not user input, so there is no SSRF
-// surface — the same reasoning as the Discord publisher beside it.
+// defaultClient is used when a caller passes none. A plain http.Client, not safehttp: the
+// host is a fixed vendor endpoint, not user input, so there is no SSRF surface.
 var defaultClient = &http.Client{Timeout: 20 * time.Second}

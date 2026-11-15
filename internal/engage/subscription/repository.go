@@ -72,10 +72,8 @@ func (r *QueriesRepository) HasPushDevice(ctx context.Context, userID int64) (bo
 	return r.q.UserHasPushToken(ctx, userID)
 }
 
-// SavedSearchQuery reads the owner-scoped saved search's stored query. It reuses
-// GetSavedSearch rather than adding a narrower query: the read is once per subscribe,
-// and a second SQL statement selecting one column would be a second place to keep the
-// ownership predicate correct.
+// SavedSearchQuery reads the owner-scoped saved search's stored query. It reuses GetSavedSearch
+// so the ownership predicate lives in one query.
 func (r *QueriesRepository) SavedSearchQuery(ctx context.Context, userID, savedSearchID int64) (string, error) {
 	row, err := r.q.GetSavedSearch(ctx, db.GetSavedSearchParams{ID: savedSearchID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {

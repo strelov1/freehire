@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// CalendarStatus labels one interval of a mentor's own resolved calendar. It marshals as
-// its own string value, so the API layer needs no translation table.
+// CalendarStatus labels one interval of a mentor's own resolved calendar. It marshals
+// as its string value.
 type CalendarStatus string
 
 const (
@@ -30,18 +30,17 @@ type CalendarInterval struct {
 }
 
 // CalendarRequest is everything Calendar needs to partition a window. It mirrors
-// SlotRequest, with the mentor's occupied time split into its two sources rather than
-// pre-unioned, because the whole point of this computation is to tell them apart.
+// SlotRequest, but keeps booked and busy time separate so they can be told apart.
 type CalendarRequest struct {
 	// Rules is the mentor's availability, weekly rules and dated overrides together.
 	Rules []Rule
-	// OwnerZone resolves the rules' wall-clock times, and is also the zone the result
-	// is reported in — this is a self-view, so there is no separate viewer zone.
+	// OwnerZone resolves the rules' wall-clock times and is the zone the result is
+	// reported in (a self-view has no separate viewer zone).
 	OwnerZone *time.Location
 	// Params is the session shape and the bounds on when it may be booked.
 	Params SessionParams
 	// Booked is the mentor's confirmed bookings. Buffers are applied here, not by the
-	// caller, exactly as SlotRequest.Busy documents.
+	// caller, as in SlotRequest.Busy.
 	Booked []Interval
 	// Busy is the mentor's synced-calendar busy intervals.
 	Busy []Interval
@@ -61,11 +60,9 @@ type CalendarResult struct {
 // Calendar partitions a window into non-overlapping, gapless intervals labeled booked,
 // busy, free or closed — the mentor's own view of what Slots computes for a seeker.
 //
-// The free ranges are computed by the exact same pipeline Slots uses (expandSchedule,
-// subtractBusy, sliceSlots, the notice/horizon filter), so the two can never disagree.
-// Booked and busy are then carved out ahead of free, in that priority order, and
-// whatever is left over — outside the mentor's stated hours, or inside them but withheld
-// by a buffer, the notice period or the horizon — is closed.
+// Free ranges come from the same pipeline Slots uses (expandSchedule, subtractBusy,
+// sliceSlots, the notice/horizon filter), so the two cannot disagree. Booked and busy
+// are carved out ahead of free, in that order; the remainder is closed.
 func Calendar(req CalendarRequest) (CalendarResult, error) {
 	if req.OwnerZone == nil {
 		return CalendarResult{}, ErrNoOwnerZone
@@ -98,9 +95,8 @@ func Calendar(req CalendarRequest) (CalendarResult, error) {
 		freeRanges = append(freeRanges, s)
 	}
 
-	// Carved out in priority order: booked first, then busy (minus whatever is already
-	// booked, in case a booking and a synced interval happen to cover the same span),
-	// then free. Whatever remains is closed.
+	// Priority order: booked, then busy (minus booked, in case both cover the same
+	// span), then free.
 	noBuffers := SessionParams{}
 	bookedRanges := mergeOverlapping(clipAll(req.Booked, w))
 	remaining := subtractBusy([]Interval{w}, bookedRanges, noBuffers)

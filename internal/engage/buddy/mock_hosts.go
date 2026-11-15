@@ -12,10 +12,9 @@ import (
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
-// maxMockHostCandidates bounds the hosts listing's work. Every candidate's slots are
-// computed in memory from three batched reads, which is cheap at today's few dozen
-// members; past this many, the hosts with the most recently saved settings are the ones
-// considered, and a host beyond the cap is still reachable from their member page.
+// maxMockHostCandidates bounds the hosts listing's work: every candidate's slots are computed in memory.
+// Past the cap the hosts with the most recently saved settings are considered; a host beyond it is
+// still reachable from their member page.
 const maxMockHostCandidates = 200
 
 // ErrUnknownTopic → 422. A topic filter outside MockTopics.

@@ -324,12 +324,10 @@ func (s *MockService) Cancel(ctx context.Context, userID int64, id uuid.UUID) er
 	return nil
 }
 
-// AnnounceCancellations tells the other participant of every mock actorID's own act
-// cancelled and nobody has announced yet: a participant's Cancel, the leave
-// (LeaveBuddyMember cancels in the leave's transaction) or a block (a trigger on user_blocks
-// cancels inside the block's statement). The api layer calls it after a leave and after a
-// block. Best-effort: a failure is logged, never returned, because the cancellation it
-// reports has already happened.
+// AnnounceCancellations tells the other participant of every mock actorID cancelled (Cancel, the
+// leave's transaction, or the block trigger) that nobody has announced yet. The api layer calls it
+// after a leave and a block. Best-effort: a failure is logged, never returned, since the
+// cancellation already happened.
 func (s *MockService) AnnounceCancellations(ctx context.Context, actorID int64) {
 	if s.notifier == nil {
 		return

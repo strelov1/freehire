@@ -173,11 +173,9 @@ func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, e
 		StartsAt: pgInstant(in.StartsAt), EndsAt: pgInstant(in.EndsAt),
 		Topic: in.Topic, GuestTimezone: in.GuestTimezone,
 	}
-	// Two bookings racing for one person's time each insert a participant row and then
-	// wait on the other's uncommitted one, and Postgres breaks that cycle by aborting one
-	// with 40P01 instead of answering 23P01. The aborted transaction wrote nothing, so it
-	// is run again: the retry waits for the survivor's commit and then meets the EXCLUDE
-	// plainly.
+	// Two bookings racing for one person's time each insert a participant row and wait on the other's
+	// uncommitted one; Postgres aborts one with 40P01 instead of 23P01. It wrote nothing, so run it
+	// again: the retry waits for the survivor's commit and then meets the EXCLUDE plainly.
 	var id pgtype.UUID
 	var err error
 	for range createMockAttempts {

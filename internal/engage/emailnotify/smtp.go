@@ -12,10 +12,9 @@ import (
 	"time"
 )
 
-// smtpRelay sends the assembled RFC 5322 message over implicit-TLS SMTP. It exists so
-// mail can leave through another provider (Resend, Postmark, ...) while SES refuses
-// the account: every message is built by buildRawMessage, the same bytes SES's raw
-// path carries, so the two transports cannot disagree about headers or bodies.
+// smtpRelay sends the assembled RFC 5322 message over implicit-TLS SMTP, so mail
+// can leave through another provider when SES refuses the account. It carries the
+// same buildRawMessage bytes as SES's raw path, so the transports cannot disagree.
 type smtpRelay struct {
 	host, port string
 	auth       smtp.Auth

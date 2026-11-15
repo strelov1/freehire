@@ -8,13 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
-// There is deliberately no uncached MentorSlots beside CachedMentorSlots.
-//
-// It existed, and the dead-code guard found it unreachable the moment the publication
-// check moved ahead of the cache — because that is where the "look the mentor up, then
-// compute" pair now lives, and one entry point cannot drift from another. A second
-// public read would be a second place to forget that a paused mentor answers as though
-// they do not exist.
+// There is deliberately no uncached MentorSlots beside CachedMentorSlots: a second public
+// read would be a second place to forget that a paused mentor answers as nonexistent.
 
 // slotsFor assembles the engine's inputs and runs it.
 func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
@@ -27,8 +22,8 @@ func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Ti
 	if err != nil {
 		return slots.SlotResult{}, err
 	}
-	// The busy read is widened by a day either side of the window: a booking that STARTS
-	// before it can still block an hour inside it once the buffers are applied.
+	// The busy read is widened a day either side: a booking starting before the window can
+	// still block an hour inside it once buffers apply.
 	busy, err := s.repo.ListBusy(ctx, mentor.ID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
 	if err != nil {
 		return slots.SlotResult{}, err
@@ -96,8 +91,7 @@ func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month 
 	if err != nil {
 		return slots.CalendarResult{}, err
 	}
-	// Widened a day either side, matching slotsFor: a booking or busy interval starting
-	// just before the month can still block an hour inside it once buffers are applied.
+	// Widened a day either side, as in slotsFor.
 	booked, busy, err := s.repo.ListBusyByKind(ctx, profile.ID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
 	if err != nil {
 		return slots.CalendarResult{}, err
@@ -125,9 +119,7 @@ func (s *Service) DeleteAvailabilityRule(ctx context.Context, userID, ruleID int
 }
 
 // ownProfile is the caller's own mentor profile, or ErrProfileNotFound. Every cabinet
-// operation starts here: an account with no profile and one that does not exist are the
-// same answer, and writing that out at each call site is how one of them eventually says
-// something else.
+// operation starts here so "no profile" and "no such account" stay one answer.
 func (s *Service) ownProfile(ctx context.Context, userID int64) (Profile, error) {
 	profile, found, err := s.repo.ProfileByUser(ctx, userID)
 	if err != nil {

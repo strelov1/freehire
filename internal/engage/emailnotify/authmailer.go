@@ -9,16 +9,14 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// AuthMailer renders and sends the transactional account mails: the sign-up
-// verification code, the password-reset code, and a company-account claim's work-email
-// verification code. It is the sibling of Notifier — same Sender transport, different
-// content — and satisfies both accounts.CodeMailer and internal/ingest/employer's own tiny
-// claim-mailer port structurally (no explicit declaration needed), so neither of those
-// packages needs the AWS dependency graph.
+// AuthMailer renders and sends the transactional account mails: sign-up
+// verification, password reset, and a company-account claim's work-email code.
+// It is Notifier's sibling over the same Sender and satisfies accounts.CodeMailer
+// and internal/ingest/employer's claim-mailer port structurally, so neither
+// package needs the AWS dependency graph.
 //
-// The code is never embedded in a link. A mail client, security scanner, or link
-// prefetcher that follows URLs would otherwise consume a single-use credential before
-// the human ever read it.
+// The code is never embedded in a link: a mail client or link prefetcher that
+// followed it would consume the single-use credential before the human read it.
 type AuthMailer struct {
 	sender Sender
 	from   string
@@ -38,9 +36,8 @@ type codeMail struct {
 	Minutes int
 }
 
-// codeTTLMinutes mirrors accounts.codeTTL. It is duplicated rather than imported to keep
-// the dependency pointing one way (handler wires accounts → mailer, never the reverse);
-// the copy is a display string, not the enforced deadline.
+// codeTTLMinutes mirrors accounts.codeTTL, duplicated to keep the dependency
+// one-way; it is a display string, not the enforced deadline.
 const codeTTLMinutes = 15
 
 var verificationHTML = template.Must(mailtpl.Partials().New("verify").Parse(`
@@ -139,9 +136,8 @@ func (m *AuthMailer) send(ctx context.Context, email, subject string, tpl *templ
 		return err
 	}
 	body.Content = template.HTML(content.String()) //nolint:gosec // rendered by the trusted template above, which escaped the code in context
-	// GroupEssential and no unsubscribe URL, and the transport enforces the pair: a
-	// code somebody asked for thirty seconds ago has no setting that would stop it,
-	// and offering one invites a click that changes nothing.
+	// GroupEssential and no unsubscribe URL (the transport enforces the pair): a
+	// code requested seconds ago has no setting that would stop it.
 	return m.sender.Send(ctx, Message{
 		From:    m.from,
 		To:      email,

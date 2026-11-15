@@ -12,19 +12,17 @@ import (
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
-// MaxMessageLen is Telegram's sendMessage text limit, measured in UTF-16 code
-// units. Exported because every engine that can build a multi-job message needs
-// the same number: a body over the limit is rejected deterministically, so each
-// retry re-fails and the batch is dead-lettered.
+// MaxMessageLen is Telegram's sendMessage text limit, in UTF-16 code units. Exported for every
+// engine that builds a multi-job message: an over-limit body is rejected deterministically, so
+// each retry re-fails and the batch is dead-lettered.
 const MaxMessageLen = 4096
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
 var _ notify.Notifier = (*Notifier)(nil)
 
-// Notifier is the Telegram implementation of notify.Notifier: it renders a digest
-// to an HTML message and sends it to the recipient chat. Digest links point at the
-// freehire job page (jobBaseURL/jobs/<slug>) so notifications keep the user on the
-// platform and never expose a source URL that may be login-gated.
+// Notifier is the Telegram implementation of notify.Notifier: it renders a digest to an HTML
+// message and sends it to the recipient chat. Links point at the freehire job page, never a
+// source URL that may be login-gated.
 type Notifier struct {
 	client     *Client
 	jobBaseURL string
@@ -36,21 +34,16 @@ func NewNotifier(client *Client, jobBaseURL string) *Notifier {
 	return &Notifier{client: client, jobBaseURL: strings.TrimRight(jobBaseURL, "/")}
 }
 
-// Send renders the digest and posts it to the chat encoded in dest. The channel
-// argument is ignored — this Notifier only serves the telegram channel, which the
-// worker routes to it.
-// A 403 is translated to notify.ErrRecipientGone, the engine-side vocabulary for
-// "this recipient is permanently closed to us" — the engine unlinks the chat and
-// soft-skips instead of counting a delivery failure it would retry to no purpose.
+// Send renders the digest and posts it to the chat encoded in dest. The channel argument is
+// ignored: this Notifier only serves telegram. A 403 becomes notify.ErrRecipientGone (see
+// SendToChat).
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
 	return n.client.SendToChat(ctx, dest, n.render(m))
 }
 
-// SendToChat posts html to the chat encoded in dest. A 403 is translated to
-// notify.ErrRecipientGone, the engine-side vocabulary for "this recipient is
-// permanently closed to us" — the engine unlinks the chat and soft-skips instead
-// of counting a delivery failure it would retry to no purpose. Shared by the
-// digest, reminder and nudge Telegram notifiers.
+// SendToChat posts html to the chat encoded in dest. A 403 becomes notify.ErrRecipientGone, so
+// the engine unlinks the chat and soft-skips instead of retrying. Shared by the digest,
+// reminder and nudge Telegram notifiers.
 func (c *Client) SendToChat(ctx context.Context, dest, html string) error {
 	chatID, err := strconv.ParseInt(dest, 10, 64)
 	if err != nil {
@@ -63,26 +56,19 @@ func (c *Client) SendToChat(ctx context.Context, dest, html string) error {
 	return err
 }
 
-// render builds the HTML message body. Job titles, company names, the salary
-// string, and the saved search name are HTML-escaped (they are user/source data);
-// the freehire URL is our own and safe.
+// render builds the HTML message body. Titles, company names, salary and the saved search name
+// are HTML-escaped (user/source data); the freehire URL is our own.
 //
-// The listing is bounded twice. notify.ListLimit is the product bound, shared with
-// the email channel so the two never disagree about a digest's shape. On top of it
-// the body is capped to Telegram's MaxMessageLen: job lines are added until the
-// next one (plus the largest possible "+ N more" tail) would overflow, then the
-// tail absorbs the remainder. Without the length cap a digest of many long-title
-// jobs exceeds the limit, Telegram rejects the send deterministically, every retry
-// re-fails, and the whole batch is dead-lettered — silently dropping the user's
-// notifications.
+// The listing is bounded twice: notify.ListLimit (shared with email) and Telegram's
+// MaxMessageLen. Job lines are added until the next one plus the largest possible "+ N more"
+// tail would overflow, then the tail absorbs the remainder; otherwise an over-limit send fails
+// on every retry and dead-letters the batch.
 //
-// A message of several digests is one Telegram message with a section per digest.
-// Every section's heading and widest tail are reserved before any job is listed, so
-// the last section is never squeezed out by the first one's jobs.
+// Several digests make one message with a section each. Every section's heading and widest
+// tail are reserved before any job is listed, so the last section is never squeezed out.
 func (n *Notifier) render(m notify.Message) string {
 	var b strings.Builder
-	// Not notify.JobCount: the bold wraps the numeral alone, so the markup sits
-	// inside the phrase that helper returns whole.
+	// Not notify.JobCount: the bold wraps the numeral alone.
 	if len(m.Digests) == 1 {
 		d := m.Digests[0]
 		fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s for %q\n\n", d.Total, notify.Plural(d.Total), html.EscapeString(d.SavedSearchName))
@@ -91,20 +77,19 @@ func (n *Notifier) render(m notify.Message) string {
 		fmt.Fprintf(&b, "🔔 <b>%d</b> new job%s from %d job alerts\n", total, notify.Plural(total), len(m.Digests))
 	}
 
-	// A search link is the user's own query and may run long; shared between
-	// sections, its allowance shrinks so the reserve below stays bounded.
+	// A search link is the user's own query and may run long; its allowance shrinks as sections
+	// share the message.
 	searchTailLen := maxSearchTailLen / len(m.Digests)
 	type part struct {
 		heading, viewAll string
 		d                notify.Digest
 	}
 	parts := make([]part, 0, len(m.Digests))
-	// Reserve room for every widest possible tail up front (d.Total is its worst-case
-	// count), so appending the actual tails can never push past the limit.
+	// Reserve room for every widest possible tail up front (d.Total is the worst case), so the
+	// actual tails cannot overflow.
 	//
-	// Headings and tails are mandatory, so with enough alerts they alone would overflow
-	// the limit and Telegram would refuse the message on every retry. The sections that
-	// do not fit fold into one closing line instead, reserved first so it always fits.
+	// Headings and tails are mandatory, so many alerts alone could overflow the limit. Sections
+	// that do not fit fold into one closing line, reserved first so it always fits.
 	folded := foldedLine(m.Total(), len(m.Digests), n.jobBaseURL)
 	reserve := 0
 	used := UTF16Len(b.String())
@@ -156,16 +141,14 @@ func (n *Notifier) render(m notify.Message) string {
 	return b.String()
 }
 
-// foldedLine is the closing line standing for the alerts a message had no room to
-// list: their job count and how many there are, linking to the notification centre,
-// which keeps a page per alert.
+// foldedLine is the closing line standing for the alerts a message had no room to list,
+// linking to the notification centre.
 func foldedLine(jobs, alerts int, baseURL string) string {
 	return fmt.Sprintf("\n\n<a href=\"%s/my/notifications\">+ %s in %d more job alert%s</a>", baseURL, notify.JobCount(jobs), alerts, notify.Plural(alerts))
 }
 
-// jobLine renders one digest job on a single line: a bullet linking to the
-// freehire job page, an optional " — Company" suffix, and an optional " · salary"
-// suffix. Title, company, and salary are HTML-escaped.
+// jobLine renders one digest job on a single line: a linked title, an optional company and an
+// optional salary, all HTML-escaped.
 func (n *Notifier) jobLine(j notify.DigestJob) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "• <a href=%q>%s</a>", n.applyURL(j), html.EscapeString(j.Title))
@@ -179,23 +162,19 @@ func (n *Notifier) jobLine(j notify.DigestJob) string {
 	return b.String()
 }
 
-// applyURL is the on-platform freehire job page for a digest job, tagged with a
-// telegram UTM source so the bot's traffic is attributable. Slugs are our own
-// normalized values, so the URL needs no escaping.
+// applyURL is the freehire job page for a digest job, tagged with a telegram UTM source. Slugs
+// are our own normalized values, so no escaping.
 func (n *Notifier) applyURL(j notify.DigestJob) string {
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=telegram-bot"
 }
 
-// viewAllURL is where the "+ N more" tail leads: the digest's own in-app
-// notification, whose page lists every job this digest matched. A digest whose
-// recording failed carries no id and falls back to the notification section.
+// viewAllURL is where the "+ N more" tail leads: the digest's own in-app notification. A digest
+// whose recording failed carries no id and falls back to the notification section.
 //
-// A digest that counts more than it carries (notify.Digest.Overflowed) links to
-// the saved search's live results instead, since its own page lists only what it
-// carries. The query is the user's own string and may run to thousands of
-// characters, while the tail is reserved out of MaxMessageLen before any job is
-// listed — so a query longer than maxSearchTailLen falls back to the saved
-// searches page, one click from the same results.
+// A digest that counts more than it carries (notify.Digest.Overflowed) links to the saved
+// search's live results instead. The query is user input and the tail is reserved out of
+// MaxMessageLen up front, so one longer than maxSearchTailLen falls back to the saved searches
+// page.
 func (n *Notifier) viewAllURL(d notify.Digest, searchTailLen int) string {
 	if d.Overflowed() {
 		if u := n.jobBaseURL + d.SearchPath("telegram-bot"); UTF16Len(u) <= searchTailLen {
@@ -213,9 +192,8 @@ func (n *Notifier) viewAllURL(d notify.Digest, searchTailLen int) string {
 // MaxMessageLen for the jobs themselves.
 const maxSearchTailLen = 1024
 
-// moreLine is the "+ N more" overflow tail linking to where the omitted jobs are,
-// or "" when nothing is omitted. The URL is escaped because a saved search's
-// query, which an overflowed digest links to, is the user's own string.
+// moreLine is the "+ N more" overflow tail, or "" when nothing is omitted. The URL is escaped
+// because it may carry the user's own query.
 func moreLine(more int, viewAllURL string) string {
 	if more <= 0 {
 		return ""
@@ -223,10 +201,9 @@ func moreLine(more int, viewAllURL string) string {
 	return fmt.Sprintf("\n<a href=\"%s\">+ %d more</a>", html.EscapeString(viewAllURL), more)
 }
 
-// UTF16Len counts s in UTF-16 code units — the unit Telegram measures a message
-// against — so a supplementary-plane rune (e.g. the 🔔 emoji) correctly counts as
-// two. Exported alongside MaxMessageLen: a caller given the limit and not the way
-// to measure against it would reach for len(), which is bytes.
+// UTF16Len counts s in UTF-16 code units, the unit Telegram measures against, so a
+// supplementary-plane rune (e.g. the 🔔 emoji) counts as two. Exported alongside MaxMessageLen
+// so callers do not use len(), which is bytes.
 func UTF16Len(s string) int {
 	return len(utf16.Encode([]rune(s)))
 }

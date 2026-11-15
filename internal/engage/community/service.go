@@ -137,10 +137,8 @@ func (s *Service) Reply(ctx context.Context, threadID, parentReplyID, userID int
 	if err != nil {
 		return Reply{}, err
 	}
-	// Best-effort denormalized count; a rare drift is cosmetic, not correctness. Returning
-	// the error here contradicted that in the worst way: the reply is already committed and
-	// thread_replies carries no unique constraint, so the caller got a 500 for a post that
-	// went through and their retry wrote a second copy of it.
+	// Best-effort denormalized count; a drift is cosmetic. Returning the error would 500 a reply that is
+	// already committed (thread_replies has no unique constraint), and the retry would write a copy.
 	if err := s.repo.IncrementReplyCount(ctx, threadID); err != nil {
 		log.Printf("community: bump reply count on thread %d: %v", threadID, err)
 	}
@@ -154,10 +152,8 @@ func (s *Service) Close(ctx context.Context, threadID int64) error {
 	return s.repo.CloseThread(ctx, threadID)
 }
 
-// PersonaFor returns userID's stable pseudonymous handle, minting one on first
-// use. Exported so other packages that attach the same site-wide persona to
-// their own content (company feedback) keep a user's pseudonym consistent
-// everywhere it's shown, rather than minting a second identity.
+// PersonaFor returns userID's stable pseudonymous handle, minting one on first use. Exported so other
+// packages that attach the site-wide persona to their content (company feedback) keep one pseudonym.
 func (s *Service) PersonaFor(ctx context.Context, userID int64) (Persona, error) {
 	return s.persona(ctx, userID)
 }

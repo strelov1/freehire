@@ -10,10 +10,8 @@ import (
 // used as a prefix verbatim (e.g. "PLN 20K").
 var currencySymbols = map[string]string{"USD": "$", "EUR": "€", "GBP": "£"}
 
-// SalaryString renders a compensation string like "$130K—$170K / year" from the
-// digest job's salary fields, or "" when no figure is known. Both channel
-// notifiers (Telegram, email) render the same string; they differ only in the
-// surrounding markup, so the formatting lives here once instead of per channel.
+// SalaryString renders a compensation string like "$130K—$170K / year" from the digest job's
+// salary fields, or "" when no figure is known. Shared by the Telegram and email notifiers.
 func (j DigestJob) SalaryString() string {
 	return formatSalary(j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod)
 }
@@ -65,11 +63,8 @@ func Plural(n int) string {
 	return "s"
 }
 
-// JobCount renders the "3 new jobs" opening every digest channel builds on,
-// differing only in what it wraps around them: an email subject adds the search
-// name, the push body stands alone. Assembling it by hand is how the push body
-// came to read "1 new jobs" while the channels beside it were correct, so the
-// count and its plural travel together from here.
+// JobCount renders the "3 new jobs" opening every digest channel builds on. The count and its
+// plural travel together from here so no channel hand-assembles "1 new jobs".
 //
 // Telegram is the one channel that cannot call this: it bolds the numeral alone
 // ("<b>3</b> new jobs"), so its markup falls inside the phrase.

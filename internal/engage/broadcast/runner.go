@@ -17,9 +17,8 @@ type Store interface {
 	RecordBroadcastEmail(ctx context.Context, arg db.RecordBroadcastEmailParams) error
 }
 
-// DefaultMaxPerRun bounds one run. A campaign reaches the entire audience, so the
-// cap is not about protecting the database — it is about how much of an untested
-// letter can go out before a human sees the result.
+// DefaultMaxPerRun bounds one run. A campaign reaches everyone, so the cap limits how much of an
+// untested letter goes out before a human sees the result.
 const DefaultMaxPerRun = 500
 
 // Runner sends one campaign.
@@ -58,15 +57,11 @@ func (r *Runner) Pending(ctx context.Context, c Campaign) (int64, error) {
 }
 
 // Run sends the campaign to one capped batch and reports what is left.
+// A failed send is recorded and stepped over: one address SES rejects must not strand the list, and a
+// retry would spend the domain's reputation on an address that already refused.
 //
-// A failed send is recorded and stepped over, exactly as in the onboarding
-// sequence: one address that SES rejects must not strand the rest of the list, and
-// retrying it on the next run would spend the domain's reputation on an address
-// that has already refused once.
-//
-// Each send takes the person's daily claim first (maildaily). One already held leaves them
-// a candidate with no ledger row; a failed send gives the claim back, since the ledger row
-// that burns the campaign for them is already what records the failure.
+// Each send takes the person's daily claim first (maildaily). One already held leaves them a candidate
+// with no ledger row; a failed send gives the claim back, since the ledger row already records the failure.
 func (r *Runner) Run(ctx context.Context, c Campaign) (Stats, error) {
 	rows, err := r.store.ListBroadcastCandidates(ctx, db.ListBroadcastCandidatesParams{
 		Campaign:  c.Name,

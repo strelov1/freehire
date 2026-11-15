@@ -1,13 +1,9 @@
-// Package broadcast sends one-off campaigns: a single letter to the whole audience,
-// on a date someone picked.
+// Package broadcast sends one-off campaigns: one letter to the whole audience on a date someone picked.
 //
-// It is the sibling of internal/engage/onboarding and shares its shape — same shell, same
-// human sender, same Reply-To — but not its pacing. A drip decides *when* a person
-// is ready for the next letter; a campaign has one moment and everyone gets it at
-// once. That difference is the reason for a separate ledger: an accidental repeat
-// hits the entire list rather than one account.
+// Sibling of internal/engage/onboarding (same shell, human sender, Reply-To) but not its pacing:
+// a campaign reaches everyone at once, so it has its own ledger; an accidental repeat hits the entire list.
 //
-// Adding a campaign is adding an entry to `campaigns`. Nothing else changes.
+// Adding a campaign is adding an entry to `campaigns`.
 package broadcast
 
 import (
@@ -35,13 +31,11 @@ type Campaign struct {
 	Preheader string
 	Heading   string
 	body      *template.Template
-	// text takes the origin for the same reason the HTML side does: a campaign that
-	// links into freehire itself cannot spell the URL as a constant, and the previews
-	// render against a relative base. Campaigns that only link outward ignore it.
+	// text takes the origin like the HTML side: a campaign linking into freehire cannot spell the URL
+	// as a constant. Campaigns that only link outward ignore it.
 	text func(base string) string
-	// Timezones limits the audience to accounts whose stored timezone is one of these. Empty
-	// sends to everyone. There is no country column; the timezone the browser reported is
-	// the nearest thing, and an account that never reported one is never reached by it.
+	// Timezones limits the audience to accounts whose stored timezone is listed; empty sends to everyone.
+	// There is no country column, so an account that never reported a timezone is never reached.
 	Timezones []string
 	// Half limits a run to one side of a split test, "a" or "b". Empty sends to everyone.
 	// Lookup returns a copy, so setting it for one run leaves the registry alone.
@@ -58,9 +52,8 @@ type Mailer struct {
 	links   *emailprefs.Links
 }
 
-// NewMailer builds a Mailer. replyTo is the human inbox that answers; as with the
-// onboarding sequence, a campaign signed by a person and answerable by nobody is
-// worse than no campaign, so the caller is expected to require it.
+// NewMailer builds a Mailer. replyTo is the human inbox that answers; a campaign signed by a person
+// and answerable by nobody is worse than none, so the caller is expected to require it.
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
@@ -98,11 +91,8 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 	})
 }
 
-// assets is what the campaign templates render from: the image URLs and the links into
-// the site, which depend on the origin and so cannot be baked into the copy, and the
-// two outward links that ride beside their marks. Each link sits next to its own icon
-// here because a campaign showing one mark and linking somewhere else is the mistake
-// worth making impossible.
+// assets is what the campaign templates render from: image URLs and site links (origin-dependent)
+// plus the two outward links. Each link sits beside its own icon so a mark can never point elsewhere.
 type assets struct {
 	PortraitURL    string
 	DiscordIcon    string

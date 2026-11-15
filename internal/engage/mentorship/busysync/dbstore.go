@@ -18,14 +18,11 @@ type DBStore struct {
 }
 
 // NewDBStore wraps the generated queries. pool is needed alongside q because
-// ReplaceBusyWindow's delete-then-insert is one edit, not two: a mentor observed between
-// them would see either an emptied or a duplicated busy set, and either can cost or
-// falsely block a booking.
+// ReplaceBusyWindow's delete-then-insert must be one transaction.
 func NewDBStore(q *db.Queries, pool *pgxpool.Pool) *DBStore { return &DBStore{q: q, pool: pool} }
 
-// ListConnections returns the mentors whose grant actually covers busy-sync — every
-// predicate (the opt-in flag, the scope, the published profile) lives in the query, so
-// this never spends an API call learning something the database already answers.
+// ListConnections returns the mentors whose grant covers busy-sync. Every predicate (opt-in
+// flag, scope, published profile) lives in the query.
 func (s *DBStore) ListConnections(ctx context.Context) ([]Connection, error) {
 	rows, err := s.q.ListMentorBusySyncConnections(ctx, gmailsync.CalendarScope)
 	if err != nil {
@@ -46,9 +43,8 @@ func (s *DBStore) RefreshToken(ctx context.Context, userID int64) (string, error
 	return r.RefreshTokenEnc, nil
 }
 
-// ReplaceBusyWindow reconciles one mentor's stored busy set in a single transaction:
-// delete first, insert second — the same shape ReplaceWeeklyAvailability uses and for the
-// same reason (see booking_repository.go), so ListBusy never observes a half-emptied set.
+// ReplaceBusyWindow reconciles one mentor's stored busy set in a single transaction
+// (delete, then insert), so ListBusy never observes a half-emptied set.
 func (s *DBStore) ReplaceBusyWindow(ctx context.Context, mentorID int64, windowEnd time.Time, periods []BusyPeriod) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -76,21 +72,15 @@ func (s *DBStore) ReplaceBusyWindow(ctx context.Context, mentorID int64, windowE
 	return tx.Commit(ctx)
 }
 
-// externalID derives the storage key a free/busy period needs but Google never provides
-// (see the package doc and design.md's "Free/busy, not events" decision): the interval's
-// own bounds, concatenated, so a re-sync of an unchanged interval updates the same row
-// rather than duplicating it, matching mentor_busy_intervals' unique constraint's original
-// intent for an events-based sync. Not hashed: the bounds already sit in cleartext in
-// starts_at/ends_at on the very same row, so hashing them here would buy no privacy —
-// only two fewer characters to read back while debugging.
+// externalID derives the storage key Google never provides for a free/busy period: the
+// interval's bounds, so a re-sync of an unchanged interval updates the same row. Not
+// hashed: the bounds already sit in cleartext on the same row.
 func externalID(start, end time.Time) string {
 	return start.UTC().Format(time.RFC3339) + "|" + end.UTC().Format(time.RFC3339)
 }
 
-// SetNeedsReconsent flags the grant, shared with every other Google feature this account
-// may use. SetGmailStatus itself clears mentor_busy_sync_opted_in alongside the move to
-// needs_reconsent — see its own comment for why that lives in the one shared statement
-// rather than duplicated in every caller that can mark this status.
+// SetNeedsReconsent flags the grant, which every Google feature on this account shares.
+// SetGmailStatus itself clears mentor_busy_sync_opted_in alongside.
 func (s *DBStore) SetNeedsReconsent(ctx context.Context, userID int64) error {
 	return s.q.SetGmailStatus(ctx, db.SetGmailStatusParams{UserID: userID, Status: "needs_reconsent"})
 }

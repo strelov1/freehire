@@ -5,19 +5,15 @@
 // job-closed (a listing the candidate is still actively tracking closed) — over
 // the same account-level notification_settings rule internal/engage/reminder reads.
 //
-// One pass (Runner.Run) does MATCH then DELIVER, mirroring internal/engage/notify: MATCH
-// re-scans current state and records new candidates in the application_nudges
-// ledger; DELIVER leases pending nudges, re-verifies the triggering condition still
-// holds (a matched nudge whose condition lapsed by delivery time is cancelled, not
-// sent), and delivers over the user's configured channels.
+// One pass (Runner.Run) does MATCH then DELIVER, mirroring internal/engage/notify:
+// MATCH records new candidates in the application_nudges ledger; DELIVER leases
+// pending nudges, re-verifies the triggering condition still holds (a lapsed nudge
+// is cancelled, not sent), and delivers over the user's configured channels.
 //
-// Dedup rides the ledger's unique key rather than a snooze or a notified-count: an
-// "episode key" — the fact that must change before a re-notify is warranted — is
-// part of the key alongside (user, job, kind). For follow-up it is the
-// application's last_activity_at at match time (silence dragging on doesn't change
-// it; a reply does); for interview-prep it is the triggering stage_set event's
-// occurred_at (a later interview round is a new event, a new episode). See the
-// centralize-lifecycle-notifications change.
+// Dedup rides the ledger's unique key: an "episode key", the fact that must change
+// before a re-notify is warranted, sits alongside (user, job, kind). For follow-up
+// it is the application's last_activity_at at match time; for interview-prep it is
+// the triggering stage_set event's occurred_at.
 package nudge
 
 import (
@@ -38,22 +34,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// Nudge kinds. Also the CHECK constraint on application_nudges.kind (migrations
-// 0083, widened by 0084 and 0144).
+// Nudge kinds. Also the CHECK constraint on application_nudges.kind.
 const (
 	KindFollowUp      = "follow_up"
 	KindInterviewPrep = "interview_prep"
 	KindJobClosed     = "job_closed"
 	// KindAutoApplySubmitted, KindAutoApplyBlocked and KindAutoApplyFailed report an
-	// unattended auto-apply attempt's own terminal outcome — see
-	// add-auto-apply-outcome-notifications. Unlike the three kinds above, their
-	// triggering condition can never lapse between MATCH and DELIVER (an applied
-	// event, a blocked_at, a failed_at are all permanent once written), so
-	// Runner.actionable treats all three as unconditionally actionable.
-	// ListAutoApplyBlockedCandidates/ListAutoApplyFailedCandidates already make
-	// Blocked and Failed mutually exclusive (failed_at wins on a row carrying
-	// both, mirroring AutoApplyQueueMetrics), so a single attempt is never matched
-	// as both kinds at once.
+	// unattended auto-apply attempt's terminal outcome. Their condition is permanent
+	// once written, so Runner.actionable treats them as unconditionally actionable.
+	// The Blocked and Failed candidate queries are mutually exclusive (failed_at
+	// wins), so one attempt never matches as both.
 	KindAutoApplySubmitted = "auto_apply_submitted"
 	KindAutoApplyBlocked   = "auto_apply_blocked"
 	KindAutoApplyFailed    = "auto_apply_failed"
@@ -69,22 +59,15 @@ type Message struct {
 	Slug       string
 	URL        string
 	DaysSilent int
-	// UserID is whose nudge this is. It rides on the message rather than beside the
-	// slice, where the kind sits and where a per-batch property would more naturally
-	// belong, because the alternative was changing this interface and reminder's and
-	// notify's — each implemented by four channels — to hand one value to the one
-	// channel that needs it. The engine batches by (account, kind), so every message
-	// in a call carries the same value; the email transport reads it off the first.
+	// UserID is whose nudge this is. The engine batches by (account, kind), so every
+	// message in a call carries the same value; the email transport reads it off the
+	// first.
 	UserID int64
 }
 
 // Notifier delivers one account's due nudges OF ONE KIND over a channel to a
-// destination, as a single message. The engine depends only on this, so a new
-// channel is a new implementation, not a change here.
-//
-// The kind travels beside the slice rather than being read off the first message,
-// because it is a property of the group: every member shares it, and the renderer
-// switches on it before it looks at any job.
+// destination, as a single message. The kind travels beside the slice because it
+// is a property of the group, and the renderer switches on it before any job.
 type Notifier interface {
 	Send(ctx context.Context, channel, dest, kind string, ms []Message) error
 }
@@ -94,17 +77,15 @@ type Notifier interface {
 var ErrChannelNotConfigured = errors.New("nudge: channel not configured")
 
 // ErrRecipientGone is returned by a Notifier whose channel learned from the send
-// that this recipient is permanently closed to us — the Telegram bot was blocked
-// or removed. Like ErrChannelNotConfigured it is a soft-skip, and additionally the
-// runner forgets the link, so no later nudge, digest or reminder tries that chat
-// again. The same sentinel as notify.ErrRecipientGone, so one errors.Is covers every engine.
+// that this recipient is permanently closed (e.g. the Telegram bot was blocked).
+// Like ErrChannelNotConfigured it is a soft-skip, and the runner also forgets the
+// link. It is the same sentinel as notify.ErrRecipientGone, so one errors.Is covers
+// every engine.
 var ErrRecipientGone = notify.ErrRecipientGone
 
-// Router dispatches a nudge to the notifier registered for its channel, so the
-// engine stays channel-agnostic.
+// Router dispatches a nudge to the notifier registered for its channel.
 type Router map[string]Notifier
 
-// Compile-time guarantee that Router is a Notifier.
 var _ Notifier = (Router)(nil)
 
 // Send routes to the registered notifier, or ErrChannelNotConfigured when none is.
@@ -116,7 +97,6 @@ func (r Router) Send(ctx context.Context, channel, dest, kind string, ms []Messa
 	return n.Send(ctx, channel, dest, kind, ms)
 }
 
-// Compile-time proof that the generated *db.Queries satisfies the engine's Store.
 var _ Store = (*db.Queries)(nil)
 
 // Store is the persistence the engine needs. *db.Queries satisfies it directly.
@@ -125,8 +105,7 @@ type Store interface {
 	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]db.ListInterviewPrepCandidatesRow, error)
 	SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error)
 	// ListAutoApplySubmittedCandidates, ListAutoApplyBlockedCandidates and
-	// ListAutoApplyFailedCandidates back the three KindAutoApply* MATCH loops. See
-	// add-auto-apply-outcome-notifications.
+	// ListAutoApplyFailedCandidates back the three KindAutoApply* MATCH loops.
 	ListAutoApplySubmittedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplySubmittedCandidatesRow, error)
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyBlockedCandidatesRow, error)
 	ListAutoApplyFailedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyFailedCandidatesRow, error)
@@ -140,30 +119,24 @@ type Store interface {
 	// DeleteTelegramLink forgets a user's Telegram chat, called when a send
 	// reports it permanently closed (ErrRecipientGone).
 	DeleteTelegramLink(ctx context.Context, userID int64) (int64, error)
-	// RecordNotification writes the in-app notification-center row for a
-	// delivered nudge. Called from fire right after MarkNudgeDelivered; a
-	// failure must never fail the delivery it accompanies (see
-	// add-notification-center's design). The returned id is only of use to
-	// the subscription digest, which records before it sends so its message can
-	// link to the row; a nudge records after and discards it.
+	// RecordNotification writes the in-app notification-center row for a delivered
+	// nudge; a failure must never fail the delivery. The returned id only matters to
+	// the subscription digest, which records before sending; a nudge discards it.
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) (int64, error)
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.
 type Config struct {
 	// FollowUpWindowDays bounds how far back ListFollowUpCandidates looks at
-	// last_activity_at, so a first deploy does not detonate the entire historical
-	// backlog as nudges.
+	// last_activity_at, so a first deploy does not nudge the whole historical backlog.
 	FollowUpWindowDays int32
 	// InterviewPrepWindowDays is the same bound on ListInterviewPrepCandidates'
 	// occurred_at.
 	InterviewPrepWindowDays int32
 	// JobClosedWindowDays bounds closure notifications; tracker settlement has no age limit.
 	JobClosedWindowDays int32
-	// AutoApplyOutcomeWindowDays is the same first-deploy bound shared by all three
-	// ListAutoApply*Candidates queries (on occurred_at/blocked_at/failed_at
-	// respectively) — one field rather than three, since all three read the same
-	// kind of "recent terminal transition" rather than distinct silence windows.
+	// AutoApplyOutcomeWindowDays is the same bound shared by all three
+	// ListAutoApply*Candidates queries (occurred_at/blocked_at/failed_at).
 	AutoApplyOutcomeWindowDays int32
 	// LeaseSeconds is the delivery lease: a claimed-but-unfinished nudge is
 	// reclaimable after this, which doubles as the crash reaper.
@@ -172,12 +145,10 @@ type Config struct {
 	ClaimBatch int32
 	// MaxAttempts dead-letters a nudge after this many failed deliveries.
 	MaxAttempts int32
-	// SnapshotCap bounds how many nudges one message carries — which is how many
-	// the in-app record holds. It is NOT the message listing bound (that is
-	// notify.ListLimit): a message is short because a long list reads badly, while
-	// the record is long because it is the page the message links to. The excess is
-	// released back to the pending queue rather than stamped delivered into a
-	// message it never appeared in.
+	// SnapshotCap bounds how many nudges one message carries, i.e. how many the
+	// in-app record holds. It is NOT the message listing bound (notify.ListLimit).
+	// The excess is released back to the pending queue rather than stamped delivered
+	// into a message it never appeared in.
 	SnapshotCap int
 }
 
@@ -197,8 +168,7 @@ func DefaultConfig() Config {
 }
 
 // Stats is the per-pass summary logged by the worker. Every counter except
-// Messages counts NUDGES, not deliveries, so the numbers stay comparable across
-// the change that made one message carry many.
+// Messages counts NUDGES, not deliveries.
 type Stats struct {
 	Matched   int // newly recorded nudge candidates
 	Delivered int // nudges sent
@@ -210,18 +180,16 @@ type Stats struct {
 }
 
 // batch is one account's due nudges OF ONE KIND in a pass. Channels, destinations
-// and quiet hours are properties of the ACCOUNT and the kind is shared by
-// construction, so the first member's row answers for the whole batch and only the
-// messages accumulate.
+// and quiet hours belong to the account, so the first member's row answers for the
+// whole batch and only the messages accumulate.
 type batch struct {
 	info db.GetNudgeForDeliveryRow
 	ids  []int64
 	msgs []Message
 }
 
-// batchKey is what makes two nudges one message: the same account AND the same
-// kind. Merging the kinds would put "your application went quiet" and "prepare for
-// your interview" in one mail, which are different errands with different actions.
+// batchKey is what makes two nudges one message: the same account AND kind, since
+// different kinds are different errands.
 type batchKey struct {
 	userID int64
 	kind   string
@@ -235,12 +203,9 @@ type Runner struct {
 	now      func() time.Time
 }
 
-// New builds a Runner.
-//
-// A non-positive SnapshotCap is corrected to the default rather than honoured: it
-// would make every batch full at zero members, so every claimed nudge is released
-// unsent while burning no attempt — a pass that logs no failure and delivers nothing,
-// forever. The other Config fields fail visibly when unset; this one does not.
+// New builds a Runner. A non-positive SnapshotCap is corrected to the default: it
+// would release every claimed nudge unsent without burning an attempt, so a pass
+// would log no failure and deliver nothing, forever.
 func New(store Store, notifier Notifier, cfg Config) *Runner {
 	if cfg.SnapshotCap <= 0 {
 		cfg.SnapshotCap = DefaultConfig().SnapshotCap
@@ -264,9 +229,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	return stats, nil
 }
 
-// match records every current follow-up, interview-prep, and job-closed candidate.
-// Re-running over an unchanged episode is a no-op (the ledger's unique key), so
-// this can freely re-scan the same candidates every pass.
+// match records every current candidate. Re-running over an unchanged episode is a
+// no-op (the ledger's unique key).
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	candidates, err := r.store.ListFollowUpCandidates(ctx, r.cfg.FollowUpWindowDays)
 	if err != nil {
@@ -384,13 +348,9 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 }
 
 // collect turns the claimed ids into one batch per (account, kind), dropping the
-// nudges that must not be sent. Each is re-checked on its own — the trigger is per
-// nudge — and only the survivors group, so a lapsed nudge is cancelled without
-// taking its neighbours' message with it.
-//
-// Batches are returned in the order their first member was claimed, which
-// ClaimDueNudges orders by creation time, so the nudge that has waited longest is
-// served first and a pass is reproducible.
+// nudges that must not be sent. Each is re-checked on its own, so a lapsed nudge is
+// cancelled without taking its neighbours' message. Batches keep the order their
+// first member was claimed (creation time), so the longest-waiting nudge goes first.
 func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batch {
 	byKey := make(map[batchKey]*batch, len(due))
 	var order []*batch
@@ -407,8 +367,8 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 			order = append(order, b)
 		}
 		if len(b.ids) >= r.cfg.SnapshotCap {
-			// The message is full. Release rather than stamp: a nudge marked
-			// delivered while appearing in no message is gone for good.
+			// Full: release rather than stamp, since a nudge marked delivered while in
+			// no message is gone for good.
 			r.release(ctx, id)
 			stats.Deferred++
 			continue
@@ -420,9 +380,9 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 }
 
 // validate re-checks one claimed nudge's triggering condition immediately before it
-// joins a batch, and holds it back inside the account's quiet hours. The re-check is
-// what lets MATCH re-run freely without ever sending a nudge whose reason has since
-// gone away. It reports whether the nudge is deliverable this pass.
+// joins a batch, and holds it back inside the account's quiet hours. The re-check
+// keeps a nudge whose reason has gone away from being sent. It reports whether the
+// nudge is deliverable this pass.
 func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetNudgeForDeliveryRow, bool) {
 	info, err := r.store.GetNudgeForDelivery(ctx, id)
 	if err != nil {
@@ -440,8 +400,8 @@ func (r *Runner) validate(ctx context.Context, id int64, stats *Stats) (db.GetNu
 		return info, false
 	}
 	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
-		// A transient time-of-day condition, not a lapsed trigger: release (not
-		// cancel) so the nudge fires once quiet hours end.
+		// Transient, not a lapsed trigger: release (not cancel) so it fires after
+		// quiet hours.
 		r.release(ctx, id)
 		stats.Deferred++
 		return info, false
@@ -462,9 +422,7 @@ func (r *Runner) message(info db.GetNudgeForDeliveryRow) Message {
 }
 
 // deliverBatch sends one (account, kind) batch as a single message per channel and
-// finalizes every ledger row in it. The batch is the unit: one send outcome decides
-// all of its nudges, because a partial result would need a second delivery ledger
-// to describe and nothing reads one.
+// finalizes every ledger row in it: one send outcome decides all of its nudges.
 func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 	sent, failedErr := r.deliverChannels(ctx, b.info, b.msgs)
 
@@ -502,13 +460,11 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 }
 
 // actionable re-derives the triggering condition from the live delivery context: a
-// disabled notification rule cancels every kind. follow-up and interview-prep
-// additionally need the job still open (closing settles the application one way
-// or another) and their own live condition; job-closed needs the opposite — the
-// listing must remain closed, and automatic expiry must not cancel its notification.
-// Other settled outcomes or removing the application cancel the notification.
-// The three auto-apply outcome kinds need no re-derivation at all: their condition
-// cannot lapse once matched.
+// disabled notification rule cancels every kind. Follow-up and interview-prep also
+// need the job still open and their own live condition; job-closed needs the
+// listing to remain closed, and automatic expiry must not cancel it. Other settled
+// outcomes or removing the application cancel the notification. The auto-apply
+// outcome kinds need no re-derivation: their condition cannot lapse.
 func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	if !info.NotificationsEnabled {
 		return false
@@ -536,9 +492,7 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 		_, active := silence.ThresholdDays(stage)
 		return !info.JobOpen && (active || stage == "expired")
 	case KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed:
-		// Permanent once matched — an applied event, a blocked_at, a failed_at never
-		// lapse the way silence or an interview stage can, so there is nothing here to
-		// re-derive. The NotificationsEnabled gate above already applies.
+		// Permanent once matched; nothing to re-derive.
 		return true
 	default:
 		return false
@@ -546,12 +500,10 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 }
 
 // deliverChannels attempts each configured channel that has a usable destination,
-// sending the whole batch as one message per channel. It reports HOW MANY messages
-// landed — a batch on email and Telegram is two, and the pass summary would
-// undercount if this were a bool — and the last hard error (a channel with no
-// destination or no notifier is a soft-skip, not an error). One successful channel
-// makes the batch delivered — a co-channel outage just misses that channel for these
-// one-shot nudges.
+// sending the whole batch as one message per channel. It reports how many messages
+// landed (a count, since email plus Telegram is two) and the last hard error; a
+// channel with no destination or no notifier is a soft-skip. One successful channel
+// makes the batch delivered.
 func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (sent int, failedErr error) {
 	for _, ch := range info.Channels {
 		dest, ok := recipient(ch, info)
@@ -562,9 +514,8 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 		if errors.Is(err, ErrChannelNotConfigured) {
 			continue
 		}
-		// The chat is closed to us for good. Forget it and skip this channel
-		// without recording a failure: retrying cannot reach it, and a nudge whose
-		// OTHER channel worked is still delivered.
+		// Closed for good: forget it and skip this channel without recording a
+		// failure; a nudge whose other channel worked is still delivered.
 		if errors.Is(err, ErrRecipientGone) {
 			r.unlinkTelegram(ctx, info.UserID, err)
 			continue
@@ -579,9 +530,8 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 }
 
 // unlinkTelegram forgets a user's Telegram chat after a send reported it
-// permanently closed, logging it because this changes the user's settings without
-// them asking. A failure here is logged and no more: the send is skipped either
-// way, and the next nudge meets the same 403 and tries again.
+// permanently closed, logging it because it changes the user's settings unasked. A
+// failure is only logged: the next nudge meets the same 403 and retries.
 func (r *Runner) unlinkTelegram(ctx context.Context, userID int64, cause error) {
 	rows, err := r.store.DeleteTelegramLink(ctx, userID)
 	if err != nil {
@@ -617,17 +567,13 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 	return "", false
 }
 
-// recordNotification writes the one in-app notification-center row for a delivered
-// batch, reusing renderNudgeBatch's title/body — the same copy the push channel
-// shows — so the in-app record never drifts from it. A batch of one keeps the shape
-// nudges have always recorded, a public slug the notification links straight to; a
-// batch of several has no single job to point at, so it carries the job list and the
-// notification center renders its own page.
+// recordNotification writes the in-app notification-center row for a delivered
+// batch, reusing renderNudgeBatch's title/body (the push copy). A batch of one
+// carries a public slug the notification links to; a batch of several carries the
+// job list for the notification center's own page.
 //
 // A failure here must not fail the delivery: the batch was already sent and marked
-// delivered; losing the in-app record is a degraded read-side feature, not a reason
-// to treat the delivery as failed — the same posture this func's caller already
-// takes toward MarkNudgeDelivered's own failure, just above.
+// delivered.
 func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 	title, body := renderNudgeBatch(b.info.Kind, b.msgs)
 	arg := db.RecordNotificationParams{
@@ -646,8 +592,7 @@ func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 	}
 }
 
-// jobsSnapshot is the job list a multi-job batch records for its notification's own
-// page, in the shape notify owns because one page renders every engine's rows.
+// jobsSnapshot is the job list a multi-job batch records, in the shape notify owns.
 func jobsSnapshot(ms []Message) json.RawMessage {
 	jobs := make([]notify.SnapshotJob, len(ms))
 	for i, m := range ms {

@@ -19,9 +19,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 )
 
-// requestTimeout bounds one delivery attempt. A slow or hanging third-party
-// endpoint must not hold up the worker pass beyond a bounded window; the
-// engine's own retry/dead-letter bookkeeping is what a timeout feeds into.
+// requestTimeout bounds one delivery attempt so a hanging third-party endpoint cannot stall the
+// worker pass.
 const requestTimeout = 10 * time.Second
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
@@ -39,10 +38,8 @@ func NewNotifier() *Notifier {
 	return newNotifier(safehttp.NewClient(requestTimeout))
 }
 
-// newNotifier builds a Notifier against an arbitrary HTTP client. The seam
-// exists for tests: safehttp refuses private addresses, which is correct in
-// production and makes a loopback test server unreachable (see
-// internal/identity/billing's client for the same pattern).
+// newNotifier builds a Notifier against an arbitrary HTTP client, for tests: safehttp refuses
+// private addresses, which makes a loopback test server unreachable.
 func newNotifier(httpc *http.Client) *Notifier {
 	return &Notifier{http: httpc}
 }
@@ -54,15 +51,11 @@ type payload struct {
 	Jobs            []notify.DigestJob `json:"jobs"`
 }
 
-// Send POSTs the digest to dest. A 410 Gone is translated to
-// notify.ErrRecipientGone — the engine-side vocabulary for "this recipient
-// will not accept messages again" — so the engine disables the destination
-// and soft-skips instead of counting a delivery failure it would retry to no
-// purpose.
+// Send POSTs the digest to dest. A 410 Gone becomes notify.ErrRecipientGone, so the engine
+// disables the destination and soft-skips instead of retrying.
 //
-// One POST per digest: a receiver is a program reading one saved search's payload,
-// so the engine never bundles a webhook's digests (see notify.Message), and this
-// loop keeps the wire shape intact even if it did.
+// One POST per digest: a receiver reads one saved search's payload, and this loop keeps that
+// wire shape even if the engine bundled digests (see notify.Message).
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
 	if err := validateScheme(dest); err != nil {
 		return fmt.Errorf("webhooknotify: %w", err)
@@ -106,11 +99,9 @@ func (n *Notifier) post(ctx context.Context, dest string, d notify.Digest) error
 // tell it apart from a real digest.
 const TestSearchName = "freehire webhook test"
 
-// Test POSTs a sample digest with no jobs to dest and reports what the
-// destination answered, with Send's own error vocabulary. It is how the API
-// proves a URL accepts our payload before relying on it: saving the URL, and
-// the explicit "test" action. The empty job list is a non-nil slice so it
-// encodes as [] — a receiver's template that ranges over it must not choke.
+// Test POSTs a sample digest with no jobs to dest and reports the answer with Send's error
+// vocabulary, proving a URL accepts our payload before it is relied on. The empty job list is
+// non-nil so it encodes as [], not null.
 func (n *Notifier) Test(ctx context.Context, dest string) error {
 	return n.Send(ctx, notify.ChannelWebhook, dest, notify.Message{Digests: []notify.Digest{{
 		SavedSearchName: TestSearchName,
@@ -118,10 +109,8 @@ func (n *Notifier) Test(ctx context.Context, dest string) error {
 	}}})
 }
 
-// validateScheme rejects anything but http/https before a request is ever
-// built — defense in depth alongside the API layer's own creation-time check
-// (see internal/api/handler), and the only thing standing between a malformed
-// dest and an attempted send since recipient() does not otherwise validate it.
+// validateScheme rejects anything but http/https before a request is built. Defense in depth
+// beside the API layer's creation-time check; recipient() does not otherwise validate dest.
 func validateScheme(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {

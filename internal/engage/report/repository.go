@@ -18,10 +18,9 @@ var (
 	_ JobCloser  = (*QueriesRepository)(nil)
 )
 
-// QueriesRepository adapts *db.Queries to the Repository and JobCloser. Each method maps the
-// relevant Postgres condition onto a package sentinel: a unique violation on create →
-// duplicate open, no row on get → not found, no row on a status-scoped mark → already
-// decided.
+// QueriesRepository adapts *db.Queries to the Repository and JobCloser, mapping unique
+// violation on create to ErrDuplicateOpen, no row on get to not found, and no row on a
+// status-scoped mark to ErrAlreadyDecided.
 type QueriesRepository struct {
 	q *db.Queries
 }
@@ -31,9 +30,8 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 	return &QueriesRepository{q: q}
 }
 
-// Create inserts a pending report. The partial unique index on (reported_by, job_id) WHERE
-// status='pending' rejects a second open report of the same job by the same user; that
-// surfaces as ErrDuplicateOpen.
+// Create inserts a pending report. The partial unique index on (reported_by, job_id)
+// WHERE status='pending' surfaces a second open report as ErrDuplicateOpen.
 func (r *QueriesRepository) Create(ctx context.Context, reportedBy, jobID int64, reason, details, contactTelegram string) (Report, error) {
 	rep, err := r.q.CreateReport(ctx, db.CreateReportParams{
 		ReportedBy:      reportedBy,
@@ -51,8 +49,7 @@ func (r *QueriesRepository) Create(ctx context.Context, reportedBy, jobID int64,
 	return fromRow(rep), nil
 }
 
-// Get loads a report by id with its reporter and job context, mapping a missing row to
-// ErrReportNotFound.
+// Get loads a report by id with its reporter and job context.
 func (r *QueriesRepository) Get(ctx context.Context, id int64) (ReportDetail, error) {
 	rep, err := r.q.GetReport(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -80,7 +77,7 @@ func (r *QueriesRepository) Get(ctx context.Context, id int64) (ReportDetail, er
 	}, nil
 }
 
-// ListPending returns the pending review queue with reporter email and job slug/title.
+// ListPending returns the pending review queue.
 func (r *QueriesRepository) ListPending(ctx context.Context) ([]ReportDetail, error) {
 	rows, err := r.q.ListPendingReports(ctx)
 	if err != nil {
@@ -93,9 +90,8 @@ func (r *QueriesRepository) ListPending(ctx context.Context) ([]ReportDetail, er
 	return out, nil
 }
 
-// MarkResolved marks a pending report resolved, storing the moderator's note as the review
-// reason. The query is scoped to status='pending', so a concurrent second decision affects
-// no row — surfaced as ErrAlreadyDecided.
+// MarkResolved marks a pending report resolved, storing the note as the review reason.
+// The query is scoped to status='pending', so a concurrent second decision gets ErrAlreadyDecided.
 func (r *QueriesRepository) MarkResolved(ctx context.Context, id, reviewedBy int64, note string) (Report, error) {
 	rep, err := r.q.MarkReportResolved(ctx, db.MarkReportResolvedParams{
 		ID:           id,
@@ -127,15 +123,13 @@ func (r *QueriesRepository) MarkDismissed(ctx context.Context, id, reviewedBy in
 	return fromRow(rep), nil
 }
 
-// Close soft-closes one job (CloseJobByID is idempotent — closing an already-closed job
-// affects no row and is not an error).
+// Close soft-closes one job; closing an already-closed job is not an error.
 func (r *QueriesRepository) Close(ctx context.Context, jobID int64) error {
 	_, err := r.q.CloseJobByID(ctx, jobID)
 	return err
 }
 
-// fromRow maps the generated db row to the package domain type, dropping the internal
-// ownership columns the use case does not need.
+// fromRow maps the generated db row to the package domain type.
 func fromRow(row db.JobReport) Report {
 	return Report{
 		ID:              row.ID,
@@ -150,8 +144,7 @@ func fromRow(row db.JobReport) Report {
 	}
 }
 
-// fromPendingRow maps a moderator-queue row to ReportDetail, adding the joined reporter and
-// job columns.
+// fromPendingRow maps a moderator-queue row to ReportDetail.
 func fromPendingRow(row db.ListPendingReportsRow) ReportDetail {
 	return ReportDetail{
 		Report: Report{

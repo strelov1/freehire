@@ -38,10 +38,9 @@ func NewWorker(q *db.Queries, send *Sender) *Worker { return &Worker{q: q, send:
 // those it gave up on.
 type Stats struct{ Subscriptions, Changes, Failed, Disabled int64 }
 
-// Run delivers every due subscription, each from its stored position until it catches up with
-// the feed. The feed query is the public feed's (ListJobChanges, here with company_slug): the same ordering, the same
-// "finished transactions only" bound and the same privacy rule, so a subscriber sees exactly
-// what a client polling GET /jobs/changes would.
+// Run delivers every due subscription, each from its stored position until it catches up with the
+// feed. The feed query is the public feed's (ListJobChanges, here with company_slug): same ordering,
+// "finished transactions only" bound and privacy rule, so a subscriber sees what GET /jobs/changes would.
 func (w *Worker) Run(ctx context.Context) (Stats, error) {
 	var st struct{ subs, changes, failed, disabled atomic.Int64 }
 	started := pgtype.Timestamptz{Time: time.Now(), Valid: true}

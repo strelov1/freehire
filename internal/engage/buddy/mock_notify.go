@@ -27,18 +27,13 @@ const (
 
 var _ MockNotifier = (*MockMailNotifier)(nil)
 
-// MockMailNotifier delivers mock notices by email and records each in the notification
-// center. Every notice names the other participant by handle only — never an account name
-// or address — and states the time in its recipient's own zone: the host's from their
-// settings, the guest's from the booking, falling back to UTC and saying so.
+// MockMailNotifier delivers mock notices by email and records each in the notification center.
+// Every notice names the other participant by handle only and states the time in its recipient's own
+// zone (the host's from their settings, the guest's from the booking, else UTC and saying so).
 //
-// Like mentorship's booking mail it bypasses the account-level notification rule: that
-// rule governs what the system originates about a member's activity, not a commitment the
-// member made and another member is holding an hour for.
-//
-// The mail is emailprefs.GroupEssential, as mentorship's booking mail is and for its
-// reason: it is a commitment the member made and another member is holding an hour for,
-// and an unsubscribe link on it would be an offer that cannot be honoured.
+// Like mentorship's booking mail it bypasses the account-level notification rule and is
+// emailprefs.GroupEssential: it is a commitment another member is holding an hour for, so an
+// unsubscribe link would be an offer that cannot be honoured.
 type MockMailNotifier struct {
 	q      *db.Queries
 	sender emailnotify.Sender

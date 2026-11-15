@@ -42,10 +42,8 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, ms []Rem
 	return n.push.Send(ctx, dest, title, body, data)
 }
 
-// renderReminderBatch produces the short, human-readable title/body for one
-// account's batch, shared by the push channel's own copy and the
-// notification-center record — both need the identical wording for the same
-// delivery event (see the add-notification-center design).
+// renderReminderBatch produces the title/body for one account's batch, shared by the push
+// channel and the notification-center record so both use the same wording.
 func renderReminderBatch(ms []ReminderMessage) (title, body string) {
 	if len(ms) == 1 {
 		return renderReminder(ms[0])

@@ -7,14 +7,13 @@ import (
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 )
 
-// Compile-time proof PushNotifier satisfies the engine's Notifier seam.
 var _ Notifier = (*PushNotifier)(nil)
 
 // PushTokenLister lists a user's registered push devices.
 type PushTokenLister = pushnotify.TokenLister
 
-// PushNotifier delivers a nudge as a mobile push, fanning out to every device
-// registered for the account via pushnotify.UserSender.
+// PushNotifier delivers a nudge as a mobile push to every device registered for the
+// account.
 type PushNotifier struct{ push *pushnotify.UserSender }
 
 // NewPushNotifier builds a PushNotifier resolving devices through tokens and
@@ -23,16 +22,14 @@ func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *Pus
 	return &PushNotifier{push: pushnotify.NewUserSender(tokens, transport)}
 }
 
-// Send resolves dest as a user id, lists that user's registered devices, and fans
-// ONE notification for the whole batch out to all of them. The channel argument is
-// ignored — this notifier only serves the push channel.
+// Send resolves dest as a user id and fans ONE notification for the whole batch out
+// to all their devices. The channel argument is ignored.
 func (n *PushNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
 	if len(ms) == 0 {
 		return nil
 	}
 	title, body := renderNudgeBatch(kind, ms)
-	// The deep link needs one destination, so it is carried only when the batch
-	// names one job.
+	// The deep link needs one destination: only a single-job batch carries it.
 	var data map[string]string
 	if len(ms) == 1 {
 		data = map[string]string{"slug": ms[0].Slug}
@@ -40,15 +37,12 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest, kind string, ms
 	return n.push.Send(ctx, dest, title, body, data)
 }
 
-// renderNudgeBatch is the shared title/body copy for one (account, kind) batch,
-// used by both the push channel (Send, above) and the notification-center record
-// written by Runner.deliverBatch in nudge.go — one rendering, two readers, so the
-// in-app record never drifts from what push already shows.
+// renderNudgeBatch is the shared title/body copy for one (account, kind) batch, used
+// by both the push channel and the notification-center record, so the in-app record
+// never drifts from push.
 //
-// The default arm is not reachable today — application_nudges.kind is CHECKed
-// against exactly the three above — but it is the copy a fourth kind would ship
-// with until someone gave it its own, so it says what the notification is about
-// rather than naming the product.
+// The default arm is unreachable while application_nudges.kind is CHECKed to the
+// known kinds; it is the copy a new kind ships with until it gets its own.
 func renderNudgeBatch(kind string, ms []Message) (title, body string) {
 	if len(ms) == 1 {
 		return renderNudge(ms[0])
@@ -71,8 +65,7 @@ func renderNudgeBatch(kind string, ms []Message) (title, body string) {
 	}
 }
 
-// renderNudge is the single-nudge wording, kept as its own function because it is
-// the one a batch of one must be indistinguishable from.
+// renderNudge is the single-nudge wording; a batch of one must read identically.
 func renderNudge(m Message) (title, body string) {
 	switch m.Kind {
 	case KindFollowUp:

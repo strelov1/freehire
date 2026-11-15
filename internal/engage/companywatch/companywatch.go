@@ -27,9 +27,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// MaxEntries is the most companies one person can watch. One early user keeps about 3,000,
-// so the limit leaves room without letting a list grow into the filter an alert's search
-// would have to carry.
+// MaxEntries is the most companies one person can watch. It keeps the filter an
+// alert's search must carry bounded.
 //
 // shortcut: the count and the insert share one statement, not a lock, so the same person's
 // concurrent adds at the edge can land a few past it. That is harmless to a bound meant to
@@ -151,12 +150,11 @@ func (s *Service) Remove(ctx context.Context, userID int64, slug string) error {
 	return nil
 }
 
-// Import adds the companies a list of names or slugs identifies. Each entry resolves the way
-// the catalogue itself resolves a company name — the alias registry, then the folded slug —
-// and counts only when that names exactly one company: an entry that names none, or that two
-// companies share and no open posting tells apart, is returned in Unmatched as typed, so the
-// person can fix it instead of finding a stranger on their list. The batch is all-or-nothing
-// against MaxEntries (ErrFull), and what is already on the list is counted, not duplicated.
+// Import adds the companies a list of names or slugs identifies. Each entry
+// resolves like a catalogue company name (alias registry, then folded slug) and
+// counts only when it names exactly one company; any other entry is returned in
+// Unmatched as typed. The batch is all-or-nothing against MaxEntries (ErrFull),
+// and entries already on the list are counted, not duplicated.
 func (s *Service) Import(ctx context.Context, userID int64, names []string) (ImportResult, error) {
 	entries := cleanEntries(names)
 	if len(entries) == 0 {
@@ -269,11 +267,10 @@ func (s *Service) resolveAll(ctx context.Context, entries []string) (map[string]
 	return out, nil
 }
 
-// settle is the one company a folded key names, or false when none or several do. The alias
-// registry, when it speaks, is the recorded answer. Without it the companies sharing the fold
-// decide: one is the company, and of several only a single one with open postings is — a
-// namesake that is hiring is the one a person typing the name means, but two of them are a
-// name the catalogue has not decided.
+// settle is the one company a folded key names, or false when none or several
+// do. A recorded alias wins. Otherwise one company sharing the fold is the
+// answer, and of several only a single one with open postings is (the hiring
+// namesake is the one a person means).
 func settle(key string, canons map[string][]string, bySlug map[string]db.ListWatchableCompaniesByFoldedSlugRow, byFold map[string][]db.ListWatchableCompaniesByFoldedSlugRow) (string, bool) {
 	if key == "" {
 		return "", false

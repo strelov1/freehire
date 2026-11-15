@@ -6,26 +6,17 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 )
 
-// body parses one campaign's markup with the shell's sign-off appended: a campaign
-// is a letter from the same person the sequence's letters are from, and the two
-// signatures were byte-identical copies until the shell took the block.
+// body parses one campaign's markup with the shell's sign-off appended, so a campaign carries the
+// same signature as the sequence's letters.
 func body(name, markup string) *template.Template {
 	return template.Must(mailtpl.Partials().New(name).Parse(markup + "\n" + `{{template "signature" .}}`))
 }
 
-// campaigns is the registry. A campaign is removed once it has been sent: the ledger
-// in broadcast_emails is what records that it went out, so keeping the copy here
-// after the fact only offers a letter about a date that has passed to whoever reads
-// the worker's usage line. The two Product Hunt letters were dropped on 2026-09-01
-// for that reason; git holds them.
+// campaigns is the registry. A campaign is removed once sent: broadcast_emails records that it went
+// out, and a stale entry only advertises a past-dated letter in the worker's usage line.
 var campaigns = map[string]Campaign{
-	// The Discord letter asks for one thing and links to one place. It could also
-	// have sold the alerts, the CV tools and the extension in the same breath — every
-	// campaign is tempted to — but a letter with four buttons is a letter nobody acts
-	// on, and what this one is for is the room filling up.
-	//
-	// It promises an answer from a person, and deliberately not a same-day one: a
-	// deadline in a letter is a promise about behaviour, and the letter keeps going out
+	// The Discord letter asks for one thing and links to one place; more buttons and nobody acts.
+	// It promises an answer from a person, deliberately not a same-day one: the letter keeps going out
 	// long after the week it was written in.
 	"discord-invite": {
 		// Name is the ledger key and stays "discord-invite" whatever the subject line
@@ -63,11 +54,8 @@ var campaigns = map[string]Campaign{
 		},
 	},
 
-	// The interview-buddies letter, like the Discord one, asks for one thing and links
-	// to one place: the feature's landing. It is honest that the network is new and
-	// small — a reader who joins expecting a crowd and finds a handful has been sold
-	// something — and honest about what the anonymity covers: others see the handle,
-	// the role titles and the progress. It says the feature is free.
+	// The interview-buddies letter asks for one thing and links to the feature's landing. It says the
+	// network is new and small, that others see only the handle, role titles and progress, and that it is free.
 	"interview-buddies": {
 		// Name is the ledger key and stays "interview-buddies" whatever the subject line
 		// says: renaming it would mail the whole list a second time. The onboarding
@@ -102,11 +90,9 @@ var campaigns = map[string]Campaign{
 		},
 	},
 
-	// The Brazil letter goes only to accounts in a Brazilian timezone. Until 2026-11-11 a card
-	// issued in Brazil could not pay at all: the Stripe account is Brazilian, so those cards
-	// are domestic, and Stripe charges domestic cards only in reais while every price was in
-	// dollars. The prices now carry a BRL amount. Written in Portuguese because that is who
-	// reads it; the amounts are the Stripe currency_options and must move with them.
+	// The Brazil letter goes only to accounts in a Brazilian timezone: those cards are domestic and Stripe
+	// charges them only in reais, so the prices now carry a BRL amount. Written in Portuguese; the amounts
+	// are the Stripe currency_options and must move with them.
 	"brazil-brl": {
 		// Name is the ledger key: renaming it would mail the audience a second time.
 		Name:      "brazil-brl",

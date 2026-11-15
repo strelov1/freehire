@@ -1,8 +1,6 @@
 // Package emailnotify is the email implementation of notify.Notifier: it renders
 // a filter-subscription digest into an HTML + plain-text email and sends it via a
-// Sender (AWS SES in production). It is the email-channel sibling of
-// internal/engage/telegramnotify; the matching engine depends only on notify.Notifier, so
-// this package is an additive channel, not a change to the engine.
+// Sender (AWS SES in production).
 package emailnotify
 
 import (
@@ -18,26 +16,21 @@ import (
 	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
-// Compile-time guarantee that Notifier satisfies the channel abstraction.
 var _ notify.Notifier = (*Notifier)(nil)
 
 // Sender is the email transport: it delivers one Message. *Client (AWS SES)
-// satisfies it in production; tests inject a fake so rendering is verified without
-// touching AWS.
+// satisfies it in production; tests inject a fake.
 //
-// One method, not three. It replaced Send / SendWithReplyTo / SendWithAttachments,
-// which had begun enumerating the combinations of their optional parts — and every
-// mail now passing through a single call is what lets one validate() refuse a
-// silenceable mail with no way out of it, on both the templated and the hand-built
-// rendering paths.
+// One method so every mail passes through a single call, which lets one validate()
+// refuse a silenceable mail with no way out of it, on templated and hand-built
+// rendering paths alike.
 type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
 // Notifier renders a digest to an email and sends it from `from` through the
-// Sender. Digest links point at the on-platform freehire job page
-// (jobBaseURL/jobs/<slug>) so notifications keep the user on the platform and
-// never expose a source URL that may be login-gated.
+// Sender. Digest links point at the on-platform job page (jobBaseURL/jobs/<slug>),
+// never a source URL that may be login-gated.
 type Notifier struct {
 	sender     Sender
 	from       string
@@ -60,8 +53,7 @@ func NewNotifier(sender Sender, from, jobBaseURL string, links *emailprefs.Links
 }
 
 // Send renders the digest and delivers it to the email address in dest. The
-// channel argument is ignored — the worker routes only the email channel to this
-// notifier.
+// channel argument is ignored.
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Message) error {
 	unsubscribe, err := n.links.For(m.UserID, emailprefs.GroupAlerts)
 	if err != nil {
@@ -88,9 +80,8 @@ type renderedEmail struct {
 	subject, html, text string
 }
 
-// htmlData is the data the HTML template renders. Every field is emitted in an
-// escaping context by html/template, which is the injection guard for the
-// user/source-derived job titles and company names.
+// htmlData is the data the HTML template renders. html/template escapes every
+// field in context, which guards the user/source-derived titles and company names.
 type htmlData struct {
 	Sections []section
 }
@@ -110,9 +101,8 @@ func (n *Notifier) section(d notify.Digest, titled bool) section {
 	for _, j := range listed {
 		rows = append(rows, mailtpl.NewJob(j.Title, j.Company, j.SalaryString(), n.jobURL(j)))
 	}
-	// A message itemizes at most notify.ListLimit jobs while Total is the true
-	// count, so the remainder becomes the "and N more" tail — which links to the
-	// page carrying the whole match set, not to the alerts settings.
+	// A message itemizes at most notify.ListLimit jobs; the remainder becomes the
+	// "and N more" tail, linking to the page with the whole match set.
 	s := section{Jobs: rows, More: max(d.Total-len(listed), 0), ViewAllURL: n.viewAllURL(d)}
 	if titled {
 		s.Title = fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName)
@@ -141,16 +131,15 @@ func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail
 	}
 
 	var b bytes.Buffer
-	// The template is a trusted constant and the data is escaped in context, so
-	// Execute can only fail on a template bug — surfaced by the render tests.
+	// The template is a trusted constant, so Execute can only fail on a template
+	// bug, which the render tests surface.
 	_ = htmlTemplate.Execute(&b, htmlData{Sections: sections})
 
 	html := n.layout.Render(mailtpl.Body{
 		Preheader: preheader,
 		Heading:   heading,
 		Content:   template.HTML(b.String()), //nolint:gosec // rendered by the trusted template below, which escaped every field in context
-		// The shell carries the unsubscribe and settings links, so the footer only
-		// has to answer "why am I getting this".
+		// The shell carries the unsubscribe and settings links.
 		Footer:         "You’re getting this because you set up a job alert on freehire.",
 		UnsubscribeURL: unsubscribeURL,
 	})
@@ -158,8 +147,7 @@ func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail
 	return renderedEmail{subject: subject, html: html, text: n.renderText(textHeading, sections, unsubscribeURL)}
 }
 
-// renderText builds the plain-text alternative, mirroring the HTML body so
-// non-HTML clients (and spam scorers) see the same content.
+// renderText builds the plain-text alternative, mirroring the HTML body.
 func (n *Notifier) renderText(heading string, sections []section, unsubscribeURL string) string {
 	var b strings.Builder
 	b.WriteString(heading + "\n")
@@ -187,18 +175,15 @@ func (n *Notifier) renderText(heading string, sections []section, unsubscribeURL
 	return b.String()
 }
 
-// manageURL is the saved-search settings page, where the digest sends anyone who
-// wants more results or fewer mails.
+// manageURL is the saved-search settings page.
 func (n *Notifier) manageURL() string { return n.jobBaseURL + "/my/notifications" }
 
 // viewAllURL is where the "and N more" tail leads: the digest's own in-app
-// notification, whose page lists every job this digest matched. A digest whose
-// recording failed carries no id, and the tail falls back to the notification
-// section — a weaker destination, but never a broken one.
+// notification page. A digest whose recording failed has no id and falls back to
+// the notification section.
 //
-// A digest that counts more than it carries (notify.Digest.Overflowed) links to
-// the saved search's live results instead: its own page lists only what it
-// carries, which would be fewer jobs than the mail just announced.
+// An overflowed digest (counts more than it carries) links to the saved search's
+// live results, since its own page would list fewer jobs than the mail announced.
 func (n *Notifier) viewAllURL(d notify.Digest) string {
 	if d.Overflowed() {
 		return n.jobBaseURL + d.SearchPath("email")
@@ -209,19 +194,17 @@ func (n *Notifier) viewAllURL(d notify.Digest) string {
 	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=email"
 }
 
-// jobURL is the on-platform freehire job page for a digest job, tagged with an
-// email UTM source so the channel's traffic is attributable. Slugs are our own
-// normalized values, so the URL needs no escaping.
+// jobURL is the on-platform job page, tagged with an email UTM source. Slugs are
+// our own normalized values, so the URL needs no escaping.
 func (n *Notifier) jobURL(j notify.DigestJob) string {
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=email"
 }
 
-// htmlTemplate is the digest body — the job list only. The surrounding chrome
-// (header, card, footer) belongs to mailtpl, so this template holds nothing that
-// another mail would also need.
+// htmlTemplate is the digest body, the job list only; the surrounding chrome
+// belongs to mailtpl.
 //
-// The list is a table rather than stacked divs because Outlook collapses the
-// margins between block elements unpredictably; table cell padding it honours.
+// A table rather than stacked divs because Outlook collapses block margins
+// unpredictably but honours cell padding.
 var htmlTemplate = template.Must(mailtpl.Partials().New("digest").Parse(`
 {{range $n, $s := .Sections}}
 {{if $s.Title}}<h2 class="m-ink" style="margin:{{if $n}}32px{{else}}0{{end}} 0 4px;font-size:16px;line-height:1.4;font-weight:600;color:#070707;">{{$s.Title}}</h2>{{end}}

@@ -6,11 +6,9 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 )
 
-// body is the letter's markup, written once — every recipient hit the same kind of
-// wall (a daily ceiling on some feature), and the letter never says which one: the
-// pricing page already treats every feature the same way ("every feature is on every
-// plan, what changes is how much"), and naming one here would promise the nudge knows
-// more about the reader's day than it does.
+// body is the letter's markup. It never names which feature hit the ceiling: pricing
+// treats every feature alike, and naming one would imply the nudge knows more about
+// the reader's day than it does.
 var body = template.Must(mailtpl.Partials().New("limit-nudge").Parse(`
 {{template "p" "Hi — I'm Ilya, I built freehire. I noticed you ran into today's limit on one of the AI features."}}
 {{template "lead" "Pro removes the daily ceiling — $5 a month, cancel any time."}}
@@ -19,8 +17,7 @@ var body = template.Must(mailtpl.Partials().New("limit-nudge").Parse(`
 {{template "muted" "Replying to this email reaches me directly — tell me if something about the limits feels off."}}
 ` + "\n" + `{{template "signature" .}}`))
 
-// text is the plain-text alternative, spelling the link out the way every other
-// personal letter in this codebase does.
+// text is the plain-text alternative, with the link spelled out.
 func text(pricingURL string) string {
 	return "Hi — I'm Ilya, I built freehire. I noticed you ran into today's limit on one of\n" +
 		"the AI features.\n\n" +
