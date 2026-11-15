@@ -11,6 +11,8 @@ pages currently hide that destination behind sign-in, so this change does not pr
 automatic extraction or introduce account-based crawling. A curator command validates
 and records known destinations, previews by default, supports clearing them, and queues
 the changed job for search in the same transaction. Ingest does not overwrite the field.
+Verified destination lookup precedes source-page canonicalisation and preserves vacancy
+query parameters and form paths, ignoring only known tracking (`utm_*` and `trk`).
 
 ## Approaches
 

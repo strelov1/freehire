@@ -2670,12 +2670,14 @@ type Querier interface {
 	// There is no unique constraint behind this on purpose (a second stint at the same employer
 	// in the same role is a real career shape), so the oldest match wins and stays stable.
 	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (FindExperienceEmploymentRow, error)
+	// Match the verified destination before rewriting an application form's path to a
+	// description page. Vacancy parameters remain identity; only known tracking is noise.
+	FindOpenJobByApplicationURL(ctx context.Context, url string) (string, error)
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
 	// by scheme, www., tracking query, fragment, case or trailing slash still matches; the
-	// same expression backs the posting and nonempty application URL indexes. A verified
-	// destination must resolve after an extension follows Apply, just like the source URL.
+	// same expression backs jobs_normalized_url_idx, so this is an index lookup.
 	// Scoped to open rows: a closed posting is not one to show a match card for.
 	//
 	// Duplicates ARE matched, and answer with the posting they duplicate. One in five open

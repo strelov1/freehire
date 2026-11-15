@@ -9,6 +9,29 @@ import (
 	"context"
 )
 
+const findOpenJobByApplicationURL = `-- name: FindOpenJobByApplicationURL :one
+SELECT COALESCE(canonical.public_slug, j.public_slug)
+FROM jobs j
+LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of
+    AND canonical.closed_at IS NULL AND NOT canonical.is_private
+LEFT JOIN job_activity a ON a.job_id = j.id
+WHERE j.application_url <> ''
+  AND normalize_application_url(j.application_url) = normalize_application_url($1)
+  AND normalize_application_url($1) <> ''
+  AND j.closed_at IS NULL AND NOT j.is_private
+ORDER BY (j.duplicate_of IS NULL) DESC, a.last_seen_at DESC, j.id DESC
+LIMIT 1
+`
+
+// Match the verified destination before rewriting an application form's path to a
+// description page. Vacancy parameters remain identity; only known tracking is noise.
+func (q *Queries) FindOpenJobByApplicationURL(ctx context.Context, url string) (string, error) {
+	row := q.db.QueryRow(ctx, findOpenJobByApplicationURL, url)
+	var public_slug string
+	err := row.Scan(&public_slug)
+	return public_slug, err
+}
+
 const setJobApplicationURL = `-- name: SetJobApplicationURL :one
 WITH locked AS MATERIALIZED (
     SELECT j.id

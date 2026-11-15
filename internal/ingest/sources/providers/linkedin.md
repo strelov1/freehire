@@ -27,3 +27,5 @@
   has verified it, `cmd/set-job-application-url --slug=... --url=... --apply` records it in
   `jobs.application_url`; public Apply links prefer it. `jobs.url` remains the LinkedIn
   posting used by liveness, and ingest leaves the separately recorded destination alone.
+  Destination lookup preserves form paths, path case and unknown query parameters (vacancy
+  IDs included); only `utm_*` and `trk` are ignored. It precedes source-page canonicalisation.
