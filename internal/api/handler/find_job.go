@@ -14,25 +14,15 @@ import (
 )
 
 // catalogSlugForURL resolves the URL of a job page to the catalog posting it is, in three
-// tiers, exact first. The catalog's own dedup identity — (source, external_id), recovered
-// from the URL — is served by a unique index, but only a handful of ATS URL shapes carry
-// an identity a parser can read. So a URL that names no identity, or names one we have no
-// row for, next matches a verified application destination with its query identity intact.
-// The last tier matches the canonical detail URL each source stored in jobs.url
-// (normalized on both sides, see migration 0042): for aggregators and most boards
-// that IS the page the user is standing on.
+// tiers, exact first: the (source, external_id) identity recovered from the URL (unique
+// index; only a few ATS URL shapes carry one), then a verified application destination
+// matched with its query identity intact, then the normalized match against the detail
+// URL each source stored in jobs.url. No tier guesses from the page title.
 //
-// An empty URL resolves to nothing: it would normalize to "" in a fallback lookup and match
-// a posting stored with an empty url.
+// An empty URL resolves to nothing: it would normalize to "" and match a posting stored
+// with an empty url.
 //
-// Neither tier guesses. An earlier version matched the page title against every catalog
-// title, which could not use an index at all (the LIKE pattern was built from the column),
-// so it degenerated into a sequential scan of millions of rows and timed out in production
-// — and it was guesswork besides, on a page title that is not something to guess from (the
-// extension was sending "reCAPTCHA").
-//
-// It is a free function rather than a method because two feature handlers need it: the
-// public /jobs/find read and the extension's /jobs/resolve import.
+// It is a free function because both /jobs/find and the extension's /jobs/resolve use it.
 func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings sources.PostingURLResolver, pageURL string) (string, error) {
 	if pageURL == "" {
 		return "", nil
@@ -51,19 +41,16 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings source
 		}
 	}
 
-	// A verified destination can be the form itself. Match it with its identifying
-	// query intact before canonicalisation strips a provider's /apply suffix.
+	// A verified destination can be the form itself; match it before canonicalisation
+	// strips a provider's /apply suffix.
 	if slug, err := queries.FindOpenJobByApplicationURL(ctx, pageURL); err == nil {
 		return slug, nil
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
 
-	// The apply form is the same posting under a different path, and it is where a
-	// candidate stands when they ask about a vacancy. The catalog stores only the
-	// detail page, so the form has to be rewritten to it before the match. Most of
-	// that rewrite is offline; a SmartRecruiters one-click link identifies its posting
-	// by an id the catalogue never kept, so the resolver asks the platform.
+	// The catalog stores only the detail page, so an apply-form URL is rewritten to it
+	// first. Mostly offline; a SmartRecruiters one-click link needs the platform asked.
 	slug, err := queries.FindOpenJobByURL(ctx, postings.CanonicalPostingURL(ctx, pageURL))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -75,15 +62,12 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings source
 }
 
 // FindJob resolves the URL of a job posting in the wild to a freehire catalog slug, so the
-// browser extension can tell that the page it is on is a job we already carry and switch
-// from the ad-hoc text match to the curated card. Public; returns {"data": null} whenever
-// the posting cannot be identified.
+// browser extension can switch to the curated card. Public; returns {"data": null} when the
+// posting cannot be identified.
 //
-// A miss also says whether the URL sits on an ATS board we know how to crawl
-// (meta.ats_board), answered by atsboard.Recognize — the one table of ATS hosts, so the
-// extension does not keep a second copy. The panel offers "add this job" only where that is
-// true or where the page marks itself up as a JobPosting: offered on every page, it filled
-// the triage queue with LinkedIn feeds, chat apps and localhost.
+// A miss also says whether the URL sits on a crawlable ATS board (meta.ats_board), via
+// atsboard.Recognize, the one table of ATS hosts. The panel offers "add this job" only
+// there or where the page marks itself up as a JobPosting.
 func (h *jobsHandlers) FindJob(ctx context.Context, params apigen.FindJobParams) (*apigen.JobFindResult, error) {
 	pageURL := strings.TrimSpace(params.URL.Or(""))
 	slug, err := catalogSlugForURL(ctx, h.queries, h.postings, pageURL)

@@ -11,15 +11,14 @@ import (
 )
 
 // The two reads every agent surface (ChatGPT app, OJCP, the in-app assistant) makes the same
-// way: run a catalogue search, load one posting. Each caller keeps its own projection and
-// output shape; only the chain in front of it lives here.
+// way: run a catalogue search, load one posting. Each keeps its own projection and output shape.
 
-// runAgentSearch runs the query the public search runs, from the same values, and records
-// the hits as served to an agent. The caller supplies the page and projects the result.
+// runAgentSearch runs the query the public search runs and records the hits as served to an
+// agent. The caller supplies the page and projects the result.
 //
-// There is no sort directive and no match vector, so a text query gets the index's own
-// relevance ordering and an empty one the freshest first (defaultSort). The outcome says
-// what became of the opt-in `semantic` flag; the surface reports it in its own vocabulary.
+// There is no sort directive or match vector: a text query gets the index's relevance order,
+// an empty one the freshest first (defaultSort). The outcome reports what became of the opt-in
+// `semantic` flag, in the surface's own vocabulary.
 func runAgentSearch(ctx context.Context, s searcher, values url.Values, limit, offset int, semanticAsked bool) (search.SearchResult, semanticOutcome, error) {
 	params := search.SearchParams{
 		Query:  values.Get("q"),
@@ -37,10 +36,9 @@ func runAgentSearch(ctx context.Context, s searcher, values url.Values, limit, o
 	return res, outcome, nil
 }
 
-// loadAgentJob loads one posting through load (agentJobBySlug or publishedJobBySlug, the
-// surface's own visibility rule), projects it to the wire shape, hangs the liveness signals
-// on it when attach is set, and records the read. The error is load's, untouched: a missing
-// row is still pgx.ErrNoRows for the caller to word.
+// loadAgentJob loads one posting through load (the surface's own visibility rule), projects it
+// to the wire shape, attaches the liveness signals when attach is set, and records the read.
+// The error is load's untouched: a missing row stays pgx.ErrNoRows.
 func loadAgentJob(ctx context.Context, load func(context.Context, string) (db.Job, error), attach func(context.Context, db.Job, *jobview.Job), slug string) (db.Job, jobview.Job, error) {
 	row, err := load(ctx, slug)
 	if err != nil {
@@ -50,8 +48,7 @@ func loadAgentJob(ctx context.Context, load func(context.Context, string) (db.Jo
 	if err != nil {
 		return db.Job{}, jobview.Job{}, err
 	}
-	// Computed on read: the index's reality class is frozen at push time and the ghost
-	// signal is never stored.
+	// Computed on read: the index's reality class is frozen at push time and ghost is never stored.
 	if attach != nil {
 		attach(ctx, row, &view)
 	}
@@ -60,7 +57,7 @@ func loadAgentJob(ctx context.Context, load func(context.Context, string) (db.Jo
 }
 
 // markdownJobs renders the hits as the assistant's tools hand them to a model: full
-// descriptions read from Postgres, as markdown.
+// descriptions from Postgres, as markdown.
 func (h *searchHandlers) markdownJobs(ctx context.Context, hits []search.JobDocument) ([]jobview.Job, error) {
 	if len(hits) > 0 {
 		if err := h.hydrateDescriptions(ctx, hits); err != nil {

@@ -19,15 +19,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// The auto-apply and screening-answer tools of the signed-in MCP server
-// (openspec/changes/auto-apply-over-mcp): an agent connected for a person can start an
-// application, follow it, answer the question it stopped on, and approve it — the whole
-// background flow, with no browser in the loop.
+// The auto-apply and screening-answer tools of the signed-in MCP server: an agent connected for
+// a person can start an application, follow it, answer the question it stopped on, and approve
+// it, with no browser in the loop.
 //
-// Every tool calls the same method the corresponding HTTP route does, so the two doors cannot
-// disagree about what is allowed. The tools that ACT on an attempt (start, review, retry,
-// cancel) additionally require the account's agents_may_apply switch, which only a browser
-// session can turn on; reading never does.
+// Every tool calls the same method as the corresponding HTTP route, so the two doors cannot
+// disagree. The tools that ACT on an attempt (start, review, retry, cancel) also require the
+// account's agents_may_apply switch, which only a browser session can turn on; reading never does.
 
 // autoApplyMCPTools is the set the account server adds to the in-app assistant's discovery
 // and tracking tools. Not offered to the in-app assistant: the browser there already has the
@@ -73,10 +71,8 @@ func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID in
 }
 
 // toolError turns what the shared methods return into a sentence an agent can act on, and
-// keeps its kind: a *fiber.Error already reads as its message, and its status is what the MCP
-// metrics and logs classify a refusal by (observability.ErrorCode). Rebuilding each one as a
-// bare error counted every refusal as internal_error. The plan's refusals are the bare errors
-// they return that mean something to the caller.
+// keeps its kind: a *fiber.Error reads as its message and its status is what MCP metrics
+// classify a refusal by (observability.ErrorCode); a bare error would count as internal_error.
 func toolError(err error) error {
 	var refused *autoApplyAllowanceRefusal
 	switch {

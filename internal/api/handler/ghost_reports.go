@@ -36,9 +36,8 @@ func (h *ghostReportHandlers) register(api fiber.Router, mw middleware, contract
 	api.Delete("/jobs/:slug/ghost-report", mw.key, contract)
 }
 
-// appliedOnLayout is a plain calendar date. The reporter is stating a day, not an
-// instant, and asking a browser for a timezone-bearing timestamp would invite a claim
-// that reads as tomorrow in one zone and today in another.
+// appliedOnLayout is a plain calendar date: the reporter states a day, not an instant,
+// so a timezone cannot make the claim read as tomorrow.
 const appliedOnLayout = "2006-01-02"
 
 // CreateGhostReport files the caller's claim about the job named by :slug. The slug is
@@ -70,8 +69,8 @@ func (h *ghostReportHandlers) CreateGhostReport(ctx context.Context, req *apigen
 // RetractGhostReport withdraws the caller's claim about :slug. A claim that is absent or
 // already withdrawn is a 404.
 //
-// It answers 204, not 200: Fiber's SendStatus(200) writes the body "OK", which breaks a
-// JSON client on a call that in fact succeeded.
+// It answers 204, not 200: Fiber's SendStatus(200) writes the body "OK", which breaks
+// JSON clients.
 func (h *ghostReportHandlers) RetractGhostReport(ctx context.Context, params apigen.RetractGhostReportParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

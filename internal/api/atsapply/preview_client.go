@@ -12,29 +12,22 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
-// StoredFormReader reads a job's previously-captured application form, when one exists.
-// Preview prefers this over a live schema fetch for every provider except Greenhouse (the
-// one with a live DOM scan) — see design.md's "prefer the stored apply_forms row" decision:
-// cmd/capture-apply-form already persists exactly this payload, and re-fetching it live for
-// every preview would cost a network round trip a stored, rarely-stale row already answers.
-// May be nil, in which case Preview always fetches live instead — the same behavior Client
-// itself already has.
+// StoredFormReader reads a job's previously captured application form. Preview prefers it
+// over a live schema fetch for every provider except Greenhouse (which has a live DOM
+// scan), since cmd/capture-apply-form already persists the payload. May be nil, in which
+// case Preview always fetches live.
 type StoredFormReader interface {
 	// GetStoredForm returns the job's captured form and true, or a zero Form and false when
-	// none has been captured yet — not an error: a majority of jobs have no captured form at
-	// all (JobApplyForm's own doc comment), and that is an ordinary outcome here too.
+	// none was captured; that is ordinary, not an error.
 	GetStoredForm(ctx context.Context, jobID int64) (applyform.Form, bool, error)
 }
 
-// PreviewClient computes a ResolvedPreview for one auto-apply attempt: the same
-// deterministic answer resolution the real submission starts from, without ever running an
-// LLM draft (no spend before the candidate has approved anything — see design.md) or
-// keeping a browser open past the scan it needs for Greenhouse.
+// PreviewClient computes a ResolvedPreview for one auto-apply attempt: the deterministic
+// answer resolution a real submission starts from, with no LLM draft (no spend before the
+// candidate approves) and no browser kept open past the Greenhouse scan.
 //
-// A separate type from Client rather than another method on it: Client is wired for
-// cmd/auto-apply's own submission dependencies (LLM drafting, CV rendering) that Preview
-// never touches, and its one caller (cmd/auto-apply's own new preview pass) constructs it
-// independently for exactly that reason.
+// Separate from Client because Client carries submission dependencies (LLM drafting, CV
+// rendering) that Preview never touches.
 type PreviewClient struct {
 	fetchers      map[string]applyform.Fetcher
 	forms         StoredFormReader
@@ -42,7 +35,7 @@ type PreviewClient struct {
 }
 
 // NewPreviewClient builds a PreviewClient. forms may be nil, degrading every provider to a
-// live schema fetch (fine, just one more request than necessary).
+// live schema fetch.
 func NewPreviewClient(transport applyform.Transport, forms StoredFormReader) *PreviewClient {
 	return &PreviewClient{
 		fetchers:      applyform.Fetchers(transport),
@@ -54,14 +47,12 @@ func NewPreviewClient(transport applyform.Transport, forms StoredFormReader) *Pr
 // Preview resolves what an unattended submission of claimed would currently send, without
 // submitting anything. Satisfies autoapply.PreviewSidecar.
 func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, answers map[string]string) (autoapply.PreviewResult, error) {
-	// Mirrors Client.resolve's own hasApprovedCV derivation: the one fact that lets the
-	// résumé field resolve at all. ClaimAutoApplyPreviewBatch's own WHERE guarantees this
-	// is never the zero value here (tailored_cv_id IS NOT NULL), the same guarantee
-	// ClaimAutoApplyBatch's own comment already documents for Claimed.TailoredCVID.
+	// Mirrors Client.resolve's hasApprovedCV derivation. ClaimAutoApplyPreviewBatch's WHERE
+	// (tailored_cv_id IS NOT NULL) guarantees it is never the zero value here.
 	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
 
-	// Same registry the submission path consults. The preview must scan whatever DOM the
-	// submission will, or the candidate approves an answer set the fill never sees.
+	// Same registry as the submission path: the preview must scan the DOM the submission
+	// will, or the candidate approves answers the fill never sees.
 	if _, canDrive := layoutFor(claimed.Provider); canDrive {
 		return p.previewByLayout(ctx, claimed, answers, hasApprovedCV)
 	}
@@ -76,9 +67,8 @@ func (p *PreviewClient) Preview(ctx context.Context, claimed autoapply.Claimed, 
 	return autoapply.PreviewResult{Preview: PreviewAnswers(mergedFromAPIOnly(apiForm), answers, hasApprovedCV)}, nil
 }
 
-// schemaFor prefers a stored form over a live fetch, matching design.md's own reasoning:
-// the stored row is what a live fetch would return anyway for a provider with no live
-// DOM-scan path, refreshed only on a deliberate re-capture, not on every read.
+// schemaFor prefers a stored form over a live fetch: for a provider with no live DOM scan
+// the stored row is what a fetch would return, refreshed only on re-capture.
 func (p *PreviewClient) schemaFor(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	if p.forms != nil {
 		if form, ok, err := p.forms.GetStoredForm(ctx, claimed.JobID); err != nil {
@@ -97,12 +87,9 @@ func (p *PreviewClient) schemaFor(ctx context.Context, claimed autoapply.Claimed
 	})
 }
 
-// previewByLayout scans the live form exactly the way Client.Submit does, for any platform
-// the registry holds a page description of, then closes the browser immediately — a preview
-// never fills or submits, so nothing here needs the session to outlive the scan.
-//
-// It must scan by the SAME layout the submission will, or the candidate approves an answer
-// set the fill never sees.
+// previewByLayout scans the live form exactly as Client.Submit does, with the same layout
+// the submission will use, then closes the browser at once; a preview never fills or
+// submits.
 func (p *PreviewClient) previewByLayout(ctx context.Context, claimed autoapply.Claimed, answers map[string]string, hasApprovedCV bool) (autoapply.PreviewResult, error) {
 	apiForm, err := p.schemaFor(ctx, claimed)
 	if err != nil {
@@ -117,9 +104,8 @@ func (p *PreviewClient) previewByLayout(ctx context.Context, claimed autoapply.C
 
 	layout, canDrive := layoutFor(claimed.Provider)
 	if !canDrive {
-		// Preview is only ever reached for a drivable platform (Preview's own branch
-		// above), so this cannot fire — but a lookup whose failure is discarded is how a
-		// later caller ends up scanning with a zero-valued layout.
+		// Unreachable (Preview only gets here for a drivable platform), but a discarded lookup
+		// failure would let a later caller scan with a zero-valued layout.
 		return autoapply.PreviewResult{}, fmt.Errorf("no form layout for %q", claimed.Provider)
 	}
 	pageHTML, err := renderedHTML(browserCtx, layout.applyURL(claimed.JobURL), layout.formSelector)

@@ -8,10 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
 
-// authorizationServerMetadata is RFC 8414's document: where the three OAuth
-// endpoints live and what this server supports. An MCP client fetches this
-// before ever calling /authorize, so it can find the right URLs without them
-// being hardcoded into the client.
+// authorizationServerMetadata is RFC 8414's document: where the OAuth endpoints live and
+// what this server supports.
 type authorizationServerMetadata struct {
 	Issuer                            string   `json:"issuer"`
 	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
@@ -23,16 +21,13 @@ type authorizationServerMetadata struct {
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
 }
 
-// OAuthAuthorizationServerMetadata renders RFC 8414's document. Public, and
-// identical for every caller — it names no user and no client.
+// OAuthAuthorizationServerMetadata renders RFC 8414's document. Public, identical for every
+// caller.
 //
-// Mounted at an internal /api/v1/oauth/metadata/authorization-server path, NOT
-// at /.well-known/oauth-authorization-server directly: nginx routes /api/ to
-// this Go service and everything else (including /.well-known/*) to the
-// SvelteKit process, so a Go route at the well-known path itself would never
-// receive a request — the same trap the OJCP manifest already hit (see
-// internal/api/ojcp/manifest.go). The SvelteKit app proxies the well-known path
-// to this one, the same way it proxies /.well-known/ojcp.json.
+// Mounted at an internal /api/v1/oauth/metadata/... path, not /.well-known/... directly:
+// nginx sends /api/ to Go and everything else to SvelteKit, so a Go route at the well-known
+// path would never be reached (same as the OJCP manifest, internal/api/ojcp/manifest.go).
+// SvelteKit proxies the well-known path here.
 func (h *authHandlers) OAuthAuthorizationServerMetadata(c *fiber.Ctx) error {
 	origin := h.frontendOrigin
 	return c.JSON(authorizationServerMetadata{
@@ -54,11 +49,10 @@ type protectedResourceMetadata struct {
 	AuthorizationServers []string `json:"authorization_servers"`
 }
 
-// OAuthProtectedResourceMetadata renders RFC 9728's document, naming the MCP server at
-// /api/v1/mcp as the protected resource and this deployment as its authorization server.
-// Public. Both the root well-known path and the path-inserted one (mcpapp.ResourceMetadataPath)
-// proxy here, since they describe the one resource. Mounted internally and proxied, same
-// reasoning as OAuthAuthorizationServerMetadata above.
+// OAuthProtectedResourceMetadata renders RFC 9728's document, naming /api/v1/mcp as the
+// protected resource and this deployment as its authorization server. Public. The root and
+// path-inserted (mcpapp.ResourceMetadataPath) well-known paths both proxy here. Mounted
+// internally like the document above.
 func (h *authHandlers) OAuthProtectedResourceMetadata(c *fiber.Ctx) error {
 	return h.protectedResource(c, oauth2server.MCPResourcePath)
 }

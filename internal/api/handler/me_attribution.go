@@ -124,15 +124,14 @@ func (h *authHandlers) ReportSignupAttribution(ctx context.Context, req *apigen.
 		log.Printf("attribution: storing for user %d: %v", userID, err)
 		return &apigen.ReportSignupAttributionOK{Data: apigen.AccountAttributionResult{}}, nil
 	}
-	// Only the first report for an account sends the event, so a retried or replayed
-	// request cannot count one sign-up twice in GA.
+	// Only the first report for an account sends the event, so a retry or replay cannot count
+	// one sign-up twice in GA.
 	//
-	// `sent` answers "should the browser stay out of it?", not strictly "did Google
-	// confirm?". GA4 cannot dedupe, so each doubtful case is settled toward the server
-	// owning the event rather than a double count: a report that lost the insert race
-	// (another browser already reported this account) and a send that may have reached
-	// Google before the connection failed. Only a definite failure — nothing configured,
-	// no client id, a refusal from Google — leaves the browser to send it.
+	// `sent` answers "should the browser stay out of it?", not "did Google confirm?". GA4 cannot
+	// dedupe, so doubtful cases settle toward the server owning the event: a report that lost
+	// the insert race, and a send that may have reached Google before the connection failed.
+	// Only a definite failure (nothing configured, no client id, a refusal) leaves it to the
+	// browser.
 	sent := inserted == 0
 	if inserted == 1 && h.ga4 != nil && ga4mp.ValidClientID(in.GAClientID) {
 		method := "oauth"

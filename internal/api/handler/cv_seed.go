@@ -26,12 +26,8 @@ type seedBankReader interface {
 
 // bankedSeeder answers "what should a new CV start from" with the candidate's banked work
 // history plus the sections the stored structure still owns. It satisfies cv.Seeder, so
-// internal/candidate/cv needs no knowledge of the bank at all: it keeps receiving a Structured and
-// keeps mapping it field by field.
-//
-// This is the step that closes the loop. Evidence a candidate confirmed while tailoring
-// for one vacancy lands in the base CV they create next — which is the difference between
-// the bank being the agent's memory and it being the user's.
+// internal/candidate/cv needs no knowledge of the bank. Evidence confirmed while tailoring
+// thereby lands in the next base CV.
 type bankedSeeder struct {
 	resume structuredResumeReader
 	bank   seedBankReader

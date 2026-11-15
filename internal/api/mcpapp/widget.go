@@ -13,11 +13,9 @@ import (
 // of the model retelling it as prose. One self-contained HTML file, embedded in the binary,
 // rendering both shapes it is handed: a search_jobs list and one get_job posting.
 //
-// It lives beside wire.go rather than in web/ on purpose. It reads exactly the fields those
-// types publish, and a test holds it to them (widget_fields_test.go); a frontend build would
-// also make this binary depend on a JS build, which is a way to ship a stale page with every
-// check green. See openspec/changes/archive/2026-10-20-chatgpt-app-widgets/design.md
-// and the requirements in openspec/specs/chatgpt-app-widgets/spec.md.
+// It lives beside wire.go, not in web/: it reads exactly the fields those types publish, and
+// widget_fields_test.go holds it to them; a JS build dependency could ship a stale page
+// with every check green.
 
 //go:embed widget/jobs.html
 var widgetPage []byte
@@ -25,9 +23,8 @@ var widgetPage []byte
 // widgetMIMEType is the MCP Apps profile. A host renders a ui:// resource only under it.
 const widgetMIMEType = "text/html;profile=mcp-app"
 
-// widgetResourceURI names the page by its content. A host caches a UI resource by URI, so a
-// page edited under an unchanged URI is a page nobody sees until the cache lets go; deriving
-// it from the bytes means nobody has to remember to bump it.
+// widgetResourceURI names the page by its content: a host caches a UI resource by URI, so an
+// edited page under an unchanged URI would not be seen.
 var widgetResourceURI = widgetURI(widgetPage)
 
 func widgetURI(page []byte) string {
@@ -35,12 +32,10 @@ func widgetURI(page []byte) string {
 	return "ui://freehire/jobs-" + hex.EncodeToString(sum[:6]) + ".html"
 }
 
-// widgetMeta is the resource's _meta: the CSP the host enforces on the page. Logos come from
-// our own proxy; nothing else is admitted, because the page makes no request of its own —
-// every value it draws arrives in the tool result.
+// widgetMeta is the resource's _meta: the CSP the host enforces. Only our logo proxy is
+// admitted; the page makes no other request.
 //
-// Declared on both the listing and the read: hosts differ in which one they consult, and the
-// specification describes both.
+// Declared on both the listing and the read: hosts differ in which one they consult.
 func widgetMeta() mcp.Meta {
 	return mcp.Meta{"ui": map[string]any{
 		"csp":           map[string]any{"resourceDomains": []string{"https://logo.freehire.me"}},
@@ -77,9 +72,8 @@ func addWidget(server *mcp.Server) {
 		MIMEType:    widgetMIMEType,
 		Meta:        widgetMeta(),
 	}, read)
-	// A host keeps the tool list it read at connect time, so after a deploy it still asks for
-	// the previous page's URI; answering "not found" there left an empty frame. Any earlier
-	// jobs page gets the current one.
+	// A host keeps the tool list from connect time and asks for a previous page's URI after a
+	// deploy; "not found" would leave an empty frame, so any earlier jobs page gets the current one.
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "ui://freehire/jobs-{version}.html",
 		Name:        "jobs-previous",

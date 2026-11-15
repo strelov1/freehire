@@ -23,16 +23,14 @@ func newVoteHandlers(queries *db.Queries, pool *pgxpool.Pool) *voteHandlers {
 }
 
 func (h *voteHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Thumbs up/down: a signed-in vote (toggle/flip); the public counters it drives
-	// are read by everyone on the job/company shapes.
+	// Signed-in votes (toggle/flip); the counters they drive are public.
 	api.Post("/jobs/:slug/vote", mw.key, contract)
 	api.Delete("/jobs/:slug/vote", mw.key, contract)
 	api.Post("/companies/:slug/vote", mw.key, contract)
 	api.Delete("/companies/:slug/vote", mw.key, contract)
 }
 
-// voteError maps the vote sentinels onto HTTP statuses. Anything else (e.g. a DB
-// failure) falls through to the central RenderError as a 500.
+// voteError maps the vote sentinels onto HTTP statuses; anything else is a 500.
 func voteError(err error) error {
 	switch {
 	case errors.Is(err, vote.ErrNotFound):

@@ -12,17 +12,12 @@ import (
 	"github.com/strelov1/freehire/internal/identity/promo"
 )
 
-// promoReadTimeout bounds one database read on these routes. Everything here is a small
-// indexed query; a longer budget would only hold a connection open for a page that has
-// already given up.
+// promoReadTimeout bounds one database read on these routes (small indexed queries).
 const promoReadTimeout = 5 * time.Second
 
 // promoHandlers serve the discount surfaces: checking a code, and an account's own invite
-// link.
-//
-// The invite routes are mounted whatever billing is doing, because sharing a link and
-// counting who came is not a purchase. Only the checkout, which lives with the other
-// billing routes, needs a configured provider.
+// link. The invite routes are mounted whatever billing is doing; only checkout needs a
+// configured provider.
 type promoHandlers struct {
 	promo *promo.Service
 }
@@ -33,29 +28,24 @@ func newPromoHandlers(svc *promo.Service) *promoHandlers {
 
 // register mounts the referral and promo routes.
 func (h *promoHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Cookie only, like the rest of /me. A link that decides who gets credited for a
-	// referral is minted for a browser session, not for a script holding a key.
+	// Cookie only, like the rest of /me: the invite link is minted for a browser session, not a key.
 	api.Get("/me/invite", mw.cookie, contract)
 
 	api.Post("/me/promo/preview", mw.cookie, contract)
 
-	// POST, and that is a security property rather than a style choice. Redeeming spends
-	// the account's one lifetime redemption, and the first draft did it on the checkout
-	// GET — which `SameSite=Lax` sends the session cookie along with on a cross-site
-	// top-level navigation. Any page could then burn a visitor's redemption by linking to
-	// it. A GET here must stay read-only; a state change goes through a method the browser
-	// will not issue cross-site without a preflight this deployment does not answer.
+	// POST is a security property: redeeming spends the account's one lifetime redemption, and a
+	// GET would carry the `SameSite=Lax` cookie on a cross-site top-level navigation, letting any
+	// page burn it. A GET here must stay read-only.
 	//
-	// Limited by the same pair: a redemption that refuses tells a guesser as much as a
-	// preview that refuses, so bounding one and not the other bounds neither.
+	// Rate limited with preview: a refusing redemption leaks as much to a guesser as a refusing
+	// preview, so bounding only one bounds neither.
 	api.Post("/me/promo/redeem", mw.cookie, contract)
 }
 
 // GetInvite returns this account's invite link and what it has earned.
 //
-// The counts name nobody. Telling a referrer which of their contacts signed up would
-// disclose that a particular person is looking for work, which is not theirs to know — so
-// the service returns aggregates and there is no query that could return more.
+// The counts name nobody: telling a referrer which contact signed up would disclose that
+// person is looking for work, so the service returns aggregates only.
 func (h *promoHandlers) GetInvite(ctx context.Context) (*apigen.GetInviteOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -88,9 +78,8 @@ func (h *promoHandlers) GetInvite(ctx context.Context) (*apigen.GetInviteOK, err
 
 // PreviewPromoCode reports what a code is worth to this caller, without consuming a seat.
 //
-// Rate limited above, and every refusal about the CODE is the same refusal: the route is
-// reachable by anyone who can create an account, and answering "that code exists but is out
-// of seats" differently from "no such code" would turn it into an oracle for guessing.
+// Every refusal about the CODE is the same refusal: telling "out of seats" from "no such
+// code" would make the route a guessing oracle.
 func (h *promoHandlers) PreviewPromoCode(ctx context.Context, req *apigen.PromoCode) (*apigen.PreviewPromoCodeOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -109,11 +98,8 @@ func (h *promoHandlers) PreviewPromoCode(ctx context.Context, req *apigen.PromoC
 
 // RedeemPromoCode spends this account's one lifetime redemption on a code.
 //
-// Separate from checkout on purpose. The redemption is DURABLE: once recorded, every later
-// checkout reads the percentage back through `promo.Discount`, so a provider failure while
-// opening the payment page costs a retry rather than the offer. Making the checkout GET do
-// this instead — as the first draft did — was both a CSRF hole and a way to burn somebody's
-// one code on a call that then failed.
+// Separate from checkout on purpose: the redemption is durable (later checkouts read it back
+// through `promo.Discount`), so a provider failure costs a retry, not the offer.
 func (h *promoHandlers) RedeemPromoCode(ctx context.Context, req *apigen.PromoCode) (*apigen.RedeemPromoCodeOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -132,9 +118,7 @@ func (h *promoHandlers) RedeemPromoCode(ctx context.Context, req *apigen.PromoCo
 
 // promoError renders the two refusals this surface distinguishes, and nothing else.
 //
-// Every reason a CODE can be refused is one status, deliberately: these routes are
-// reachable by anyone who can create an account, and separating "no such code" from "out of
-// seats" would answer the question a guesser is actually asking.
+// Every reason a CODE can be refused is one status, deliberately, so a guesser learns nothing.
 func promoError(err error, fallback string, userID int64) error {
 	switch {
 	case errors.Is(err, promo.ErrAlreadyRedeemed):

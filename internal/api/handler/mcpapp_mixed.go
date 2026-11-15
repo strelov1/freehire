@@ -26,7 +26,7 @@ func mountMCP(
 			return granted(c)
 		}}
 	api.All("/mcp", handlers...)
-	// The old signed-in endpoint, still the saved URL of connectors added before #4539: the
-	// same server, so they keep working instead of a 404 the client cannot recover from.
+	// The old signed-in endpoint, still the saved URL of existing connectors: same server, so
+	// they keep working instead of a 404 the client cannot recover from.
 	api.All("/mcp/account", handlers...)
 }

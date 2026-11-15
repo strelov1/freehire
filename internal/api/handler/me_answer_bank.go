@@ -15,9 +15,8 @@ import (
 // answerBankHandlers serves the candidate's own bank of screening answers.
 type answerBankHandlers struct{ bank *answerbank.Store }
 
-// register mounts the bank's three routes. mw.key, matching every other /me route that a
-// client other than the web app may reasonably call: the CLI (strelov1/freehire-cli) reaches
-// these with an API key.
+// register mounts the bank's three routes with mw.key, since the CLI reaches them with an
+// API key.
 func (h *answerBankHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	api.Get("/me/answer-bank", mw.key, contract)
 	api.Put("/me/answer-bank", mw.key, contract)
@@ -39,7 +38,7 @@ func (h *answerBankHandlers) ListBankedAnswers(ctx context.Context) (*apigen.Lis
 
 // bankedAnswersOut renders the bank for the HTTP route. The assistant and MCP tools keep
 // toBankedAnswerResponses below: the MCP SDK checks a tool's answer against its Go type, and
-// a generated type with its own MarshalJSON is exactly what that check has refused before.
+// a generated type with its own MarshalJSON fails that check.
 func bankedAnswersOut(answers []answerbank.Answer) []apigen.BankedAnswer {
 	out := make([]apigen.BankedAnswer, 0, len(answers))
 	for _, a := range answers {
@@ -53,10 +52,9 @@ func bankedAnswersOut(answers []answerbank.Answer) []apigen.BankedAnswer {
 
 // SaveBankedAnswer records the caller's answer to one question.
 //
-// The provenance is AuthorCandidate because of WHERE this ran — a request the candidate
-// themselves authenticated — never because a body said so. There is no field for it in the
-// request (apigen.SaveBankedAnswer, saveAnswerRequest for the tool), and that absence is the
-// enforcement.
+// The provenance is AuthorCandidate because of where this ran (a request the candidate
+// authenticated), never because a body said so. The request has no field for it
+// (apigen.SaveBankedAnswer, saveAnswerRequest for the tool); that absence is the enforcement.
 func (h *answerBankHandlers) SaveBankedAnswer(ctx context.Context, req *apigen.SaveBankedAnswer) (*apigen.SaveBankedAnswerOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -102,12 +100,10 @@ func (h *answerBankHandlers) DeleteBankedAnswer(ctx context.Context, params apig
 }
 
 // bankedAnswerResponse is one answer on the wire. provenance rides along so a surface can
-// show which answers are the candidate's own — the store's List returns every provenance
-// deliberately.
+// show which answers are the candidate's own; the store's List returns every provenance.
 //
-// UpdatedAt is a time.Time, not a pre-formatted string: encoding/json marshals it as RFC3339
-// with whatever sub-second precision it carries, which is both correct and free. Formatting
-// it by hand re-implemented the standard and dropped the fraction while doing so.
+// UpdatedAt is a time.Time, not a formatted string: encoding/json marshals RFC3339 with
+// the sub-second precision it carries.
 type bankedAnswerResponse struct {
 	ID         int64     `json:"id"`
 	Topic      string    `json:"topic"`

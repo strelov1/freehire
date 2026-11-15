@@ -99,14 +99,9 @@ func mentorBookingList(bookings []mentorship.Booking) apigen.MentorshipSessions 
 	return splitBookings(bookings, true)
 }
 
-// splitBookings renders one party's sessions into the wire shape both session lists take:
-// "each split into upcoming and past", per the spec. Split HERE rather than by two queries
-// against two clocks, so the halves cannot disagree about which side of now a session sits
-// on — a session starting between two reads would otherwise appear in both, or in neither.
-// One clock for the whole list.
-//
-// Both slices are non-nil: a nil one marshals to `null`, and a client that gets null for
-// "no past sessions" has to special-case it.
+// splitBookings renders one party's sessions into upcoming and past halves. The split is
+// here, against one clock, so a session starting between two reads cannot appear in both or
+// neither. Both slices are non-nil so an empty one marshals to [] rather than null.
 func splitBookings(bookings []mentorship.Booking, nameTheSeeker bool) apigen.MentorshipSessions {
 	now := time.Now()
 	out := apigen.MentorshipSessions{Upcoming: []apigen.MentorshipBooking{}, Past: []apigen.MentorshipBooking{}}
@@ -273,13 +268,9 @@ func (h *mentorshipHandlers) UpdateMentorProfile(ctx context.Context, req *apige
 	return &apigen.UpdateMentorProfileOK{Data: toOwnMentorResponse(profile)}, nil
 }
 
-// withCalendarLink resolves whether the caller holds a connected calendar.events grant
-// and sets it on the input, so a connected mentor's meeting link is no longer required —
-// the same test CreateMeetEvent's own gate applies at booking time.
-//
-// Skipped when the submitted link is already non-empty: validateMeetingURL only ever
-// consults HasCalendarLink for an EMPTY link, so a mentor who filled the field in pays
-// no extra round trip to answer a question that cannot change their outcome.
+// withCalendarLink sets whether the caller holds a connected calendar.events grant, so a
+// connected mentor needs no meeting link (the test CreateMeetEvent applies at booking).
+// Skipped when the link is non-empty: validateMeetingURL only consults it for an empty one.
 func (h *mentorshipHandlers) withCalendarLink(ctx context.Context, userID int64, req *apigen.MentorshipProfileBody) (mentorship.ProfileInput, error) {
 	in := profileInput(userID, req)
 	if strings.TrimSpace(in.MeetingURL) != "" {

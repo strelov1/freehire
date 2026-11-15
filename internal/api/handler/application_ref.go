@@ -7,14 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// applicationRef is one row of the tracking listing, addressed the way the listing
-// served it. The listing mints two forms (internal/application/jobtracking/repository.go): an
-// application whose posting was deleted is named by the application itself,
-// because it has no slug to borrow; every other row is named by its posting's public
-// slug. The write endpoints accept both, because the interface can only send back
-// what the listing gave it.
-//
-// Exactly one field is set.
+// applicationRef is one row of the tracking listing, addressed the way the listing served it
+// (internal/application/jobtracking/repository.go): an application whose posting was deleted is
+// named by the application itself, every other row by its posting's public slug. The write
+// endpoints accept both. Exactly one field is set.
 type applicationRef struct {
 	// AppID is applications.id when the row named an application directly.
 	AppID int64
@@ -25,13 +21,11 @@ type applicationRef struct {
 // applicationRefPrefix marks the application form. See ListInteractions, which mints it.
 const applicationRefPrefix = "a"
 
-// parseApplicationRef reads a row id into the thing it names. An empty id names
-// nothing and is refused as not-found rather than as a bad request: "not an id" and
-// "not visible to you" must be one answer, the rule the opaque-id swap set for CVs.
+// parseApplicationRef reads a row id into the thing it names. An empty id is refused as
+// not-found, not as a bad request: "not an id" and "not visible to you" must be one answer.
 //
-// Everything that is not the application form is handed on as a slug, including "a"
-// followed by digits too large for an int64. The lookup there answers 404, which is
-// the answer that branch would give anyway — no second error path for the same result.
+// Anything that is not the application form is handed on as a slug, including "a" followed by
+// digits too large for an int64; that lookup answers 404 anyway.
 func parseApplicationRef(raw string) (applicationRef, error) {
 	if raw == "" {
 		return applicationRef{}, fiber.NewError(fiber.StatusNotFound, "application not found")

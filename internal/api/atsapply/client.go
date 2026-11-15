@@ -18,60 +18,34 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// tagAutoApplyDrafting attributes drafting LLM spend to the candidate the application
-// belongs to, distinct from every other feature's tag — see
-// openspec/changes/auto-apply-llm-drafting/design.md's "cmd/auto-apply becomes a second
-// per-user LLM caller" decision for why this worker may resolve a per-user credential at
-// all. A bare word, matching internal/api/handler/user_llm.go's tag constants — the gateway's
-// x-bf-dim-feature header already names the dimension, so a "feature:" prefix in the value
-// would file this spend under its own two-part label instead of alongside the others.
+// tagAutoApplyDrafting attributes drafting LLM spend to the candidate the application belongs
+// to. A bare word like internal/api/handler/user_llm.go's tag constants: the gateway's
+// x-bf-dim-feature header already names the dimension, so a "feature:" prefix would file the
+// spend under its own two-part label.
 const tagAutoApplyDrafting = "auto-apply-drafting"
 
-// There is no per-provider captcha list any more, and reintroducing one would be a
-// mistake worth naming here.
-//
-// This file used to carry `requiresCaptcha{"lever": true}`, on the design's stated risk
-// that Lever "renders one on every posting". Measured against live postings on 2026-09-09,
-// that is not so: two queued Lever applications (coderio, jobgether) render NO captcha of
-// any kind, four others carry hCaptcha, and on all of them the only "recaptcha" in the page
-// is the string `.g-recaptcha div` inside a CSS rule. A captcha is a per-employer setting
-// on this platform, not a property of it — so the list decided what a page said before
-// anyone looked at the page, and it refused four postings in five for a reason that was
-// never measured.
-//
-// What replaces it is reading the page: browser.go's hasRecaptchaMarker distinguishes a
-// rendered challenge from an invisible score-based one, on the page actually being applied
-// to. That is the same lesson in the same file's history — the marker itself used to fire
-// on the mere WORD "recaptcha" and parked every Greenhouse posting there is.
+// There is no per-provider captcha list, and reintroducing one would be a mistake: a captcha
+// is a per-employer setting on a platform (Lever postings vary from none to hCaptcha), so a
+// list refuses pages before anyone looks at them. Instead browser.go's hasRecaptchaMarker
+// reads the page actually being applied to.
 
-// fillProviders is the single source of truth for which providers Submit can actually
-// fill/submit for. Checked both before drafting is attempted (resolve, to avoid paying for
-// a draft nothing can use) and before a fill+submit is attempted (Submit) — one set, so the
-// two can never drift apart.
+// fillProviders is the single source of truth for which providers Submit can fill and submit
+// through this package's own Chrome. Checked before drafting (resolve, to avoid paying for a
+// draft nothing can use) and before fill+submit (Submit), so the two cannot drift.
 //
-// Every entry here must also have a layout (layout.go), and a test asserts the containment:
-// a provider Submit will try to fill, with no description of its page to fill it by, would
-// reach a submit click with selectors matching nothing.
-//
-// Empty since 2026-10-25, when Greenhouse moved to the browser-use executor (see
-// browserUseProviders): this host's own Chrome submitted from the host's own address, which
-// every candidate's application then carried to the employer, and it lost Greenhouse's
-// invisible reCAPTCHA as often as it passed it. The path stays — the DOM scan that builds
-// a Greenhouse or Lever plan still runs through it, and a provider this Chrome can complete
-// on is a row here again.
+// Every entry must also have a layout (layout.go); a test asserts the containment. Empty
+// today: Chrome submitted from this host's own address and lost Greenhouse's invisible
+// reCAPTCHA about as often as it passed, so it moved to the browser-use executor (see
+// browserUseProviders). The DOM scan still runs through this path.
 var fillProviders = map[string]bool{}
 
-// SubmittableProviders is the set other packages may read as "an application can be
-// COMPLETED here without a person": the providers this package's own browser submits on
-// (fillProviders) and the ones the browser-use executor does — the latter only while this
-// deployment has it enforcing, since in shadow mode it sends nothing and an agent planning
-// around the flag would wait on an application that is never made.
+// SubmittableProviders is the set other packages may read as "an application can be COMPLETED
+// here without a person": fillProviders plus the browser-use providers, the latter only while
+// this deployment is enforcing (in shadow mode it sends nothing).
 //
-// It is exported because the OJCP surface publishes exactly this fact as
-// `supports_agent_submission`, the flag an external agent plans around, and a hand-written
-// copy over there would be a fourth list in a repo that already has three easy to confuse:
-// jobview.AutoApplyProviders (four ATSs a fill may be ATTEMPTED on), handler's enqueue set
-// (five that may be QUEUED), and this one. Only this one means submitted.
+// Exported because the OJCP surface publishes it as `supports_agent_submission`. Do not copy
+// it: jobview.AutoApplyProviders (a fill may be ATTEMPTED) and handler's enqueue set (may be
+// QUEUED) are different sets; only this one means submitted.
 //
 // A copy is returned so a caller cannot mutate the map this package routes on.
 func SubmittableProviders() map[string]bool {
@@ -87,68 +61,47 @@ func SubmittableProviders() map[string]bool {
 	return out
 }
 
-// reasonSubmissionNotImplemented is the one park reason for two distinct gaps that both
-// mean "nothing here can ever act on this attempt, regardless of how well the form
-// resolves": fillProviders excluding a provider whose schema DID fetch (Ashby, Workable),
-// and errNoSchemaFetcher below, for a provider applyform.Fetchers never registered at all
-// (Recruitee) — the candidate has no reason to see two different-sounding permanent gaps.
+// reasonSubmissionNotImplemented is the one park reason for two gaps that both mean nothing
+// here can ever act on this attempt: fillProviders excluding a provider whose schema DID
+// fetch (Ashby, Workable), and errNoSchemaFetcher (Recruitee).
 const reasonSubmissionNotImplemented = "submission not yet implemented for this provider"
 
-// errNoSchemaFetcher reports that applyform.Fetchers has no entry for a provider at all —
-// distinct from a fetcher's own call failing, which stays an ordinary retryable error.
-// fetchSchema and PreviewClient.schemaFor both return it so their callers can park honestly
-// (reasonSubmissionNotImplemented) instead of spending the ordinary retry/dead-letter budget
-// on a provider that will never gain a schema fetcher through a retry.
+// errNoSchemaFetcher reports that applyform.Fetchers has no entry for a provider, distinct
+// from a fetcher's own call failing (an ordinary retryable error). fetchSchema and
+// PreviewClient.schemaFor return it so callers park instead of retrying a provider that will
+// never gain a fetcher.
 var errNoSchemaFetcher = errors.New("no schema fetcher registered for this provider")
 
 // Client drives a headless browser to resolve and, where possible, submit one application
-// attempt. It implements autoapply.SidecarClient — the in-process replacement for the
-// Python/Patchright sidecar the design originally proposed (see design.md's "chromedp, not
-// a Python/Patchright sidecar" decision).
+// attempt. It implements autoapply.SidecarClient, the in-process replacement for the
+// Python/Patchright sidecar.
 type Client struct {
 	fetchers      map[string]applyform.Fetcher
 	allocatorOpts []chromedp.ExecAllocatorOption
-	// llmClient is the BASE, unbound client; nil means drafting is off (an unconfigured
-	// deployment, the same convention every other LLM-backed feature follows). Bound
-	// per attempt, per candidate, in Submit — never shared across attempts, the same
-	// reason RunAgentAutofill binds per request rather than once at startup.
+	// llmClient is the BASE, unbound client; nil means drafting is off. Bound per attempt, per
+	// candidate, in Submit, never shared across attempts.
 	llmClient *llm.Client
 	llmKeys   *llmkey.Resolver
-	// typesafeAPIKey backs the Jev provider for select-kind drafted fields
-	// (JevSelectDrafter). Empty disables it outright: those fields draft through the LLM
-	// exactly as they did before this setting existed. See TYPESAFE_API_KEY in
-	// internal/platform/config.
+	// typesafeAPIKey backs the Jev provider for select-kind drafted fields (JevSelectDrafter).
+	// Empty disables it: those fields draft through the LLM.
 	typesafeAPIKey string
-	// atoms is nil-checked directly (not nil-safe like llmkey.Resolver): a nil reader
-	// means "no grounding source configured", and drafting is skipped entirely rather
-	// than run against an always-empty GroundingContext.
+	// atoms is nil-checked directly (unlike the nil-safe llmkey.Resolver): nil means no
+	// grounding source, and drafting is skipped rather than run on an empty GroundingContext.
 	atoms AtomReader
-	// letters is nil-checked directly, the same convention atoms follows: nil means no
-	// letter store configured, and a cover-letter field simply drafts through the generic
-	// Drafter exactly as it did before this capability existed. See
-	// openspec/changes/autoapply-reuse-cover-letter.
+	// letters is nil-checked like atoms: nil means a cover-letter field drafts through the
+	// generic Drafter.
 	letters LetterReader
-	// cvs and renderer resolve and render a claim's approved tailored CV to a résumé PDF,
-	// on demand, at submit time — no object storage involved (openspec/changes/
-	// auto-apply-tailored-resume's design.md: "File rendering is on-demand"). Both nil is
-	// an ordinary, supported state exactly like atoms/llmClient: a résumé field then simply
-	// cannot be filled even when Resolve marked it resolvable, and attachApprovedResume
-	// treats that as a render-failure park rather than a panic.
+	// cvs and renderer render a claim's approved tailored CV to a résumé PDF on demand at
+	// submit time. Both nil is a supported state: a résumé field then cannot be filled, and
+	// attachApprovedResume parks the attempt instead of panicking.
 	cvs      CVReader
 	renderer cv.Renderer
-	// browserUse executes an already-resolved Plan through the browser-use cloud agent
-	// for a provider fillProviders excludes (Ashby, Workable — see browseruse_fill.go;
-	// Recruitee is excluded there for a structural reason, not a policy one). Nil is the
-	// unconfigured deployment, the same convention every other optional dependency here
-	// follows: a form that would otherwise route to this backend simply parks with
-	// reasonSubmissionNotImplemented, exactly as it did before this capability existed.
-	// See openspec/changes/add-browseruse-atsapply-fallback.
+	// browserUse executes an already-resolved Plan through the browser-use cloud agent for a
+	// provider fillProviders excludes (see browseruse_fill.go). Nil is the unconfigured
+	// deployment: such a form parks with reasonSubmissionNotImplemented.
 	browserUse *BrowserUseExecutor
-	// forms reads a job's previously-captured application form — the same StoredFormReader
-	// PreviewClient already uses, wired here too so fetchSchema can reach it for a
-	// provider with no live fetcher (today: Recruitee). Nil is the unconfigured
-	// deployment: fetchSchema then behaves exactly as it did before this capability
-	// existed. See openspec/changes/atsapply-recruitee-stored-schema.
+	// forms reads a job's previously-captured application form, so fetchSchema can reach it for
+	// a provider with no live fetcher (today: Recruitee). Nil is the unconfigured deployment.
 	forms StoredFormReader
 	// entitlement answers whether the candidate is still on a paid plan before a draft call
 	// spends for them. Required, not optional like the dependencies above: a nil one means
@@ -163,24 +116,20 @@ type Entitlement interface {
 }
 
 // reasonPaidPlanRequired parks an attempt whose candidate is no longer on a paid plan. The
-// entry was queued while they were, and may wait a long time to be claimed; by then a lapsed
-// subscription buys no model call, so the questions it would have drafted are not drafted
-// and the attempt is not submitted half-answered either.
+// entry may wait long in the queue; a lapsed subscription buys no model call, and the attempt
+// is not submitted half-answered either.
 const reasonPaidPlanRequired = "the candidate's paid plan has lapsed; drafting answers needs Pro"
 
-// WithBrowserUse attaches the browser-use fallback executor, returning c for chaining.
-// Separate from NewClient's constructor so adding this optional dependency never touches
-// NewClient's existing positional signature or any of its other call sites.
+// WithBrowserUse attaches the browser-use fallback executor, returning c for chaining. A
+// setter so NewClient's signature and call sites stay unchanged.
 func (c *Client) WithBrowserUse(executor *BrowserUseExecutor) *Client {
 	c.browserUse = executor
 	return c
 }
 
-// WithStoredFormReader attaches the stored-form fallback fetchSchema reads before giving
-// up on a provider with no live fetcher, returning c for chaining — the same
-// "optional dependency via a setter, not a NewClient parameter" shape WithBrowserUse
-// already established, for the same reason: this never touches NewClient's existing
-// positional signature or any of its other call sites.
+// WithStoredFormReader attaches the stored-form fallback fetchSchema reads before giving up on
+// a provider with no live fetcher, returning c for chaining. A setter, like WithBrowserUse,
+// so NewClient's signature and call sites stay unchanged.
 func (c *Client) WithStoredFormReader(forms StoredFormReader) *Client {
 	c.forms = forms
 	return c
@@ -192,18 +141,11 @@ type CVReader interface {
 	Get(ctx context.Context, id uuid.UUID, userID int64) (cv.Record, error)
 }
 
-// NewClient builds a Client. transport is the same one internal/applyform's own capture
-// worker uses (internal/sources.Client) — the Greenhouse/Ashby schema fetch this package
-// reuses needs nothing different from it. llmClient/llmKeys/atoms/letters may all be nil,
-// which disables question drafting entirely and leaves every other behavior unchanged (a
-// form drafting could have completed instead parks, exactly as it did before this
-// capability existed) — letters alone being nil only disables the cover-letter-reuse
-// preference, leaving ordinary drafting through llmClient/atoms unaffected. The reverse is
-// NOT true: resolve's own nil-atoms guard skips drafting (and so letter-reuse) entirely,
-// atoms and letters are not two independent switches — see that guard's own comment.
-// cvs/renderer
-// may also be nil, with the same degrade: a résumé field parks instead of being filled.
-//
+// NewClient builds a Client. transport is the one internal/applyform's capture worker uses.
+// llmClient/llmKeys/atoms/letters may be nil, which disables question drafting and leaves
+// everything else unchanged (letters alone nil only disables cover-letter reuse). The reverse
+// is NOT true: resolve skips drafting, and so letter reuse, when atoms is nil. cvs/renderer
+// may also be nil: a résumé field then parks instead of being filled.
 // entitlement is consulted before every draft call (see resolve); unlike the others, a nil
 // one does not degrade to the old behaviour — it refuses to draft.
 func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *llmkey.Resolver, typesafeAPIKey string, atoms AtomReader, letters LetterReader, cvs CVReader, renderer cv.Renderer, entitlement Entitlement) *Client {
@@ -223,10 +165,9 @@ func NewClient(transport applyform.Transport, llmClient *llm.Client, llmKeys *ll
 
 var _ autoapply.SidecarClient = (*Client)(nil)
 
-// Submit resolves one attempt and submits it only when every required question is
-// answered. Nothing here guesses: a field with no usable answer, or an ATS the browser
-// cannot safely drive at all (a captcha board), always parks rather than risking a bad or
-// duplicate submission.
+// Submit resolves one attempt and submits it only when every required question is answered.
+// Nothing here guesses: a field with no usable answer, or an ATS the browser cannot safely
+// drive, parks rather than risking a bad or duplicate submission.
 func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers map[string]string) (autoapply.SidecarResult, error) {
 	apiForm, err := c.fetchSchema(ctx, claimed)
 	if err != nil {
@@ -240,10 +181,9 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 	var browserCtx context.Context
 	var cancelBrowser context.CancelFunc
 
-	// Whether this package can drive a browser at this platform at all is the registry's
-	// answer, not a provider name spelled out here: adding a third platform is a row in
-	// layout.go rather than another branch. A provider with no layout reaches neither a
-	// browser nor a submit click, and Submit reports it as not-implemented below.
+	// Whether this package can drive a browser at a platform is the layout registry's answer,
+	// not a provider name spelled out here. A provider with no layout reaches neither a browser
+	// nor a submit click, and Submit reports it as not-implemented below.
 	layout, canDrive := layoutFor(claimed.Provider)
 
 	if canDrive {
@@ -260,11 +200,8 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 			}
 			return autoapply.SidecarResult{}, fmt.Errorf("render application page: %w", err)
 		}
-		// A reCAPTCHA footprint can be present on a page whose known selector still
-		// rendered fine — the two are independent (found by a PR review pass: the
-		// check below used to run only on the OTHER branch, when the selector timed
-		// out, leaving a page that scans successfully but is still challenge-gated to
-		// fall through to a real fill/submit attempt with no check at all).
+		// A reCAPTCHA footprint can be present on a page whose known selector still rendered, so
+		// this check runs on both paths, not only after a selector timeout.
 		if hasRecaptchaMarker(pageHTML) {
 			return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: string(reasonCaptchaProtected)}, nil
 		}
@@ -289,13 +226,10 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 	}
 
 	if !fillProviders[claimed.Provider] {
-		// browser-use fallback (openspec/changes/add-browseruse-atsapply-fallback): for
-		// Ashby/Workable, whose schema-only Reconcile already produced this
-		// fully-resolved plan, execute it through the cloud agent instead of parking —
-		// unless the daily spend guard refuses, which falls through to the same park this
-		// provider has always gotten. A résumé field renders the same way the Greenhouse
-		// path does (attachApprovedResume) before reaching the executor, which uploads
-		// those same bytes into browser-use's own workspace rather than a local path.
+		// browser-use fallback: for Ashby/Workable, whose schema-only Reconcile already produced
+		// this fully-resolved plan, execute it through the cloud agent instead of parking, unless
+		// the spend guard refuses (then the usual park). The résumé is rendered by
+		// attachApprovedResume, and the executor uploads those bytes into its own workspace.
 		if c.browserUse != nil && browserUseEligible(claimed.Provider, plan) {
 			cleanup, parked := c.attachApprovedResume(ctx, claimed, &plan)
 			if parked != nil {
@@ -310,8 +244,7 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 				return result, err
 			}
 		}
-		// Fill/submit is wired for the platforms in fillProviders — see layout.go. A form for
-		// another provider that DID fully resolve still parks rather than being
+		// A form for another provider that DID fully resolve still parks rather than being
 		// submitted through a path never built or verified.
 		return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: reasonSubmissionNotImplemented}, nil
 	}
@@ -330,55 +263,40 @@ func (c *Client) Submit(ctx context.Context, claimed autoapply.Claimed, answers 
 	confirmed, err := fillAndSubmit(browserCtx, claimed.JobID, plan, layout)
 	if err != nil {
 		if errors.Is(err, errCaptchaRefused) {
-			// The board said it could not VERIFY the submission, which is it telling us
-			// no application was created. Reported as its own status rather than an
-			// error, because the runner retries this one on a far more generous budget:
-			// an invisible captcha is a coin toss no browser configuration improves, and
-			// each further ask is free of consequence to the employer.
+			// The board could not VERIFY the submission, i.e. no application was created. Its own
+			// status because the runner retries it on a far more generous budget: an invisible
+			// captcha is a coin toss and a further ask costs the employer nothing.
 			return autoapply.SidecarResult{Status: autoapply.StatusCaptchaRefused, Reason: err.Error()}, nil
 		}
 		// A fill action failing, or the board EXPLICITLY refusing the submission
-		// (SUBMIT_REFUSED_MARKERS in fill.go — matched whether the refused attempt was
-		// the sidecar's own deliberate submit click or one triggered early by a field's
-		// own interaction), both mean no submission happened — safe to retry normally.
-		// This is deliberately distinct from the timeout-with-no-marker case below,
-		// which is NOT known to be safe to retry.
+		// (SUBMIT_REFUSED_MARKERS in fill.go), both mean no submission happened: safe to retry.
+		// Unlike the timeout-with-no-marker case below, which is not.
 		return autoapply.SidecarResult{}, fmt.Errorf("fill and submit: %w", err)
 	}
 	if !confirmed {
-		// Neither a confirmation nor a refusal appeared before the timeout — the click
-		// may or may not have gone through. Reported as StatusUnconfirmed, not a plain
-		// error: internal/autoapply's runner dead-letters this immediately rather than
-		// retrying it through the ordinary attempts budget, because retrying risks a
-		// second real submission to the employer.
+		// Neither a confirmation nor a refusal appeared before the timeout: the click may or may
+		// not have gone through. StatusUnconfirmed, not an error, because the runner dead-letters
+		// it instead of retrying, which risks a second real submission.
 		return autoapply.SidecarResult{Status: autoapply.StatusUnconfirmed}, nil
 	}
 	return autoapply.SidecarResult{Status: autoapply.StatusApplied}, nil
 }
 
-// resolve runs the deterministic pass and, where a drafting source is configured, offers
-// the drafter what it left unmapped. The drafter is bound fresh for this one attempt's
-// candidate (llmkey.Bind, tagged tagAutoApplyDrafting) — never shared across attempts, so
-// one candidate's answers can never leak into another's LLM spend or grounding.
+// resolve runs the deterministic pass and, where a drafting source is configured, offers the
+// drafter what it left unmapped. The drafter is bound fresh for this attempt's candidate
+// (llmkey.Bind, tagged tagAutoApplyDrafting), never shared across attempts, so one candidate's
+// answers cannot leak into another's LLM spend or grounding.
 //
-// A failure to read the grounding source degrades to "draft nothing" rather than failing
-// the whole attempt: the deterministic Plan is still useful (it may already be fully
-// resolved, or a partial answer is still better than none at submit time) — see the
-// requirement that a non-groundable question parks rather than blocking every other field.
+// A failure to read the grounding source degrades to "draft nothing": the deterministic Plan
+// is still useful and a non-groundable question parks rather than blocking every other field.
 //
-// Skipped entirely for a provider Submit cannot fill/submit for (today: everything but
-// Greenhouse — see fillProviders). Found by code review: this used to run unconditionally,
-// so every Ashby attempt with an unmapped field paid for a real grounding read and a real,
-// budget-attributed LLM call whose answer Submit then discarded two lines later ("submission
-// not yet implemented for this provider") — spend with no possible use.
+// Skipped entirely for a provider Submit cannot fill/submit for (see submits), so no spend goes
+// on a draft Submit would discard.
 func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged []MergedField, answers map[string]string) (Plan, error) {
 	hasApprovedCV := claimed.TailoredCVID != uuid.Nil
-	// A nil c.atoms disables ResolveWithDrafting entirely — including cover-letter reuse,
-	// even when c.letters IS configured. The two are documented as independently nil-safe
-	// (NewClient's own doc comment), which is true of each ALONE; this early return is the
-	// one place that couples them regardless — found by code review. Not reachable today
-	// (cmd/auto-apply/main.go always wires both together), so left as a plain deterministic
-	// Resolve rather than special-cased for a configuration nothing constructs yet.
+	// A nil c.atoms disables ResolveWithDrafting entirely, including cover-letter reuse even when
+	// c.letters IS configured: atoms and letters are not independent switches. Not reachable
+	// today (cmd/auto-apply/main.go wires both), so a plain deterministic Resolve.
 	if c.atoms == nil || !c.submits(claimed.Provider) {
 		return Resolve(merged, answers, hasApprovedCV), nil
 	}
@@ -394,11 +312,10 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 		return Resolve(merged, answers, hasApprovedCV), nil
 	}
 
-	// Every model call made for a person needs them on a paid plan, and this worker cannot
-	// sit behind the HTTP paid gate — so it asks here, per attempt, right before the call.
-	// The candidate may have lapsed since the entry was queued. A free answer parks the
-	// attempt (Submit); a read that fails is returned as the error it is, so the attempt
-	// fails and retries rather than drafting on an entitlement nobody could read.
+	// Every model call made for a person needs them on a paid plan, and this worker sits behind
+	// no HTTP paid gate, so it asks here per attempt: the candidate may have lapsed since
+	// queueing. A free answer parks (Submit); a failed read is returned, so the attempt retries
+	// rather than drafting on an unreadable entitlement.
 	if err := c.requirePaid(ctx, claimed.UserID); err != nil {
 		return Plan{}, err
 	}
@@ -407,17 +324,11 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	return ResolveWithDrafting(ctx, merged, answers, drafter, grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
 }
 
-// submits reports whether Submit can complete an application on provider — through this
-// package's own browser (fillProviders) or through the browser-use executor when it is wired
-// and enforcing with budget left today. resolve drafts only for these, so a draft is never
-// paid for that nothing will send, and never withheld from one that will be sent. The budget
-// is asked again at submission (BrowserUseExecutor.submit): another attempt may spend what was
-// left in between, and that refusal parks the attempt as before.
-//
-// It used to read fillProviders alone, from before browser-use submitted anything: on
-// 2026-10-25 an approved Workable application whose review screen said fourteen answers
-// "will be drafted at submission" reached submission with none drafted and parked on all of
-// them.
+// submits reports whether Submit can complete an application on provider: through this
+// package's own browser (fillProviders) or the browser-use executor when it is wired,
+// enforcing and has budget left. resolve drafts only for these, so a draft is never paid for
+// that nothing will send, nor withheld from one that will be sent. The budget is asked again
+// at submission (BrowserUseExecutor.submit); a refusal there parks the attempt.
 func (c *Client) submits(provider string) bool {
 	if fillProviders[provider] {
 		return true
@@ -434,21 +345,14 @@ func (c *Client) requirePaid(ctx context.Context, userID int64) error {
 	return err
 }
 
-// attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it
-// as the résumé field's Value in plan — the file fillOne (fill.go) actually uploads.
-// Cleanup removes the temp file; the caller defers it so the file outlives the fill/submit
-// that reads it and is gone once Submit returns.
+// attachApprovedResume renders the claim's approved tailored CV to a temp PDF and sets it as
+// the résumé field's Value in plan, the file fillOne (fill.go) uploads. The caller defers
+// cleanup so the file outlives the fill/submit and is gone once Submit returns. A plan with no
+// résumé field returns two nils.
 //
-// A plan with no résumé field (nothing this attempt needs to attach) returns two nils —
-// nothing to render, nothing to park, nothing to clean up.
-//
-// There is no error return, because there is no failure here that is anyone's to retry: a
-// render failure parks the attempt naming the résumé field (design.md: "never guess, park
-// instead" — the same rule an unresolved form field already follows), and c.cvs/c.renderer
-// being unconfigured is treated identically, because it means this deployment cannot fill a
-// résumé field at all yet, which is exactly the state a required field with no known answer
-// parks for. Reporting an error alongside would suggest a third outcome that does not exist.
-// Same shape as unscannableFormResult below: the classified result, or nothing.
+// There is no error return: a render failure parks the attempt naming the résumé field (never
+// guess, park instead), and an unconfigured c.cvs/c.renderer is treated identically, since
+// that deployment cannot fill a résumé field at all.
 func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Claimed, plan *Plan) (cleanup func(), parked *autoapply.SidecarResult) {
 	idx := -1
 	for i, f := range plan.Fields {
@@ -477,10 +381,9 @@ func (c *Client) attachApprovedResume(ctx context.Context, claimed autoapply.Cla
 }
 
 // renderResumeToTempFile renders claimed's approved tailored CV through the same Typst
-// renderer the interactive CV workspace's PDF download uses (GetCVPDF, internal/api/
-// handler/cv.go), to a temp file chromedp can point a file input at — no object storage, no
-// persistence beyond this one attempt. No photo, no traced hrefs: a machine-submitted
-// résumé attachment is not the interactive preview those exist for.
+// renderer as the interactive PDF download (GetCVPDF in internal/api/handler/cv.go) to a temp
+// file chromedp can point a file input at. No photo, no traced hrefs: those are for the
+// interactive preview.
 func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.Claimed) (string, error) {
 	if c.cvs == nil || c.renderer == nil {
 		return "", fmt.Errorf("no CV renderer configured")
@@ -510,24 +413,15 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 	return f.Name(), nil
 }
 
-// fetchSchema reuses internal/applyform's own per-provider fetcher rather than
-// re-implementing Greenhouse/Ashby's API calls or Lever's page parse, live-fetching
-// whenever a fetcher is registered for the provider — deliberately NOT the storage-first
-// order PreviewClient.schemaFor uses for its own, cheaper purpose. apply_forms holds a
-// captured row for every provider cmd/capture-apply-form drains (Greenhouse, Ashby,
-// Workable, Lever — not only Recruitee, whose form arrives free with the crawl instead),
-// so preferring storage here too would risk a real submission reading a row captured for
-// the job page's own display, possibly stale, when a fresh fetch was available.
+// fetchSchema reuses internal/applyform's per-provider fetcher, live-fetching whenever one is
+// registered. Deliberately NOT the storage-first order PreviewClient.schemaFor uses: a real
+// submission must not read a possibly stale row captured for the job page's display.
 //
-// c.forms is therefore reached only when a live fetch cannot answer: no fetcher registered
-// for the provider, or a fetch that FAILED. The second is not hypothetical — on 2026-10-25
-// Workable answered this host's form requests with 429 and a Retry-After of 23 hours, after
-// cmd/capture-apply-form had read 3,369 of its forms from the same address that day, and
-// every approved Workable application failed before reaching the browser that would have
-// submitted it. The stored row is also the one the candidate reviewed (schemaFor reads it
-// first), and the fill itself still runs against the live page, which refuses a field the
-// form no longer has. With nothing stored, the live fetch's own error is returned, so a
-// transient failure stays an ordinary retryable one.
+// c.forms is reached only when a live fetch cannot answer: no fetcher registered, or a fetch
+// that FAILED (a rate-limited host would otherwise fail every approved application before the
+// browser). The stored row is also the one the candidate reviewed, and the fill still runs
+// against the live page, which refuses a field the form no longer has. With nothing stored,
+// the live fetch's own error is returned, so a transient failure stays retryable.
 func (c *Client) fetchSchema(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	fetcher, ok := c.fetchers[claimed.Provider]
 	if !ok {
@@ -562,13 +456,10 @@ func (c *Client) storedForm(ctx context.Context, jobID int64) (applyform.Form, b
 }
 
 // unscannableFormResult reports whether err is renderedHTML's classified outcome for a form
-// it could not scan — a white-label custom domain's own DOM shape, or a reCAPTCHA-gated
-// form — and if so, the parked result Submit should return for it instead of a plain error.
-// Neither case is a transient failure worth retrying: this parks like any other attempt
-// correctly declining to guess, rather than spending the ordinary Fail/dead-letter budget on
-// a form that will never change shape or stop being challenge-protected. Kept as a pure
-// function, separate from Submit's real browser call, so the mapping is unit-testable
-// without a live browser. See openspec/changes/auto-apply-whitelabel-greenhouse.
+// it could not scan (a white-label DOM shape or a reCAPTCHA-gated form), and if so the parked
+// result Submit returns instead of a plain error. Neither case is transient, so it parks
+// rather than spending the retry/dead-letter budget. Pure, so it is unit-testable without a
+// browser.
 func unscannableFormResult(err error) (autoapply.SidecarResult, bool) {
 	var unscannable *unscannableFormError
 	if !errors.As(err, &unscannable) {
@@ -577,10 +468,9 @@ func unscannableFormResult(err error) (autoapply.SidecarResult, bool) {
 	return autoapply.SidecarResult{Status: autoapply.StatusParked, Reason: string(unscannable.reason)}, true
 }
 
-// mergedFromAPIOnly builds a merged-field list straight from the platform's declared
-// schema, for a provider this package has no live DOM-scan for yet. The API is trusted as
-// the whole picture here — the risk Reconcile.go exists to close (a DOM-rendered field the
-// API never declares) is unverified for these providers until 7.1's live smoke test.
+// mergedFromAPIOnly builds a merged-field list straight from the platform's declared schema,
+// for a provider with no live DOM scan. The API is trusted as the whole picture, so a
+// DOM-rendered field it never declares (the risk Reconcile exists to close) goes unseen here.
 func mergedFromAPIOnly(api applyform.Form) []MergedField {
 	out := make([]MergedField, 0, len(api.Fields))
 	for _, f := range api.Fields {

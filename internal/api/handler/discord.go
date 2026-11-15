@@ -13,25 +13,20 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
 )
 
-// discordStateCookieName carries the CSRF state across the Discord consent round-trip. Its
-// own name, not shared with the Gmail or Calendar flows: two connects in flight at once must
-// not be able to complete each other.
+// discordStateCookieName carries the CSRF state across the consent round-trip. Not shared
+// with the Gmail or Calendar flows, so two connects in flight cannot complete each other.
 const discordStateCookieName = "fh_discord_state"
 
-// discordCallbackPath is where Discord returns the browser. It is registered with the
-// Discord application by hand, so it is written once here and read into the redirect_uri of
-// both the consent URL and the token exchange — the two must be byte-identical or Discord
-// refuses the exchange.
+// discordCallbackPath is where Discord returns the browser. Registered with the Discord
+// application by hand; the consent URL and the token exchange must use a byte-identical
+// redirect_uri or Discord refuses the exchange.
 const discordCallbackPath = "/api/v1/me/discord/callback"
 
 // discordScopes is the consent asked for. `identify` reads the account id we bind to;
-// `guilds.join` is what lets one click put the user on the server, instead of sending them
-// off to find an invite and come back.
+// `guilds.join` puts the user on the server in one click.
 const discordScopes = "identify guilds.join"
 
-// DiscordLinker is the part of *discordlink.Service these routes use. Declared by the
-// consumer and kept to three methods, so the service can grow without widening what the
-// HTTP layer may do.
+// DiscordLinker is the part of *discordlink.Service these routes use.
 type DiscordLinker interface {
 	Link(ctx context.Context, userID int64, code, redirectURI string) (discordlink.Link, error)
 	Unlink(ctx context.Context, userID int64) error
@@ -41,9 +36,7 @@ type DiscordLinker interface {
 // discordHandlers serves linking a Discord account to a freehire account, so the paid role
 // on the community server can follow the subscription.
 //
-// A nil svc is how the composition root says "not configured": register then mounts nothing
-// and every route 404s. That is what lets this ship before the Discord application exists,
-// and what rolling it back looks like.
+// A nil svc means "not configured": register mounts nothing and every route 404s.
 type discordHandlers struct {
 	svc            DiscordLinker
 	clientID       string
@@ -70,11 +63,9 @@ func (h *discordHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/discord/connect", mw.cookie, h.Connect)
 	api.Delete("/me/discord", mw.cookie, h.Unlink)
 
-	// The callback is the browser returning from Discord, so it is mounted on
-	// optionalCookie rather than cookie. Under RequireAuth a session that did not survive
-	// the round-trip renders a JSON 401 into the address bar and strands the user; the
-	// handler answers that case itself, with a redirect. The Gmail callback learned this
-	// the hard way — see its own test.
+	// The callback is a browser navigation, so it is mounted on optionalCookie: under
+	// RequireAuth a lost session would render a JSON 401 into the address bar. The handler
+	// answers that case itself with a redirect.
 	api.Get("/me/discord/callback", mw.optionalCookie, h.Callback)
 }
 
@@ -84,10 +75,9 @@ func (h *discordHandlers) redirectURI() string {
 	return h.frontendOrigin + discordCallbackPath
 }
 
-// Status reports whether the caller has linked a Discord account, and whether the feature
-// exists at all — so the SPA can render the card without a second request. Reaching this
-// handler means the routes were mounted, so enabled is always true here; it is sent anyway
-// because the SPA reads the same shape from every integration.
+// Status reports whether the caller has linked a Discord account and whether the feature
+// exists. enabled is always true here (the routes are mounted) but is sent because the SPA
+// reads the same shape from every integration.
 func (h *discordHandlers) Status(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -138,9 +128,7 @@ func (h *discordHandlers) authCodeURL(state string) string {
 // connect was started from.
 //
 // Every outcome is a redirect carrying a marker, never JSON: this is a top-level navigation
-// returning from another site, and a JSON body here is rendered into the address bar. The
-// underlying cause is logged server-side first, because the marker tells the user what
-// happened and tells us nothing.
+// and a JSON body would render into the address bar. The cause is logged server-side first.
 func (h *discordHandlers) Callback(c *fiber.Ctx) error {
 	redirect := func(qs string, err error) error {
 		log.Printf("discord connect: %s: %v", qs, err)
@@ -156,10 +144,8 @@ func (h *discordHandlers) Callback(c *fiber.Ctx) error {
 	if cookieState == "" || c.Query("state") != cookieState {
 		return redirect("discord_error=state", errors.New("state cookie missing or mismatched"))
 	}
-	// Discord echoes the state on its refusal redirect too, so passing the check above says
-	// nothing about whether consent was given. A declined screen arrives as
-	// ?error=access_denied with no code — the same trap the Gmail flow fell into, where it
-	// read as success and told the user they were connected the moment they refused.
+	// Discord echoes the state on its refusal redirect too, so the state check does not
+	// prove consent: a declined screen arrives as ?error=access_denied with no code.
 	if refusal := c.Query("error"); refusal != "" {
 		return redirect("discord_error=denied", errors.New(refusal))
 	}
@@ -170,9 +156,8 @@ func (h *discordHandlers) Callback(c *fiber.Ctx) error {
 
 	if _, err := h.svc.Link(c.Context(), userID, code, h.redirectURI()); err != nil {
 		if errors.Is(err, discordlink.ErrAlreadyLinkedElsewhere) {
-			// Its own marker: this one is the user's to resolve — they must disconnect the
-			// Discord account from the other freehire account first — and "something went
-			// wrong" would leave them retrying forever.
+			// Its own marker: the user must unlink the Discord account from the other
+			// freehire account first, and a generic error would leave them retrying.
 			return redirect("discord_error=taken", err)
 		}
 		return redirect("discord_error=exchange", err)

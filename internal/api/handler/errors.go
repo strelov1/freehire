@@ -17,14 +17,12 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// statusClientClosedRequest is nginx's non-standard 499: the client went away
-// before the handler finished. There is no one to receive the body, so it is not
-// an application fault — we classify it away from the reported 500s.
+// statusClientClosedRequest is nginx's non-standard 499: the client left before the
+// handler finished. Not an application fault, so it is not reported.
 const statusClientClosedRequest = 499
 
-// LocalPanicReported marks a panic captured by the server's recovery callback.
-// Fiber re-delivers the recovered error to the ErrorHandler, so RenderError
-// checks this marker to avoid reporting the same panic a second time.
+// LocalPanicReported marks a panic captured by the recovery callback. Fiber re-delivers
+// the recovered error to the ErrorHandler; RenderError checks this to report it once.
 const LocalPanicReported = "panic_reported"
 
 type codedError struct {
@@ -53,10 +51,9 @@ func authError(status int, code, message string) error {
 //     leaking internals.
 //
 // Anything that ends as a 500 is reported to the exception log
-// (observability.CaptureError), whether the handler declared it or fell through
-// to one. Routine 4xx, mapped 404s and the deployment-shaped 503s are
-// deliberately not reported, so the error inbox reflects genuine faults rather
-// than normal client traffic. Panics are reported separately, by ReportPanic.
+// (observability.CaptureError), declared or fall-through. Routine 4xx, mapped 404s and
+// deployment-shaped 503s are not, so the inbox holds genuine faults. Panics are reported
+// by ReportPanic.
 func RenderError(c *fiber.Ctx, err error) error {
 	var ce *codedError
 	if errors.As(err, &ce) {
@@ -64,8 +61,7 @@ func RenderError(c *fiber.Ctx, err error) error {
 	}
 	status, msg, report := classify(err)
 
-	// A recovered panic was already captured with its stack by ReportPanic;
-	// reporting the re-delivered error again would duplicate it.
+	// A recovered panic was already captured with its stack by ReportPanic.
 	if report && c.Locals(LocalPanicReported) == nil {
 		reportUnexpected(c, err)
 	}
@@ -73,10 +69,9 @@ func RenderError(c *fiber.Ctx, err error) error {
 	return c.Status(status).JSON(fiber.Map{"error": msg})
 }
 
-// reportUnexpected reports err as a genuine fault. It exists for call
-// sites that build their own response — a redirect, typically — instead of
-// returning through RenderError, but still want the same "only real faults
-// reach the error inbox" gate RenderError applies to everything else.
+// reportUnexpected reports err as a genuine fault, for call sites that build their own
+// response (a redirect, say) instead of returning through RenderError but want the same
+// "only real faults" gate.
 func reportUnexpected(c *fiber.Ctx, err error) {
 	if _, _, report := classify(err); !report {
 		return
@@ -100,29 +95,17 @@ func requestErrorAttributes(c *fiber.Ctx) []attribute.KeyValue {
 }
 
 // classify maps an error to its HTTP status and message and reports whether it is
-// a server fault worth reporting. The 404-mapped DB errors, a client
-// disconnect and a malformed search query are all routine; every 500 is a fault,
-// including one a handler DECLARED with fiber.NewError to give the caller a
-// readable message.
+// a server fault worth reporting. The 404-mapped DB errors, a client disconnect and a
+// malformed search query are routine; every 500 is a fault, including one a handler
+// DECLARED with fiber.NewError to phrase a readable message. Hence the branch tests the
+// code instead of answering false for every *fiber.Error.
 //
-// That last clause is the whole reason this branch tests the code instead of
-// answering false for every *fiber.Error. Thirteen call sites wrapped a genuine
-// failure — a DB read, a token mint, an autopilot run — in fiber.NewError(500,
-// "…") purely to phrase it for a human, and thereby took it out of the error
-// inbox; seven of them do not log either, so the failure left no trace anywhere.
-// The streamed autopilot already decided the other way (see reportStreamFault in
-// assistant.go), and the synchronous route sent the SAME error past it.
+// It is an EQUALITY, not `code >= 500`: 503 means "this deployment has no
+// Meilisearch/LLM configured", an environment statement nobody can act on from reports.
 //
-// It is an EQUALITY, not `code >= 500`. Forty-two sites answer 503 to mean "this
-// deployment has no Meilisearch/LLM configured" — a statement about the
-// environment, repeated on every request to that route, and not a fault anyone
-// can act on from the error reports.
-//
-// A *fiber.Error cannot wrap, so a 500 declared this way is reported as its
-// own message with no cause behind it. Call sites that have a cause worth keeping
-// should therefore return `fmt.Errorf("…: %w", err)` and let the fall-through
-// render the generic body, rather than phrasing the message and dropping the
-// error.
+// A *fiber.Error cannot wrap, so a declared 500 is reported with no cause. A call site
+// with a cause worth keeping should return `fmt.Errorf("…: %w", err)` and let the
+// fall-through render the generic body.
 func classify(err error) (status int, msg string, report bool) {
 	var fe *fiber.Error
 	var invalidValue *inbox.InvalidError
@@ -132,10 +115,9 @@ func classify(err error) (status int, msg string, report bool) {
 		return fe.Code, fe.Message, fe.Code == fiber.StatusInternalServerError
 	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err), errors.Is(err, inbox.ErrNotFound):
 		return fiber.StatusNotFound, "not found", false
-	// The mail service validates against its own vocabularies and refuses to record
-	// an application over a suggestion nobody has answered. Both readers of that
-	// service need the same decision; only the rendering differs, and this is the
-	// HTTP half of it.
+	// The mail service validates against its own vocabularies and refuses to record an
+	// application over an unanswered suggestion. Both readers need the same decision; this
+	// is the HTTP half.
 	case errors.As(err, &invalidValue):
 		return fiber.StatusBadRequest, invalidValue.Error(), false
 	case errors.Is(err, inbox.ErrSlugRequired):
@@ -146,33 +128,25 @@ func classify(err error) (status int, msg string, report bool) {
 		return fiber.StatusBadRequest, badBatch.Error(), false
 	case errors.Is(err, inbox.ErrPendingSuggestion):
 		return fiber.StatusConflict, err.Error(), false
-	// The candidate has not run their fit analysis for this job, so the tailoring surfaces
-	// have nothing to ground on. A state, not a fault — and one both readers of the fit
-	// service meet, so the status is decided here rather than at each call site.
+	// No fit analysis for this job, so the tailoring surfaces have nothing to ground on.
+	// A state, not a fault; the status is decided here for both readers of the fit service.
 	//
-	// errNoRequirementList is the same state reached from the other side: an autopilot run
-	// whose analysis would not fill, refused deliberately by refuseAutopilotWithoutAPlan
-	// rather than let loose on a CV with nothing to work through. It is listed HERE, beside
-	// the condition it shares, because both of its readers — RenderError for the plain
-	// endpoint and reportStreamFault for the streamed one — ask this function and only this
-	// function whether a failure is worth reporting. Filed as a fault it was 12 Sentry
-	// events for a refusal that had already explained itself to the candidate on the
-	// stream, on a quota measured in thousands (see web/src/lib/transientNoise.ts).
+	// errNoRequirementList is the same state from the other side: autopilot refused by
+	// refuseAutopilotWithoutAPlan. It is listed HERE because both RenderError and
+	// reportStreamFault ask only this function whether a failure is worth reporting, and
+	// the refusal has already explained itself to the candidate.
 	case errors.Is(err, fitanalysis.ErrNoAnalysis), errors.Is(err, errNoRequirementList):
 		return fiber.StatusConflict, "run the fit analysis first", false
-	// The client cancelled the request (navigated away, closed the tab). The
-	// cancellation propagates through downstream calls (DB, Meilisearch) as
-	// context.Canceled — not a server fault, and there is no one left to answer.
-	// A server-side timeout (context.DeadlineExceeded) is deliberately NOT matched
-	// here: that is our own deadline firing and is worth reporting.
+	// The client cancelled (navigated away, closed the tab); it propagates through DB and
+	// Meilisearch calls as context.Canceled. Not a fault. context.DeadlineExceeded is
+	// deliberately NOT matched: our own deadline firing is worth reporting.
 	case errors.Is(err, context.Canceled):
 		return statusClientClosedRequest, "client closed request", false
-	// q carried more OR alternatives than search allows. Say which limit was hit:
-	// the generic "invalid search query" would leave the caller guessing.
+	// q carried more OR alternatives than search allows; name the limit.
 	case errors.Is(err, search.ErrTooManyAlternatives):
 		return fiber.StatusBadRequest, search.ErrTooManyAlternatives.Error(), false
-	// Meilisearch rejected the request as malformed (a 400) — e.g. an unparseable
-	// filter value from client input. That is a bad request, not a fault.
+	// Meilisearch rejected the request as malformed (400), e.g. an unparseable client
+	// filter value: a bad request, not a fault.
 	case errors.Is(err, search.ErrBadQuery):
 		return fiber.StatusBadRequest, "invalid search query", false
 	default:

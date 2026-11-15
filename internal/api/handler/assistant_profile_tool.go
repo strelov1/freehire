@@ -17,17 +17,13 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 )
 
-// noProfileResult is what get_profile answers when the caller has never saved a
-// profile. It is a result, not an error: the agent has learned something true and
-// should act on it. The instruction matters as much as the fact — collecting the
-// same preferences in chat would produce a better answer this once and nothing
-// durable, where the profile page's values persist and drive the ranked feed,
-// subscriptions and fit analysis.
+// noProfileResult is what get_profile answers when no profile was ever saved: a result, not an error.
+// Its instruction sends the agent to the profile page, whose values persist and drive the ranked
+// feed, subscriptions and fit analysis; preferences collected in chat do not.
 type noProfileResult struct {
 	Profile any `json:"profile"`
-	// Account is the connected account's email, masked: which account the agent is bound
-	// to is the one thing a person cannot see from inside the agent, and the full address
-	// never reaches the model.
+	// Account is the connected account's email, masked: the one thing a person cannot see from
+	// inside the agent. The full address never reaches the model.
 	Account string `json:"account,omitempty"`
 	Next    string `json:"next"`
 	// Background and CV (its deprecated alias, see profileToolResult) are still served: the
@@ -63,13 +59,9 @@ func noProfileNext(masked string) string {
 		"while signed in to the right one. Otherwise: " + next
 }
 
-// getProfileTool reads the caller's own saved profile: the specializations, skills
-// and location preferences they curated, plus their structured CV with the contact
-// fields left out.
-//
-// This is the tool that stops the agent interrogating a user for what they have
-// already told the product. Registered for every session, and worth calling before
-// the first search of a conversation.
+// getProfileTool reads the caller's saved profile: specializations, skills and location
+// preferences, plus the structured CV without contact fields. It stops the agent re-asking what
+// the user already told the product; call it before the first search.
 func (h *assistantHandlers) getProfileTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "get_profile",
@@ -86,10 +78,8 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"themselves. Takes no arguments.",
 		Schema: assistant.EmptySchema,
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
-			// Registered for every session, so it is registered on every assembly — and the
-			// assistant's constructor takes each surface as a pointer that may be nil (it
-			// guards cvH itself). Without this the absence is a nil dereference inside the
-			// SSE stream's goroutine, which the candidate reads as a turn that died.
+			// Registered on every assembly: the assistant's constructor takes each surface as a pointer
+			// that may be nil, and a nil cvH would panic inside the SSE goroutine.
 			if h.profile == nil || h.profile.userProfile == nil {
 				return nil, unavailable("the saved profile")
 			}
@@ -112,14 +102,10 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 	}
 }
 
-// profileToolResult is what the agent sees. It differs from the HTTP profile response in
-// one deliberate way: the experience bank is reported as a SHAPE — the roles, how much
-// evidence each carries, and which stated skills have none — rather than as content.
-//
-// A tool result is persisted in the transcript and replayed into the model's context on
-// every later turn. A two-hundred-atom bank replayed each turn would consume the window
-// and defeat trimming, so content is fetched per question through experience_search and
-// the summary tells the agent where it is worth asking one.
+// profileToolResult is what the agent sees. Unlike the HTTP profile response it reports the
+// experience bank as a SHAPE (roles, evidence per role, stated skills with none), not content:
+// a tool result is replayed into the model's context on every later turn, so a big bank would
+// consume the window. Content is fetched per question through experience_search.
 type profileToolResult struct {
 	Specializations     []string `json:"specializations"`
 	Skills              []string `json:"skills"`
@@ -131,10 +117,8 @@ type profileToolResult struct {
 	// years, education, languages (work history is left to Experience). It is profile data,
 	// not a CV document, which is why it is named for what it is and not "cv".
 	Background *resumeextract.Professional `json:"background,omitempty"`
-	// CV is the same block under its original name, kept so a reader written against it does
-	// not break. Deprecated: drop it once get_profile's description has told agents to read
-	// `background` for a few weeks (revisit after 2026-12-01); it doubles this block in every
-	// transcript until then.
+	// CV is the same block under its original name, kept so older readers do not break.
+	// Deprecated: drop it once agents read `background`; it doubles this block in every transcript.
 	CV         *resumeextract.Professional `json:"cv,omitempty"`
 	Experience *experienceSummary          `json:"experience,omitempty"`
 }

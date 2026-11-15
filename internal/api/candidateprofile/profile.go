@@ -1,12 +1,8 @@
-// Package candidateprofile assembles the canonical set of fields a candidate has already
-// stated — identity, contact details, and their own screening answers — from their CV,
-// their structured résumé, their account, and internal/screeninganswers.
+// Package candidateprofile assembles the fields a candidate has already stated (identity,
+// contact, screening answers) from their CV, structured résumé, account and screening answers.
 //
-// It exists so a value the browser extension fills a form with and a value cmd/auto-apply
-// resolves a form against can never diverge: both read this package's Assemble, not two
-// separate re-derivations of the same precedence rules. It answers only what the candidate
-// has already told the system — nothing here drafts or infers an answer, so an unset field
-// stays unset rather than guessed.
+// The extension autofill and cmd/auto-apply both read Assemble, so their values cannot diverge.
+// Nothing here drafts or infers: an unset field stays unset.
 package candidateprofile
 
 import (
@@ -32,10 +28,8 @@ type Profile struct {
 	GitHub    string `json:"github"`
 	Portfolio string `json:"portfolio"`
 
-	// The candidate's own screening answers (internal/screeninganswers), formatted for
-	// display/autofill. Independent of the identity fields above: there is exactly one
-	// screening-answers store, so unlike CV vs. résumé there is no precedence to resolve.
-	// Empty when the caller has stated nothing — never guessed.
+	// Screening answers (internal/screeninganswers), formatted for autofill. Independent of the
+	// identity fields: one store, no precedence. Empty when unstated, never guessed.
 	AuthorizedCountries   string `json:"authorized_countries"`
 	VisaSponsorshipNeeded string `json:"visa_sponsorship_needed"`
 	DesiredSalary         string `json:"desired_salary"`
@@ -44,25 +38,18 @@ type Profile struct {
 	Age18OrOlder          string `json:"age_18_or_older"`
 	PrivacyConsent        string `json:"privacy_consent"`
 
-	// BankAnswers is topic → answer for the questions this candidate has answered on
-	// earlier applications. Not a fixed field like the ones above, because the questions
-	// employers author are not a fixed set — that is the whole reason the bank exists.
+	// BankAnswers is topic → answer for questions answered on earlier applications. Not a fixed
+	// field because employer questions are not a fixed set.
 	BankAnswers map[string]string `json:"-"`
 }
 
-// Fields flattens Profile into the keyed values a form-filler grounds its plan in — the
-// fixed set above and nothing else, keyed exactly as /me/autofill-profile returns them.
+// Fields flattens Profile into the keyed values a form-filler grounds its plan in, keyed as
+// /me/autofill-profile returns them.
 //
-// The banked answers are deliberately NOT here; FieldsWithBankedAnswers is what includes
-// them. This map is what internal/api/handler's agent autofill hands to
-// internal/ai/autofillagent, which JSON-marshals the whole of it into a model prompt and
-// then uses it as the grounding set — so adding the bank here would send every free-text
-// answer the candidate ever typed for an employer (on Greenhouse that includes the
-// demographic and veteran/disability questions) to the model on every run, and would widen
-// autofillagent.groundedValue's anti-fabrication gate by the size of the bank: that gate
-// accepts any planned value sharing a word-run with ANY profile value, so a model could
-// fabricate an answer to one question and have it admitted because the words happen to
-// appear in an unrelated banked answer.
+// Banked answers are deliberately NOT here (see FieldsWithBankedAnswers): this map is
+// JSON-marshalled into the autofillagent prompt, so the bank would send every past free-text
+// answer (demographic ones included) to the model and widen autofillagent.groundedValue's
+// anti-fabrication gate, which admits any value sharing a word-run with any profile value.
 func (p Profile) Fields() map[string]string {
 	return map[string]string{
 		"full_name":  p.FullName,
@@ -85,19 +72,12 @@ func (p Profile) Fields() map[string]string {
 	}
 }
 
-// FieldsWithBankedAnswers is Fields plus the candidate's banked answers, and is what an
-// application FORM is resolved against — internal/api/atsapply.Resolve, reached through
-// cmd/auto-apply's own autoapply.AnswerSource. The split is what keeps the bank off every
-// other path (see Fields). Agent autofill in the browser reads BankAnswers itself and
-// recalls them by topic, apart from the profile it plans with (autofillagent.Banked).
+// FieldsWithBankedAnswers is Fields plus the banked answers. An application FORM is resolved
+// against it (atsapply.Resolve), which keeps the bank off every other path.
 //
-// Banked answers ride in the same map under a prefix, so a caller that resolves an answer
-// never has to know which source stated it. The prefix must match internal/api/atsapply's
-// own bankAnswerKeyPrefix — a topic is a folded question and could otherwise collide with a
-// fixed key. The two cannot share a constant (atsapply is layer 8, this block sits below
-// it), so that comment and this one are the only thing holding them together;
-// atsapply's TestResolve_ReadsTheKeysProfileFieldsActuallyWrites is the only test that
-// fails if they drift.
+// Banked answers ride under a "topic:" prefix that must match atsapply's bankAnswerKeyPrefix
+// (no shared constant: atsapply is a higher layer). atsapply's
+// TestResolve_ReadsTheKeysProfileFieldsActuallyWrites fails on drift.
 func (p Profile) FieldsWithBankedAnswers() map[string]string {
 	fields := p.Fields()
 	for topic, answer := range p.BankAnswers {
@@ -106,17 +86,14 @@ func (p Profile) FieldsWithBankedAnswers() map[string]string {
 	return fields
 }
 
-// CVReader is the one base-CV read Assemble makes. Tailored copies are excluded by the
-// query behind it (GetBaseCVByUser filters NOT is_tailored), not by anything here: a
-// tailored CV is written for one vacancy and this block carries none.
+// CVReader is the one base-CV read Assemble makes. The query (GetBaseCVByUser filters NOT
+// is_tailored) excludes tailored copies, which are written for one vacancy.
 type CVReader interface {
 	BaseCV(ctx context.Context, userID int64) (cv.Record, bool, error)
 }
 
 // ResumeReader is the one résumé read Assemble makes. The bool reports whether a structure
-// current with the uploaded résumé exists: the store compares the structure's stamp against
-// the résumé's upload time, so one derived from a superseded file reads as absent rather
-// than being served.
+// current with the uploaded résumé exists; one from a superseded file reads as absent.
 type ResumeReader interface {
 	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
@@ -131,9 +108,8 @@ type ScreeningAnswersReader interface {
 	Get(ctx context.Context, userID int64) (screeninganswers.Answers, error)
 }
 
-// BankReader supplies the candidate's own banked screening answers, keyed by topic. Only
-// answers they themselves gave — internal/candidate/answerbank.Store.Sendable is what
-// enforces that, not this interface.
+// BankReader supplies the candidate's banked answers by topic. Only answers they gave:
+// answerbank.Store.Sendable enforces that.
 type BankReader interface {
 	Sendable(ctx context.Context, userID int64) (map[string]string, error)
 }
@@ -143,11 +119,9 @@ type Assembler struct {
 	cvs      CVReader
 	resumes  ResumeReader
 	accounts AccountReader
-	// screeningAnswers is nil-able: "no screening answers configured" degrades the
-	// screening fields to empty, same as an unconfigured résumé reader.
+	// screeningAnswers is nil-able: unconfigured leaves the screening fields empty.
 	screeningAnswers ScreeningAnswersReader
-	// bank is nil-able: "no answer bank configured" degrades to no banked answers, the
-	// same way an unconfigured screening-answers reader degrades those fields to empty.
+	// bank is nil-able: unconfigured means no banked answers.
 	bank BankReader
 	// profiles is nil-able: the job-search profile's base, read only when no contact source
 	// states a location (WithProfileLocation).
@@ -162,10 +136,8 @@ func NewAssembler(cvs CVReader, resumes ResumeReader, accounts AccountReader, sc
 // Assemble builds a candidate's Profile from the first source that states a contact,
 // backstopped by their account email.
 //
-// The sources are ordered: the base CV first, because it is the copy the candidate authored
-// and the only one the tailoring agent cannot rewrite (the edit policy denies it the
-// header's name, email, phone and links); the structured résumé second, because it is what
-// seeded that CV in the first place. Corrected beats derived.
+// Sources are ordered: the base CV first (the candidate's corrected copy; the edit policy
+// denies the tailoring agent the header), then the structured résumé that seeded it.
 func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error) {
 	var fromCV cv.Header
 	if rec, ok, err := a.cvs.BaseCV(ctx, userID); err != nil {
@@ -187,9 +159,8 @@ func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error)
 	}
 
 	profile := BuildProfile(firstStatedHeader(fromCV, fromResume), account.Email)
-	// The header answers for the whole block (firstStatedHeader), so a CV that states a name
-	// and no location would hide the résumé's location; the résumé is asked for that one
-	// field before the search profile is.
+	// The header answers for the whole block, so a CV with a name but no location would hide the
+	// résumé's location; ask the résumé for that field before the search profile.
 	if profile.Location == "" {
 		profile.Location = fromResume.Location
 	}
@@ -213,20 +184,16 @@ func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error)
 	return profile, nil
 }
 
-// statesContact reports whether a header carries any contact value at all. A source that
-// exists but states nothing is passed over rather than allowed to answer, so a CV created
-// empty does not silence a résumé that has the values.
+// statesContact reports whether a header carries any contact value. A source that states
+// nothing is passed over, so an empty CV does not silence a résumé.
 func statesContact(h cv.Header) bool {
 	return h.FullName != "" || h.Email != "" || h.Phone != "" || h.Location != "" || len(h.Links) > 0
 }
 
-// firstStatedHeader returns the first header that states any contact value, or the zero
-// header when none does.
+// firstStatedHeader returns the first header that states any contact value, or the zero header.
 //
-// The chosen header answers for the WHOLE block: fields are never merged across sources.
-// The résumé structure is what seeds a CV (cv.Seed), so the two sources hold the same
-// fields with the CV holding the corrected ones — a merge would restore precisely the
-// value the candidate deleted from their CV.
+// The chosen header answers for the WHOLE block, never merged across sources: the CV holds the
+// corrected fields, so a merge would restore a value the candidate deleted.
 func firstStatedHeader(headers ...cv.Header) cv.Header {
 	for _, h := range headers {
 		if statesContact(h) {
@@ -236,9 +203,8 @@ func firstStatedHeader(headers ...cv.Header) cv.Header {
 	return cv.Header{}
 }
 
-// ContactHeaderFromStructured projects the structured résumé's contact fields into a
-// header, so the résumé can be offered to firstStatedHeader as one more source. It is the
-// same five-field mapping cv.Seed makes when it seeds a CV from the same structure.
+// ContactHeaderFromStructured projects the résumé's contact fields into a header, the same
+// mapping cv.Seed makes.
 func ContactHeaderFromStructured(st resumeextract.Structured) cv.Header {
 	return cv.Header{
 		FullName: st.FullName,
@@ -291,10 +257,8 @@ func splitName(full string) (first, last string) {
 	}
 }
 
-// applyScreeningFields merges the caller's screening answers into the profile. Best-effort
-// in the same shape as the CV/résumé reads' "not found" branches: no reader configured or
-// no answers stated both leave the screening fields empty rather than failing the whole
-// read. Any OTHER error is real and propagates.
+// applyScreeningFields merges the caller's screening answers into the profile. No reader or no
+// stored answers leaves the fields empty; any other error propagates.
 func applyScreeningFields(ctx context.Context, p *Profile, reader ScreeningAnswersReader, userID int64) error {
 	if reader == nil {
 		return nil

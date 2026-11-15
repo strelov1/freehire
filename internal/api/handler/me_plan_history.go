@@ -96,13 +96,9 @@ func loadPlanHistory(ctx context.Context, queries *db.Queries, userID int64, lim
 }
 
 // resolveUsageSubjects batch-resolves the vacancies the entries name, keyed by
-// subjectKey(feature, ref).
-//
-// The two features name different things and neither can be parsed as the other: a job
-// analysis carries a job's numeric id, a tailoring charge carries '<session>#n'. The
-// feature is part of the key so a job id and a session that happen to look alike cannot
-// collide. A reference whose subject was deleted is simply absent, and the caller falls
-// back to a generic label.
+// subjectKey(feature, ref). A job analysis carries a job's numeric id, a tailoring charge
+// '<session>#n'; neither parses as the other. A deleted subject is absent and the caller
+// falls back to a generic label.
 func resolveUsageSubjects(ctx context.Context, queries *db.Queries, userID int64, rows []db.ListUsageLedgerRow) (map[string]string, error) {
 	var jobRefs []int64
 	var sessionRefs []string

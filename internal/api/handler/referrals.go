@@ -65,10 +65,7 @@ func (h *referralHandlers) requestJobID(ctx context.Context, slug string, id *in
 }
 
 func (h *referralHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Employee referrals: any authenticated user (cookie or API key) offers to refer into a
-	// company (proof CV, moderated) and requests a referral from a company's approved-referrer
-	// pool; referrers manage their own incoming requests. The offer-moderation queue is
-	// moderator-gated, mirroring the submissions queue above.
+	// Any authenticated user (cookie or key) may offer or request; the offer-moderation queue is moderator-gated.
 	api.Post("/me/referrals/offers", mw.key, h.SubmitReferralOffer)
 	api.Get("/me/referrals/offers", mw.key, contract)
 	api.Delete("/me/referrals/offers/:id", mw.key, contract)
@@ -142,9 +139,8 @@ func optionalCVID(raw *string) (*uuid.UUID, error) {
 	return &id, nil
 }
 
-// referralError maps the referral sentinels to HTTP statuses. Validation failures are 422,
-// authorization is 403, missing targets 404, and conflicts (duplicate,
-// not-pending, not-open) are 409; anything else falls through to RenderError as 500.
+// referralError maps the referral sentinels to HTTP statuses: validation 422, authorization
+// 403, missing targets 404, conflicts 409; anything else falls through as 500.
 func referralError(err error) error {
 	switch {
 	case errors.Is(err, referral.ErrProofRequired),
@@ -182,9 +178,8 @@ func referralError(err error) error {
 }
 
 // CreateReferralRequest records a seeker's request into a company's referrer pool and pings
-// the approved referrers. RequireAuth. Validation failures 422, no referrer 409, cap 429.
-// Exactly one of the CV fields is meaningful per cv_kind (validated in the domain); the
-// contact is Telegram and/or email.
+// the approved referrers. Validation failures 422, no referrer 409, cap 429. Exactly one of
+// the CV fields is meaningful per cv_kind (validated in the domain).
 func (h *referralHandlers) CreateReferralRequest(ctx context.Context, req *apigen.ReferralRequestCreate) (*apigen.CreateReferralRequestCreated, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -262,8 +257,8 @@ func (h *referralHandlers) ListMyReferralRequests(ctx context.Context) (*apigen.
 }
 
 // SubmitReferralOffer records a member's offer to refer into a company. The proof CV is a
-// multipart "file" stored to S3; company_slug is a form field. RequireAuth; the offer waits
-// on moderation. 503 when the blob store is unconfigured, 409 on a duplicate offer.
+// multipart "file" stored to S3; company_slug is a form field. 503 when the blob store is
+// unconfigured, 409 on a duplicate offer.
 func (h *referralHandlers) SubmitReferralOffer(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -307,7 +302,7 @@ func (h *referralHandlers) ListMyReferralOffers(ctx context.Context) (*apigen.Li
 }
 
 // WithdrawReferralOffer lets a member stop being a referrer by deleting their own offer.
-// RequireAuth; owner-scoped in the service. 404 when the offer is absent or not theirs.
+// Owner-scoped in the service: 404 when the offer is absent or not theirs.
 func (h *referralHandlers) WithdrawReferralOffer(ctx context.Context, params apigen.WithdrawReferralOfferParams) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -520,12 +515,8 @@ func referralProofKey(userID int64, companySlug string) string {
 	return fmt.Sprintf("referral-proof/%d/%s.pdf", userID, companySlug)
 }
 
-// referralPathID parses the :id route param as a referral's UUID. A malformed id
-// cannot name any referral, so it answers exactly as a missing one does, down to
-// the message referralError would render. That matters more here than elsewhere:
-// an incoming request's CV is read by an approved referrer rather than by the
-// owner, so "not visible to you" is a membership answer, and none of the ways to
-// miss should be told apart.
+// referralPathID parses the :id route param as a referral's UUID. A malformed id answers
+// exactly as a missing one, so no way of missing can be told apart from "not visible to you".
 func referralPathID(c *fiber.Ctx, notFound string) (uuid.UUID, error) {
 	return referralUUID(c.Params("id"), notFound)
 }

@@ -44,13 +44,13 @@ func newConfiguredAuthHandlers(cfg Config, queries *db.Queries, issuer *auth.Iss
 // newBuddySurfaces builds the messaging core with the buddy persona registered, and the
 // buddy surfaces over it.
 func newBuddySurfaces(cfg Config, queries *db.Queries, mailClient *emailnotify.Client) (*conversationHandlers, *buddyHandlers) {
-	// Conversations are the messaging core's; each persona a participant may speak as is
+	// Conversations belong to the messaging core; each persona a participant may speak as is
 	// registered here.
 	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)
 	messagingSvc := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(buddyRepo))
 	buddySvc := buddy.New(buddyRepo, messagingSvc)
-	// Buddy mock interviews. Without a mail transport the notices still reach the
-	// notification center. A properly nil interface, never a typed-nil *Client.
+	// Buddy mock interviews. Without a mail transport notices still reach the notification
+	// center. Must be a properly nil interface, never a typed-nil *Client.
 	var mockMail emailnotify.Sender
 	if mailClient != nil && cfg.NotifyEmailFrom != "" {
 		mockMail = mailClient
@@ -65,20 +65,16 @@ func newBuddySurfaces(cfg Config, queries *db.Queries, mailClient *emailnotify.C
 
 // newMentorshipSurfaces builds the mentorship marketplace and its profile-form prefill.
 func newMentorshipSurfaces(cfg Config, queries *db.Queries, mailClient *emailnotify.Client, photoStore *headshot.Store, resumeStore *resume.Store, profileSvc *userprofile.Service, bank *experience.Store) (*mentorshipHandlers, *mentorSuggestionsHandlers) {
-	// The mentorship marketplace: referral's opposite number, where the insider is named
-	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
-	// transport — the feature works and nobody is told, which is how it ships before SES
-	// is wired for it and what rolling it back looks like.
+	// The mentorship marketplace: referral's opposite, where the insider is named and chosen.
+	// A nil notifier means no mail transport: the feature works and nobody is told.
 	var mentorshipNotifier mentorship.Notifier
 	if mailClient != nil && cfg.NotifyEmailFrom != "" {
 		mentorshipNotifier = mentorship.NewMailNotifier(mailClient, cfg.NotifyEmailFrom,
 			strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/sessions")
 	}
-	// A connected mentor's calendar.events grant, mirroring the inbox recall gate in Register: the
-	// candidate calendar sync's own GmailConnector/GmailCipher pair, reused rather than a
-	// second copy of either. Nil when either is unset, so a deployment with no Google
-	// client configured just gets every booking's static-link fallback — this feature's
-	// entire rollback path.
+	// A connected mentor's calendar.events grant, reusing the candidate calendar sync's
+	// GmailConnector/GmailCipher pair. Nil when either is unset, so bookings get the
+	// static-link fallback.
 	mentorshipRepo := mentorship.NewQueriesRepository(queries, cfg.Pool)
 	var mentorshipCalendar mentorship.CalendarLinker
 	if cfg.GmailConnector != nil && cfg.GmailCipher != nil {
@@ -88,15 +84,11 @@ func newMentorshipSurfaces(cfg Config, queries *db.Queries, mailClient *emailnot
 		mentorshipRepo,
 		mentorship.Config{Notifier: mentorshipNotifier, Cache: cfg.Cache, CalendarLinker: mentorshipCalendar},
 	), photoStore)
-	// The mentor-profile create form's prefill. Composed from four unrelated blocks'
-	// own services (résumé, user profile, account, experience bank) plus the company
-	// catalog — never from mentorship itself, see the mentor-profile-prefill spec.
+	// The mentor-profile create form's prefill, composed from the CV, user profile, account and
+	// experience bank services plus the company catalog, never from mentorship itself.
 	//
-	// The account read is the bare repository, not a second accounts.Service: the
-	// only thing this handler needs is UserByID, which accounts.Repository already
-	// exposes, and newAuthHandlers already builds the one Service this process
-	// needs. A constructor that builds a shared service is the bug this package's
-	// AGENTS.md calls out by name — hoist, don't duplicate.
+	// The account read is the bare repository, not a second accounts.Service: it only needs
+	// UserByID, and newAuthHandlers already builds the one Service (hoist, don't duplicate).
 	mentorSuggestionsH := newMentorSuggestionsHandlers(
 		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
 	)

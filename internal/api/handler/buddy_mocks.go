@@ -51,9 +51,8 @@ func mockError(err error) error {
 	case errors.Is(err, buddy.ErrMockNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "mock interview not found")
 	case errors.Is(err, slots.ErrNoOwnerZone):
-		// A stored zone that no longer resolves is a broken row, not a bad request. Wrapped,
-		// not a fiber.Error, so the report keeps the host and the zone; the caller gets RenderError's
-		// generic 500.
+		// A stored zone that no longer resolves is a broken row, not a bad request. Wrapped, not a fiber.Error,
+		// so the report keeps the host and zone; the caller gets RenderError's generic 500.
 		return fmt.Errorf("buddy mock: this member's schedule is misconfigured: %w", err)
 	}
 	return buddyError(err)
@@ -121,10 +120,8 @@ func toBuddyMockResponses(entries []buddy.MockEntry) []buddyMockResponse {
 	return out
 }
 
-// buddyMockHostResponse is one member who runs mocks, as the hosts listing shows them:
-// the handle and card summary every buddy list shows, the topics they offer, their
-// soonest open slot in the viewer's zone, and the member page's review aggregate. No
-// meeting link, no account id.
+// buddyMockHostResponse is one mock host as the hosts listing shows them: the usual buddy card summary, topics offered,
+// soonest open slot in the viewer's zone, and the review aggregate. No meeting link, no account id.
 type buddyMockHostResponse struct {
 	Handle      string                   `json:"handle"`
 	CardSummary buddyCardSummaryResponse `json:"card_summary"`
@@ -160,8 +157,7 @@ type buddyBookMockBody struct {
 	Timezone string    `json:"timezone"`
 }
 
-// The routes below implement the contract (typespec/buddies.tsp); the types above stay for
-// the MCP tools, which the SDK validates against the Go type.
+// The routes below implement the contract (typespec/buddies.tsp); the types above stay for the MCP tools (the SDK validates against the Go type).
 
 func buddyMockSettingsOut(s buddy.MockSettings) apigen.BuddyMockSettingsOut {
 	return apigen.BuddyMockSettingsOut{Timezone: s.Timezone, MeetingURL: s.MeetingURL, Topics: buddyMockTopics(s.Topics), Paused: s.Paused}

@@ -8,13 +8,9 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
-// list_filter_values answers "which values does this filter take?" before a search is
-// spent on a guess. Measured against production on 2026-10-27: search_jobs had no way to
-// learn the skill vocabulary, so a model wrote "golangg", got zero postings, and told a
-// person freehire had no Go jobs. Reporting the unknown value afterwards is half the fix;
-// this is the other half — the account server's facets tool, narrowed to one filter at a
-// time, because the full distribution (1,200 skills alone) is a context window spent on a
-// list the model needs one line of.
+// list_filter_values answers "which values does this filter take?" before a search is spent
+// on a guess (a model writing "golangg" gets zero postings). It is the facets tool narrowed
+// to one filter at a time, because the full distribution would flood the context.
 
 // Bounds for a list_filter_values page.
 const (
@@ -24,8 +20,8 @@ const (
 
 // filterValueFacets maps each search_jobs input field this tool can list to the facet the
 // catalogue counts it under. The keys are the TOOL's field names (sources, not source),
-// because that is what the model will write next. company_slugs is absent: an employer is
-// found by name through the company search, and the slug distribution is millions long.
+// because that is what the model will write next. company_slugs is absent: employers are
+// found through the company search, and the slug distribution is huge.
 var filterValueFacets = map[string]string{
 	"category":        "category",
 	"seniority":       "seniority",
@@ -87,9 +83,8 @@ func FilterValues(in FilterValuesInput, counts map[string]map[string]int64) Filt
 }
 
 // ContainsMatcher keeps a value when it contains the text, case-folded. For skills it also
-// keeps the canonical the text resolves to: the search reads "golang" as "go", and a
-// model that asked about golang must be shown the value it will find postings under — a
-// substring match alone would offer "golang-migrate" and hide "go".
+// keeps the canonical the text resolves to: search reads "golang" as "go", and a substring
+// match alone would offer "golang-migrate" and hide "go".
 func ContainsMatcher(facet, contains string) func(string) bool {
 	needle := strings.ToLower(strings.TrimSpace(contains))
 	if needle == "" {

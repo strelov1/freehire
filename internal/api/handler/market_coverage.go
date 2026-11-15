@@ -15,8 +15,7 @@ import (
 
 // maxCoverageSkills caps the supplied skill list. Each skill becomes its own
 // `skills != "<skill>"` AND group in the uncovered query, so an unbounded list
-// would balloon the Meilisearch filter; a real CV lists well under this many
-// canonical skills.
+// would balloon the Meilisearch filter.
 const maxCoverageSkills = 100
 
 // MarketCoverage scores a caller-supplied skill list against the live open-vacancy
@@ -63,12 +62,10 @@ func (h *resumeHandlers) MarketCoverage(ctx context.Context, req *apigen.ResumeC
 
 // coverageIgnoredParams reports the query params this endpoint did not filter on.
 //
-// The skills facet is reported rather than excused: the measured skills arrive
-// in the body, so marketFilter drops them via stripSkillParams — but a caller who
-// wrote `?skills=rust` still wrote a filter that was thrown away, and the score
-// comes back looking equally confident. search.UnknownParams cannot name them
-// (the facet is real vocabulary, just not vocabulary this endpoint reads), so
-// they are collected here and folded into the one sorted, bounded report.
+// The skills facet is reported: marketFilter drops `?skills=rust` via stripSkillParams
+// (skills come in the body), yet the score would look equally confident.
+// search.UnknownParams cannot name them (real vocabulary this endpoint does not read),
+// so they are folded into the one sorted, bounded report here.
 func coverageIgnoredParams(query url.Values) []search.UnknownParam {
 	vals := maps.Clone(query)
 

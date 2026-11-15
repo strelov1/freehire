@@ -23,9 +23,9 @@ type accountEmailLookup interface {
 	UserEmail(ctx context.Context, userID int64) (string, error)
 }
 
-// deleteAccountBody carries the confirmation: the member types their own email
-// address. It is deliberately not a yes/no flag — this is the one request in the API
-// that cannot be undone.
+// deleteAccountBody carries the confirmation: the member types their own email address.
+// Deliberately not a yes/no flag, since this is the one request in the API that cannot be
+// undone.
 type deleteAccountBody struct {
 	Email string `json:"email"`
 }
@@ -35,9 +35,8 @@ type deleteAccountBody struct {
 // restore path.
 //
 // Cookie-only, deliberately: an API key must not be able to destroy the account that
-// issued it (the same reasoning that keeps key management off the key path). The
-// session cookie is expired in the response, and every other device's cookie stops
-// authenticating as soon as the row is gone — RequireAuth checks the subject exists.
+// issued it. The session cookie is expired in the response, and every other device's cookie
+// stops authenticating once the row is gone (RequireAuth checks the subject exists).
 func (h *authHandlers) DeleteAccount(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -51,8 +50,7 @@ func (h *authHandlers) DeleteAccount(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Case-insensitive, matching how an account is looked up at login: a member who
-	// types their address in a different case is still confirming their own account.
+	// Case-insensitive, matching account lookup at login.
 	if in.Email == "" || !strings.EqualFold(strings.TrimSpace(in.Email), email) {
 		return fiber.NewError(fiber.StatusBadRequest, "confirm deletion by entering your account email")
 	}

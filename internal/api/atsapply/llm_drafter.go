@@ -30,9 +30,8 @@ func draftRequestSchema() (llmschema.Schema, error) {
 	return draftSchema, draftSchemaErr
 }
 
-// draftAnswer is the model's structured response. Grounded is the model's own admission
-// that it found a basis for an answer — false (or a blank Answer) means "nothing to say",
-// read by LLMDrafter as ok=false, never as an empty string standing in for an answer.
+// draftAnswer is the model's structured response. Grounded false (or a blank Answer) means
+// nothing to say; LLMDrafter reads it as ok=false, never as an empty answer.
 type draftAnswer struct {
 	Answer   string `json:"answer"`
 	Grounded bool   `json:"grounded"`
@@ -58,9 +57,8 @@ type LLMDrafter struct {
 	client *llm.Client
 }
 
-// NewLLMDrafter wraps an already-bound client (internal/llmkey.Bind, per attempt, per
-// candidate — see cmd/auto-apply's wiring). client may be nil, matching every other
-// LLM-backed feature's "unconfigured deployment" convention.
+// NewLLMDrafter wraps an already-bound client (llmkey.Bind, per attempt and candidate).
+// client may be nil, the usual unconfigured-deployment convention.
 func NewLLMDrafter(client *llm.Client) *LLMDrafter {
 	return &LLMDrafter{client: client}
 }
@@ -92,10 +90,9 @@ func (d *LLMDrafter) Draft(ctx context.Context, question MergedField, grounding 
 	return out.Answer, true, nil
 }
 
-// draftUserPrompt lists the question and the candidate's own publishable facts. Options,
-// where the field offers any, are listed so the model can answer IN one of them rather
-// than free text the caller would then fail to match (matchOption still re-checks this;
-// the prompt is a hint, not the enforcement).
+// draftUserPrompt lists the question and the candidate's publishable facts. Options are
+// listed so the model answers in one of them; the prompt is a hint, and matchOption still
+// enforces it.
 func draftUserPrompt(question MergedField, grounding GroundingContext) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Question: %s\n", question.Label)

@@ -24,14 +24,9 @@ func (s *browserToolsSocket) Send(frame []byte) error {
 	return s.conn.WriteMessage(websocket.TextMessage, frame)
 }
 
-// BrowserToolsWS upgrades one end of a user's browser-tool channel: the
-// extension that executes tool calls, or the harness that issues them, told
-// apart by `?role=`. Authentication has already happened in RequireAuthWS, whose
-// resolved user id the upgraded connection inherits — it, not anything the
-// client claims, is what the frames are routed by.
-//
-// The connection is a pure conduit: every frame read here is handed to the hub
-// verbatim, so adding a tool needs no change on the server.
+// BrowserToolsWS upgrades one end of a user's browser-tool channel, the extension (executes tool calls) or the harness
+// (issues them), told apart by `?role=`. Frames are routed by the user id RequireAuthWS resolved, not anything the client claims.
+// The connection is a pure conduit: frames go to the hub verbatim, so adding a tool needs no server change.
 func (a *API) BrowserToolsWS() fiber.Handler {
 	return websocket.New(func(conn *websocket.Conn) {
 		user, ok := conn.Locals(auth.LocalsUserID).(int64)
@@ -40,8 +35,7 @@ func (a *API) BrowserToolsWS() fiber.Handler {
 		}
 		role, ok := browsertools.ParseRole(conn.Query("role"))
 		if !ok {
-			// Nothing can be routed to or from an unknown end; close rather than
-			// hold a connection that will never be addressed.
+			// Nothing can be routed to or from an unknown end; close rather than hold the connection.
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"role must be extension or harness"}`))
 			return
 		}

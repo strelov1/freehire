@@ -11,13 +11,11 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// Version is what this server reports itself as. It is the app's version, not the
-// catalogue's and not OJCP's.
+// Version is what this server reports itself as: the app's version, not OJCP's.
 const Version = "1.0"
 
-// Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
-// that ADVERTISES a tool separately from registering it, so they are constants only because
-// the tests name them, not because a second list needs keeping in step.
+// Tool names. Unlike the OJCP transport's, they feed no manifest; they are constants only
+// because the tests name them.
 const (
 	toolSearchJobs      = "search_jobs"
 	toolGetJob          = "get_job"
@@ -39,9 +37,8 @@ const (
 // ReadOnly is every tool's annotation block, written once.
 //
 // All four read, none writes, and all reach a catalogue that changes outside the
-// conversation. Incorrect annotation of exactly these hints is a named rejection reason in
-// OpenAI's submission guidelines, so sharing one value is not merely tidy: it removes the
-// copy-paste from which a write tool would inherit a read-only claim.
+// conversation. Wrong hints are a rejection reason in OpenAI's submission guidelines; one
+// shared value stops a write tool inheriting a read-only claim by copy-paste.
 func ReadOnly() *mcp.ToolAnnotations {
 	destructive, openWorld := false, true
 	return &mcp.ToolAnnotations{
@@ -125,12 +122,11 @@ func newCatalogueServer(r Reader, origin, instructions string, next nextHints) *
 	return server
 }
 
-// Identity is how a server introduces itself: its name, and the logo and website a client
-// shows beside it in its list of connections. Every freehire MCP server introduces itself
-// through this, so all of them carry the same face.
+// Identity is how every freehire MCP server introduces itself: its name, and the logo and
+// website a client shows in its list of connections.
 //
-// With no origin it is the name alone. An icon is a URL the client fetches, and a path
-// with no host is one it cannot — the same rule the projector follows for job links.
+// With no origin it is the name alone: an icon is a URL the client fetches, and a path with
+// no host is one it cannot.
 func Identity(name, version, origin string) *mcp.Implementation {
 	id := &mcp.Implementation{Name: name, Title: "freehire", Version: version}
 	origin = strings.TrimSuffix(origin, "/")
@@ -150,18 +146,14 @@ func Identity(name, version, origin string) *mcp.Implementation {
 // toolResult renders a failure the way this audience can act on: an error RESULT carrying a
 // sentence, never a JSON-RPC protocol error.
 //
-// That is the opposite of the OJCP transport beside it, and deliberately. There a failure
-// must reach the wire as a code an agent branches on; here the caller is a language model,
-// and a protocol error surfaces to a ChatGPT user as a generic failure with nothing to do
-// next. An error result is text the model reads: "no posting with that identifier" leads it
-// to search instead of retrying.
+// Unlike the OJCP transport, which needs a code an agent branches on, the caller here is a
+// language model: a protocol error reaches a ChatGPT user as a generic failure, while an
+// error result is text that leads the model to search instead of retrying.
 //
-// The generic branch discloses nothing. What went wrong inside this deployment is ours, not
-// a caller's — but it stays an ERROR rather than an empty answer, which would read as a
-// catalogue holding nothing.
+// The generic branch discloses nothing internal, but stays an ERROR rather than an empty
+// answer, which would read as an empty catalogue.
 //
-// It takes a reader call's two return values directly, so every tool wraps its own read in
-// one expression and no call site can forget the branch.
+// It takes a reader call's two return values directly so no call site can forget the branch.
 func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 	if err == nil {
 		return nil, out, nil
@@ -204,10 +196,9 @@ func publicErrorCode(err error) string {
 
 // StatelessHandler serves a freshly built MCP server per request over the streamable
 // transport. Stateless because a stateful session derives its tool contexts from the
-// `initialize` request, whose fasthttp RequestCtx the Fiber adaptor recycles once that
-// request ends: a later call would read another request's user values, and agent view
-// counts would be attributed to the wrong request or lost. Every tool here is a request in,
-// an answer out, so statelessness costs nothing.
+// `initialize` request, whose fasthttp RequestCtx the Fiber adaptor recycles after that
+// request ends: later calls would read another request's user values and misattribute
+// agent view counts.
 func StatelessHandler(newServer func() *mcp.Server) http.Handler {
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return newServer() },
 		&mcp.StreamableHTTPOptions{Stateless: true})

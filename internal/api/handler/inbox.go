@@ -14,13 +14,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// harnessPageMax caps a listing that carries bodies. Bodies are the one listing
-// payload heavy enough to matter, and an agent sweeping its backlog has no reason
-// to pull an unbounded page.
-//
-// The assistant's own listing tool caps itself far lower (see
-// assistantInboxBodyMax): a harness reads a page once, while a tool result is
-// replayed into the model's context on every later turn of the session.
+// harnessPageMax caps a listing that carries bodies, the one heavy listing payload.
+// The assistant's listing tool caps itself lower (assistantInboxBodyMax): its results
+// are replayed into the model's context on every later turn.
 const harnessPageMax = 50
 
 // pgStr unwraps a nullable text column to a plain string ("" when NULL).
@@ -61,9 +57,8 @@ func bodyOf(m inbox.Message) apigen.InboxEmail {
 // ?unclassified=1, ?link=<state>, ?include_other=1. The vocabularies are checked by the
 // service, so an unknown value is one 400 wherever it arrives from.
 //
-// include_other is opt-IN because the listing's default is the applications a person came
-// to find, not everything a mailbox holds. What that default costs them is reported as a
-// number rather than left to be discovered.
+// include_other is opt-in: the default listing is the applications a person came to
+// find, and the hidden count is reported in meta.
 func parseInboxQuery(query url.Values) inbox.Query {
 	return inbox.Query{
 		Source:       query.Get("source"),
@@ -89,10 +84,9 @@ func queryBool(query url.Values, key string) bool {
 // mail with nowhere to go yet), ?q= (subject/sender/body search); standard
 // limit/offset pagination.
 //
-// ?body=1 additionally returns each message's readable body. That is the agent's
-// read path: it triages a page in one request, and — unlike GetEmail — marks
-// nothing read, so a harness sweeping the backlog never zeroes its owner's unread
-// count. Pages carrying bodies are capped at harnessPageMax.
+// ?body=1 also returns each readable body. It is the agent's read path and, unlike
+// GetEmail, marks nothing read, so a sweep never zeroes the owner's unread count.
+// Pages with bodies are capped at harnessPageMax.
 func (h *inboxHandlers) GetInbox(ctx context.Context, _ apigen.GetInboxParams) (*apigen.InboxPage, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -125,9 +119,7 @@ func (h *inboxHandlers) GetInbox(ctx context.Context, _ apigen.GetInboxParams) (
 			SuggestedSlug: optString(m.SuggestedSlug), SuggestedCompany: optString(m.SuggestedCompany),
 		})
 	}
-	// The hidden count rides in the listing's meta rather than in a second request: a
-	// number nobody fetches is a number nobody sees, and this one exists precisely so a
-	// misclassification is findable.
+	// The hidden count rides in meta so a misclassification is findable without a second request.
 	return &apigen.InboxPage{
 		Data: out,
 		Meta: apigen.InboxMeta{Total: page.Total, Limit: int64(limit), Offset: int64(offset), Hidden: page.Hidden},
@@ -137,9 +129,8 @@ func (h *inboxHandlers) GetInbox(ctx context.Context, _ apigen.GetInboxParams) (
 // GetEmail returns one message body, scoped to the caller (404 for another user's),
 // and marks it read on open (best-effort — a failed mark never blocks reading).
 //
-// Marking read is why this path is not part of internal/application/inbox and is not offered to
-// the assistant: read_at means "a human saw this", and a reader sweeping a backlog
-// through here would zero its owner's unread count. Sweeping goes through GetInbox.
+// Marking read is why this is not in internal/application/inbox nor offered to the
+// assistant: read_at means "a human saw this". Sweeping goes through GetInbox.
 func (h *inboxHandlers) GetEmail(ctx context.Context, params apigen.GetEmailParams) (*apigen.GetEmailOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -163,10 +154,9 @@ func (h *inboxHandlers) GetEmail(ctx context.Context, params apigen.GetEmailPara
 // filters as read and reports how many it marked. The unread filter is implicit —
 // the query only ever touches unread rows.
 //
-// Every filter parseInboxQuery reads is passed on, because "mark all read" means the page
-// in front of the caller and there is no undo. `include_other` goes through ShowsOther for
-// the same reason the listing does: `?status=other` is a request FOR that label, and
-// passing IncludeOther raw would mark nothing.
+// Every filter parseInboxQuery reads is passed on: "mark all read" means the page in
+// front of the caller and there is no undo. `include_other` goes through ShowsOther as in
+// the listing, since `?status=other` requests that label and raw IncludeOther would mark nothing.
 func (h *inboxHandlers) MarkAllReadInbox(ctx context.Context, _ apigen.MarkAllReadInboxParams) (*apigen.MarkAllReadInboxOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -199,9 +189,8 @@ func (h *inboxHandlers) RestoreEmail(ctx context.Context, params apigen.RestoreE
 // setEmailDeleted flips one message's soft-delete flag (delete or restore),
 // scoped to the caller. A message that is not theirs matches no row → 404.
 //
-// It answers 204, not Fiber's SendStatus(200): that helper writes the status text
-// "OK" as the body, which is neither of this API's response shapes, and a client
-// that decodes a 2xx body fails on a call that actually succeeded.
+// It answers 204, not Fiber's SendStatus(200), which writes "OK" as the body and
+// breaks clients that decode a 2xx body.
 func (h *inboxHandlers) setEmailDeleted(ctx context.Context, rawID string, deleted bool) error {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {

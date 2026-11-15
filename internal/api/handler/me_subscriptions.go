@@ -23,9 +23,8 @@ func newSubscriptionHandlers(queries *db.Queries) *subscriptionHandlers {
 }
 
 func (h *subscriptionHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Filter subscriptions are cookie-only (RequireAuth) like saved searches: a
-	// browser convenience, owner-scoped (a non-owned id is 404). The handlers below
-	// implement the contract (typespec/alerts.tsp).
+	// Cookie-only like saved searches: a browser convenience, owner-scoped (a non-owned id is
+	// a 404).
 	api.Get("/me/subscriptions", mw.cookie, contract)
 	api.Post("/me/subscriptions", mw.cookie, contract)
 	api.Patch("/me/subscriptions/:id", mw.cookie, contract)
@@ -47,9 +46,9 @@ func subscriptionOut(s subscription.Subscription, savedSearchName string) apigen
 	return out
 }
 
-// subscriptionError maps the subscription sentinels onto HTTP statuses: an
-// unsupported channel is a 400, a missing/non-owned saved search or subscription
-// is a 404, a duplicate or a push subscription with no device to reach is a 409. Anything else falls through to a 500.
+// subscriptionError maps the subscription sentinels onto HTTP: an unsupported channel is a
+// 400, a missing/non-owned saved search or subscription a 404, a duplicate or a push
+// subscription with no device to reach a 409. Anything else is a 500.
 func subscriptionError(err error) error {
 	switch {
 	case errors.Is(err, subscription.ErrInvalidChannel):

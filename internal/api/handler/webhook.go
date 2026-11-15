@@ -14,16 +14,15 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// webhookHandlers serves the account's single saved-search webhook
-// destination: create/update, view, enable/disable, delete, test. Deliveries
-// are plain, unsigned POSTs — there is no secret to manage.
+// webhookHandlers serves the account's single saved-search webhook destination.
+// Deliveries are plain, unsigned POSTs; there is no secret to manage.
 type webhookHandlers struct {
 	queries *db.Queries
 	tester  webhookTester
 }
 
-// webhookTester sends a sample delivery to a URL and reports whether the
-// destination accepted it — webhooknotify.Notifier in production.
+// webhookTester sends a sample delivery to a URL and reports whether it was accepted
+// (webhooknotify.Notifier in production).
 type webhookTester interface {
 	Test(ctx context.Context, url string) error
 }
@@ -33,8 +32,7 @@ func newWebhookHandlers(queries *db.Queries, tester webhookTester) *webhookHandl
 }
 
 func (h *webhookHandlers) register(api fiber.Router, mw middleware) {
-	// Cookie-only, like subscription management: a browser convenience, never
-	// an API key.
+	// Cookie-only, like subscription management; never an API key.
 	api.Get("/me/webhook", mw.cookie, h.GetWebhook)
 	api.Post("/me/webhook", mw.cookie, h.CreateOrUpdateWebhook)
 	api.Patch("/me/webhook", mw.cookie, h.SetWebhookEnabled)
@@ -69,8 +67,7 @@ type setWebhookEnabledRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
-// validateWebhookURL rejects anything but an http(s) URL, per the
-// webhook-notifications spec's creation-time scheme check.
+// validateWebhookURL rejects anything but an http(s) URL.
 func validateWebhookURL(raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -96,10 +93,8 @@ func (h *webhookHandlers) CreateOrUpdateWebhook(c *fiber.Ctx) error {
 	if err := validateWebhookURL(in.URL); err != nil {
 		return err
 	}
-	// Prove the destination accepts our payload before storing it. A URL that
-	// only fails at the first real digest is disabled a few failures later
-	// with nobody watching — Discord's own webhook URLs (which want a
-	// different body) and endpoints that 404 were saved exactly that way.
+	// Prove the destination accepts our payload before storing it: a URL that only fails at
+	// the first real digest gets disabled later with nobody watching (e.g. Discord URLs, which want a different body).
 	if err := h.probe(c.Context(), in.URL); err != nil {
 		return err
 	}
@@ -118,10 +113,9 @@ func (h *webhookHandlers) CreateOrUpdateWebhook(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toWebhookResponse(row)})
 }
 
-// TestWebhook sends a sample delivery to the stored destination, so a user
-// can check an endpoint they changed on their side without re-saving it. A
-// pass stamps last_success_at; a failure changes nothing and is a 422 naming
-// what the destination answered. A missing destination is a 404.
+// TestWebhook sends a sample delivery to the stored destination, so a user can recheck an
+// endpoint without re-saving. A pass stamps last_success_at; a failure changes nothing and is
+// a 422 naming the destination's answer. A missing destination is a 404.
 func (h *webhookHandlers) TestWebhook(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -143,9 +137,7 @@ func (h *webhookHandlers) TestWebhook(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toWebhookResponse(row)})
 }
 
-// probe runs the tester against url and turns a refusal into a 422 the user
-// can act on ("destination responded 404"), without the transport's package
-// prefix.
+// probe runs the tester against url and turns a refusal into an actionable 422, without the transport's package prefix.
 func (h *webhookHandlers) probe(ctx context.Context, url string) error {
 	if err := h.tester.Test(ctx, url); err != nil {
 		reason := strings.TrimPrefix(err.Error(), "webhooknotify: ")
@@ -154,8 +146,7 @@ func (h *webhookHandlers) probe(ctx context.Context, url string) error {
 	return nil
 }
 
-// recordProbeSuccess stamps a passed probe the way a delivered digest is
-// stamped, and returns the destination as it now reads.
+// recordProbeSuccess stamps a passed probe like a delivered digest and returns the destination.
 func (h *webhookHandlers) recordProbeSuccess(ctx context.Context, userID int64) (db.WebhookConfig, error) {
 	if err := h.queries.RecordWebhookDeliverySuccess(ctx, userID); err != nil {
 		return db.WebhookConfig{}, err
@@ -200,9 +191,7 @@ func (h *webhookHandlers) SetWebhookEnabled(c *fiber.Ctx) error {
 		return err
 	}
 
-	// A single follow-up read renders the final state and is what actually
-	// reports "no destination configured" — EnableWebhookConfig's own
-	// pgx.ErrNoRows is swallowed above rather than duplicating that check.
+	// This read is what reports "no destination configured"; EnableWebhookConfig's ErrNoRows is swallowed above.
 	row, err := h.queries.GetWebhookConfig(c.Context(), userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fiber.NewError(fiber.StatusNotFound, "no webhook destination configured")

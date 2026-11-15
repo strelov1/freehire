@@ -9,31 +9,24 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
-// OJCP has no field for "this posting may no longer be a real opening". `agent_notes` is
-// the spec's free-text channel to an agent, so the posting-reality verdict travels there
-// until the standard grows a field of its own — which is the follow-on RFC this
-// implementation is meant to argue for.
+// OJCP has no field for "this posting may no longer be a real opening", so the
+// posting-reality verdict travels in `agent_notes`, the spec's free-text channel to an
+// agent, until the standard grows a field.
 //
-// The wording is bound by the same doctrine as the interface's: the system observes facts
-// about a POSTING and never an employer's intent, so the strongest thing it may say is
-// that the posting is likely inactive. An agent will relay this to a candidate, and quite
-// possibly to the employer; a sentence that reads as an accusation would be relayed as one.
-// Keyed by ghost's own exported constants rather than by string literals: renaming a level
-// there would otherwise leave this map silently returning "" for every affected posting,
-// with no test failing because a test written against literals agrees with the bug.
+// The wording observes facts about a POSTING, never an employer's intent: the strongest
+// thing it may say is that the posting is likely inactive, since an agent relays it onward.
+// Keyed by ghost's exported constants, not string literals, so a renamed level cannot
+// silently yield "" with no failing test.
 var realityVerdict = map[string]string{
 	ghost.LevelLikely:   "likely to be inactive",
 	ghost.LevelPossible: "possibly inactive",
 }
 
-// criterionSentence renders a criterion code as something a person can read. An agent
-// relays this note to a candidate, and `evergreen_posting` reaching them as-is is
-// undefined jargon — the interface has always had to RENDER these rather than pass them
-// through, which is why ghost exports the vocabulary at all.
+// criterionSentence renders a criterion code as something a person can read; a code like
+// `evergreen_posting` is jargon once an agent relays it to a candidate.
 //
-// An unmapped code falls back to its own value: a criterion added to ghost and not named
-// here reads awkwardly, which is better than a note that silently omits the evidence
-// behind its own verdict.
+// An unmapped code falls back to its own value: awkward, but better than silently omitting
+// the evidence behind the verdict.
 var criterionSentence = map[string]string{
 	ghost.CriterionEvergreenPosting:   "the posting has been open unusually long",
 	ghost.CriterionATSAbsent:          "it is no longer on the employer's own ATS",
@@ -42,8 +35,7 @@ var criterionSentence = map[string]string{
 }
 
 // agentNotesFor renders the posting-reality verdict as a sentence, or "" when there is no
-// verdict. Silence is deliberate: most of the catalogue carries none, and a note saying
-// "no concerns" would assert a check we never ran.
+// verdict. Silence is deliberate: "no concerns" would assert a check we never ran.
 func agentNotesFor(j jobview.Job) string {
 	g := j.Ghost
 	if g == nil {

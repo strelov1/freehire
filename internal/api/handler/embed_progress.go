@@ -18,10 +18,9 @@ type embedProgressSource interface {
 	Subscribe() (embedprogress.Progress, <-chan embedprogress.Progress, func())
 }
 
-// embedProgressHandlers serves the public /embeddings page's figures — see
-// openspec/changes/embedding-progress-page. Neither route touches the database: the
-// JSON answer is the sampler's latest document and the stream is its subscription, so
-// a request costs a mutex and nothing the host's database would notice.
+// embedProgressHandlers serves the public /embeddings page's figures. Neither route
+// touches the database: the JSON answer is the sampler's latest document and the stream
+// is its subscription.
 type embedProgressHandlers struct {
 	source       embedProgressSource
 	pingInterval time.Duration
@@ -55,10 +54,9 @@ func (h *embedProgressHandlers) GetEmbeddingProgress(context.Context) (*apigen.G
 	return &apigen.GetEmbeddingProgressOK{Data: out}, nil
 }
 
-// Stream sends the current document at once (once one has been sampled) and then one
-// "progress" event per sample,
-// with a keepalive ping between. Each event is the whole document, so a client that
-// misses one is current again at the next.
+// Stream sends the current document at once (once one has been sampled), then one
+// "progress" event per sample with a keepalive ping between. Each event is the whole
+// document, so a client that misses one is current at the next.
 func (h *embedProgressHandlers) Stream(c *fiber.Ctx) error {
 	if h.source == nil {
 		return fiber.ErrServiceUnavailable
@@ -75,9 +73,8 @@ func (h *embedProgressHandlers) Stream(c *fiber.Ctx) error {
 		stream := newSSEStream(w, conn, sseWriteTimeout)
 		defer recoverStream("embedprogress: stream", nil)
 
-		// Before the sampler's first reading every figure is null; sending that would
-		// replace what the page already rendered with "measuring…". The first real
-		// sample arrives on the channel below.
+		// Before the first reading every figure is null; sending that would replace what
+		// the page rendered with "measuring…".
 		if current.MeasuredAt != nil && !stream.event("progress", current) {
 			return
 		}

@@ -12,19 +12,16 @@ import (
 const (
 	// jevSelectAnswerKey names the single question this file ever asks Jev.
 	jevSelectAnswerKey = "answer"
-	// jevSelectDeclineKey covers two reasons at once — nothing stated supports any
-	// option, or the question falls in a categorically excluded topic — because the
-	// caller only ever needs "answered or not", never which reason applied. Its wording
-	// cannot collide with a real option label for the same reason jevDeclineKey
-	// (autofillagent/jev.go) cannot.
+	// jevSelectDeclineKey covers both "nothing supports any option" and "categorically
+	// excluded topic", since the caller only needs answered or not. Its wording cannot collide
+	// with a real option label, as with jevDeclineKey (autofillagent/jev.go).
 	jevSelectDeclineKey = "none of these / not stated"
 )
 
-// jevSelectInstructions mirrors draftSystemPrompt's rules (llm_drafter.go), narrowed to a
-// single select-kind question. The categorical exclusion travels with every call — see
-// design.md: a select field reaching this drafter already passed draftable's sensitive/
-// geography label gate, so this is a second, independent safeguard against a label
-// heuristic missing a real compensation/eligibility question.
+// jevSelectInstructions mirrors draftSystemPrompt's rules (llm_drafter.go) for a single
+// select question. The categorical exclusion travels with every call as a second safeguard
+// in case the draftable sensitive/geography label gate missed a compensation or
+// eligibility question.
 func jevSelectInstructions(label string) string {
 	return fmt.Sprintf(`You answer ONE job-application question on behalf of a candidate, by
 picking the single option the candidate's own stated facts support.
@@ -47,11 +44,9 @@ func newJevSelectChooser(apiKey string, opts ...jev.Option) *jevSelectChooser {
 	return &jevSelectChooser{client: jev.New(apiKey, opts...)}
 }
 
-// Choose asks Jev to pick one of options (option labels) for question, grounded in facts.
-// It returns ok=false for the decline sentinel (or a blank choice); any other answer is
-// returned as ok=true even if it names no offered option — matchOption re-validates the
-// result against the field's own offered options downstream, so a hallucinated label is
-// caught there, not here.
+// Choose asks Jev to pick one of options for question, grounded in facts. ok=false for the
+// decline sentinel or a blank choice; any other answer is ok=true even if it names no
+// offered option, since matchOption re-validates it downstream.
 func (j *jevSelectChooser) Choose(ctx context.Context, question MergedField, options []string, facts []experience.Atom) (string, bool, error) {
 	criteria := make(map[string]string, len(options)+1)
 	for _, opt := range options {

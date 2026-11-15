@@ -2,23 +2,19 @@ package mcpapp
 
 // The wire shapes the tools answer in.
 //
-// They are FLAT on purpose. jobview.Job nests the LLM's output under `enrichment`, which is
-// right for a JSON client reading one document and wrong for a model reading ten results in
-// a chat turn: every nesting level is a place the salary can be missed. So the handful of
-// enrichment fields a person actually asks about are lifted to the top, and the rest of
-// that object is not published here at all.
+// They are FLAT on purpose: jobview.Job nests the LLM's output under `enrichment`, and every
+// nesting level is a place a model can miss the salary. The few enrichment fields people ask
+// about are lifted to the top; the rest is not published here.
 //
-// The `jsonschema` tags are not documentation. The SDK derives each tool's output schema
-// from these types, and that schema is what ChatGPT reads to decide whether a field answers
-// the question it was asked.
+// The `jsonschema` tags are not just documentation: the SDK derives each tool's output
+// schema from these types, and ChatGPT reads it to decide whether a field answers the question.
 
 // JobSummary is one posting as a search result: enough to choose from, never the full body.
 type JobSummary struct {
 	Slug    string `json:"slug" jsonschema:"the posting's identifier"`
 	Title   string `json:"title"`
 	Company string `json:"company"`
-	// CompanySlug travels beside the display name because it is what get_company takes.
-	// Resolving a name back to a slug is a guess; carrying it is not.
+	// CompanySlug travels beside the display name because get_company takes it.
 	CompanySlug string `json:"company_slug,omitempty" jsonschema:"the employer's identifier"`
 	Location    string `json:"location,omitempty"`
 	// Countries is the faceted geography, which Location's free text is not. A posting
@@ -26,8 +22,7 @@ type JobSummary struct {
 	Countries []string `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes the role is open in"`
 	WorkMode  string   `json:"work_mode,omitempty" jsonschema:"remote, hybrid or onsite"`
 	// Seniority is OURS, not a standard's. Values outside the common four (intern, staff,
-	// principal) are published as they are — 18.1% of open postings carry one, and
-	// flattening them into a smaller vocabulary is what the OJCP surface has to do.
+	// principal) are published as they are, not flattened as the OJCP surface must.
 	Seniority      string   `json:"seniority,omitempty"`
 	Category       string   `json:"category,omitempty"`
 	EmploymentType string   `json:"employment_type,omitempty"`
@@ -44,14 +39,12 @@ type JobSummary struct {
 	// FirstSeenAt stands in for the index's reality class, which is frozen at push time and
 	// goes stale; this cannot. get_job computes the live verdict (see AGENTS.md).
 	FirstSeenAt string `json:"first_seen_at,omitempty" jsonschema:"RFC3339 UTC; when freehire first saw this posting — a posted_at far newer than this means the date was refreshed"`
-	// Summary is the search index's truncated preview, never the full body. Ten full job
-	// descriptions in one turn spend the context window on text the model will reduce to a
-	// line each; get_job is where a full body is read, for the one posting a person picked.
+	// Summary is the search index's truncated preview, never the full body; get_job reads
+	// the full body of the one posting a person picked.
 	Summary string `json:"summary,omitempty" jsonschema:"a short preview, not the full description"`
 	// Source names the board this posting was collected from, and OfficialJobURL is the
-	// employer's own link. Both travel with every result: this channel renders results as
-	// prose, where a link is easy to drop, and a posting repeated without its source reads
-	// as though freehire were the employer.
+	// employer's own link. Both travel with every result: prose drops links easily, and a
+	// posting repeated without its source reads as though freehire were the employer.
 	Source         string `json:"source" jsonschema:"the job board this posting was collected from"`
 	URL            string `json:"url" jsonschema:"the posting's page on freehire"`
 	OfficialJobURL string `json:"official_job_url,omitempty" jsonschema:"the employer's own posting, when known"`
@@ -60,15 +53,12 @@ type JobSummary struct {
 // SearchJobsResult is what search_jobs answers.
 type SearchJobsResult struct {
 	Query string `json:"query,omitempty"`
-	// Total is the whole match count, which Jobs is a page of. The two are separate so a
-	// model can say "showing 10 of 4,312" instead of implying it has seen everything.
+	// Total is the whole match count, of which Jobs is a page, so a model can say "10 of 4,312".
 	Total  int          `json:"total"`
 	Offset int          `json:"offset"`
 	Jobs   []JobSummary `json:"jobs"`
-	// IgnoredParams names the filters this tool could not honour. An answer that widens
-	// without saying so is the failure mode this repository reports everywhere rather than
-	// refusing — a retired facet must not break a saved search, and silence is what let a
-	// mistyped country pass for a search of that country.
+	// IgnoredParams names the filters this tool could not honour; an answer that widens must
+	// say so rather than refuse (a retired facet must not break a saved search).
 	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked. Replace the value and search again rather than reporting that nothing was found"`
 	// Semantic reports what became of a `semantic: true` request. Only SemanticUnavailable
 	// is produced today: semantic matching is not available, so it is answered by keywords.
@@ -100,20 +90,16 @@ type JobResult struct {
 	// ApplyRequires is what the employer's own form will REFUSE the application without —
 	// the standard fields plus every required question, as captured in apply_forms.
 	//
-	// It is the part of this catalogue almost nobody else can answer, and it is worth a
-	// chat turn: a candidate deciding whether to start an application wants to know it
-	// wants three essays BEFORE opening the page, not after. Absent where no form was
-	// captured, which is most of the catalogue — an empty list would read as "this
-	// employer asks for nothing".
+	// Absent where no form was captured, which is most of the catalogue: an empty list
+	// would read as "this employer asks for nothing".
 	ApplyRequires []string `json:"apply_requires,omitempty" jsonschema:"what the employer's application form requires"`
 
 	// The liveness signals answer "is this posting real and still open", as the job page
 	// does. They are computed on read by the handler and are ABSENT where a lookup failed:
 	// an empty level or a false flag must never stand in for a verdict nobody issued.
 	//
-	// They are flat like the rest of this shape, and the ghost criteria travel with the
-	// level, because internal/job/ghost states facts about a posting, never an accusation
-	// about an employer — a level without its criteria would be exactly that.
+	// The ghost criteria travel with the level: internal/job/ghost states facts about a
+	// posting, never an accusation about an employer, and a bare level would be one.
 	ClosedAt   string `json:"closed_at,omitempty" jsonschema:"RFC3339 UTC; set when the posting no longer accepts applications"`
 	LastSeenAt string `json:"last_seen_at,omitempty" jsonschema:"RFC3339 UTC; when a re-crawl last confirmed the posting live on its source"`
 	Reality    string `json:"reality,omitempty" jsonschema:"fresh, stale or likely-evergreen: whether the posting looks like a live opening, judged from its age and repost history"`
@@ -147,17 +133,14 @@ type SearchCompaniesResult struct {
 	Total     int              `json:"total"`
 	Offset    int              `json:"offset"`
 	Companies []CompanySummary `json:"companies"`
-	// IgnoredParams, for the same reason the job search carries it: an answer that widens
-	// without saying so leaves the model to read a zero as an empty catalogue.
+	// IgnoredParams, for the same reason as the job search.
 	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked"`
 }
 
 // CompanyResult is one employer in full.
 //
-// It is barely wider than the summary, and deliberately: what we hold about a company is a
-// tagline, an industry list and a home country. The `company_info` JSONB beside them is not
-// published — no surface in this repository reads it, and inventing a projection for a blob
-// nothing else parses would be a shape with no source of truth behind it.
+// It is barely wider than the summary: we hold only a tagline, an industry list and a home
+// country. The `company_info` JSONB is not published; nothing else parses it.
 type CompanyResult struct {
 	CompanySummary
 	Industries []string `json:"industries,omitempty"`
@@ -174,8 +157,7 @@ const (
 // JobOpenState is one posting's answer to "is it still up?".
 //
 // not_found covers a slug that never existed AND one this surface refuses (private, or a
-// duplicate of another posting) — the same indistinguishability get_job keeps, because
-// whether a private posting exists under some slug is not an anonymous caller's business.
+// duplicate), as get_job does: a private posting's existence is not the caller's business.
 type JobOpenState struct {
 	Slug       string `json:"slug"`
 	Status     string `json:"status" jsonschema:"open, closed or not_found"`
@@ -186,8 +168,7 @@ type JobOpenState struct {
 // JobsOpenResult is what check_jobs_open answers.
 type JobsOpenResult struct {
 	Jobs []JobOpenState `json:"jobs"`
-	// Unchecked names the slugs past the per-call cap. A long shortlist is neither refused
-	// nor silently cut: the model can say what is left and ask again.
+	// Unchecked names the slugs past the per-call cap, so the model can ask again.
 	Unchecked []string `json:"unchecked,omitempty" jsonschema:"slugs beyond the per-call cap, which were not checked"`
 }
 

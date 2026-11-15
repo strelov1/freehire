@@ -13,9 +13,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// accountCapabilityInstructions tells an agent what freehire can do beyond a search, which
-// the people in this connector mostly never find out, and where to start. Auto-apply is
-// added only for a session that is served it.
+// accountCapabilityInstructions tells an agent what freehire can do beyond a search.
+// Auto-apply is added only for a session that is served it.
 const accountCapabilityInstructions = "freehire searches jobs, saves and tracks them, sends alerts on new matches"
 
 const accountProfileInstructions = " and keeps the job-search profile. Call get_profile before the first search. "
@@ -27,9 +26,8 @@ const accountSetupInstructions = "get_setup_status: the next setup step. "
 const accountAutoApplyInstructions = "Auto-apply: saved answers may be sent to employers. " +
 	"Check get_setup_status before the first auto_apply_start; its refusals are final for that call, so relay the reason instead of retrying. "
 
-// accountPlanInstructions is kept to one clause: the tool's own description says what the
-// plan carries and that the free plan includes no AI. Only for a session served auto-apply,
-// the one metered action an MCP tool starts; elsewhere there is nothing to check it before.
+// accountPlanInstructions is one clause; the tool's description covers the rest. Only for a
+// session served auto-apply, the one metered action an MCP tool starts.
 const accountPlanInstructions = "Call get_plan before auto-apply. "
 
 const accountAlertInstructions = "Alerts use configured channels. "
@@ -42,10 +40,8 @@ const accountDictionaryInstructions = "Use suggest_dictionary_term for an unknow
 const accountProblemInstructions = "Use report_problem for failed operations or missing capabilities; " +
 	"omit secrets and personal documents. Do not report report failures."
 
-// accountInstructions is the personal-tool part of the server's instructions for the tools
-// this session is actually served: each paragraph only when the tool it begins with is among
-// them. It describes capabilities and result states; the optional workflow lives in the
-// packaged skill, and permissions remain enforced by the tools.
+// accountInstructions is the personal-tool part of the server's instructions: each paragraph
+// only when the tool it begins with is served. Permissions stay enforced by the tools.
 func accountInstructions(tools []assistant.Tool) string {
 	served := func(name string) bool {
 		return slices.ContainsFunc(tools, func(t assistant.Tool) bool { return t.Name == name })
@@ -83,10 +79,9 @@ func accountInstructions(tools []assistant.Tool) string {
 }
 
 // accountAnnotations declares what a tool does to the account, from the effect the tool
-// itself carries. A client reads these to decide whether to ask the person before a call,
-// so they are not decoration: unset, every search is a confirmation prompt. Every tool is
-// open-world for the same reason the catalogue tools are: the catalogue and the
-// tracking board both change outside this conversation, on the website.
+// itself carries. A client reads these to decide whether to ask the person before a call:
+// unset, every search is a confirmation prompt. Every tool is open-world because the
+// catalogue and the tracking board change outside this conversation.
 func accountAnnotations(t assistant.Tool) *mcp.ToolAnnotations {
 	destructive, openWorld := t.Effect == assistant.EffectOverwrites, true
 	return &mcp.ToolAnnotations{
@@ -98,12 +93,9 @@ func accountAnnotations(t assistant.Tool) *mcp.ToolAnnotations {
 	}
 }
 
-// accountToolHandler closes over the request's resolved userID — set once, when
-// newServer is built per request — so
-// every call this session makes runs as that user and no other. The JSON error
-// envelope mirrors assistant.Registry.Call's own failure rendering, reproduced
-// here rather than reused directly since the SDK's CallToolResult shape differs
-// from assistant.Result.
+// accountToolHandler closes over the userID resolved when newServer is built per request, so
+// every call this session makes runs as that user and no other. Its error envelope mirrors
+// assistant.Registry.Call's; the SDK's CallToolResult shape differs from assistant.Result.
 func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		out, err := t.Run(ctx, userID, req.Params.Arguments)
@@ -158,15 +150,11 @@ func errorResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
 
-// AccountUserIDHeader is the internal, request-scoped header Handler
-// trusts for the caller's resolved user id. It is set by the Fiber middleware
-// that authenticates the bearer token BEFORE this handler ever runs (see
-// mcpAuthenticate in internal/api/handler) — never read from, or trusted from,
-// an external caller.
+// AccountUserIDHeader is the internal, request-scoped header Handler trusts for the caller's
+// resolved user id. The Fiber middleware (mcpAuthenticate in internal/api/handler) sets it
+// BEFORE this handler runs; never trust it from an external caller.
 //
-// Authentication lives in that middleware rather than here because a bare
-// net/http.Handler (this one, wrapped via adaptor.HTTPHandler) has no route
-// back into Fiber's error pipeline: an infra failure authenticating the token
-// (a DB error, not an unknown token) must be reported as the 500 it is, and
-// only a true Fiber handler returning a Go error gets that for free.
+// Authentication lives in that middleware because a bare net/http.Handler (wrapped via
+// adaptor.HTTPHandler) cannot reach Fiber's error pipeline, and an infra failure
+// authenticating the token must surface as a 500.
 const AccountUserIDHeader = "X-Freehire-Account-User-Id"

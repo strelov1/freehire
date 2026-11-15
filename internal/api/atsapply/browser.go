@@ -12,46 +12,33 @@ import (
 	"github.com/strelov1/freehire/internal/platform/browser"
 )
 
-// stealthAllocatorOptions are this package's launch options. The flags themselves live in
-// platform/browser, which is their single home in the repository: ingest also launches a
-// browser now (for a source behind a JavaScript challenge), and two copies of the flags would
-// mean the next anti-bot fix lands in one and silently not the other.
-//
-// What that package documents, and what still holds here: the pair is what the 2026-09-02
-// spike measured against bot.sannysoft.com, and it is not a claim of undetectability — see
-// design.md's "chromedp, not a Python/Patchright sidecar" decision for the caveats.
+// stealthAllocatorOptions are this package's launch options. The flags live in
+// platform/browser so ingest and this package cannot drift apart on anti-bot fixes. They are
+// a measured pair, not a claim of undetectability.
 func stealthAllocatorOptions() []chromedp.ExecAllocatorOption {
 	return browser.LaunchOptions()
 }
 
-// pageLoadTimeout bounds how long a single navigation+render may take before this package
-// gives up waiting for the known selector and falls back to classifying why it never
-// appeared (see classifyTimeout). Generous: an application form pulls in its own JS bundle
-// and, on Greenhouse, a client-side render pass.
+// pageLoadTimeout bounds one navigation+render before falling back to classifyTimeout.
+// Generous: an application form pulls in its own JS bundle and, on Greenhouse, a client-side
+// render pass.
 const pageLoadTimeout = 20 * time.Second
 
 // classifyTimeout bounds the one follow-up HTML capture renderedHTML makes to classify why
-// the known Greenhouse selector never appeared. Deliberately ADDITIONAL to pageLoadTimeout,
-// not carved out of it: an earlier version shortened the selector wait itself to make room
-// for classification, and live verification against a real, ordinary vanilla-template
-// posting (openspec/changes/auto-apply-whitelabel-greenhouse task 4.2) caught that
-// regression directly — the shortened wait intermittently misclassified a normal,
-// fillable posting as unrecognized_form_layout under real load, exactly the false-positive
-// risk design.md's Risks anticipated. Keeping the full pageLoadTimeout for the selector
-// wait (unchanged from before this change) and only spending extra time on classification
-// after it genuinely elapses removes that regression entirely.
+// the known selector never appeared. It is ADDITIONAL to pageLoadTimeout, not carved out of
+// it: a shortened selector wait misclassified fillable postings as unrecognized_form_layout
+// under load.
 const classifyTimeout = 10 * time.Second
 
 // newBrowser starts one browser process for one attempt. Callers must call the returned
-// cancel to tear it down — nothing here pools or reuses a browser across attempts, so one
-// attempt's session can never leak state (cookies, a half-filled form) into the next.
+// cancel. Nothing is pooled across attempts, so no state (cookies, a half-filled form) leaks
+// into the next.
 func (c *Client) newBrowser(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	return newBrowserSession(ctx, c.allocatorOpts)
 }
 
-// newBrowserSession is newBrowser's body, free of *Client so PreviewClient (which shares
-// the same allocator options but none of Client's LLM/CV dependencies) can start a session
-// the same way rather than duplicating it.
+// newBrowserSession is newBrowser's body, free of *Client so PreviewClient can start a session
+// the same way.
 func newBrowserSession(ctx context.Context, allocatorOpts []chromedp.ExecAllocatorOption) (context.Context, context.CancelFunc, error) {
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocatorOpts...)
 	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
@@ -59,8 +46,7 @@ func newBrowserSession(ctx context.Context, allocatorOpts []chromedp.ExecAllocat
 		cancelBrowser()
 		cancelAlloc()
 	}
-	// Force the browser to actually start now rather than lazily on the first action, so
-	// a launch failure surfaces here instead of inside renderedHTML with a less specific
+	// Start the browser now, not lazily, so a launch failure surfaces here with a specific
 	// error.
 	if err := chromedp.Do(browserCtx); err != nil {
 		cancel()
@@ -69,22 +55,15 @@ func newBrowserSession(ctx context.Context, allocatorOpts []chromedp.ExecAllocat
 	return browserCtx, cancel, nil
 }
 
-// renderedHTML navigates to url, waits for readySelector to appear (the application form
-// itself — proof the client-side render pass that reveals fields like Greenhouse's
-// `country` has actually run), and returns the page's rendered HTML.
+// renderedHTML navigates to url, waits for readySelector (the application form, proof the
+// client-side render pass that reveals fields like Greenhouse's `country` has run), and
+// returns the rendered HTML.
 //
-// If readySelector genuinely never appears — the probe's own pageLoadTimeout elapses, not
-// some other failure — this does not treat that as an undifferentiated, retryable error: it
-// spends up to classifyTimeout MORE capturing whatever HTML the page currently has and
-// classifying it (classifyUnscannableForm) — a white-label custom Greenhouse domain renders
-// a different DOM shape entirely, and some such pages are also gated by a reCAPTCHA
-// challenge on the form itself. Either classification comes back as an *unscannableFormError
-// so Client.Submit can map it to a parked result instead of a plain failure. Any OTHER
-// failure (a DNS error, connection refused, a crashed tab — anything that is not "the known
-// selector simply never showed up in time") propagates as an ordinary error instead: nothing
-// here can safely explain it as an unscannable form, and doing so anyway would silently park
-// an attempt that a normal retry might well have succeeded on. See
-// openspec/changes/auto-apply-whitelabel-greenhouse/design.md.
+// If the probe's own pageLoadTimeout elapses, it spends up to classifyTimeout MORE capturing
+// the current HTML and classifying it (classifyUnscannableForm), returning an
+// *unscannableFormError so Client.Submit can park the attempt. Any OTHER failure (DNS,
+// connection refused, crashed tab) propagates as an ordinary error: parking it would hide an
+// attempt a retry might have completed.
 func renderedHTML(ctx context.Context, url, readySelector string) (string, error) {
 	probeCtx, probeCancel := context.WithTimeout(ctx, pageLoadTimeout)
 	var pageHTML string
@@ -95,12 +74,8 @@ func renderedHTML(ctx context.Context, url, readySelector string) (string, error
 	if err == nil {
 		pageHTML, err = chromedp.Run(probeCtx, chromedp.OuterHTML("html"))
 	}
-	// Checked before cancel: once a context's Done channel closes for one reason, a later
-	// cancel() call cannot overwrite Err() with a different one (see context.WithTimeout),
-	// so this reliably tells "the probe's own deadline fired" apart from any other failure
-	// — the same errors.Is(callCtx.Err(), context.DeadlineExceeded) idiom
-	// internal/embed/runner.go and internal/searchdrain/runner.go already use for the
-	// analogous "was it really this call's own budget" question.
+	// Checked before cancel: a context's Err() is not overwritten once Done closes, so this
+	// tells the probe's own deadline apart from any other failure.
 	probeTimedOut := errors.Is(probeCtx.Err(), context.DeadlineExceeded)
 	probeCancel()
 	if err == nil {
@@ -148,16 +123,13 @@ func (e *unscannableFormError) Error() string {
 	return fmt.Sprintf("application form not scannable: %s", e.reason)
 }
 
-// classifyUnscannableForm inspects a page's already-rendered HTML (captured after its known
-// selector failed to appear within pageLoadTimeout) to tell a reCAPTCHA-gated form apart
-// from one whose layout this package simply does not recognize. Pure and fixture-testable,
-// the same way ScanForm already is — no further browser interaction needed to
-// classify.
+// classifyUnscannableForm inspects already-rendered HTML (captured after the known selector
+// failed to appear within pageLoadTimeout) to tell a reCAPTCHA-gated form from one whose
+// layout this package does not recognize. Pure, so fixture-testable like ScanForm.
 //
-// Narrow and named, matching resolve.go's "never guess" rule: this looks only for
-// reCAPTCHA's own footprint, not a generic "something looks locked" heuristic. A form gated
-// by a different challenge vendor still falls back to reasonUnrecognizedLayout — still a
-// safe park, just a less specific reason (see design.md's Risks).
+// Narrow and named, matching resolve.go's "never guess" rule: only reCAPTCHA's own footprint
+// counts. A form gated by another vendor falls back to reasonUnrecognizedLayout, still a safe
+// park.
 func classifyUnscannableForm(pageHTML string) unscannableFormReason {
 	if hasRecaptchaMarker(pageHTML) {
 		return reasonCaptchaProtected
@@ -178,51 +150,29 @@ var recaptchaChallengeFrames = []string{
 // evidence that a page's reCAPTCHA is one nobody has to pass.
 const recaptchaInvisibleBadge = "grecaptcha-badge"
 
-// recaptchaWidgetMarkers is the footprint of a reCAPTCHA widget being MOUNTED: the iframe
-// Google injects for the checkbox and for the invisible badge alike. Both URL shapes,
-// classic and Enterprise.
+// recaptchaWidgetMarkers is the footprint of a MOUNTED reCAPTCHA widget: the anchor iframe
+// Google injects for the checkbox and the invisible badge alike. Both URL shapes.
 //
-// The widget's own class is deliberately NOT here, and the reason is a defect this list
-// already caused. It used to carry `g-recaptcha"`, `g-recaptcha'` and `g-recaptcha ` — the
-// class with a delimiter attached, so that `g-recaptcha-response` (the hidden token field
-// every reCAPTCHA page has) would not match. But a CSS SELECTOR carries a delimiter too,
-// and Lever's own stylesheet ships `.page-centered,.g-recaptcha div,.h-captcha-spacing {…}`
-// on every posting. So a page with no reCAPTCHA of any kind — no iframe, no badge, nothing
-// but that one styling rule — was read as challenge-protected, and it parked a real,
-// fully-resolved application the candidate had already approved (freehire, 2026-09-09).
-//
-// Reading a class name out of page text cannot tell a rule that STYLES an element from the
-// element. An iframe URL can only be there because the script put it there, which is why
-// this list is iframes alone. Nothing is lost: a rendered widget always mounts an anchor
-// iframe — that is what a live capture established when this function was first narrowed.
+// The widget's class name is deliberately NOT here: a CSS selector carries the same text
+// (Lever's stylesheet ships `.g-recaptcha div` on every posting), so a class match parked
+// pages with no reCAPTCHA at all. An iframe URL is only in the page text if the script put it
+// there.
 var recaptchaWidgetMarkers = []string{
 	"recaptcha/api2/anchor",
 	"recaptcha/enterprise/anchor",
 }
 
-// hasRecaptchaMarker reports whether pageHTML carries a reCAPTCHA CHALLENGE — something a
-// candidate would have to pass — as opposed to merely loading reCAPTCHA at all.
+// hasRecaptchaMarker reports whether pageHTML carries a reCAPTCHA CHALLENGE a candidate
+// would have to pass, not merely a loaded reCAPTCHA. Every vanilla job-boards.greenhouse.io
+// posting ships an invisible, score-based reCAPTCHA Enterprise, so a bare "recaptcha" match
+// would park the one provider this package can fill. What separates the cases:
 //
-// The distinction is the whole point of this function, and it is not a nicety. EVERY
-// vanilla job-boards.greenhouse.io posting ships an invisible, score-based reCAPTCHA
-// Enterprise. The earlier unscoped `strings.Contains(html, "recaptcha")` therefore matched
-// every Greenhouse posting there is, and through previewByLayout's own check that parked
-// the ONE provider this package can actually fill — before a single application was ever
-// attempted (freehire, 2026-09-08: 5 of the 10 entries the queue had ever held, all of them
-// on pages whose form scans fine in under two seconds).
+//   - a bframe iframe is the image-grid challenge itself, decisive on its own;
+//   - otherwise the corner badge means the invisible kind, which asks nothing;
+//   - otherwise a mounted widget with no badge is a checkbox the candidate must tick.
 //
-// Presence of a widget cannot be the test, which is what a first attempt at this fix
-// assumed and a capture of the live DOM disproved: an invisible reCAPTCHA mounts an anchor
-// iframe too. What actually separates the two:
-//
-//   - a bframe iframe is the image-grid challenge itself, and is in the DOM only when one
-//     is genuinely being posed — decisive on its own;
-//   - otherwise, the corner badge means the page's reCAPTCHA is the invisible kind, which
-//     asks nothing;
-//   - otherwise, a mounted widget with no badge is a checkbox the candidate must tick.
-//
-// A page gated by a different vendor's challenge is unaffected either way: its form's own
-// selector never appears, so it still parks as reasonUnrecognizedLayout.
+// A page gated by a different vendor's challenge never shows the form selector, so it still
+// parks as reasonUnrecognizedLayout.
 func hasRecaptchaMarker(pageHTML string) bool {
 	lower := strings.ToLower(pageHTML)
 	if containsAny(lower, recaptchaChallengeFrames) {
@@ -234,10 +184,8 @@ func hasRecaptchaMarker(pageHTML string) bool {
 	return containsAny(lower, recaptchaWidgetMarkers)
 }
 
-// containsAny reports whether s contains any of markers. Literal scans rather than one
-// regexp alternation, for the reason internal/dict/skilltag documents for its own
-// dictionary: alternation over a page-sized string is a fraction of the speed, and this
-// runs on every scanned posting.
+// containsAny reports whether s contains any of markers. Literal scans beat one regexp
+// alternation on a page-sized string, and this runs on every scanned posting.
 func containsAny(s string, markers []string) bool {
 	for _, marker := range markers {
 		if strings.Contains(s, marker) {

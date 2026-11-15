@@ -14,23 +14,18 @@ import (
 	"github.com/strelov1/freehire/internal/search/searchintent"
 )
 
-// intentHandlers serves the search-interpretation endpoint. It is transport only: it
-// reads the caller, builds the request, binds the model client to that caller's own
-// gateway credential, and renders what internal/search/searchintent returns. Every decision
-// about what a description means lives there, where it is testable without a server.
+// intentHandlers serves the search-interpretation endpoint. It is transport only: it reads
+// the caller, builds the request, binds the model client to that caller's own gateway
+// credential, and renders what internal/search/searchintent returns. Every decision about
+// what a description means lives there.
 //
-// It reads NO profile, deliberately. Turning a saved profile into filters is already a
-// feature — "Apply my profile", filtersFromProfile in web/src/lib/facetModel.ts — and it
-// is a pure client-side mapping because a profile is already written in the filter's own
-// vocabulary. A second implementation here would be a diverging copy of rules that one
-// place already gets right (the base-location gate, the include-wins overlap rule), and
-// would spend a model call to do worse.
+// It reads NO profile, deliberately: "Apply my profile" (filtersFromProfile in
+// web/src/lib/facetModel.ts) already maps a profile to filters client-side, and a second
+// implementation here would diverge and spend a model call to do worse.
 //
-// The model client arrives ONLY through llm: the interpreter is built per request — from
-// the caller's own bound client when signed in, from that same field's service client
-// when not. Holding a second, service-credential interpreter beside it would be two
-// sources of one dependency, free to disagree about whether the feature is configured at
-// all.
+// The model client arrives ONLY through llm, built per request (the caller's bound client
+// when signed in, that field's service client when not). A second, service-credential
+// interpreter beside it could disagree about whether the feature is configured.
 type intentHandlers struct {
 	llm llmBinding
 }
@@ -40,16 +35,13 @@ func newIntentHandlers(llm llmBinding) *intentHandlers {
 }
 
 func (h *intentHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
-	// Optional session: open to signed-out visitors as well. The AI search is how a
-	// visitor first finds the catalogue, and asking them to sign in before they have seen
-	// it hid the feature from exactly the people it is for. A signed-in caller is unchanged
-	// — their own credential, their own per-user budget; a guest is answered on the service
-	// credential. An integration that
-	// wants filters still has the documented facet vocabulary and /agent/jobs/search.
+	// Optional session: open to signed-out visitors, since the AI search is how a visitor
+	// first finds the catalogue. A signed-in caller uses their own credential and per-user
+	// budget; a guest is answered on the service credential. An integration that wants filters
+	// still has the documented facet vocabulary and /agent/jobs/search.
 	//
 	// Deliberately NOT behind mw.paidAI: the interpretation is one of the model calls every
-	// account gets (plan.WithFreeAI, marked in the handler). It is a short call on a cheap
-	// model. Every call answered 402 to free on 2026-10-19.
+	// account gets (plan.WithFreeAI, marked in the handler), a short call on a cheap model.
 	api.Post("/search/interpret", mw.optional, refuseEncodedGuestBody, contract)
 }
 
@@ -105,11 +97,11 @@ func (v interpretResult) result() searchintent.Result {
 	}
 }
 
-// InterpretSearch turns a written description of a job search into filter values. Open
-// to signed-in and signed-out callers alike (see register).
+// InterpretSearch turns a written description of a job search into filter values. Open to
+// signed-in and signed-out callers alike (see register).
 //
-// Response: {"data": {...}}. A result that resolved nothing is a 200 carrying
-// empty:true, not an error — the request was fine, the description was not usable.
+// Response: {"data": {...}}. A result that resolved nothing is a 200 carrying empty:true,
+// not an error: the request was fine, the description was not usable.
 func (h *intentHandlers) InterpretSearch(ctx context.Context, body *apigen.SearchIntentRequest) (*apigen.InterpretSearchOK, error) {
 	userID, signedIn := auth.UserIDFromContext(ctx)
 	// The previous result travels as raw JSON and is decoded here, so a malformed one is

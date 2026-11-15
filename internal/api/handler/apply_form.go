@@ -11,19 +11,15 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
-// JobApplyForm serves the application form captured for the job addressed by :slug —
-// the questions a candidate will have to answer, shaped for reading. Public
-// (unauthenticated) like the other job reads. Response: {"data": {...}}.
+// JobApplyForm serves the application form captured for the job addressed by :slug: the
+// questions a candidate will have to answer. Public, like the other job reads.
 //
-// Two queries rather than one join, mirroring JobCopies on the same resource: an
-// unknown slug fails at the first exactly as /copies does, while a posting that exists
-// but has no captured form fails at the second with its own message. Both are 404s, and
-// keeping them distinguishable matters — "this employer asks nothing" and "we cannot
-// read this platform" are different statements, and only the second is usually true.
+// Two queries rather than one join, mirroring JobCopies: an unknown slug fails at the first, a
+// posting with no captured form at the second with its own message. Both are 404s but stay
+// distinguishable ("this employer asks nothing" vs "we cannot read this platform").
 //
-// A form is captured for a minority of postings (the platforms whose forms can be read
-// at all are roughly a sixth of technical ones), so the 404 is the ordinary case rather
-// than an error worth logging.
+// Forms are captured for only a minority of postings, so the 404 is the ordinary case, not an
+// error worth logging.
 func (h *jobsHandlers) JobApplyForm(ctx context.Context, params apigen.JobApplyFormParams) (*apigen.JobApplyFormOK, error) {
 	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
@@ -42,8 +38,8 @@ func (h *jobsHandlers) JobApplyForm(ctx context.Context, params apigen.JobApplyF
 	if err := json.Unmarshal(row.Payload, &form); err != nil {
 		return nil, fmt.Errorf("decode apply form for job %d: %w", job.ID, err)
 	}
-	// The provider is authoritative on the row rather than inside the payload: the row
-	// is what a re-capture rewrites and what a per-provider purge would select on.
+	// The provider is authoritative on the row, not inside the payload: a re-capture rewrites the
+	// row and a per-provider purge selects on it.
 	form.Provider = row.Provider
 
 	raw, err := json.Marshal(form.ForDisplay())

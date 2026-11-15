@@ -26,10 +26,8 @@ func newPhotoHandlers(photos *headshot.Store) *photoHandlers {
 }
 
 func (h *photoHandlers) register(api fiber.Router, mw middleware) {
-	// GET /me/photo reports presence; the image itself hangs off it as a sub-resource.
-	// The split mirrors /me/resume, whose read is metadata too: a client needs to know
-	// whether there is a headshot (to choose a control, or to prompt for one in the
-	// template gallery) far more often than it needs the bytes.
+	// GET /me/photo reports presence; the image hangs off it as a sub-resource, mirroring
+	// /me/resume: clients need to know whether a headshot exists far more often than the bytes.
 	api.Put("/me/photo", mw.cookie, h.PutPhoto)
 	api.Get("/me/photo", mw.cookie, h.GetPhoto)
 	api.Get("/me/photo/image", mw.cookie, h.GetPhotoImage)
@@ -119,11 +117,9 @@ func (h *photoHandlers) DeletePhoto(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// maxPhotoUpload bounds what is read out of the multipart part. It is a backstop, not the
-// real gate: fasthttp has already read and parsed the whole body by the time FormFile runs,
-// so the server's BodyLimit (cmd/server/main.go) is what actually stops an oversize upload —
-// and because that limit covers the entire request, a file at this cap is rejected there
-// first. The client advertises a smaller size to keep that from being the common path.
+// maxPhotoUpload bounds what is read from the multipart part. A backstop: fasthttp has
+// already parsed the whole body, so the server's BodyLimit (cmd/server/main.go) is the real
+// gate and rejects a file at this cap first.
 const maxPhotoUpload = 8 << 20
 
 // readPhotoUpload reads the "file" part into memory. Only multipart is accepted: unlike

@@ -10,11 +10,9 @@ import (
 	"github.com/strelov1/freehire/internal/engage/buddy"
 )
 
-// buddyHandlers serves the interview-buddy network (internal/engage/buddy): membership
-// under a generated handle, similar members, the feed of other members' search progress,
-// and the invitation that starts a chat. The chat itself is the messaging core's
-// (conversationHandlers). Every route is cookie-only, so a leaked API key cannot act for a
-// member. The routes implement the contract (typespec/buddies.tsp).
+// buddyHandlers serves the interview-buddy network (internal/engage/buddy): membership under a generated handle,
+// similar members, the feed of members' search progress, and the invitation that starts a chat (the chat itself is
+// conversationHandlers). Every route is cookie-only, so a leaked API key cannot act for a member. Contract: typespec/buddies.tsp.
 type buddyHandlers struct {
 	buddy *buddy.Service
 	mocks *buddy.MockService

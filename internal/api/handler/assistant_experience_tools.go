@@ -16,10 +16,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// experienceBankTools is what the assistant needs from the experience bank. Narrow
-// handler-side interface, as everywhere else in this layer: it makes the provenance gate
-// testable without a database, which matters most for the one rule the whole capability
-// exists to keep.
+// experienceBankTools is what the assistant needs from the experience bank: a narrow handler-side
+// interface that makes the provenance gate testable without a database.
 type experienceBankTools interface {
 	Retrieve(ctx context.Context, userID int64, q experience.Query, limit int) ([]experience.Match, error)
 	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
@@ -30,24 +28,17 @@ type experienceBankTools interface {
 	MergeAtoms(ctx context.Context, userID int64, a, b uuid.UUID) (experience.Atom, error)
 }
 
-// experienceSearchLimit caps what one search puts into the transcript. A tool result is
-// replayed into the model's context on every later turn, so an unbounded bank read would
-// consume the window a few searches in.
+// experienceSearchLimit caps what one search puts into the transcript: tool results are replayed
+// into the model's context on every later turn.
 const experienceSearchLimit = 8
 
-// experienceReadLimit caps one read-by-id for the same reason, and the overflow is
-// REPORTED rather than dropped: the ids were named deliberately, so losing some of them
-// silently would leave the model believing it had seen the whole set.
-//
-// Deliberately its own constant rather than a number shared with the frontend that builds
-// the opening message. Two constants across the stack drift; a tool that says what it did
-// not read cannot.
+// experienceReadLimit caps one read-by-id for the same reason, and the overflow is reported rather
+// than dropped: the ids were named deliberately, so silent loss would leave the model believing it
+// saw the whole set. Its own constant, not one shared with the frontend, which would drift.
 const experienceReadLimit = 8
 
-// assistantExperienceTools are registered under EVERY preset. The moment a candidate
-// articulates their experience is not scheduled: a chat about the market surfaces "I
-// actually ran that migration at Sber" as readily as a tailoring session does, and the
-// only version of this feature that works is the one that is listening at the time.
+// assistantExperienceTools are registered under every preset: a candidate may articulate their
+// experience in any chat, not only a tailoring session.
 func (h *assistantHandlers) assistantExperienceTools(sessionID uuid.UUID) []assistant.Tool {
 	return []assistant.Tool{
 		h.experienceSearchTool(),
@@ -104,14 +95,10 @@ func (h *assistantHandlers) experienceSearchTool() assistant.Tool {
 	}
 }
 
-// experienceGetTool reads named achievements, which is the half of the bank the agent
-// could not see.
-//
-// Every other id-bearing surface leads here: the opening message that names a selection,
-// get_profile's soft_duplicate_clusters (ids with no claim text, so the transcript stays
-// small), and the id a merge hands back. Without this, an id could only be guessed at
-// through experience_search — which retrieves by MEANING and drops what scores zero, so a
-// UUID matched nothing and the agent was told the achievement did not exist.
+// experienceGetTool reads named achievements, the half of the bank the agent could not see. Every
+// other id-bearing surface leads here (the opening message naming a selection, get_profile's
+// soft_duplicate_clusters, a merge's result id). experience_search retrieves by meaning, so a UUID
+// matched nothing and the agent was told the achievement did not exist.
 func (h *assistantHandlers) experienceGetTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "experience_get",
@@ -140,9 +127,7 @@ func (h *assistantHandlers) experienceGetTool() assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			// Answer in the order asked, minus repeats: these ids usually arrive as a
-			// selection or a duplicate cluster, and a reply that follows the question is
-			// the one the agent can act on.
+			// Answer in the order asked, minus repeats: a reply that follows the question is one the agent can act on.
 			wanted := make([]string, 0, len(in.IDs))
 			seen := make(map[string]bool, len(in.IDs))
 			for _, raw := range in.IDs {
@@ -163,9 +148,8 @@ func (h *assistantHandlers) experienceGetTool() assistant.Tool {
 				wanted = wanted[:experienceReadLimit]
 			}
 
-			// One owner-scoped pass rather than a lookup per id: it is the read Retrieve
-			// already makes, and it means ownership is a property of the query instead of
-			// a check that could be forgotten.
+			// One owner-scoped pass rather than a lookup per id: ownership is a property of the query, not a
+			// check that could be forgotten.
 			atoms, err := h.experience.ListAtoms(ctx, userID)
 			if err != nil {
 				return nil, err
@@ -208,8 +192,7 @@ func (h *assistantHandlers) experienceGetTool() assistant.Tool {
 			}
 
 			out := map[string]any{"achievements": found}
-			// A partial answer beats a refusal, and naming what failed is what lets the
-			// agent correct itself inside the same turn rather than spending another.
+			// A partial answer beats a refusal; naming what failed lets the agent correct itself in the same turn.
 			if len(unresolved) > 0 {
 				out["unresolved"] = unresolved
 				out["unresolved_note"] = "These are not achievements on this candidate's bank — they may have " +
@@ -243,13 +226,10 @@ func (h *assistantHandlers) experienceEmploymentsTool() assistant.Tool {
 	}
 }
 
-// experienceAddTool records one achievement.
-//
-// The `said` argument is the honest wall's mechanism. The model does not choose the
-// provenance — it supplies the candidate's own words, verbatim, and the service checks
-// them against the session transcript. A quote that is really there makes the atom the
-// candidate's assertion; anything else is the model's own, recorded as agent_inferred and
-// barred from reaching a CV until the candidate confirms it.
+// experienceAddTool records one achievement. The `said` argument is the honest wall's mechanism: the
+// model supplies the candidate's own words verbatim and the service checks them against the session
+// transcript. A real quote makes the atom the candidate's assertion; anything else is recorded as
+// agent_inferred and barred from a CV until the candidate confirms it.
 func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "experience_add",
@@ -321,8 +301,7 @@ func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Too
 			}
 			stored, err := h.experience.AddAtom(ctx, userID, atom, h.authorFor(ctx, sessionID, in.Said))
 			if errors.Is(err, experience.ErrAlreadyBanked) {
-				// Not a failure: the candidate learns it is already recorded, and the
-				// model stops trying to record it again.
+				// Not a failure: the candidate learns it is already recorded, and the model stops retrying.
 				return map[string]any{"already_banked": true, "claim": in.Claim}, nil
 			}
 			if err != nil {
@@ -384,10 +363,8 @@ func (h *assistantHandlers) experienceUpdateTool(sessionID uuid.UUID) assistant.
 			if err != nil {
 				return nil, err
 			}
-			// Content the label is meant to vouch for is changing, so the authorship is
-			// re-derived rather than carried over — otherwise a confirmed atom stays
-			// "confirmed" no matter how far the model edits it from what was said. An edit
-			// that touches no content is a rewrite of nothing and keeps the standing it had.
+			// Changed content re-derives authorship instead of carrying it over, or a confirmed atom would stay
+			// "confirmed" however far the model edits it. An edit touching no content keeps its standing.
 			author := experience.AuthorRewrite
 			if in.Claim != nil || in.Context != nil || in.Metrics != nil {
 				author = h.authorFor(ctx, sessionID, in.Said)
@@ -532,17 +509,11 @@ func (h *assistantHandlers) checkExperienceContextRequired(ctx context.Context, 
 	return nil
 }
 
-// provenanceFor decides how an atom entered the bank, and it is the one place the honest
-// wall is actually enforced on the write side.
-//
-// The model supplies the candidate's words; the entry point checks them against what the
-// candidate really said in this session. A quote that appears in their messages makes the
-// claim theirs. A quote that does not — a paraphrase, a summary, an invention — is the model
-// speaking, and is recorded as such rather than rejected: the agent needs its own hypothesis
-// on record in order to ask the candidate about it.
-//
-// This is the only place a claim's standing can go UP, and it can only because something
-// outside the model confirmed the words. The bank turns the answer into the stored label.
+// provenanceFor decides how an atom entered the bank; the one place the honest wall is enforced on the
+// write side. A quote found in the candidate's messages makes the claim theirs. One that is not (a
+// paraphrase, a summary, an invention) is the model speaking, and is recorded as such rather than
+// rejected, since the agent needs its hypothesis on record to ask the candidate about it. This is the
+// only place a claim's standing can go UP, because something outside the model confirmed the words.
 func (h *assistantHandlers) authorFor(ctx context.Context, sessionID uuid.UUID, said string) experience.Author {
 	said = strings.TrimSpace(said)
 	if said == "" || h.store == nil {
@@ -550,8 +521,8 @@ func (h *assistantHandlers) authorFor(ctx context.Context, sessionID uuid.UUID, 
 	}
 	transcript, err := h.store.Transcript(ctx, sessionID)
 	if err != nil {
-		// Unverifiable is not verified. Failing closed costs the candidate a confirmation
-		// step; failing open would put an unchecked claim on their CV.
+		// Unverifiable is not verified: failing closed costs a confirmation step, failing open puts an
+		// unchecked claim on their CV.
 		return experience.AuthorAgent
 	}
 	if assistant.UserSaid(transcript, said) {
@@ -573,13 +544,10 @@ func optionalUUID(raw string) (*uuid.UUID, error) {
 	return &id, nil
 }
 
-// resolveEmployment parses the role an achievement attaches to, and — when the value is not
-// an id — refuses with the ids that WOULD have worked.
-//
-// The list is the whole point. A model that guesses ("the ringcentral one") used to be told
-// only that it was wrong, spend a round on experience_employments, and retry: one of the eight
-// rounds a turn has, burned on a lookup the refusal could have carried. The candidate's roles
-// are a handful of rows, already owner-scoped, and they are what the retry needs.
+// resolveEmployment parses the role an achievement attaches to and, when the value is not an id,
+// refuses with the ids that would have worked. A model that guesses ("the ringcentral one") would
+// otherwise burn one of its few rounds on experience_employments; the roles are a handful of
+// owner-scoped rows.
 func (h *assistantHandlers) resolveEmployment(ctx context.Context, userID int64, raw string) (*uuid.UUID, error) {
 	id, err := optionalUUID(raw)
 	if err == nil {
@@ -608,12 +576,9 @@ func (h *assistantHandlers) resolveEmployment(ctx context.Context, userID int64,
 	return nil, errors.New(b.String())
 }
 
-// atomEntry is one achievement as the model sees it: the claim it can reframe, the place
-// it happened, and whether it may be written into a CV as it stands.
-//
-// Shared by every tool that returns an achievement, and that is the point. An achievement
-// found by search and the same achievement read by id must not arrive carrying different
-// fields, or the model ends up treating them as two kinds of thing.
+// atomEntry is one achievement as the model sees it: the claim, the place, and whether it may be written
+// into a CV as it stands. Shared by every tool that returns an achievement, so the same achievement
+// found by search or read by id never arrives with different fields.
 func atomEntry(m experience.Match) map[string]any {
 	entry := map[string]any{
 		"id":           m.Atom.ID,
