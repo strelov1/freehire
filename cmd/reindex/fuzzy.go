@@ -6,23 +6,13 @@ import (
 	"fmt"
 	"log"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
-)
-
-const (
-	// fuzzyThreshold is the word overlap two descriptions need to count as the same posting.
-	// Per-city variants of one role score 0.95-1.00 and distinct roles in a bucket at most 0.5; 0.9 sits in that gap.
-	fuzzyThreshold = 0.9
-
-	// fuzzyMaxBucket is the largest bucket this pass reads. The few huge buckets are generic-title-by-location
-	// (one retailer title across thousands of stores), which must NOT collapse and dominate pairwise cost, so no MinHash or LSH is needed.
-	fuzzyMaxBucket = 200
 )
 
 // fuzzyDedupQuerier is the slice of the store this pass needs, named so the pass can be read
@@ -103,7 +93,7 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 	if err != nil {
 		return 0, err
 	}
-	judged, comparable := bucketByRole(titles)
+	judged, comparable := jobdedup.BucketByRole(titles)
 	if len(judged) == 0 {
 		return 0, nil
 	}
@@ -127,11 +117,11 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 
 	var moveIDs, canons []int64
 	for _, bucketIDs := range comparable {
-		postings := make([]fuzzyPosting, 0, len(bucketIDs))
+		postings := make([]jobdedup.FuzzyPosting, 0, len(bucketIDs))
 		for _, id := range bucketIDs {
-			postings = append(postings, fuzzyPosting{ID: id, Signature: signatures[id]})
+			postings = append(postings, jobdedup.FuzzyPosting{ID: id, Signature: signatures[id]})
 		}
-		for id, canon := range clusterBucket(postings, fuzzyThreshold) {
+		for id, canon := range jobdedup.ClusterBucket(postings, jobdedup.FuzzyThreshold) {
 			moveIDs = append(moveIDs, id)
 			canons = append(canons, canon)
 		}
@@ -143,84 +133,4 @@ func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier,
 		Canons:     canons,
 		Company:    company,
 	})
-}
-
-// fuzzyPosting is one open canonical posting inside a (company, title) bucket.
-type fuzzyPosting struct {
-	ID        int64
-	Signature map[string]struct{}
-}
-
-// bucketByRole groups one company's open unclaimed postings by normalized title and splits them
-// into the two sets the marker write needs.
-//
-//   - judged: every row this pass reaches a verdict on. A row here with no assignment is
-//     RELEASED, so the set has to be exactly what the pass is willing to decide.
-//   - comparable: the buckets worth loading descriptions for — more than one member, and no
-//     more than fuzzyMaxBucket of them.
-//
-// The difference is "no cluster" versus "not judged". A bucket OVER the cap is not judged: the cap is a
-// cost heuristic, so treating its members as unclustered would un-collapse the largest groups. A bucket
-// UNDER two, or a title that normalizes to nothing, IS judged: it cannot cluster, which frees a marker whose canon closed.
-//
-// The key comes from jobhash.RoleKey, so a per-city variant lands on its base role as elsewhere; deriving it in Go keeps one definition.
-//
-// A title that normalizes to nothing yields no key (RoleKey contract), else blank titles would share one bucket.
-func bucketByRole(rows []db.FuzzyDedupCandidateTitlesForCompanyRow) (judged []int64, comparable map[string][]int64) {
-	buckets := make(map[string][]int64)
-	for _, row := range rows {
-		// The company is fixed for the call, so it is not part of the key.
-		key := jobhash.RoleKey("", row.Title)
-		if key == "" {
-			judged = append(judged, row.ID)
-			continue
-		}
-		buckets[key] = append(buckets[key], row.ID)
-	}
-	comparable = make(map[string][]int64, len(buckets))
-	for key, ids := range buckets {
-		if len(ids) > fuzzyMaxBucket {
-			continue // not judged: skipped on cost, so its members keep whatever marker they hold
-		}
-		judged = append(judged, ids...)
-		if len(ids) > 1 {
-			comparable[key] = ids
-		}
-	}
-	return judged, comparable
-}
-
-// clusterBucket assigns near-identical postings in one bucket to a canonical id, returning only the
-// postings that MOVE, each mapped to its canon (the lowest id in its cluster, so a re-run is a no-op).
-//
-// Membership is decided against the canon, never transitively: similarity is not an equivalence relation,
-// and following A~B~C chains would walk a bucket into one blob.
-//
-// Callers must only pass buckets keyed by a real company and title: the bucket stops boilerplate-heavy
-// postings of different jobs at one employer (0.98 shared vocabulary) from merging.
-func clusterBucket(postings []fuzzyPosting, threshold float64) map[int64]int64 {
-	if len(postings) < 2 {
-		return map[int64]int64{}
-	}
-	ordered := make([]fuzzyPosting, len(postings))
-	copy(ordered, postings)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
-
-	moved := make(map[int64]int64)
-	claimed := make(map[int64]bool, len(ordered))
-	for i, canon := range ordered {
-		if claimed[canon.ID] {
-			continue
-		}
-		for _, other := range ordered[i+1:] {
-			if claimed[other.ID] {
-				continue
-			}
-			if jobhash.DescriptionSimilarity(canon.Signature, other.Signature) >= threshold {
-				claimed[other.ID] = true
-				moved[other.ID] = canon.ID
-			}
-		}
-	}
-	return moved
 }
