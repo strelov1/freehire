@@ -170,6 +170,7 @@ func Register(app *fiber.App, cfg Config) {
 	// recognized-ATS branch, and internal/job/privatejob for the generic-scrape/pasted-text branch.
 	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	planH := newPlanHandlers(plans, queries)
+	catalogueH := newCatalogueHandlers(queries, cfg.Export)
 	billingSvc := billing.New(cfg.Billing, queries)
 	// The store provider reads its own environment: it is enabled and credentialed
 	// independently of Stripe.
@@ -520,6 +521,7 @@ func Register(app *fiber.App, cfg Config) {
 		referralHandlers:             referralsH,
 		billingHandlers:              billingH,
 		planHandlers:                 planH,
+		catalogueHandlers:            catalogueH,
 		directApplyHandlers:          directApplyH,
 		jobsHandlers:                 jobsH,
 		searchHandlers:               searchH,

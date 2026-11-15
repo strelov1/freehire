@@ -9,7 +9,7 @@
 // companies endpoint filters by plain array overlap (OR within a facet, AND across
 // facets), so a facet is just a value set.
 
-import { COMPANY_FACETS } from './facets';
+import { COMPANY_FACETS } from './directoryFacets';
 
 /** 'job_count' is the backend's default order (most active first) and is never
  *  written to the URL — a clean link leans on that default, the same convention

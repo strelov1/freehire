@@ -30,17 +30,15 @@
   import { agentAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
-  import MatchCard from './MatchCard.svelte';
-  import ApplyPlanCard from './ApplyPlan.svelte';
-  import SaveAnswers from './SaveAnswers.svelte';
+  import MatchStatusView from './MatchStatusView.svelte';
+  import AutofillFooter from './AutofillFooter.svelte';
+  import FormPlanView from './FormPlanView.svelte';
   import AppliedPrompt from './AppliedPrompt.svelte';
   import PlanRefusalAlert from './PlanRefusalAlert.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
-  import AddJobOffer from './AddJobOffer.svelte';
   import ChatPanel from './ChatPanel.svelte';
   import PanelHeader from './PanelHeader.svelte';
-  import { Button, EmptyState, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
-  import { Square, RectangleEllipsis } from '@lucide/svelte';
+  import { TabStrip, tabStripId } from 'freehire-design-system';
 
   let chat = $state<ChatState>(initChat());
   // Local action feedback (autofill results, errors) — not part of a turn.
@@ -746,57 +744,30 @@
                 onDismiss={() => (appliedCandidate = null)}
               />
             {/if}
-            {#if matchStatus === 'ready' && matchJob && match}
-              <MatchCard job={matchJob} {match} hasUploadField={uploads.some((u) => u.frame === TOP_FRAME)} />
-            {:else if matchStatus === 'loading'}
-              <div class="match-skeleton">
-                <Skeleton class="h-9 w-9 rounded-lg" />
-                <div class="match-skeleton-lines">
-                  <Skeleton class="h-3 w-2/3 rounded" />
-                  <Skeleton class="h-3 w-1/3 rounded" />
-                </div>
-              </div>
-            {:else if matchStatus === 'error'}
-              <EmptyState title="Match unavailable" description={matchError}>
-                {#snippet action()}
-                  <Button variant="outline" size="sm" onclick={loadMatch}>Retry</Button>
-                {/snippet}
-              </EmptyState>
-            {:else if matchStatus === 'empty' && canAddJob}
-              <!-- Not an empty state but an offer: a vacancy freehire does not carry yet is
-                   the one moment the panel can ask for something useful, so it leads with
-                   the action and says what it buys — rather than reporting a miss. Any
-                   other page gets nothing here (see canAddJob). -->
-              <AddJobOffer adding={contributing} onAdd={contributePage} />
-            {/if}
+            <MatchStatusView
+              status={matchStatus}
+              job={matchJob}
+              {match}
+              hasUploadField={uploads.some((u) => u.frame === TOP_FRAME)}
+              error={matchError}
+              onRetry={loadMatch}
+              {canAddJob}
+              {contributing}
+              onAdd={contributePage}
+            />
 
-            <!-- The account of the form the user is standing in front of. It is
-                 independent of the match: a page can show an application freehire
-                 does not carry a posting for, and the checklist is just as useful
-                 there. -->
-            {#if !plan && planError}
-              <p class="no-plan">Could not read this page's form: {planError}</p>
-            {:else if !plan && questionsSeen > 0}
-              <!-- The page asks questions but they did not add up to an
-                   application. Saying so beats an empty space the user has to
-                   guess about. -->
-              <p class="no-plan">
-                {questionsSeen} field{questionsSeen === 1 ? '' : 's'} on this page — not enough to read as an application
-                form.
-              </p>
-            {/if}
-            {#if plan}
-              <ApplyPlanCard
-                {plan}
-                filling={fillingLabel}
-                walking={autofilling}
-                onReveal={revealItem}
-                onCancel={() => (walkStop = true)}
-              />
-              {#if answerOffers.length > 0}
-                <SaveAnswers offers={answerOffers} saving={savingAnswers} onSave={saveAnswers} />
-              {/if}
-            {/if}
+            <FormPlanView
+              {plan}
+              {planError}
+              {questionsSeen}
+              {fillingLabel}
+              {autofilling}
+              onReveal={revealItem}
+              onCancel={() => (walkStop = true)}
+              {answerOffers}
+              {savingAnswers}
+              onSave={saveAnswers}
+            />
 
             {#if autofillRefusal}
               <PlanRefusalAlert refusal={autofillRefusal} />
@@ -815,23 +786,7 @@
         </div>
 
         {#if user && matchStatus === 'ready' && matchJob && matchJob.public_slug !== ''}
-          <div class="match-footer">
-            {#if autofilling}
-              <!-- The same button, not a second one beside it: while a walk runs
-                   there is exactly one thing to do with it, and a disabled
-                   "Filling…" left the user watching something they could not
-                   call off. -->
-              <Button class="w-full" variant="outline" size="lg" onclick={() => (walkStop = true)} disabled={walkStop}>
-                {walkStop ? 'Stopping…' : 'Stop'}
-                <Square class="size-4" />
-              </Button>
-            {:else}
-              <Button class="w-full" variant="primary" size="lg" onclick={autofill}>
-                Autofill
-                <RectangleEllipsis class="size-4" />
-              </Button>
-            {/if}
-          </div>
+          <AutofillFooter {autofilling} bind:walkStop onAutofill={autofill} />
         {/if}
       </div>
     {:else}
@@ -932,31 +887,6 @@
    * 0` makes .match-scroll actually scroll instead of squeezing its children. */
   .match-scroll > :global(*) {
     flex-shrink: 0;
-  }
-
-  .match-footer {
-    flex-shrink: 0;
-    padding: 10px 12px;
-    border-top: 1px solid var(--border);
-  }
-
-  .match-skeleton {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .match-skeleton-lines {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .no-plan {
-    font-size: 12px;
-    color: var(--muted-foreground);
-    padding: 0 2px;
   }
 
   .empty {

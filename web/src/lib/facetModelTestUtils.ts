@@ -1,4 +1,5 @@
-import { emptyFilters, type FacetState, type JobFilters, type JobSort } from './facetModel';
+import { emptyFilters, type FacetState, type JobFilters } from './facetModel';
+import { type JobSort } from './jobSort';
 
 // Builders shared by facetModel's tests.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMPANY_FACETS, TALENT_FACETS } from './facets';
+import { COMPANY_FACETS, TALENT_FACETS } from './directoryFacets';
 import { COMPANY_RAIL_GROUPS, TALENT_RAIL_GROUPS } from './filterSections';
 import { FILTER_SEARCH_LIMIT, jobFilterSearchItems, matchFilterSearch, railFacetSearchItems } from './filterSearch';
 

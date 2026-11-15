@@ -1,15 +1,7 @@
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { UserProfile } from './types';
-import {
-  type JobFilters,
-  appliesWorkModeRemoteAnywhere,
-  emptyFacet,
-  emptyFilters,
-  facetAdd,
-  facetSetSign,
-  isPhysicalMode,
-  signOf,
-} from './facetModel';
+import { type JobFilters, appliesWorkModeRemoteAnywhere, emptyFacet, emptyFilters, isPhysicalMode } from './facetModel';
+import { facetAdd, facetSetSign, signOf } from './facetSign';
 
 // How many characters each profile list may contribute to a profile-derived query.
 //

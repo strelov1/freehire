@@ -74,6 +74,7 @@ type contractHandlers struct {
 	*referralHandlers
 	*billingHandlers
 	*planHandlers
+	*catalogueHandlers
 	*directApplyHandlers
 	*jobsHandlers
 	*searchHandlers

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMPANY_FACETS, FACETS } from './facets';
+import { FACETS } from './facets';
+import { COMPANY_FACETS } from './directoryFacets';
 import { INDUSTRY_VALUES } from './generated/contracts';
 
 describe('company industry facets', () => {
