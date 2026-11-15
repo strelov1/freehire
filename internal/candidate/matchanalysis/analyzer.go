@@ -16,10 +16,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// Input bounds for untrusted, user/ingest-supplied text sent to the model. Kept modest
-// on purpose: the fit model reasons over every input token, so a large CV/description
-// balloons its thinking time (tens of seconds per stage). These caps keep each stage
-// responsive while still covering the substance of a CV and a posting.
+// Input bounds for untrusted text sent to the model. Kept modest because the fit model reasons
+// over every input token, so large inputs balloon each stage's thinking time.
 const (
 	maxDescriptionRunes = 6000
 	maxCompanyRunes     = 2000
@@ -27,23 +25,17 @@ const (
 
 // Analyzer runs the fixed three-stage fit prompt-chain over an llm.Client. A nil
 // client (LLM unconfigured) makes Analyze a no-op so the endpoint degrades to no
-// analysis, mirroring atscheck.Analyzer. The chain scores the fit from the de-identified
-// structured résumé (see Input.StructuredResume) — it never sends the raw CV, so it carries
-// no direct identifier to the provider and needs no PII detector of its own.
+// analysis, mirroring atscheck.Analyzer. The chain scores from the de-identified structured
+// résumé (see Input.StructuredResume) and never sends the raw CV, so it needs no PII detector.
 type Analyzer struct {
 	client *llm.Client
 }
 
-// NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured), in which case the
-// analysis degrades to a no-op.
 // As returns an analyzer spending as `caller`, so one analysis is billed to the candidate's
-// own gateway credential. The analyzer is one field, so cloning it per request costs nothing
-// beside the model calls it is about to make. Nil-safe.
+// own gateway credential. Nil-safe.
 //
 // It takes a caller and not a client so the chain keeps the per-stage timeout it was built
-// with (matchAnalysisLLMTimeout). That figure happens to equal the client default today, so
-// the shape this replaces cost nothing here — it cost the résumé extraction beside it, and
-// would have cost this one the day somebody changed the number. See llm.Caller.
+// with (matchAnalysisLLMTimeout). See llm.Caller.
 func (a *Analyzer) As(caller llm.Caller) *Analyzer {
 	if a == nil {
 		return a
@@ -54,6 +46,8 @@ func (a *Analyzer) As(caller llm.Caller) *Analyzer {
 	return &clone
 }
 
+// NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured), in which case the
+// analysis degrades to a no-op.
 func NewAnalyzer(client *llm.Client) *Analyzer {
 	return &Analyzer{client: client}
 }
@@ -93,18 +87,13 @@ type Input struct {
 	// (accepted work modes, remote reach, base, relocation); empty when unset.
 	LocationPreferences string
 
-	// Language is the caller's account language (accounts.User.Language, e.g. "en"/"ru"),
-	// naming the language every free-text field in the analysis — dimension comments,
-	// strengths, gaps, the recommendation, hidden-signal insights — is written in. It is
-	// the candidate's own reading of their fit, not part of the CV, so it follows their
-	// profile language rather than the vacancy's (freehire#1837; contrast the tailoring
-	// flow, whose CV bullets follow the vacancy's language instead). Empty falls back to
-	// English, same as assistant.LanguageName.
+	// Language is the caller's account language (e.g. "en"/"ru"), used for every free-text
+	// field in the analysis. It follows the candidate's profile, not the vacancy's (unlike
+	// tailoring's CV bullets). Empty falls back to English, as assistant.LanguageName does.
 	Language string
 
-	// Blockers are the deterministic hard-constraint results (hardconstraint.Evaluate).
-	// The unmet ones are fed into the prompt as established constraints so the model
-	// respects rather than re-derives them; the same list caps the served overall_score.
+	// Blockers are the deterministic hard-constraint results (hardconstraint.Evaluate). Unmet
+	// ones go into the prompt as established facts; the same list caps the served overall_score.
 	Blockers []hardconstraint.Blocker
 }
 
@@ -140,13 +129,11 @@ type Event struct {
 var stageLabels = map[int]string{1: "Extract & Match", 2: "Recruiter verdict", 3: "Adversarial audit"}
 
 // StageLabel names one of the three chain stages (1-3) for a caller that describes a stage
-// without running the chain (e.g. synthesizing a stage_done burst for a reader who joined
-// after the chain already finished elsewhere). Empty for an unknown stage.
+// without running the chain. Empty for an unknown stage.
 func StageLabel(stage int) string { return stageLabels[stage] }
 
 // Analyze runs the three-stage chain and returns the final analysis, discarding the
-// stream. Returns (nil, nil) when the LLM is unconfigured. It is a thin collector over
-// AnalyzeStream — one chain implementation, no duplication.
+// stream. Returns (nil, nil) when the LLM is unconfigured.
 func (a *Analyzer) Analyze(ctx context.Context, in Input) (*Analysis, error) {
 	return a.AnalyzeStream(ctx, in, func(Event) {})
 }
@@ -161,9 +148,8 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, nil
 	}
 
-	// The fit is scored from the candidate's banked work history; without it there is nothing
-	// to reason over, so degrade to no analysis (the raw CV is never used as a fallback, and
-	// neither is the structured résumé's own copy of the experience).
+	// Without banked work history there is nothing to reason over: no analysis, and the raw CV
+	// is never a fallback.
 	candidate := candidateContext(in.StructuredResume)
 	if candidate == "" {
 		return nil, nil
@@ -220,37 +206,25 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	return &analysis, nil
 }
 
-// stageAttempts is how many times a stage's LLM call is tried. Two failures earn a retry:
-// a PARSE failure (the gateway occasionally returns a transient HTML error page that fails
-// JSON parsing — a single re-try recovers it, mirroring the enrichment worker), and a
-// TIMEOUT (a stage that burns its whole budget is hung, not slow; prod showed the retry
-// answering in seconds). A connection error, or a caller who has gone away, is returned
-// immediately. Two attempts of matchAnalysisLLMTimeout bound the worst case for the stages
-// that get two — see attemptsForStage, which gives the adversarial audit one, because there
-// the retry only ever repeated the failure.
+// stageAttempts is how many times a stage's LLM call is tried. A parse failure (the gateway
+// occasionally returns a transient HTML error page) and a timeout (a hung stage, not a slow
+// one) are retried; a connection error or a caller who has gone away returns immediately.
+// See attemptsForStage for the audit's single attempt.
 const stageAttempts = 2
 
 // streamStage runs one streaming JSON call, forwarding reasoning deltas as thinking
 // events for the given stage, and unmarshals the accumulated JSON into out. A parse
 // failure and a timed-out stage are each retried once; anything else returns at once.
 func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user string, emit func(Event), out any) error {
-	// A snapshot of out exactly as the caller handed it in — the zero value for stages 1
-	// and 2, or Stage 2's verdict for Stage 3's seed-and-merge audit (see Analyze: Stage 3
-	// pre-populates out so a field the audit's JSON omits keeps its Stage 2 value, since
-	// json.Unmarshal only overwrites the keys present in the source). Every attempt
-	// restores out to this snapshot before decoding into it: encoding/json does not roll
-	// back a partial decode, so a failed attempt can leave the fields it reached before
-	// erroring still set, and without restoring first a later attempt's valid-but-partial
-	// JSON would silently inherit that stale, never-validated value instead of the seed
-	// (zero, or Stage 2's) it should have started from.
+	// Snapshot of out as the caller handed it in (zero, or Stage 2's verdict for the Stage 3
+	// seed-and-merge audit). Every attempt restores it before decoding: encoding/json does not
+	// roll back a partial decode, so a later attempt's partial JSON would inherit stale fields.
 	dst := reflect.ValueOf(out).Elem()
 	seed := reflect.New(dst.Type()).Elem()
 	seed.Set(dst)
 
 	var parseErr error
-	// The audit is allowed longer than the stages a reader is blocked on — see
-	// timeoutForStage. The clone is three fields; it costs nothing beside the call it is
-	// about to make, and it leaves a.client's own bound alone for the next stage.
+	// The audit is allowed longer (see timeoutForStage); the clone leaves a.client's own bound alone.
 	client := a.client.WithTimeout(timeoutForStage(stage, a.client.Timeout()))
 
 	attempts := attemptsForStage(stage)
@@ -259,11 +233,8 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 			emit(Event{Kind: EventThinking, Stage: stage, Thinking: t})
 		}, stageGenOptions(stage)...)
 		if err != nil {
-			// A stage that burned its own per-call deadline is retried like a parse failure.
-			// Production showed such a call hung rather than slow — it ate the full budget
-			// while the very next attempt answered in seconds — so failing here throws away
-			// an analysis that was one retry away. A caller who went away is final: nobody
-			// is left to read a second answer, and it would only spend tokens.
+			// A stage that hit its own per-call deadline is retried like a parse failure. A caller
+			// who went away is final: nobody would read a second answer.
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && attempt < attempts {
 				log.Printf("matchanalysis: stage %d timed out, retrying: %v", stage, err)
 				continue
@@ -282,23 +253,15 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 	return parseErr
 }
 
-// freeTextLanguageDirective tells the model which language to write every free-text
-// field of a stage's output in — the requirement/evidence text, the hidden-signal
-// insights, the dimension comments, the strengths/gaps and the recommendation. These
-// are the candidate's own reading of their fit against a vacancy, not text that goes
-// onto a CV, so they follow the caller's profile language rather than the vacancy's
-// (freehire#1837; contrast internal/ai/assistant's tailoring prompt, whose cv_edit
-// bullets follow the vacancy's language instead).
+// freeTextLanguageDirective tells the model which language to write every free-text field of a
+// stage's output in. These are the candidate's own reading of their fit, not CV text, so they
+// follow the caller's profile language rather than the vacancy's (unlike tailoring's cv_edit).
 func freeTextLanguageDirective(language string) string {
 	return "\n\nWrite every free-text value in " + assistant.LanguageName(language) + ", regardless of what language the job posting or the candidate's CV is in.\n"
 }
 
-// stage1LanguageDirective is freeTextLanguageDirective plus one exception: Stage 1's
-// "quote" field is defined as "a short verbatim excerpt from the job description" — a
-// blanket translation instruction would contradict that and stop it from being
-// verifiable against the posting. Every other Stage 1 field (the requirement text, the
-// evidence explanation, the hidden-signal insight) is the model's own prose and follows
-// the directive as normal.
+// stage1LanguageDirective is freeTextLanguageDirective plus one exception: the "quote" field
+// is a verbatim excerpt of the job description, so translating it would make it unverifiable.
 func stage1LanguageDirective(language string) string {
 	return freeTextLanguageDirective(language) +
 		"Exception: \"quote\" must stay a verbatim excerpt copied from the job posting, in the posting's own language — never translate it.\n"
@@ -350,8 +313,7 @@ func stage2SystemPrompt(language string) string {
 	b.WriteString("- \"experience_relevance\": how relevant is their domain and role-type experience?\n")
 	b.WriteString("- \"seniority_fit\": does their level match the role's seniority?\n")
 	b.WriteString("- \"skills_coverage\": consistent with the provided deterministic skills match. ")
-	// The audit knew this and the recruiter did not, so the recruiter over-scored and the
-	// audit spent a whole model call putting it back. See evidenceStrengthRule.
+	// See evidenceStrengthRule.
 	b.WriteString(evidenceStrengthRule())
 	b.WriteString("\n")
 	b.WriteString("- \"company_context\": fit with the company's stage/industry (from the company info).\n")
@@ -381,8 +343,7 @@ func stage3SystemPrompt(language string) string {
 	b.WriteString("Return ONLY a JSON object in the SAME shape as the verdict you are given.\n\n")
 	b.WriteString("Challenge it against the CV evidence: lower any inflated dimension score, remove ")
 	b.WriteString("strengths the CV does not actually support, and surface gaps that were glossed over. ")
-	// The same rule the recruiter now scores under. It stays here because the audit must
-	// still CHECK it, not because the audit is the only stage that knows it.
+	// The audit must still check the rule the recruiter scores under.
 	b.WriteString(evidenceStrengthRule())
 	b.WriteString(" ")
 	b.WriteString("Keep what is well-supported. Return the corrected verdict with the same keys ")
@@ -468,35 +429,24 @@ func writeJob(b *strings.Builder, in Input) {
 	b.WriteString("\n\n")
 }
 
-// maxStructuredRunes bounds the structured-résumé JSON added to the prompt — it is a
-// compact summary, so a modest cap covers it while keeping the stage responsive.
+// maxStructuredRunes bounds the structured-résumé JSON added to the prompt.
 const maxStructuredRunes = 3000
 
-// candidateContext renders the candidate context sent to the model. Empty when the caller has
-// no banked experience — the chain then produces no analysis, and the raw CV is never a
-// fallback — or, defensively, when the projection will not marshal.
-//
-// There is nothing to strip here and nothing to re-project: de-identification is the argument's
-// type. resumeextract.Professional names the fields a model may see, so a field the projection
-// does not name never reaches the prompt, including one that does not exist yet. Deleting known
-// contact keys would have sent every future addition to the model until somebody remembered to
-// extend the list.
 // HasCandidateContext reports whether there is enough banked work history for the chain to
 // reason over. False means AnalyzeStream will decline and produce nothing.
 //
-// Exported so a caller can tell the two reasons an analysis came back empty apart, and say
-// which one it was. They are the same silence and completely different situations: a
-// deployment with no gateway is nothing the candidate did, while an unreadable CV is
-// something only they can fix — and until this existed both rendered as "analysis
-// unavailable", which sent a candidate whose CV had failed to parse looking for a fault on
-// our side of a screen that said their CV was present.
-//
-// One predicate, one owner: whether the chain can run is this package's rule, and a caller
-// re-deriving it from the same field would be a second copy free to drift.
+// Exported so a caller can tell "no gateway" (nothing the candidate did) from "unreadable CV"
+// (only they can fix it). One predicate, one owner: a caller re-deriving it would drift.
 func HasCandidateContext(candidate resumeextract.Professional) bool {
 	return candidateContext(candidate) != ""
 }
 
+// candidateContext renders the candidate context sent to the model. Empty when there is no
+// banked experience (the raw CV is never a fallback) or the projection will not marshal.
+//
+// De-identification is the argument's type: resumeextract.Professional names the fields a
+// model may see, so a field it does not name never reaches the prompt. Stripping known contact
+// keys instead would leak every future addition.
 func candidateContext(candidate resumeextract.Professional) string {
 	if len(candidate.Experience) == 0 {
 		return ""
@@ -508,8 +458,7 @@ func candidateContext(candidate resumeextract.Professional) string {
 	return llm.TruncateRunes(string(blob), maxStructuredRunes)
 }
 
-// writeCandidate appends the de-identified structured résumé as the candidate context.
-// Omitted when empty (the chain never reaches a stage with an empty candidate).
+// writeCandidate appends the de-identified structured résumé; omitted when empty.
 func writeCandidate(b *strings.Builder, candidate string) {
 	if candidate == "" {
 		return
@@ -576,16 +525,12 @@ func writeLocation(b *strings.Builder, in Input) {
 	b.WriteString("\n")
 }
 
-// remoteWithinReach reports whether the job is remote AND its region or country falls
-// within the candidate's stated remote reach (their location_preferences remote.regions
-// and remote.countries — two independent fields the profile editor lets a candidate set
-// separately, e.g. reach scoped to specific countries with no region picked at all). A
-// reach of "global", or one naming the job's region or country, covers the posting
-// regardless of the posted office city — a remote worker within that reach can take it
-// without relocating. This is deterministic on purpose: it stops the model from reading a
-// remote role's HQ city (e.g. a LATAM-remote job posted from Santo Domingo) as a
-// relocation requirement and scoring location_fit 0. Unset/unparseable prefs or a
-// non-remote job → false (the model judges).
+// remoteWithinReach reports whether the job is remote AND its region or country falls within
+// the candidate's stated remote reach (location_preferences remote.regions / remote.countries,
+// which are independent fields). A reach of "global", or one naming the job's region or country,
+// covers the posting regardless of the office city. Deterministic on purpose: it stops the model
+// reading a remote role's HQ city as a relocation requirement and scoring location_fit 0.
+// Unset/unparseable prefs or a non-remote job give false (the model judges).
 func remoteWithinReach(in Input) bool {
 	if !in.JobRemote && !strings.EqualFold(in.JobWorkMode, "remote") {
 		return false

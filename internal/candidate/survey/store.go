@@ -5,16 +5,13 @@ import (
 	"errors"
 )
 
-// ErrNotFound is the Repository's way of saying there is no stored row. It stops at the
-// Store: Get turns it into a fully-unstated record, because "has answered nothing" and
-// "has no row" are the same fact to every caller, and making them handle both would be
-// asking them to care about storage.
+// ErrNotFound means there is no stored row. It stops at the Store: Get turns it into an
+// unstated record, since "answered nothing" and "no row" are the same to callers.
 var ErrNotFound = errors.New("survey: not found")
 
-// ValidationError is the input itself being rejected — an out-of-vocabulary stage or
-// challenge, a note beside a coded challenge, a malformed currency, a non-positive income —
-// as opposed to a Repository failure. The HTTP handler needs the distinction to answer a
-// bad request with 400 and a genuine fault with 500.
+// ValidationError is the input itself being rejected (out-of-vocabulary value, note
+// beside a coded challenge, malformed currency, non-positive income), as opposed to a
+// Repository failure; the handler maps it to 400 and the rest to 500.
 type ValidationError struct {
 	err error
 }
@@ -22,9 +19,8 @@ type ValidationError struct {
 func (e *ValidationError) Error() string { return e.err.Error() }
 func (e *ValidationError) Unwrap() error { return e.err }
 
-// Repository is the persistence contract for the single per-user survey record. Get maps a
-// missing row to ErrNotFound; Upsert creates or replaces. Implementations map the generated
-// db row to Responses, so the use case never sees db.*.
+// Repository is the persistence contract for the per-user survey record. Get maps a
+// missing row to ErrNotFound; Upsert creates or replaces.
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Responses, error)
 	Upsert(ctx context.Context, userID int64, a Responses) (Responses, error)
@@ -54,10 +50,8 @@ func (s *Store) Get(ctx context.Context, userID int64) (Responses, error) {
 	return a, nil
 }
 
-// Update sanitizes and validates the given fields, merges them over whatever the caller
-// already has stored (a field the update leaves unset keeps its stored value), and persists
-// the merged record. A caller with no existing record starts from a fully unstated one, so
-// the first update is also a create.
+// Update sanitizes the given fields, merges them over the stored record (an unset field
+// keeps its stored value), validates and persists the result. The first update is also a create.
 func (s *Store) Update(ctx context.Context, userID int64, update Responses) (Responses, error) {
 	update.Sanitize()
 
@@ -66,11 +60,8 @@ func (s *Store) Update(ctx context.Context, userID int64, update Responses) (Res
 		return Responses{}, err
 	}
 
-	// Validate the MERGED record, not the patch. Validating the patch alone would break the
-	// contract one field above it: the note's gate reads the challenge, so a caller who has
-	// already stored `other` and now sends only the note — completing an answer, not
-	// contradicting one — would be rejected for carrying no challenge, even though "a field
-	// the body omits keeps its stored value" says it does not have to.
+	// Validate the MERGED record, not the patch: the note's gate reads the challenge, so a
+	// caller who stored `other` and now sends only the note must not be rejected.
 	merged := Merge(existing, update)
 	if err := merged.Validate(); err != nil {
 		return Responses{}, &ValidationError{err: err}

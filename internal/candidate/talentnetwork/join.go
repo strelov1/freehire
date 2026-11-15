@@ -12,10 +12,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// mintAttempts bounds the re-mint loop when a freshly minted handle collides with one
-// another account already holds. The suffix draws from ~1M values per base, so two
-// collisions in a row is already implausible; the bound is here so a store that fails
-// every claim ends the request instead of the loop.
+// mintAttempts bounds the re-mint loop on handle collisions, so a store that fails every
+// claim ends the request instead of looping.
 const mintAttempts = 5
 
 // JoinStore is what Join needs from *db.Queries.
@@ -27,15 +25,9 @@ type JoinStore interface {
 
 // Join makes sure the given account has a catalogue handle, minting one if it does not.
 //
-// It lives here rather than in the handler because what to name somebody, and what to do
-// when that name is taken, is a fact about the catalogue — not about HTTP. The handler
-// calls it and writes the visibility; this decides the address.
-//
-// Idempotent by the claim's own `talent_handle IS NULL` predicate, which is what makes
-// leaving and rejoining keep the URL a candidate already shared: the second join claims
-// nothing and the stored handle stands. A collision with ANOTHER account's handle comes
-// back as a unique violation and is answered by minting a new suffix — the same
-// allocate-and-retry shape internal/identity/accounts uses for usernames.
+// Idempotent via the claim's `talent_handle IS NULL` predicate, so leaving and rejoining
+// keeps the URL already shared. A collision with ANOTHER account's handle comes back as a
+// unique violation and is re-minted, like internal/identity/accounts usernames.
 func Join(ctx context.Context, store JoinStore, userID int64) error {
 	row, err := store.GetTalentNetworkVisibility(ctx, userID)
 	if err != nil {
@@ -61,8 +53,7 @@ func Join(ctx context.Context, store JoinStore, userID int64) error {
 		})
 		switch {
 		case err == nil:
-			// Zero rows means the account already had a handle — a concurrent join won
-			// the race — which is the same success as having written one.
+			// Zero rows means a concurrent join won the race: still success.
 			return nil
 		case pgerr.IsUniqueViolation(err):
 			continue
@@ -73,13 +64,9 @@ func Join(ctx context.Context, store JoinStore, userID int64) error {
 	return fmt.Errorf("talentnetwork: could not mint a free handle in %d attempts", mintAttempts)
 }
 
-// primaryTitleOf reads the account's stored CV and returns the title of the role that
-// best describes what they do now.
-//
-// An unreadable or absent CV yields "" and is NOT an error: HandleBase turns it into the
-// neutral base, because being unable to name somebody's discipline is not a reason to
-// refuse them a URL — and gating membership on the CV pipeline would mean a candidate who
-// joins during an extraction cannot.
+// primaryTitleOf returns the title of the role that best describes what the account's
+// stored CV says they do now. An unreadable or absent CV yields "" and is NOT an error:
+// HandleBase falls back to the neutral base, and membership must not depend on the CV pipeline.
 func primaryTitleOf(ctx context.Context, store JoinStore, userID int64) (string, error) {
 	raw, err := store.GetUserResumeStructuredOnly(ctx, userID)
 	if err != nil {

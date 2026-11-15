@@ -2,11 +2,9 @@
 // candidate has actually done. An Employment is a place where something happened (a
 // job or a project); an Atom is one piece of evidence at the grain of a CV bullet.
 //
-// The bank exists because every other store of experience is a cache. The structured
-// résumé is derived from the uploaded file and replaced whenever that file changes; a
-// tailored CV is derived from a vacancy and thrown away with it. Knowledge a candidate
-// confirms — to the tailoring agent, in a chat, on their profile page — had nowhere to
-// live. Here it accumulates, and only its owner removes it.
+// Every other store of experience is a cache: the structured résumé is replaced when the
+// uploaded file changes, a tailored CV is thrown away with its vacancy. The bank is where
+// what a candidate confirms accumulates, and only its owner removes it.
 package experience
 
 import (
@@ -20,11 +18,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape and its sanitizer, so what a client receives can be
-// read without the server-only Store and Importer beside it (mirrors cv.go vs store.go,
-// structured.go vs resumeextract.go). cmd/gen-contracts does NOT read this package — it
-// once was written as though it did, and that belief is what kept a private copy of
-// llm.TrimTruncateRunes here to avoid an import nothing was actually avoiding.
+// This file holds ONLY the wire shape and its sanitizer, apart from the server-only Store
+// and Importer. cmd/gen-contracts does NOT read this package.
 
 // Field bounds for untrusted bank content. Atoms are written by the user AND by the
 // model, and are fed back into LLM prompts on retrieval, so Sanitize is both the

@@ -14,79 +14,50 @@ import (
 // The public catalogue card, and the one rule that makes it safe:
 //
 //	every string it carries is a value a DICTIONARY resolved, or a date. Never a
-//	string the candidate typed — with ONE deliberate exception, CandidateRole.Title.
+//	string the candidate typed, with ONE exception: CandidateRole.Title.
 //
-// The exception, and what it was measured against: a work history reduced to
-// "Senior · Backend" per row loses the part a reader came for, and a title the dictionary
-// cannot place ("Technical Lead | Team Lead") reduces to nothing at all. Publishing the
-// title verbatim gives that back, and its cost is the hazard this whole file exists to
-// avoid — an employer's name riding along inside the title.
+// The exception: a work history reduced to "Senior · Backend" per row loses what a reader
+// came for, and a title the dictionary cannot place ("Technical Lead | Team Lead") reduces
+// to nothing. The cost is an employer's name riding along inside the title. Scrubbing was
+// declined: separators like "|", " - ", "@" sit in ordinary titles far more often than
+// beside an employer, so cut-on-symbol mangles the common case, and cut-on-known-company
+// misses spellings like "embedded at League Inc.". So the title is published verbatim, the
+// candidate is told where they decide, and the exception stays to this ONE field.
 //
-// Measured on production (2026-09-18), across every account with a stored extract: 59 of
-// 9,748 roles carried their own `company` string somewhere in the title, and half of those
-// were "Freelance", "Independent" or "Self-Employed", which name no employer. Scoped to
-// the accounts actually IN the catalogue: 1 of 343. Scrubbing was considered and declined
-// — the separators that would drive it ("|", " - ", "@") sit in ordinary titles far more
-// often than beside an employer ("Senior Staff Engineer | Team Lead"), so a cut-on-symbol
-// rule mangles the common case to catch the rare one, and a cut-on-known-company rule
-// still misses the shapes that spell the employer differently ("embedded at League Inc.").
-// The decision is therefore: publish it, say so where a candidate decides, and keep the
-// exception to this ONE field.
+// This is stronger than "mask the fields that identify somebody", which is why this type
+// exists instead of reusing resumeextract.Anonymous: that replaces only the current role's
+// `company`, but an employer's name also sits in prose ("at <employer> I rebuilt..."), job
+// titles, project names and the institution line. Masking field by field would publish any
+// field the extraction contract later grows by default; a whitelist of dictionary-resolved
+// values fails the other way (something is missing until someone adds it).
 //
-// Everything else on the card keeps the original rule, and the reasoning below is why.
-//
-// That is a stronger rule than "mask the fields that identify somebody", and the
-// difference is the whole reason this type exists rather than reusing
-// resumeextract.Anonymous. Anonymous replaces the current role's `company` column and
-// leaves everything else alone, which is right for a page a candidate hands to one
-// person and wrong for a page a crawler reads: an employer's name is usually sitting
-// in the prose beside the column that was masked ("at <employer> I rebuilt the billing
-// pipeline"), in the job title ("Backend Engineer @ <employer>"), in a project's name,
-// or in the institution line.
-//
-// Masking those one by one would work until the extraction contract grows a field, at
-// which point the new one is published by default. A whitelist of dictionary-resolved
-// values fails the other way: something we should have shown is missing, and somebody
-// notices and adds it.
-//
-// What that costs, stated plainly: languages carry no dictionary this block can reach,
-// so they are absent. Education and certifications now DO have one — internal/dict/edulevel
-// (a candidate's degree text resolved to vocab.EducationLevelValues) and
-// internal/dict/certification (a curated alias table) — so an education entry's LEVEL and
-// YEAR and a resolved certification's canonical name are carried; the institution name,
-// field of study, and any certification issuer or date are not, for the same reason an
-// employer name is not: free text a dictionary cannot vouch for.
+// Cost: languages have no dictionary this block can reach, so they are absent. Education
+// carries only the degree LEVEL (internal/dict/edulevel) and year, and certifications only
+// canonical names (internal/dict/certification); institution, field of study, issuer and
+// certification dates are free text a dictionary cannot vouch for.
 
 // CandidateCard is one candidate as the public catalogue shows them.
 type CandidateCard struct {
 	// Seniority and Category describe the candidate as a whole: what their current (or
-	// most recent) role resolves to. This is the card's heading, built rather than
-	// quoted — see PrimaryTitle.
+	// most recent) role resolves to. The heading is built, not quoted; see PrimaryTitle.
 	Seniority string `json:"seniority,omitempty"`
 	Category  string `json:"category,omitempty"`
 
 	// TotalYears is the CV's own figure. A number cannot carry a name.
 	TotalYears int `json:"total_years,omitempty"`
 
-	// Skills are skilltag canonicals. A token the dictionary does not resolve emits
-	// nothing, which is exactly the whitelisting this card needs — see skilltag's
-	// "never guess" rule.
+	// Skills are skilltag canonicals; an unresolved token emits nothing.
 	Skills []string `json:"skills"`
 
-	// Roles is the work history with everything nameable removed: no employer, no
-	// location, no prose. What remains is the shape of a career, which is what a
-	// recruiter reads a history for anyway.
+	// Roles is the work history with everything nameable removed: no employer, location or prose.
 	Roles []CandidateRole `json:"roles"`
 
-	// Education carries only what internal/dict/edulevel resolves from each entry's
-	// degree text, plus its year — never the institution or field of study. An entry
-	// whose degree resolves to nothing is dropped rather than kept under an empty
-	// label: a work-history gap reads worse than absence, but a candidate's set of
-	// degrees carries no such expectation of completeness.
+	// Education carries only what internal/dict/edulevel resolves from each entry's degree
+	// text, plus its year. An entry whose degree resolves to nothing is dropped, not kept
+	// under an empty label (unlike roles, nobody expects a complete degree list).
 	Education []EducationEntry `json:"education,omitempty"`
 
-	// Certifications are internal/dict/certification canonicals. A name the dictionary
-	// does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+	// Certifications are internal/dict/certification canonicals; unresolved names emit nothing.
 	Certifications []string `json:"certifications,omitempty"`
 }
 
@@ -99,10 +70,9 @@ type EducationEntry struct {
 
 // CandidateRole is one position: what it was, when, and what it was built with.
 type CandidateRole struct {
-	// Title is the candidate's own words, verbatim — the card's ONE exception to the
-	// dictionary-only rule, argued in this file's header comment. Seniority and Category
-	// remain beside it as the fallback for a role whose title is absent, and as the
-	// values every filter reads: the raw string is for a human to read, never to match on.
+	// Title is the candidate's own words, the card's ONE exception to the dictionary-only
+	// rule (see the header). Seniority and Category are the fallback for an absent title
+	// and what every filter reads; the raw string is never matched on.
 	Title string `json:"title,omitempty"`
 
 	Seniority string `json:"seniority,omitempty"`
@@ -117,10 +87,9 @@ type CandidateRole struct {
 
 // ProjectCard projects a stored CV onto the public catalogue card.
 //
-// It reads the whole Structured and returns only what a dictionary could vouch for. A
-// role whose title resolves to nothing is KEPT, carrying its period and stack under
-// empty seniority and category: dropping it would make a work history look shorter than
-// it is, and a gap in a career reads worse than an unlabelled job.
+// It returns only what a dictionary could vouch for. A role whose title resolves to
+// nothing is KEPT with empty seniority and category: dropping it would shorten the work
+// history, and a gap reads worse than an unlabelled job.
 func ProjectCard(s resumeextract.Structured) CandidateCard {
 	primary := classify.Parse(PrimaryTitle(s))
 	return CandidateCard{
@@ -134,9 +103,8 @@ func ProjectCard(s resumeextract.Structured) CandidateCard {
 	}
 }
 
-// cardEducation resolves each entry's degree text via edulevel.ForDegree, dropping an
-// entry whose degree resolves to nothing rather than keeping it under an empty label —
-// see CandidateCard.Education's own comment for why that differs from cardRoles.
+// cardEducation resolves each degree via edulevel.ForDegree, dropping unresolved entries
+// (see CandidateCard.Education).
 func cardEducation(education []resumeextract.Education) []EducationEntry {
 	if len(education) == 0 {
 		return nil
@@ -154,11 +122,8 @@ func cardEducation(education []resumeextract.Education) []EducationEntry {
 
 func cardRoles(experience []resumeextract.Experience) []CandidateRole {
 	if len(experience) == 0 {
-		// Never nil: CatalogueMember.Card.Roles has no `omitempty`, so the wire contract
-		// promises an array. A nil slice marshals to JSON `null`, which every frontend
-		// reader of this field (card.roles.length, card.roles.slice(...)) crashes on —
-		// found in production when a member with zero experience reached the catalogue
-		// list page (TalentCard.svelte:29) and 500'd it.
+		// Never nil: Roles has no `omitempty`, and a nil slice marshals to JSON `null`,
+		// which the frontend readers (card.roles.length) crash on.
 		return []CandidateRole{}
 	}
 	roles := make([]CandidateRole, 0, len(experience))
@@ -170,9 +135,7 @@ func cardRoles(experience []resumeextract.Experience) []CandidateRole {
 			Category:  c.Category,
 			Start:     e.Start,
 			End:       e.End,
-			// Reported the way rankOf reads it: an unset end means ongoing under the
-			// extraction contract, so a role with neither flag nor end date is shown as
-			// current rather than as one that ended at an unknown time.
+			// Same as rankOf: an unset end means ongoing under the extraction contract.
 			Current: e.Current || e.End == nil,
 			Stack:   canonicalSkills(e.Stack),
 		})
@@ -181,60 +144,43 @@ func cardRoles(experience []resumeextract.Experience) []CandidateRole {
 }
 
 // canonicalSkills resolves free tokens to skilltag canonicals, dropping what it cannot
-// place. WithResumeAcronyms is on because these tokens ARE the candidate's own claims
-// about themselves — the tier exists for exactly this side of the match, unlike cvmatch,
-// which mines a vacancy's prose and must not read a résumé-only acronym into it.
+// place. WithResumeAcronyms is on because these tokens are the candidate's own claims;
+// cvmatch, which mines a vacancy's prose, must not read résumé-only acronyms.
 func canonicalSkills(tokens []string) []string {
-	// Never nil: CandidateCard.Skills and CandidateRole.Stack both promise an array on
-	// the wire (Skills has no `omitempty`; neither frontend reader checks for absence).
-	// A nil slice marshals to JSON `null` — see cardRoles for the production incident
-	// this caused. skilltag.Canonicalize returns nil whenever NOTHING resolves, which is
-	// not only the empty-input case: a candidate whose every listed token is unresolved
-	// (dropped by the dictionary) hits the same nil, so the coalesce covers the RESULT,
-	// not just a len(tokens) == 0 shortcut.
+	// Never nil (see cardRoles). Canonicalize returns nil whenever nothing resolves, not
+	// only for empty input, so the coalesce must cover the result.
 	if resolved := skilltag.Canonicalize(tokens, skilltag.WithResumeAcronyms()); resolved != nil {
 		return resolved
 	}
 	return []string{}
 }
 
-// CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus the
-// facts that live in columns rather than in the CV.
+// CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus
+// the facts that live in columns rather than in the CV.
 //
-// Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
-// extraction (users.resume_cities), not the free-text location inside the CV, which
-// carries values like "Austria, Klagenfurt 9020"; the timezone is an IANA zone;
-// specializations are drawn from vocab.CategoryValues by the profile form. None of the
-// three can carry a sentence.
+// Every field obeys the ProjectCard rule: cities are the NORMALISED extraction
+// (users.resume_cities), not the free-text CV location; the timezone is an IANA zone;
+// specializations come from vocab.CategoryValues.
 //
-// Specializations are NOT a duplicate of Card.Category, and the difference is the useful
-// part. Category is derived from what the candidate has DONE — the title of their most
-// recent role, through classify. Specializations are what they SAY they want, ticked from
-// the same closed vocabulary on their own profile. A backend engineer whose profile says
-// `ml_ai` is somebody a recruiter wants to find, and the two fields disagreeing is the
-// only way that shows.
+// Specializations are NOT a duplicate of Card.Category: Category is what the candidate has
+// DONE (latest title through classify), Specializations what they SAY they want. A backend
+// engineer who ticks `ml_ai` is findable only because the two can disagree.
 type CatalogueMember struct {
 	Handle string        `json:"handle"`
 	Card   CandidateCard `json:"card"`
 
-	// Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
-	// is what a recruiter asking "can we overlap for a call" actually means — there are
-	// dozens of zones per continent — so it is what the filter reads.
+	// Timezone is the IANA zone; TimezoneRegion is the part before the slash, which is what
+	// the filter reads (dozens of zones per continent).
 	Timezone       string `json:"timezone,omitempty"`
 	TimezoneRegion string `json:"timezone_region,omitempty"`
 
 	Cities          []string `json:"cities"`
 	Specializations []string `json:"specializations"`
 
-	// UpdatedAt is when the structured extract was written, which is the freshest thing
-	// the catalogue knows about a member. It orders the list.
+	// UpdatedAt is when the structured extract was written; it orders the list.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	// HasPhoto says only whether GET /talent/{handle}/photo has something to serve —
-	// never the object key, and never the image itself. It survives the card's own
-	// dictionary-only rule because a boolean carries no name: the alternative was every
-	// list card firing that request and reading the 404 GetPhoto already gives a member
-	// with none, which is correct but a wasted round trip for what is, in practice, most
-	// of the catalogue.
+	// HasPhoto says only whether GET /talent/{handle}/photo has something to serve, never
+	// the object key. A boolean carries no name, and it saves list cards a wasted 404 request.
 	HasPhoto bool `json:"has_photo"`
 }

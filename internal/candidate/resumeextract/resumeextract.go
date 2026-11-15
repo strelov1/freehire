@@ -1,11 +1,8 @@
 // Package resumeextract derives a typed, sanitized structured résumé from an uploaded
-// CV via the LLM, for the read-only profile view and as pre-normalized fit input (see
-// the resume-structured-profile change). It is a self-contained, typed prompt unit —
-// the sibling of internal/candidate/matchanalysis and internal/ai/enrich — kept free of storage concerns so
-// the résumé Store stays free of LLM coupling. Sanitize (see structured.go) is both the
-// persist guard and the prompt-injection guard for the untrusted CV text: every value is
-// bounded and coerced to the contract before it is persisted or served, so the model can
-// never introduce an out-of-bounds value.
+// CV via the LLM, for the profile view and as pre-normalized fit input. It is free of
+// storage concerns so the résumé Store stays free of LLM coupling. Sanitize (structured.go)
+// is both the persist guard and the prompt-injection guard for the untrusted CV text:
+// every value is bounded and coerced to the contract before it is persisted or served.
 package resumeextract
 
 import (
@@ -19,9 +16,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
-// ErrDisabled is returned by Extract when the LLM is not configured (nil client), so a
-// best-effort caller can skip persisting a structured résumé without treating it as a
-// failure.
+// ErrDisabled is returned by Extract when the LLM is not configured, so a best-effort
+// caller can skip persisting without treating it as a failure.
 var ErrDisabled = errors.New("resumeextract: llm not configured")
 
 // Extractor derives a structured CV, including contacts, from the original text.
@@ -55,19 +51,17 @@ func (e *Extractor) Enabled() bool { return e != nil && e.client != nil }
 func (e *Extractor) ModelID() string { return e.client.ModelID() }
 
 const (
-	// retryMinBudget is the least time a second model call is worth starting with. The caller's
-	// deadline was sized for ONE call (healthy ones take 45-83s), so after a slow first call
-	// there may be too little left for another.
+	// retryMinBudget is the least time a second model call is worth starting with; the
+	// caller's deadline was sized for ONE call.
 	retryMinBudget = 45 * time.Second
-	// retryReserve is held back from the caller's deadline so the retry can never run it down
-	// to zero: the caller still has to persist the answer, and a valid first extraction lost to
-	// an expired context is worse than the date problem the retry was meant to fix.
+	// retryReserve is held back from the caller's deadline so the caller can still persist
+	// the answer; losing a valid first extraction is worse than the date problem.
 	retryReserve = 10 * time.Second
 )
 
-// retryContext bounds a second model call so it cannot consume the time the caller needs to
-// store the result. It reports false when too little time is left to be worth trying; a
-// context without a deadline is passed through.
+// retryContext bounds a second model call so it leaves the caller time to store the
+// result. It reports false when too little time is left; a context without a deadline
+// passes through.
 func retryContext(ctx context.Context) (context.Context, context.CancelFunc, bool) {
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -99,39 +93,29 @@ func (e *Extractor) generate(ctx context.Context, modelText string, schema llmsc
 	return s, nil
 }
 
-// Extract sends the (bounded) CV text to the model in JSON mode and returns the parsed,
-// sanitized structure. Returns ErrDisabled when unconfigured; a transport or parse
-// failure is returned as an error (the caller degrades best-effort).
+// Extract sends the bounded CV text to the model in JSON mode and returns the sanitized
+// structure. It returns ErrDisabled when unconfigured; a transport or parse failure is
+// returned as an error.
 func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, error) {
 	if !e.Enabled() {
 		return Structured{}, ErrDisabled
 	}
-	// Bound the original CV once, before extraction and date validation, so both use
-	// exactly the same evidence. Preserve contact details and employment dates verbatim.
+	// Bound once, before extraction and date validation, so both see the same evidence.
 	cvText = llm.TrimTruncateRunes(cvText, maxCVRunes)
 	schema, err := requestSchema()
 	if err != nil {
 		return Structured{}, err
 	}
-	// No deliberation: this is transcription, not judgement. The model is being asked to
-	// restate what the CV already says in a fixed shape, and measurement says it recovers
-	// exactly as much either way — the same employments, titles, dates, skills and
-	// education, with nothing invented — while reasoning costs half the wall clock and
-	// answers unpredictably enough to cross this call's timeout. See llm.ReasoningEffort
-	// for the numbers and for which providers honour it.
-	//
-	// That measurement was taken on one model. It does not make the dates safe on another:
-	// glm-4.6 shifted every role's start year onto its neighbour with this very call, which
-	// is why the dates are checked against the text below instead of trusted.
+	// No reasoning: this is transcription, and reasoning recovers no more while costing
+	// half the wall clock and risking the call's timeout (see llm.ReasoningEffort). That
+	// does not make dates trustworthy on every model, so they are checked below.
 	s, err := e.generate(ctx, cvText, schema)
 	if err != nil {
 		return Structured{}, err
 	}
-	// A date the CV does not support is a claim about the candidate's history that nothing
-	// downstream can re-check. Ask once more before settling for it; a second call costs
-	// little next to a CV that reads wrong to the person it belongs to. The retry is not
-	// trusted either — it replaces the first answer only if it is better, and a certain error outranks any number
-	// of doubtful ones: trading three doubtful months for one invented year would cost a date.
+	// A date the CV does not support cannot be re-checked downstream, so ask once more.
+	// The retry replaces the first answer only if it is better; a certain error outranks
+	// any number of doubtful ones.
 	if hard, soft := dateProblems(s, cvText); hard+soft > 0 {
 		if retryCtx, cancel, ok := retryContext(ctx); ok {
 			if again, err := e.generate(retryCtx, cvText, schema); err == nil {
@@ -142,21 +126,18 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 			cancel()
 		}
 	}
-	// Whatever is still certainly wrong is removed rather than stored: an undated role is
-	// incomplete, a wrongly dated one is false.
+	// Whatever is still certainly wrong is removed rather than stored.
 	dropUnsupportedYears(&s, cvText)
 	s.Sanitize()
 	return s, nil
 }
 
-// maxCVRunes bounds the CV text sent to the model — a long CV covers its substance well
-// within this, and the cap keeps the call responsive (mirrors matchanalysis's input bounds).
+// maxCVRunes bounds the CV text sent to the model and keeps the call responsive.
 const maxCVRunes = 12000
 
 // systemPrompt pairs with the request schema (schema.go): the schema fixes the shape,
-// this fixes the meaning. Every field is required by the schema, so "I cannot fill
-// this" is expressed as null — never as an absent key, which the schema forbids and a
-// model with no legal way to decline answers by inventing.
+// this the meaning. Every field is required, so "cannot fill" must be null, not an absent
+// key; a model with no legal way to decline invents.
 const systemPrompt = `You extract a structured résumé from raw CV text and return ONLY a JSON object.
 Rules:
 - Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — return null for it.

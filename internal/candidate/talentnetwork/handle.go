@@ -9,35 +9,25 @@ import (
 	"github.com/strelov1/freehire/internal/dict/classify"
 )
 
-// The catalogue handle: the one public identifier of a member's card, at
-// /talent/<handle>. Minted the first time a candidate joins and never recomputed —
-// a URL that moves is a URL somebody has already shared.
+// The catalogue handle: the one public identifier of a member's card, at /talent/<handle>.
+// Minted when a candidate first joins and never recomputed, since a moved URL breaks shares.
 //
-// It is deliberately NOT the account's username. internal/identity/username derives
-// that from the email's local part, so for most accounts it is the person's own name,
-// and the hosted mailbox adopts the same string as a live address. Either one in the
-// URL of a page that exists to withhold the name would undo the feature in the
-// address bar.
-//
-// The shape is validated here rather than by username.Valid for the same reason. That
-// function owns the mailbox handle's rules; borrowing it would tie this URL's shape to
-// a vocabulary that has no reason to move in step with it, and the drift would be
-// silent in both directions.
+// It is deliberately NOT the account's username (internal/identity/username), which is
+// derived from the email local part, usually the person's name, and doubles as a mailbox
+// address; either in the URL would defeat a page that withholds the name. For the same
+// reason the shape is validated here, not by username.Valid.
 
 const (
-	// neutralBase is the handle base for a title the category dictionary does not
-	// resolve. classify never guesses, and a candidate whose title it does not know is
-	// not a candidate who should go without a URL.
+	// neutralBase is the handle base for a title the category dictionary does not resolve;
+	// such a candidate still gets a URL.
 	neutralBase = "candidate"
 
-	// suffixLen is how many characters carry the uniqueness. Four over a 32-character
-	// alphabet is ~1M values per base — a collision is possible and is simply re-minted
-	// against the store, the same way internal/identity/accounts allocates a username.
+	// suffixLen is how many characters carry the uniqueness (~1M values per base); a
+	// collision is re-minted against the store, like internal/identity/accounts usernames.
 	suffixLen = 4
 
-	// maxHandleLen bounds what the route will look up. The longest category is well
-	// under this; the limit exists so a crafted path is rejected before it reaches a
-	// query, not to constrain anything we mint.
+	// maxHandleLen bounds what the route will look up, so a crafted path is rejected
+	// before it reaches a query.
 	maxHandleLen = 40
 )
 
@@ -46,19 +36,15 @@ const (
 // '0' and '1' are left out — a handle gets read aloud and typed from a screenshot.
 const suffixAlphabet = "abcdefghijkmnpqrstuvwxyz23456789"
 
-// handlePattern is the shape ValidHandle accepts: lowercase alphanumerics in
-// hyphen-separated groups, at least two of them. The second group is the suffix, so a
-// bare category can never be mistaken for somebody's handle.
+// handlePattern is the shape ValidHandle accepts: lowercase alphanumerics in at least two
+// hyphen-separated groups, so a bare category is never taken for a handle.
 var handlePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)+$`)
 
-// HandleBase returns the handle's readable part for a candidate whose most recent role
-// carries the given title: the category the title resolves to, with the vocabulary's
-// underscores written as the hyphens a URL wants, or the neutral base when nothing
-// resolves.
+// HandleBase returns the handle's readable part for a most-recent role title: its
+// category with underscores as hyphens, or the neutral base when nothing resolves.
 //
-// The SENIORITY is deliberately absent. A handle is frozen at mint, and the grade is
-// the part of a title most likely to change — baking it in would guarantee that every
-// member who gets promoted carries a URL contradicting their own card.
+// Seniority is deliberately absent: the handle is frozen at mint and the grade is what
+// changes, so a promoted member would carry a URL contradicting their card.
 func HandleBase(title string) string {
 	category := classify.Parse(title).Category
 	if category == "" {

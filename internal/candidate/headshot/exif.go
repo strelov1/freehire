@@ -9,9 +9,8 @@ import (
 // for "upright", so a caller can apply it unconditionally.
 const orientationUnset = 1
 
-// EXIF orientation values this package acts on. The pure mirrors (2 and 4) are read but
-// deliberately not applied; 5 and 7 are a mirror plus a quarter turn, and only the turn is
-// applied — see orient in normalize.go.
+// EXIF orientation values this package acts on. The pure mirrors (2 and 4) are read but not
+// applied; 5 and 7 are a mirror plus a quarter turn and only the turn is applied (see orient).
 const (
 	orientationRotate180  = 3
 	orientationRotate90   = 6 // 90° clockwise restores upright
@@ -20,17 +19,14 @@ const (
 	orientationTransverse = 7 // mirrored; its turn matches orientationRotate90
 )
 
-// exifHeader is the APP1 payload prefix that marks the segment as EXIF rather than,
-// say, XMP — which also lives in APP1 and must not be parsed as TIFF.
+// exifHeader is the APP1 payload prefix that marks the segment as EXIF, not XMP (also in APP1,
+// and not TIFF).
 var exifHeader = []byte("Exif\x00\x00")
 
-// readOrientation returns the EXIF orientation a JPEG declares (1–8), or
-// orientationUnset when there is none. The input is an untrusted upload, so every read
-// is bounds-checked and any malformed structure yields orientationUnset rather than an
-// error: an unreadable orientation is not a reason to refuse an otherwise valid image.
-//
-// Only JPEG is handled. PNG has no orientation concept, and the WebP containers a phone
-// produces carry the rotation baked into the pixels.
+// readOrientation returns the EXIF orientation a JPEG declares (1-8), or orientationUnset when
+// there is none. The input is an untrusted upload: every read is bounds-checked and malformed
+// structure yields orientationUnset rather than an error. Only JPEG is handled; PNG has no
+// orientation and phone WebP bakes the rotation into the pixels.
 func readOrientation(data []byte) int {
 	seg := exifSegment(data)
 	if seg == nil {
@@ -95,8 +91,7 @@ func orientationFromTIFF(tiff []byte) int {
 	if ifd+2 > len(tiff) {
 		return orientationUnset
 	}
-	// The declared entry count is untrusted: clamp it to what the buffer can actually
-	// hold rather than believing a header that claims thousands of entries.
+	// The declared entry count is untrusted: clamp it to what the buffer can hold.
 	const entrySize = 12
 	count := int(order.Uint16(tiff[ifd:]))
 	if max := (len(tiff) - ifd - 2) / entrySize; count > max {

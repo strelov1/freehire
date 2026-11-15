@@ -10,8 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// The prompts are functions rather than constants so they are testable on their own, the same
-// shape enrich and atscheck keep.
+// The prompts are functions rather than constants so they are testable on their own.
 
 func selectSystemPrompt() string {
 	var b strings.Builder
@@ -128,10 +127,8 @@ func auditSystemPrompt(band Band, bounds Bounds) string {
 	return b.String()
 }
 
-// auditUserPrompt carries BOTH the letter and the achievements it is meant to be checked
-// against. Sending the letter alone would ask the skeptic to verify support against a list it
-// was never given, which makes the one cut it must always make unenforceable — the stage
-// would still shorten the letter and silently pass every invented claim.
+// auditUserPrompt carries BOTH the letter and the achievements it is checked against. The
+// letter alone would leave the skeptic unable to cut invented claims while still shortening it.
 func auditUserPrompt(drafted Letter, atoms []experience.Atom) (string, error) {
 	blob, err := json.Marshal(atomsForPrompt(atoms))
 	if err != nil {
@@ -175,8 +172,7 @@ func requirementList(reqs []matchanalysis.Requirement) string {
 }
 
 // promptAtom is the shape an atom takes in a prompt. Provenance is deliberately absent: only
-// publishable atoms ever reach here, so naming the label would invite the model to reason
-// about a distinction that has already been decided.
+// publishable atoms reach here, and naming the label would invite the model to reason about it.
 type promptAtom struct {
 	ID      string   `json:"id"`
 	Claim   string   `json:"claim"`

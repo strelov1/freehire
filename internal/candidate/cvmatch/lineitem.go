@@ -4,10 +4,9 @@ package cvmatch
 // internal/candidate/atscheck: the two scorers share no code, and coupling them so one could not be
 // re-weighted without the other would buy nothing.
 //
-// On the wire they are the SAME shape, and that is also deliberate — the panel renders a
-// readability row and a job-match row through one component, so the contract generator is
-// pointed at the file that excludes these two (see cmd/gen-contracts) and the generated
-// LineItem is shared. If these ever diverge in shape, that exclusion has to go.
+// On the wire they are deliberately the SAME shape: the panel renders both through one
+// component, so the contract generator excludes these two (see cmd/gen-contracts) and the
+// generated LineItem is shared. If the shapes diverge, that exclusion has to go.
 
 // Status is a check outcome inside a category.
 type Status string

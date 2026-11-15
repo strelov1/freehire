@@ -8,8 +8,7 @@ import "sort"
 const RoleTopN = 20
 
 // TopRoleSkills ranks a skills facet distribution by demand (count desc, slug asc) and
-// returns the top n slugs — the role's most in-demand skills, which is the roleTopSkills
-// input to Score.
+// returns the top n slugs, the roleTopSkills input to Score.
 func TopRoleSkills(facet map[string]int64, n int) []string {
 	type skillCount struct {
 		slug  string

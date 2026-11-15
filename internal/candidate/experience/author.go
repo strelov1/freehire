@@ -6,10 +6,8 @@ package experience
 //
 // This is the wall the CV evidence gate stands on. Only a claim the CANDIDATE asserted may be
 // written into their CV (Provenance.Publishable); a model's own reading is banked, searchable,
-// and refused there. Until this type existed the rule lived in three functions in the HTTP
-// layer, so any new writer — a cmd worker, the CLI, a fourth assistant tool, a mobile endpoint
-// — could hand the store ProvenanceManual on model-authored text and have it come back
-// CV-publishable. The store now derives the label and ignores whatever is in the struct.
+// and refused there. The store derives the label from Author and ignores any label a writer
+// puts in the struct.
 type Author string
 
 const (

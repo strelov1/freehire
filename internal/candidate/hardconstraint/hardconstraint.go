@@ -1,22 +1,16 @@
-// Package hardconstraint deterministically checks a job's structured requirements
-// against a caller's structured résumé across six categories and reports typed
-// blockers. It is pure (no I/O, no LLM), the same dict-only discipline as
-// internal/candidate/jobmatch and internal/dict/classify: a category is judged only when BOTH
-// sides carry data, so a missing field is skipped, never a false blocker.
+// Package hardconstraint deterministically checks a job's structured requirements against a
+// caller's structured CV across six categories and reports typed blockers. It is pure (no I/O,
+// no LLM): a category is judged only when BOTH sides carry data, so a missing field is skipped,
+// never a false blocker.
 //
-// The blockers are advisory at every call site that reads them for a human to act on.
-// They surface on the profile-match bar, cap the server-owned overall_score in the LLM
-// fit analysis (a ceiling the model cannot exceed), and feed anti-hallucination
-// guardrails into the tailor — but they never hide or downrank a job at any of those
-// sites.
+// Blockers are advisory wherever a human reads them: they show on the profile-match bar, cap
+// the server-owned overall_score in the LLM fit analysis, and feed the tailor's
+// anti-hallucination guardrails, but never hide or downrank a job.
 //
-// One caller reads them differently: internal/api/handler's auto-apply enqueue gate
-// (openspec/changes/add-auto-apply-eligibility-gate) treats an unmet work-authorization
-// or location-and-work-mode entry as a reason to refuse an UNATTENDED submission outright
-// — there is no human in that loop to see an advisory warning and decide for themselves.
-// This is a property of that caller's stakes, not a second meaning for Evaluate's output:
-// the package itself, its "never emit a false blocker" discipline, and every other
-// caller's advisory-only treatment are unchanged.
+// One caller is stricter: internal/api/handler's auto-apply enqueue gate treats an unmet
+// work-authorization or location-and-work-mode entry as a reason to refuse an UNATTENDED
+// submission, since no human sees the warning. That is the caller's stakes, not a second
+// meaning of Evaluate's output.
 package hardconstraint
 
 import (
@@ -26,8 +20,8 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint/credentials"
 )
 
-// tier pins each category's severity and its score-cap ceiling. A lower cap is a
-// harder blocker; the caller takes the minimum cap over the unmet blockers.
+// tier pins each category's severity and score-cap ceiling. A lower cap is a harder blocker;
+// the caller takes the minimum cap over the unmet blockers.
 var tier = map[BlockerCategory]struct {
 	severity BlockerSeverity
 	scoreCap int
@@ -40,9 +34,9 @@ var tier = map[BlockerCategory]struct {
 	CategoryLocationWorkMode: {SeveritySoft, 75},
 }
 
-// JobRequirements is the job side, read straight from the enrichment columns
-// (plus required_certifications from the enrichment jsonb). A nil/zero/empty field
-// means "no such requirement" and its category is skipped.
+// JobRequirements is the job side, read from the enrichment columns (plus
+// required_certifications from the enrichment jsonb). A nil/zero/empty field means "no such
+// requirement" and its category is skipped.
 type JobRequirements struct {
 	ExperienceYearsMin     *int
 	EducationLevel         string   // "", none, bachelor, master, phd
@@ -54,8 +48,8 @@ type JobRequirements struct {
 	RequiredCertifications []string // canonical credential slugs
 }
 
-// CVEvidence is the résumé side, assembled from the structured résumé and profile.
-// A zero/empty field means "no evidence" and its category is skipped.
+// CVEvidence is the CV side, assembled from the structured CV and profile. A zero/empty field
+// means "no evidence" and its category is skipped.
 type CVEvidence struct {
 	TotalYears     int      // <=0 treated as unknown
 	Degrees        []string // free-text degree names
@@ -133,19 +127,16 @@ func appendCertifications(out []Blocker, job JobRequirements, cv CVEvidence) []B
 		return out
 	}
 	held := canonicalSet(cv.Certifications)
-	// Both-sides-present: with no recognized certification evidence on the résumé we
-	// cannot tell "holds none" from "extraction missed it" (the field is new and
-	// often empty), so we skip rather than raise a false blocker. A résumé that DOES
-	// list certifications, just not the required one, is real evidence and blocks.
+	// Both sides present: with no recognized certification on the CV we cannot tell "holds
+	// none" from "extraction missed it" (the field is often empty), so we skip rather than raise
+	// a false blocker. A CV that lists certifications, just not the required one, blocks.
 	if len(held) == 0 {
 		return out
 	}
 	for _, req := range job.RequiredCertifications {
 		met := held[req]
-		// The label, not the slug: Reason and Action are rendered verbatim on the job
-		// page and go verbatim into all three stages of the analysis prompt, so the slug
-		// put "Requires the gcp-professional-cloud-architect certification." in front of
-		// a candidate.
+		// The label, not the slug: Reason and Action render verbatim on the job page and in the
+		// analysis prompt.
 		name := credentials.Label(req)
 		reason := fmt.Sprintf("Requires the %s certification.", name)
 		action := fmt.Sprintf("Do not claim the %s certification unless you currently hold it.", name)
@@ -155,9 +146,8 @@ func appendCertifications(out []Blocker, job JobRequirements, cv CVEvidence) []B
 }
 
 func appendLanguage(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker {
-	// Info-only: a résumé language list rarely carries a proficiency level, so we
-	// never block. We can only affirm the language is present; absence is not
-	// evidence of its lack, so that case is skipped.
+	// Info-only: a CV language list rarely carries a proficiency level, so we never block. We
+	// can only affirm the language is present; absence is skipped.
 	if job.EnglishLevel == "" || !mentionsEnglish(cv.Languages) {
 		return out
 	}
@@ -180,9 +170,8 @@ func appendWorkAuth(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker
 	return append(out, blocker(CategoryWorkAuth, false, reason, action))
 }
 
-// requiresOnSitePresence reports whether the job's work mode needs the candidate to
-// physically be somewhere — true for both "onsite" and "hybrid" (vocab.WorkModeValues'
-// third and second values). A fully "remote" job needs neither check below.
+// requiresOnSitePresence reports whether the work mode needs the candidate physically
+// somewhere: "onsite" and "hybrid". A fully "remote" job needs neither check below.
 func requiresOnSitePresence(workMode string) bool {
 	return workMode == "onsite" || workMode == "hybrid"
 }
@@ -221,14 +210,10 @@ func bestDegreeRank(degrees []string) (int, bool) {
 	return best, found
 }
 
-// canonicalSet resolves the résumé's certification lines to canonical slugs.
-//
-// Exact first, then whole-word containment — the shape degreeMatch (degrees.go) already
-// uses, and for the same reason. Canonical matches the WHOLE string, and a résumé entry
-// almost never is one: "CompTIA Security+ (2022)", "Certified Kubernetes Administrator
-// (CKA)" and "AWS Certified Solutions Architect – Associate" all returned ("", false).
-// With one other entry resolving, the len(held)==0 skip did not fire, and the candidate
-// got a hard blocker and a 60 score-cap for a certification they hold.
+// canonicalSet resolves the CV's certification lines to canonical slugs: exact first, then
+// whole-word containment, as degreeMatch does. Canonical matches the WHOLE string, and a CV
+// entry almost never is one ("CompTIA Security+ (2022)"); without the scan, one other resolving
+// entry defeats the len(held)==0 skip and the candidate gets a false hard blocker.
 func canonicalSet(certs []string) map[string]bool {
 	held := make(map[string]bool, len(certs))
 	for _, c := range certs {

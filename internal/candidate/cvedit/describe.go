@@ -7,14 +7,12 @@ import (
 
 // Describe renders a batch as the line the history feed shows.
 //
-// It is generated from the operations, never supplied by the model. The description is
-// rendered in the workspace as the application's own words, and model-authored text
-// presented that way is exactly what the assistant's untrusted-content boundary exists to
-// keep out. An agent's own reason for an edit travels separately, as a note, attributed to
-// it.
+// It is generated from the operations, never supplied by the model: it renders as the
+// application's own words, and model-authored text there would cross the assistant's
+// untrusted-content boundary. An agent's reason travels separately, as an attributed note.
 //
-// The document is passed in so an address can be named the way the candidate sees it:
-// `experience[2].bullets[1]` is "a bullet in Senior Engineer, Acme", not a path.
+// The document is passed in so an address reads as the candidate sees it
+// (`experience[2].bullets[1]` is "a bullet in Senior Engineer, Acme").
 func Describe(ops []Op, before, after State) string {
 	switch len(ops) {
 	case 0:
@@ -23,7 +21,6 @@ func Describe(ops []Op, before, after State) string {
 		return describeOne(ops[0], before, after)
 	}
 
-	// Several operations in one place read better as a count of that place than as a list.
 	if where, ok := commonPlace(ops, after); ok {
 		return fmt.Sprintf("Edited %d things in %s", len(ops), where)
 	}
@@ -70,13 +67,12 @@ func describeOne(op Op, before, after State) string {
 		return fmt.Sprintf("%s a language", verb)
 	}
 
-	// Anything the list above has not been taught to name yet still reads as a sentence
-	// rather than as a path, and adding a field to the document cannot produce a blank line.
+	// Fallback so a new document field never produces a blank line.
 	return fmt.Sprintf("%s %s", verb, humanise(shape))
 }
 
-// entryName names an experience entry the way it appears on the page. It reads the state
-// AFTER the change where it can, so a removed entry is still named from the state before.
+// entryName names an experience entry as it appears on the page. It reads the state after the
+// change, falling back to before so a removed entry is still named.
 func entryName(p Path, before, after State) string {
 	steps := p.steps()
 	if len(steps) < 2 || !steps[1].isIndex() {

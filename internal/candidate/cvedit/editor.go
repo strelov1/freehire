@@ -131,20 +131,18 @@ type Editor struct {
 	refuseListCap bool
 }
 
-// NewEditor builds the editor over its repository and the gate an agent's claims answer
-// to. The gate is supplied here and nowhere else, so an editor that admits an uncited
-// agent claim cannot be produced by assembling things in the wrong order.
+// NewEditor builds the editor over its repository and the gate an agent's claims answer to.
+// The gate is supplied only here, so an editor that admits an uncited agent claim cannot be
+// assembled by accident.
 //
-// A nil gate means CANDIDATE-authored editing only: requireEvidence exempts the candidate,
-// who is the source the bank exists to record. It is what the candidate-only test editors
-// pass, and it is not a configuration an agent write path may be built on.
+// A nil gate means CANDIDATE-authored editing only (requireEvidence exempts the candidate);
+// an agent write path must not be built on it.
 func NewEditor(repo Repository, gate EvidenceGate) *Editor {
 	return &Editor{repo: repo, policy: DefaultPolicy(), gate: gate, now: time.Now, refuseListCap: true}
 }
 
-// SetRefuseListCap turns the over-cap refuse on or off. When off, Sanitize may drop
-// trailing bullets again — the pre-refuse behaviour. Returns the editor so callers can
-// chain it at construction (e.g. NewEditor(...).SetRefuseListCap(cfg.On)).
+// SetRefuseListCap turns the over-cap refuse on or off; when off, Sanitize may silently drop
+// trailing bullets. Returns the editor for chaining at construction.
 func (e *Editor) SetRefuseListCap(on bool) *Editor {
 	e.refuseListCap = on
 	return e
@@ -157,10 +155,8 @@ func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Ch
 		meta cv.Meta
 		rev  Revision
 	)
-	// Both checks run BEFORE the transaction opens. The policy needs nothing but the batch,
-	// and the gate reads the experience bank on its own connection — asking it while holding
-	// the CV row lock borrows a second connection from the pool for the length of a commit,
-	// which is the shape a pool-exhaustion deadlock takes under load.
+	// Both checks run BEFORE the transaction opens: the gate reads the experience bank on its
+	// own connection, and doing that under the CV row lock risks a pool-exhaustion deadlock.
 	if err := e.authorize(ctx, userID, ch); err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
@@ -175,13 +171,10 @@ func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Ch
 // authorize answers "may this actor make this change at all" — a question about the batch, not
 // about the document, so it is settled before anything is locked.
 //
-// The ADDRESS is checked here too, and not left to the entry points. Path is a bare string,
-// so an Op can carry one ParsePath would refuse, and everything downstream trusts it: the
-// policy asks pathTouches, which answers "no" in both directions for an address it cannot
-// read (an empty Path addresses the whole State and DefaultPolicy admits an agent to it),
-// and Apply resolves a negative index by panicking. Three callers ran the loop themselves
-// and every one of them was one forgotten line away from that; the same argument
-// CommitDocument makes when it refuses ActorAgent rather than trusting every future caller.
+// The ADDRESS is checked here too, not left to entry points: Path is a bare string, and
+// downstream trusts it. pathTouches answers "no" both ways for an unreadable address (an empty
+// Path addresses the whole State and DefaultPolicy admits an agent to it), and Apply panics on
+// a negative index.
 func (e *Editor) authorize(ctx context.Context, userID int64, ch Change) error {
 	if len(ch.Ops) == 0 {
 		return fmt.Errorf("%w: a change with no operations", ErrInvalidOp)
@@ -208,49 +201,36 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 		return cv.Meta{}, Revision{}, err
 	}
 
-	// Sanitize after applying and before storing, exactly as the whole-document path always
-	// has: a change states what was asked for, and the sanitizer decides what is kept.
+	// Sanitize after applying and before storing, as the whole-document path does.
 	after := applied
 	after.Sanitize()
 
-	// Sanitize used to silently keep the first MaxBullets and drop the rest. An
-	// agent insert into a full list then looked like a successful "add" while
-	// original trailing bullets vanished. Refuse that class of loss before Save
-	// unless an operator turned the guard off (SetRefuseListCap(false)).
+	// Sanitize keeps the first MaxBullets and drops the rest, so an agent insert into a full
+	// list would look like a successful "add" while trailing bullets vanished. Refuse it.
 	if e.refuseListCap {
 		if err := refuseIfSanitizeDropsContent(applied); err != nil {
 			return cv.Meta{}, Revision{}, err
 		}
 	}
 
-	// Agent-only: a candidate typing their own project name through the CLI-edit endpoint is
-	// never refused by this — the misfile this guards against is the model's, not theirs.
+	// Agent-only: the misfile this guards against is the model's, not the candidate's.
 	if ch.Actor == ActorAgent {
 		if err := refuseIfProjectLooksLikeJob(ch.Ops); err != nil {
 			return cv.Meta{}, Revision{}, err
 		}
 	}
 
-	// Which inverse to store depends on whether the sanitizer moved anything.
-	//
-	// Apply's inverse is the precise one: it reverses each operation in kind, so undoing a
-	// reorder is one `move` back rather than a rewrite of every entry it touched. But it was
-	// computed against the pre-sanitized result, and the sanitizer drops empty entries and
-	// whitespace-only bullets — every index after such a drop shifts, and the inverse then
-	// removes the wrong element.
-	//
-	// So: keep Apply's inverse when the sanitizer changed nothing (the overwhelming majority,
-	// and the only case where a `move` survives at all — the differ has no move in its
-	// vocabulary). Fall back to the diff when it did, where precision is already lost but
-	// correctness is not.
+	// Apply's inverse is the precise one (undoing a reorder is one `move`), but it was computed
+	// against the pre-sanitized result: the sanitizer drops empty entries and blank bullets,
+	// shifting later indices, so that inverse would remove the wrong element. Keep it only when
+	// the sanitizer changed nothing (the differ has no move); otherwise fall back to the diff.
 	inverse := applyInverse
 	if !Equal(applied, after) {
 		inverse = Diff(after, before)
 	}
 
-	// An operation that changes nothing files nothing. Picking the template already in use
-	// is a click the gallery allows, and "switched to the Sidebar template" under a CV that
-	// was already on Sidebar is a lie the feed would keep forever.
+	// A no-op files nothing: re-picking the current template must not leave a false
+	// "switched template" entry in the feed.
 	if Equal(before, after) {
 		return metaOf(cvID, before), Revision{}, nil
 	}
@@ -259,11 +239,9 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
-	// Work the candidate directed: their own hand through the editor or the template picker, or
-	// the agent they are talking to. An import (header heal, reseed) and the system's seed are not:
-	// the flag exists so the automatic stale-vs-upload refresh can leave a base the candidate has
-	// worked on alone, and an agent edit on a base is candidate-directed work like any other.
-	// (On a tailored copy the flag is set too and never read.)
+	// Only candidate-directed work counts (editor, template picker, their agent), not imports or
+	// the system seed: the flag lets the automatic stale-vs-upload refresh leave a worked-on
+	// base alone. It is also set on tailored copies, where it is never read.
 	if handEdit(ch) {
 		if err := tx.MarkHandEdited(ctx); err != nil {
 			return cv.Meta{}, Revision{}, err
@@ -303,18 +281,9 @@ func (e *Editor) record(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 		return Revision{}, err
 	}
 	if ok && e.continues(newest, ch) {
-		// The operations are replaced, not accumulated: each save carries the place's
-		// current value, so the newest batch already describes the whole burst. Appending
-		// would also make the revision stop matching the next save's shape, which is how
-		// this was wrong the first time.
-		//
-		// The inverse is deliberately not touched: it still leads back to the state before
-		// the first of the coalesced edits, which is what undo has to mean for typed text.
-		//
-		// The note IS replaced along with the title: it is the stated reason for the newest
-		// batch's content, and a coalesced save already carries that content whole rather than
-		// accumulating it — restating anything less would attribute the current text to a
-		// reason that no longer describes it.
+		// Operations are replaced, not accumulated: each save carries the place's current value.
+		// The inverse is left alone, so undo still leads back to before the first coalesced edit.
+		// The note is replaced with the title, so the current text keeps its own stated reason.
 		return tx.Amend(ctx, newest.ID, ch.Ops, title, ch.Note)
 	}
 
@@ -337,15 +306,12 @@ func (e *Editor) continues(newest Revision, ch Change) bool {
 	if newest.Actor != ch.Actor || newest.Origin != ch.Origin || newest.Reverted() {
 		return false
 	}
-	// A second agent turn is a second run. Folding its first edit into the previous turn's
-	// revision would file it under that run's batch, and "undo the run" would miss it.
+	// A second agent turn is a second run; folding it in would hide it from "undo the run".
 	if newest.BatchID != ch.BatchID {
 		return false
 	}
-	// Only `set` may be folded. Replacing the operations is right for it — each save carries
-	// the place's current value — and wrong for the rest: two inserts at the same position are
-	// two additions, and keeping only the second leaves the first recorded nowhere and
-	// undoable by nothing.
+	// Only `set` may be folded: replacing operations is wrong for the rest (two inserts at one
+	// position are two additions, and keeping only the second loses the first).
 	if !allSets(newest.Ops) || !allSets(ch.Ops) {
 		return false
 	}
@@ -379,21 +345,16 @@ func samePaths(a, b []Op) bool {
 	return true
 }
 
-// CommitDocument records a whole-document save. The differ derives the operations, so from
-// here on a save is indistinguishable from an agent's batch — whole-document PUT is an input
-// format, not a second way to write the document.
+// CommitDocument records a whole-document save. The differ derives the operations, so a save
+// is indistinguishable from an agent's batch.
 //
-// A save that changes nothing commits nothing and returns the CV as it stands: autosave
-// fires on a timer, and a revision per timer tick would bury the feed.
+// A save that changes nothing commits nothing and returns the CV as it stands, so autosave
+// ticks do not bury the feed.
 //
-// Unlike Commit, authorize() runs INSIDE the locked transaction here, because the operations
-// it checks do not exist until Diff has compared the incoming document against the state the
-// lock protects — there is nothing to authorize before that. Commit's ordering exists to keep
-// the evidence gate's bank read (a second pooled connection) from running while the CV row is
-// locked, which is the shape of a pool-exhaustion deadlock under load; requireEvidence only
-// ever makes that read for ActorAgent. So this refuses the agent actor outright rather than
-// trusting every future caller to keep passing ActorCandidate/ActorSystem, which is what made
-// today's ordering safe by convention rather than by construction.
+// Unlike Commit, authorize() runs INSIDE the locked transaction, because the operations only
+// exist after Diff against the locked state. requireEvidence reads the bank (a second pooled
+// connection) only for ActorAgent, so this refuses that actor outright rather than relying on
+// callers to avoid the pool-exhaustion deadlock.
 func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int64,
 	actor Actor, origin Origin, next State) (cv.Meta, Revision, error) {
 
@@ -410,20 +371,15 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 		if err != nil {
 			return err
 		}
-		// Refuse BEFORE Sanitize can truncate what the caller sent. Sanitize below keeps the
-		// first cv.MaxBullets and drops the rest; checking after it ran would see a document
-		// that already lost the excess and could never trip ErrListCap. This is the same
-		// guard commit() applies to an agent's Ops batch, extended to a whole-document save —
-		// PUT /me/cvs/:id (the editor's autosave) and Reset from résumé both go through
-		// here, and a pasted section or a bank seed can carry more than the cap.
+		// Refuse BEFORE Sanitize truncates: afterwards the excess is gone and ErrListCap could
+		// never trip. Autosave and Reset from résumé both come through here.
 		if e.refuseListCap {
 			if err := refuseIfSanitizeDropsContent(next); err != nil {
 				return err
 			}
 		}
-		// Sanitize the incoming state first, so the diff is against what would be stored
-		// rather than against what was sent — otherwise a value the sanitizer clamps would
-		// show up as an edit on every save.
+		// Sanitize first so the diff is against what would be stored; otherwise a clamped value
+		// shows up as an edit on every save.
 		next.Sanitize()
 
 		ops := Diff(before, next)
@@ -432,9 +388,7 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 			return nil
 		}
 		change := Change{Actor: actor, Origin: origin, Ops: ops}
-		// The operations are derived here, so this is the first moment they can be checked.
-		// The actor guard above guarantees ActorAgent never reaches this call, and the gate
-		// does not apply to candidate or system, so no bank read ever happens under the lock.
+		// The actor guard above keeps ActorAgent out, so no bank read happens under the lock.
 		if err := e.authorize(ctx, userID, change); err != nil {
 			return err
 		}
@@ -448,13 +402,8 @@ func metaOf(cvID uuid.UUID, s State) cv.Meta {
 	return cv.Meta{ID: cvID, Title: s.Title, TemplateID: s.TemplateID}
 }
 
-// Seed opens a CV's history with a system revision: the copy exists, and this is where its
-// feed starts. It carries no operations and no inverse, because there is nothing to undo —
-// undoing "this CV was created" is deleting it, which is a different action with its own
-// button.
-//
-// Without it a tailored copy's history would begin mid-story, with the first edit and no
-// account of where the document came from.
+// Seed opens a CV's history with a system revision, so the feed starts at creation. It has no
+// operations or inverse: undoing creation is deleting the CV, a separate action.
 func (e *Editor) Seed(ctx context.Context, cvID uuid.UUID, userID int64, title string) (Revision, error) {
 	var rev Revision
 	err := e.repo.Edit(ctx, cvID, userID, func(ctx context.Context, tx Tx) error {

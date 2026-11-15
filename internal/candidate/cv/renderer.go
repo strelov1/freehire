@@ -13,34 +13,27 @@ import (
 	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
-// Renderer turns a CV Document into PDF bytes using a resolved template. It is an
-// interface so the schema, storage, and handlers do not depend on the concrete engine;
-// a Chrome/LaTeX renderer could replace TypstRenderer without touching them.
+// Renderer turns a CV Document into PDF bytes using a resolved template.
 //
-// photo is the member's normalized headshot, or nil when they have none (or the template
-// does not print one). It is a separate argument rather than a Document field because the
-// image is a profile asset: the document is client-writable and travels into tailoring
-// prompts, and an image belongs in neither.
+// photo is the member's normalized headshot, or nil. It is not a Document field: the
+// document is client-writable and travels into tailoring prompts, and an image belongs in neither.
 type Renderer interface {
 	Render(ctx context.Context, doc Document, tmpl Template, photo []byte, hrefs LinkHrefs) ([]byte, error)
 }
 
-// defaultRenderTimeout bounds a single compile so a pathological input can never hang a
-// request; Typst renders a CV in ~50–150 ms, so this is generous headroom.
+// defaultRenderTimeout bounds a single compile so a pathological input cannot hang a request.
 const defaultRenderTimeout = 15 * time.Second
 
 // TypstRenderer renders via the Typst CLI. The document is passed as a data.json file the
 // template reads (never interpolated into argv), and the compile is sandboxed to a temp
-// --root with --ignore-system-fonts so it uses only the font embedded in the binary —
-// making local and prod output identical.
+// --root with --ignore-system-fonts, so local and prod output are identical.
 type TypstRenderer struct {
 	bin     string
 	timeout time.Duration
 }
 
 // NewTypstRenderer builds a renderer over the typst binary at bin. An empty bin yields a
-// nil renderer, so the feature is disabled (the handler returns 501) — the same nil-safe
-// gating as blobstore/meili/llm.
+// nil renderer, which disables the feature (the handler returns 501).
 func NewTypstRenderer(bin string) *TypstRenderer {
 	if bin == "" {
 		return nil
@@ -51,9 +44,8 @@ func NewTypstRenderer(bin string) *TypstRenderer {
 // Render compiles the template against the document and returns the PDF bytes. photo is
 // composed in by the templates that print one; it is ignored by the rest.
 //
-// hrefs supplies a link target per position, overriding the absolute URL the payload derives from
-// the document itself. A zero value is the ordinary render: the links still resolve absolutely,
-// they just point where the candidate wrote them.
+// hrefs supplies a link target per position, overriding the absolute URL derived from the
+// document. A zero value is the ordinary render.
 func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template, photo []byte, hrefs LinkHrefs) ([]byte, error) {
 	return r.compile(ctx, doc, tmpl, "pdf", photo, hrefs)
 }
@@ -64,9 +56,8 @@ func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template,
 const photoFile = "photo.jpg"
 
 // compile stages the document, template, and bundled fonts in a sandboxed temp dir and runs
-// typst, returning the output in the requested format ("pdf" for live rendering, "svg" for
-// preview generation). Shared by Render and GeneratePreviews so both use the exact same font
-// staging and sandbox flags.
+// typst, returning the output in the requested format ("pdf" or "svg"). Shared by Render and
+// GeneratePreviews.
 func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template, format string, photo []byte, hrefs LinkHrefs) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "cv-render-*")
 	if err != nil {
@@ -74,11 +65,9 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 	}
 	defer os.RemoveAll(dir)
 
-	// Swap the font registry id for the family name Typst asks for. doc is a value, so this
-	// is a copy and the caller's document — the one the handler is about to persist — keeps
-	// the id. Same trick as Document.withoutContacts; it is what lets the stored document stay
-	// free of engine-specific names. An unregistered or unset id resolves to nothing, leaving
-	// the template's own #set text(font:) to decide.
+	// Swap the font registry id for the family name Typst asks for. doc is a copy, so the
+	// caller's document keeps the id and the stored document stays free of engine-specific
+	// names. An unregistered or unset id leaves the template's own #set text(font:) in charge.
 	if family, ok := ResolveFontFamily(doc.Style.FontFamily); ok {
 		doc.Style.FontFamily = family
 	} else {
@@ -105,9 +94,8 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 	if err := os.WriteFile(tmplPath, tmpl.source, 0o600); err != nil {
 		return nil, err
 	}
-	// Stage the bundled fonts so --font-path exposes faces (e.g. Liberation Sans) that the
-	// Typst binary does not embed — without them --ignore-system-fonts would silently fall
-	// back to a default serif for the sans templates.
+	// Stage the bundled fonts: without them --ignore-system-fonts silently falls back to a
+	// default serif for faces the Typst binary does not embed (e.g. Liberation Sans).
 	fontDir := filepath.Join(dir, "fonts")
 	if err := os.Mkdir(fontDir, 0o700); err != nil {
 		return nil, err
@@ -130,26 +118,23 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 	return os.ReadFile(outPath)
 }
 
-// LinkHrefs carries one link target per link in the document, aligned by index with
-// Header.Links and with Projects. An empty entry means "use what the payload derived".
+// LinkHrefs carries one link target per link, aligned by index with Header.Links and Projects.
+// An empty entry means "use what the payload derived".
 //
-// It rides on the render payload and never on the Document: cvs.data is what the candidate edits
-// and the tailoring agent patches, and a link target chosen at render time is neither.
+// It rides on the render payload, never on the Document: a render-time target is not something
+// the candidate edits or the tailoring agent patches.
 type LinkHrefs struct {
 	Header   []string `json:"header,omitempty"`
 	Projects []string `json:"projects,omitempty"`
 }
 
-// renderPayload marshals what the template reads back as json("data.json"): the document's
-// own fields plus has_photo and the resolved link targets. The embedding inlines Document's
-// fields, so the templates keep reading cv.header — and because the extras live only on this
-// render-time wrapper, they are neither settable by a client nor persisted with the CV.
+// renderPayload marshals what the template reads as json("data.json"): the document's fields
+// plus has_photo and the resolved link targets. The extras live only on this wrapper, so a
+// client cannot set them and they are never persisted.
 //
-// Experience/Education/Certifications are re-declared here with their perioddate.PeriodDate
-// fields formatted back to the plain display strings every template's daterange-style
-// helper has always expected (Go's json package resolves the same-named, shallower
-// field in favor of the one promoted from the embedded Document) — no .typ file needs
-// to know the stored value is now structured.
+// Experience/Education/Certifications are re-declared with their perioddate fields formatted
+// to plain display strings (the shallower same-named field wins in encoding/json), so no .typ
+// file sees the structured value.
 func renderPayload(doc Document, hasPhoto bool, hrefs LinkHrefs) ([]byte, error) {
 	return json.Marshal(struct {
 		Document
@@ -215,13 +200,11 @@ func formatCertificationsForRender(items []Certification) []renderCertification 
 	return out
 }
 
-// resolveHrefs fills in a target for every link position: the caller's, when it supplied one, and
-// otherwise the document's own link made absolute.
+// resolveHrefs fills in a target for every link position: the caller's, when supplied, else
+// the document's own link made absolute.
 //
-// The normalisation is not part of tracing and applies to every render. CVs store links as a
-// candidate writes them on paper — "github.com/ada" — and a PDF annotation carrying that verbatim
-// is a relative URI that no reader can follow. Every template had that defect long before this
-// feature; the payload is the one place to fix it, rather than six copies of Typst string handling.
+// The normalisation applies to every render: CVs store links as written ("github.com/ada"),
+// and a PDF annotation carrying that verbatim is a relative URI no reader can follow.
 func resolveHrefs(doc Document, supplied LinkHrefs) LinkHrefs {
 	projectLinks := make([]string, len(doc.Projects))
 	for i, p := range doc.Projects {
@@ -244,8 +227,7 @@ func resolveHrefs(doc Document, supplied LinkHrefs) LinkHrefs {
 	return out
 }
 
-// overlay writes the caller's non-empty entries over the derived ones, position by position. A
-// supplied slice shorter than the document's is not an error: it simply names fewer links.
+// overlay writes src's non-empty entries over dst, by position. A shorter src is not an error.
 func overlay(dst, src []string) {
 	for i := 0; i < len(src) && i < len(dst); i++ {
 		if src[i] != "" {
