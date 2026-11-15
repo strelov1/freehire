@@ -102,6 +102,7 @@ var renderers = []func(string) (Sample, error){
 	emailChangeSample,
 	emailChangedSample,
 	directApplicationSample,
+	applicationStatusSample,
 	digestSample,
 	digestBundleSample,
 	savedJobReminderSample,
@@ -277,6 +278,23 @@ func directApplicationSample(baseURL string) (Sample, error) {
 				CV:            []byte("%PDF-1.7"),
 				CVFilename:    "cv.pdf",
 				CVContentType: "application/pdf",
+			})
+	})
+}
+
+// applicationStatusSample is a rejection with the employer's own words — the letter whose
+// tone matters most, and the one carrying every part (lead, quoted message, link).
+func applicationStatusSample(baseURL string) (Sample, error) {
+	return sample("application-status", "Candidate / Employer's answer", func(c *capture) error {
+		return emailnotify.NewApplicationMailer(c, "hi@freehire.me", baseURL).
+			SendStatusUpdate(context.Background(), emailnotify.ApplicationStatusMail{
+				To:          "someone@example.com",
+				ReplyTo:     "hiring@acme.example",
+				CompanyName: "Acme",
+				JobTitle:    "Senior Platform Engineer",
+				JobURL:      baseURL + "/jobs/senior-platform-engineer-acme-9f3c",
+				Stage:       "rejected",
+				Message:     "Thank you for the time you put into this. We chose someone with more on-call experience, and would be glad to hear from you again next year.",
 			})
 	})
 }
