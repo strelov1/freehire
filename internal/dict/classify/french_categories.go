@@ -176,8 +176,8 @@ var frenchCategoryTable = []aliasEntry{
 	{"dba", "devops"},
 	{"ingenieur systeme linux", "devops"},
 	{"ingenieur systemes linux", "devops"},
-	{"administrateur systeme", "devops"}, // the main table files the system administrator here
-	{"administrateur systemes", "devops"},
+	{"administrateur systeme", "system_administration"}, // the main table files the system administrator here
+	{"administrateur systemes", "system_administration"},
 	{"ingenieur systeme et reseau", "devops"},
 	{"ingenieur systemes et reseaux", "devops"},
 	{"ingenieur cloud", "devops"},

@@ -4,6 +4,10 @@ import "testing"
 
 func TestInfrastructureSpecializations(t *testing.T) {
 	cases := map[string]string{
+		"Administrador de sistemas":           "system_administration",
+		"Administradora de sistemas":          "system_administration",
+		"Administrateur système":              "system_administration",
+		"Administrateur systèmes":             "system_administration",
 		"Senior Systems Administrator":        "system_administration",
 		"System Administrator":                "system_administration",
 		"Linux Administrator":                 "system_administration",
