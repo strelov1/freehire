@@ -2,7 +2,7 @@
 // events over a range, oldest first.
 //
 // It is the ledger's first dated reader. Until now the table was written by every path
-// that moves an application and read only by the per-company aggregate in insights.sql,
+// that moves an application and read only by the per-company aggregate in insights_companies.sql,
 // which groups by employer and never asks when.
 //
 // It is not a method on internal/application/jobtracking. That package is organised around mutations
