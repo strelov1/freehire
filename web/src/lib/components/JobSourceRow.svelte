@@ -3,11 +3,11 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { sourceFamily, sourceLabel } from '#lib/sourceLabels.js';
   import { filterHref } from '#lib/enrichment.js';
-  import { SOURCE_LOGO_DOMAINS, sourceLogoUrl } from '#lib/logo.js';
+  import SourceBadge from './SourceBadge.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
   import { syncProfileAlert } from '#lib/profileAlertSync.js';
   import { promptSignIn } from '#lib/signin.js';
-  import { Badge, EntityLogo, Tooltip, badgeVariants, cn } from '#lib/ui/index.js';
+  import { Badge, Tooltip, badgeVariants, cn } from '#lib/ui/index.js';
   import AdzunaAttribution from './AdzunaAttribution.svelte';
   import DevGlobalJobsAttribution from './DevGlobalJobsAttribution.svelte';
 
@@ -73,18 +73,7 @@
   <span class={cn(badgeVariants({ variant: 'outline' }), 'gap-1.5 pl-1')}>
     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal /jobs filter link from filterHref; query-only, no route to resolve -->
     <a href={filterHref('source', source)} class="inline-flex items-center gap-1.5 transition hover:text-foreground">
-      <!-- The source's own brand mark: its DISPLAY NAME, plus the platform's own domain where
-           one is curated — never a posting host, which serves the employer's logo under the
-           platform's name. EntityLogo also catches a 404 that landed before hydration, which a
-           hand-rolled onerror cannot. -->
-      <EntityLogo
-        name={label}
-        src={sourceLogoUrl(label, SOURCE_LOGO_DOMAINS[source]) ?? undefined}
-        shape="square"
-        size="xs"
-        class="shrink-0"
-      />
-      {label}
+      <SourceBadge {source} framed={false} />
     </a>
 
     <!-- Hidden from signed-out readers, who have no profile to write to. -->
