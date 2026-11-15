@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/job/job"
@@ -38,7 +39,7 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool, targetVersion int32
 // ClaimSearchOutboxBatch already skips an entry whose job has since closed or become a
 // non-canonical repost. cmd/search-drain applies the CategoryUnresolved/DescriptionMissing
 // rules on the way out, so nothing is gated here that is not gated there.
-func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID int64) (job.Job, job.Extras, error) {
+func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID, conflictOwnedBy int64) (job.Job, job.Extras, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -50,7 +51,13 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID in
 	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
 	// every other write path. The mint query also folds the manual salary into the
 	// enrichment payload so it displays at once.
-	id, err := qtx.UpsertManualJob(ctx, f.UpsertManualParams(actorID))
+	params := f.UpsertManualParams(actorID)
+	params.OwnerTeamOf = pgtype.Int8{Int64: conflictOwnedBy, Valid: conflictOwnedBy != 0}
+	id, err := qtx.UpsertManualJob(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The conflict's owner guard refused the update: the row is another team's.
+		return job.Job{}, job.Extras{}, ErrOwnedElsewhere
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, fmt.Errorf("upsert manual job: %w", err)
 	}

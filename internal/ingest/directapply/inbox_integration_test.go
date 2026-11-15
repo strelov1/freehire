@@ -41,7 +41,8 @@ func newInboxFixture(t *testing.T) inboxFixture {
 		return id
 	}
 	f.employer, f.other, f.candidate = user("hr@acme.test"), user("hr@globex.test"), user("c@example.test")
-	// Each employer holds an account, as every employer who publishes a vacancy does.
+	// A vacancy belongs to the company team of whoever published it (employer_team), so each
+	// employer holds an account.
 	for _, a := range []struct {
 		id   int64
 		slug string
@@ -186,6 +187,25 @@ func TestInboxRepository_MovesAndCountsStages(t *testing.T) {
 	}
 	if apps, err := f.repo.List(ctx, f.employer, directapply.InboxFilter{JobSlug: "acme-platform", Stage: directapply.StageInterview, Limit: 50}); err != nil || len(apps) != 1 {
 		t.Errorf("List(acme-platform, interview) = %+v, %v; want it", apps, err)
+	}
+}
+
+func TestInboxRepository_ATeammateSeesTheTeamsApplications(t *testing.T) {
+	f := newInboxFixture(t)
+	ctx := context.Background()
+	id := f.apply(t, f.vacancy, f.candidate, "cv", true)
+	var mate int64
+	if err := f.pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('dev@acme.test') RETURNING id`).Scan(&mate); err != nil {
+		t.Fatalf("seed teammate: %v", err)
+	}
+	if _, err := f.pool.Exec(ctx, `INSERT INTO company_account_members (user_id, company_slug, work_email) VALUES ($1, 'acme', 'dev@acme.test')`, mate); err != nil {
+		t.Fatalf("seed membership: %v", err)
+	}
+	if apps, err := f.repo.List(ctx, mate, directapply.InboxFilter{Limit: 50}); err != nil || len(apps) != 1 || apps[0].ID != id {
+		t.Fatalf("teammate's List = %+v, %v; want the application to the holder's vacancy", apps, err)
+	}
+	if _, err := f.repo.SetStage(ctx, mate, id, directapply.StageReviewing); err != nil {
+		t.Errorf("teammate's SetStage: %v", err)
 	}
 }
 

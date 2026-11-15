@@ -461,6 +461,24 @@ type CompanyAccount struct {
 	EmailConfirmedAt pgtype.Timestamptz `json:"email_confirmed_at"`
 }
 
+type CompanyAccountInvitation struct {
+	ID          int64              `json:"id"`
+	CompanySlug string             `json:"company_slug"`
+	Email       string             `json:"email"`
+	TokenHash   []byte             `json:"token_hash"`
+	InvitedBy   int64              `json:"invited_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+}
+
+type CompanyAccountMember struct {
+	UserID      int64              `json:"user_id"`
+	CompanySlug string             `json:"company_slug"`
+	WorkEmail   string             `json:"work_email"`
+	InvitedBy   pgtype.Int8        `json:"invited_by"`
+	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
+}
+
 type CompanyFeedback struct {
 	ID           int64              `json:"id"`
 	UserID       pgtype.Int8        `json:"user_id"`

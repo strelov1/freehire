@@ -157,10 +157,11 @@ func (st State) refusal() error {
 	return nil
 }
 
-// Employers answers whether a vacancy's author may still receive applications, and where.
-// employer.Service satisfies it.
+// Employers answers whether a vacancy's author may still receive applications, and where,
+// and who acts for the same company. employer.Service satisfies it.
 type Employers interface {
 	ActiveAccount(ctx context.Context, userID int64) (employer.Account, error)
+	Teammates(ctx context.Context, userID, otherID int64) (bool, error)
 }
 
 // CVs reads the CVs a candidate may send with an application to jobID.
@@ -252,8 +253,12 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	if err != nil {
 		return err
 	}
-	if v.EmployerID == userID {
-		// An employer emailing themselves their own vacancy's application is never meant;
+	own, err := s.ownCompany(ctx, v, userID)
+	if err != nil {
+		return err
+	}
+	if own {
+		// An employer emailing their own company's vacancy an application is never meant;
 		// answered as for any posting that takes no application from this caller.
 		return ErrNotFound
 	}
@@ -347,6 +352,11 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 	return nil
 }
 
+// ownCompany reports whether userID published v or acts for the company whose team did.
+func (s *Service) ownCompany(ctx context.Context, v Vacancy, userID int64) (bool, error) {
+	return s.employers.Teammates(ctx, v.EmployerID, userID)
+}
+
 // receivingEmployer loads the account that authored a vacancy and reports whether it may
 // still receive applications. A revoked or deleted account is not an error here: it means
 // the vacancy no longer takes applications.
@@ -380,8 +390,11 @@ func (s *Service) Form(ctx context.Context, userID int64, slug string) (FormView
 		}
 	}
 	view := FormView{CompanyName: v.Company, Questions: form.Fields, Open: open}
-	if userID == 0 || userID == v.EmployerID {
+	if userID == 0 {
 		return view, nil
+	}
+	if own, err := s.ownCompany(ctx, v, userID); err != nil || own {
+		return view, err
 	}
 
 	state, err := s.repo.State(ctx, v.ID, userID)

@@ -80,35 +80,10 @@ func (q *Queries) DeleteCompanyAccount(ctx context.Context, userID int64) (int64
 	return result.RowsAffected(), nil
 }
 
-const getCompanyAccountByUserID = `-- name: GetCompanyAccountByUserID :one
-SELECT user_id, company_slug, company_name, work_email, status, verified_at, created_at, updated_at, email_confirmed_at
-FROM company_accounts
-WHERE user_id = $1
-`
-
-// The one account a user may hold, in whatever status it is in. Every employer-facing
-// capability check reads this and then inspects status itself, rather than a second query
-// per status, since a pending/revoked account needs to be distinguishable in the refusal.
-func (q *Queries) GetCompanyAccountByUserID(ctx context.Context, userID int64) (CompanyAccount, error) {
-	row := q.db.QueryRow(ctx, getCompanyAccountByUserID, userID)
-	var i CompanyAccount
-	err := row.Scan(
-		&i.UserID,
-		&i.CompanySlug,
-		&i.CompanyName,
-		&i.WorkEmail,
-		&i.Status,
-		&i.VerifiedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.EmailConfirmedAt,
-	)
-	return i, err
-}
-
 const insertPendingCompanyAccount = `-- name: InsertPendingCompanyAccount :one
 INSERT INTO company_accounts (user_id, company_slug, company_name, work_email)
-VALUES ($1, $2, $3, $4)
+SELECT $1, $2, $3, $4
+WHERE NOT EXISTS (SELECT 1 FROM company_account_members m WHERE m.user_id = $1)
 RETURNING user_id, company_slug, company_name, work_email, status, verified_at, created_at, updated_at, email_confirmed_at
 `
 
@@ -123,7 +98,9 @@ type InsertPendingCompanyAccountParams struct {
 // the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 // succeeds, and the loser's caller maps the unique violation to a clean conflict — see
 // pgerr.IsUniqueViolation. user_id is the table's primary key, so a user who already holds
-// an account (in any status) also fails here, on the primary-key conflict.
+// an account (in any status) also fails here, on the primary-key conflict. A user who is a
+// member of another company's team (migration 0271) is refused too, by writing no row: a user
+// acts for at most one company.
 func (q *Queries) InsertPendingCompanyAccount(ctx context.Context, arg InsertPendingCompanyAccountParams) (CompanyAccount, error) {
 	row := q.db.QueryRow(ctx, insertPendingCompanyAccount,
 		arg.UserID,

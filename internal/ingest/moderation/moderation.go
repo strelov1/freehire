@@ -29,6 +29,9 @@ var (
 	// surfaces the wrapped message in the 400 body, so it carries no package prefix.
 	ErrInvalid     = errors.New("invalid request")
 	ErrJobNotFound = errors.New("moderation: job not found")
+	// ErrOwnedElsewhere is a Create with ConflictOwnedBy set whose identity already belongs
+	// to a posting created outside that user's company team: nothing was written.
+	ErrOwnedElsewhere = errors.New("moderation: this posting belongs to another employer")
 )
 
 // defaultSource is the origin recorded when the moderator does not name one. The URL is
@@ -73,6 +76,12 @@ type CreateInput struct {
 	SalaryMax      *int
 	SalaryCurrency string
 	SalaryPeriod   string
+
+	// ConflictOwnedBy, when set, lets the write update an existing posting at the same
+	// identity only if this user's company team created it (employer_team); otherwise
+	// Create writes nothing and returns ErrOwnedElsewhere. The employer path sets it; a
+	// moderator, who may edit any manual job, leaves it zero.
+	ConflictOwnedBy int64
 }
 
 // Validate enforces the required fields and that the URL is an absolute http(s) link
@@ -137,7 +146,9 @@ func (p UpdatePatch) validate() error {
 // the derived job.Fields plus the acting moderator; the adapter builds the db params from
 // them. All three return the persisted aggregate and its read-only Extras.
 type Repository interface {
-	Create(ctx context.Context, f job.Fields, actorID int64) (job.Job, job.Extras, error)
+	// Create upserts the posting; with conflictOwnedBy non-zero an existing row is updated
+	// only when that user's company team created it, else ErrOwnedElsewhere.
+	Create(ctx context.Context, f job.Fields, actorID, conflictOwnedBy int64) (job.Job, job.Extras, error)
 	BySlug(ctx context.Context, slug string) (job.Job, job.Extras, error)
 	Update(ctx context.Context, slug string, f job.Fields, actorID int64) (job.Job, job.Extras, error)
 }
@@ -187,7 +198,7 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (jo
 	f.URL = in.URL
 	f.Remote = in.Remote
 	f.PostedAt = in.PostedAt
-	return s.repo.Create(ctx, f, actorID)
+	return s.repo.Create(ctx, f, actorID, in.ConflictOwnedBy)
 }
 
 // Update loads the manual job, overlays the supplied (nil-means-unchanged) fields, and

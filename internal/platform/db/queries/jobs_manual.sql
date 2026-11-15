@@ -123,6 +123,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     updated_at   = now()
+-- An employer re-creating a vacancy at an identity that already exists may only update one
+-- its own company team created (owner_team_of, employer_team in migration 0271); for
+-- somebody else's row the conflict updates nothing and no row comes back. Checked here, in
+-- the write itself, so no change of who belongs to which team between a pre-check and this
+-- statement can let one company overwrite another's vacancy. NULL for a moderator, who may
+-- edit any manual job.
+WHERE sqlc.narg(owner_team_of)::bigint IS NULL
+   OR jobs.created_by = ANY(ARRAY(SELECT employer_team(sqlc.narg(owner_team_of)::bigint)))
 RETURNING jobs.id;
 
 -- name: InsertPrivateJob :one
@@ -243,7 +251,8 @@ RETURNING jobs.id;
 
 -- name: UpdateEmployerJob :one
 -- The employer-authored analogue of UpdateManualJob, scoped narrower on purpose: WHERE
--- created_by = actor_id (not merely IS NOT NULL) AND source = 'employer'. UpdateManualJob's
+-- created_by is in the actor's company team (employer_team, migration 0271 — not merely IS
+-- NOT NULL) AND source = 'employer'. UpdateManualJob's
 -- own scope lets any moderator edit any manually-authored job, which is correct for trusted
 -- staff and wrong for a self-service employer — see openspec/changes/
 -- add-employer-company-accounts/design.md for why this needed its own query rather than a
@@ -294,27 +303,29 @@ SET title        = sqlc.arg(title),
     updated_by   = sqlc.arg(updated_by)::bigint,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug)
-  AND created_by = sqlc.arg(actor_id)::bigint
+  AND created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
   AND source = 'employer'
   AND NOT is_private
 RETURNING jobs.id;
 
 -- name: ListEmployerJobs :many
--- An employer's own dashboard list: every vacancy this actor created through this path,
+-- An employer's own dashboard list: every vacancy the actor's company team created through
+-- this path (employer_team, migration 0271),
 -- newest first, open and closed both (the dashboard shows a closed one with its own badge
 -- rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
 -- ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
 -- postings, not the public catalogue.
 SELECT *
 FROM jobs_read
-WHERE created_by = sqlc.arg(actor_id)::bigint
+WHERE created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
   AND source = 'employer'
 ORDER BY created_at DESC
 LIMIT 200;
 
 -- name: CloseEmployerJob :one
 -- Soft-close, the employer-self-service analogue of CloseJobByID: scoped to the actor's own
--- employer-authored posting (created_by = actor_id AND source = 'employer'), never any other
+-- team's employer-authored posting (created_by in employer_team(actor_id) AND source =
+-- 'employer'), never any other
 -- job. closed_reason = 'employer_closed' (migration 0175) keeps this mechanism distinguishable
 -- from a moderator's 'moderated' close — a different actor and a different trust level.
 -- WHERE closed_at IS NULL keeps it idempotent, matching every other closer.
@@ -324,7 +335,7 @@ WITH closed AS (
         closed_reason = 'employer_closed',
         updated_at    = now()
     WHERE jobs.public_slug = sqlc.arg(public_slug)
-      AND jobs.created_by = sqlc.arg(actor_id)::bigint
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
       AND jobs.source = 'employer'
       AND jobs.closed_at IS NULL
     RETURNING jobs.id
@@ -336,8 +347,8 @@ WITH closed AS (
 SELECT count(*) FROM closed;
 
 -- name: ReopenEmployerJob :one
--- Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
--- source = 'employer'), and ONLY a close that actor made — closed_reason =
+-- Undoes CloseEmployerJob: the same scope (created_by in employer_team(actor_id) AND
+-- source = 'employer'), and ONLY a close the employer made — closed_reason =
 -- 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)
 -- stays closed; reopening it is not the employer's call. A vacancy taking applications on
 -- freehire has no URL to re-create under, so without this its employer could never undo a
@@ -350,7 +361,7 @@ WITH reopened AS (
         closed_reason = '',
         updated_at    = now()
     WHERE jobs.public_slug = sqlc.arg(public_slug)
-      AND jobs.created_by = sqlc.arg(actor_id)::bigint
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
       AND jobs.source = 'employer'
       AND jobs.closed_reason = 'employer_closed'
     RETURNING jobs.id, COALESCE(jobs.posted_at, jobs.created_at) AS posted

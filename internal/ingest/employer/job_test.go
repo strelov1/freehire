@@ -21,6 +21,12 @@ type fakeJobRepo struct {
 	closed       map[string]bool
 	forms        map[string]applyform.Form // externalID -> stored form
 	formErr      error                     // when set, SaveForm fails with it
+	team         map[int64]int64           // userID -> team id; absent means no team
+}
+
+func (r *fakeJobRepo) Teammates(_ context.Context, actorID, otherID int64) (bool, error) {
+	t, ok := r.team[actorID]
+	return actorID == otherID || ok && r.team[otherID] == t, nil
 }
 
 func newFakeJobRepo() *fakeJobRepo {
@@ -41,11 +47,6 @@ func (r *fakeJobRepo) SaveForm(_ context.Context, j job.Job, form applyform.Form
 	}
 	r.forms[j.Fields().ExternalID] = form
 	return nil
-}
-
-func (r *fakeJobRepo) Owner(_ context.Context, externalID string) (int64, bool, error) {
-	id, ok := r.byExternalID[externalID]
-	return id, ok, nil
 }
 
 func (r *fakeJobRepo) BySlug(_ context.Context, actorID int64, slug string) (job.Job, job.Extras, error) {
@@ -122,16 +123,24 @@ func (r *fakeJobRepo) seed(slug string, ownerID int64, f job.Fields) {
 // standing in for moderation.Service.Create.
 type fakeMinter struct {
 	calls []moderation.CreateInput
-	repo  *fakeJobRepo // so a mint also registers ownership, matching the real Create+Owner relationship
+	repo  *fakeJobRepo // so a mint also registers ownership, matching the real upsert
 	actor int64
 }
 
-func (m *fakeMinter) Create(_ context.Context, actorID int64, in moderation.CreateInput) (job.Job, job.Extras, error) {
+func (m *fakeMinter) Create(ctx context.Context, actorID int64, in moderation.CreateInput) (job.Job, job.Extras, error) {
 	m.calls = append(m.calls, in)
 	m.actor = actorID
 	externalID := in.URL
 	if in.ExternalID != "" {
 		externalID = in.ExternalID
+	}
+	// The real upsert's owner guard: an existing row of another team is not updated.
+	if m.repo != nil && in.ConflictOwnedBy != 0 {
+		if owner, ok := m.repo.byExternalID[externalID]; ok {
+			if ours, _ := m.repo.Teammates(ctx, in.ConflictOwnedBy, owner); !ours {
+				return job.Job{}, job.Extras{}, moderation.ErrOwnedElsewhere
+			}
+		}
 	}
 	j, err := job.New(job.Draft{Input: jobderive.Input{
 		Source: jobSource, ExternalID: externalID, Title: in.Title, Company: in.Company, Location: in.Location, Description: in.Description,
@@ -249,8 +258,25 @@ func TestCreateVacancy_RefusesAColludingURLFromADifferentEmployer(t *testing.T) 
 	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Different Title"}); !errors.Is(err, ErrURLTaken) {
 		t.Fatalf("err = %v, want ErrURLTaken", err)
 	}
-	if len(minterB.calls) != 0 {
-		t.Error("the minter must never be called for a colliding URL owned by someone else")
+	if got := jobs.byExternalID["https://shared.example/jobs/1"]; got != 1 {
+		t.Errorf("the colliding URL's row now belongs to %d; another employer's write must change nothing", got)
+	}
+	if len(minterB.calls) != 1 || minterB.calls[0].ConflictOwnedBy != 2 {
+		t.Errorf("mint calls = %+v; want one, carrying the caller as the conflict's owner guard", minterB.calls)
+	}
+}
+
+func TestCreateVacancy_ATeammatesURLIsTheTeamsOwn(t *testing.T) {
+	jobs := newFakeJobRepo()
+	jobs.team = map[int64]int64{1: 100, 2: 100}
+	sA := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+	if _, _, err := sA.CreateVacancy(context.Background(), 1, VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Go Engineer"}); err != nil {
+		t.Fatalf("employer A CreateVacancy: %v", err)
+	}
+	minterB := &fakeMinter{repo: jobs}
+	sB := activeService(t, 2, jobs, minterB)
+	if _, _, err := sB.CreateVacancy(context.Background(), 2, VacancyInput{Description: "Build things.", URL: "https://shared.example/jobs/1", Title: "Go Engineer"}); err != nil {
+		t.Fatalf("a teammate re-creating the team's vacancy: %v", err)
 	}
 }
 

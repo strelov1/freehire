@@ -11,6 +11,9 @@ the design records are [openspec/changes/add-in-app-apply](../../../openspec/cha
 and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes/add-employer-applicant-pipeline).
 
 ## Always true
+- **Nobody applies to their own company.** `Apply` refuses (as not found) a candidate who
+  acts for the company whose team published the vacancy (`Employers.Teammates`), not just
+  its author: a teammate's application would email their own colleagues.
 - **Recorded first, stamped sent after.** `Apply` writes the `direct_applications` row,
   sends the mail, and only then sets `sent_at`. A failed send returns `ErrDelivery` and
   leaves the row unsent; the candidate applying again REPLACES its content and retries. The
@@ -51,9 +54,11 @@ and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes
 
 ## The applicant inbox (`Inbox`)
 - **Reached only through the vacancy, and only once delivered.** Every inbox statement joins
-  the application to its job and requires `created_by = employer AND source = 'employer'`
-  plus `sent_at IS NOT NULL` — the ownership predicate the employer's vacancy writes use.
-  Anything else, another employer's application included, is `ErrNotFound`. An unsent row is
+  the application to its job and requires `created_by = ANY(ARRAY(SELECT employer_team(employer)))
+  AND source = 'employer'` plus `sent_at IS NOT NULL` — the ownership predicate the
+  employer's vacancy writes use, so every member of the company team sees every application
+  to the team's vacancies. Anything else, another company's application included, is
+  `ErrNotFound`. An unsent row is
   not the employer's to see: they were never sent it, and the candidate's retry may replace
   it. Every method also requires `ActiveAccount`, so a revoked account reads nothing.
 - **The CV is a copy of what was mailed** (`direct_application_cvs`, migration 0270), written
