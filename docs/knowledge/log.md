@@ -1,5 +1,11 @@
 # Knowledge update history
 
+## 2026-11-15
+
+Linked the catalogue concept to the WhatJobs summary-matching implementation and
+its worker reference. Evidence is the local source and captured public postings;
+no production deployment is asserted.
+
 ## 2026-11-14
 
 Created the OKF v0.2 navigation bundle from repository instructions and package
