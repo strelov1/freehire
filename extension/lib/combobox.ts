@@ -18,9 +18,9 @@ import {
   displayedValues,
   isComboWidget,
   isOnScreen,
-  normalizeLabel,
   shownText,
 } from './form';
+import { normalizeLabel } from './fieldKeys';
 import { assertNever } from './utils';
 
 /**

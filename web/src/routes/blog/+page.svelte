@@ -2,7 +2,8 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '#lib/components/Seo.svelte';
-  import { blogJsonLd, breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jsonLdScript } from '#lib/seo.js';
+  import { blogJsonLd } from '#lib/seoAppJsonLd.js';
   import type { PostType } from '#lib/blog.js';
   import type { PageData } from './$types';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { answersToOffer } from './answerOffer';
-import { normalizeLabel } from './form';
+import { normalizeLabel } from './fieldKeys';
 import type { FramedField } from './protocol';
 
 function field(label: string, value: string, extra: Partial<FramedField> = {}): FramedField {

@@ -3,14 +3,13 @@ import {
   revealField,
   extractForm,
   extractUploads,
-  matchFieldKey,
   planLabelFills,
   fillsForFrame,
   fillByLabel,
   looksLikeApplication,
   scopeToApplication,
-  formatAuthorizedCountries,
 } from './form';
+import { matchFieldKey, formatAuthorizedCountries } from './fieldKeys';
 import { labeledInput, must, reset } from './test-utils';
 
 /** A <form> holding a labelled control, and optionally a resume upload. */
