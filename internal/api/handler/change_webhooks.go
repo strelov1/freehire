@@ -184,6 +184,10 @@ func newWebhookSecret() (string, error) {
 
 // normalizeCompanySlugs lowercases, trims and dedupes, and bounds the list.
 func normalizeCompanySlugs(in []string) ([]string, error) {
+	// Bounded before the dedupe, which is quadratic: the decoder does not cap the list.
+	if len(in) > maxChangeWebhookCompanies {
+		return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("at most %d company_slugs", maxChangeWebhookCompanies))
+	}
 	out := make([]string, 0, len(in))
 	for _, s := range in {
 		s = strings.ToLower(strings.TrimSpace(s))
@@ -193,9 +197,6 @@ func normalizeCompanySlugs(in []string) ([]string, error) {
 		if !slices.Contains(out, s) {
 			out = append(out, s)
 		}
-	}
-	if len(out) > maxChangeWebhookCompanies {
-		return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("at most %d company_slugs", maxChangeWebhookCompanies))
 	}
 	return out, nil
 }
