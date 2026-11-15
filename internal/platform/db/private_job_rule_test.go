@@ -81,13 +81,12 @@ var privatePredicateExemptions = map[string]string{
 	// itself: RecomputeRoleDuplicatesForCompanies carries the predicate on its canon, since a
 	// JD pasted before the employer's board entered the catalogue predates every public
 	// posting of the role. ---
-	"CompaniesWithRoleClusters":           "names the companies whose role clusters the pass recomputes",
-	"CompaniesWithAggregatorPostings":     "names the companies holding aggregator postings for the suppression pass",
-	"CompaniesWithFuzzyDedupCandidates":   "names the companies the fuzzy pass considers",
-	"FuzzyDedupCandidateTitlesForCompany": "the titles the fuzzy pass compares within one company",
-	"MarkFuzzyDuplicatesForCompany":       "writes duplicate_of_fuzzy for one company's candidates",
-	"DuplicateClosureGeoAll":              "unions a closure's geography into its owner's facets — country/region/city codes, no posting",
-	"DuplicateClosureGeoFor":              "the same union, for named owners",
+	"CompaniesWithRoleClusters":         "names the companies whose role clusters the pass recomputes",
+	"CompaniesWithAggregatorPostings":   "names the companies holding aggregator postings for the suppression pass",
+	"CompaniesWithFuzzyDedupCandidates": "names the companies the fuzzy pass considers",
+	"MarkFuzzyDuplicatesForCompany":     "writes duplicate_of_fuzzy for one company's candidates",
+	"DuplicateClosureGeoAll":            "unions a closure's geography into its owner's facets — country/region/city codes, no posting",
+	"DuplicateClosureGeoFor":            "the same union, for named owners",
 
 	// --- Answers only about content the caller already holds. ---
 	"FindOpenJobByURL": "matches on the URL the caller supplied, and a private posting carries a URL only when it was created BY scraping that page (a pasted-text one has none), so the slug it can return always points at content the caller had the address for",
