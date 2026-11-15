@@ -98,6 +98,22 @@ func (q *Queries) LockActingMembership(ctx context.Context, userID int64) (strin
 	return company_slug, err
 }
 
+const lockAuthor = `-- name: LockAuthor :one
+SELECT id FROM users WHERE id = $1 FOR KEY SHARE
+`
+
+// Locks the author's users row (FOR KEY SHARE) for an employer vacancy write, before the
+// company and membership rows: deleting the user takes that row first and then cascades to
+// the company account and memberships, so the write takes the three in the same order and
+// the two serialise instead of deadlocking (the write's created_by foreign-key check would
+// otherwise wait on the user row while holding the account row). No row: the user is gone.
+func (q *Queries) LockAuthor(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockAuthor, userID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockCompanyAccountBySlug = `-- name: LockCompanyAccountBySlug :one
 SELECT user_id FROM company_accounts WHERE company_slug = $1 FOR KEY SHARE
 `

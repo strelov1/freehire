@@ -85,8 +85,8 @@ type CreateInput struct {
 	// Employer, when set, makes this an employer's write for their company team: an existing
 	// posting at the same identity is updated only if that team created it (employer_team),
 	// otherwise nothing is written and Create returns ErrOwnedElsewhere. The write also holds
-	// the company-account row, then the author's membership row, FOR KEY SHARE for its
-	// transaction — the order a company-account delete takes them — so removing the member or
+	// the author's users row, the company-account row and the author's membership row FOR KEY
+	// SHARE for its transaction — the order a user deletion takes them — so removing the member or
 	// deleting the account waits for it and then hands over or detaches the new posting too;
 	// an author who no longer acts for Employer.CompanySlug gets ErrNoCompany. A moderator,
 	// who may edit any manual job, leaves it zero.

@@ -5794,6 +5794,12 @@ type Querier interface {
 	LockActingMembership(ctx context.Context, userID int64) (string, error)
 	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
 	LockAssistantSessionCreation(ctx context.Context, userID int64) error
+	// Locks the author's users row (FOR KEY SHARE) for an employer vacancy write, before the
+	// company and membership rows: deleting the user takes that row first and then cascades to
+	// the company account and memberships, so the write takes the three in the same order and
+	// the two serialise instead of deadlocking (the write's created_by foreign-key check would
+	// otherwise wait on the user row while holding the account row). No row: the user is gone.
+	LockAuthor(ctx context.Context, userID int64) (int64, error)
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
 	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
 	// booking holding its share lock makes this wait until the mock is committed, and

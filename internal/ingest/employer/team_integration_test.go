@@ -181,11 +181,7 @@ func TestTeam_AnInFlightVacancyWriteIsDetachedWithTheAccount(t *testing.T) {
 		_, err := f.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, f.holder)
 		deleted <- err
 	}()
-	select {
-	case err := <-deleted:
-		t.Fatalf("the account was deleted while a vacancy write held its row (err %v)", err)
-	case <-time.After(300 * time.Millisecond):
-	}
+	waitForLockWait(t, f.pool, deleted)
 	if slug, err := q.LockActingMembership(ctx, member); err != nil || slug != "acme" {
 		t.Fatalf("LockActingMembership with the deletion waiting = %q, %v", slug, err)
 	}
@@ -243,5 +239,71 @@ func TestTeam_AWriteForACompanyTheAuthorLeftIsRefused(t *testing.T) {
 	})
 	if !errors.Is(err, moderation.ErrNoCompany) {
 		t.Errorf("err = %v, want ErrNoCompany", err)
+	}
+}
+
+// waitForLockWait returns once another session of this database is waiting on a lock — the
+// observed proof that it is blocked, rather than a fixed delay. It fails if `done` reports
+// the operation finished instead.
+func waitForLockWait(t *testing.T, pool *pgxpool.Pool, done <-chan error) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("the operation finished (err %v) instead of waiting on the lock", err)
+		default:
+		}
+		var waiting int
+		if err := pool.QueryRow(context.Background(), `
+			SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`).Scan(&waiting); err != nil {
+			t.Fatalf("read pg_stat_activity: %v", err)
+		}
+		if waiting > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("no session ever waited on a lock")
+}
+
+// The claimant creating a vacancy while their account deletion is in flight: the write,
+// driven through moderation's real Create, waits on the claimant's users row (taken before
+// the company row, in deletion order) and then reports the company gone — rather than the
+// two deadlocking on the created_by foreign key.
+func TestTeam_AClaimantsWriteDuringTheirAccountDeletionDoesNotDeadlock(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	mod := moderation.New(moderation.NewQueriesRepository(db.New(f.pool), f.pool, enrich.Version))
+
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, f.holder); err != nil {
+		t.Fatalf("delete claimant (uncommitted): %v", err)
+	}
+
+	created := make(chan error, 1)
+	go func() {
+		_, _, err := mod.Create(ctx, f.holder, moderation.CreateInput{
+			URL: "https://acme.test/jobs/11", Source: "employer", Title: "Go Engineer", Company: "Acme",
+			Description: "Build things.", Employer: moderation.EmployerOwner{UserID: f.holder, CompanySlug: "acme"},
+		})
+		created <- err
+	}()
+	waitForLockWait(t, f.pool, created)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit deletion: %v", err)
+	}
+	select {
+	case err := <-created:
+		if !errors.Is(err, moderation.ErrNoCompany) {
+			t.Fatalf("the write after the deletion committed: err = %v, want ErrNoCompany (not a deadlock)", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the write never finished after the deletion committed")
 	}
 }

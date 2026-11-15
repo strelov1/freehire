@@ -152,12 +152,17 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 }
 
 // lockActingCompany holds, for the write's transaction, the rows that make the author act for
-// the company the write was prepared for: the company-account row first, then their
-// membership row (absent for the claimant) — the order a company-account delete takes them
-// (the account, then the memberships it cascades to), so the two never wait on each other in
-// a cycle. A concurrent removal or account deletion then waits for the write and sees the
+// the company the write was prepared for: the author's users row, then the company-account
+// row, then their membership row (absent for the claimant) — the order a user deletion takes
+// them (the user, the account it cascades to, the memberships that cascades to), so the two
+// never wait on each other in a cycle. A concurrent removal or account deletion then waits for the write and sees the
 // posting it made. ErrNoCompany when the account is gone or the author no longer acts for it.
 func lockActingCompany(ctx context.Context, q *db.Queries, owner EmployerOwner) error {
+	if _, err := q.LockAuthor(ctx, owner.UserID); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoCompany
+	} else if err != nil {
+		return err
+	}
 	claimant, err := q.LockCompanyAccountBySlug(ctx, owner.CompanySlug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNoCompany

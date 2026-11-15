@@ -47,3 +47,11 @@ SELECT company_slug FROM company_account_members WHERE user_id = sqlc.arg(user_i
 -- order the account's deletion takes the two. Returns the claimant. No row: the account is
 -- gone.
 SELECT user_id FROM company_accounts WHERE company_slug = sqlc.arg(company_slug) FOR KEY SHARE;
+
+-- name: LockAuthor :one
+-- Locks the author's users row (FOR KEY SHARE) for an employer vacancy write, before the
+-- company and membership rows: deleting the user takes that row first and then cascades to
+-- the company account and memberships, so the write takes the three in the same order and
+-- the two serialise instead of deadlocking (the write's created_by foreign-key check would
+-- otherwise wait on the user row while holding the account row). No row: the user is gone.
+SELECT id FROM users WHERE id = sqlc.arg(user_id) FOR KEY SHARE;

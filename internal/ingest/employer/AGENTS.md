@@ -150,9 +150,10 @@ for the full design record.
   cascade. Account deletion lives in `identity`, which cannot import this block, so the rule
   lives in the database.
 - **An employer vacancy write holds its author's team rows.** With `CreateInput.Employer`
-  set, moderation's `Create` takes the company-account row, then the author's membership
-  row, `FOR KEY SHARE` in its transaction (`LockCompanyAccountBySlug`, `LockActingMembership`)
-  — the order an account deletion takes them, so the two never deadlock. A removal or account
+  set, moderation's `Create` takes the author's users row, the company-account row and the
+  author's membership row, `FOR KEY SHARE` in its transaction (`LockAuthor`,
+  `LockCompanyAccountBySlug`, `LockActingMembership`) — the order a user deletion takes them
+  (the user, then the account and memberships it cascades to), so the two never deadlock. A removal or account
   deletion running meanwhile waits for the write to commit, then hands over or detaches the
   new vacancy too. An author who no longer acts for the company the write was prepared for
   (removed, the account gone, or moved to another company) is refused
