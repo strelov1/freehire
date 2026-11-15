@@ -50,8 +50,8 @@ another session's revision, and the drafting chain clipped accepted selections a
 Refresh now retains its expected revision until an explicit conflict is surfaced; the chain
 shares the 50-atom selection bound. Focused domain and workspace tests pass.
 
-New migrations were renumbered to 0274/0275 after main gained colliding numbers. Both existing
-0272 migrations on main remain immutable and are recorded in the duplicate-prefix baseline.
+New migrations were renumbered to 0276/0277 after main resolved its application-destination
+migration collision in PR #4667. The duplicate-prefix baseline remains unchanged from main.
 
 Post-fix verification: full Go unit suite and vet passed, as did the database selection
 integration test, all ten cover-letter workspace tests, changed-file ESLint, migration-number
