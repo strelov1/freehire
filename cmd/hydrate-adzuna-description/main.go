@@ -5,7 +5,8 @@
 // cmd/ingest enqueues a job only when its URL is Adzuna's hosted page, not the ad-network
 // tracking redirect (see adzunadesc.Eligible), which answers "Access Denied".
 //
-// It exits non-zero on any failure or dead letter, so cron can alert.
+// It exits non-zero when the queue is unusable, or when a run captured nothing but had failures or
+// dead letters (RunStats.Degraded), so cron can alert.
 package main
 
 import (

@@ -64,9 +64,9 @@ func (i *professionCategoryIndex) get(ctx context.Context, c sources.XMLGetter) 
 	return sitemaps, nil
 }
 
-// discover returns only the categories the crawl accepts, the platform's two IT sections. It fails
-// loudly if the platform renames one, which no seed file would. The adapter refuses the other
-// categories (see profession.go), so offering them would offer boards that cannot be crawled.
+// discover returns only the categories the crawl accepts (the platform's two IT sections) that the
+// sitemap index still publishes; a renamed section drops out without an error. The adapter refuses
+// the other categories (see profession.go), so offering them would offer boards that cannot be crawled.
 func (p professionProber) discover(ctx context.Context, _ httpClient) ([]string, error) {
 	sitemaps, err := p.index.get(ctx, p.client)
 	if err != nil {
