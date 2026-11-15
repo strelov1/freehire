@@ -126,14 +126,13 @@ func talentstormJob(board, company string, o talentstormOffer) (Job, bool) {
 	return j, true
 }
 
-// talentstormEmploymentType maps the offer type and the employment. Measured across 1,355
-// offers on 122 sites (2026-10-25): the offer types are Stellenangebot (1), Ausbildung (2),
-// Duales Studium (3), Praktikum (4), Studien-/Abschlussarbeit (5), Initiativbewerbung (6) and
-// Freelancer (7); the employments ft (Vollzeit), pt (Teilzeit), mj (Minijob/Studentenjob) and hj
-// (Ferienjob). An internship and a freelance offer say what the arrangement is whatever the
-// hours; a Minijob and a Ferienjob have no value in the vocabulary and stay "", as do the
-// apprenticeship and study types. Talentstorm records no work arrangement, so WorkMode is the
-// parser's.
+// talentstormEmploymentType maps the offer type and the employment. Offer types: Stellenangebot
+// (1), Ausbildung (2), Duales Studium (3), Praktikum (4), Studien-/Abschlussarbeit (5),
+// Initiativbewerbung (6), Freelancer (7); employments: ft (Vollzeit), pt (Teilzeit), mj
+// (Minijob/Studentenjob), hj (Ferienjob). An internship and a freelance offer say what the
+// arrangement is whatever the hours; a Minijob and a Ferienjob have no value in the vocabulary
+// and stay "", as do the apprenticeship and study types. Talentstorm records no work
+// arrangement, so WorkMode is the parser's.
 func talentstormEmploymentType(jobtype int, code string) string {
 	switch jobtype {
 	case 4:

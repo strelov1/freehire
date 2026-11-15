@@ -18,12 +18,11 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// posaoHR adapts posao.hr, a Croatian general job board: ~570 postings employers and staffing
+// posaoHR adapts posao.hr, a Croatian general job board: postings employers and staffing
 // agencies publish on the site itself, every trade, many of them abroad (Austria, Germany). The
 // site also republishes the public employment service's vacancies, which the hzz adapter reads
 // at their source, so those are skipped here. It is boardless and an aggregator — the employer is
-// read per posting. See the "posao.hr traps" section of AGENTS.md for the measurements behind each
-// rule.
+// read per posting. See the "posao.hr traps" section of AGENTS.md.
 //
 // The listing is the site's county pages, server-rendered HTML, fifteen cards a page, the
 // site's own postings ahead of the republished ones; a card carries the title, the employer and
@@ -55,16 +54,15 @@ const (
 	posaoHRLanguageURL = posaoHRBaseURL + "/trebam/promijeniti-jezik/hr"
 	// posaoHRAbroad is the county slice of postings outside Croatia.
 	posaoHRAbroad = "inozemstvo"
-	// posaoHRMaxPages is a safety ceiling on one county's walk: the largest (Grad Zagreb) took 16
-	// pages to reach its republished tail on 2026-10-29. Reaching it fails the crawl.
+	// posaoHRMaxPages is a safety ceiling on one county's walk (the largest, Grad Zagreb, needs
+	// about 16 pages to reach its republished tail). Reaching it fails the crawl.
 	posaoHRMaxPages = 60
 	// posaoHRRequestInterval paces every request of a run at one a second — a courtesy ceiling:
 	// two clients reading back to back drew no refusal.
 	posaoHRRequestInterval = time.Second
 	posaoHRDetailWorkers   = 2
-	// posaoHRMaxNewPerRun bounds the posting pages one run reads: the listing is ~95 pages, and
-	// 600 posting pages at one a second is ten minutes, well inside the scheduler's crawl budget.
-	// The whole catalogue (~570) fits one run.
+	// posaoHRMaxNewPerRun bounds the posting pages one run reads: at one a second, 600 pages is
+	// ten minutes, well inside the scheduler's crawl budget.
 	posaoHRMaxNewPerRun   = 600
 	posaoHRDeadlineMargin = 5 * time.Minute
 )

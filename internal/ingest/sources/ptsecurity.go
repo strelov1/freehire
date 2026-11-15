@@ -13,9 +13,8 @@ import (
 )
 
 // ptsecurity adapts Positive Technologies' own careers site (ptsecurity.com/about/vacancy/), a
-// single-company source with no per-tenant board id (boardless). The site is a Next.js App
-// Router app; there is no public API (its /api paths answer 403), so both halves are read from
-// what the server renders:
+// single-company source with no board id. The site is a Next.js App Router app with no public API
+// (its /api paths answer 403), so both halves are read from what the server renders:
 //
 //   - the listing's RSC flight carries the vacancy-list payload — every vacancy's title, slug,
 //     locations, activity group and technology stack, plus the listing's own pagination total;
@@ -30,13 +29,12 @@ type ptsecurity struct {
 }
 
 const (
-	// ptsecurityListURL is the listing, paged server-side by ?page=N (measured 2026-10-14:
-	// ?page=2 answers pagination.page 2 and the second page's vacancies). The /ru-ru/ path the
-	// site links answers 308 to this canonical one.
+	// ptsecurityListURL is the listing, paged server-side by ?page=N. The /ru-ru/ path the site
+	// links answers 308 to this canonical one.
 	ptsecurityListURL    = "https://ptsecurity.com/about/vacancy/?page=%d"
 	ptsecurityVacancyURL = "https://ptsecurity.com/about/vacancy/%s/"
-	// ptsecurityMaxPages bounds the pagination walk against a payload whose pageCount never
-	// stops growing. The listing held 17 vacancies on one page when this was written.
+	// ptsecurityMaxPages bounds the pagination walk against a payload whose pageCount never stops
+	// growing.
 	ptsecurityMaxPages = 50
 )
 
@@ -99,9 +97,8 @@ func (p ptsecurity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 // list walks the listing's pages and returns every vacancy, deduplicated by slug. The listing
 // carries no other id, and the slug is the vacancy's URL segment, so it is unique among live
-// vacancies by construction: two entries with one slug can only open one page. Even a generic
-// slug is a real route — "vacancy" (Руководитель консалтинговых проектов, 2026-10-14) serves
-// that vacancy at /about/vacancy/vacancy/.
+// vacancies: two entries with one slug can only open one page. Even a generic slug ("vacancy") is
+// a real route.
 //
 // The walk is checked against the listing's own total, counting the entries as delivered
 // (before the slug dedup, so a repeated entry cannot fail every crawl): a walk that came up
@@ -161,7 +158,7 @@ func ptsecurityListingOf(flight string) (ptsecurityListing, error) {
 }
 
 // ptsecurityPosting is the vacancy page's schema.org JobPosting. datePosted is present but
-// empty on every page sampled, so it is still decoded — the day the site fills it, it is read.
+// empty on every page seen, so it is still decoded for the day the site fills it.
 type ptsecurityPosting struct {
 	DatePosted      string `json:"datePosted"`
 	EmploymentType  string `json:"employmentType"`

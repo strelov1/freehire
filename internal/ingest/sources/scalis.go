@@ -9,13 +9,11 @@ import (
 
 // scalis adapts Scalis, a multi-tenant ATS (<board>.scalis.ai). The board is the tenant
 // subdomain. The listing page is a Next.js App Router app whose RSC flight inlines a
-// complete, richly-structured job object per posting — title, company, locations,
-// employment/workplace enums, skills, salary, and a full HTML description reachable as a
-// "$<id>" reference into the flight's own text rows — so, unlike topco, no per-posting
-// detail fetch is needed at all. The listing is paginated (confirmed live: 10 results per
-// page, an empty result list past the last page, no redirect trap), so Fetch pages to
-// exhaustion using the shared fetchFlight/bracketSlice/nextFlightTextRows primitives every
-// other RSC-flight adapter (deel, topco, micro1) already uses.
+// complete job object per posting — title, company, locations, employment/workplace enums,
+// skills, salary, and a full HTML description reachable as a "$<id>" reference into the
+// flight's own text rows — so, unlike topco, no per-posting detail fetch is needed. The
+// listing is paginated (10 results per page, an empty list past the last page), so Fetch pages
+// to exhaustion using the shared fetchFlight/bracketSlice/nextFlightTextRows primitives.
 type scalis struct {
 	http HTMLGetter
 }
@@ -25,23 +23,17 @@ func NewScalis(c HTMLGetter) Source { return scalis{http: c} }
 
 func (scalis) Provider() string { return "scalis" }
 
-// scalisPageSize is the listing's fixed page size (confirmed live).
+// scalisPageSize is the listing's fixed page size.
 const scalisPageSize = 10
 
-// scalisMaxPages bounds the page walk. The natural stop is a page whose result list is
-// empty (confirmed live, including past the true last page), but a misbehaving tenant that
-// never returns an empty page would otherwise loop forever. `limit` is confirmed
-// server-clamped (a live `limit=100` request still answered 10 results per page), so a
-// larger tenant genuinely needs more pages rather than a bigger page — this is a wide
-// safety margin over the one measured tenant (46 postings, 5 pages), not a real board size,
-// and reaching it is a hard failure (see Fetch), never a silent partial success, the same
-// lesson `teamtailor.ttMaxPages` already paid for on a real board.
+// scalisMaxPages bounds the page walk. The natural stop is an empty result page, but a tenant
+// that never returns one would otherwise loop forever. `limit` is server-clamped to 10, so a
+// larger tenant needs more pages, not a bigger page. Reaching the bound is a hard failure (see
+// Fetch), never a silent partial success.
 const scalisMaxPages = 500
 
-// fullBoardListing: jobURLs proves completeness by paginating to a genuinely empty page,
-// and treats a later-page failure or reaching the scalisMaxPages safety ceiling as a hard
-// Fetch failure rather than a partial success — see the fullBoardListing interface's own
-// bar (source.go) and scalisMaxPages's comment for why a reachable ceiling must fail loudly.
+// fullBoardListing: completeness is proven by paginating to a genuinely empty page; a
+// later-page failure or reaching scalisMaxPages is a hard Fetch failure (see source.go).
 func (scalis) fullBoardListing() {}
 
 func (s scalis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -59,12 +51,10 @@ func (s scalis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return nil, fmt.Errorf("scalis: board %q page %d: %w", e.Board, page, err)
 		}
 		if len(listing.Results) == 0 {
-			// Postings reference their descriptions by id into the flight's text rows
-			// (see scalisToJob). If every reference on the whole board failed to
-			// resolve, the row parse broke — e.g. the marker format changed — so fail
-			// loudly rather than ship a board of empty-bodied jobs; a single
-			// unresolved reference on an otherwise-healthy board still yields its
-			// posting with an empty description (tolerated degradation), matching deel.
+			// Postings reference their descriptions by id into the flight's text rows. If every
+			// reference on the board failed to resolve, the row parse broke (e.g. the marker
+			// format changed), so fail loudly rather than ship empty-bodied jobs; a single
+			// unresolved reference still yields its posting with an empty description.
 			if refs > 0 && resolved == 0 {
 				return nil, fmt.Errorf("scalis: board %q: %d description references but none resolved", e.Board, refs)
 			}
@@ -84,19 +74,16 @@ func (s scalis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			}
 		}
 	}
-	// The loop ran out scalisMaxPages without ever seeing an empty page — the board is
-	// not proven to have ended, so this is not "here is what we found," it is a failure.
+	// scalisMaxPages ran out without an empty page: the board is not proven to have ended.
 	return nil, fmt.Errorf("scalis: board %q: reached the %d-page safety ceiling without finding the board's end",
 		e.Board, scalisMaxPages)
 }
 
-// scalisDescription resolves a posting's description, preferring descriptionHtml (it
-// preserves paragraph/list structure) and falling back to the plain-text description when
-// the HTML field's own reference fails to resolve — a row-parse hiccup on just that one
-// field still keeps a body rather than losing it. hadRef reports whether either field was a
-// "$<id>" reference at all, which Fetch uses for the board-wide resolution health check: it
-// is the single source of truth both scalisToJob and that check read, so they can never
-// disagree about whether a given posting's reference resolved.
+// scalisDescription resolves a posting's description, preferring descriptionHtml (it keeps
+// paragraph/list structure) and falling back to the plain-text description when the HTML
+// field's reference fails to resolve. hadRef reports whether either field was a "$<id>"
+// reference, which Fetch uses for the board-wide resolution health check; scalisToJob and
+// that check both read it so they cannot disagree.
 func scalisDescription(p scalisPosting, rows map[string]string) (desc string, hadRef bool) {
 	for _, field := range []string{p.DescriptionHTML, p.Description} {
 		ref, isRef := strings.CutPrefix(field, "$")
@@ -130,13 +117,11 @@ type scalisPosting struct {
 	Workplace       string   `json:"workplace"`
 	Payment         string   `json:"payment"`
 	Skills          []string `json:"skills"`
-	// Company is deliberately NOT decoded: a Scalis board is single-tenant, so the
-	// curator-configured CompanyEntry.Company is authoritative. React's RSC flight also
-	// deduplicates repeated identical objects across an array — every posting after the
-	// first carries "company" as a path-backreference STRING ("$5:2:props:...") rather
-	// than a literal object, which a typed field would fail to unmarshal (this broke
-	// every crawl of boldbusiness in production). Leaving the field out entirely means
-	// json.Unmarshal skips it regardless of its shape.
+	// Company is deliberately NOT decoded: a Scalis board is single-tenant, so the configured
+	// CompanyEntry.Company is authoritative. The RSC flight also deduplicates repeated objects:
+	// every posting after the first carries "company" as a path-backreference STRING
+	// ("$5:2:props:..."), which a typed field would fail to unmarshal. Leaving the field out
+	// means json.Unmarshal skips it whatever its shape.
 	Locations []struct {
 		City    string `json:"city"`
 		Country string `json:"country"`

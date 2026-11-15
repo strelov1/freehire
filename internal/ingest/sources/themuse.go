@@ -11,15 +11,11 @@ import (
 // takes each posting's company from the feed. The /api/public/jobs endpoint pages by page
 // number and ships each posting's full description inline (no detail call).
 //
-// The response's own page_count/total (verified live: 20356 pages, 407108 jobs) is NOT a
-// walkable bound: despite reporting that count, the API itself rejects any page beyond ~99
-// with a 400 ("Value `page` is too high") — the true depth is roughly 2 orders of magnitude
-// smaller than what the metadata claims (the same shape of surprise WhatJobs' feed has, see
-// internal/ingest/sources/AGENTS.md). No special-casing is needed for it: the adapter walks forward
-// from page 1 and, per the paginated-walk convention (AGENTS.md — first page failing is a
-// board error, a later page failing ends the walk with what was gathered), the 400 on the
-// real ceiling is just a later-page failure that stops the crawl and returns the partial
-// catalogue already collected.
+// The response's page_count/total is NOT a walkable bound: the API rejects any page beyond ~99 with
+// a 400 ("Value `page` is too high"), far below the reported count (the same surprise as WhatJobs'
+// feed, see sources/AGENTS.md). Nothing is special-cased: per the paginated-walk convention (first
+// page failing is a board error, a later page failing ends the walk with what was gathered), that
+// 400 just ends the crawl with the partial catalogue.
 type themuse struct {
 	http JSONGetter
 }
@@ -112,10 +108,9 @@ func (p themusePosting) toJob() (Job, bool) {
 	}, true
 }
 
-// museSeniority maps The Muse's own level taxonomy (verified live: "entry", "mid", "senior" —
-// no other short_name observed across a multi-page sample) to freehire's controlled
-// vocabulary. An unrecognized value maps to "" rather than a guess (vocab.SeniorityValues is
-// dict-only).
+// museSeniority maps The Muse's own level taxonomy ("entry", "mid", "senior") to freehire's
+// controlled vocabulary. An unrecognized value maps to "" rather than a guess
+// (vocab.SeniorityValues is dict-only).
 func museSeniority(shortName string) string {
 	switch shortName {
 	case "entry":

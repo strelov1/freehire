@@ -21,10 +21,9 @@ import (
 // postings are syndicated to job boards through short links (www.workwise.io/s/<code>) that land
 // on the posting. It is boardless and an aggregator — thousands of employers, named per posting.
 //
-// The posting set is one sitemap, enquiryFocusPagesSitemap.xml (4,015 postings on 2026-10-25),
-// which names only each posting's URL; every fact is bought with the posting page's schema.org
-// JobPosting, so the adapter hydrates only the postings the catalogue lacks. See the "Workwise
-// traps" section of AGENTS.md for the measurements behind each rule.
+// The posting set is one sitemap, enquiryFocusPagesSitemap.xml, which names only each
+// posting's URL; every fact comes from the posting page's schema.org JobPosting, so the adapter
+// hydrates only the postings the catalogue lacks. See the "Workwise traps" section of AGENTS.md.
 type workwise struct {
 	http         workwiseHTTP
 	limiter      waiter
@@ -44,15 +43,15 @@ const (
 	workwiseSitemapNeedle = "/enquiryFocusPagesSitemap.xml"
 )
 
-// workwiseRequestInterval paces every request of a run through one limiter. 60 posting pages at
-// ~2.5/s drew no refusal; two a second is courtesy, not a limit we measured.
+// workwiseRequestInterval paces every request of a run through one limiter. Two a second is
+// courtesy; no refusal was seen at ~2.5/s.
 const workwiseRequestInterval = 500 * time.Millisecond
 
 // workwiseDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 const workwiseDetailWorkers = 3
 
-// workwiseMaxNewPerRun bounds how many unseen postings one run hydrates: 2,500 pages at two a
-// second is ~21 minutes. The first run faces the whole catalogue (~4k), so it takes two runs.
+// workwiseMaxNewPerRun bounds how many unseen postings one run hydrates; the first run faces
+// the whole catalogue, so it takes several runs.
 const workwiseMaxNewPerRun = 2500
 
 // NewWorkwise builds the adapter over the given client.
@@ -288,9 +287,8 @@ var workwiseHomeOfficeDays = regexp.MustCompile(`<span>\s*\d+(?:\s*-\s*\d+)?\s+T
 
 // workwiseWorkMode reads the arrangement the posting form states. jobLocationType TELECOMMUTE
 // with the "Remote Job" line is remote; "Remote möglich" (remote possible) and a number of
-// home-office days a week are hybrid. "Kein Homeoffice" is NOT read as onsite: it is what 70% of
-// sampled postings show, and the form cannot tell an employer who chose it from one who left the
-// field alone.
+// home-office days a week are hybrid. "Kein Homeoffice" is NOT read as onsite: most postings
+// show it, and the form cannot tell an employer who chose it from one who left the field alone.
 func workwiseWorkMode(locationType, description string) string {
 	switch {
 	case strings.Contains(description, "<span>Remote Job</span>") && locationType == "TELECOMMUTE":

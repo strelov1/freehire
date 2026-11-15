@@ -11,39 +11,36 @@ import (
 	"sync/atomic"
 )
 
-// tyomarkkinatori adapts Job Market Finland (tyomarkkinatori.fi), the Finnish national job
-// portal run by KEHA-keskus (the successor to the retired te-palvelut). Like the other national
-// feeds (jobdanmark/jobnet/jobtech) it is boardless (one public API, no per-tenant board) and an
-// aggregator (every posting carries its own employer), and it covers every sector — the
+// tyomarkkinatori adapts Job Market Finland (tyomarkkinatori.fi), the Finnish national job portal
+// run by KEHA-keskus. Like the other national feeds (jobdanmark/jobnet/jobtech) it is boardless and
+// an aggregator (every posting carries its own employer), and it covers every sector: the
 // downstream dictionaries and the enrich non-tech gate decide relevance, not the adapter.
 //
-// The catalogue is served by a same-origin JSON API behind a rewriting gateway, discovered by
-// capturing the search SPA's own XHR:
-//   - list:   POST /api/jobpostingfulltext/search/v2/search — an empty query returns the whole
+// The catalogue is served by a same-origin JSON API behind a rewriting gateway (found by capturing
+// the search SPA's own XHR):
+//   - list:   POST /api/jobpostingfulltext/search/v2/search. An empty query returns the whole
 //     catalogue freshest-first, but the list item omits the posting body.
-//   - detail: GET /api/jobposting-new/v1/public/jobpostings/{id} — the body (plain or markdown),
-//     the authoritative employer name, and the publish date.
+//   - detail: GET /api/jobposting-new/v1/public/jobpostings/{id}. The body (plain or markdown), the
+//     authoritative employer name, and the publish date.
 //
-// The search is a thin Elasticsearch proxy: it hard-caps deep paging at (pageNumber*pageSize)+
-// pageSize ≤ 10000 (the max_result_window), and the whole portal (~10.7k open postings) exceeds
-// that. So the crawl SHARDS by region — every region's slice is well under the window and pages
-// fully — and dedups the ids a multi-region posting returns in several shards. Region assignment
-// is stable across runs, so a posting we ingest via a region shard stays reachable via the same
-// shard, which is what keeps the post-run unseen sweep from false-closing the tail (unlike a
-// single freshest-10k sweep, whose oldest open postings would age out of view and be closed).
-// Region-less postings (rare, fully foreign with no Finnish municipality) simply never enter the
-// catalogue — a coverage gap, not a false-close.
+// The search is a thin Elasticsearch proxy that hard-caps deep paging at
+// (pageNumber*pageSize)+pageSize <= 10000 (the max_result_window), and the whole portal exceeds
+// that. So the crawl SHARDS by region (every region's slice is well under the window and pages
+// fully) and dedups the ids a multi-region posting returns in several shards. Region assignment is
+// stable across runs, so a posting ingested via a region shard stays reachable via the same shard,
+// which keeps the post-run unseen sweep from false-closing the tail (a single freshest-10k sweep
+// would age out the oldest open postings and close them). Region-less postings (rare, fully foreign
+// with no Finnish municipality) never enter the catalogue: a coverage gap, not a false-close.
 //
-// Detail is the expensive fan-out (one request per posting over ~10k postings), so the adapter is
-// a HydratingSource: FetchNew fetches a posting's detail only when the catalogue does not already
-// have it, refreshing a seen posting's liveness without a detail request (see nofluffjobs).
+// Detail is the expensive fan-out (one request per posting), so the adapter is a HydratingSource:
+// FetchNew fetches a posting's detail only when the catalogue does not already have it, refreshing
+// a seen posting's liveness without a detail request (see nofluffjobs).
 //
-// The detail endpoint rate-limits under sustained load: a cold-start crawl that fetches all ~10k
-// details trips a 403 after a few hundred requests. So hydration is GRADUAL — the first 403 latches
-// off further detail requests for the rest of the run, and an un-hydrated posting is left
-// un-ingested (not stored description-less) so it stays unseen and a later run hydrates it once the
-// limit has cooled. Over successive hourly runs the catalogue fills up, every posting with a real
-// description; in steady state only the daily delta needs a detail request, well under the limit.
+// The detail endpoint rate-limits under sustained load (a 403 after a few hundred requests on a
+// cold start). So hydration is GRADUAL: the first 403 latches off further detail requests for the
+// rest of the run, and an un-hydrated posting is left un-ingested (not stored description-less) so
+// it stays unseen and a later run hydrates it once the limit has cooled. In steady state only the
+// daily delta needs a detail request.
 type tyomarkkinatori struct {
 	http tmtClient
 }
@@ -71,11 +68,10 @@ const (
 	tmtDetailWorkers = 4
 )
 
-// tmtRegions is the fixed set of Finnish region (maakunta) codes the search filters on — the 18
-// mainland regions plus Åland (21). The two historically-vacant codes (03, 20) are omitted; a
-// live-but-empty region would merely return no postings, so the list is a convenience, not a
-// correctness dependency. A posting is matched into a region via its municipality, so the shards
-// collectively over-cover the catalogue (a multi-region posting appears in several), which the
+// tmtRegions is the fixed set of Finnish region (maakunta) codes the search filters on: the
+// mainland regions plus Åland (21). The two vacant codes (03, 20) are omitted; a live-but-empty
+// region would merely return no postings. A posting is matched into a region via its municipality,
+// so the shards over-cover the catalogue (a multi-region posting appears in several), which the
 // id-dedup in listAll collapses.
 var tmtRegions = []string{
 	"01", "02", "04", "05", "06", "07", "08", "09", "10",

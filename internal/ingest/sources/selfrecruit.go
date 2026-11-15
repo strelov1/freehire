@@ -12,10 +12,9 @@ import (
 // selfrecruit adapts selfrecruit.ge ("Self.hr"), a Georgian-market multi-tenant ATS. The
 // board is the tenant subdomain (e.g. "dressup" for dressup.selfrecruit.ge). The platform
 // exposes no JSON API and no schema.org/ld+json markup: the listing is paged by OFFSET
-// (`/vacancies/<offset>` in steps of 10 — `/vacancies/0` confirmed identical to the bare
-// tenant root), and each posting's title and description sit in fixed, classed DOM
-// elements ("vacancy_title_inner", "pub_vac_text_detail") read via the shared html.go DOM
-// walkers.
+// (`/vacancies/<offset>` in steps of 10; offset 0 equals the bare tenant root), and each
+// posting's title and description sit in fixed, classed DOM elements ("vacancy_title_inner",
+// "pub_vac_text_detail") read via the shared html.go DOM walkers.
 type selfrecruit struct {
 	http HTMLGetter
 }
@@ -25,14 +24,12 @@ func NewSelfRecruit(c HTMLGetter) Source { return selfrecruit{http: c} }
 
 func (selfrecruit) Provider() string { return "selfrecruit" }
 
-// selfrecruitPageSize is the listing's fixed page size (confirmed live: offsets 0, 10, 20
-// each answer a distinct set of up to 10 postings).
+// selfrecruitPageSize is the listing's fixed page size.
 const selfrecruitPageSize = 10
 
-// selfrecruitMaxPages bounds the offset walk. The natural stop is a page adding no new
-// posting link — confirmed live even past the end, since a page beyond the last one
-// redirects back to the tenant root, whose links are already seen — but a misbehaving
-// tenant that never repeats a link would otherwise loop forever.
+// selfrecruitMaxPages bounds the offset walk. The natural stop is a page adding no new posting
+// link (a page past the last redirects to the tenant root, whose links are already seen); the cap
+// guards a tenant that never repeats a link.
 const selfrecruitMaxPages = 100
 
 // fullBoardListing: crawlAllPagedLinks fails the whole Fetch on ANY page failing, not just
@@ -80,10 +77,9 @@ func (s selfrecruit) detail(ctx context.Context, e CompanyEntry, loc string) (Jo
 		return Job{}, false
 	}
 
-	// firstByClass returns nil when the page carries neither classed element — textContent/
-	// innerHTML would panic on a nil node, and a page that answered but carries no posting
-	// markup at all is unreadable, not a posting with an empty title, the same "successful
-	// fetch, no usable content" reading detailUnreadable already gives a transport failure.
+	// firstByClass returns nil when the page carries neither classed element: a page with no posting
+	// markup is unreadable, not a posting with an empty title, as detailUnreadable already reads a
+	// transport failure.
 	titleNode := firstByClass(root, "vacancy_title_inner")
 	descNode := firstByClass(root, "pub_vac_text_detail")
 	if titleNode == nil || descNode == nil {

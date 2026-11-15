@@ -19,12 +19,11 @@ import (
 //
 // The results endpoint answers a GET with {"results": "<html fragment>"}: the fragment holds a
 // <section id="search-results"> whose data-total-pages says how many pages RecordsPerPage cuts
-// the board into, and one <a href=… data-job-id=…> per posting (a page of 100 was honoured on
-// the sampled boards). The listing carries no description, so the adapter hydrates
-// (HydratingSource): a posting page — whose schema.org JobPosting ld+json block states the
-// title, description, date and locations — is fetched only for a posting the catalogue does not
-// already have. The boards are large (ALDI US lists ~1,550 postings), so that is the difference
-// between a request per posting and a request per NEW posting on every crawl.
+// the board into, and one <a href=… data-job-id=…> per posting. The listing carries no
+// description, so the adapter hydrates (HydratingSource): a posting page — whose schema.org
+// JobPosting ld+json block states the title, description, date and locations — is fetched only
+// for a posting the catalogue does not already have, turning a request per posting into a
+// request per NEW posting on every crawl.
 //
 // The results endpoint is NOT answered without the facet parameters the site's own script sends:
 // a bare CurrentPage/RecordsPerPage query returns an empty fragment with hasJobs=true.
@@ -46,7 +45,7 @@ const (
 	// tbPageSize is the RecordsPerPage a listing request asks for.
 	tbPageSize = 100
 	// tbMaxPages bounds the page walk, so a board whose data-total-pages never converges cannot
-	// loop forever. 100 pages × tbPageSize is far past the largest board sampled (~1,550).
+	// loop forever.
 	tbMaxPages = 100
 	// tbResultsQuery is the facet parameter set the site's own search script sends with every
 	// request, empty. Without it the endpoint answers an empty fragment.

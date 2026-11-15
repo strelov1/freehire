@@ -6,12 +6,10 @@ import (
 	"strconv"
 )
 
-// keka adapts Keka career portals, an Indian HR/ATS SaaS. The board is the company's Keka
-// subdomain (e.g. "minfy" for minfy.keka.com/careers). One request to the platform's own
-// job-listing API (the same one its careers page's own frontend calls, whichever of its two
-// generations a given org's portal renders with — jobListingFormat 1 or 2, verified live
-// against one of each) returns every open posting fully detailed, description included, so no
-// per-posting detail fetch is needed at all.
+// keka adapts Keka career portals. The board is the company's Keka subdomain (e.g. "minfy" for
+// minfy.keka.com/careers). One request to the platform's own job-listing API (the one its careers
+// page calls, for both jobListingFormat 1 and 2) returns every open posting with its description,
+// so there is no per-posting detail fetch.
 type kekaHTTP interface {
 	JSONGetter
 }
@@ -25,9 +23,8 @@ func NewKeka(c kekaHTTP) Source { return keka{http: c} }
 
 func (keka) Provider() string { return "keka" }
 
-// fullBoardListing: the jobs-active endpoint returns the board's whole open-postings array in
-// one request (verified live against an 88-posting board, no pagination), so a listing failure
-// aborts the whole Fetch rather than silently returning a partial board.
+// fullBoardListing: the jobs-active endpoint returns the whole open-postings array in one
+// request, so a listing failure aborts the Fetch rather than returning a partial board.
 func (keka) fullBoardListing() {}
 
 func (s keka) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -79,10 +76,8 @@ func kekaJob(base, company string, p kekaPosting) Job {
 		Company:     company,
 		Location:    location,
 		Description: sanitizeHTML(p.Description),
-		// Keka carries no structured remote flag in the fields either template's org
-		// configures (jobListingSetting.jobFields lists only some mix of
-		// location/experience/jobType/dateOfPosting); the location/title heuristic is the
-		// only signal available.
+		// Keka carries no structured remote flag (jobListingSetting.jobFields lists only some mix of
+		// location/experience/jobType/dateOfPosting); the location/title heuristic is the only signal.
 		Remote:         isRemote(location) || isRemote(p.Title),
 		EmploymentType: employmentType,
 		PostedAt:       parseRFC3339(p.PublishedOn),

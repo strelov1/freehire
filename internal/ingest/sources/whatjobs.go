@@ -20,8 +20,7 @@ import (
 // The feed cannot be crawled exhaustively (it stops serving results past roughly two thousand
 // pages while reporting a far larger total), and its postings cannot be verified: url points at
 // the network's billing landing page rather than the employer's posting, so cmd/liveness can never
-// probe one. Both facts are why the adapter declares a wide sweepGrace instead of relying on the
-// default unseen window.
+// probe one. Both are why the adapter declares a wide sweepGrace instead of the default unseen window.
 type whatjobs struct {
 	http        JSONGetter
 	publisherID string
@@ -36,16 +35,15 @@ const (
 	// feed's paginator — so the size is pinned here rather than made configurable.
 	whatjobsPageSize = 50
 	// whatjobsMaxPages bounds one keyword's crawl. The feed stops serving results past roughly two
-	// thousand pages regardless of the total it reports, and a broad keyword ("software engineer",
-	// 12k postings) would take hundreds of requests to walk, so a keyword is read as a bounded slice
-	// and kept narrow in the board file instead. When the budget is what ended a crawl the adapter
-	// says so in the log: a bounded slice must never read as full coverage.
+	// thousand pages regardless of the total it reports, and a broad keyword would take hundreds of
+	// requests to walk, so a keyword is read as a bounded slice and kept narrow in the board file.
+	// When the budget ended a crawl the adapter says so in the log: a bounded slice must never read
+	// as full coverage.
 	whatjobsMaxPages = 40
 	// whatjobsMinCorroboratedPct is the share of a page's postings that must name the keyword's terms
 	// for the crawl to continue. The feed's keyword RANKS rather than filters and pads a thin result
-	// set with unrelated inventory: measured on "rust developer", page 1 corroborated 47/47 and page 2
-	// only 4/26. Any threshold inside that gap behaves the same, so this sits plainly in the middle
-	// rather than being tuned to one sample.
+	// set with unrelated inventory, so relevance falls off a cliff between pages; any threshold in
+	// that gap behaves the same.
 	whatjobsMinCorroboratedPct = 50
 	// whatjobsCrawlIP is the mandatory user_ip. A crawl is not a user viewing a page, so sending
 	// a real visitor address would fabricate an impression: the feed ignores tracking for an
@@ -63,7 +61,7 @@ const (
 	// empty board because a blank board is how a typo looks, and a typo must not pour a whole pool
 	// into the catalogue — this one has to be written on purpose. It suits the thin accounts, whose
 	// pool fits inside whatjobsMaxPages and holds too little of any one role for keyword slices to
-	// find; a deep account (the US carries ~875k) would only have its first slice read.
+	// find; a deep account would only have its first slice read.
 	whatjobsWholeInventory = "*"
 )
 
@@ -282,10 +280,9 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %d postings, none carrying a %s id — tracked URL shape changed?",
 				keyword, page, len(resp.Data), whatjobsTrackedID)
 		}
-		// Relevance does not taper, it falls off a cliff — measured 100% on page 1 and 15% on page 2.
-		// A corroborated share under the minimum means the feed has started padding the result set, so
-		// every further page is mostly waste. Stopping here is what keeps the request volume (and the
-		// rate limiting it caused) down; the page's corroborated postings are real and are kept.
+		// Relevance does not taper, it falls off a cliff. A corroborated share under the minimum
+		// means the feed has started padding the result set, so every further page is mostly waste.
+		// Stopping keeps request volume (and rate limiting) down; this page's corroborated postings are kept.
 		if len(terms) > 0 && corroborated*100 < usable*whatjobsMinCorroboratedPct {
 			stopped = fmt.Sprintf("relevance collapsed to %d/%d on page %d", corroborated, usable, page)
 			break
@@ -352,9 +349,9 @@ func whatjobsExternalID(trackedURL string) (string, bool) {
 	return m[1], true
 }
 
-// whatjobsResellerMark matches the tracking signature a reseller appends to the body, which 96% of
-// the feed's descriptions carry. It identifies the network the posting was resold through, not the
-// role, so it is cut before the description reaches the catalogue.
+// whatjobsResellerMark matches the tracking signature a reseller appends to the body. It identifies
+// the network the posting was resold through, not the role, so it is cut before the description
+// reaches the catalogue.
 var whatjobsResellerMark = regexp.MustCompile(`\s*#J-\d+-Ljbffr\s*$`)
 
 // toJob maps a posting, returning ok=false when the tracked URL carries no native id. The tracked

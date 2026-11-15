@@ -17,8 +17,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// taleez adapts Taleez (taleez.com), a French ATS whose customers — SMEs, staffing groups,
-// healthcare networks, garages of the AD network — publish each opening at
+// taleez adapts Taleez (taleez.com), a French ATS that publishes each opening at
 // https://taleez.com/apply/<token>. There is no per-customer listing any more (the old
 // taleez.com/careers/<slug> pages answer 404, and <slug>.taleez.com is wildcard DNS), so the
 // adapter is boardless: the posting set is the job sitemap robots.txt advertises, and the
@@ -47,12 +46,11 @@ const (
 	taleezSitemapURL = "https://" + taleezHost + "/sitemap-job.xml"
 
 	// taleezRequestInterval paces every posting page at one a second: a quick burst from one IP
-	// drew a refused connection (2026-10-28), so this is a courtesy ceiling.
+	// drew a refused connection, so this is a courtesy ceiling.
 	taleezRequestInterval = time.Second
 	taleezDetailWorkers   = 2
-	// taleezFreshPerRun and taleezBacklogPerRun bound one run's page reads: 1,200 pages at one a
-	// second is twenty minutes. The sitemap held 12,136 postings on 2026-10-28, so the first runs
-	// take it in slices.
+	// taleezFreshPerRun and taleezBacklogPerRun bound one run's page reads (1,200 pages at one a
+	// second is twenty minutes); a large sitemap is taken in slices over several runs.
 	taleezFreshPerRun    = 900
 	taleezBacklogPerRun  = 300
 	taleezDeadlineMargin = 5 * time.Minute

@@ -15,17 +15,15 @@ import (
 	"golang.org/x/net/html"
 )
 
-// optius adapts Optius (www.optius.com), a Slovenian general job board: ~1.3k open postings
-// from employers and staffing agencies across every trade. It is boardless and an aggregator —
-// the employer is read per posting. See the "Optius traps" section of AGENTS.md for the
-// measurements behind each rule.
+// optius adapts Optius (www.optius.com), a Slovenian general job board. It is boardless and an
+// aggregator: the employer is read per posting. See the "Optius traps" section of AGENTS.md.
 //
-// The listing is server-rendered HTML, twenty cards a page, newest first; a card carries the
-// title, the employer, the place and the application deadline, never the body. The body is
-// bought from the posting page for postings the catalogue lacks, within a per-run budget, one
-// request at a time: the site answers 429 to as few as two concurrent requests. The site's own
-// "abroad" region listing (Tujina) is walked as well, so the Slovenian fallback country is never
-// attached to a posting in Austria whose place the location dictionary cannot read.
+// The listing is server-rendered HTML, twenty cards a page, newest first; a card carries title,
+// employer, place and deadline, never the body. The body is fetched from the posting page for
+// postings the catalogue lacks, within a per-run budget, one request at a time: the site answers
+// 429 to as few as two concurrent requests. The site's "abroad" region listing (Tujina) is walked
+// too, so the Slovenian fallback country is never attached to a posting abroad whose place the
+// location dictionary cannot read.
 type optius struct {
 	http           HTMLGetter
 	maxNewPerRun   int
@@ -40,16 +38,13 @@ const (
 	optiusAbroadListing = optiusListing + "regija/tujina/"
 	// optiusPageSize is the cards a listing page carries; the pager's s= is a card offset.
 	optiusPageSize = 20
-	// optiusMaxPages is a safety ceiling on one listing walk: 66 pages on 2026-10-29. Reaching
-	// it fails the crawl rather than ending the walk as a success.
+	// optiusMaxPages is a safety ceiling on one listing walk; reaching it fails the crawl.
 	optiusMaxPages = 300
-	// optiusRequestInterval paces every request of a run, listing and posting page alike, at one
-	// every three seconds. One request is in flight at a time, yet a walk paced at one a second
-	// drew a 429 by its twelfth page, while requests back to back at ~4 s each never did.
+	// optiusRequestInterval paces every request of a run, listing and posting page alike. One
+	// request at a time is not enough: a walk paced at one a second still drew a 429.
 	optiusRequestInterval = 3 * time.Second
-	// optiusMaxNewPerRun bounds the posting pages one run reads. The listing walk takes ~5
-	// minutes and a posting page ~3.5 s, so 400 pages fit the scheduler's 2,400 s crawl budget
-	// with the writes after them. A cold catalogue (~1.3k) is taken over a few runs.
+	// optiusMaxNewPerRun bounds the posting pages one run reads, sized so the walk, the pages and
+	// the writes after them fit the scheduler's crawl budget. A cold catalogue takes a few runs.
 	optiusMaxNewPerRun   = 400
 	optiusDeadlineMargin = 5 * time.Minute
 )
@@ -150,7 +145,7 @@ func (s optius) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		answered.Add(1)
 		return job, ok
 	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
+	// A crawl that read no page at all is broken, not quiet. "Answered" includes a posting the
 	// site reported gone; postings left for want of time are not failures.
 	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
 		return nil, fmt.Errorf("optius: requested %d posting pages and none answered", int64(len(unseen))-outOfTime.Load())
@@ -197,11 +192,10 @@ func (s optius) list(ctx context.Context) ([]optiusCard, error) {
 	return cards, nil
 }
 
-// walk reads one listing to its end: the first page carrying no card at an offset past the
-// total the page itself states. A cardless page without the result counter (a challenge or an
-// error page answered 200), or one short of the stated total, is not the listing's end and
-// fails the walk. The total is the cardless page's own, so postings that expired while the walk
-// ran do not fail it.
+// walk reads one listing to its end: the first cardless page at an offset past the total that
+// page states. A cardless page without the result counter (a challenge or error page answered
+// 200), or short of the stated total, fails the walk. The total is the cardless page's own, so
+// postings that expired mid-walk do not fail it.
 func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 	seen := make(map[string]bool)
 	var out []optiusCard
@@ -382,9 +376,8 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	}
 	if hasLD {
 		j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
-		// validThrough is the source's own last application day, a bare UTC date. Unlike a
-		// posted_at it may legitimately sit today or tomorrow, so it is not run through
-		// NotFuture; a stale one past today closes the posting on the write.
+		// validThrough is the source's last application day, a bare UTC date. It may legitimately
+		// be today or tomorrow, so it skips NotFuture.
 		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.ValidThrough)); err == nil {
 			j.ApplicationDeadline = &t
 		}
@@ -396,11 +389,9 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	return j, true, nil
 }
 
-// optiusBody renders the posting from the page's main column: the employer's introduction
-// under its name, then each section heading ("Opis delovnega mesta", "Pričakujemo", "Ponujamo")
-// and labelled fact ("Delovni čas", "Zahtevana izobrazba") in page order. Employers with their
-// own page template keep the same headings and fact rows, so one reading covers both. A page
-// whose posting is an image or an embedded third-party page yields nothing here.
+// optiusBody renders the posting from the page's main column: the employer's introduction, then
+// each section heading and labelled fact in page order. Employers with their own template keep
+// the same headings and rows. A posting that is an image or an embedded page yields nothing.
 func optiusBody(section *html.Node) string {
 	var b strings.Builder
 	heading := ""

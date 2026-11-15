@@ -19,11 +19,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// mojposao adapts MojPosao, Alma Career's job board on its "borg" platform: mojposao.hr,
-// Croatia's largest commercial board (every trade, ~6% IT), and its Bosnian sibling mojposao.ba.
-// A board is the market's domain; both serve the same API, which picks the market by the x-app
-// header. It is an aggregator — the employer is read per posting. See the "MojPosao traps"
-// section of AGENTS.md for the measurements behind each rule.
+// mojposao adapts MojPosao, Alma Career's job board on its "borg" platform: mojposao.hr (Croatia)
+// and mojposao.ba (Bosnia). Both serve the same API, which picks the market by the x-app header.
+// It is an aggregator: the employer is read per posting. See the "MojPosao traps" section of
+// AGENTS.md.
 //
 // The listing is the web app's own search API, 100 postings a request; it names the title,
 // employer and place of every open posting but carries only a snippet of the body. The body,
@@ -66,12 +65,10 @@ const (
 	// a one-second crawl delay.
 	mojposaoRequestInterval = time.Second
 	mojposaoDetailWorkers   = 2
-	// mojposaoMaxPages is a safety ceiling: the Croatian catalogue was 1,449 postings (15 pages)
-	// on 2026-10-28, the Bosnian one 531.
+	// mojposaoMaxPages is a safety ceiling on the pages walked.
 	mojposaoMaxPages = 100
-	// mojposaoMaxNewPerRun bounds the posting requests of one run: ~15 listing requests and
-	// 1,200 posting requests at one a second sit well inside the scheduler's default 2,400 s
-	// crawl budget, and cover the whole catalogue's cold start in about two runs.
+	// mojposaoMaxNewPerRun bounds the posting requests of one run so it fits the scheduler's
+	// default crawl budget at one request a second; a cold start takes about two runs.
 	mojposaoMaxNewPerRun   = 1200
 	mojposaoDeadlineMargin = 5 * time.Minute
 
@@ -129,9 +126,8 @@ type mojposaoCard struct {
 }
 
 // mojposaoOrg is a posting's employer. An employer that hides its name is not an object but the
-// bare string "incognito" (4 of 1,449 postings on 2026-10-28); it decodes to an empty name, and
-// such a posting is dropped — filing it under the label would invent one employer collecting
-// every anonymous posting.
+// bare string "incognito"; it decodes to an empty name, and such a posting is dropped: filing it
+// under the label would invent one employer collecting every anonymous posting.
 type mojposaoOrg struct {
 	Name string `json:"name"`
 }
@@ -425,7 +421,7 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool)
 
 // mojposaoBody joins the posting's three text sections under the headings the site's own page
 // gives them, and leads with the salary line the page shows when the employer published one. A
-// posting whose sections are all empty — every Bosnian one sampled — carries its body only as the
+// posting whose sections are all empty (every Bosnian one) carries its body only as the
 // designed HTML ad, which is read instead.
 func mojposaoBody(d mojposaoDetail) string {
 	var b strings.Builder
@@ -458,7 +454,7 @@ func mojposaoBody(d mojposaoDetail) string {
 
 // mojposaoInlineTag matches the inline emphasis employers type into the otherwise plain-text
 // sections ("<b>prvi kontakt</b>"), after escaping; mojposaoOtherTag is any other tag, which is
-// dropped (a stray "<div>{BENEFITS_2}</div>" template remnant was measured).
+// dropped (e.g. a stray "<div>{BENEFITS_2}</div>" template remnant).
 var (
 	mojposaoInlineTag = regexp.MustCompile(`&lt;(/?)(b|strong|i|em|u)&gt;`)
 	mojposaoOtherTag  = regexp.MustCompile(`&lt;/?[a-zA-Z][a-zA-Z0-9]*( [^&]*)?/?&gt;`)

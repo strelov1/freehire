@@ -12,11 +12,11 @@ import (
 
 // nodesk adapts nodesk.co, a remote-jobs board. Boardless (one public RSS feed, no
 // per-tenant board) and multi-company, so it stays in the source facet and takes each
-// posting's company from the feed. All-remote board (live-verified: every posting's page
-// states it can be done remotely), so every posting is remote.
+// posting's company from the feed. All-remote board (every posting's page states it can be done
+// remotely), so every posting is remote.
 //
-// The feed's <description> is only the opening blurb (confirmed live: ~700 chars vs. the
-// ~7000-char full posting), not the body — so each item gets a per-posting detail fetch for
+// The feed's <description> is only the opening blurb, not the body, so each item gets a
+// per-posting detail fetch for
 // its page's schema.org JobPosting ld+json, same as breezy/teamtailor. A failed or
 // description-less detail fetch falls back to the feed's short blurb rather than dropping the
 // posting, since unlike breezy's listing (which carries nothing) the feed already gives a

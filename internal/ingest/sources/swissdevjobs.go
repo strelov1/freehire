@@ -15,10 +15,9 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// swissdevjobs adapts SwissDevJobs (swissdevjobs.ch), a Swiss IT-only job board: a few hundred
-// postings, almost every one with the employer's yearly salary in CHF. It is boardless and an
-// aggregator — the employer is read per posting. See the "SwissDevJobs traps" section of
-// AGENTS.md for the measurements behind each rule.
+// swissdevjobs adapts SwissDevJobs (swissdevjobs.ch), a Swiss IT-only job board, almost every
+// posting with a yearly CHF salary. Boardless and an aggregator: the employer is read per posting.
+// See the "SwissDevJobs traps" section of AGENTS.md.
 //
 // The listing is the site's own public feed, /api/jobsLight: the whole catalogue in one request,
 // everything but the body. The body is bought from the posting page, whose server-rendered
@@ -42,8 +41,8 @@ const (
 	// measured limit.
 	swissdevjobsRequestInterval = time.Second
 	swissdevjobsDetailWorkers   = 2
-	// swissdevjobsMaxNewPerRun bounds one run's posting pages. The board held 228 postings on
-	// 2026-10-29, so a first run reads it whole and later runs read the few new ones.
+	// swissdevjobsMaxNewPerRun bounds one run's posting pages; the board is small enough that a first
+	// run reads it whole.
 	swissdevjobsMaxNewPerRun   = 1000
 	swissdevjobsDeadlineMargin = 5 * time.Minute
 	swissdevjobsDetailMarker   = "window.__detailedJob ="
@@ -64,7 +63,7 @@ func (swissdevjobs) Provider() string { return "swissdevjobs" }
 // One national board, no per-tenant id.
 func (swissdevjobs) boardless() {}
 
-// Around a hundred employers post here, each named per posting.
+// The employer is named per posting.
 func (swissdevjobs) aggregator() {}
 
 // swissdevjobsJob is one feed row; the posting page's state adds the three text fields.
@@ -213,10 +212,9 @@ func swissdevjobsBaseJob(r swissdevjobsJob) Job {
 }
 
 // swissdevjobsDetailPaths are the posting page's addresses, tried in turn. The site sometimes
-// serves a page with its state left as the literal "JOB_PLACEHOLDER" instead of the posting
-// (13 of 140 on the first production run), and which address does so varies from request to
-// request — the same posting rendered under /fr/jobs/ moments after /jobs/ and /de/jobs/ had
-// not — so a placeholder is retried under the next address before the posting is deferred.
+// serves a page with its state left as the literal "JOB_PLACEHOLDER", and which address does so
+// varies from request to request, so a placeholder is retried under the next address before the
+// posting is deferred.
 var swissdevjobsDetailPaths = []string{"/jobs/", "/de/jobs/", "/fr/jobs/"} // the first is r.url()
 
 // errSwissdevjobsPlaceholder is a page served without its posting state.

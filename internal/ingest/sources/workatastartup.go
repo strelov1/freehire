@@ -12,24 +12,20 @@ import (
 )
 
 // workatastartup adapts Work at a Startup (workatastartup.com), Y Combinator's job board.
-// Boardless (one Algolia-backed index, no per-tenant board) and multi-company, so it stays
-// in the source facet and takes each posting's company from the hit. The board is gated:
-// the public page ships an Algolia key neutered to return nothing, and a working key is only
-// embedded in a logged-in session. So this adapter needs that session's Algolia search key,
-// read every run from the signed-in /companies page when WAAS_SSO_KEY (the YC sign-in cookie)
-// is set, or else supplied out-of-band via WAAS_ALGOLIA_KEY. Since 2026-10 a session's key
-// carries a validUntil a day ahead, so a pasted static key stops working the next day.
-// With the key, the index is queried directly — every hit carries the full posting (company,
-// title, markdown description, location, remote, date), so there is no per-job detail call.
+// Boardless (one Algolia-backed index) and multi-company, so it stays in the source facet and
+// takes each posting's company from the hit. The board is gated: the public page ships an
+// Algolia key that returns nothing, and a working key is only embedded in a logged-in session.
+// The key is read every run from the signed-in /companies page when WAAS_SSO_KEY (the YC
+// sign-in cookie) is set, or else supplied via WAAS_ALGOLIA_KEY. A session key expires within
+// a day, so a pasted static key stops working the next day. Every hit carries the full posting
+// (company, title, markdown description, location, remote, date), so there is no detail call.
 //
-// Two Algolia quirks shape the crawl. (1) The index defaults to distinct-by-company, collapsing
-// its ~5k postings to one-per-company (~1.3k); every query therefore sets distinct=false so all
-// postings are visible. (2) Offset pagination is capped at 1000 hits (paginationLimitedTo), well
-// under the full count, so a single sweep would silently truncate. Instead the crawl bisects the
-// id space: each query filters a half-open [lo, hi) id window and, whenever a window still fills
-// a page, splits it in half and recurses. Because id is unique per posting, a width-1 window
-// holds at most one hit, so the recursion always terminates and reaches every posting — the
-// standard workaround for the offset cap, with id (unique, numeric, filterable) as the key.
+// Two Algolia quirks shape the crawl. (1) The index defaults to distinct-by-company, hiding most
+// postings; every query sets distinct=false. (2) Offset pagination is capped at 1000 hits
+// (paginationLimitedTo), under the full count, so one sweep would silently truncate. Instead the
+// crawl bisects the id space: each query filters a half-open [lo, hi) id window and splits it in
+// half when it still fills a page. id is unique per posting, so a width-1 window holds at most
+// one hit and the recursion terminates having reached every posting.
 type workatastartup struct {
 	http waasHTTP
 }
@@ -51,7 +47,7 @@ const (
 	// waasHitsPerPage is Algolia's max page size and its offset-pagination cap (paginationLimitedTo):
 	// a window returning a full page is assumed to hold more and gets bisected.
 	waasHitsPerPage = 1000
-	// waasIDProbeBase seeds the exponential search for the id upper bound; current ids are ~1e5.
+	// waasIDProbeBase seeds the exponential search for the id upper bound.
 	waasIDProbeBase = 1 << 16
 )
 
@@ -121,8 +117,8 @@ func (s workatastartup) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error
 	}
 	url := fmt.Sprintf("https://%s-dsn.algolia.net/1/indexes/%s/query", waasAlgoliaApp, waasAlgoliaIdx)
 
-	// Find an id upper bound: the smallest power-of-two past every posting's id. Exponential so it
-	// self-adjusts as ids grow, with no hard-coded ceiling that could one day silently truncate.
+	// Find an id upper bound: the smallest power-of-two past every posting's id. Exponential, so
+	// it adjusts as ids grow with no hard-coded ceiling that could silently truncate.
 	hi := int64(waasIDProbeBase)
 	for {
 		hits, err := s.query(ctx, headers, url, hi, -1, 1)
@@ -165,9 +161,8 @@ func (s workatastartup) collect(ctx context.Context, headers map[string]string, 
 	return s.collect(ctx, headers, url, mid, hi, out)
 }
 
-// query runs one Algolia search over the id window with distinct off (the index defaults to
-// distinct-by-company, which would hide most postings). hi < 0 means an open upper bound (used to
-// probe for postings at or above lo); otherwise the window is half-open [lo, hi).
+// query runs one Algolia search over the id window with distinct off. hi < 0 means an open
+// upper bound (probe for postings at or above lo); otherwise the window is half-open [lo, hi).
 func (s workatastartup) query(ctx context.Context, headers map[string]string, url string, lo, hi int64, hitsPerPage int) ([]waasHit, error) {
 	filters := fmt.Sprintf(`["id>=%d","id<%d"]`, lo, hi)
 	if hi < 0 {

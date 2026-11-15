@@ -29,11 +29,10 @@ type onlyfy struct {
 }
 
 // onlyfyRequestInterval/onlyfyRequestBurst pace every request the adapter makes. All sites share
-// one platform edge, which answers 429 to the run's aggregate rate: the first unpaced production
-// crawl (2026-10-25, 125 boards, boards and posting pages fanned out concurrently) had 37 boards
-// fail their listing on 429 and 1,544 posting pages come back unreadable. A single client at
-// 8-way concurrency was never refused (300 posting pages, ~1.6 req/s, latency-bound), so the
-// pace sits at about twice that. Tune it as the other pacers are tuned: down while boards 429.
+// one platform edge, which answers 429 to the run's aggregate rate: unpaced, boards and posting
+// pages fanned out concurrently get refused. A single client at 8-way concurrency was never
+// refused, so the pace sits at about twice that. Tune it as the other pacers are tuned: down while
+// boards 429.
 const (
 	onlyfyRequestInterval = 333 * time.Millisecond // ~3 req/s
 	onlyfyRequestBurst    = 3
@@ -51,7 +50,7 @@ func (onlyfy) fullBoardListing() {}
 // onlyfyPageSize is how many rows one listing request asks for.
 const onlyfyPageSize = 100
 
-// onlyfyMaxPages bounds the walk; the largest board measured (jungheinrich) holds 185 postings.
+// onlyfyMaxPages bounds the walk well above the largest board.
 const onlyfyMaxPages = 100
 
 var (
@@ -207,17 +206,15 @@ type onlyfyPosting struct {
 	} `json:"baseSalary"`
 }
 
-// detail reads one posting. Its page renders a schema.org JobPosting on roughly half the sites;
-// a site with its own job template renders none (de-cix, measured 2026-10-25: 1,422 of 3,004
-// postings came back unreadable before this fallback), and there the posting is the platform's
+// detail reads one posting. Its page renders a schema.org JobPosting on most sites;
+// a site with its own job template renders none, and there the posting is the platform's
 // own job-ad view, <site>/job/show/<id>/full, whose #jobAdContainer every template shares, with
 // the title, place and date the listing row states. A posting the site no longer serves is
 // dropped; one it failed to serve is reported unreadable.
 //
 // jobLocationType is deliberately not read: the site sets TELECOMMUTE on postings whose body
-// describes on-site work (a petrol-station clerk, a construction engineer) — 16 of 26 such
-// postings sampled on 2026-10-25 mention no remote work at all — so the flag states nothing a
-// work mode could rest on, and the description parser decides.
+// describes on-site work (a petrol-station clerk, a construction engineer), so the flag states
+// nothing a work mode could rest on, and the description parser decides.
 func (s onlyfy) detail(ctx context.Context, e CompanyEntry, site string, r onlyfyRow) (Job, bool) {
 	id, url := r.id, site+"/job/"+r.id
 	root, err := s.http.GetHTML(ctx, url)

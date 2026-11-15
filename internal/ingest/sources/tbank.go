@@ -15,11 +15,11 @@ import (
 // publisher_N), each vacancy listed once per city it is open in — and each vacancy's description
 // comes from its own POST to the careers API, fanned out like the other detail-fetching adapters.
 //
-// The listing used to be the API's getVacancies. On 2026-10 T-Bank moved it behind a server-built
-// GraphQL filter (`filters.generatedGraphQL`) that no plain request supplies, and the endpoint went
-// on answering "OK" with zero vacancies, so the provider looked healthy while collecting nothing.
-// The sitemaps list the same vacancies (716 unique on 2026-10-21) with the id the description
-// endpoint takes and the section that names its category.
+// The listing used to be the API's getVacancies, but T-Bank moved it behind a server-built
+// GraphQL filter (`filters.generatedGraphQL`) that no plain request supplies, and the endpoint
+// went on answering "OK" with zero vacancies, so the provider looked healthy while collecting
+// nothing. The sitemaps list the same vacancies with the id the description endpoint takes and
+// the section that names its category.
 type tbank struct {
 	http tbankHTTP
 }
@@ -34,11 +34,10 @@ const (
 	tbankSitemapIndexURL = "https://www.tbank.ru/storage/career/sitemaps/sitemap.xml"
 	tbankDetailURL       = "https://www.tbank.ru/pfpjobs/papi/getVacancyDescription"
 	tbankSource          = "publisher"
-	// tbankTimeout bounds one request. The sitemaps are slow to serve — measured 2026-10-21,
-	// back_office_0.xml took 33 s for 188 KB and it_0.xml 12.5 s for 3.9 MB.
+	// tbankTimeout bounds one request. The sitemaps are slow to serve (tens of seconds for a few MB).
 	tbankTimeout = 90 * time.Second
 	// tbankMaxCitiesNamed bounds how many of a vacancy's cities its location names; a
-	// representative vacancy is listed in up to ~290.
+	// nationwide vacancy is listed in hundreds.
 	tbankMaxCitiesNamed = 3
 )
 
@@ -141,7 +140,7 @@ func (b tbank) list(ctx context.Context) ([]tbankVacancy, error) {
 }
 
 // tbankCapitals lead a location when a vacancy is open there, so a nationwide vacancy listed
-// alphabetically in ~290 cities does not read as "Abakan, Almetyevsk, …".
+// alphabetically in hundreds of cities does not read as "Abakan, Almetyevsk, …".
 var tbankCapitals = []string{"moscow", "saint-petersburg"}
 
 // tbankIDSlug matches a city segment that is an id rather than a city (the sitemaps carry a few).

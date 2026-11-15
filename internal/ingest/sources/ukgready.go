@@ -8,37 +8,30 @@ import (
 	"strings"
 )
 
-// ukgready adapts UKG Ready career sites — the HR suite UKG sells today under that name,
-// after buying it as Kronos Workforce Ready and still serving it from its SaaSHR-era hosts.
-// It is a DIFFERENT product from the one the ukg adapter crawls (UKG Pro Recruiting, formerly
-// UltiPro, on rec.pro.ukg.net): different hosts, different API, different board shape. The
-// provider is named after the product as UKG sells it rather than after either vendor
-// codename, so a reader who lands on a career page headed "UKG Ready" finds this file.
+// ukgready adapts UKG Ready career sites (formerly Kronos Workforce Ready, still served from
+// SaaSHR-era hosts). It is a DIFFERENT product from the ukg adapter (UKG Pro Recruiting, formerly
+// UltiPro, on rec.pro.ukg.net): different hosts, API and board shape.
 //
-// A board is "<host>/<tenant>" — e.g. "secure4.saashr.com/6162397". The host is load-bearing
-// because it selects the ENVIRONMENT the tenant is hosted in (UKG names them US-4-PROD,
-// US-61-PROD, AU-1-PROD, …). A tenant lives in exactly one of them and every other host answers
-// "Company not found" for it — including hosts in the same country, so this is not only about
-// data residency — and the environment is not derivable from the tenant id. The board id
-// therefore has to carry the host, the same self-describing shape ukg and workday use.
+// A board is "<host>/<tenant>", e.g. "secure4.saashr.com/6162397". The host selects the
+// ENVIRONMENT the tenant lives in (US-4-PROD, AU-1-PROD, ...); every other host answers "Company
+// not found" for it, and the environment is not derivable from the tenant id, so the board id
+// carries the host (as ukg and workday do). Tenant ids are case-insensitive, so boards are lower case.
 //
-// One environment is then fronted by several white-label hosts (secure*.saashr.com,
-// secure*.entertimeonline.com, secure*.yourpayrollhr.com, secure.workforceready.<cc> and
-// *.mykronos.com), all serving the same tenants, so the host is branding rather than identity —
-// see ukgreadyTenant, which folds it so one tenant cannot be crawled twice. Tenant ids are
-// case-insensitive (confirmed live), so boards are written in lower case.
+// One environment is fronted by several white-label hosts (secure*.saashr.com,
+// secure*.entertimeonline.com, secure*.yourpayrollhr.com, secure.workforceready.<cc>,
+// *.mykronos.com) serving the same tenants, so the host is branding, not identity: see
+// ukgreadyTenant.
 //
-// The public career page (https://<host>/ta/<tenant>.careers) renders client-side, so the
-// adapter reads the SPA's own keyless REST API instead:
+// The career page (https://<host>/ta/<tenant>.careers) renders client-side, so the adapter reads
+// the SPA's keyless REST API:
 //
 //	listing: /ta/rest/ui/recruitment/companies/|<tenant>/job-requisitions?offset=&size=
 //	detail:  /ta/rest/ui/recruitment/companies/|<tenant>/job-requisitions/<id>
 //
-// The listing already carries identity, address, pay and the remote flag, but its
-// job_description is a ~250-character ellipsis-terminated preview; only the detail resource
-// holds the body. Those bodies are heavy — employers paste base64 data-URI images into them,
-// and one board measured a 100 KB median — so this is a HydratingSource: every crawl lists
-// the whole board, and a body is fetched only for a posting the catalogue does not have yet.
+// The listing carries identity, address, pay and the remote flag, but its job_description is a
+// ~250-character preview; only the detail holds the body. Bodies are heavy (employers paste
+// base64 data-URI images), so this is a HydratingSource: every crawl lists the whole board and
+// fetches a body only for a posting the catalogue does not have yet.
 type ukgready struct {
 	http JSONGetter
 }
@@ -85,20 +78,13 @@ func (b ukgreadyBoard) jobURL(id string) string {
 	return fmt.Sprintf("https://%s/ta/%s.careers?ShowJob=%s", b.host, b.tenant, id)
 }
 
-// ukgreadyTenant folds a board to the thing it actually addresses: the tenant. Every white-label
-// host of one environment serves the same tenants — confirmed live, one tenant's postings answer
-// identically on secure.saashr.com, secure4.saashr.com and secure2.entertimeonline.com, and
-// another's on both secure.workforceready.com.au and aus-secure.prd.mykronos.com — so two board
-// ids differing only in the host are ONE crawl target, and without this fold they would be
-// crawled as two boards under two external_id namespaces. It is boardIdentity's entry for this
-// provider; see the icims note there for the false-closes that costs.
+// ukgreadyTenant folds a board to the tenant it addresses, so two board ids differing only in the
+// white-label host are ONE crawl target, not two external_id namespaces. It is boardIdentity's
+// entry for this provider; see the icims note there for the false-closes that costs.
 //
-// The fold ignores the host entirely, which relies on a tenant id naming one tenant everywhere.
-// That is what the platform shows: an id belonging to another environment answers "Company not
-// found" rather than resolving to a different company, the ids interleave across environments
-// as one sequence would, and no id in sources/ukgready.yml repeats across its 2,230 tenants.
-// A board it cannot parse folds to itself, so a malformed entry collides only with an
-// identical one rather than with every other malformed entry.
+// The fold ignores the host, which relies on a tenant id naming one tenant everywhere: an id from
+// another environment answers "Company not found" rather than resolving to a different company.
+// A board it cannot parse folds to itself, so a malformed entry collides only with an identical one.
 func ukgreadyTenant(board string) string {
 	if b, err := parseUKGReadyBoard(board); err == nil {
 		return b.tenant
@@ -226,17 +212,12 @@ func (s ukgready) crawl(ctx context.Context, e CompanyEntry, seen func(externalI
 	}), nil
 }
 
-// list walks the tenant's requisitions a page at a time until _paging.total is collected. The
-// total is authoritative; an empty page also stops the walk, so a total that ever overstates
-// cannot spin the loop.
+// list walks the tenant's requisitions a page at a time until _paging.total is collected. An
+// empty page also stops the walk, so an overstated total cannot spin the loop.
 //
-// The gotcha is the parameter's NAME: "offset" is a 1-based PAGE NUMBER, not a row offset, and
-// the API confirms nothing — it echoes whatever was asked back in _paging and answers an empty
-// page. Confirmed live on an 84-posting board at size=50: offset=0 and offset=1 both serve rows
-// 1-50, offset=2 serves the remaining 34, offset=3 is empty, and the union of those pages is the
-// whole board. Advancing it by the row count instead (the shape the name invites) reads page 1
-// and then page 200, so every board past one page silently truncates — a 259-posting board
-// ingested exactly 200 before this was fixed.
+// Trap: "offset" is a 1-based PAGE NUMBER, not a row offset. The API echoes whatever was asked
+// back in _paging and answers an empty page, so advancing it by row count jumps to page 200 and
+// silently truncates every board past one page.
 func (s ukgready) list(ctx context.Context, b ukgreadyBoard) ([]ukgreadyPosting, error) {
 	var postings []ukgreadyPosting
 	for pageNum := 1; ; pageNum++ {
@@ -298,26 +279,19 @@ func (s ukgready) hydrate(ctx context.Context, b ukgreadyBoard, e CompanyEntry, 
 	return job, true
 }
 
-// ukgreadyBody assembles the description from the detail resource: the body, followed by the
-// requirements block the platform stores and renders separately (non-empty on roughly two
-// postings in five). job_preview is deliberately left out — it is a per-tenant marketing banner
-// repeated verbatim on every posting of the board (confirmed live: 12 of 12 postings identical
-// on two boards), so it would say nothing about the role and would blur the description hash
-// that collapses reposts.
+// ukgreadyBody assembles the description from the detail resource: the body, then the requirements
+// block the platform stores separately. job_preview is left out: it is a per-tenant banner
+// repeated verbatim on every posting, and would blur the description hash that collapses reposts.
 func ukgreadyBody(detail ukgreadyPosting) string {
 	return detail.JobDescription + detail.JobRequirement
 }
 
 // currency resolves the tenant's pay currency from its format settings, returning "" when this
 // crawl has no posting to publish a pay figure for, or when the request fails.
-//
-// The pay figures are bare numbers with no currency beside them: which currency they are in is
-// a property of the TENANT's configured locale, and the career page itself reads it from there.
-// It is therefore fetched once per board, and only when a posting this crawl is going to hydrate
-// actually states a pay figure this adapter could publish — a steady-state re-crawl, where every
-// posting is already ingested, spends nothing. Without the currency the amounts are dropped
-// rather than guessed: the same number means very different things in USD and in the AUD the
-// Australian environment serves.
+// The pay figures are bare numbers; the currency is a property of the TENANT's locale, read from
+// its format settings. It is fetched once per board, and only when a posting this crawl will
+// hydrate states publishable pay, so a steady-state re-crawl spends nothing. Without it the
+// amounts are dropped rather than guessed (the same number differs in USD and AUD).
 func (s ukgready) currency(ctx context.Context, b ukgreadyBoard, postings []ukgreadyPosting,
 	seen func(externalID string) bool) string {
 	publishable := func(p ukgreadyPosting) bool { return p.needsBody(seen) && p.statesPay() }
@@ -354,12 +328,9 @@ func ukgreadySalaryPeriod(frequency string) string {
 
 // ukgreadyEmploymentType maps a posting's employee type onto freehire's vocabulary.
 //
-// The field is a per-tenant picklist the employer writes itself, not a platform enum, so the
-// values seen live run from "Full Time" through "FT Non-Exempt" and "Regular (Full Time)" to
-// FLSA pay classes that state no schedule at all ("Exempt", "Non-Exempt", "Student Assistant").
-// The mapping reads the one thing those labels do spell consistently — a full-time or part-time
-// marker — and yields "" for everything else, including a label carrying both, so the
-// description parser decides instead.
+// The field is a per-tenant picklist the employer writes ("Full Time", "FT Non-Exempt", FLSA
+// classes like "Exempt"), not a platform enum. Only a full-time or part-time marker is read;
+// everything else, including a label carrying both, yields "" so the description parser decides.
 func ukgreadyEmploymentType(employeeType string) string {
 	// Fold every non-letter to a space so "Full-Time", "Reg FT - Non-Exempt" and
 	// "Regular (Full Time)" all present their marker as a whole word, and pad the ends so the

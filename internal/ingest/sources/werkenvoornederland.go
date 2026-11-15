@@ -14,10 +14,9 @@ import (
 )
 
 // werkenVoorNederland adapts Werken voor Nederland (www.werkenvoornederland.nl), the job site of
-// the Dutch central government: every ministry, agency and the armed forces publish their
-// vacancies and internships there, ~1,400 at a time. It is boardless and an aggregator — the
-// employing organisation is read per posting. See the "Dutch public boards" section of
-// AGENTS.md for the measurements behind each rule.
+// the Dutch central government: every ministry, agency and the armed forces publish there. It is
+// boardless and an aggregator: the employing organisation is read per posting. See the "Dutch
+// public boards" section of AGENTS.md for the measurements behind each rule.
 //
 // The posting set is one sitemap, which names only each posting's URL, so every fact is bought
 // with the posting page: the adapter hydrates only the postings the catalogue lacks.
@@ -35,15 +34,14 @@ type werkenVoorNederlandHTTP interface {
 const wvnSitemapURL = "https://www.werkenvoornederland.nl/sitemap-vacatures.xml"
 
 // wvnRequestInterval paces every request of a run through one limiter. robots.txt asks for at
-// most ten a second; one a second is courtesy toward a government site, not a measured limit.
+// most ten a second; one a second is courtesy toward a government site, not a known limit.
 const wvnRequestInterval = time.Second
 
 // wvnDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 const wvnDetailWorkers = 2
 
-// wvnMaxNewPerRun bounds how many unseen postings one run hydrates: 1,200 pages at one a second
-// is 20 minutes. The first run faces the whole catalogue (~1,400), so it takes two; after that a
-// run meets the ~40 postings a day publishes.
+// wvnMaxNewPerRun bounds how many unseen postings one run hydrates: at one request a second the
+// cap keeps a run to about 20 minutes. The first run faces the whole catalogue, so it takes two.
 const wvnMaxNewPerRun = 1200
 
 // NewWerkenVoorNederland builds the adapter over the given client.

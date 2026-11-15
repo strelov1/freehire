@@ -8,8 +8,7 @@ import (
 	"strings"
 )
 
-// oraclePageLimit is the requisition-list page size. The API caps a page well above this;
-// a modest page keeps each request cheap and the pagination loop simple.
+// oraclePageLimit is the requisition-list page size (the API caps a page well above it).
 const oraclePageLimit = 100
 
 // oracle adapts Oracle Recruiting Cloud (a.k.a. Oracle Fusion / ORC) career sites. The
@@ -80,9 +79,8 @@ func (s oracle) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 func (s oracle) listRequisitions(ctx context.Context, b oracleBoard) ([]oracleRequisition, error) {
 	var reqs []oracleRequisition
 	for offset := 0; ; {
-		// offset must sit INSIDE the finder clause (next to limit). Oracle ignores a
-		// top-level &offset= query param, so a misplaced offset silently re-fetches the
-		// first page every iteration and only the newest page of jobs is ever collected.
+		// offset must sit INSIDE the finder clause: Oracle ignores a top-level &offset=, which
+		// would re-fetch the first page forever.
 		url := fmt.Sprintf(
 			"https://%s/hcmRestApi/resources/latest/recruitingCEJobRequisitions"+
 				"?onlyData=true&expand=requisitionList.secondaryLocations,requisitionList.workLocation"+
@@ -130,19 +128,15 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 		return Job{}, false
 	}
 	d := resp.Items[0]
-	// The three external fields are block-level HTML fragments, so they concatenate
-	// directly (an empty field contributes nothing) before sanitizing.
+	// The three external fields are block-level fragments, so they concatenate directly.
 	external := d.ExternalDescriptionStr + d.ExternalResponsibilitiesStr + d.ExternalQualificationsStr
 
 	var description string
 	if oracleHasVisibleText(external) {
 		description = sanitizeHTML(external)
 	} else {
-		// Some requisition templates (seen live on Goldman Sachs' Campus/Summer-Analyst
-		// postings) leave the External* fields at essentially nothing ("<br>", "") and
-		// carry the real body in these two instead — falling back to them here is the
-		// difference between a usable description and one with nothing for downstream
-		// skill extraction to work from.
+		// Some requisition templates leave the External* fields empty ("<br>", "") and carry
+		// the real body in these two.
 		description = sanitizeHTML(d.CorporateDescriptionStr + d.OrganizationDescriptionStr)
 	}
 
@@ -158,26 +152,22 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 		Remote:      workMode == "remote" || isRemote(r.PrimaryLocation),
 		WorkMode:    workMode,
 		PostedAt:    parseDate(r.PostedDate),
-		// JobSchedule is Oracle's structured full/part-time enum; preferred over the
-		// free-text employment-type parse.
+		// JobSchedule is a structured enum, preferred over the free-text parse.
 		EmploymentType: oracleEmploymentType(d.JobSchedule),
 	}, true
 }
 
-// oracleTagPattern matches an HTML tag, used to check whether the External* fields carry
-// any real content or are just markup ("<br>", "" ...) with nothing rendered inside it.
+// oracleTagPattern matches an HTML tag, to tell real External* content from bare markup.
 var oracleTagPattern = regexp.MustCompile(`<[^>]*>`)
 
-// oracleHasVisibleText reports whether s renders any text once its tags are stripped. A
-// lone "<br>" or an empty string both fail this check, which is what should trigger the
-// CorporateDescriptionStr/OrganizationDescriptionStr fallback in detail.
+// oracleHasVisibleText reports whether s renders any text once its tags are stripped; failing
+// it triggers the Corporate/Organization description fallback in detail.
 func oracleHasVisibleText(s string) bool {
 	return strings.TrimSpace(html.UnescapeString(oracleTagPattern.ReplaceAllString(s, ""))) != ""
 }
 
-// oracleEmploymentType maps Oracle's JobSchedule ("Full time" / "Part time") onto the
-// freehire employment-type vocabulary, returning "" for any other/absent value so the
-// description parser decides — structured signal only, never a guess.
+// oracleEmploymentType maps Oracle's JobSchedule ("Full time" / "Part time"); anything else is
+// "" so the description parser decides.
 func oracleEmploymentType(jobSchedule string) string {
 	switch strings.TrimSpace(strings.ToLower(jobSchedule)) {
 	case "full time":

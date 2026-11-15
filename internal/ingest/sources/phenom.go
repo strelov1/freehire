@@ -19,9 +19,8 @@ import (
 // teaser, so a posting needs a detail fetch the first time it is seen (see FetchNew).
 
 // phenomPageSize is the refineSearch page size: the largest the API serves (asked for 1,000
-// it answers 500, measured 2026-10-30 on careers.dhl.com). Every board of a run shares one
-// pace (pacedPhenomGetter), so the listing's request count is the run's floor — ~1,250 pages
-// for the ~514k postings 381 boards stated that day, five times fewer than at 100.
+// it answers 500). Every board of a run shares one pace (pacedPhenomGetter), so the
+// listing's request count is the run's floor and a bigger page cuts it.
 const phenomPageSize = 500
 
 // phenomMaxPages is a ceiling on one board's walk. The listing serves nothing once from+size
@@ -32,11 +31,10 @@ const phenomMaxPages = 100
 // phenomMaxNewPerBoard bounds how many unseen postings one board hydrates per run, and
 // phenomMaxNewPerRun how many the whole run does. Both exist because every board shares one
 // pace: the run's listing pages must all fit inside its crawl deadline, and a detail request
-// spent on a cold board is a listing page another board does not get. On 2026-10-30, 381
-// boards stated ~514k postings against 122k stored, so the first crawls face a ~390k backlog;
-// unbounded, the leading boards' bodies would again spend the whole deadline (see FetchNew).
-// At these bounds the backlog drains over a few weeks of 3-hourly runs, steady-state churn
-// (~5k new postings a day) fits easily, and the listing still reaches every board each run.
+// spent on a cold board is a listing page another board does not get. Unbounded, the first
+// crawls' backlog would spend the whole deadline on the leading boards' bodies (see FetchNew).
+// At these bounds the backlog drains over several runs, steady-state churn fits, and the
+// listing still reaches every board each run.
 const (
 	phenomMaxNewPerBoard = 300
 	phenomMaxNewPerRun   = 3000
@@ -82,10 +80,9 @@ func (s phenom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // comes back as a SeenRefresh carrying the listing's identity, so its liveness refreshes and
 // its stored body is kept; an unseen posting past either bound is left for a later run.
 //
-// The detail was this adapter's whole cost. Until 2026-10-30 every run re-read every stored
-// body, under a ~1 req/s pace shared by all boards; once the board count went from ~95 to 383
-// (2026-10-21..30) a run reached ~18 boards before its deadline, the rest failed in its last
-// seconds, and 66% of the provider's ~122k open postings went unseen for over a week.
+// Re-reading every stored body under the shared pace was this adapter's whole cost: a run
+// reached few boards before its deadline and the rest went unseen, so seen postings keep
+// their stored body.
 func (s phenom) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	return s.crawl(ctx, e, seen, phenomMaxNewPerBoard, s.runBudget)
 }
@@ -169,7 +166,7 @@ func claimBudget(budget *atomic.Int64, want int64) int64 {
 // board under the window costs no extra request.
 //
 // It is not a proof of the whole board, and the adapter does not claim fullBoardListing: the
-// listing's order is not stable between requests, so one walk reads ~85-92% of a board's
+// listing's order is not stable between requests, so one walk reads only part of a board's
 // distinct postings (see TestPhenomIsNotFullBoardListing). Successive walks read different
 // subsets, which is what keeps the 48h company-scoped sweep safe.
 func (s phenom) list(ctx context.Context, board string) ([]phenomPosting, error) {
@@ -184,15 +181,12 @@ func (s phenom) list(ctx context.Context, board string) ([]phenomPosting, error)
 }
 
 // phenomListingWindow is how far into one listing the API serves: a page reaching past the
-// 10,000th result answers empty (measured 2026-10-30). Six of 382 boards stated more on
-// 2026-10-31 — CVS and O'Reilly ~19.1k, Advance Auto Parts 16.5k, Dollar Tree 15.4k, two of
-// them under two hostnames each.
+// 10,000th result answers empty. Some large retail boards state more.
 const phenomListingWindow = 10000
 
 // phenomSliceLimit is the largest state slice listByState accepts: a walk advances by what each
 // page held, so its last request may start anywhere below the slice's total, and a slice of up
-// to this size keeps that request's from+size inside the window however the pages fell. The
-// largest state on 2026-10-31 held 2,357.
+// to this size keeps that request's from+size inside the window however the pages fell.
 const phenomSliceLimit = phenomListingWindow - phenomPageSize
 
 // listByState reads a board over the listing window as one walk per state (the
@@ -200,14 +194,12 @@ const phenomSliceLimit = phenomListingWindow - phenomPageSize
 // the counts the board's first page stated before anything is read: every state must fit the
 // window, and together they must account for the board's total, or the crawl fails rather than
 // pass a partial read off as the board. The sum may exceed the total — a multi-location posting
-// is counted, and listed, under each of its states (CVS: 23,224 for 19,099) — and crawl keeps
-// one copy of each posting.
+// is counted, and listed, under each of its states — and crawl keeps one copy of each posting.
 //
 // State, not category or country, because it is the only facet that slices every board over
-// the window: Advance Auto Parts and Dollar Tree each hold ~99% of their postings under one
-// category, and every board's country is ~all US. It also reads more of a board: a slice
-// that fits one page is read whole, where offset paging loses postings between pages (CVS
-// 2026-10-31: 94.6% distinct by state, 86.4% by category).
+// the window: some boards hold nearly all postings under one category, and every board's
+// country is nearly all US. It also reads more of a board: a slice that fits one page is read
+// whole, where offset paging loses postings between pages.
 func (s phenom) listByState(ctx context.Context, board string, first phenomPage) ([]phenomPosting, error) {
 	counted := 0
 	for state, n := range first.states {

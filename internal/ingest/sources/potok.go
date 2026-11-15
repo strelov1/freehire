@@ -11,9 +11,8 @@ import (
 
 // potok adapts the public career pages Potok (potok.io), a Russian ATS, hosts per tenant at
 // <board>.potok.io/open/jobs/. The page is server-rendered Lever-clone markup and lists the
-// tenant's WHOLE open set in one response — no pagination (the largest tenant, 629 postings, is
-// one 560 KB page). Each row carries id, title, city and the group it is filed under, but no
-// body: that lives only on the posting page /open/jobs/<id>, which has no JSON-LD, so this is a
+// tenant's WHOLE open set in one response — no pagination. Each row carries id, title, city and
+// the group it is filed under, but no body: that lives only on the posting page /open/jobs/<id>, which has no JSON-LD, so this is a
 // HydratingSource that fetches a posting page only for a posting the catalogue lacks.
 //
 // Neither page states a salary or a publish date. The posting page adds one structured field the

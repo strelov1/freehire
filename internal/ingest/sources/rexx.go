@@ -39,8 +39,8 @@ func (rexx) Provider() string { return "rexx" }
 // rexxPageSize is how many postings one listing page carries; ?start advances by it.
 const rexxPageSize = 100
 
-// rexxMaxPages bounds the listing walk. The largest portal measured (newyorker, 918 postings)
-// has ten pages; reaching the bound without a natural end fails the crawl (crawlAllPagedLinks).
+// rexxMaxPages bounds the listing walk; reaching the bound without a natural end fails the
+// crawl (crawlAllPagedLinks).
 const rexxMaxPages = 100
 
 // rexxBoard is the shape of a portal base: a lowercase host, optionally followed by path
@@ -122,8 +122,8 @@ func rexxLinks(base *url.URL, root *html.Node) []string {
 	return out
 }
 
-// rexxIsListing reports whether a page is a rexx portal page: every portal measured
-// (115 of the 115 serving a real listing, 2026-10-25) links the vendor in its footer.
+// rexxIsListing reports whether a page is a rexx portal page: every portal links the vendor
+// in its footer.
 func rexxIsListing(root *html.Node) bool {
 	found := false
 	walk(root, func(n *html.Node) bool {
@@ -202,8 +202,8 @@ func (s rexx) detail(ctx context.Context, e CompanyEntry, l rexxLink) (Job, bool
 		ExternalID: l.id,
 		URL:        l.url,
 		Title:      strings.TrimSpace(p.Title),
-		// hiringOrganization.name is the PORTAL's name ("Home Shopping Europe GmbH Jobportal"
-		// on a third of portals), so the catalogue's employer stands.
+		// hiringOrganization.name is the PORTAL's name ("Home Shopping Europe GmbH Jobportal"),
+		// so the catalogue's employer stands.
 		Company:        e.Company,
 		Description:    sanitizeHTML(p.Description),
 		EmploymentType: schemaEmploymentType(p.EmploymentType),

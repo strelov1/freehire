@@ -15,18 +15,16 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// talentsoft adapts Talentsoft career sites (Cegid Talent, formerly Talentsoft — the ATS behind
-// EDF, Safran, SPIE, Sodexo, Geodis, Framatome and much of the French public sector). Each
+// talentsoft adapts Talentsoft career sites (Cegid Talent, formerly Talentsoft). Each
 // customer runs one server-rendered ASP.NET site on its own host: <tenant>.talent-soft.com,
 // <tenant>.profils.org (the vendor's older domain), or the employer's own domain
 // (passerelles.economie.gouv.fr). The board is that HOST.
 //
 // The listing is /offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list&page=<n>, the same
 // path on every site whatever its language. "mode=list" is what makes the page parameter work
-// without a session (the default map/tile view ignores it), and no LCID is sent: a language
-// the site offers but its postings were not published in FILTERS them out (asadventure-bever
-// lists 104 postings by default and 0 under LCID=1036). Page size is the tenant's own (5 to 30
-// measured), so it is read from page one; the site states its total in
+// without a session (the default map/tile view ignores it), and no LCID is sent: a language the
+// site offers but its postings were not published in FILTERS them out. Page size is the tenant's
+// own (5 to 30), so it is read from page one; the site states its total in
 // #…_Pagination_TotalOffers, and an empty site renders #…_NoResult_NoResult instead.
 //
 // The site publishes no feed beyond an RSS export capped at 20 items and no JSON-LD, so the body
@@ -68,20 +66,18 @@ func (talentsoft) Provider() string { return "talentsoft" }
 const (
 	// talentsoftVendorRate bounds the run's aggregate request rate across every site.
 	talentsoftVendorRate = rate.Limit(3)
-	// talentsoftMaxNewPerBoard bounds the posting pages one site buys in a run. Safran's 4,532
-	// postings (measured 2026-10-28) arrive over about ten runs instead of one run starving
-	// every other site of the vendor budget.
+	// talentsoftMaxNewPerBoard bounds the posting pages one site buys in a run, so a huge site
+	// arrives over several runs instead of starving every other site of the vendor budget.
 	talentsoftMaxNewPerBoard = 500
 	// talentsoftDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	talentsoftDeadlineMargin = 5 * time.Minute
 	// talentsoftResultCap is the most results one search serves: past it the listing answers page
-	// one again (Safran's 4,546 postings at 20 a page stop at page 50; Crédit Agricole's 1,320 at
-	// 10 a page stop at page 100). A larger slice is split along a search facet.
+	// one again. A larger slice is split along a search facet.
 	talentsoftResultCap = 1000
 	// talentsoftMaxSplits bounds how many facets deep a slice is split before the crawl fails.
 	talentsoftMaxSplits = 3
 	// talentsoftMaxPages bounds one slice's walk, which the cap keeps under 200 pages at the
-	// smallest page size measured (5); needing more fails the crawl rather than ending it early.
+	// smallest page size (5); needing more fails the crawl rather than ending it early.
 	talentsoftMaxPages = 250
 	talentsoftListPath = "/offre-de-emploi/liste-toutes-offres.aspx"
 )
@@ -330,15 +326,12 @@ type talentsoftDimValue struct {
 
 // talentsoftSplitSlack is how far a split's values may fall short of the slice they split: a
 // posting filed under no value of a field counts in the total and under none of its values.
-// Safran's 2,104 permanent European postings sum to 2,103 by job family (2026-10-28); EDF's
-// 1,997 sum to 1,934 by region in its search form's counts (a live walk of those regions read
-// 1,904, postings moving between the two reads), the rest being filed under a country alone. What a split
-// leaves out is not read, and the walk's own 90% floor bounds the whole loss.
+// What a split leaves out is not read, and the walk's own 90% floor bounds the whole loss.
 func talentsoftSplitSlack(total int) int { return max(2, total*5/100) }
 
 // talentsoftPartition picks the dimension to split a slice along. Two sources offer them. The
-// facet panel (Safran, Crédit Agricole) links each value as ?changefacet=1&facet_<dim>=<id> with
-// the slice's own count. A site without one (EDF) still takes the same parameters, which its
+// facet panel links each value as ?changefacet=1&facet_<dim>=<id> with the slice's own count.
+// A site without one still takes the same parameters, which its
 // search form names only by field: the contract select is facet_JobDescription_Contract, and a
 // geographic checkbox is facet_Country, facet_Region or facet_Department by its depth in the
 // tree (its aria-labelledby lists its ancestors). Form counts are the whole site's, so they can
@@ -634,9 +627,9 @@ func talentsoftContractLabels(root *html.Node) []string {
 	return labels
 }
 
-// listedPlace is the listing row's place, for a page that labels none (Sodexo's renders no
-// field at all): the platform's default row is reference, date, contract, place, so the LAST
-// item is the place unless the tenant's row ends on the reference or the date.
+// listedPlace is the listing row's place, for a page that labels none: the platform's default
+// row is reference, date, contract, place, so the LAST item is the place unless the tenant's row
+// ends on the reference or the date.
 func (p talentsoftPosting) listedPlace() string {
 	if len(p.rowItems) == 0 {
 		return ""

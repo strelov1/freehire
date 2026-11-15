@@ -8,21 +8,14 @@ import (
 	"strings"
 )
 
-// orion adapts Orion Group (orionjobs.com), an international oil & gas / engineering
-// recruitment agency. Boardless: one public, keyless JSON API paginates the whole
-// catalogue. NOT an aggregator — the API never names a real end client (standard
-// recruitment-agency anonymization, confirmed live), so every posting is attributed to
-// the agency itself. The listing already carries the full HTML description, so unlike
-// emagine.go there is no separate detail fetch.
+// orion adapts Orion Group (orionjobs.com), an oil & gas / engineering recruitment agency.
+// Boardless: one public, keyless JSON API paginates the whole catalogue. NOT an aggregator: the
+// API never names the end client, so every posting is attributed to the agency. The listing
+// carries the full HTML description, so there is no detail fetch.
 //
-// The listing is fetched as text (TextGetter), not GetJSON: the API's backend
-// double-encodes its response as a JSON string whenever the request carries
-// "Accept: application/json" — GetJSON always sends that header, Fetch's manual decode
-// below does not, and that is the only difference that reproduces the bug (confirmed
-// live 2026-10-08: curl with an explicit Accept: application/json header gets a quoted
-// string; the same request with Accept: text/html, or no Accept header at all, gets the
-// real object). This is the site's own content-negotiation defect, not a workaround for
-// anything the site is trying to prevent.
+// The listing is fetched as text (TextGetter), not GetJSON: the backend double-encodes its
+// response as a JSON string whenever the request carries "Accept: application/json", which
+// GetJSON always sends. A different or absent Accept header gets the real object.
 type orion struct {
 	list TextGetter
 }
@@ -31,8 +24,7 @@ const (
 	orionListingURL = "https://www.orionjobs.com/api/recruitment/job/data/"
 	orionBaseURL    = "https://www.orionjobs.com"
 	orionCompany    = "Orion Group"
-	// orionMaxPages bounds pagination as a backstop, the same role emagineMaxPages plays,
-	// in case pagination.total ever understates the true count.
+	// orionMaxPages is a backstop in case pagination.total understates the count.
 	orionMaxPages = 500
 )
 
@@ -95,10 +87,8 @@ type orionItem struct {
 	EmploymentType []orionValue `json:"employment_type"`
 }
 
-// toJob maps one listing item directly to a Job — the API's listing already carries the
-// full description, so this is the whole mapping, not a partial pre-detail stub. An item
-// with no id or title is dropped (ok=false): id 0 would collide with every other such
-// item's ExternalID, the same risk emagine.toJob's own guard exists to prevent.
+// toJob maps one listing item to a Job. An item with no id or title is dropped: id 0 would
+// collide on ExternalID with every other such item.
 func (it orionItem) toJob() (Job, bool) {
 	if it.ID == 0 || strings.TrimSpace(it.Title.Value) == "" {
 		return Job{}, false
@@ -121,11 +111,7 @@ func (it orionItem) toJob() (Job, bool) {
 }
 
 // orionEmploymentType maps Orion's employment_type label onto vocab.EmploymentTypeValues.
-// "Contract" is confirmed live; "full time"/"part time"/"internship" follow this
-// codebase's usual mapping for a self-evident business-vocabulary field (e.g.
-// recruiterflowEmploymentType). "permanent" is a UK recruitment-agency synonym for
-// full-time added for Orion specifically — a reasonable reading, not independently
-// confirmed live the way "Contract" was.
+// "permanent" is the UK recruitment-agency synonym for full-time.
 func orionEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full time", "full-time", "fulltime", "permanent":

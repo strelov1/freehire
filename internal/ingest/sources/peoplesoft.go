@@ -45,8 +45,7 @@ const (
 	// a PeopleTools field name, not tenant configuration.
 	peoplesoftLoadMore = "HRS_AGNT_RSLT_I$hdown$0"
 	// peoplesoftMaxPostbacks bounds the walk; reaching it before the stated row count fails the
-	// crawl. A postback adds 50 rows, so this covers 10,000 — the largest tenant measured holds
-	// 600.
+	// crawl. A postback adds 50 rows, so this covers 10,000.
 	peoplesoftMaxPostbacks = 200
 	// peoplesoftDetailWorkers is the posting-page fan-out. Every request of a board rides one
 	// PeopleTools session, so it stays well under the shared default.

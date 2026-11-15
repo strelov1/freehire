@@ -18,8 +18,7 @@ import (
 // subdomain label) is the identity.
 //
 // The site's own JavaScript reads a keyless JSON API on api-recruiter.recruiter.co.kr, which
-// resolves the tenant from a `prefix` request header carrying the career host
-// (verified 2026-11-03 against cosmax and onedskr-people):
+// resolves the tenant from a `prefix` request header carrying the career host:
 //
 //	POST /position/v1/jobflex      {"pageableRq":{"page","size"},"filter":{...}}
 //	                               -> {"pagination":{...},"list":[{positionSn,title,...}]}
@@ -50,8 +49,8 @@ func (recruiterCoKR) Provider() string { return "recruiter_co_kr" }
 const (
 	rckAPI      = "https://api-recruiter.recruiter.co.kr"
 	rckPageSize = 100
-	// rckMaxPages is a ceiling, not an expected end: 100 rows a page admits 10,000 postings
-	// against 42 on the largest tenant measured. Reaching it fails the crawl.
+	// rckMaxPages is a ceiling, not an expected end: 100 rows a page admits 10,000 postings.
+	// Reaching it fails the crawl.
 	rckMaxPages = 100
 	// rckOffsetKST is the offset of the zone the platform's naive timestamps are written in.
 	rckOffsetKST = 9 * 60 * 60

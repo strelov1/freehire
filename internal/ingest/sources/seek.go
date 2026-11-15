@@ -44,8 +44,8 @@ type seek struct{ seekCrawler }
 type jobStreet struct{ seekCrawler }
 
 // NewSeek builds the SEEK adapter. The listing and the detail take SEPARATE transports because only
-// one of them needs pacing: the search listing is ~150 requests a run and has never been refused,
-// while the GraphQL detail is metered by a per-IP budget (see seekDetailInterval). sources.All hands
+// one of them needs pacing: the search listing is never refused, while the GraphQL detail is
+// metered by a per-IP budget (see seekDetailInterval). sources.All hands
 // the bare client for the first and the network's one shared detail client for the second.
 func NewSeek(list JSONGetter, detail *seekDetailNetwork) Source {
 	return seek{seekCrawler{provider: "seek", markets: seekMarkets, maxPages: seekMaxPages, http: list, details: detail}}
@@ -87,8 +87,8 @@ func (s seekCrawler) BoardURLPrefix(region string) (string, bool) {
 func (seekCrawler) aggregator() {}
 
 // sweepGrace widens the unseen sweep because the crawl reaches only a SLICE of each subclassification:
-// SEEK stops serving results past roughly the 550th (see seekMaxPages), so the busiest slices — five
-// of Australia's 22 when this was written, the largest at ~746 postings — have a tail no crawl can
+// SEEK stops serving results past roughly the 550th (see seekMaxPages), so the busiest slices
+// have a tail no crawl can
 // reach. Ordered newest-first the reachable window covers most of a SEEK advertisement's 30-day run,
 // but a posting drifting past it would, on the 48-hour default, be closed and reopened as it drifts
 // back, writing a phantom removal into job_daily_stats each cycle. The marker is sound here because
@@ -102,10 +102,9 @@ func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
 // removal, and is left to the window alone, as WhatJobs does. See the sliceBoardListing interface.
 func (seek) sliceBoardListing() {}
 
-// fullBoardListing: JobStreet has no SEEK-style result window — live SG 6290 served 17 pages
-// to its natural end — and at pageSize 100 the search's totalCount equals the distinct postings
-// a full walk reads (2026-10-29: SG 6290 1,629 of 1,629, SG 6302 9/9, MY 6287 641/641, ID 6287
-// 686/686, HK 6281 3,694/3,694). The walk fails on a later page's error, on the page ceiling,
+// fullBoardListing: JobStreet has no SEEK-style result window, and at pageSize 100 the search's
+// totalCount equals the distinct postings a full walk reads. The walk fails on a later page's
+// error, on the page ceiling,
 // and on a distinct count that differs from the last page's totalCount. See the
 // fullBoardListing interface for the bar.
 func (jobStreet) fullBoardListing() {}
@@ -117,10 +116,9 @@ const (
 	// window and confirm its end. The walk's real stop condition is a page adding no new posting;
 	// this only bounds an edge that keeps answering with fresh inventory.
 	seekMaxPages = 6
-	// JobStreet/JobsDB does not share SEEK AU/NZ's ~550-result window: live SG 6290
-	// served 17 pages (1,698 rows) and page 18 empty on 2026-09-12. Keep a generous
-	// safety ceiling, but unlike SEEK treat reaching it as a crawl failure — JobStreet
-	// has demonstrated a natural end, so silently accepting a capped walk would throw
+	// JobStreet/JobsDB does not share SEEK AU/NZ's ~550-result window. Keep a generous
+	// safety ceiling, but unlike SEEK treat reaching it as a crawl failure: JobStreet
+	// has a natural end, so silently accepting a capped walk would throw
 	// away inventory the API was willing to serve.
 	jobStreetMaxPages = 100
 )
@@ -128,7 +126,7 @@ const (
 // seekMarket is one SEEK country site. The three request fields travel together because none works
 // alone: host serves the market's own domain, siteKey selects its catalogue, and where scopes the
 // search — omitting where does NOT mean "everywhere", it collapses the result set to a small
-// unrelated subset (36 of 688 on the slice this was measured against).
+// unrelated subset.
 type seekMarket struct {
 	host    string
 	siteKey string
@@ -142,10 +140,9 @@ var seekMarkets = map[string]seekMarket{
 	"nz": {host: "https://www.seek.co.nz", siteKey: "NZ-Main", where: "All New Zealand"},
 }
 
-// jobStreetMarkets are the APAC SEEK-network sites live-verified against the same v5 API on
-// 2026-09-12. `where` is load-bearing and is NOT spelled "All <country>" on these sites:
-// Singapore returned zero results for "All Singapore" while "Singapore" returned the full
-// market. Hong Kong and Thailand expose the same platform under the legacy JobsDB brand.
+// jobStreetMarkets are the APAC SEEK-network sites on the same v5 API. `where` is load-bearing
+// and is NOT spelled "All <country>" on these sites: Singapore returns zero results for
+// "All Singapore". Hong Kong and Thailand expose the same platform under the legacy JobsDB brand.
 var jobStreetMarkets = map[string]seekMarket{
 	"sg": {host: "https://sg.jobstreet.com", siteKey: "SG-Main", where: "Singapore"},
 	"my": {host: "https://my.jobstreet.com", siteKey: "MY-Main", where: "Malaysia"},
@@ -231,8 +228,8 @@ func (s seekCrawler) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 // covered by first-party ATS sources before we spend SEEK's scarce GraphQL detail budget.
 // Covered postings are still emitted list-only so the ordinary aggregator gate can count and
 // discard them; only the body request is skipped. This matters especially for JobStreet, where
-// a first crawl spans tens of thousands of listings but a substantial share of employers are
-// already covered directly by freehire.
+// a first crawl spans tens of thousands of listings and many employers are already covered
+// directly.
 func (s seekCrawler) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	m, postings, err := s.crawl(ctx, e)
 	if err != nil {
@@ -346,7 +343,7 @@ func (s seekCrawler) walk(ctx context.Context, e CompanyEntry, m seekMarket) ([]
 const seekPrivateAdvertiser = "Private Advertiser"
 
 // employer resolves the posting's company. companyName is the employer SEEK holds a profile for and
-// is empty on roughly one posting in thirty, where advertiser.description carries the name the
+// is sometimes empty, where advertiser.description carries the name the
 // employer typed instead. Empty means the posting is unusable.
 func (p seekPosting) employer() string {
 	name := strings.TrimSpace(firstNonEmpty(p.CompanyName, p.Advertiser.Description))
@@ -394,13 +391,11 @@ func seekEmploymentType(workTypes []string) string {
 }
 
 // salaryParagraph renders the listing's salary label as a leading paragraph, folded into the
-// description because the label is free text rather than a structured amount — measured live it
-// ranges over "$75,000 – $85,000 per year", "160000", "$1,000/day + super" and "Rates Negotiable",
-// none of which Job's structured salary fields can take. Roughly a tenth of the postings that fill
-// it use it for marketing copy instead ("Strong remuneration", "Optional 9 day fortnight | Career
-// Growth"); it is quoted verbatim anyway, because SEEK labels the field as the salary and second-
-// guessing which values are "really" salaries would be exactly the heuristic the structured-facet
-// contract forbids. Empty when SEEK states nothing.
+// description because the label is free text ("$75,000 – $85,000 per year", "160000",
+// "Rates Negotiable") that Job's structured salary fields cannot take. Some postings use it for
+// marketing copy; it is quoted verbatim anyway, because second-guessing which values are
+// "really" salaries is the heuristic the structured-facet contract forbids. Empty when SEEK
+// states nothing.
 func (p seekPosting) salaryParagraph() string {
 	label := strings.TrimSpace(p.SalaryLabel)
 	if label == "" {

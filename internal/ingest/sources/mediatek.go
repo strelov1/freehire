@@ -39,8 +39,7 @@ const (
 	mediatekJobURL    = "https://careers.mediatek.com/en/jobs/"
 	// mediatekPageSize is the most rows the search returns per page.
 	mediatekPageSize = 100
-	// mediatekMaxPages is a ceiling, not a stopping rule: a catalogue that outgrows it fails the
-	// crawl (621 postings, 7 pages, on 2026-10-25).
+	// mediatekMaxPages is a ceiling, not a stopping rule: a catalogue that outgrows it fails the crawl.
 	mediatekMaxPages = 30
 	// mediatekRequirementsHeading is the posting page's h3 over the requirements list.
 	mediatekRequirementsHeading = "Main Requirements and Qualifications"

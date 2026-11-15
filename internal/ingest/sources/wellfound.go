@@ -12,15 +12,14 @@ import (
 
 // wellfound adapts Wellfound (formerly AngelList Talent), a large startup-marketplace job board.
 // The board is a role-taxonomy slug (e.g. "software-engineer", crawled as
-// https://wellfound.com/role/r/<slug>) rather than a per-tenant ATS board — the same
+// https://wellfound.com/role/r/<slug>) rather than a per-tenant ATS board: the same
 // "board = a facet the site itself defines" shape hh (professional_role) and schoolspring
-// (keyword) already use, chosen because the unscoped marketplace is only ~19% technical
-// (measured) and Wellfound's own role taxonomy already picks a workable technical slice for
-// free.
+// (keyword) use. The unscoped marketplace is mostly non-technical, and Wellfound's role taxonomy
+// already picks a technical slice.
 //
-// Wellfound's listing pages answer 403 to a plain request, direct or proxied (measured live); the
-// Scrapling tier's impersonating fetcher over the proxy is served (2026-10-20), so in production
-// this adapter is wired through scraplingProviders (scraplingtier.go) like bayt/gulftalent. Each page is server-rendered
+// Wellfound's listing pages answer 403 to a plain request, direct or proxied; the Scrapling
+// tier's impersonating fetcher is served, so in production this adapter is wired through
+// scraplingProviders (scraplingtier.go) like bayt/gulftalent. Each page is server-rendered
 // by Next.js and embeds a `<script id="__NEXT_DATA__">` tag whose JSON body is
 // props.pageProps.apolloState.data — a normalized Apollo GraphQL cache. A JobListingSearchResult
 // entry carries every scalar field this adapter needs directly EXCEPT the hiring company, which
@@ -29,10 +28,9 @@ import (
 // jobs. parseWellfoundPage therefore builds that reverse index before mapping entries.
 //
 // The listing already carries each posting's full HTML description, so this is NOT a
-// HydratingSource (no second, per-posting request). Pagination trusts the payload's own stated
-// pageCount rather than treating an empty page as the only proof pagination has ended — the same
-// precedent Dayforce/UKG Ready already set against an exact vendor-stated count, as opposed to
-// SEEK's untrustworthy totalCount.
+// HydratingSource. Pagination trusts the payload's own stated pageCount rather than treating an
+// empty page as the only proof pagination has ended (as Dayforce/UKG Ready do with a vendor-stated
+// count, as opposed to SEEK's untrustworthy totalCount).
 type wellfound struct {
 	http HTMLGetter
 }
@@ -56,7 +54,7 @@ const (
 	wellfoundJobURL = "https://wellfound.com/jobs/%s-%s"
 	// wellfoundMaxPages bounds pagination so a payload that never reports a sane pageCount (or
 	// reports one that keeps growing) cannot loop unboundedly. Comfortably above any role
-	// slice's real depth (the largest role measured during this adapter's spike was 46 pages).
+	// slice's real depth.
 	wellfoundMaxPages = 500
 )
 
@@ -170,13 +168,10 @@ func parseWellfoundPage(root *html.Node) (wellfoundParsedPage, error) {
 // every StartupResult entry's highlightedJobListings. A malformed StartupResult entry simply
 // contributes no mappings rather than failing the page.
 //
-// StartupResult keys are visited in SORTED order and the first mapping for a job key wins,
-// deliberately: Go's map iteration order is randomized per range, so ranging data directly
-// would make a job's resolved company flip unpredictably between runs of the SAME input if it
-// were ever referenced by more than one startup. Real Wellfound data models one job as owned by
-// exactly one startup, so this is a defensive tie-break rather than an observed case — but a
-// silently nondeterministic result would churn content_hash and misattribute the employer at
-// random, which sorting rules out regardless of whether the conflict is ever real.
+// StartupResult keys are visited in SORTED order and the first mapping for a job key wins:
+// ranging the map directly is randomized per run, so a job referenced by more than one startup
+// would flip its resolved company between runs of the same input, churning content_hash and
+// misattributing the employer. Real data has one owner per job, so this is a defensive tie-break.
 func wellfoundCompanyIndex(data map[string]json.RawMessage) map[string]string {
 	startupKeys := make([]string, 0, len(data))
 	for key := range data {
@@ -232,23 +227,19 @@ func wellfoundTotals(data map[string]json.RawMessage) (wellfoundSearchTotals, er
 	return wellfoundSearchTotals{}, fmt.Errorf("wellfound: ROOT_QUERY.talent carries no seoLandingPageJobSearchResults field")
 }
 
-// Fetch crawls one role slice to the payload's own stated page count. The first page failing —
-// to fetch or to parse — errors the whole call; a later page failing the same way does too,
-// since (unlike the ordinary "later page ends the walk with what was gathered" rule this
-// repository otherwise follows) an unparseable page here signals a vendor-markup change rather
-// than having reached the board's natural end, which the stated pageCount already tells the
-// walk where that is.
+// Fetch crawls one role slice to the payload's own stated page count. A page failing to fetch or
+// parse errors the whole call, even a later one: unlike the usual "a later page ends the walk with
+// what was gathered" rule, an unparseable page here signals a vendor-markup change, since the
+// stated pageCount already says where the board ends.
 func (s wellfound) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	first, err := s.fetchPage(ctx, e.Board, 1)
 	if err != nil {
 		return nil, fmt.Errorf("wellfound: role %q page 1: %w", e.Board, err)
 	}
 	pages := []wellfoundParsedPage{first}
-	// A silent truncation, deliberately: unlike bayt/gulftalent's fullBoardListing promise
-	// (where reaching a page cap before proving the board's true end must fail the crawl
-	// outright), wellfound never claims completeness in the first place, so a role slice
-	// deeper than any observed one (largest measured: 46 pages) simply yields a partial
-	// crawl rather than an error.
+	// A silent truncation, deliberately: unlike bayt/gulftalent's fullBoardListing promise (where
+	// reaching a page cap before proving the true end must fail the crawl), wellfound never claims
+	// completeness, so a role slice deeper than the cap yields a partial crawl, not an error.
 	pageCount := min(first.PageCount, wellfoundMaxPages)
 	for page := 2; page <= pageCount; page++ {
 		p, err := s.fetchPage(ctx, e.Board, page)
@@ -310,15 +301,12 @@ func wellfoundSalary(comp string) (lo, hi *int, currency, period string) {
 	return inrSalary(pay)
 }
 
-// wellfoundDescription folds the listing's free-text compensation range into the rendered
-// HTML body. Wellfound's own description field is Markdown, not HTML — confirmed live
-// (freehire.me/jobs/ai-engineer-co-founder-role-brandbrahma-pkuqoprb rendered a raw
-// "**bold**" before this fix) — so it goes through the same markdownToHTML (goldmark)
-// conversion join.go's Join.com adapter already established in this package for exactly
-// this shape of source, before sanitizing. The compensation range is a display string, so
-// it is carried as text — routed through sanitizeHTML rather than hand-escaped — and only
-// the rupee ranges whose unit and period are unambiguous also reach the structured salary
-// fields (wellfoundSalary).
+// wellfoundDescription folds the listing's free-text compensation range into the rendered HTML
+// body. Wellfound's description field is Markdown, not HTML, so it goes through the same
+// markdownToHTML (goldmark) conversion as join.go's Join.com adapter before sanitizing. The
+// compensation range is a display string, carried as text through sanitizeHTML; only the rupee
+// ranges whose unit and period are unambiguous also reach the structured salary fields
+// (wellfoundSalary).
 func wellfoundDescription(e wellfoundJobEntry) string {
 	body := sanitizeHTML(markdownToHTML(e.Description))
 	comp := strings.TrimSpace(e.Compensation)

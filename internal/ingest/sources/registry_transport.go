@@ -36,7 +36,7 @@ func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
 // browserUASource builds a registry entry for an adapter whose platform refuses any client
 // that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
 // mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
-// See BrowserUserAgent for the measurement, and for the line this does NOT cross.
+// See BrowserUserAgent for the rationale, and for the line this does NOT cross.
 func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
 	if c == nil {
 		var zero T
@@ -68,7 +68,7 @@ func compatibleUASource[T any](c HTTPClient, build func(T) Source) Source {
 // crawlerUASource is compatibleUASource for an edge that refuses every self-identifying
 // string but serves a recognised search-crawler one (UKG Pro Recruiting: its nginx 403s
 // "freehire/0.1 (+https://freehire.me)" on the listing API and the detail pages alike, while
-// the Googlebot string and a plain browser string are both served — measured live 2026-11-05).
+// the Googlebot string and a plain browser string are both served).
 // See crawlerUserAgent for the line this does not cross.
 func crawlerUASource[T any](c HTTPClient, build func(T) Source) Source {
 	if c == nil {

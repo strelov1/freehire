@@ -177,9 +177,8 @@ func IsAggregator(reg map[string]Source, provider string) bool {
 
 // nationalMarket is an aggregator that lists one country's job market, so the coverage gate
 // credits an employer's own board only where that board hires in the same country. Without
-// it the gate matched by company name alone: a Slovenian "Arriva d.o.o." on mojedelo was
-// discarded because the UK Arriva's Workday board is crawled, and "Echo center d.o.o." because
-// an unrelated US "echo" is (issue #4412, ~400 of ~3,700 mojedelo postings a run).
+// it the gate matched by company name alone, discarding a Slovenian "Arriva d.o.o." posting
+// because the UK Arriva's board is crawled.
 type nationalMarket interface {
 	marketCountries(e CompanyEntry) []string
 }

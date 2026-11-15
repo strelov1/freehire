@@ -145,8 +145,7 @@ type paylocityBrief struct {
 	IndeedRemoteType int  `json:"IndeedRemoteType"`
 	// JobLocation is the structured location record LocationName labels. LocationName is
 	// the tenant's own name for it ("Remote Worker", "Concord Office") and usually names no
-	// place, so Country here is the only statement of where the work is — "USA" on every one
-	// of 392 briefs sampled across 40 live boards (2026-10-18).
+	// place, so Country here is the only statement of where the work is.
 	JobLocation *struct {
 		Country string `json:"Country"`
 	} `json:"JobLocation"`
@@ -157,14 +156,12 @@ type paylocityBrief struct {
 const paylocityHybridRemoteType = 1
 
 // workMode maps the brief's structured remote pair to a work mode, matching the label the
-// posting page itself renders (live-verified 2026-10-23): IsRemote with IndeedRemoteType 1
-// is "Hybrid Remote", IsRemote with any other type is "Fully Remote", and IsRemote false
-// renders no arrangement label at all — so it states nothing and stays "" for the location
-// and description to decide. IndeedRemoteType alone means nothing: 2 is the value nearly
-// every NON-remote brief carries (731 of 733 sampled across 290 boards).
+// posting page itself renders: IsRemote with IndeedRemoteType 1 is "Hybrid Remote", IsRemote
+// with any other type is "Fully Remote", and IsRemote false renders no arrangement label, so
+// it states nothing and stays "" for the location and description to decide. IndeedRemoteType
+// alone means nothing: 2 is the value nearly every non-remote brief carries.
 //
-// Reading IsRemote alone filed every hybrid posting as remote (freehire report 108: a
-// "Hybrid Remote • Cincinnati, OH" posting stored as remote).
+// Reading IsRemote alone filed every hybrid posting as remote.
 func (b paylocityBrief) workMode() string {
 	switch {
 	case !b.IsRemote:

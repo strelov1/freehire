@@ -10,14 +10,12 @@ import (
 )
 
 // pyjamahr adapts PyjamaHR (jobs.pyjamahr.com), an Indian multi-tenant ATS. The board is the
-// tenant's path segment. The listing is the tenant's own internal frontend API — found by
-// capturing real browser network traffic, since it lives on a completely different host
-// (api.pyjamahr.com) than the page itself and every static endpoint guess against the page's
-// own host (app.pyjamahr.com) turned out to be its SPA's index.html shell, not JSON. The
-// listing is a plain, keyless GET, standard DRF-style pagination via its own "next" URL. Each
-// item already carries id/slug/title/location/workplace_type — only the description and the
-// richer structured fields (job type, salary, skills, experience) come from a per-posting
-// detail fetch, itself a plain keyless GET on the same API.
+// tenant's path segment. The listing is the tenant's internal frontend API on a different host
+// (api.pyjamahr.com) than the page; the page's own host (app.pyjamahr.com) answers every static
+// endpoint with its SPA's index.html shell. The listing is a plain, keyless GET with DRF-style
+// pagination via its own "next" URL. Each item already carries
+// id/slug/title/location/workplace_type; the description and the richer structured fields (job
+// type, salary, skills, experience) come from a per-posting detail fetch, also a keyless GET.
 type pyjamahr struct {
 	http JSONGetter
 }
@@ -27,17 +25,15 @@ func NewPyjamahr(c JSONGetter) Source { return pyjamahr{http: c} }
 
 func (pyjamahr) Provider() string { return "pyjamahr" }
 
-// pyjamahrMaxPages bounds the "next" walk so a feed that never returns a null next cannot
-// loop forever. Reaching it while next is still non-empty is a hard Fetch failure (see
-// list), never a silent partial success — the property fullBoardListing rests on, unlike
-// manatal.go's own next-URL adapter, which is deliberately NOT marked fullBoardListing
-// because its own ceiling stops silently.
+// pyjamahrMaxPages bounds the "next" walk so a feed that never returns a null next cannot loop
+// forever. Reaching it while next is still non-empty is a hard Fetch failure (see list), never a
+// silent partial success, which fullBoardListing rests on; manatal.go's next-URL adapter is NOT
+// marked fullBoardListing because its ceiling stops silently.
 const pyjamahrMaxPages = 500
 
 // fullBoardListing: the "next"-URL walk proves the whole set of open postings by reaching a
 // null next; reaching pyjamahrMaxPages while next is still set fails the whole Fetch instead.
-// A detail-fetch failure for one posting becomes an Unreadable marker rather than a silent
-// drop, the same contract a listing-then-detail adapter like recrutei/humanbit already gives.
+// A detail-fetch failure for one posting becomes an Unreadable marker rather than a silent drop.
 func (pyjamahr) fullBoardListing() {}
 
 func (s pyjamahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -117,10 +113,9 @@ func (s pyjamahr) detail(ctx context.Context, e CompanyEntry, it pyjamahrItem) (
 	workMode := firstNonEmpty(workplaceTypeMode(strings.ReplaceAll(d.WorkplaceType, "_", "-")), workModeFromRemote(d.Remote))
 	salaryMin, salaryMax, salaryCurrency, salaryPeriod := pyjamahrSalary(d)
 
-	// An explicit 0 is "no prior experience required" — a stated fact, not absent data
-	// (the same distinction internal/job/jobfacts.go's own ExperienceYearsMin doc makes) —
-	// so it is always set, never gated behind a truthiness check that would misread it as
-	// unknown and fall back to the description-text heuristic instead.
+	// An explicit 0 is "no prior experience required", a stated fact, not absent data (see
+	// internal/job/jobfacts.go ExperienceYearsMin), so it is always set rather than gated behind a
+	// truthiness check that would fall back to the description-text heuristic.
 	minExperience := int(d.MinExperience)
 	experienceMin := &minExperience
 
@@ -144,9 +139,8 @@ func (s pyjamahr) detail(ctx context.Context, e CompanyEntry, it pyjamahrItem) (
 	}, true
 }
 
-// pyjamahrSalary reports the detail's salary bounds only when the platform marks them
-// visible and both bounds are present with a recognized period — bounds with their unit,
-// or nothing at all, the same posture scalis's own salary mapping already established.
+// pyjamahrSalary reports the detail's salary bounds only when the platform marks them visible and
+// both bounds are present with a recognized period: bounds with their unit, or nothing.
 func pyjamahrSalary(d pyjamahrDetail) (min, max *int, currency, period string) {
 	if !d.IsSalaryVisible || d.MinSalary == nil || d.MaxSalary == nil {
 		return nil, nil, "", ""
@@ -164,10 +158,8 @@ func pyjamahrSalary(d pyjamahrDetail) (min, max *int, currency, period string) {
 	return &minV, &maxV, d.Currency, period
 }
 
-// pyjamahrEmploymentType maps PyjamaHR's job_type onto vocab.EmploymentTypeValues.
-// "FULLTIME" and "INTERN" are confirmed live; the other plain-English spellings below
-// follow this codebase's usual defensive mapping for a self-evident business-vocabulary
-// field (e.g. humanbitEmploymentType), not a guess at an opaque code.
+// pyjamahrEmploymentType maps PyjamaHR's job_type onto vocab.EmploymentTypeValues. The plain-English
+// spellings follow the usual defensive mapping for a business-vocabulary field.
 func pyjamahrEmploymentType(t string) string {
 	switch strings.ToUpper(strings.TrimSpace(t)) {
 	case "FULLTIME", "FULL_TIME", "FULL-TIME":
@@ -184,9 +176,8 @@ func pyjamahrEmploymentType(t string) string {
 }
 
 // pyjamahrSkills canonicalizes PyjamaHR's raw skill strings through the shared skilltag
-// dictionary. Live entries are compound phrases ("stakeholder management",
-// "cross-functional collaboration"), the same shape humanbitSkills/micro1Skills already
-// document needing mining rather than whole-string matching.
+// dictionary. Entries are compound phrases ("stakeholder management"), which need mining rather
+// than whole-string matching.
 func pyjamahrSkills(skills []string) []string {
 	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }

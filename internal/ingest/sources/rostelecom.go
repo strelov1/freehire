@@ -9,9 +9,9 @@ import (
 
 // rostelecom adapts Rostelecom's careers API (job.rt.ru), a single-company source with no
 // per-tenant board id (boardless). Like sber, the listing carries each vacancy's body inline
-// (whatWeToDo / whatWeExpect / whatWeOffer), so a crawl is the listing alone — three requests
-// for the ~300 postings the site holds. The API names no employer entity, so every posting is
-// the configured entry's company, and it states no publication date.
+// (whatWeToDo / whatWeExpect / whatWeOffer), so a crawl is the listing alone. The API names
+// no employer entity, so every posting is the configured entry's company, and it states no
+// publication date.
 type rostelecom struct {
 	http JSONGetter
 }
@@ -42,9 +42,9 @@ type rostelecomNamed struct {
 }
 
 // rostelecomVacancy is one listed vacancy with its body inline. The payload's salaryCurrency
-// is not read: it is "руб" or null — null on half the postings that state a figure — so it
-// carries nothing the rouble default does not. The street address is not read either: the
-// city is the location, and a street line only gives the location parser something to misread.
+// is not read: it is "руб" or null (even when a figure is stated), so it adds nothing to the
+// rouble default. The street address is not read either: the city is the location, and a
+// street line only gives the location parser something to misread.
 type rostelecomVacancy struct {
 	ID           int               `json:"id"`
 	Name         string            `json:"name"`

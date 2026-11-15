@@ -7,11 +7,9 @@ import (
 	"strings"
 )
 
-// ozon adapts Ozon's public job API (job-api.ozon.ru), a single-company source with no
-// per-tenant board id (boardless). The list endpoint paginates by page and carries no
-// description, so each kept vacancy's body comes from its own detail request, fanned out
-// like SmartRecruiters. Only external_vacancy items are real Ozon postings; the rest are
-// dropped.
+// ozon adapts Ozon's public job API (job-api.ozon.ru), a boardless single-company source. The
+// list endpoint carries no description, so each kept vacancy is fetched in detail. Only
+// external_vacancy items are real Ozon postings; the rest are dropped.
 type ozon struct {
 	http JSONGetter
 }
@@ -53,9 +51,8 @@ func (o ozon) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// list pages through every vacancy page (1..meta.totalPages), keeping only external_vacancy
-// items. The server fixes the page size regardless of the requested limit, so totalPages
-// from the response drives the loop.
+// list pages through 1..meta.totalPages, keeping only external_vacancy items. The server fixes
+// the page size regardless of limit, so totalPages drives the loop.
 func (o ozon) list(ctx context.Context) ([]ozonItem, error) {
 	var kept []ozonItem
 	for page := 1; ; page++ {

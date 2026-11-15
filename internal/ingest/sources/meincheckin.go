@@ -17,7 +17,7 @@ import (
 // insurers, district and city councils. A tenant is a path segment on one of three branded hosts
 // (sparkasse., vr. and www.mein-check-in.de). www serves its own tenants and redirects the
 // sparkasse. ones to their host; the vr. tenants (cooperative banks, often keyed by their bank
-// code, 85095004) answer only on vr. and are a 404 on www. No slug was measured on both, so the
+// code, 85095004) answer only on vr. and are a 404 on www. No slug is known on both, so the
 // board is the bare tenant slug (ksk-ratzeburg, sv-informatik, aalen, 85095004) and the start
 // page is asked of www first, then of vr.
 //
@@ -44,7 +44,7 @@ func (meincheckin) Provider() string { return "meincheckin" }
 var meincheckinBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
 // meincheckinOpenApplication matches the open-application entry most tenants list among their
-// positions (~7% of measured entries). It is not a vacancy.
+// positions. It is not a vacancy.
 var meincheckinOpenApplication = regexp.MustCompile(`(?i)initiativbewerbung`)
 
 type meincheckinPosition struct {

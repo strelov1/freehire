@@ -10,14 +10,14 @@ import (
 
 // recrutei adapts Recrutei (jobs.recrutei.com.br), a Brazilian multi-tenant ATS. The board is
 // the tenant's path segment. The listing is the tenant's own internal frontend API — found by
-// capturing real browser network traffic, not from any published documentation, since the
-// listing page's HTML/JS carries no discoverable endpoint by itself: a single
+// capturing real browser network traffic, since the
+// listing page's HTML/JS carries no discoverable endpoint: a single
 // POST /api/v2/vacancies/per-departments/<board> with body {"search":""} returns every open
-// posting grouped by department, with the declared total equal to the summed item count
-// (verified live). Each item already carries its own title, company name, location, and
+// posting grouped by department, with the declared total equal to the summed item count.
+// Each item already carries its own title, company name, location, and
 // employment regime — only the description and post date come from a per-posting detail
 // fetch, decoded from the page's schema.org application/ld+json JobPosting block via the
-// shared ldJobPosting decoder (the same one geekhunter already uses).
+// shared ldJobPosting decoder.
 type recrutei struct {
 	http recruteiHTTP
 }
@@ -36,8 +36,7 @@ func (recrutei) Provider() string { return "recrutei" }
 // fullBoardListing: the listing proves the whole set of open postings by construction (one
 // request, no pagination), verified against its own declared total on every fetch (see
 // listRecrutei). A detail-fetch failure for one posting becomes an Unreadable marker rather
-// than a silent drop, the same contract a listing-then-detail adapter like geekhunter or
-// humanbit already gives this marker. A listing fetch, decode, or completeness-check failure
+// than a silent drop, as in geekhunter/humanbit. A listing fetch, decode, or completeness-check failure
 // fails the whole Fetch outright.
 func (recrutei) fullBoardListing() {}
 
@@ -66,7 +65,7 @@ type recruteiDepartment struct {
 
 // recruteiItem is one listing posting. Everything except the description and post date is
 // read straight from here — the detail page's own copies of location/employmentType are
-// unreliable (see design.md: a literal "undefined" locality and a constant "FULL_TIME").
+// unreliable (a literal "undefined" locality and a constant "FULL_TIME").
 type recruteiItem struct {
 	ID          int              `json:"id"`
 	Title       string           `json:"title"`
@@ -77,14 +76,10 @@ type recruteiItem struct {
 }
 
 // recruteiLocation decodes the listing item's "location" field, which the platform emits as
-// EITHER a JSON array of strings (the shape every sample carried during design) or, for a
-// posting with no stated address, the bare Portuguese placeholder string "Não informado"
-// ("not stated") — found live on ~20% of a real tenant's postings, which broke the very
-// first production crawl with "cannot unmarshal string into []string" the day this adapter
-// shipped. "Não informado" decodes to an empty slice (no location, never a literal
-// placeholder string in the job — the same posture the detail page's "undefined" leak
-// already earned in design.md); any OTHER bare string is kept as a single-element location,
-// since nothing observed live rules out a real value ever being sent that way.
+// either a JSON array of strings or, for a posting with no stated address, the bare
+// Portuguese placeholder string "Não informado" ("not stated"), which a plain []string
+// decode rejects. "Não informado" decodes to an empty slice (never a literal placeholder
+// in the job); any other bare string is kept as a single-element location.
 type recruteiLocation []string
 
 func (l *recruteiLocation) UnmarshalJSON(b []byte) error {
@@ -167,9 +162,8 @@ func (s recrutei) detail(ctx context.Context, e CompanyEntry, it recruteiItem) (
 // vocab.EmploymentTypeValues. CLT is the standard full-time employment contract; Pessoa
 // Jurídica ("PJ") is a legal-entity/freelance contractor arrangement. "CLT ou PJ" (either) and
 // "Não informado" (not stated) are genuinely ambiguous or unstated, so they map to "" rather
-// than a guess — the detail page's own ld+json employmentType is NOT used here: verified live
-// that it reports "FULL_TIME" for postings of every regime, a platform-side constant rather
-// than a real per-posting signal.
+// than a guess. The detail page's ld+json employmentType is NOT used: it reports "FULL_TIME"
+// for every regime, a platform-side constant.
 func recruteiEmploymentType(regime string) string {
 	switch strings.TrimSpace(regime) {
 	case "CLT":

@@ -31,8 +31,8 @@ func (lever) Provider() string { return "lever" }
 // the bar.
 func (lever) fullBoardListing() {}
 
-// emptyBoardListing: an unknown board answers 404, and an emptied one
-// answers 200 with a bare [] (2026-10-29); a null body fails Fetch. See the emptyBoardListing interface for the bar.
+// emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with a bare [];
+// a null body fails Fetch. See the emptyBoardListing interface for the bar.
 func (lever) emptyBoardListing() {}
 
 func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -122,12 +122,10 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-// leverSalaryPeriod maps Lever's salaryRange.interval (confirmed live: per-year-salary,
-// per-month-salary, per-hour-wage, and a one-time bonus/stipend that isn't a recurring
-// wage at all) onto freehire's salary_period vocabulary. An unrecognized interval maps
-// to "" so the caller drops the whole salary rather than mislabelling its period — e.g.
-// defaulting an hourly rate to a yearly figure downstream would misrepresent it, which
-// is worse than reporting nothing.
+// leverSalaryPeriod maps Lever's salaryRange.interval (per-year-salary, per-month-salary,
+// per-hour-wage, and a one-time bonus/stipend that is not a recurring wage) onto freehire's
+// salary_period vocabulary. An unrecognized interval maps to "" so the caller drops the whole
+// salary rather than mislabel its period.
 func leverSalaryPeriod(interval string) string {
 	switch interval {
 	case "per-year-salary":

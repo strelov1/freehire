@@ -19,9 +19,8 @@ import (
 
 // nsz adapts the job search of Serbia's National Employment Service (Nacionalna služba za
 // zapošljavanje, nsz.gov.rs): the vacancies Serbian employers publish through the public
-// service, ~500 open at a time, every trade, mostly health care, education and local
-// employers. It is boardless and an aggregator — the employer is read per posting. See the
-// "NSZ traps" section of AGENTS.md for the measurements behind each rule.
+// service, every trade, mostly health care, education and local employers. It is boardless and an
+// aggregator: the employer is read per posting. See the "NSZ traps" section of AGENTS.md.
 //
 // The search is a server-rendered page, 20 vacancies a page, newest first; a card carries the
 // title, the employer and its town. The body and the vacancy's facts are on the vacancy's own
@@ -45,16 +44,16 @@ const (
 	// home page.
 	nszPostingURL = nszBaseURL + "/employee/jobs/preview/%s"
 
-	// nszMaxPages is a safety ceiling far past the catalogue's size (510 vacancies, 26 pages,
-	// on 2026-10-29); reaching it fails the crawl rather than ending it.
+	// nszMaxPages is a safety ceiling far past the catalogue's size; reaching it fails the crawl
+	// rather than ending it.
 	nszMaxPages = 200
-	// nszRequestInterval paces every request of a run at one a second — a courtesy ceiling
-	// toward a public service, not a measured limit.
+	// nszRequestInterval paces every request of a run at one a second: a courtesy ceiling
+	// toward a public service.
 	nszRequestInterval = time.Second
 	nszDetailWorkers   = 2
-	// nszMaxNewPerRun bounds the vacancy pages one run buys: a page answers in ~1.5 s, so 1,200
-	// is ~30 minutes, plus a ~2 minute listing walk and the writes, inside the scheduler's
-	// default crawl budget. The whole catalogue is ~500, so a cold run takes it all.
+	// nszMaxNewPerRun bounds the vacancy pages one run buys, so the page fetches at one a second
+	// plus the listing walk and the writes fit the scheduler's default crawl budget. The whole
+	// catalogue is small enough that a cold run takes it all.
 	nszMaxNewPerRun   = 1200
 	nszDeadlineMargin = 5 * time.Minute
 

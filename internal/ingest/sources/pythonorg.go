@@ -13,11 +13,10 @@ import (
 )
 
 // pythonorg adapts the Python.org job board (python.org/jobs), the Python Software Foundation's
-// own board, where employers post Python roles directly. The whole catalogue is one
-// server-rendered listing (/jobs/, 25 postings a page; 28 postings over two pages measured
-// 2026-10-15), so the provider is boardless. A listing card states the posting's id, title,
-// employer, place and posting date; the body lives only on the posting page, so this is a
-// HydratingSource that buys a page only for a posting the catalogue lacks.
+// own board. The whole catalogue is one server-rendered listing (/jobs/, 25 postings a page), so
+// the provider is boardless. A listing card states the posting's id, title, employer, place and
+// posting date; the body lives only on the posting page, so this is a HydratingSource that buys a
+// page only for a posting the catalogue lacks.
 //
 // The board's RSS feed carries bodies but only the newest 20 postings, so it cannot be the
 // listing. The walk follows the ordinary "which page failed decides" rule and claims neither
@@ -29,7 +28,7 @@ type pythonorg struct {
 const (
 	pythonorgBase    = "https://www.python.org"
 	pythonorgListURL = pythonorgBase + "/jobs/"
-	// pythonorgMaxPages is a ceiling twenty times the measured catalogue, never the expected end.
+	// pythonorgMaxPages is a ceiling far above the catalogue size, never the expected end.
 	pythonorgMaxPages = 40
 )
 

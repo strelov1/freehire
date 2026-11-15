@@ -42,15 +42,12 @@ func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error
 	return s.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchNew is Fetch that spends a page request only on postings the catalogue does not hold.
-// The page is this adapter's whole cost — the sitemap names a posting and carries nothing
-// else — and re-reading every stored page on every run could not finish: measured
-// 2026-10-28, each of the three shards' 2400-second crawls reached ~350 of its ~850 boards,
-// every run for at least ten days ended on its deadline, and the eight boards in flight when
-// it did (jobs.lidl alone lists 21k postings) saved nothing. A seen posting is re-listed as a
-// SeenRefresh carrying the sitemap's identity — the sitemap itself proves the posting is
-// still published — so its liveness refreshes and its hydrated body and facets are kept.
-// The sitemap stays whole, so the board-scoped sweep still closes what it stopped listing.
+// FetchNew is Fetch that spends a page request only on postings the catalogue does not hold. The
+// page is this adapter's whole cost (the sitemap carries only URLs), and re-reading every stored
+// page each run cannot finish inside the deadline on large boards. A seen posting is re-listed as
+// a SeenRefresh carrying the sitemap's identity, so liveness refreshes and its hydrated body and
+// facets are kept. The sitemap stays whole, so the board-scoped sweep still closes what it
+// stopped listing.
 func (s successfactors) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	sitemapURL := fmt.Sprintf("https://%s/job_sitemap.xml", e.Board)
 	sitemap, err := getSitemap(ctx, s.http, sitemapURL)
@@ -114,16 +111,13 @@ func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitema
 	}, true
 }
 
-// sfLocation reads where a posting is from its page. The JobPosting's jobLocation microdata
-// carries either a structured address (addressLocality/addressCountry) or one streetAddress
-// string; the standard template also renders the place as a jobGeoLocation line, which is
-// the most complete form (it spells out the region), so it is preferred when present.
-// addressRegion is never used: the platform truncates it to four characters ("Québ",
-// "II d"). Custom layouts may instead name a "Job Location" token. A complete list
-// of city/country pairs supplies every country; otherwise structured addressCountry
-// is returned as the posting's country, since in a
-// free-text line "CA" reads as California rather than Canada. A tenant whose custom layout
-// drops both the microdata and the rendered line states no place, and gets none.
+// sfLocation reads where a posting is from its page. The jobGeoLocation line is preferred (the
+// most complete form, spells out the region), then the JobPosting jobLocation microdata
+// (structured address or one streetAddress string); custom layouts may name a "Job Location"
+// token. addressRegion is never used: the platform truncates it to four characters ("Québ").
+// A complete list of city/country pairs supplies every country; otherwise structured
+// addressCountry is the posting's country, since in a free-text line "CA" reads as California
+// rather than Canada. A tenant whose layout drops both the microdata and the line gets no place.
 func sfLocation(root *html.Node) (string, []string) {
 	country := itempropAttr(root, "addressCountry")
 

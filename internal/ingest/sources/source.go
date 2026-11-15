@@ -131,13 +131,12 @@ type Job struct {
 	SalaryMax      *int
 	SalaryCurrency string
 	SalaryPeriod   string
-	// CompanyWebsite is the EMPLOYER's own website, set only when the platform states it in
-	// a structured employer field (EURES's employer.website). It is never a posting URL and
-	// never the job board's own host. It is a fact about the company rather than the
-	// posting, so the pipeline writes it to the company row (company_info.website, only
-	// where none is known yet) and keeps it out of the job aggregate and its content hash.
-	// A shared website is the strongest evidence that two spellings are one employer
-	// (docs/agents/company-identity.md), which is why it is collected (freehire#3895).
+	// CompanyWebsite is the EMPLOYER's own website, set only when the platform states it in a
+	// structured employer field (EURES's employer.website). It is never a posting URL and never the
+	// job board's own host. It is a fact about the company rather than the posting, so the pipeline
+	// writes it to the company row (company_info.website, only where none is known yet) and keeps it
+	// out of the job aggregate and its content hash. A shared website is the strongest evidence that
+	// two spellings are one employer (docs/agents/company-identity.md).
 	CompanyWebsite string
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged
 	// removed in JobStream's incremental feed). A streaming, self-closing source emits
@@ -216,10 +215,10 @@ type StreamingSource interface {
 // HydratingSource is a Source that fetches expensive per-posting detail (e.g. the description
 // the list omits) only for postings the catalogue does not already have. The pipeline supplies a
 // seen predicate — seen(externalID) reports whether that posting is already ingested for the
-// provider — so a large aggregator (justjoin, ~20k live offers) issues detail requests only for
-// new postings instead of on every crawl. An adapter opts in by implementing this in addition to
-// Fetch (the list-only fallback used when the pipeline cannot supply a seen set); every other
-// adapter is unaffected. The pipeline prefers FetchNew when the adapter implements it.
+// provider — so a large aggregator (justjoin) issues detail requests only for new postings
+// instead of on every crawl. An adapter opts in by implementing this in addition to Fetch (the
+// list-only fallback used when the pipeline cannot supply a seen set); every other adapter is
+// unaffected. The pipeline prefers FetchNew when the adapter implements it.
 type HydratingSource interface {
 	Source
 	FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error)
@@ -245,10 +244,8 @@ type RecentSource interface {
 //
 // It exists because `seen` alone cannot bound the work on such a board. A discarded posting is
 // never stored, so it is never seen, so the ordinary hydrating crawl pays for its body on
-// EVERY run and throws the body away every time. That is a rounding error on most aggregators
-// (measured on prod across the twelve hydrating ones: 0-3% for all but three) and it is the
-// whole board on one: remote.com lists ~5.7k postings of which ~4.1k are already covered, so
-// 71% of its hydration budget bought nothing, hourly, forever.
+// EVERY run and throws the body away every time. That is minor on most aggregators and the
+// whole board on one that lists many already-covered postings (remote.com).
 //
 // The pipeline passes a DetailGate only when the coverage gate actually applies to this board,
 // so an adapter that gets here can trust both of its answers.
@@ -342,11 +339,10 @@ type fullCatalog interface{ fullCatalog() }
 // that one crawl read the whole board, and the grace window stands in for that proof: a posting
 // that merely sat past the budget comes back within it, one the keyword stopped carrying does
 // not. Without the marker such a provider closed only through the company scope, which leaked
-// every posting whose company had drifted out of every slice — measured 2026-10-28, 5,835 of
-// whatjobs-uk's 5,880 open postings unseen past the 14-day grace belonged to a company no run
-// that day wrote, and only cmd/liveness's 45-day age rule ever reached them. Granting it to an
-// adapter without a sweepGrace would close on the 48h default every posting past the budget, so
-// a test holds every member to one. See SliceBoardListingProviders.
+// every posting whose company had drifted out of every slice (only cmd/liveness's age rule ever
+// reached them). Granting it to an adapter without a sweepGrace would close on the 48h default
+// every posting past the budget, so a test holds every member to one. See
+// SliceBoardListingProviders.
 type sliceBoardListing interface{ sliceBoardListing() }
 
 // sweepGrace marks an adapter that needs the post-run unseen sweep to wait a DIFFERENT length of
@@ -366,8 +362,7 @@ type sliceBoardListing interface{ sliceBoardListing() }
 //     needs (gem: see gemSweepGrace). Sound only when the fleet's own crawl cadence for that
 //     provider is comfortably tighter than the declared window, with room to spare for a missed
 //     run or two — narrowing the SHARED default instead would falsely close the much slower,
-//     jitterier providers that still rely on it (workday, smartrecruiters — see
-//     cmd/ingest/coverage.go's measured per-provider staleness).
+//     jitterier providers that still rely on it (workday, smartrecruiters).
 //
 // See SweepGraceWindows.
 type sweepGrace interface{ sweepGrace() time.Duration }
@@ -388,13 +383,12 @@ type livenessProbed interface{ livenessProbed() }
 // end (an empty page, hasNext=false, or a declared page count reached) with no artificial
 // page or offset cap in adapter code — and treats any failure to establish that proof as a
 // failed Fetch rather than a partial success. Only such an adapter's boards are safe for the
-// post-run sweep's board-scoped close (freehire#2328): a silently truncated crawl reported as
-// an unqualified success would let the sweep close the unreached remainder as if it were
-// gone, which is exactly what happened to a live solidjobs board and forced #2337's revert.
-// The bar is deliberately structural rather than a documented assumption — solidjobs.go
-// recorded its 500-posting cap in a comment nobody's code read; this marker must not be
-// grantable on the same evidence. See habrcareer.go's fullCatalog Fetch for the pattern
-// (any page failure is a hard error, never a partial result) and FullBoardListingProviders.
+// post-run sweep's board-scoped close: a silently truncated crawl reported as an unqualified
+// success would let the sweep close the unreached remainder as if it were gone. The bar is
+// deliberately structural rather than a documented assumption: a cap recorded only in a
+// comment is not enough, so this marker must not be grantable on that evidence. See
+// habrcareer.go's fullCatalog Fetch for the pattern (any page failure is a hard error, never a
+// partial result) and FullBoardListingProviders.
 type fullBoardListing interface{ fullBoardListing() }
 
 // RegionScopedBoards marks an adapter whose board id repeats across REGIONS of one provider
@@ -416,17 +410,17 @@ type RegionScopedBoards interface {
 // and an answer that never had a listing in it — a challenge page, an HTML error page served
 // with 200, a JSON envelope without its posting collection, a page whose markup moved so that
 // nothing parses — ends a walk on its first page and looks exactly like an empty board. Without
-// this marker such a board's last postings stayed open until the empty-feed net closed them 30
-// days later (cmd/close-chronic-boards); with it, a wrongly granted adapter would close a live
+// this marker such a board's last postings stay open until the empty-feed net
+// (cmd/close-chronic-boards) closes them; with it, a wrongly granted adapter would close a live
 // board's whole catalogue on the 48h window.
 //
 // The bar: a non-2xx answer is a failed Fetch, an answer that does not decode as the source's
 // listing is a failed Fetch, and an answer that decodes but carries no posting collection at
 // all (the key absent or null) is a failed Fetch too (errListingAbsent) — only the collection
 // present and empty is an empty board. A source that answers an UNKNOWN board with an empty
-// listing (SmartRecruiters' totalFound=0 for any company identifier, measured 2026-10-29) does
-// not qualify: the empty answer is then also what a failed lookup looks like. An HTML-scraped
-// listing does not qualify either, since zero links parsed is what moved markup looks like.
+// listing (SmartRecruiters' totalFound=0 for any company identifier) does not qualify: the
+// empty answer is then also what a failed lookup looks like. An HTML-scraped listing does not
+// qualify either, since zero links parsed is what moved markup looks like.
 // Granted per adapter after that check, never by sweeping the fullBoardListing set — a test
 // holds every member to fullBoardListing and to the default sweep window. See
 // EmptyBoardListingProviders.

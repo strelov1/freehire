@@ -18,12 +18,11 @@ import (
 // it is echoed back into every posting's own URL, so a stable identifier is used rather than a
 // throwaway one) and ships each posting's full description inline (no detail call).
 //
-// KNOWN LIMITATION, verified live 2026-08-10: the response reports totalPages/totalCount (3
-// pages, 1399 jobs for the "it" division) but the endpoint has no discoverable way to reach
-// pages beyond the first — pageIndex, pageNumber, page, skip, offset and a POST body were all
-// tried and every one of them silently returns page 0 again. Only the first (fixed) 500
-// postings per division are reachable through this adapter today; the rest is a real gap, not
-// an oversight, left for whoever finds the actual paging mechanism (or an authenticated one).
+// KNOWN LIMITATION: the response reports totalPages/totalCount but the endpoint has no
+// discoverable way to reach pages beyond the first: pageIndex, pageNumber, page, skip, offset and
+// a POST body all silently return page 0 again. Only the first (fixed) 500 postings per division
+// are reachable; the rest is a real gap, left for whoever finds the actual paging mechanism (or
+// an authenticated one).
 type solidjobs struct {
 	http JSONGetter
 }
@@ -110,10 +109,9 @@ func (p solidjobsPosting) toJob() (Job, bool) {
 	}, true
 }
 
-// solidjobsEmploymentType maps the platform's contractTime field, which already uses
-// freehire's own vocabulary spelling for the two values verified live ("full_time",
-// "part_time"). Anything else maps to "" rather than a guess (vocab.EmploymentTypeValues is
-// dict-only).
+// solidjobsEmploymentType maps the platform's contractTime field, which already uses freehire's
+// own spelling for "full_time" and "part_time". Anything else maps to "" rather than a guess
+// (vocab.EmploymentTypeValues is dict-only).
 func solidjobsEmploymentType(contractTime string) string {
 	switch contractTime {
 	case "full_time", "part_time":
@@ -123,10 +121,9 @@ func solidjobsEmploymentType(contractTime string) string {
 	}
 }
 
-// solidjobsSeniority maps the platform's own experienceLevel taxonomy (verified live: "Intern",
-// "Junior", "Regular", "Senior" — no other value observed) to freehire's controlled
-// vocabulary. "Regular" is the Polish IT market's usual label for a mid-level developer.
-// An unrecognized value maps to "" rather than a guess.
+// solidjobsSeniority maps the platform's own experienceLevel taxonomy ("Intern", "Junior",
+// "Regular", "Senior") to freehire's controlled vocabulary. "Regular" is the Polish IT market's
+// usual label for a mid-level developer. An unrecognized value maps to "" rather than a guess.
 func solidjobsSeniority(level string) string {
 	switch level {
 	case "Intern":

@@ -26,20 +26,15 @@ type scraplingProvider struct {
 }
 
 // scraplingProviders is the allowlist of providers no plain client can reach, crawled through
-// services/scrapling-fetch on the crawl host. Each row's route is the cheapest one measured to
-// pass on 2026-10-20 (docs/superpowers/specs/2026-10-20-scrapling-fetch-design.md has the
-// per-mode table): `http` is one request with Chrome's TLS fingerprint, ~0.2-2 s; `browser` is a
-// stealth Chromium navigation that solves Cloudflare challenges, ~5-9 s once the first page on
-// a host has paid for the challenge (~110 s on bayt).
-//
-// It replaced the hosted Firecrawl tier, which carried bayt, gulftalent, wellfound, wantapply's
-// sitemap and hh's detail pages at a credit per page and ran out of credits in 2026-10.
+// services/scrapling-fetch on the crawl host. Each row's route is the cheapest one that passes:
+// `http` is one request with Chrome's TLS fingerprint; `browser` is a stealth Chromium
+// navigation that solves Cloudflare challenges, slow on the first page of a host.
 //
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
 	// 405 to the crawl host's IP; through the proxy, a GeeTest challenge from the sixth listing
-	// page on a plain client, and 20 of 20 pages in a browser over the same proxy.
+	// page on a plain client; a browser over the same proxy passes.
 	"infojobs": {scraplingRoute{scraplingfetch.ModeBrowser, true}, func(f *Client) Source {
 		return NewInfoJobs(f)
 	}},
@@ -81,28 +76,26 @@ var scraplingProviders = map[string]scraplingProvider{
 		return NewCleverstaff(f)
 	}},
 	// Only the posting pages: Akamai bot management holds a plain request open without
-	// answering, and the impersonating fetcher is served from the crawl host's own IP (measured
-	// 2026-10-27). The active-offers sitemap is not behind it and stays on a plain client.
+	// answering, and the impersonating fetcher is served from the crawl host's own IP. The
+	// active-offers sitemap is not behind it and stays on a plain client.
 	"turijobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewTurijobs(NewClient(), f)
 	}},
 	// Cloudflare answers 403 to a plain client from the crawl host on every path, sitemap
 	// included; the impersonating fetcher is served from the crawl host's own IP, with an
-	// occasional 403 the adapter retries (measured 2026-10-28).
+	// occasional 403 the adapter retries.
 	"cadremploi": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCadremploi(f)
 	}},
 	// Cloudflare answers 403 to a plain client from the crawl host on every path, robots.txt
 	// included; the impersonating fetcher is served from the crawl host's own IP, listing and
-	// offer pages alike (measured 2026-10-29, ~1-3 s a page).
+	// offer pages alike.
 	"pracuj": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewPracuj(f)
 	}},
 	// Only the posting pages: a Cloudflare challenge answers 403 to a plain client and to the
-	// impersonating fetcher alike (1 of 5 served direct, a third to four in five over the
-	// rotating proxy at ~225 KB a refusal), and the browser passes 18 of 18 from the crawl host's
-	// own IP, ~8 s a page once the first has paid ~110 s for the challenge (measured
-	// 2026-10-28). The sitemaps sit on a CDN with no challenge and stay on a plain client.
+	// impersonating fetcher alike, and the browser passes from the crawl host's own IP. The
+	// sitemaps sit on a CDN with no challenge and stay on a plain client.
 	"jobteaser": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewJobTeaser(NewClient(), f)
 	}},
@@ -117,54 +110,52 @@ var scraplingProviders = map[string]scraplingProvider{
 	}},
 	// Vercel's bot firewall: 403 to the crawl host's IP in any client, and through the proxy a
 	// plain request draws the 429 "Security Checkpoint" about half the time. The browser over the
-	// proxy passes it, 10 of 10 pages measured on 2026-10-21. It replaced the chromedp browser
-	// tier, which the checkpoint had started answering with a 403.
+	// proxy passes it.
 	"echojobs": {scraplingRoute{scraplingfetch.ModeBrowser, true}, func(f *Client) Source {
 		return NewEchoJobs(f)
 	}},
-	// Cloudflare's "Just a moment..." challenge on the site and, since 2026-10-20, on
+	// Cloudflare's "Just a moment..." challenge on the site and on
 	// api.wuzzuf.net too, to every plain request direct or proxied. The browser from the crawl
 	// host's own IP solves it; over the proxy it timed out. Paced: see wuzzufPageInterval.
 	"wuzzuf": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewWuzzuf(pacedWuzzufSite(f))
 	}},
-	// Cloudflare's challenge on the listing to every datacenter IP since 2026-10: through the
-	// proxy a plain request passed 4 of 10 pages and the impersonating fetcher 7 of 10, while the
-	// browser from the crawl host's own IP read 10 of 10. The posting JSON on oferta.occ.com.mx
-	// is not challenged and stays on a plain client with the browser-compatible User-Agent.
+	// Cloudflare's challenge on the listing to every datacenter IP: through the proxy a plain
+	// request and the impersonating fetcher pass only partly, while the browser from the crawl
+	// host's own IP passes. The posting JSON on oferta.occ.com.mx is not challenged and stays on
+	// a plain client with the browser-compatible User-Agent.
 	"occ": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewOCC(occSplit{HTMLGetter: f, JSONGetter: NewCompatibleUAClient()})
 	}},
-	// The fixed proxy exit is 429'd on every detail page once a run has spent its budget — 15 of
-	// 15 measured on 2026-10-22, so a run hydrating 600 postings timed out with none stored. The
-	// impersonating fetcher over the rotating exit read 18 of 20; the misses are a 403 per bad IP
-	// and are retried next run. Still paced, since the site's own budget is unknown.
+	// The fixed proxy exit is 429'd on every detail page once a run has spent its budget, so a
+	// large hydration run times out with nothing stored. The impersonating fetcher over the
+	// rotating exit mostly passes; the misses are a 403 per bad IP and are retried next run.
+	// Still paced, since the site's own budget is unknown.
 	"vagas": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewVagas(pacedHTMLGetter(f, vagasRequestInterval, vagasRequestBurst))
 	}},
 	// Only its posting pages: Cloudflare answers 403 to every plain request for them from the
-	// crawl host, and the impersonating fetcher from the crawl host's own IP is served (2026-10-25,
-	// ~0.4 s a page). The JSON search is not challenged and stays on a plain client.
+	// crawl host, and the impersonating fetcher from the crawl host's own IP is served. The JSON
+	// search is not challenged and stays on a plain client.
 	// Cloudflare refuses the crawl host's IP for a plain client, through both proxies, and
 	// shows a Go Chrome-fingerprint client its challenge; the impersonating fetcher is served.
 	// Through the service's rotating proxy, not from the crawl host's own IP: that IP is
-	// rate-limited per address, and the first sharded passes drew 429s on 1-19 boards per shard
-	// even at one request every 4 s per shard, while the rotating exits answered 40 of 40 at
-	// ~3 s a page (2026-10-26). The code tables on static.104.com.tw have no such edge and stay
-	// on a plain client.
+	// rate-limited per address and draws 429s even at one request every 4 s per shard, while the
+	// rotating exits answer. The code tables on static.104.com.tw have no such edge and stay on a
+	// plain client.
 	"job104": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewJob104(f, NewClient())
 	}},
 	// Imperva's bot wall ("Pardon Our Interruption", HTTP 405) to the crawl host and to the fixed
 	// proxy exit after a handful of requests; the browser over the proxy is refused too. The
-	// impersonating fetcher over the rotating exits passed about half the requests on 2026-10-27,
-	// and the adapter re-sends a 405, each attempt on a new exit.
+	// impersonating fetcher over the rotating exits passes about half the requests, and the
+	// adapter re-sends a 405, each attempt on a new exit.
 	"epreselec": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewEPreselec(f)
 	}},
 	// Cloudflare's "Just a moment..." challenge (403) to every plain client, from the crawl host,
 	// the fixed proxy and a laptop alike; the impersonating fetcher from the crawl host's own IP
-	// read all 59 measured sites, 4,097 jobs, on 2026-10-27.
+	// is served.
 	"viterbit": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewViterbit(f)
 	}},
@@ -173,7 +164,7 @@ var scraplingProviders = map[string]scraplingProvider{
 	}},
 }
 
-// A browser fetch that meets a challenge on its first page measured ~110 s, and the service
+// A browser fetch that meets a challenge on its first page can take ~110 s, and the service
 // queues a request for a free browser for up to 120 s; the timeout covers both.
 const (
 	scraplingBrowserTimeout = 5 * time.Minute

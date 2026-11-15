@@ -22,12 +22,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )
 
-// pracuj adapts Pracuj.pl (www.pracuj.pl), Poland's largest general job board: ~63k open offers
-// in ~48.5k postings (one posting is offered in several cities as several offers), every trade,
-// ~10% of them in the two IT categories. It is boardless and an aggregator — the employer is
-// read per posting. Grupa Pracuj's IT board theprotocol.it carries the same postings and is not
-// crawled separately. See the "Pracuj.pl traps" section of AGENTS.md for the measurements behind
-// each rule.
+// pracuj adapts Pracuj.pl (www.pracuj.pl), Poland's largest general job board. It is
+// boardless and an aggregator: the employer is read per posting. Grupa Pracuj's IT board
+// theprotocol.it carries the same postings and is not crawled separately. See the "Pracuj.pl
+// traps" section of AGENTS.md for the measurements behind each rule.
 //
 // Cloudflare refuses a plain client on every path, so the whole crawl goes through the Scrapling
 // tier's impersonating fetcher (see scraplingProviders). The listing is the site's own search,
@@ -63,32 +61,26 @@ const (
 	// pracujPageSize is the largest page the search serves; a page is ~1.2 MB of HTML.
 	pracujPageSize = 100
 
-	// pracujRequestInterval paces the listing at one page a second — a courtesy ceiling, not a
-	// measured limit; ~560 listing pages a run drew no refusal.
+	// pracujRequestInterval paces the listing at one page a second, a courtesy ceiling rather than
+	// a known limit.
 	pracujRequestInterval = time.Second
 	// pracujWorkers keeps two listing requests in flight: one round trip through the Scrapling
 	// tier is ~1-3 s, so a single worker would read well under the one-a-second pace.
 	pracujWorkers = 2
 	// pracujOfferInterval paces the offer pages, one at a time. Cloudflare rate-limits them
-	// separately from the listing: the first production run read 114 offer pages at about one a
-	// second and every offer request after that answered 429 "Access denied" for over an hour,
-	// while the listing kept answering; the block lifted after about an hour. 170 offer pages at
-	// one every ~7.3 s (20 minutes) then drew no refusal, which rules out any "~100 per window"
-	// rule with a window over ~12 minutes; one every 8 s stays under every rule that run allows.
+	// separately from the listing: reading about one a second ends in 429 "Access denied" on every
+	// offer request for about an hour. One every 8 s stays under every rule seen.
 	pracujOfferInterval = 8 * time.Second
 	// pracujRetries bounds how often a failed request is asked again. The search's server render
-	// sometimes answers 200 without its results (a deep page of the unfiltered search did so for
-	// about half the requests); within a category slice it did not in ~560 pages, and a second
-	// try a few seconds later is the cure either way.
+	// sometimes answers 200 without its results (mostly deep pages of the unfiltered search); asking
+	// again a few seconds later cures it.
 	pracujRetries      = 4
 	pracujRetryBackoff = 3 * time.Second
-	// pracujMaxPages is a safety ceiling per slice: the largest slice was 210 pages on
-	// 2026-10-29.
+	// pracujMaxPages is a safety ceiling per slice.
 	pracujMaxPages = 600
-	// pracujMaxNewPerRun bounds the offer pages of one run: the schedule's 4,500 s run timeout
-	// leaves the crawl 65 minutes once cmd/ingest keeps its 10-minute sweep reserve, and ~10
-	// minutes of listing, 360 offer pages at one every 8 s (48 minutes) and the 5-minute margin
-	// fit in that. A cold catalogue is taken in slices, newest first.
+	// pracujMaxNewPerRun bounds the offer pages of one run so that the listing, the offer pages at
+	// pracujOfferInterval and the deadline margin fit in the schedule's run timeout. A cold catalogue
+	// is taken in slices, newest first.
 	pracujMaxNewPerRun   = 360
 	pracujDeadlineMargin = 5 * time.Minute
 )
@@ -100,11 +92,10 @@ type pracujSlice struct {
 	tech       bool
 }
 
-// pracujSlices partitions the site's 35 top-level categories into four searches small enough to
-// walk to the end. The unfiltered search (48.5k postings) answers ~half its deep pages without
-// results; a search of up to ~21k did not fail once. The slices still overlap (a posting may be
-// filed under categories of two slices, ~15% of the walk) and the walk deduplicates by posting.
-// 5015 and 5016 are "IT - Administracja" and "IT - Rozwój oprogramowania".
+// pracujSlices partitions the site's top-level categories into four searches small enough to
+// walk to the end: the unfiltered search answers about half its deep pages without results. The
+// slices overlap (a posting may be filed under categories of two slices); the walk deduplicates
+// by posting. 5015 and 5016 are "IT - Administracja" and "IT - Rozwój oprogramowania".
 var pracujSlices = []pracujSlice{
 	{categories: "5015,5016", tech: true},
 	// Manual work, production, supply chain, transport, quality, health and safety, energy.

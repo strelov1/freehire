@@ -15,13 +15,13 @@ import (
 // (e.g. 7700000000000 = Moscow). Multi-company (employer per posting), board-based like
 // arbeitsagentur — no new source shape needed.
 //
-// The API hard-caps pagination — the offset param is a 0-based page index, page size maxes at
-// 100, and page 100 errors — so one query reaches only the freshest 10k of a listing (results
-// are date_modify-descending). Six regions hold more than that (Krasnodar ~20k, Moscow ~19k,
-// measured 2026-10-30), so a region past the ceiling is read in date WINDOWS: the API's
-// modifiedTo bound selects what is older than the oldest posting the previous query reached,
-// and each window is walked to its own end. Until then the tail past 10k was never listed, so
-// nothing could tell its live postings from its dead ones (see fullBoardListing below).
+// The API hard-caps pagination (the offset param is a 0-based page index, page size maxes at 100,
+// and page 100 errors), so one query reaches only the freshest 10k of a listing (results are
+// date_modify-descending). Large regions (Moscow, Krasnodar) hold more than that, so a region past
+// the ceiling is read in date WINDOWS: the API's modifiedTo bound selects what is older than the
+// oldest posting the previous query reached, and each window is walked to its own end. Without
+// that, the tail past 10k would never be listed and its live postings could not be told from its
+// dead ones (see fullBoardListing below).
 type trudvsem struct {
 	http JSONGetter
 }
@@ -34,9 +34,9 @@ const (
 	// — the freshest 10k postings — are reachable per query.
 	trudvsemMaxPages = 100
 	// trudvsemWindowOverlap widens each window's modifiedTo bound past the oldest date_modify the
-	// previous query read. The listing is only roughly sorted (adjacent postings were measured a
-	// second out of order) and the bound's inclusivity is undocumented, so a bound exactly at that
-	// date could skip a posting; the overlap's repeats cost a page or so and are dropped by id.
+	// previous query read. The listing is only roughly sorted (adjacent postings can be a second
+	// out of order) and the bound's inclusivity is undocumented, so a bound exactly at that date
+	// could skip a posting; the overlap's repeats are dropped by id.
 	trudvsemWindowOverlap = time.Hour
 	// trudvsemModifyLayout is date_modify's format: "2026-10-30T13:39:45+0300".
 	trudvsemModifyLayout = "2006-01-02T15:04:05-0700"

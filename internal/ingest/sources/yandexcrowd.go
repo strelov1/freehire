@@ -20,8 +20,8 @@ type yandexcrowd struct {
 }
 
 // NewYandexCrowd builds the Yandex Crowd adapter over the given HTTP client. It needs
-// GetLargeText, not GetText: the listing inlines every posting's full description, and by
-// September 2026 that page had grown past GetText's 2 MiB link-probe cap.
+// GetLargeText, not GetText: the listing inlines every posting's full description and exceeds
+// GetText's 2 MiB link-probe cap.
 func NewYandexCrowd(c LargeTextGetter) Source { return yandexcrowd{http: c} }
 
 func (yandexcrowd) Provider() string { return "yandexcrowd" }
