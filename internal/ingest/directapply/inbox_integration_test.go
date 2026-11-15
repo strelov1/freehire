@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -198,5 +199,45 @@ func TestInboxRepository_ApplicationsGoWithTheCandidate(t *testing.T) {
 	var left int
 	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM direct_application_cvs WHERE application_id = $1`, id).Scan(&left); err != nil || left != 0 {
 		t.Errorf("kept CVs after account deletion = %d, %v; want none", left, err)
+	}
+}
+
+func TestApplicationLocks_SerialiseOneApplication(t *testing.T) {
+	f := newInboxFixture(t)
+	locks := directapply.NewApplicationLocks(db.New(f.pool), f.pool)
+	ctx := context.Background()
+
+	firstIn, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- locks.Serialize(ctx, 42, func(context.Context) error {
+			close(firstIn)
+			<-release
+			return nil
+		})
+	}()
+	<-firstIn
+
+	secondRan := make(chan struct{})
+	go func() {
+		_ = locks.Serialize(ctx, 42, func(context.Context) error { close(secondRan); return nil })
+	}()
+	select {
+	case <-secondRan:
+		t.Fatal("a second move of the same application ran while the first held its lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+	// Another application is not held up.
+	if err := locks.Serialize(ctx, 43, func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("Serialize(43): %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("first Serialize: %v", err)
+	}
+	select {
+	case <-secondRan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second move never ran after the first released the lock")
 	}
 }

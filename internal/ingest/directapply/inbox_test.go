@@ -79,11 +79,15 @@ func (f *fakeInbox) SetStage(_ context.Context, id, appID int64, st Stage) (Stag
 }
 
 type fakeMirror struct {
-	stages []string
-	err    error
+	stages   []string
+	err      error
+	onMirror func()
 }
 
 func (m *fakeMirror) Mirror(_ context.Context, _, _ int64, stage string) (bool, error) {
+	if m.onMirror != nil {
+		m.onMirror()
+	}
 	m.stages = append(m.stages, stage)
 	return m.err == nil, m.err
 }
@@ -101,19 +105,34 @@ func (n *fakeNotifier) SendStatusUpdate(_ context.Context, m StatusMail) error {
 	return nil
 }
 
+// fakeLocks records which applications a move held the lock of, and whether the move's
+// work ran inside it.
+type fakeLocks struct {
+	held   int64
+	locked []int64
+}
+
+func (l *fakeLocks) Serialize(ctx context.Context, id int64, fn func(context.Context) error) error {
+	l.locked = append(l.locked, id)
+	l.held = id
+	defer func() { l.held = 0 }()
+	return fn(ctx)
+}
+
 type inboxHarness struct {
 	repo      *fakeInbox
 	employers fakeEmployers
 	mirror    *fakeMirror
 	notifier  *fakeNotifier
+	locks     *fakeLocks
 }
 
 func newInboxHarness() *inboxHarness {
-	return &inboxHarness{repo: newFakeInbox(), mirror: &fakeMirror{}, notifier: &fakeNotifier{}}
+	return &inboxHarness{repo: newFakeInbox(), mirror: &fakeMirror{}, notifier: &fakeNotifier{}, locks: &fakeLocks{}}
 }
 
 func (h *inboxHarness) inbox() *Inbox {
-	return NewInbox(h.repo, h.employers, h.mirror, h.notifier)
+	return NewInbox(h.repo, h.employers, h.mirror, h.notifier, h.locks)
 }
 
 func TestInboxList_CountsEveryStageAndTotalsTheFilter(t *testing.T) {
@@ -275,5 +294,17 @@ func TestInboxCV_ServesTheKeptFile(t *testing.T) {
 	}
 	if _, err := h.inbox().CV(context.Background(), employerID, 2); !errors.Is(err, ErrNotFound) {
 		t.Errorf("CV of an application with no kept file: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestInboxMove_RunsUnderTheApplicationsLock(t *testing.T) {
+	h := newInboxHarness()
+	var heldDuringMirror int64
+	h.mirror.onMirror = func() { heldDuringMirror = h.locks.held }
+	if _, err := h.inbox().Move(context.Background(), employerID, 1, StageInterview, ""); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if len(h.locks.locked) != 1 || h.locks.locked[0] != 1 || heldDuringMirror != 1 {
+		t.Errorf("locked %v, held during mirror %d; want the move's follow-ups inside application 1's lock", h.locks.locked, heldDuringMirror)
 	}
 }

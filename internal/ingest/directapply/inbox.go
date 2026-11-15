@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/strelov1/freehire/internal/ingest/employer"
 )
 
 // Stage is an application's position in the employer's own hiring pipeline. Every
@@ -145,11 +147,18 @@ type Inbox struct {
 	employers Employers
 	mirror    StageMirror
 	notifier  StatusNotifier
+	locks     ApplicationLocker
+}
+
+// ApplicationLocker runs fn while no other caller runs a function for the same
+// application. ApplicationLocks satisfies it.
+type ApplicationLocker interface {
+	Serialize(ctx context.Context, id int64, fn func(context.Context) error) error
 }
 
 // NewInbox builds an Inbox. Every dependency is required.
-func NewInbox(repo InboxRepository, employers Employers, mirror StageMirror, notifier StatusNotifier) *Inbox {
-	return &Inbox{repo: repo, employers: employers, mirror: mirror, notifier: notifier}
+func NewInbox(repo InboxRepository, employers Employers, mirror StageMirror, notifier StatusNotifier, locks ApplicationLocker) *Inbox {
+	return &Inbox{repo: repo, employers: employers, mirror: mirror, notifier: notifier, locks: locks}
 }
 
 // Inbox page bounds.
@@ -234,6 +243,19 @@ func (in *Inbox) Move(ctx context.Context, employerID, id int64, st Stage, messa
 		return MoveResult{}, fmt.Errorf("%w: the message is longer than %d characters", ErrInvalid, maxMessage)
 	}
 
+	// The whole move runs under the application's lock: two moves of one application never
+	// interleave, so an older move cannot mirror or mail after a newer one has.
+	var res MoveResult
+	err = in.locks.Serialize(ctx, id, func(ctx context.Context) error {
+		var err error
+		res, err = in.move(ctx, acc, employerID, id, st, message)
+		return err
+	})
+	return res, err
+}
+
+// move is Move's body, run under the application's lock.
+func (in *Inbox) move(ctx context.Context, acc employer.Account, employerID, id int64, st Stage, message string) (MoveResult, error) {
 	mv, err := in.repo.SetStage(ctx, employerID, id, st)
 	if err != nil {
 		return MoveResult{}, err

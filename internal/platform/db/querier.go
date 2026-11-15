@@ -5802,6 +5802,11 @@ type Querier interface {
 	// Each approval checks the registry and company_parents and then writes them, and two
 	// approvals checked against the same state could each pass while together making a chain.
 	LockCompanyRelationDecisions(ctx context.Context) error
+	// Serialises everything one employer move does to one application — the stage write, the
+	// candidate's tracking and the letter — against another move of the same application, so
+	// an older move can never mirror or mail after a newer one. Transaction-scoped: the caller
+	// holds the transaction open for the move and rolls it back to release.
+	LockDirectApplication(ctx context.Context, id int64) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -7651,8 +7656,11 @@ type Querier interface {
 	// Moves a delivered application to a stage in the employer's pipeline and reports what the
 	// move needs downstream: whether it changed anything (`changed` is false when it already
 	// stood there, so a repeated click notifies nobody twice), and who the candidate is and
-	// what they applied to. The row is locked first, so of two concurrent moves to the same
-	// stage only one reports a change. No row: not the employer's.
+	// what they applied to. One UPDATE, so the comparison with the current stage is made on the
+	// row as it is when the update reaches it — a concurrent move that committed first is seen,
+	// not an older snapshot of it. stage_changed_at moves only with the stage, which is how the
+	// RETURNING tells a change from a no-op. No row: not the employer's. Callers serialise the
+	// whole move per application (LockDirectApplication).
 	SetDirectApplicationStage(ctx context.Context, arg SetDirectApplicationStageParams) (SetDirectApplicationStageRow, error)
 	// Record the outcome of examining one binding: whether the role is now held, and that it was
 	// examined just now.

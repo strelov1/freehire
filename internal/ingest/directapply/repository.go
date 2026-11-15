@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/job"
@@ -240,4 +241,30 @@ func (r *QueriesRepository) SetStage(ctx context.Context, employerID, id int64, 
 		JobTitle:       row.JobTitle,
 		Company:        row.Company,
 	}, nil
+}
+
+// ApplicationLocks serialises work per application with a transaction-scoped advisory
+// lock (LockDirectApplication). Rolling the transaction back releases it however fn ends.
+type ApplicationLocks struct {
+	pool *pgxpool.Pool
+	q    *db.Queries
+}
+
+// NewApplicationLocks builds ApplicationLocks over the pool.
+func NewApplicationLocks(q *db.Queries, pool *pgxpool.Pool) *ApplicationLocks {
+	return &ApplicationLocks{pool: pool, q: q}
+}
+
+// Serialize runs fn holding the application's lock. fn does its own work on its own
+// connections; the lock lives on the transaction this method holds open meanwhile.
+func (l *ApplicationLocks) Serialize(ctx context.Context, id int64, fn func(context.Context) error) error {
+	tx, err := l.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := l.q.WithTx(tx).LockDirectApplication(ctx, id); err != nil {
+		return err
+	}
+	return fn(ctx)
 }

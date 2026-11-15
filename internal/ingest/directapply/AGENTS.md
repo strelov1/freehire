@@ -67,8 +67,11 @@ and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes
   for interview/offer/rejected, the candidate is emailed (`StatusNotifier`, Reply-To the
   account's work email). Neither follow-up fails the move; a failed letter is reported as
   `candidate_notified: false`, never as sent. A repeated move to the same stage changes
-  nothing and notifies nobody (`SetDirectApplicationStage` locks the row and reports
-  `changed`). A message is refused with a stage that sends no letter rather than dropped.
+  nothing and notifies nobody (`SetDirectApplicationStage` is one UPDATE that compares
+  against the row as the update reaches it, and reports `changed`). The whole move — write,
+  mirror, letter — runs under the application's transaction-scoped advisory lock
+  (`ApplicationLocks`, `LockDirectApplication`), so an older move can never mirror or mail
+  after a newer one. A message is refused with a stage that sends no letter rather than dropped.
 - **Every stage maps onto a userjob stage** (`candidateStage`): new → applied (what the
   record reads on arrival, so moving back undoes a stage the employer set by mistake),
   reviewing → screening, hired → accepted, the rest by name. Whether the candidate's record

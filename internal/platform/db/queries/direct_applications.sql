@@ -118,27 +118,32 @@ WHERE c.application_id = sqlc.arg(id)
 -- Moves a delivered application to a stage in the employer's pipeline and reports what the
 -- move needs downstream: whether it changed anything (`changed` is false when it already
 -- stood there, so a repeated click notifies nobody twice), and who the candidate is and
--- what they applied to. The row is locked first, so of two concurrent moves to the same
--- stage only one reports a change. No row: not the employer's.
-WITH target AS (
-    SELECT da.id, da.user_id, da.job_id
-    FROM direct_applications da
-    JOIN jobs j ON j.id = da.job_id
+-- what they applied to. One UPDATE, so the comparison with the current stage is made on the
+-- row as it is when the update reaches it — a concurrent move that committed first is seen,
+-- not an older snapshot of it. stage_changed_at moves only with the stage, which is how the
+-- RETURNING tells a change from a no-op. No row: not the employer's. Callers serialise the
+-- whole move per application (LockDirectApplication).
+WITH moved AS (
+    UPDATE direct_applications da
+    SET stage = sqlc.arg(stage)::text,
+        stage_changed_at = CASE WHEN da.stage = sqlc.arg(stage)::text THEN da.stage_changed_at ELSE now() END
+    FROM jobs j
     WHERE da.id = sqlc.arg(id)
+      AND j.id = da.job_id
       AND j.created_by = sqlc.arg(employer_id)::bigint
       AND j.source = 'employer'
       AND da.sent_at IS NOT NULL
-    FOR UPDATE OF da
-), moved AS (
-    UPDATE direct_applications
-    SET stage = sqlc.arg(stage)::text, stage_changed_at = now()
-    WHERE id = (SELECT target.id FROM target)
-      AND stage <> sqlc.arg(stage)::text
-    RETURNING id
+    RETURNING da.user_id, da.job_id, (da.stage_changed_at IS NOT DISTINCT FROM now())::boolean AS changed
 )
-SELECT EXISTS (SELECT 1 FROM moved) AS changed,
-       t.user_id AS candidate_id, u.email AS candidate_email,
-       t.job_id, j.public_slug AS job_slug, j.title AS job_title, j.company
-FROM target t
-JOIN jobs j ON j.id = t.job_id
-JOIN users u ON u.id = t.user_id;
+SELECT m.changed, m.user_id AS candidate_id, u.email AS candidate_email,
+       m.job_id, j.public_slug AS job_slug, j.title AS job_title, j.company
+FROM moved m
+JOIN jobs j ON j.id = m.job_id
+JOIN users u ON u.id = m.user_id;
+
+-- name: LockDirectApplication :exec
+-- Serialises everything one employer move does to one application — the stage write, the
+-- candidate's tracking and the letter — against another move of the same application, so
+-- an older move can never mirror or mail after a newer one. Transaction-scoped: the caller
+-- holds the transaction open for the move and rolls it back to release.
+SELECT pg_advisory_xact_lock(hashtextextended('direct_application:' || sqlc.arg(id)::bigint::text, 0));
