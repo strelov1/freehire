@@ -151,6 +151,7 @@
         {claiming ? s.claiming : s.claimSubmit}
       </Button>
     </form>
+    <p class="max-w-sm text-xs text-muted-foreground">{s.claimTeamHint}</p>
   </div>
 {:else if phase === 'confirm'}
   <div class="flex max-w-sm flex-col gap-6">
@@ -194,5 +195,13 @@
     </div>
   </div>
 {:else if company}
-  <EmployerDashboard {company} tab={section} onProfileSaved={(updated) => (company = updated)} />
+  <EmployerDashboard
+    {company}
+    tab={section}
+    onProfileSaved={(updated) => {
+      // A save that finishes after the member left must not bring the dashboard back.
+      if (company) company = updated;
+    }}
+    onLeft={() => (company = null)}
+  />
 {/if}

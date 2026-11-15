@@ -7,6 +7,9 @@ import type {
   EmployerApplicationStage,
   EmployerCompany,
   EmployerCompanyProfileInput,
+  EmployerTeam,
+  EmployerTeamInvitation,
+  EmployerTeamInvitationPreview,
   EmployerVacancyInput,
   EmployerVacancyPatch,
   Job,
@@ -134,6 +137,49 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     );
   }
 
+  // ── The company team ──────────────────────────────────────────────────────
+
+  /** Everyone who acts for the caller's company, and the invitations still open. */
+  async function getEmployerTeam(): Promise<EmployerTeam> {
+    return requestData<EmployerTeam>('/api/v1/employer/team');
+  }
+
+  /** Mail a colleague a single-use link to join the team. Inviting an address again
+   *  replaces its link. */
+  async function inviteEmployerTeamMember(email: string): Promise<EmployerTeamInvitation> {
+    return requestData<EmployerTeamInvitation>(
+      '/api/v1/employer/team/invitations',
+      jsonBody('POST', { email } satisfies components['schemas']['EmployerTeamInvite']),
+    );
+  }
+
+  /** Withdraw an invitation; its link stops working. */
+  async function withdrawEmployerTeamInvitation(id: number): Promise<void> {
+    await call(`/api/v1/employer/team/invitations/${id}`, { method: 'DELETE' });
+  }
+
+  /** Remove a member — or the caller, to leave. Their vacancies stay with the team. */
+  async function removeEmployerTeamMember(userId: number): Promise<void> {
+    await call(`/api/v1/employer/team/members/${userId}`, { method: 'DELETE' });
+  }
+
+  /** Which company an invitation link invites to, at which address. 404 for a dead link. */
+  async function previewEmployerTeamInvitation(token: string): Promise<EmployerTeamInvitationPreview> {
+    return requestData<EmployerTeamInvitationPreview>(
+      '/api/v1/employer/team/invitation-preview',
+      jsonBody('POST', { token } satisfies components['schemas']['EmployerTeamToken']),
+    );
+  }
+
+  /** Join the team an invitation link invites to. 409 when the caller already acts for a
+   *  company. */
+  async function joinEmployerTeam(token: string): Promise<EmployerAccount> {
+    return requestData<EmployerAccount>(
+      '/api/v1/employer/team/join',
+      jsonBody('POST', { token } satisfies components['schemas']['EmployerTeamToken']),
+    );
+  }
+
   /** The moderator review queue: employer claims that could not auto-activate. */
   async function listPendingEmployerClaims(): Promise<EmployerAccount[]> {
     return requestData<EmployerAccount[]>('/api/v1/employer/claims');
@@ -164,6 +210,12 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     listEmployerApplications,
     employerApplicationCVUrl,
     moveEmployerApplication,
+    getEmployerTeam,
+    inviteEmployerTeamMember,
+    withdrawEmployerTeamInvitation,
+    removeEmployerTeamMember,
+    previewEmployerTeamInvitation,
+    joinEmployerTeam,
     listPendingEmployerClaims,
     approveEmployerClaim,
     rejectEmployerClaim,

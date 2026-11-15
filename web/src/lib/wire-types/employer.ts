@@ -65,6 +65,18 @@ export type EmployerApplicationsPage = components['schemas']['EmployerApplicatio
 /** A moved application, and whether the candidate was emailed about the move. */
 export type EmployerApplicationMoved = components['schemas']['EmployerApplicationMoved'];
 
+/** Everyone who acts for the company (`holder` is the claimant) and the open invitations. */
+export type EmployerTeam = components['schemas']['EmployerTeam'];
+
+/** Someone who acts for the company. */
+export type EmployerTeamMember = components['schemas']['EmployerTeamMember'];
+
+/** An invitation whose link still works. */
+export type EmployerTeamInvitation = components['schemas']['EmployerTeamInvitation'];
+
+/** What an invitation link offers before it is accepted. */
+export type EmployerTeamInvitationPreview = components['schemas']['EmployerTeamInvitationPreview'];
+
 /** POST /employer/jobs body. Deliberately no `company` field — the server always uses the
  *  account's own locked company name, never request content (see
  *  internal/ingest/employer/AGENTS.md). */

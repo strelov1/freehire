@@ -21,6 +21,7 @@
   import States from './States.svelte';
   import EmployerApplications from './EmployerApplications.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
+  import EmployerTeam from './EmployerTeam.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 
   // `tab` is the route: /my/employer is the profile, /my/employer/vacancies the vacancies.
@@ -32,10 +33,12 @@
     company,
     tab,
     onProfileSaved,
+    onLeft,
   }: {
     company: EmployerCompany;
     tab: 'profile' | 'vacancies' | 'applications';
     onProfileSaved: (updated: EmployerCompany) => void;
+    onLeft: () => void;
   } = $props();
 
   const s = $derived(t(messages, locale()));
@@ -360,6 +363,7 @@
         {savingProfile ? s.profileSaving : s.profileSave}
       </Button>
     </form>
+    <EmployerTeam {onLeft} />
   {:else}
     <TabStrip {tabs} active={tab} label={s.vacancyTabsLabel} panelId={PANEL_ID} />
     <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)}>
