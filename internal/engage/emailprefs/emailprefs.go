@@ -123,8 +123,8 @@ func (s *Signer) Parse(token string) (int64, Group, error) {
 	if err != nil || userID <= 0 {
 		return 0, "", fmt.Errorf("%w: user id %q", ErrInvalidToken, id)
 	}
-	// Re-sign from the PARSED id: ParseInt accepts "+42" and "0042", which Mint never
-	// emits, so the canonical form guarantees those never verify.
+	// Re-sign from the PARSED id: ParseInt accepts "+42" and "0042", so those spellings
+	// verify as the same canonical token, never as a different user.
 	if !hmac.Equal([]byte(sig), []byte(s.sign(payloadFor(userID, g)))) {
 		return 0, "", fmt.Errorf("%w: signature mismatch (a rotated secret looks like this)", ErrInvalidToken)
 	}
