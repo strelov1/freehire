@@ -1283,6 +1283,14 @@ type Handler interface {
 	//
 	// GET /me/cvs
 	ListCVs(ctx context.Context) (*ListCVsOK, error)
+	// ListCatalogueSnapshots implements listCatalogueSnapshots operation.
+	//
+	// Lists the finished snapshots, newest first, each with a short-lived pre-signed download URL (about
+	// 15 minutes; call this again for a fresh link). Needs the Data plan: any other account gets `403`.
+	// `501` means bulk files are not set up on this deployment.
+	//
+	// GET /catalogue/snapshots
+	ListCatalogueSnapshots(ctx context.Context) (*ListCatalogueSnapshotsOK, error)
 	// ListChangeWebhooks implements listChangeWebhooks operation.
 	//
 	// The caller's subscriptions, oldest first, with their delivery state. Secrets are not included.

@@ -203,6 +203,7 @@ const (
 	ListCVTemplatesOperation                OperationName = "ListCVTemplates"
 	ListCVTracerLinksOperation              OperationName = "ListCVTracerLinks"
 	ListCVsOperation                        OperationName = "ListCVs"
+	ListCatalogueSnapshotsOperation         OperationName = "ListCatalogueSnapshots"
 	ListChangeWebhooksOperation             OperationName = "ListChangeWebhooks"
 	ListCompaniesOperation                  OperationName = "ListCompanies"
 	ListCompanyFeedbackOperation            OperationName = "ListCompanyFeedback"
