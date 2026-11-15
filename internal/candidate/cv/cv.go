@@ -9,14 +9,11 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape (Document + its section types) and the sanitizer,
-// so cmd/gen-contracts can generate the TypeScript type from this file alone without
-// dragging in the server-only Renderer/Store (mirrors resumeextract.go's structured.go
-// vs resumeextract.go split).
+// This file holds ONLY the wire shape (Document + section types) and the sanitizer, so
+// cmd/gen-contracts can generate the TypeScript type without the server-only Renderer/Store.
 
-// Field bounds for untrusted CV content. The Document is user-editable and — in the
-// follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
-// and the prompt-injection guard (same invariant as enrich/resumeextract).
+// Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+// Sanitize is both the persistence guard and the prompt-injection guard.
 const (
 	maxNameRunes     = 120
 	maxLocationRunes = 160
@@ -27,8 +24,7 @@ const (
 	maxShortRunes    = 200 // role, company, degree, field, dates, language name/level, links, names
 
 	// The section ceilings Sanitize truncates to, exported (and generated into the web
-	// contracts) so the editor can refuse an Add past them instead of letting Sanitize drop
-	// a row silently.
+	// contracts) so the editor can refuse an Add past them instead of dropping a row silently.
 	MaxExperience     = 30
 	MaxEducation      = 20
 	MaxSkillGroups    = 20
@@ -38,16 +34,13 @@ const (
 	MaxCertifications = 30
 	maxLinks          = 20
 
-	// DefaultMaxBullets is the per-experience / per-project bullet ceiling when
-	// CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
-	// than let Sanitize drop trailing content silently.
+	// DefaultMaxBullets is the per-experience / per-project bullet ceiling when CV_MAX_BULLETS
+	// is unset. Writers must refuse growth past MaxBullets rather than let Sanitize drop it.
 	DefaultMaxBullets = 20
 )
 
-// MaxBullets is the hard ceiling on bullets per experience (and per project).
-// Sanitize keeps the first MaxBullets and drops the rest. Mutable so a deployment
-// can raise or lower it via CV_MAX_BULLETS without a code change; SetMaxBullets
-// is the only writer.
+// MaxBullets is the hard ceiling on bullets per experience (and per project); Sanitize keeps
+// the first MaxBullets. Mutable via CV_MAX_BULLETS; SetMaxBullets is the only writer.
 var MaxBullets = DefaultMaxBullets
 
 // SetMaxBullets sets the per-role bullet ceiling. Values below 1 fall back to
@@ -59,9 +52,8 @@ func SetMaxBullets(n int) {
 	MaxBullets = n
 }
 
-// Page margins are in inches. Sanitize clamps each side to this résumé-sane band and
-// defaults a zero (unset) side to defaultMargin, so a fresh skeleton and an old document
-// with no margin field both render at half an inch.
+// Page margins are in inches. Sanitize clamps each side to this band and defaults an unset
+// (zero) side to defaultMargin.
 const (
 	defaultMargin = 0.5
 	minMargin     = 0.25
@@ -82,9 +74,8 @@ const (
 // not filled in are left empty rather than invented, and Sanitize drops empty entries.
 type Document struct {
 	Margins Margins `json:"margins"`
-	// No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
-	// empty strings/slices/maps), so the tag would promise clients an absence they never see
-	// while making the generated TypeScript optional for no reason.
+	// No omitempty: it does nothing on a struct, so the tag would only make the generated
+	// TypeScript optional.
 	Style          Style            `json:"style"`
 	Header         Header           `json:"header"`
 	Summary        string           `json:"summary,omitempty"`
@@ -97,8 +88,7 @@ type Document struct {
 }
 
 // Margins is the CV's per-side page margin in inches, applied identically to the HTML
-// preview and the Typst-rendered PDF. Sanitize clamps each side and defaults an unset
-// (zero) side to defaultMargin.
+// preview and the Typst PDF. Sanitize clamps each side and defaults an unset side.
 type Margins struct {
 	Top    float64 `json:"top"`
 	Right  float64 `json:"right"`
@@ -107,23 +97,15 @@ type Margins struct {
 }
 
 // Style is the CV's typography: the typeface, the base type size in points, and the line
-// height as a leading multiple of the em. It is part of the document, so it persists with
-// the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
+// height as a leading multiple of the em. It is part of the document, so it persists, is
+// copied when the CV is tailored, and is not clobbered by field-level patches.
 //
-// A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
-// the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
-// difference is deliberate on both counts:
+// A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO, unlike
+// Margins. Resolving defaults here would bake the current template's typography into every
+// document on its next save and stop a template switch from changing leading.
 //
-//   - Every CV written before this type existed has no style block, so it renders exactly as
-//     it did. There is nothing to migrate.
-//   - A template stays a whole design choice. Switching to a template with looser leading
-//     actually loosens the leading, because that value was never frozen into the document.
-//
-// Resolving defaults here — the natural thing to do by analogy with clampMargin — would
-// silently bake the current template's typography into every document on its next save.
-//
-// FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
-// resolves it on its own copy of the document at render time.
+// FontFamily is a registry id (see fonts.go), never a renderer's face name; the renderer
+// resolves it on its own copy at render time.
 type Style struct {
 	FontFamily string  `json:"font_family,omitempty"`
 	FontSize   float64 `json:"font_size,omitempty"`   // points
@@ -133,9 +115,8 @@ type Style struct {
 // sanitized returns the style with each SET value clamped to its band, and every unset
 // (zero) value left unset.
 func (s Style) sanitized() Style {
-	// A face we cannot render is dropped, not refused: Sanitize repairs a document rather
-	// than failing it, the same way an out-of-range margin is clamped. The fonts endpoint
-	// exists so a client never has to guess an id.
+	// A face we cannot render is dropped, not refused: Sanitize repairs rather than fails, like
+	// a clamped margin.
 	if !knownFontID(s.FontFamily) {
 		s.FontFamily = ""
 	}
@@ -192,28 +173,20 @@ type Header struct {
 }
 
 // withoutContacts returns a copy of the document carrying only the parts of the header a
-// model may see. Location stays: it is not an identifier, and a tailoring agent reasons
-// about it when the vacancy is tied to a place. Everything else goes — a name, an address,
-// a number, and a personal profile URL all name the candidate equally.
+// model may see. Location stays (a tailoring agent reasons about it); a name, address,
+// number and personal profile URL all name the candidate and go.
 //
-// It REBUILDS the header from what is allowed through rather than clearing the fields it
-// knows to be identifiers, so a field added to Header is withheld until someone decides
-// otherwise here. A list of what to remove discloses whatever it has not been taught about,
-// which is the reading internal/candidate/resumeextract already rejected for its own projection
-// (structured.go: "A blacklist ... would disclose that new field by default, which is the
-// wrong way round"). This projection reaches the same models, so it follows the same rule.
-//
-// The receiver is a value, so the stored document is untouched — only the copy handed
-// to a reader is stripped.
+// It REBUILDS the header from what is allowed through rather than clearing known identifiers,
+// so a field added to Header is withheld until someone decides otherwise (a blacklist would
+// disclose it by default; see resumeextract structured.go). The receiver is a value, so the
+// stored document is untouched.
 func (d Document) withoutContacts() Document {
 	d.Header = Header{Location: d.Header.Location}
 	return d
 }
 
 // Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
-// (year, optional month) — the same shared type experience.Employment and
-// resumeextract.Experience use. Rendering to PDF formats this back to display text
-// (see renderer.go); no template deals with the structured value directly.
+// (year, optional month), formatted to display text at render time (see renderer.go).
 type ExperienceItem struct {
 	Role     string                 `json:"role,omitempty"`
 	Company  string                 `json:"company,omitempty"`
@@ -347,8 +320,7 @@ func sanitizeCertification(c Certification) (Certification, bool) {
 
 // --- small helpers (mirror internal/candidate/resumeextract) ---
 
-// mostRecent returns at most n elements of s, keeping the LAST n rather than the first
-// — see Seed's own use for why a seeded bullet list is capped this way.
+// mostRecent returns at most n elements of s, keeping the LAST n (see Seed's own use).
 func mostRecent[T any](s []T, n int) []T {
 	if len(s) > n {
 		return s[len(s)-n:]

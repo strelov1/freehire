@@ -1,17 +1,13 @@
 // Package survey holds the candidate's self-reported segmentation answers: how far along
 // their job search is, the things in its way, and what they earn today.
 //
-// These are the questions the onboarding wizard could not ask while every one of its steps
-// was a search facet. They describe the candidate to US, and to nobody else — deliberately
-// not internal/identity/userprofile (that table IS the search filter, and its CHECK
-// constraints mean a row cannot exist for someone who skipped the skills step), and
-// deliberately not internal/ingest/screeninganswers (those six facts are what an EMPLOYER
-// sees on an application form, and none of these three ever is).
+// These describe the candidate to us and nobody else, so they are deliberately not in
+// internal/identity/userprofile (that table IS the search filter) nor in
+// internal/ingest/screeninganswers (what an EMPLOYER sees on an application form).
 //
-// Current income keeps the same amount/currency/period triple screeninganswers uses for
-// desired salary, so the two figures compare without conversion. The desired salary itself
-// stays over there: it is one fact, and a second copy of it here would give the product two
-// numbers with equal claim to being the answer.
+// Current income uses the same amount/currency/period triple screeninganswers uses for
+// desired salary, so the two compare without conversion. Desired salary stays there; a
+// second copy would give two numbers with equal claim.
 package survey
 
 import (
@@ -22,30 +18,27 @@ import (
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
-// Responses is one candidate's survey record. Every field is independently optional: a nil
-// pointer means the candidate has not stated that fact, never a guessed default and never
-// a zero standing in for silence.
+// Responses is one candidate's survey record. Every field is independently optional: nil
+// means not stated, never a default or a zero standing in for silence.
 type Responses struct {
 	JobSearchStage *string `json:"job_search_stage,omitempty"`
 	// BiggestChallenges are members of vocab.JobChallengeValues, in the order picked. Nil
 	// means unstated; Sanitize folds an empty list into nil so the two never differ.
 	BiggestChallenges []string `json:"biggest_challenges,omitempty"`
 	// BiggestChallengeNote is free text, admitted only while vocab.JobChallengeOther is
-	// among the challenges. A note beside coded answers alone could contradict them, and
-	// nothing downstream would know which to believe.
+	// among the challenges; beside coded answers alone it could contradict them.
 	BiggestChallengeNote  *string `json:"biggest_challenge_note,omitempty"`
 	CurrentIncomeAmount   *int    `json:"current_income_amount,omitempty"`
 	CurrentIncomeCurrency *string `json:"current_income_currency,omitempty"`
 	CurrentIncomePeriod   *string `json:"current_income_period,omitempty"`
 }
 
-// Sanitize normalizes the record in place. It normalizes; it does not gate-keep — an
-// invalid value is left intact so Validate can still name it.
+// Sanitize normalizes the record in place; an invalid value is left intact so Validate
+// can name it.
 //
-// The two enum fields are deliberately NOT case-folded: the vocabularies are canonical and
-// values are stored as-is (the same choice screeninganswers made for desired_salary_period),
-// so folding here would quietly accept a spelling the wizard never sends and no later
-// membership check would match.
+// The two enum fields are deliberately NOT case-folded: values are stored as-is
+// (like screeninganswers' desired_salary_period), and folding would accept a spelling
+// no later membership check matches.
 func (a *Responses) Sanitize() {
 	if a.CurrentIncomeCurrency != nil {
 		upper := strings.ToUpper(strings.TrimSpace(*a.CurrentIncomeCurrency))
@@ -54,7 +47,7 @@ func (a *Responses) Sanitize() {
 	if len(a.BiggestChallenges) == 0 {
 		a.BiggestChallenges = nil
 	} else {
-		// A repeated pick says nothing new; keep the first, which keeps the order picked.
+		// Keep the first of a repeated pick, preserving the order picked.
 		seen := make(map[string]bool, len(a.BiggestChallenges))
 		unique := make([]string, 0, len(a.BiggestChallenges))
 		for _, c := range a.BiggestChallenges {
@@ -66,8 +59,7 @@ func (a *Responses) Sanitize() {
 		a.BiggestChallenges = unique
 	}
 	if a.BiggestChallengeNote != nil {
-		// A note of whitespace is an empty note, which is what lets someone who picked
-		// "other" and typed nothing still pass validation.
+		// A whitespace note is empty, so "other" with no text still validates.
 		trimmed := strings.TrimSpace(*a.BiggestChallengeNote)
 		if trimmed == "" {
 			a.BiggestChallengeNote = nil
@@ -77,12 +69,8 @@ func (a *Responses) Sanitize() {
 	}
 }
 
-// Validate reports the first reason this record cannot be persisted, naming the offending
-// field so the endpoint can report it back actionably. Runs after Sanitize, so a currency
-// that was only differently-cased has already been normalized.
-//
-// An entirely empty record is valid: every wizard step is skippable, so "answered nothing"
-// is a normal state rather than a failure.
+// Validate reports the first reason this record cannot be persisted, naming the field.
+// Run it after Sanitize. An entirely empty record is valid: every wizard step is skippable.
 func (a Responses) Validate() error {
 	if a.JobSearchStage != nil && !slices.Contains(vocab.JobSearchStageValues, *a.JobSearchStage) {
 		return fmt.Errorf("job_search_stage: %q is not one of %v", *a.JobSearchStage, vocab.JobSearchStageValues)
@@ -110,21 +98,17 @@ func (a Responses) Validate() error {
 	return nil
 }
 
-// Merge overlays update onto existing: a stated field (non-nil pointer) replaces the stored
-// value, an omitted one keeps it. There is no way to return a stated field to unstated —
-// every field here is corrective in practice (a candidate restates a stage they have moved
-// past, they do not withdraw one) and no wizard surface produces a withdrawal, so that
-// omission trades a rare, low-value operation for a contract with no presence-detection in
-// it. Same reasoning, and same conclusion, as screeninganswers.Merge.
+// Merge overlays update onto existing: a non-nil field replaces the stored value, an
+// omitted one keeps it. A stated field cannot return to unstated; candidates restate, they
+// do not withdraw (same as screeninganswers.Merge).
 func Merge(existing, update Responses) Responses {
 	merged := existing
 	if update.JobSearchStage != nil {
 		merged.JobSearchStage = update.JobSearchStage
 	}
 	if update.BiggestChallenges != nil {
-		// The note belongs to the "other" answer. Carrying it past a list that no longer
-		// has "other" would leave a record Validate rejects and no API call could repair,
-		// since nothing here can clear a field on its own.
+		// The note belongs to "other"; keeping it past a list without "other" would leave a
+		// record Validate rejects and no call could repair.
 		if !slices.Contains(update.BiggestChallenges, vocab.JobChallengeOther) {
 			merged.BiggestChallengeNote = nil
 		}

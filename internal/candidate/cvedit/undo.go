@@ -13,11 +13,9 @@ import (
 
 // Revert undoes one revision by applying its inverse to the CURRENT document.
 //
-// Two consequences worth stating, because both are the point rather than side effects. Edits
-// made after the one being undone survive — only what that revision did is reversed. And the
-// undo is recorded as a revision of its own, naming what it reversed, so the log is never
-// rewritten: an undo can itself be undone, and the feed keeps describing what actually
-// happened to the document.
+// Edits made after the one being undone survive; only what that revision did is reversed.
+// The undo is recorded as a revision of its own, naming what it reversed, so the log is never
+// rewritten and an undo can itself be undone.
 //
 // Neither the path policy nor the evidence gate applies here. An inverse restores text the
 // candidate already had on the page — asking it to cite evidence for words it is putting
@@ -46,9 +44,8 @@ func (e *Editor) Revert(ctx context.Context, cvID uuid.UUID, userID int64, revis
 }
 
 // RevertBatch undoes every standing revision of one agent turn or autopilot run, newest
-// first. It is what "undo the run" means now that there is no pre-run snapshot: grouping by
-// batch removes the edge two concurrent runs used to create, where each snapshotted a
-// half-edited document and reverting returned to the middle of the other one.
+// first. This is what "undo the run" means: there is no pre-run snapshot, so concurrent runs
+// cannot revert each other to a half-edited document.
 //
 // The run report is not cleared here. It describes what the run made of each REQUIREMENT,
 // which is a different question from what it changed, and it lives on the CV row rather than

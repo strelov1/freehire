@@ -13,22 +13,17 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 )
 
-// perRequirement bounds how much evidence one requirement contributes. Retrieval already
-// ranks and drops zero-scoring atoms, so this only stops one broadly-worded requirement from
-// filling the whole offered set on its own.
+// perRequirement bounds how much evidence one requirement contributes, so one broadly-worded
+// requirement cannot fill the whole offered set.
 const perRequirement = 4
 
 // answerable reports whether a requirement is one the letter should look for evidence
-// against. Only `missing-have` is: it names something the candidate meets but the CV leaves
-// implicit, which is precisely the job the letter does and the CV cannot.
+// against. Only `missing-have` is: something the candidate meets but the CV leaves implicit.
 //
-// A `missing-gap` is filtered out rather than merely deprioritised. Retrieving against it can
-// only surface something adjacent, and adjacent evidence in front of a drafting stage is an
-// invitation to stretch it into a claim. `covered` and `synonym-only` are excluded too: the
-// CV already shows them, and a letter that restates the CV earns no place.
-//
-// The filter is here rather than left to the caller for the same reason the provenance gate
-// moved inside Draft — a rule a caller must remember to apply is a convention.
+// `missing-gap` is filtered out, not deprioritised: retrieving against it only surfaces
+// adjacent evidence, an invitation to stretch it into a claim. `covered` and `synonym-only`
+// are excluded because the CV already shows them. The filter lives here so a caller need not
+// remember it.
 func answerable(r matchanalysis.Requirement) bool {
 	return r.Status == matchanalysis.StatusMissingHave
 }
@@ -43,17 +38,11 @@ type Retriever interface {
 // Gather collects the candidate's evidence for a vacancy's requirements, best first and with
 // each atom appearing once.
 //
-// Retrieval runs per requirement because that is the grain the bank scores at — one atom
-// against one requirement. Two requirements answered by the same achievement is the common
-// case rather than an edge one ("Kafka" and "event-driven architecture" are one bullet), so
-// an atom keeps its BEST score across the requirements it answered and appears once.
+// Retrieval runs per requirement, the bank's scoring grain. One achievement often answers
+// several requirements, so an atom keeps its BEST score across them.
 //
-// The bank is the fallback in two cases: a vacancy with no requirements to retrieve against,
-// and requirements that retrieve nothing. Both mean the candidate's evidence does not line up
-// requirement-by-requirement, which is a reason to write from the bank rather than a reason to
-// refuse — the provenance gate downstream still decides what may be used.
-//
-// Gather does NOT apply that gate. Draft does, so that a caller cannot skip it.
+// The whole bank is the fallback when the vacancy has no requirements or none retrieve
+// anything. Gather does NOT apply the provenance gate; Draft does, so a caller cannot skip it.
 func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis.Requirement) ([]experience.Atom, error) {
 	best := make(map[uuid.UUID]experience.Match)
 
@@ -84,8 +73,7 @@ func Gather(ctx context.Context, r Retriever, userID int64, reqs []matchanalysis
 	}
 
 	ranked := slices.Collect(maps.Values(best))
-	// Sorted by score, then by id so the order is stable for a given bank — an unstable order
-	// would make two drafts of the same letter differ for no reason a reader could see.
+	// Sorted by score, then id, so two drafts of the same bank see a stable order.
 	slices.SortFunc(ranked, func(x, y experience.Match) int {
 		if c := cmp.Compare(y.Score, x.Score); c != 0 {
 			return c

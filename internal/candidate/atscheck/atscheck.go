@@ -1,16 +1,12 @@
-// Package atscheck computes a deterministic ATS-readiness score for a CV from its
-// plain text as five weighted categories (Keyword Strength, Format Compliance,
-// Section Completeness, Content Quality, Length & Density) whose maxima sum to 100.
-// Each category carries per-item point attribution; the overall score is the sum of
-// the category scores, and the potential score adds back every recoverable point.
-// It is pure and I/O-free (mirrors internal/job/verdict) — the handler supplies the CV
-// text, the CV's parsed skills, and the role's top in-demand skills; an optional LLM
-// layer (see analyzer.go) refines the Content Quality category on top.
+// Package atscheck computes a deterministic ATS-readiness score for a CV from its plain
+// text as five weighted categories (Keyword Strength, Format Compliance, Section
+// Completeness, Content Quality, Length & Density) whose maxima sum to 100. Each carries
+// per-item point attribution; Overall is the sum of category scores and Potential adds back
+// every recoverable point. Pure and I/O-free: the handler supplies the CV text, parsed
+// skills and the role's top skills; an optional LLM layer (analyzer.go) refines Content Quality.
 //
-// The CV text comes from a plain-text PDF extractor, so layout facts (multi-column,
-// tables, images) are NOT detectable here — only what text allows. The strongest
-// signal we can read is emptiness: a scanned/image CV yields almost no text and
-// fails machine_readable, the single biggest ATS killer.
+// Layout facts (multi-column, tables, images) are NOT detectable from extracted text. The
+// strongest signal is emptiness: a scanned CV yields almost no text and fails machine_readable.
 package atscheck
 
 import (
@@ -41,9 +37,8 @@ const (
 	categoryLength   = "length_density"
 )
 
-// Category maxima. Keyword (40) is named; Format (8+4+2+2+2+2=20), Sections
-// (4+3+3+2+2+1=15), Content (6+6+3=15), and Length (5+5=10) are the sums of their
-// item weights below. All five sum to 100.
+// Category maxima: Keyword 40, Format 20, Sections 15, Content 15, Length 10, summing to 100
+// as the item weights below do.
 const (
 	keywordMax = 40
 	contentMax = 15
@@ -106,14 +101,11 @@ var (
 	dateRE   = regexp.MustCompile(`\b(?:19|20)\d{2}\b|\b\d{1,2}[/.\-]\d{4}\b`)
 	bulletRE = regexp.MustCompile(`(?m)^[ \t]*[-*•‣●·][ \t]+\S`)
 	quantRE  = regexp.MustCompile(`\d+(?:\.\d+)?\s?%|\$\s?\d|\b\d+x\b`)
-	// The `(?:^|[^A-Za-z0-9])` boundary keeps a look-alike host like "evillinkedin.com/x"
-	// from counting as a linked profile — without it the vendor domain matches wherever
-	// it appears as a substring.
+	// The `(?:^|[^A-Za-z0-9])` boundary keeps a look-alike host like "evillinkedin.com/x" from
+	// counting as a linked profile.
 	linkedinRE = regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])linkedin\.com/\S+`)
-	// dateRangeRE matches a role's date range ("2021 - 2026", "Jan 2023 – Present",
-	// "Mar 2020 - Dec 2022") and captures the start year, which is all roleBlocks needs
-	// to order roles and count their bullets. The end side tolerates a leading month
-	// word the same way the start side's \b does implicitly.
+	// dateRangeRE matches a role's date range ("2021 - 2026", "Jan 2023 – Present") and captures
+	// the start year, which roleBlocks uses to order roles and count their bullets.
 	dateRangeRE = regexp.MustCompile(`(?i)\b((?:19|20)\d{2})\s*[-–—]\s*(?:present|(?:[a-z]+\.?\s+)?(?:19|20)\d{2})\b`)
 )
 
@@ -250,8 +242,7 @@ func chronologyItem(cv string, weight int) LineItem {
 }
 
 func sectionsCategory(lower, cvText string) ScoreCategory {
-	// Weights re-balanced to fit the summary keyword-density and summary-length items
-	// while keeping the category maximum at 15 (and the five-category total at 100).
+	// Weights are balanced to fit the summary items while keeping the category max at 15.
 	return ScoreCategory{ID: categorySections, Label: "Section Completeness", Items: []LineItem{
 		item(hasAny(lower, sectionKeywords["experience"]), 4, "Experience section",
 			"Add a clearly labelled Experience section", StatusWarn),

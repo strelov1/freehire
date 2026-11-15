@@ -12,13 +12,9 @@ import (
 )
 
 // employmentRow is what Repository returns for one employment, independent of sqlc's
-// per-query row type. Each of the six employment queries below selects a different
-// column set than the full experience_employments table (period_start/period_end text
-// are gone from all of them; ListExperienceEmploymentDatesForBackfill selects only
-// those, for the backfill worker), so sqlc generates a distinct Go type per query
-// instead of the one shared db.ExperienceEmployment these used to return. One shape
-// here means employmentFromRow (store.go) has exactly one type to convert from,
-// and fakeRepo (store_test.go) needs no sqlc-generated type at all.
+// per-query row type. Each employment query selects a different column set, so sqlc
+// generates a distinct Go type per query; one shape here gives employmentFromRow (store.go)
+// a single type to convert from, and fakeRepo (store_test.go) needs no sqlc types.
 type employmentRow struct {
 	ID               uuid.UUID
 	UserID           int64

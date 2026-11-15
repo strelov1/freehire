@@ -11,9 +11,8 @@ import (
 // otherwise land as `any`, which is a type the client cannot check.
 func wireTime(t time.Time) string { return t.Format(time.RFC3339) }
 
-// This file holds the revision's wire shape — what the history feed shows and what the
-// preview highlights. It is generated to TypeScript, so it stays free of server-only
-// concerns: the operations themselves, the policy and the repository live elsewhere.
+// This file holds the revision's wire shape, generated to TypeScript, so it stays free of
+// server-only concerns (operations, policy, repository).
 
 // RevisionView is one entry in the history feed.
 //

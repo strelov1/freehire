@@ -11,27 +11,23 @@ import (
 )
 
 const (
-	// maxCVRunes bounds the CV text sent to the model (user-supplied → cap token cost).
+	// maxCVRunes caps the user-supplied CV text sent to the model.
 	maxCVRunes = 24000
-	// maxSuggestionRunes / maxSuggestions bound the model's advice so a verbose answer
-	// can't blow up the stored/served payload.
+	// maxSuggestionRunes / maxSuggestions bound the model's advice so a verbose answer can't
+	// blow up the stored payload.
 	maxSuggestionRunes = 240
 	maxSuggestions     = 6
 )
 
 // Analyzer runs the optional LLM qualitative review of a CV. A nil client (LLM
-// unconfigured) makes Analyze a no-op so the caller degrades to the deterministic
-// score.
+// unconfigured) makes Analyze a no-op so the caller degrades to the deterministic score.
 type Analyzer struct {
 	client *llm.Client
 }
 
-// NewAnalyzer wraps an llm.Client. client may be nil (LLM unconfigured).
 // As returns an analyzer spending as `caller`, so one review is billed to the candidate's
-// own gateway credential. Nil-safe.
-//
-// It takes a caller and not a client so this analyzer keeps whatever it was built with; see
-// llm.Caller for what the shape it replaces cost.
+// own gateway credential. Nil-safe. It takes a caller, not a client, so the analyzer keeps
+// whatever it was built with.
 func (a *Analyzer) As(caller llm.Caller) *Analyzer {
 	if a == nil {
 		return a
@@ -42,25 +38,24 @@ func (a *Analyzer) As(caller llm.Caller) *Analyzer {
 	return &clone
 }
 
+// NewAnalyzer wraps an llm.Client. client may be nil (LLM unconfigured).
 func NewAnalyzer(client *llm.Client) *Analyzer {
 	return &Analyzer{client: client}
 }
 
 // Review is the LLM's qualitative answer: a content-quality score and short,
-// actionable suggestions. JSON is the wire contract (generated to TS + persisted).
+// actionable suggestions. JSON is the wire contract (generated to TS and persisted).
 type Review struct {
 	ContentQuality int      `json:"content_quality"`
 	Suggestions    []string `json:"suggestions"`
 }
 
-// Analyze asks the model, over the candidate's contact-free résumé projection, for a
-// content-quality score (0-100) and a few concrete improvement suggestions. It NEVER sends the
-// raw CV. De-identification is the argument's type, not something this package performs: a
-// resumeextract.Professional names the fields a model may see, so a field added to the
-// structured résumé is withheld until somebody adds it there too. Returns (nil, nil) when
-// unconfigured — the caller decides whether it has a résumé to review at all — so callers
-// degrade to the deterministic score. The model is untrusted output: the score is clamped and
-// suggestions are trimmed, length-bounded, and capped.
+// Analyze asks the model for a content-quality score (0-100) and a few improvement
+// suggestions over the candidate's contact-free résumé projection; it never sends the raw CV.
+// De-identification is the argument's type: resumeextract.Professional names the fields a
+// model may see, so a newly added field is withheld until added there too. Returns (nil,
+// nil) when unconfigured. The model is untrusted: the score is clamped and suggestions are
+// trimmed, length-bounded and capped.
 func (a *Analyzer) Analyze(ctx context.Context, candidate resumeextract.Professional) (*Review, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
@@ -97,8 +92,8 @@ func (r *Review) sanitize() {
 	r.Suggestions = cleaned
 }
 
-// reviewSystemPrompt pins the JSON contract. Kept as a function (mirrors enrich's
-// testable buildSystemPrompt).
+// reviewSystemPrompt pins the JSON contract. A function so buildSystemPrompt-style tests can
+// call it.
 func reviewSystemPrompt() string {
 	var b strings.Builder
 	b.WriteString("You are a senior technical recruiter reviewing a candidate's structured résumé ")

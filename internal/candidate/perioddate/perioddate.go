@@ -6,11 +6,9 @@
 // represent "year-only" without lying about a precision nobody stated, so PeriodDate is a
 // plain (Year, Month) pair with Month == 0 meaning "year-only" — never a day.
 //
-// experience.Employment, resumeextract.Experience, and cv.ExperienceItem all embed
-// this type: it used to be three independent free-form strings sharing one documented
-// convention (migration 0047_experience_bank.sql), which is also why Parse exists here
-// rather than in any one of them — the backfill, the jsonb self-healing decode, and any
-// future consumer all need the same best-effort reading of old free text.
+// experience.Employment, resumeextract.Experience, and cv.ExperienceItem all embed this type.
+// Parse lives here, not in any one of them, because the backfill, the jsonb self-healing
+// decode, and any other consumer need the same best-effort reading of old free text.
 package perioddate
 
 import (
@@ -25,30 +23,24 @@ import (
 // zero means the CV gave no month). A *PeriodDate of nil means the boundary is unset —
 // distinct from a PeriodDate whose Year is zero, which Sanitize never produces.
 //
-// Tagged lowercase (matching every other field on the structs that embed it) because
-// this shape also reaches an LLM: resumeextract's request schema is derived from
-// Structured by reflection (internal/platform/llmschema), which reads these same
-// struct tags — untagged fields would ask the model for {"Year":...,"Month":...}
-// instead of {"year":...,"month":...}.
+// Tagged lowercase because this shape also reaches an LLM: resumeextract's request schema is
+// derived from Structured by reflection (internal/platform/llmschema), which reads these tags;
+// untagged fields would ask the model for {"Year":...} instead of {"year":...}.
 type PeriodDate struct {
 	Year  int `json:"year"`
 	Month int `json:"month,omitempty"`
 }
 
-// minYear/maxYear bound what Sanitize accepts, matching the range the free-text
-// parser this replaces already enforced.
+// minYear/maxYear bound what Sanitize accepts.
 const (
 	minYear = 1900
 	maxYear = 2100
 )
 
-// Sanitize enforces persistence-safe bounds on d, coercing rather than erroring — this
-// runs on untrusted LLM output as well as candidate-entered form values, and both must
-// degrade to something storable instead of failing the whole write. A year outside
-// [1900, 2100] discards the date entirely (nil): an implausible year is not usable
-// evidence of when something happened, and there is nothing safe to fall back to
-// within just the date value. A month outside [1, 12] is dropped, coercing to
-// year-only instead of discarding the (valid) year alongside it.
+// Sanitize enforces persistence-safe bounds on d, coercing rather than erroring: it runs on
+// untrusted LLM output and form values, which must degrade to something storable. A year
+// outside [1900, 2100] discards the date (nil); a month outside [1, 12] is dropped, leaving
+// a year-only date.
 func Sanitize(d *PeriodDate) *PeriodDate {
 	if d == nil {
 		return nil
@@ -67,12 +59,9 @@ func Sanitize(d *PeriodDate) *PeriodDate {
 var monthNames = [...]string{"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 
 // Format renders d for display, e.g. "Mar 2021" or "2018" for a year-only date. A nil
-// PeriodDate, or one with no valid year, formats as "" — callers joining a start/end pair
-// (see cv/renderer.go's daterange-equivalent) already treat an empty side as absent.
-// The Year <= 0 case matters beyond nil: UnmarshalJSON cannot make the *PeriodDate field
-// itself nil when handed an unparseable legacy string (encoding/json has already
-// allocated the pointee before calling it), so it leaves the zero PeriodDate{} instead —
-// Format treats that the same as absent rather than printing "0".
+// PeriodDate, or one with no valid year, formats as "". The Year <= 0 case matters beyond nil:
+// UnmarshalJSON cannot make the *PeriodDate field nil for an unparseable legacy string
+// (encoding/json has already allocated the pointee), so it leaves the zero PeriodDate{}.
 func (d *PeriodDate) Format() string {
 	if d == nil || d.Year <= 0 {
 		return ""
@@ -83,11 +72,9 @@ func (d *PeriodDate) Format() string {
 	return monthNames[d.Month] + " " + strconv.Itoa(d.Year)
 }
 
-// FormatEnd formats a period's end boundary, substituting "Present" when current is
-// true instead of leaving it blank — the caller passes end=nil for an ongoing entry,
-// matching Employment/ExperienceItem's own Current-means-no-end convention. Exported so
-// a consumer that renders start and end separately (cv/renderer.go's per-field render
-// projection) doesn't hand-roll the same substitution FormatRange applies internally.
+// FormatEnd formats a period's end boundary, substituting "Present" when current is true; the
+// caller passes end=nil for an ongoing entry. Exported for consumers that render start and end
+// separately.
 func FormatEnd(end *PeriodDate, current bool) string {
 	if current {
 		return "Present"
@@ -95,10 +82,8 @@ func FormatEnd(end *PeriodDate, current bool) string {
 	return end.Format()
 }
 
-// FormatRange joins a start/end pair for display the same way every consumer that used
-// to hold pre-formatted strings already joined them (cv's typst templates' daterange,
-// the assistant tools' period line): " – " between two present sides, just the one side
-// when only it is present, "" when neither is.
+// FormatRange joins a start/end pair for display: " – " between two present sides, just the one
+// side when only it is present, "" when neither is.
 func FormatRange(start, end *PeriodDate, current bool) string {
 	a := start.Format()
 	b := FormatEnd(end, current)
@@ -108,10 +93,8 @@ func FormatRange(start, end *PeriodDate, current bool) string {
 	return a + b
 }
 
-// IsPresentLabel reports whether s is a CV's way of spelling "this hasn't ended" — the
-// only place this vocabulary is defined, so every caller inferring Current from a raw
-// label (import_resume.go, the jsonb legacy decode below) agrees on which spellings
-// count.
+// IsPresentLabel reports whether s is a CV's way of spelling "this hasn't ended". The one
+// definition of that vocabulary, so every caller inferring Current from a raw label agrees.
 func IsPresentLabel(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "present", "current", "now", "ongoing", "today":
@@ -198,9 +181,7 @@ func monthNumber(name string) (int, bool) {
 	return m, ok
 }
 
-// dateAlias breaks the recursion a PeriodDate method calling json.Marshal/Unmarshal(d) on
-// itself would cause, while still going through the ordinary struct-tag-driven
-// encoding (Year/Month's own `json:` tags) rather than a second, hand-written shape.
+// dateAlias breaks the json.Marshal/Unmarshal recursion while keeping the struct-tag encoding.
 type dateAlias PeriodDate
 
 // MarshalJSON always emits the object shape — a value read from the legacy string
@@ -209,16 +190,11 @@ func (d PeriodDate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dateAlias(d))
 }
 
-// UnmarshalJSON accepts three shapes: the new {"year":..,"month":..} object; a legacy
-// free-text JSON string (resume_structured/cv_documents rows written before this type
-// existed, or an LLM gateway that stops honouring the request schema — see
-// perioddate's package doc); or a bare JSON number, the same defensive tolerance
-// resumeextract's old verbatimString shim gave free-text dates, kept here because a
-// model asked for {"year": N} routinely emits a bare N instead. A string or number that
-// fails to parse as a date decodes to the zero PeriodDate with no error: the jsonb stores
-// this feeds are read-and-regenerated snapshots, not accumulating records, so a value
-// nobody can make sense of is dropped the same way an absent field would be, not
-// treated as a decode failure.
+// UnmarshalJSON accepts three shapes: the {"year":..,"month":..} object; a legacy free-text
+// JSON string (older jsonb rows, or a gateway ignoring the request schema); or a bare JSON
+// number, since a model asked for {"year": N} routinely emits a bare N. A string or number that
+// fails to parse decodes to the zero PeriodDate with no error: the jsonb stores are
+// read-and-regenerated snapshots, so an unreadable value is dropped like an absent field.
 func (d *PeriodDate) UnmarshalJSON(b []byte) error {
 	if trimmed := bytes.TrimSpace(b); len(trimmed) > 0 && trimmed[0] != '"' && trimmed[0] != '{' {
 		var y int

@@ -5,14 +5,11 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// This file holds ONLY the wire shape (Structured + Experience + Education) and its
-// sanitizer, so cmd/gen-contracts can generate the TypeScript type from this file alone
-// without dragging in the server-only Extractor (mirrors matchanalysis.go vs analyzer.go).
+// This file holds ONLY the wire shape and its sanitizer, so cmd/gen-contracts can generate
+// the TypeScript type from it without the server-only Extractor.
 
-// Field bounds for the untrusted, model-produced structure. Modest on purpose: the
-// structure is a display/summary artifact, not the ground-truth CV text (which the fit
-// chain still reads in full). These caps keep the persisted JSON and the profile render
-// bounded regardless of what the model returns.
+// Field bounds for the untrusted, model-produced structure. Modest on purpose: it is a
+// display artifact, not the ground-truth CV text.
 const (
 	maxNameRunes         = 120
 	maxHeadlineRunes     = 200
@@ -35,9 +32,8 @@ const (
 	maxYears = 70
 )
 
-// Structured is the typed, sanitized résumé. Every field is optional — a value the CV
-// does not state is left empty rather than invented (the model is prompted accordingly
-// and Sanitize drops empty entries).
+// Structured is the typed, sanitized résumé. Every field is optional: a value the CV
+// does not state stays empty, and Sanitize drops empty entries.
 type Structured struct {
 	FullName       string       `json:"full_name,omitempty"`
 	Headline       string       `json:"headline,omitempty"`
@@ -55,15 +51,12 @@ type Structured struct {
 	Projects       []Project    `json:"projects,omitempty"`
 }
 
-// Professional is Structured with the contact fields left out — the résumé's substance
-// (what the person has done) without the identity (who they are). It is what goes to a
-// consumer that has no business knowing the candidate's name: the LLM fit chain, and an
-// agent reading the profile over the API.
+// Professional is Structured without the contact fields: what the person has done, not
+// who they are. It goes to consumers that must not know the name (the LLM fit chain, an
+// agent reading the profile over the API).
 //
-// The field set is a whitelist, deliberately: a field later added to Structured is
-// withheld until it is added here too. A blacklist — dropping the four known contact
-// keys — would disclose that new field by default, which is the wrong way round for a
-// projection whose whole job is to hold personal data back.
+// The field set is a whitelist on purpose: a field later added to Structured stays
+// withheld until added here, where a blacklist would disclose it by default.
 type Professional struct {
 	Headline       string       `json:"headline,omitempty"`
 	Location       string       `json:"location,omitempty"`
@@ -93,10 +86,9 @@ func (s Structured) Professional() Professional {
 	}
 }
 
-// Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
-// (year, optional month) that the model interprets from however the CV prints the
-// range; Current marks an ongoing role instead of a fabricated End. Summary is the
-// role/company one-line context; Highlights are the achievement bullets.
+// Experience is one work-history entry. Current marks an ongoing role instead of a
+// fabricated End. Summary is the one-line role/company context; Highlights are the
+// achievement bullets.
 type Experience struct {
 	Title      string                 `json:"title,omitempty"`
 	Company    string                 `json:"company,omitempty"`
@@ -116,25 +108,20 @@ type Project struct {
 	Highlights []string `json:"highlights,omitempty"`
 }
 
-// Education is one education entry. Year is the same structured perioddate.PeriodDate as
-// Experience's Start/End (month is rarely stated for a degree, so it is usually
-// year-only, but the type stays the one shared shape rather than a bare int).
+// Education is one education entry; Year is usually year-only.
 //
-// Degree is assumed short and dedicated (a CV's own degree line, e.g. "BSc Computer
-// Science"), never a full sentence — internal/dict/edulevel.ForDegree relies on this to
-// safely match bare "BS"/"MS" forms that would be ambiguous in free-running prose. If
-// this field's extraction ever changes to allow fuller sentences, revisit ForDegree's
-// leniency alongside it.
+// Degree must stay short (a CV's own degree line, e.g. "BSc Computer Science"), never a
+// sentence: internal/dict/edulevel.ForDegree relies on it to match bare "BS"/"MS", which
+// are ambiguous in prose.
 type Education struct {
 	Degree      string                 `json:"degree,omitempty"`
 	Institution string                 `json:"institution,omitempty"`
 	Year        *perioddate.PeriodDate `json:"year,omitempty"`
 }
 
-// Sanitize bounds every string, coerces total-years into [0, maxYears], caps each
-// array's cardinality, and drops entries that carry no content. Only the sanitized
-// value is persisted or served, so untrusted CV text cannot inject unbounded or
-// malformed content (the same invariant as enrich/matchanalysis).
+// Sanitize bounds every string, coerces total-years into [0, maxYears], caps each array's
+// length, and drops entries with no content. Only the sanitized value may be persisted or
+// served, so untrusted CV text cannot inject unbounded content.
 func (s *Structured) Sanitize() {
 	s.FullName = llm.TrimTruncateRunes(s.FullName, maxNameRunes)
 	s.Headline = llm.TrimTruncateRunes(s.Headline, maxHeadlineRunes)
@@ -187,8 +174,6 @@ func sanitizeEducation(e Education) (Education, bool) {
 	keep := e.Degree != "" || e.Institution != "" || e.Year != nil
 	return e, keep
 }
-
-// --- small helpers ---
 
 // mapEntries applies fn to each entry, keeping only those fn marks as non-empty.
 func mapEntries[T any](in []T, fn func(T) (T, bool)) []T {

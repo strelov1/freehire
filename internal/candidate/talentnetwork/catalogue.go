@@ -17,10 +17,9 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// ErrNotFound is what every way of not being in the catalogue looks like from outside:
-// a handle nobody holds, a member who has left, one whose extract has gone stale, and a
-// string that could not be a handle at all. One error because the route must answer all
-// four identically — otherwise it becomes a way to ask whether an account exists.
+// ErrNotFound covers every way of not being in the catalogue: an unheld handle, a member
+// who left, a stale extract, a malformed handle. One error so the route answers all four
+// identically and cannot be used to ask whether an account exists.
 var ErrNotFound = errors.New("talentnetwork: not found")
 
 // Store is the slice of *db.Queries this package reads.
@@ -30,12 +29,9 @@ type Store interface {
 	GetTalentNetworkMemberUserIDByHandle(ctx context.Context, handle string) (int64, error)
 }
 
-// Query is the catalogue's whole filter vocabulary. Every field is a closed-vocabulary
-// value or a number: there is no free-text search, because a card carries no free text
-// to search.
-//
-// A nil slice and an empty one mean the same thing — no constraint — so a caller never
-// has to distinguish "absent" from "present but empty" when reading a query string.
+// Query is the catalogue's whole filter vocabulary: closed-vocabulary values and numbers,
+// no free-text search (a card carries no free text). A nil slice and an empty one both
+// mean no constraint.
 type Query struct {
 	Categories      []string
 	Seniorities     []string
@@ -57,17 +53,13 @@ type Page struct {
 
 // Catalogue serves the public list from an in-memory snapshot refreshed on a TTL.
 //
-// Reading the whole membership and filtering in Go is not a shortcut around SQL — it is
-// what the data allows. The two facets that matter most, category and seniority, do not
-// exist as columns: they are derived from a job title by a dictionary that changes
-// weekly, so a `WHERE category = ?` would first need them stored, backfilled, and kept
-// in step. At the scale this serves (a membership in the hundreds; the whole catalogue
-// is a few megabytes) the derivation is microseconds and the storage is a rounding error.
+// Filtering in Go fits the data: category and seniority are not columns, they are derived
+// from job titles by a dictionary that changes often, so SQL would first need them stored,
+// backfilled and kept in step.
 //
-// THE SEAM, stated so nobody has to guess where it is: when the membership outgrows a
-// snapshot that fits comfortably in memory — order of thousands — the projection moves
-// to a table written by a worker and the filtering moves to SQL. Neither the handler nor
-// the wire shape has to change for that; only this type's internals do.
+// shortcut: the whole membership is held in memory, fine for hundreds. At thousands, move
+// the projection to a worker-written table and the filtering to SQL; only this type's
+// internals change.
 type Catalogue struct {
 	store Store
 	ttl   time.Duration
@@ -107,18 +99,15 @@ func (c *Catalogue) List(ctx context.Context, q Query) (Page, error) {
 		}
 	}
 
-	// The snapshot is already ordered (freshest extract first, tie-broken by handle —
-	// the query does that), and filtering preserves order, so the page is a window.
+	// The snapshot is ordered by the query (freshest extract, then handle) and filtering
+	// preserves order, so the page is a window.
 	return Page{Members: window(matched, q.Limit, q.Offset), Total: len(matched)}, nil
 }
 
-// ByHandle returns one member, read from the DATABASE rather than the snapshot: a
-// candidate who leaves must stop resolving on the next request, not when the snapshot
-// next refreshes.
+// ByHandle returns one member, read from the DATABASE rather than the snapshot so a
+// candidate who leaves stops resolving immediately.
 func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMember, error) {
-	// Refused before the query, so a crafted path costs a string comparison. It also
-	// keeps every "not a member" answer identical: a malformed handle and a real one
-	// nobody holds both come back as ErrNotFound.
+	// Refused before the query, so a crafted path costs a string comparison.
 	if !ValidHandle(handle) {
 		return CatalogueMember{}, ErrNotFound
 	}
@@ -142,12 +131,10 @@ func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMembe
 	}, c.now()), nil
 }
 
-// HeadshotOwner resolves a handle straight to its current member's account id, read from
-// the DATABASE like ByHandle and for the same reason — never serving a headshot for a
-// member who has just left. It exists apart from ByHandle so the public photo route can
-// look up a headshot owner without building the public CandidateCard projection: the id
-// is not part of that projection and has no reason to travel through the code path that
-// assembles one.
+// HeadshotOwner resolves a handle to its current member's account id, read from the
+// DATABASE like ByHandle so a departed member's headshot is never served. It is apart from
+// ByHandle because the id is not part of the public projection and must not travel through
+// the code that builds one.
 func (c *Catalogue) HeadshotOwner(ctx context.Context, handle string) (int64, error) {
 	if !ValidHandle(handle) {
 		return 0, ErrNotFound
@@ -165,10 +152,8 @@ func (c *Catalogue) HeadshotOwner(ctx context.Context, handle string) (int64, er
 
 // current returns a snapshot no older than the TTL, refreshing if needed.
 //
-// A refresh that FAILS while a snapshot already exists is swallowed: a stale list is
-// worth more than an empty one, and an empty one reads as "nobody is in the network"
-// rather than as an outage. A failure with no snapshot at all has nothing to fall back
-// on and is reported.
+// A refresh that FAILS while a snapshot exists is swallowed: a stale list beats an empty
+// one, which reads as "nobody is in the network". With no snapshot the error is reported.
 func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 	if s := c.snap.Load(); s != nil && c.now().Sub(s.builtAt) < c.ttl {
 		return s, nil
@@ -177,9 +162,7 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 	c.refreshing.Lock()
 	defer c.refreshing.Unlock()
 
-	// Re-check under the lock: whoever held it may already have refreshed, and a
-	// thundering herd on the whole membership is a self-inflicted outage on the same
-	// table every authenticated request already touches.
+	// Re-check under the lock: the previous holder may have refreshed already.
 	if s := c.snap.Load(); s != nil && c.now().Sub(s.builtAt) < c.ttl {
 		return s, nil
 	}
@@ -212,10 +195,8 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 	return s, nil
 }
 
-// storedMember is the shape both reads return: the list query and the by-handle query
-// select the same columns, but sqlc gives each its own row type, so this is where the two
-// meet. Named fields rather than six positional arguments — half of them strings, half
-// slices — where a transposed pair would compile and publish somebody's cities as their
+// storedMember unifies the list and by-handle rows (same columns, separate sqlc types).
+// Named fields because a transposed positional pair would compile and publish cities as
 // specialisations.
 type storedMember struct {
 	handle          string
@@ -228,19 +209,15 @@ type storedMember struct {
 	hasPhoto        bool
 }
 
-// projectMember turns one stored row into a catalogue entry.
-//
-// An unreadable stored structure yields an EMPTY card rather than dropping the member:
-// they joined, and disappearing from the catalogue is indistinguishable from having
-// left. The same treatment resume.Store.Structured gives an unmarshal failure.
+// projectMember turns one stored row into a catalogue entry. An unreadable stored
+// structure yields an EMPTY card rather than dropping the member, since vanishing looks
+// like having left (as resume.Store.Structured does).
 func projectMember(row storedMember, now time.Time) CatalogueMember {
 	var s resumeextract.Structured
 	if len(row.structured) > 0 {
 		_ = json.Unmarshal(row.structured, &s)
 	}
-	// The card shows years the way the candidate's own profile does: their figure if they
-	// gave one, otherwise the extract's caught up with its dated roles. Nothing else they
-	// own is read — the rest of the card stays the dictionary-only projection.
+	// Years match the candidate's own profile; nothing else they own is read.
 	resume.DecodeOwned(row.owned).ApplyTotalYears(&s, now)
 	return CatalogueMember{
 		Handle:          row.handle,
@@ -254,9 +231,8 @@ func projectMember(row storedMember, now time.Time) CatalogueMember {
 	}
 }
 
-// timezoneRegion is the part of an IANA zone before the slash — "Europe" from
-// "Europe/Berlin". Empty for an unset or malformed zone, which is what makes a member
-// without one fall out of a region filter rather than quietly pass it.
+// timezoneRegion is the part of an IANA zone before the slash ("Europe"). Empty for an
+// unset or malformed zone, so such a member falls out of a region filter.
 func timezoneRegion(tz string) string {
 	region, _, ok := strings.Cut(tz, "/")
 	if !ok {
@@ -265,8 +241,7 @@ func timezoneRegion(tz string) string {
 	return region
 }
 
-// nonNil keeps a nil slice from reaching the wire as `null` where the contract says it
-// is a list. The LEFT JOIN behind these fields makes nil the ordinary case, not an edge.
+// nonNil keeps a nil slice from reaching the wire as `null`; the LEFT JOIN makes nil ordinary.
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}
@@ -275,8 +250,7 @@ func nonNil(s []string) []string {
 }
 
 // matches reports whether a member satisfies every constraint in q. Values within one
-// filter are OR and different filters are AND: "any of these skills" is what narrowing a
-// search means, while requiring all of them empties the result on the second term.
+// filter are OR, different filters AND (requiring all skills would empty the result).
 func (q Query) matches(m CatalogueMember) bool {
 	return anyOf(q.Categories, m.Card.Category) &&
 		anyOf(q.Seniorities, m.Card.Seniority) &&
@@ -288,8 +262,7 @@ func (q Query) matches(m CatalogueMember) bool {
 }
 
 // anyOf reports whether have is one of want. An empty want is no constraint; an empty
-// have never satisfies a non-empty want, which is what excludes a member with no
-// timezone from a timezone filter instead of passing them through.
+// have never satisfies a non-empty want.
 func anyOf(want []string, have string) bool {
 	if len(want) == 0 {
 		return true
@@ -297,8 +270,7 @@ func anyOf(want []string, have string) bool {
 	return have != "" && slices.Contains(want, have)
 }
 
-// overlaps reports whether have carries any of want. Same empty-means-unconstrained rule
-// as anyOf.
+// overlaps reports whether have carries any of want; an empty want is no constraint.
 func overlaps(want, have []string) bool {
 	if len(want) == 0 {
 		return true
@@ -311,8 +283,7 @@ func overlaps(want, have []string) bool {
 	return false
 }
 
-// window is the LIMIT/OFFSET slice, clamped so an offset past the end is an empty page
-// rather than a panic — a visitor who edits the URL is not an error condition.
+// window is the LIMIT/OFFSET slice; an offset past the end is an empty page, not a panic.
 func window(members []CatalogueMember, limit, offset int) []CatalogueMember {
 	if offset < 0 {
 		offset = 0

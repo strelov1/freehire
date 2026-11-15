@@ -9,17 +9,16 @@ import (
 )
 
 // fontFS holds the fonts bundled for templates that need a face the Typst binary does not
-// embed. Typst ships only Libertinus Serif / New Computer Modern / DejaVu Sans Mono, so the
-// sans templates rely on Liberation Sans (SIL OFL) staged here and exposed via --font-path.
+// embed (it ships only Libertinus Serif, New Computer Modern, DejaVu Sans Mono); the sans
+// templates use Liberation Sans (SIL OFL) via --font-path.
 //
 //go:embed fonts/*.ttf
 var fontFS embed.FS
 
 // FontInfo is a registered typeface's display metadata, as the font picker sees it. Note
-// names the familiar face it matches where one applies — the point of this list is not
-// variety but letting a candidate match a firm's house style, so "Calibri metrics" is the
-// useful thing to say about Carlito. CSS is the stack the live HTML preview renders with; it
-// ships with the list so the web never grows a second copy of this registry.
+// names the familiar face it matches (e.g. "Calibri metrics"), since the list exists to match
+// a firm's house style. CSS is the stack the live HTML preview renders with, shipped here so
+// the web keeps no second copy.
 type FontInfo struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -35,19 +34,16 @@ type fontEntry struct {
 	// a Document: ResolveFontFamily maps an id to it at render time.
 	Typst string
 	// typstBuiltin marks a face the Typst binary already carries, so nothing is bundled for
-	// it. Everything else names its .ttf files under fonts/, and TestEveryRegisteredFontIsResolvable
-	// fails if one is missing — under --ignore-system-fonts a missing face is not an error,
-	// it is a silently wrong CV.
+	// typstBuiltin marks a face the Typst binary already carries. Everything else names .ttf
+	// files under fonts/, and TestEveryRegisteredFontIsResolvable fails if one is missing: under
+	// --ignore-system-fonts a missing face silently renders a wrong CV.
 	typstBuiltin bool
 	files        []string
 }
 
-// fontRegistry is the set of typefaces a CV may choose. The seam to add one is: drop its
-// .ttf files into fonts/ with their licence, then append an entry here.
-//
-// The list is deliberately short and conservative. Three of the four are metric-compatible
-// with the faces résumé-scanning software and recruiters expect, which is what a CV font
-// picker is actually for.
+// fontRegistry is the set of typefaces a CV may choose. To add one, drop its .ttf files into
+// fonts/ with their licence, then append an entry here. Kept short and conservative: three of
+// the four are metric-compatible with the faces résumé scanners and recruiters expect.
 var fontRegistry = []fontEntry{
 	{
 		FontInfo:     FontInfo{ID: "libertinus-serif", Label: "Libertinus Serif", Note: "book serif", CSS: `"Libertinus Serif", "Linux Libertine", Georgia, serif`},
@@ -90,8 +86,8 @@ func FontIDs() []string {
 }
 
 // ResolveFontFamily maps a registry id to the family name Typst asks for. The empty id does
-// NOT resolve: it means "whatever the template uses", and the renderer must leave the
-// template's own font declaration alone rather than overriding it with a default.
+// NOT resolve: it means "whatever the template uses", so the renderer must leave the
+// template's own font alone.
 func ResolveFontFamily(id string) (string, bool) {
 	if id == "" {
 		return "", false

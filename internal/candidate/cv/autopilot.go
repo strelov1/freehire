@@ -1,9 +1,8 @@
 package cv
 
-// AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is
-// fixed and small on purpose: the panel renders each value, and a value it cannot render
-// is worse than a refused write. Nothing is coerced — an unrecognised status is reported
-// back to the model with the valid ones named, which is how it corrects itself mid-turn.
+// AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is fixed
+// because the panel must render each value. Nothing is coerced: an unrecognised status is
+// reported back to the model with the valid ones named, so it can correct itself.
 type AutopilotStatus string
 
 const (

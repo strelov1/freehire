@@ -7,13 +7,10 @@ import (
 
 // datedYears is the whole years of work the dated roles span, overlaps counted once.
 //
-// The stored TotalYears is a figure the model wrote when the CV was parsed: it goes stale
-// the day after (a role still running keeps the length it had at parse time) and the
-// model can simply misjudge it, so a card showing "2+ years" above a role that began
-// three years ago contradicts itself. The dates are on the card too, so the figure must
-// agree with them. A role with no start year says nothing and is skipped; an ongoing
-// role (marked current, or with no end) runs to now. A year-only date counts as the
-// least it could mean (see below), so the figure never claims more than the CV shows.
+// The stored TotalYears was written by the model at parse time, goes stale, and can be
+// misjudged, so it can contradict the dates shown beside it. A role with no start year is
+// skipped; an ongoing role (current, or no end) runs to now. A year-only date counts as
+// the least it could mean, so the figure never claims more than the CV shows.
 func datedYears(experience []Experience, now time.Time) int {
 	nowMonth := now.Year()*12 + int(now.Month()) - 1
 	type span struct{ from, to int }
@@ -22,11 +19,9 @@ func datedYears(experience []Experience, now time.Time) int {
 		if e.Start == nil || e.Start.Year <= 0 {
 			continue
 		}
-		// A CV that gives only a year does not say which month, and this figure is
-		// compared against a vacancy's minimum, so it takes the shortest span the dates
-		// allow: a role begun in a year-only 2024 starts in December, one ended in a
-		// year-only 2025 ends in January. "2024-2025" may be a single month, and counting
-		// it as a year would mark a one-year requirement as met on no evidence.
+		// Year-only dates take the shortest span they allow (start in December, end in
+		// January): "2024-2025" may be one month, and counting a year would mark a
+		// vacancy's minimum as met on no evidence.
 		startMonth := e.Start.Month
 		if startMonth == 0 {
 			startMonth = 12
@@ -55,9 +50,9 @@ func datedYears(experience []Experience, now time.Time) int {
 	return months / 12
 }
 
-// EffectiveYears is the figure to show and to compare against a vacancy: the larger of
-// what the model wrote at parse time and what the dated roles add up to now. A
-// candidate's own figure is not this one — see resume.Owned.ApplyTotalYears.
+// EffectiveYears is the figure to show and compare against a vacancy: the larger of the
+// parse-time TotalYears and the dated roles. A candidate's own figure is separate; see
+// resume.Owned.ApplyTotalYears.
 func (s Structured) EffectiveYears(now time.Time) int {
 	return max(s.TotalYears, datedYears(s.Experience, now))
 }

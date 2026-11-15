@@ -138,8 +138,7 @@ type Bounds struct {
 	MaxSignalInsightRunes int
 }
 
-// DefaultBounds returns the hard-coded sanitize ceilings (the values historically
-// baked into this package).
+// DefaultBounds returns the hard-coded sanitize ceilings.
 func DefaultBounds() Bounds {
 	return Bounds{
 		MaxCommentRunes:       DefaultMaxCommentRunes,
@@ -213,10 +212,8 @@ type Requirement struct {
 	EvidenceStrength string `json:"evidence_strength"` // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 
-// Signal is one interpretive read of the job posting's own wording — a verbatim quote plus
-// what it implies about pace, ownership expectations, team stage, or culture. Freeform text
-// bounded by length only (the same tier as Recommendation/comment), not a controlled
-// vocabulary: there is no fixed set of "signal types" to coerce into.
+// Signal is one interpretive read of the job posting's own wording: a verbatim quote plus what
+// it implies about pace, ownership, team stage, or culture. Freeform, bounded by length only.
 type Signal struct {
 	Quote   string `json:"quote"`
 	Insight string `json:"insight"`
@@ -239,8 +236,8 @@ type Analysis struct {
 // ApplyCeiling clamps the analysis's OverallScore down to ceil — the deterministic
 // hard-constraint ceiling (hardconstraint.OverallCap over the caller's blockers) —
 // and re-derives the Verdict from the capped score. A ceil of 100 (no unmet blocker)
-// leaves the score untouched. Applied at serve time, not stored, so the ceiling
-// always reflects the current dictionary (see the recompute-on-read design).
+// leaves the score untouched. Applied at serve time, not stored, so the ceiling always
+// reflects the current dictionary.
 func ApplyCeiling(a *Analysis, ceil int) {
 	if a == nil || ceil >= a.OverallScore {
 		return

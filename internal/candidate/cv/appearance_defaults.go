@@ -9,8 +9,7 @@ import (
 )
 
 // AppearanceDefaults is the template/typography/margins a user has saved to seed every new
-// base CV with. It carries no document content — only the three things a fresh CV's
-// creation call sites otherwise hardcode.
+// base CV with. It carries no document content.
 type AppearanceDefaults struct {
 	TemplateID string
 	Style      Style
@@ -38,17 +37,12 @@ func unmarshalMargins(data []byte) (Margins, error) {
 }
 
 // GetAppearanceDefaults returns the user's saved appearance defaults, or the system's
-// standard CV defaults with ok=false when the user has never saved any — never a zero or
-// absent shape, so a caller always has something concrete to seed a new CV from or to show
-// on the settings screen. It is the one place every base-CV creation call site (Store.Tailor,
-// the reset-from-résumé handler, CreateCV) reads this from, so they cannot drift from one
-// another.
+// standard defaults with ok=false when none were saved, never a zero shape. It is the one
+// place every base-CV creation site reads from, so they cannot drift.
 //
-// A saved template_id that no longer resolves — the template registry (template.go) can
-// shrink after it was saved — heals to DefaultTemplateID rather than being handed on as-is:
-// Store.Create never validates its templateID argument, so an unresolvable id would otherwise
-// reach a new CV silently and only fail much later, at render time. The saved typography and
-// margins are unaffected; only the template is stale.
+// A saved template_id that no longer resolves heals to DefaultTemplateID: Store.Create never
+// validates it, so a stale id would fail much later, at render time. Typography and margins
+// are unaffected.
 func (s *Store) GetAppearanceDefaults(ctx context.Context, userID int64) (AppearanceDefaults, bool, error) {
 	row, err := s.repo.GetAppearanceDefaults(ctx, userID)
 	if err != nil {
@@ -73,10 +67,9 @@ func (s *Store) GetAppearanceDefaults(ctx context.Context, userID int64) (Appear
 }
 
 // SetAppearanceDefaults validates and stores the user's appearance defaults, replacing any
-// previously saved values, and returns exactly what was saved (already sanitized) so a caller
-// never needs a second read to report back what it just wrote. It rejects an unknown
-// template_id (ErrUnknownTemplate) and clamps out-of-range typography/margin values — the same
-// rules a CV document's own Sanitize applies — rather than rejecting them.
+// saved values, and returns exactly what was saved (sanitized). It rejects an unknown
+// template_id (ErrUnknownTemplate) and clamps out-of-range typography/margins like a CV
+// document's own Sanitize.
 func (s *Store) SetAppearanceDefaults(ctx context.Context, userID int64, defaults AppearanceDefaults) (AppearanceDefaults, error) {
 	tmpl, err := ResolveTemplate(defaults.TemplateID)
 	if err != nil {

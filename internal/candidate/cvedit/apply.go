@@ -11,9 +11,8 @@ import (
 	"strings"
 )
 
-// OpKind is the closed set of things an edit can do. Four structural operations replace the
-// eight named ones they succeed, and unlike them they reach every field of the document —
-// education, projects, certifications, languages, margins and typography included.
+// OpKind is the closed set of things an edit can do. The four structural operations reach
+// every field of the document.
 type OpKind string
 
 const (
@@ -23,8 +22,7 @@ const (
 	OpMove   OpKind = "move"
 )
 
-// OpKinds is the vocabulary as a caller meets it, for the schema a model reads. Rendering it
-// from here rather than restating the list in prose is what keeps the two from drifting.
+// OpKinds is the vocabulary as a caller meets it, for the schema a model reads.
 var OpKinds = []string{string(OpSet), string(OpInsert), string(OpRemove), string(OpMove)}
 
 // Op is one edit. Path addresses the place; Value carries the new content for set and
@@ -47,14 +45,11 @@ var ErrInvalidOp = errors.New("cvedit: invalid operation")
 // Apply carries out a batch and returns the state it produced together with the operations
 // that would undo it.
 //
-// Inverses are computed here, one at a time, because this is the only moment the previous
-// value is still in hand: once the batch has run, "what did this bullet say before" is a
-// question nobody can answer. They come back in reverse order, so applying them in sequence
-// walks the state backwards through the batch.
+// Inverses are computed here because this is the only moment the previous value is still in
+// hand. They come back in reverse order, so applying them in sequence walks the state backwards.
 //
-// The batch is all-or-nothing. Apply works on its own deep copy and only hands it back on
-// success, so a refused batch leaves both the returned state and the caller's own value
-// exactly as they were — a rejected edit is never a partial one.
+// The batch is all-or-nothing: Apply works on a deep copy and hands it back only on success,
+// so a refused batch leaves the caller's state untouched.
 func Apply(state State, ops []Op) (State, []Op, error) {
 	working, err := clone(state)
 	if err != nil {
@@ -76,16 +71,9 @@ func Apply(state State, ops []Op) (State, []Op, error) {
 // one that means the same thing applied in sequence, by running each list's consecutive
 // removals from the highest index down.
 //
-// It is not part of Apply, and that distinction is the whole point. Apply's own index semantics
-// are sequential — each operation addresses the list as the batch has changed it so far — and
-// two of its three callers depend on that: `Diff` states its indices exactly that way, and the
-// inverses Apply itself produces are replayed the same way by undo. Sorting inside Apply
-// silently corrupted both: a save that deleted two non-adjacent bullets deleted the wrong one,
-// and undoing a run left the agent's insertion in place while removing the candidate's line.
-//
-// A model is the one author that does not think sequentially: it reads the document once and
-// names the positions it saw. So the conversion belongs where that batch arrives, and nowhere
-// else.
+// It must not move into Apply: Apply's indices are sequential (each operation addresses the
+// list as changed so far), and both Diff and undo's replayed inverses depend on that. Only a
+// model's batch, written against positions it read once, needs this conversion.
 func OrderAgainstOriginal(ops []Op) []Op {
 	ordered := make([]Op, len(ops))
 	copy(ordered, ops)
@@ -172,7 +160,7 @@ func applyInsert(state *State, op Op) (Op, error) {
 	if err != nil {
 		return Op{}, err
 	}
-	// One past the end is the append: `experience[2]` on a list of two puts the entry last.
+	// One past the end appends.
 	if at > list.Len() {
 		return Op{}, fmt.Errorf("%w: %q inserts at position %d of a list holding %d%s",
 			ErrInvalidOp, op.Path, at, list.Len(), holds(list))
@@ -218,8 +206,7 @@ func applyMove(state *State, op Op) (Op, error) {
 			ErrInvalidOp, op.Path, from, to, list.Len())
 	}
 
-	// Copy the element out before the removal: after it, the index points into a slice that
-	// no longer holds what it did.
+	// Copy the element out before the removal shifts the indices.
 	element := reflect.New(list.Type().Elem()).Elem()
 	element.Set(list.Index(from))
 	list.Set(sliceInsertAt(sliceRemoveAt(list, from), to, element))
@@ -228,9 +215,8 @@ func applyMove(state *State, op Op) (Op, error) {
 	return Op{Kind: OpMove, Path: replaceLastIndex(op.Path, to), To: &back}, nil
 }
 
-// sliceInsertAt and sliceRemoveAt build a new slice rather than shuffling in place: the
-// state being edited is a deep copy, but a slice header copied from it can still share its
-// backing array with an inverse that was detached earlier.
+// sliceInsertAt and sliceRemoveAt build a new slice rather than shuffling in place, which
+// could alias the backing array of an inverse detached earlier.
 func sliceInsertAt(list reflect.Value, at int, v reflect.Value) reflect.Value {
 	grown := reflect.MakeSlice(list.Type(), list.Len()+1, list.Len()+1)
 	reflect.Copy(grown, list.Slice(0, at))
@@ -241,9 +227,8 @@ func sliceInsertAt(list reflect.Value, at int, v reflect.Value) reflect.Value {
 
 func sliceRemoveAt(list reflect.Value, at int) reflect.Value {
 	if list.Len() == 1 {
-		// Emptying a list yields the absent list, not an empty one. The document's json
-		// tags omit both, so the two are the same stored state — keeping them distinct in
-		// memory would have the differ report operations between identical documents.
+		// Emptying a list yields the absent list: the json tags omit both, and keeping them
+		// distinct would make the differ report operations between identical documents.
 		return reflect.Zero(list.Type())
 	}
 	shrunk := reflect.MakeSlice(list.Type(), list.Len()-1, list.Len()-1)
@@ -252,16 +237,13 @@ func sliceRemoveAt(list reflect.Value, at int) reflect.Value {
 	return shrunk
 }
 
-// resolveList reaches the list an indexed path sits in, and the position it names. It is
-// what insert, remove and move work through: they change the list, not the element, so
-// resolving to the element itself would be one hop too far — and for an append, the element
-// does not exist yet.
+// resolveList reaches the list an indexed path sits in, and the position it names. Insert,
+// remove and move change the list, not the element (which does not exist yet for an append).
 func resolveList(state *State, p Path) (reflect.Value, int, error) {
 	steps := p.steps()
 	last := steps[len(steps)-1]
 	if !last.isIndex() {
-		// A bare list path (`experience[0].bullets`) was the commonest refused cv_edit on prod,
-		// and the plain refusal left the agent to guess the fix; spell out the append index.
+		// A bare list path is a common agent mistake; spell out the append index.
 		if v, err := resolveSteps(state, steps, p); err == nil && v.Kind() == reflect.Slice {
 			return reflect.Value{}, 0, fmt.Errorf("%w: %q is a whole list, not a position in it: use \"%s[%d]\" to add at the end, or name an existing position%s",
 				ErrInvalidOp, p, p, v.Len(), holds(v))
@@ -275,8 +257,8 @@ func resolveList(state *State, p Path) (reflect.Value, int, error) {
 	return list, last.index, nil
 }
 
-// replaceLastIndex rewrites the trailing `[n]` of a path, which is how a move states its own
-// inverse: the element now sits where it was moved to, and must travel back from there.
+// replaceLastIndex rewrites the trailing `[n]` of a path: a move's inverse starts from where
+// the element now sits.
 func replaceLastIndex(p Path, index int) Path {
 	s := string(p)
 	for i := len(s) - 1; i >= 0; i-- {
@@ -287,9 +269,8 @@ func replaceLastIndex(p Path, index int) Path {
 	return p
 }
 
-// coerce turns a caller's value into the addressed field's own type, going through json so
-// that a value written in Go and a value read back out of jsonb are treated identically —
-// the inverses stored on a revision come back as generic json and must apply unchanged.
+// coerce turns a caller's value into the addressed field's own type, going through json so a
+// Go value and one read back from jsonb (stored inverses) are treated identically.
 func coerce(value any, want reflect.Type, p Path) (reflect.Value, error) {
 	blob, err := json.Marshal(value)
 	if err != nil {
@@ -304,9 +285,8 @@ func coerce(value any, want reflect.Type, p Path) (reflect.Value, error) {
 	return out.Elem(), nil
 }
 
-// detach copies a value out of the state, so an inverse holding it survives later edits to
-// the place it came from. A shallow read would alias the very slice the batch is about to
-// rewrite.
+// detach copies a value out of the state so an inverse holding it survives later edits; a
+// shallow read would alias a slice the batch is about to rewrite.
 func detach(v reflect.Value) (any, error) {
 	blob, err := json.Marshal(v.Interface())
 	if err != nil {

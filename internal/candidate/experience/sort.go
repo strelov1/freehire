@@ -7,9 +7,8 @@ import (
 )
 
 // periodSortKey orders a *perioddate.PeriodDate reverse-chronologically: nil (unknown) sorts
-// lowest, and a year-only date sorts as if it were January of that year — the same
-// floor the free-text parser this replaced used, so "2024" still ranks below "Feb 2024"
-// and above "2023" (whatever month).
+// lowest, and a year-only date sorts as if it were January, so "2024" ranks below
+// "Feb 2024" and above "2023".
 func periodSortKey(d *perioddate.PeriodDate) int {
 	if d == nil {
 		return 0
@@ -22,8 +21,7 @@ func periodSortKey(d *perioddate.PeriodDate) int {
 }
 
 // employmentSortKey prefers a concrete end date, treats an ongoing role as "now", and
-// falls back to the start date — unlike the free-text era, there is no parsing left to
-// do here: Start/End are already perioddate.PeriodDate.
+// falls back to the start date.
 func employmentSortKey(e Employment) int {
 	const periodKeyCurrent = 999999
 	if e.Current {

@@ -18,13 +18,11 @@ const (
 	// maxUploadBytes caps the request body. A phone photo is 2–5 MiB.
 	maxUploadBytes = 8 << 20
 	// maxSourcePixels caps the DECODED size, checked on the header before any decode: a
-	// decompression bomb is small on disk and enormous in memory, and the byte cap does not
-	// bound it — a 0.6 MiB JPEG can decode to 50 MP. The ceiling is what one request may
-	// cost the API process, not what a camera can produce: the output is 512 px, so pixels
-	// past this point buy nothing and only lengthen the resample.
+	// decompression bomb is small on disk and huge in memory, which the byte cap does not
+	// bound. It limits what one request may cost the API; the output is 512 px, so more
+	// pixels buy nothing.
 	maxSourcePixels = 30_000_000
-	// outputEdge is the stored square's side in pixels. At the ~1.4in frame the templates
-	// print, 512 px is over 300 dpi — enough for print, small enough to keep the object
+	// outputEdge is the stored square's side in pixels: over 300 dpi at the ~1.4in print frame,
 	// around 40 KB.
 	outputEdge  = 512
 	jpegQuality = 85
@@ -39,11 +37,10 @@ var (
 	ErrTooLarge = errors.New("headshot: image is too large")
 )
 
-// Normalize turns an arbitrary upload into the one shape that gets stored: a centred
-// square, outputEdge on a side, upright per the file's declared orientation, encoded as
-// JPEG. It never returns the caller's bytes unchanged — re-encoding is what guarantees
-// the stored object is an image and nothing else (any trailing payload, EXIF GPS, or
-// embedded thumbnail is dropped along with everything the decoder ignored).
+// Normalize turns an arbitrary upload into the one stored shape: a centred square, outputEdge
+// on a side, upright per the declared orientation, encoded as JPEG. It never returns the
+// caller's bytes unchanged: re-encoding guarantees the object is an image and nothing else
+// (trailing payload, EXIF GPS and embedded thumbnails are dropped).
 func Normalize(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("%w: empty upload", ErrUnsupportedImage)
@@ -66,10 +63,9 @@ func Normalize(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedImage, err)
 	}
-	// Resize BEFORE rotating. The centred square commutes with a quarter turn, so the
-	// result is the same either way — but rotating the source would allocate a second
-	// full-size buffer and copy it pixel by pixel, which on a 30 MP upload is seconds of
-	// CPU and hundreds of megabytes. Rotating the 512 px square is microseconds.
+	// Resize BEFORE rotating. The square commutes with a quarter turn, but rotating the source
+	// would copy a second full-size buffer (seconds of CPU on a 30 MP upload); rotating the
+	// 512 px square is microseconds.
 	square := orient(scale(src, centredSquare(src.Bounds())), readOrientation(data))
 
 	var out bytes.Buffer
@@ -79,12 +75,10 @@ func Normalize(data []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// orient rotates the image so it is upright, per the EXIF orientation its file declared.
-// Only the ROTATION each orientation carries is applied — never the mirroring: a flip is
-// something a person did on purpose, and silently undoing it hands them back a photo that
-// is not the one they see everywhere else. The transposed orientations (5 and 7) are a
-// mirror AND a quarter turn, so they get the turn and keep the flip; the pure mirrors
-// (2 and 4) are left entirely alone.
+// orient rotates the image upright per the declared EXIF orientation. Only the ROTATION is
+// applied, never the mirroring: a flip is deliberate, and undoing it hands back a photo unlike
+// the one the member sees elsewhere. The transposed orientations (5 and 7) get the turn and
+// keep the flip; the pure mirrors (2 and 4) are left alone.
 func orient(src image.Image, orientation int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -101,8 +95,7 @@ func orient(src image.Image, orientation int) image.Image {
 }
 
 // remap rebuilds the image at dstW×dstH, placing each source pixel where at says. A quarter
-// turn swaps the dimensions, which is why the destination size is stated by the caller
-// rather than inferred.
+// turn swaps the dimensions, so the caller states the destination size.
 func remap(src image.Image, dstW, dstH int, at func(x, y int) (int, int)) image.Image {
 	b := src.Bounds()
 	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
@@ -115,9 +108,8 @@ func remap(src image.Image, dstW, dstH int, at func(x, y int) (int, int)) image.
 	return dst
 }
 
-// centredSquare is the largest square inside the bounds. A portrait photo therefore keeps
-// its middle band rather than its top, which is where a face usually sits in a headshot
-// shot at arm's length.
+// centredSquare is the largest square inside the bounds. A portrait keeps its middle band
+// rather than its top, since a face in an arm's-length headshot sits mid-frame.
 func centredSquare(b image.Rectangle) image.Rectangle {
 	edge := min(b.Dx(), b.Dy())
 	return image.Rect(0, 0, edge, edge).Add(image.Point{
@@ -126,15 +118,11 @@ func centredSquare(b image.Rectangle) image.Rectangle {
 	})
 }
 
-// scale resamples the source rectangle into an outputEdge square — the crop and the resize
-// in one resampling pass, since Scale reads a source rect natively. CatmullRom is the
-// sharpest of the kernels x/image offers and the cost is irrelevant on a 512 px target; the
-// standard library has no resampling scaler at all.
+// scale resamples the source rectangle into an outputEdge square, cropping and resizing in one
+// pass. CatmullRom is the sharpest x/image kernel and cost is irrelevant at 512 px.
 //
-// The destination starts opaque white and the source is drawn Over it, because JPEG has no
-// alpha: a cut-out PNG scaled with draw.Src would arrive premultiplied, and jpeg.Encode
-// reads those transparent pixels as pure black — a face on a black square, with no error to
-// notice it by.
+// The destination starts opaque white and the source is drawn Over it: JPEG has no alpha, and
+// a cut-out PNG drawn with draw.Src would encode its transparent pixels as black, silently.
 func scale(src image.Image, r image.Rectangle) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, outputEdge, outputEdge))
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)

@@ -30,9 +30,8 @@ var ErrNotBase = errors.New("cv: not a base CV")
 
 // Meta is a CV without its document body — the shape the list and mutation responses use.
 type Meta struct {
-	// ID is a random UUID, not a counter: a CV is a résumé, and a countable id
-	// would both publish how many exist and make one forgotten owner check
-	// enumerable. See the opaque-cv-ids change.
+	// ID is a random UUID, not a counter: a countable id would publish how many CVs exist
+	// and make a forgotten owner check enumerable.
 	ID         uuid.UUID
 	Title      string
 	TemplateID string
@@ -90,10 +89,9 @@ type BaseItem struct {
 }
 
 // Repository persists CVs. Every read/update/delete is owner-scoped by (id, userID); a
-// foreign or missing id yields pgx.ErrNoRows (Get/Update) or a zero delete count.
-// Repository deliberately has NO method that writes a CV's document. internal/candidate/cvedit owns
-// that, and one declared here — even unused — is an invitation to write a document with no
-// revision, no policy and no evidence gate behind it.
+// foreign or missing id yields pgx.ErrNoRows (Get) or a zero delete count.
+// It deliberately has NO method that writes a CV's document: internal/candidate/cvedit owns
+// that, and one here would bypass revisions, policy and the evidence gate.
 type Repository interface {
 	Create(ctx context.Context, userID int64, title, templateID string, data []byte) (db.CreateCVRow, error)
 	List(ctx context.Context, userID int64) ([]db.ListCVsByUserRow, error)
@@ -111,8 +109,7 @@ type Repository interface {
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 	SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error)
 	// MergeAutopilotEntry folds one requirement's outcome into the run report in a single
-	// statement — see MergeCVAutopilotEntry's own comment for why this cannot be a Get then a
-	// SetAutopilotReport.
+	// statement; see MergeCVAutopilotEntry for why it cannot be a Get then a SetAutopilotReport.
 	MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error)
 	GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error)
 	// GetAppearanceDefaults returns pgx.ErrNoRows when the user has never saved any —
@@ -124,7 +121,6 @@ type Repository interface {
 }
 
 // Seeder provides the user's extracted résumé, used to seed a base CV when they have none.
-// resume.Store already satisfies this shape (Structured), so the handler passes it directly.
 type Seeder interface {
 	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
@@ -197,13 +193,9 @@ func recordFromRow(row db.GetCVByIDRow) (Record, error) {
 // GetForModel returns one owned CV with the contact block stripped, for every reader
 // that puts the document in front of a model.
 //
-// It is a second accessor rather than a flag on Get because the rule is about who is
-// READING, not about how the request arrived. The redaction used to be a handler-level
-// test on whether the caller held an API key; when the assistant moved in-process it
-// carried no key at all, the test stopped firing, and a requirement that was still on
-// the books quietly stopped being met. Naming the safe path makes it the one an agent
-// surface reaches for, and leaves Get to the owner's own full-fidelity reads (the
-// editor, the PDF render).
+// It is a separate accessor, not a flag on Get, because the rule is about who is READING,
+// not how the request arrived (an in-process assistant carries no API key). Get stays for the
+// owner's full-fidelity reads (the editor, the PDF render).
 func (s *Store) GetForModel(ctx context.Context, id uuid.UUID, userID int64) (Record, error) {
 	rec, err := s.Get(ctx, id, userID)
 	if err != nil {
@@ -244,9 +236,8 @@ func (s *Store) SetSession(ctx context.Context, id uuid.UUID, userID int64, sess
 // SetTracerLinks turns link tracing on or off for one CV. Owner-scoped: a foreign or missing id
 // is ErrNotFound.
 //
-// It writes the column directly rather than going through cvedit, the only other writer of a
-// stored CV. A cvedit write becomes a revision with a computed inverse, and consent to track a
-// third party must not be something an undo of an unrelated edit can grant or revoke.
+// It writes the column directly, not through cvedit: a cvedit write becomes a revision with an
+// inverse, and consent to track a third party must not be grantable or revocable by an undo.
 func (s *Store) SetTracerLinks(ctx context.Context, id uuid.UUID, userID int64, enabled bool) error {
 	n, err := s.repo.SetTracerLinks(ctx, id, userID, enabled)
 	if err != nil {
@@ -277,8 +268,6 @@ func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem,
 	}
 	return out, nil
 }
-
-// Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.
 
 // Delete removes an owned CV, or returns ErrNotFound when nothing matched.
 func (s *Store) Delete(ctx context.Context, id uuid.UUID, userID int64) error {
@@ -441,9 +430,8 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, baseID uuid.UUI
 		}
 		base = Record{Meta: meta, Document: doc}
 	}
-	// One tailored copy per vacancy. The workspace's address carries no CV reference, so a
-	// reload re-runs this exact request; minting a second copy leaves the candidate's
-	// conversation bound to the first one, which is what "my chat disappeared" looks like.
+	// One tailored copy per vacancy: the workspace address carries no CV reference, so a reload
+	// re-runs this request, and a second copy would orphan the candidate's conversation.
 	if existing, err := s.TailoredForJob(ctx, userID, jobID); err == nil {
 		return s.existingCopyBase(ctx, userID, base, existing), existing, false, nil
 	} else if !errors.Is(err, ErrNotFound) {
@@ -453,9 +441,8 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, baseID uuid.UUI
 	doc, _ := Align(base.Document, preferred)
 	tailored, err := s.createTailored(ctx, userID, jobID, base.ID, tailoredTitle, base.TemplateID, doc)
 	if err != nil {
-		// A concurrent call for the same vacancy can win the insert between our SELECT above
-		// and this one: cvs_user_id_job_id_tailored_uniq_idx (0091) turns the loser into a
-		// unique violation instead of a duplicate row. Re-fetch and return the winner's copy.
+		// A concurrent call can win the insert; cvs_user_id_job_id_tailored_uniq_idx turns the
+		// loser into a unique violation. Return the winner's copy.
 		if pgerr.IsUniqueViolation(err) {
 			existing, ferr := s.TailoredForJob(ctx, userID, jobID)
 			if ferr != nil {
@@ -468,10 +455,9 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, baseID uuid.UUI
 	return base.Meta, tailored, true, nil
 }
 
-// existingCopyBase is the base to report alongside a tailored copy that already existed: its
-// own base when it records one that is still there, else the base this call resolved. Reopening
-// a vacancy with a different base chosen returns the same copy (one per vacancy), and the
-// response must not claim it came from the base just picked.
+// existingCopyBase is the base to report alongside an already-existing tailored copy: its own
+// base when still there, else the one this call resolved. Reopening with a different base
+// returns the same copy, which must not be reported as derived from the newly picked base.
 func (s *Store) existingCopyBase(ctx context.Context, userID int64, resolved Record, existing Meta) Meta {
 	rec, err := s.Get(ctx, existing.ID, userID)
 	if err != nil {

@@ -1,9 +1,7 @@
 package hardconstraint
 
-// This file holds ONLY the served wire shape (Blocker + its BlockerCategory/BlockerSeverity enums),
-// so cmd/gen-contracts can generate the TypeScript type from this file alone without
-// dragging in the evaluator inputs (JobRequirements/CVEvidence) or logic — the same
-// wire-only split as matchanalysis.go vs analyzer.go.
+// This file holds ONLY the served wire shape (Blocker and its enums), so cmd/gen-contracts can
+// generate the TypeScript type from it without the evaluator inputs or logic.
 
 // BlockerCategory names the requirement axis a blocker covers.
 type BlockerCategory string

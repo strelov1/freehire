@@ -561,31 +561,28 @@ export interface Report {
 // source: delta.go
 
 /**
- * Delta is the change one CV's ATS readiness shows against another's: the overall
- * move plus one entry per category, and — only when the overall fell — the category
- * that fell furthest. It compares two Reports and computes nothing itself, so the
- * five categories, their labels and their weights stay the scorer's business.
- * JSON is the wire contract shared with the frontend (see cmd/gen-contracts).
+ * Delta is the change one CV's ATS readiness shows against another's: the overall move,
+ * one entry per category, and (only when the overall fell) the category that fell furthest.
+ * It only compares two Reports; the categories, labels and weights stay the scorer's. JSON is
+ * the wire contract shared with the frontend (see cmd/gen-contracts).
  */
 export interface Delta {
   base: number /* int */; // the baseline CV's overall score
   tailored: number /* int */; // the compared CV's overall score
   change: number /* int */; // Tailored − Base, signed
   /**
-   * Categories reports only the categories present in BOTH reports: a category on
-   * one side alone is not a difference, and reporting it against an implied zero
-   * would invent a change nobody made.
+   * Categories reports only the categories present in BOTH reports: one-sided ones would
+   * invent a change against an implied zero.
    */
   categories: CategoryChange[];
   /**
-   * Regressed is true when the overall score fell. A category may fall while the
-   * overall holds; that is not a regression, and WorstCategory stays empty for it.
+   * Regressed is true when the overall score fell. A category may fall while the overall
+   * holds; that is not a regression and leaves WorstCategory empty.
    */
   regressed: boolean;
   /**
-   * WorstCategory is the id of the category with the most negative change, set only
-   * when Regressed. An equal drop resolves to the earlier of the two in the compared
-   * report's own order, so the answer never depends on map iteration.
+   * WorstCategory is the id of the category with the most negative change, set only when
+   * Regressed. Ties go to the earlier one in the compared report's order, never map order.
    */
   worst_category?: string;
 }
@@ -599,10 +596,8 @@ export interface CategoryChange {
   tailored: number /* int */;
   change: number /* int */; // Tailored − Base, signed
   /**
-   * Items are the checks behind the TAILORED side's score, so a panel can expand a row
-   * into why it stands where it does. The base side's items are deliberately not carried:
-   * the candidate is editing the tailored copy, and a before/after list of individual
-   * checks is a diff nobody asked for.
+   * Items are the checks behind the TAILORED side's score, so a panel can expand a row. The
+   * base side's items are deliberately not carried.
    */
   items?: LineItem[];
 }
@@ -985,10 +980,8 @@ export interface Requirement {
   evidence_strength: string; // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 /**
- * Signal is one interpretive read of the job posting's own wording — a verbatim quote plus
- * what it implies about pace, ownership expectations, team stage, or culture. Freeform text
- * bounded by length only (the same tier as Recommendation/comment), not a controlled
- * vocabulary: there is no fixed set of "signal types" to coerce into.
+ * Signal is one interpretive read of the job posting's own wording: a verbatim quote plus what
+ * it implies about pace, ownership, team stage, or culture. Freeform, bounded by length only.
  */
 export interface Signal {
   quote: string;
@@ -1011,18 +1004,15 @@ export interface Analysis {
 }
 
 /**
- * Band is how long the letter should be. Two are offered rather than a free-form length,
- * because the application forms do not state a limit — no captured apply_forms field carries
- * maxlength — so the numbers are a product decision and a slider over them would be a
- * precision the data does not support.
+ * Band is how long the letter should be. Two are offered because forms state no limit, so the
+ * numbers are a product decision and a finer control would imply precision the data lacks.
  */
 export type Band = string;
 export const BandShort: Band = "short";
 export const BandStandard: Band = "standard";
 /**
  * Bounds are the server-owned ceilings on what the chain may return. The model is never
- * trusted to observe them; Sanitize enforces them after the fact, the same discipline
- * matchanalysis keeps over its own output.
+ * trusted to observe them; Sanitize enforces them afterwards.
  */
 export interface Bounds {
   /**
@@ -1031,14 +1021,13 @@ export interface Bounds {
   ShortCeiling: number /* int */;
   StandardCeiling: number /* int */;
   /**
-   * Floor is the shortest body that still counts as a letter. The audit stage cuts, and a
-   * stage whose only instruction is to cut can cut to nothing; below this the caller keeps
-   * the un-audited draft instead.
+   * Floor is the shortest body that still counts as a letter. The audit only cuts and can cut
+   * to nothing; below this the caller keeps the un-audited draft.
    */
   Floor: number /* int */;
   /**
-   * MaxCited caps how many atoms one letter may cite. A letter that cites everything cites
-   * nothing — the point of the citation list is that a reader can check it.
+   * MaxCited caps how many atoms one letter may cite; citing everything makes the list
+   * uncheckable.
    */
   MaxCited: number /* int */;
 }
@@ -1048,21 +1037,19 @@ export interface Bounds {
 export interface Letter {
   body: string;
   /**
-   * Cited are the atoms the letter's claims rest on, in the order the letter uses them.
-   * This is what the UI shows beside the letter and what makes the honesty claim checkable.
+   * Cited are the atoms the letter's claims rest on, in the order the letter uses them; the UI
+   * shows them beside the letter.
    */
   cited_atom_ids: string[];
   /**
-   * Language is what the letter was written in, taken from the VACANCY and not from the
-   * candidate's profile — the employer is the reader.
+   * Language is what the letter was written in, from the VACANCY, not the candidate's profile.
    */
   language: string;
 }
 
 /**
- * Structured is the typed, sanitized résumé. Every field is optional — a value the CV
- * does not state is left empty rather than invented (the model is prompted accordingly
- * and Sanitize drops empty entries).
+ * Structured is the typed, sanitized résumé. Every field is optional: a value the CV
+ * does not state stays empty, and Sanitize drops empty entries.
  */
 export interface Structured {
   full_name?: string;
@@ -1081,14 +1068,11 @@ export interface Structured {
   projects?: Project[];
 }
 /**
- * Professional is Structured with the contact fields left out — the résumé's substance
- * (what the person has done) without the identity (who they are). It is what goes to a
- * consumer that has no business knowing the candidate's name: the LLM fit chain, and an
- * agent reading the profile over the API.
- * The field set is a whitelist, deliberately: a field later added to Structured is
- * withheld until it is added here too. A blacklist — dropping the four known contact
- * keys — would disclose that new field by default, which is the wrong way round for a
- * projection whose whole job is to hold personal data back.
+ * Professional is Structured without the contact fields: what the person has done, not
+ * who they are. It goes to consumers that must not know the name (the LLM fit chain, an
+ * agent reading the profile over the API).
+ * The field set is a whitelist on purpose: a field later added to Structured stays
+ * withheld until added here, where a blacklist would disclose it by default.
  */
 export interface Professional {
   headline?: string;
@@ -1103,10 +1087,9 @@ export interface Professional {
   projects?: Project[];
 }
 /**
- * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
- * (year, optional month) that the model interprets from however the CV prints the
- * range; Current marks an ongoing role instead of a fabricated End. Summary is the
- * role/company one-line context; Highlights are the achievement bullets.
+ * Experience is one work-history entry. Current marks an ongoing role instead of a
+ * fabricated End. Summary is the one-line role/company context; Highlights are the
+ * achievement bullets.
  */
 export interface Experience {
   title?: string;
@@ -1128,14 +1111,10 @@ export interface Project {
   highlights?: string[];
 }
 /**
- * Education is one education entry. Year is the same structured perioddate.PeriodDate as
- * Experience's Start/End (month is rarely stated for a degree, so it is usually
- * year-only, but the type stays the one shared shape rather than a bare int).
- * Degree is assumed short and dedicated (a CV's own degree line, e.g. "BSc Computer
- * Science"), never a full sentence — internal/dict/edulevel.ForDegree relies on this to
- * safely match bare "BS"/"MS" forms that would be ambiguous in free-running prose. If
- * this field's extraction ever changes to allow fuller sentences, revisit ForDegree's
- * leniency alongside it.
+ * Education is one education entry; Year is usually year-only.
+ * Degree must stay short (a CV's own degree line, e.g. "BSc Computer Science"), never a
+ * sentence: internal/dict/edulevel.ForDegree relies on it to match bare "BS"/"MS", which
+ * are ambiguous in prose.
  */
 export interface Education {
   degree?: string;
@@ -1144,10 +1123,9 @@ export interface Education {
 }
 
 /**
- * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is
- * fixed and small on purpose: the panel renders each value, and a value it cannot render
- * is worse than a refused write. Nothing is coerced — an unrecognised status is reported
- * back to the model with the valid ones named, which is how it corrects itself mid-turn.
+ * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is fixed
+ * because the panel must render each value. Nothing is coerced: an unrecognised status is
+ * reported back to the model with the valid ones named, so it can correct itself.
  */
 export type AutopilotStatus = string;
 /**
@@ -1186,44 +1164,37 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
 
 /**
  * The section ceilings Sanitize truncates to, exported (and generated into the web
- * contracts) so the editor can refuse an Add past them instead of letting Sanitize drop
- * a row silently.
+ * contracts) so the editor can refuse an Add past them instead of dropping a row silently.
  */
 export const MaxExperience = 30;
 /**
- * Field bounds for untrusted CV content. The Document is user-editable and — in the
- * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
- * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
  */
 export const MaxEducation = 20;
 /**
- * Field bounds for untrusted CV content. The Document is user-editable and — in the
- * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
- * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
  */
 export const MaxSkillGroups = 20;
 /**
- * Field bounds for untrusted CV content. The Document is user-editable and — in the
- * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
- * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
  */
 export const MaxLanguages = 20;
 /**
- * Field bounds for untrusted CV content. The Document is user-editable and — in the
- * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
- * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
  */
 export const MaxProjects = 30;
 /**
- * Field bounds for untrusted CV content. The Document is user-editable and — in the
- * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
- * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ * Field bounds for untrusted CV content. The Document is user-editable and fed to an LLM, so
+ * Sanitize is both the persistence guard and the prompt-injection guard.
  */
 export const MaxCertifications = 30;
 /**
- * DefaultMaxBullets is the per-experience / per-project bullet ceiling when
- * CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
- * than let Sanitize drop trailing content silently.
+ * DefaultMaxBullets is the per-experience / per-project bullet ceiling when CV_MAX_BULLETS
+ * is unset. Writers must refuse growth past MaxBullets rather than let Sanitize drop it.
  */
 export const DefaultMaxBullets = 20;
 /**
@@ -1233,9 +1204,8 @@ export const DefaultMaxBullets = 20;
 export interface Document {
   margins: Margins;
   /**
-   * No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
-   * empty strings/slices/maps), so the tag would promise clients an absence they never see
-   * while making the generated TypeScript optional for no reason.
+   * No omitempty: it does nothing on a struct, so the tag would only make the generated
+   * TypeScript optional.
    */
   style: Style;
   header: Header;
@@ -1249,8 +1219,7 @@ export interface Document {
 }
 /**
  * Margins is the CV's per-side page margin in inches, applied identically to the HTML
- * preview and the Typst-rendered PDF. Sanitize clamps each side and defaults an unset
- * (zero) side to defaultMargin.
+ * preview and the Typst PDF. Sanitize clamps each side and defaults an unset side.
  */
 export interface Margins {
   top: number /* float64 */;
@@ -1260,19 +1229,13 @@ export interface Margins {
 }
 /**
  * Style is the CV's typography: the typeface, the base type size in points, and the line
- * height as a leading multiple of the em. It is part of the document, so it persists with
- * the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
- * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
- * the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
- * difference is deliberate on both counts:
- *   - Every CV written before this type existed has no style block, so it renders exactly as
- *     it did. There is nothing to migrate.
- *   - A template stays a whole design choice. Switching to a template with looser leading
- *     actually loosens the leading, because that value was never frozen into the document.
- * Resolving defaults here — the natural thing to do by analogy with clampMargin — would
- * silently bake the current template's typography into every document on its next save.
- * FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
- * resolves it on its own copy of the document at render time.
+ * height as a leading multiple of the em. It is part of the document, so it persists, is
+ * copied when the CV is tailored, and is not clobbered by field-level patches.
+ * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO, unlike
+ * Margins. Resolving defaults here would bake the current template's typography into every
+ * document on its next save and stop a template switch from changing leading.
+ * FontFamily is a registry id (see fonts.go), never a renderer's face name; the renderer
+ * resolves it on its own copy at render time.
  */
 export interface Style {
   font_family?: string;
@@ -1292,9 +1255,7 @@ export interface Header {
 }
 /**
  * Experience is one work-history entry. Start/End are a structured perioddate.PeriodDate
- * (year, optional month) — the same shared type experience.Employment and
- * resumeextract.Experience use. Rendering to PDF formats this back to display text
- * (see renderer.go); no template deals with the structured value directly.
+ * (year, optional month), formatted to display text at render time (see renderer.go).
  */
 export interface ExperienceItem {
   role?: string;
@@ -1493,9 +1454,8 @@ export const FieldAge18OrOlder: Field = "age_18_or_older";
 export const FieldPrivacyConsent: Field = "privacy_consent";
 
 /**
- * Responses is one candidate's survey record. Every field is independently optional: a nil
- * pointer means the candidate has not stated that fact, never a guessed default and never
- * a zero standing in for silence.
+ * Responses is one candidate's survey record. Every field is independently optional: nil
+ * means not stated, never a default or a zero standing in for silence.
  */
 export interface Responses {
   job_search_stage?: string;
@@ -1506,8 +1466,7 @@ export interface Responses {
   biggest_challenges?: string[];
   /**
    * BiggestChallengeNote is free text, admitted only while vocab.JobChallengeOther is
-   * among the challenges. A note beside coded answers alone could contradict them, and
-   * nothing downstream would know which to believe.
+   * among the challenges; beside coded answers alone it could contradict them.
    */
   biggest_challenge_note?: string;
   current_income_amount?: number /* int */;
@@ -1521,8 +1480,7 @@ export interface Responses {
 export interface CandidateCard {
   /**
    * Seniority and Category describe the candidate as a whole: what their current (or
-   * most recent) role resolves to. This is the card's heading, built rather than
-   * quoted — see PrimaryTitle.
+   * most recent) role resolves to. The heading is built, not quoted; see PrimaryTitle.
    */
   seniority?: string;
   category?: string;
@@ -1531,28 +1489,21 @@ export interface CandidateCard {
    */
   total_years?: number /* int */;
   /**
-   * Skills are skilltag canonicals. A token the dictionary does not resolve emits
-   * nothing, which is exactly the whitelisting this card needs — see skilltag's
-   * "never guess" rule.
+   * Skills are skilltag canonicals; an unresolved token emits nothing.
    */
   skills: string[];
   /**
-   * Roles is the work history with everything nameable removed: no employer, no
-   * location, no prose. What remains is the shape of a career, which is what a
-   * recruiter reads a history for anyway.
+   * Roles is the work history with everything nameable removed: no employer, location or prose.
    */
   roles: CandidateRole[];
   /**
-   * Education carries only what internal/dict/edulevel resolves from each entry's
-   * degree text, plus its year — never the institution or field of study. An entry
-   * whose degree resolves to nothing is dropped rather than kept under an empty
-   * label: a work-history gap reads worse than absence, but a candidate's set of
-   * degrees carries no such expectation of completeness.
+   * Education carries only what internal/dict/edulevel resolves from each entry's degree
+   * text, plus its year. An entry whose degree resolves to nothing is dropped, not kept
+   * under an empty label (unlike roles, nobody expects a complete degree list).
    */
   education?: EducationEntry[];
   /**
-   * Certifications are internal/dict/certification canonicals. A name the dictionary
-   * does not resolve emits nothing, the same whitelisting Skills gets from skilltag.
+   * Certifications are internal/dict/certification canonicals; unresolved names emit nothing.
    */
   certifications?: string[];
 }
@@ -1569,10 +1520,9 @@ export interface EducationEntry {
  */
 export interface CandidateRole {
   /**
-   * Title is the candidate's own words, verbatim — the card's ONE exception to the
-   * dictionary-only rule, argued in this file's header comment. Seniority and Category
-   * remain beside it as the fallback for a role whose title is absent, and as the
-   * values every filter reads: the raw string is for a human to read, never to match on.
+   * Title is the candidate's own words, the card's ONE exception to the dictionary-only
+   * rule (see the header). Seniority and Category are the fallback for an absent title
+   * and what every filter reads; the raw string is never matched on.
    */
   title?: string;
   seniority?: string;
@@ -1583,44 +1533,33 @@ export interface CandidateRole {
   stack?: string[];
 }
 /**
- * CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus the
- * facts that live in columns rather than in the CV.
- * Every field here survives the same rule ProjectCard enforces. Cities are the NORMALISED
- * extraction (users.resume_cities), not the free-text location inside the CV, which
- * carries values like "Austria, Klagenfurt 9020"; the timezone is an IANA zone;
- * specializations are drawn from vocab.CategoryValues by the profile form. None of the
- * three can carry a sentence.
- * Specializations are NOT a duplicate of Card.Category, and the difference is the useful
- * part. Category is derived from what the candidate has DONE — the title of their most
- * recent role, through classify. Specializations are what they SAY they want, ticked from
- * the same closed vocabulary on their own profile. A backend engineer whose profile says
- * `ml_ai` is somebody a recruiter wants to find, and the two fields disagreeing is the
- * only way that shows.
+ * CatalogueMember is one entry in the public catalogue: the dictionary-checked card, plus
+ * the facts that live in columns rather than in the CV.
+ * Every field obeys the ProjectCard rule: cities are the NORMALISED extraction
+ * (users.resume_cities), not the free-text CV location; the timezone is an IANA zone;
+ * specializations come from vocab.CategoryValues.
+ * Specializations are NOT a duplicate of Card.Category: Category is what the candidate has
+ * DONE (latest title through classify), Specializations what they SAY they want. A backend
+ * engineer who ticks `ml_ai` is findable only because the two can disagree.
  */
 export interface CatalogueMember {
   handle: string;
   card: CandidateCard;
   /**
-   * Timezone is the IANA zone; TimezoneRegion is the part before the slash. The region
-   * is what a recruiter asking "can we overlap for a call" actually means — there are
-   * dozens of zones per continent — so it is what the filter reads.
+   * Timezone is the IANA zone; TimezoneRegion is the part before the slash, which is what
+   * the filter reads (dozens of zones per continent).
    */
   timezone?: string;
   timezone_region?: string;
   cities: string[];
   specializations: string[];
   /**
-   * UpdatedAt is when the structured extract was written, which is the freshest thing
-   * the catalogue knows about a member. It orders the list.
+   * UpdatedAt is when the structured extract was written; it orders the list.
    */
   updated_at: string;
   /**
-   * HasPhoto says only whether GET /talent/{handle}/photo has something to serve —
-   * never the object key, and never the image itself. It survives the card's own
-   * dictionary-only rule because a boolean carries no name: the alternative was every
-   * list card firing that request and reading the 404 GetPhoto already gives a member
-   * with none, which is correct but a wasted round trip for what is, in practice, most
-   * of the catalogue.
+   * HasPhoto says only whether GET /talent/{handle}/photo has something to serve, never
+   * the object key. A boolean carries no name, and it saves list cards a wasted 404 request.
    */
   has_photo: boolean;
 }
