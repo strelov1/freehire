@@ -4,9 +4,12 @@ import ReminderSettings from './ReminderSettings.svelte';
 
 // Stub the facade instead of initializing unrelated UI exports.
 vi.mock('#lib/ui/index.js', () => ({
+  Badge() {},
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
   ProviderIcon() {},
 }));
+const navigation = vi.hoisted(() => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => navigation);
 vi.mock('@lucide/svelte', async () => ({
   Bell: (await import('@lucide/svelte/icons/bell')).default,
   Check: (await import('@lucide/svelte/icons/check')).default,
@@ -84,12 +87,17 @@ describe('Daily inbox summary settings', () => {
   });
 });
 
-it('requires Pro or Ultra to enable the inbox summary', async () => {
+it('sends a free account to the plans instead of enabling the inbox summary', async () => {
   backend.myPlan.mockResolvedValue({ plan: 'free' });
   render(ReminderSettings);
   const toggle = await screen.findByRole('switch', { name: 'Daily inbox summary' });
-  expect(toggle.hasAttribute('disabled')).toBe(true);
-  expect(screen.getByRole('link', { name: 'View plans' })).toBeTruthy();
+  expect(toggle.hasAttribute('disabled')).toBe(false);
+  expect(screen.getByRole('link', { name: 'Pro feature, view plans' }).getAttribute('href')).toBe('/pricing');
+  await fireEvent.click(toggle);
+  expect(navigation.goto).toHaveBeenCalledWith('/pricing');
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  await new Promise((resolve) => setTimeout(resolve, 450)); // past the autosave debounce
+  expect(backend.updateNotificationSettings).not.toHaveBeenCalled();
 });
 
 it('allows Ultra to opt in', async () => {

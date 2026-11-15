@@ -1,12 +1,12 @@
 <script lang="ts">
   import { Bell, Check, Mail, Moon, Smartphone } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api, ApiError } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
-  import { cn } from '#lib/ui/index.js';
-  import { ProviderIcon } from '#lib/ui/index.js';
+  import { Badge, cn, ProviderIcon } from '#lib/ui/index.js';
 
   // The single account-level notification rule: turn notifications on and pick
   // the delivery channels. It gates four things at once — the saved-job apply
@@ -311,7 +311,10 @@
   <section class="mt-4 rounded-xl border border-border bg-card p-4">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <h2 class="text-sm font-semibold">Daily inbox summary</h2>
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          Daily inbox summary
+          <a href={resolve('/pricing')} aria-label="Pro feature, view plans"><Badge variant="brand">Pro</Badge></a>
+        </h2>
         <p class="mt-1 text-xs text-muted-foreground">
           New recruiter messages, requests and application updates in one email, grouped by conversation. Empty days
           send nothing.
@@ -320,8 +323,13 @@
       <ToggleSwitch
         on={inboxDigestEnabled}
         label="Daily inbox summary"
-        disabled={!inboxDigestEnabled && (!inboxDigestPaid || !enabled || !channels.includes('email'))}
+        disabled={!inboxDigestEnabled && inboxDigestPaid && (!enabled || !channels.includes('email'))}
         onToggle={() => {
+          // Free accounts see the switch, and turning it on sends them to the plans.
+          if (!inboxDigestEnabled && !inboxDigestPaid) {
+            void goto(resolve('/pricing'));
+            return;
+          }
           inboxDigestEnabled = !inboxDigestEnabled;
           persist();
         }}
