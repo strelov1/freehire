@@ -21,9 +21,8 @@ func Drain(ctx context.Context, indexing Runner, removals DeletionRunner, opt Ru
 		if err := ctx.Err(); err != nil {
 			return indexed, deleted, err
 		}
-		// Between waves, because a backlog makes one run last hours: a rebuild reaching its
-		// bulk load has to stop this run, not just the next one. Whatever is queued stays
-		// queued, and the rebuild's swap reflects it.
+		// Checked between waves: a backlog can make one run last hours, and a rebuild reaching its
+		// bulk load must stop this run. Queued entries stay queued.
 		if opt.Stop != nil && opt.Stop() {
 			log.Printf("search-drain: paused, stopping after indexed=%d deleted=%d", indexed.Indexed, deleted.Deleted)
 			return indexed, deleted, nil

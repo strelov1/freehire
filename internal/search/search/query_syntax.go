@@ -6,30 +6,27 @@ import (
 	"unicode"
 )
 
-// maxAlternatives bounds how many OR alternatives one q may carry. The search
-// endpoints are public and each alternative is one more Meilisearch query.
+// maxAlternatives bounds OR alternatives per q: the endpoints are public and each is
+// another Meilisearch query.
 const maxAlternatives = 5
 
 // titlePrefix scopes the alternative it starts to the title field.
 const titlePrefix = "title:"
 
-// ErrTooManyAlternatives is returned for a q with more than maxAlternatives OR
-// alternatives. Handlers render its message as a 400.
+// ErrTooManyAlternatives is returned for a q over maxAlternatives; handlers render a 400.
 var ErrTooManyAlternatives = errors.New("q has more than 5 OR alternatives")
 
-// Alternative is one OR branch of q: the text handed to Meilisearch as written
-// (so its quotes and leading-minus exclusions keep working) and, when the branch
-// began with title:, the fields it is restricted to. Nil Fields means the
-// caller's q_fields, or every searchable field.
+// Alternative is one OR branch of q: its text as written (so quotes and leading-minus
+// exclusions keep working) and, after a title: prefix, the fields it is restricted to.
+// Nil Fields means the caller's q_fields, or every searchable field.
 type Alternative struct {
 	Text   string
 	Fields []string
 }
 
-// ParseQuery splits q on standalone uppercase OR tokens outside double quotes
-// and reads a leading title: on each branch. A q that uses neither operator comes
-// back as ONE alternative whose Text is q byte-for-byte, so the request built
-// from it is exactly the request built before operators existed.
+// ParseQuery splits q on standalone uppercase OR tokens outside double quotes and reads a
+// leading title: on each branch. A q with neither operator comes back as ONE alternative
+// whose Text is q byte-for-byte.
 func ParseQuery(q string) ([]Alternative, error) {
 	groups := [][]string{{}}
 	hasOperator := false
@@ -96,11 +93,8 @@ func splitOutsideQuotes(q string) []string {
 }
 
 // wholeWords ends text with a space, which tells Meilisearch its last word is complete.
-// Otherwise the engine expands that word as a prefix ("engineer" → engineers,
-// engineering, …), and over a catalogue of millions of postings with long descriptions
-// a two-word query ran into the engine's 1.5s search cutoff and came back partly
-// ranked: "data engineer" took ~1.6s and put "Machine Learning Engineer" first,
-// against ~30ms and "Data Engineer" first with the space (measured on prod, 2026-11-13).
+// Otherwise the engine prefix-expands it ("engineer" → engineering, …), and on a large
+// catalogue a two-word query hit the 1.5s search cutoff and came back partly ranked.
 // Typo tolerance still applies to every word.
 func wholeWords(text string) string {
 	if text == "" || strings.HasSuffix(text, " ") {

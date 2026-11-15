@@ -9,22 +9,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
-// proposal is the shape the model answers in — one field per filter this surface can
-// ground, and nothing else.
+// proposal is the shape the model answers in: one field per filter this surface can
+// ground.
 //
-// It exists as a typed struct rather than as a map of facet name to values because the
-// schema the model is constrained by runs in strict mode, which forbids the free-form
-// keys a map needs. Naming each filter buys more than legality, though: the closed
-// vocabularies reach the model as enums (see requestSchema), so the values it may
-// write are fixed by the schema instead of merely described to it, and a model that
-// cannot name a facet cannot invent one.
+// It is a typed struct, not a map, because the strict-mode schema forbids free-form keys;
+// it also lets closed vocabularies reach the model as enums (see requestSchema).
 //
-// intent() turns it into the form resolution reads. The two are kept in step by a test
-// rather than by discipline — a facet in one and not the other is invisible at runtime.
+// intent() converts it for resolution; a test keeps the two in step.
 type proposal struct {
-	// Summary is one sentence naming the search these values build. It is asked for in
-	// the SAME response as the values so it can never describe a different search than
-	// the one that was resolved.
+	// Summary is one sentence naming the search these values build, asked for in the same
+	// response so it cannot describe a different search.
 	Summary string `json:"summary"`
 	// Query is free text for a concept no filter expresses, and nothing else.
 	Query string `json:"query"`
@@ -48,9 +42,7 @@ type proposal struct {
 	EducationLevel flexStrings `json:"education_level"`
 	SalaryPeriod   flexStrings `json:"salary_period"`
 
-	// Exclude is what the person ruled out. "Remote, but not in the USA" is how people
-	// actually describe a search, and a filter that can only add answers a different
-	// question.
+	// Exclude is what the person ruled out ("remote, but not in the USA").
 	Exclude exclusions `json:"exclude"`
 
 	SalaryMin          *flexInt `json:"salary_min"`
@@ -59,10 +51,8 @@ type proposal struct {
 	VisaSponsorship    flexBool `json:"visa_sponsorship"`
 }
 
-// exclusions are the filters people phrase negatively. It is deliberately a subset of
-// the fields above: every facet supports exclusion technically, but nobody says "not
-// B2 English" or "not a full-time role", and each field offered costs tokens on every
-// request whether or not it is used.
+// exclusions are the filters people phrase negatively. A deliberate subset of the fields
+// above: every facet can be excluded, but each field offered costs tokens on every request.
 type exclusions struct {
 	Skills      flexStrings `json:"skills"`
 	Countries   flexStrings `json:"countries"`
@@ -74,9 +64,8 @@ type exclusions struct {
 	RoleType    flexStrings `json:"role_type"`
 }
 
-// intent flattens the proposal into the facet map resolution walks. Every key is
-// present whether or not the model filled it, so this doubles as the statement of
-// which filters the surface offers — the drift test reads it as exactly that.
+// intent flattens the proposal into the facet map resolution walks. Every key is present
+// even when empty: the drift test reads it as the list of filters the surface offers.
 func (p proposal) intent() intent {
 	return intent{
 		Facets: map[string][]string{
@@ -127,15 +116,11 @@ var (
 	schemaErr  error
 )
 
-// requestSchema derives the model's response format from proposal and pins every
-// closed vocabulary to its enum.
+// requestSchema derives the model's response format from proposal and pins every closed
+// vocabulary to its enum.
 //
-// The open vocabularies — skills, cities and countries — are left
-// as free strings deliberately: each runs to thousands of values, and spending that
-// many tokens on every request to constrain what the dictionaries already check after
-// the fact would buy nothing. The values the model invents there are dropped and
-// reported, which is the contract; an invented CLOSED value would be the same drop for
-// a value that did not need to be invented at all.
+// Skills, cities and countries stay free strings: each has thousands of values, and the
+// dictionaries check them afterwards (invented values are dropped and reported).
 func requestSchema() (llmschema.Schema, error) {
 	schemaOnce.Do(func() {
 		schema, schemaErr = llmschema.Of[proposal](
@@ -154,19 +139,11 @@ func requestSchema() (llmschema.Schema, error) {
 			llmschema.Enum("english_level", vocab.EnglishLevelValues),
 			llmschema.Enum("education_level", vocab.EducationLevelValues),
 			llmschema.Enum("salary_period", vocab.SalaryPeriodValues),
-			// All three bounds are asked for as TEXT, for two reasons that happen to
-			// want the same thing.
-			//
-			// Meaning: zero is a real filter on the experience ceiling — postings that
-			// require no prior experience — and the model writes zero for "unset". As
-			// text, "" and "0" are different answers. See flexInt.
-			//
-			// Mechanism: flexInt is a struct (it carries the set/unset flag), and the
-			// schema is derived by REFLECTION. Left alone, a struct with no exported
-			// fields is declared to the model as an empty object, and a model honouring
-			// that dutifully answers "{}" — which is how every bound silently stopped
-			// arriving. AsText is what stops reflection describing the carrier instead
-			// of the value. schema_test.go pins it.
+			// The bounds are asked for as text for two reasons. Zero is a real experience
+			// ceiling but the model writes it for "unset"; as text "" and "0" differ (see
+			// flexInt). And flexInt is a struct with no exported fields, which reflection
+			// would declare as an empty object, so the model answers "{}". schema_test.go
+			// pins it.
 			llmschema.AsText("salary_min", "posted_within_days", "experience_years_max"),
 		)
 		if schemaErr != nil {

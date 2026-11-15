@@ -12,9 +12,8 @@ import (
 )
 
 // EncodeQuery writes the values the way the website's serializer does (facetModel's
-// filtersToParams): one param per facet, its values comma-joined. The matcher reads
-// either form; this one is what the website's own dedupe compares against, so a search
-// saved by a server-side caller is recognised there as the same set.
+// filtersToParams): one param per facet, values comma-joined, so the website's dedupe recognises
+// a server-saved search as the same set. The matcher reads either form.
 func EncodeQuery(vals url.Values) string {
 	flat := url.Values{}
 	for k, vs := range vals {

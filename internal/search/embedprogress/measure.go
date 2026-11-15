@@ -16,11 +16,9 @@ type CoverageCounter interface {
 	SemanticCoverageCounts(ctx context.Context, targetModel string) (db.SemanticCoverageCountsRow, error)
 }
 
-// Measure counts coverage against the model the catalogue is embedded with now, the
-// same target cmd/embed enqueues against, so "covered" means "the queue will not take
-// it again". It records the queue depth with the counts so the live figure can move by
-// how much the queue has drained since; the caller runs both in one snapshot
-// transaction, so the two describe the same moment.
+// Measure counts coverage against the model the catalogue is embedded with now, the same target
+// cmd/embed enqueues against. It records the queue depth with the counts; the caller runs both in
+// one snapshot transaction so they describe the same moment.
 func Measure(ctx context.Context, counter CoverageCounter, now func() time.Time) (Snapshot, error) {
 	depth, err := counter.SemanticOutboxClaimableDepth(ctx)
 	if err != nil {

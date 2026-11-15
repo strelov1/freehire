@@ -7,11 +7,9 @@ import (
 	"strings"
 )
 
-// scalarFilters are the non-facet query params filterFromValues reads: each is a
-// single typed value rather than a facet's value set, so none appears in
-// StringFacets. Listed here so UnknownParams can tell a filter this package
-// honours from one it silently drops. A test asserts each still narrows a query,
-// so the list cannot rot into a lie as filters come and go.
+// scalarFilters are the non-facet params filterFromValues reads: single typed values, none in
+// StringFacets. UnknownParams uses the list to tell honoured filters from dropped ones; a test
+// asserts each still narrows a query.
 var scalarFilters = []string{
 	"visa_sponsorship",
 	"salary_min",
@@ -23,20 +21,17 @@ var scalarFilters = []string{
 	ApplyQuestionsMaxParam,
 }
 
-// WatchlistParam narrows a search to the companies on the caller's own watchlist
-// (internal/engage/companywatch). It is a fact about the CALLER, not a facet of the posting,
-// so FilterFromValues does not read it: whoever runs the search resolves the person's
-// company slugs and adds them (AndInStrings), the HTTP search per request and the notify
-// worker per subscriber. Narrows counts it, since a query carrying it selects less than the
-// catalogue, and that is what lets `watchlist=true` be saved as an alert.
+// WatchlistParam narrows a search to the caller's own watchlist (internal/engage/companywatch).
+// It describes the CALLER, not the posting, so FilterFromValues does not read it: whoever runs
+// the search resolves the company slugs and adds them (AndInStrings). Narrows counts it, which
+// lets `watchlist=true` be saved as an alert.
 const WatchlistParam = "watchlist"
 
 // WantsWatchlist reports whether a parsed query asks for the caller's watchlist.
 func WantsWatchlist(v url.Values) bool { return isTrue(v, WatchlistParam) }
 
-// HasInvalidVisaSponsorship reports a nonempty visa scalar that the search drops.
-// Alert admission and delivery share this check so a legacy value cannot silently
-// widen a subscription. Inspect the scalar directly, without a capped report.
+// HasInvalidVisaSponsorship reports a nonempty visa scalar that the search drops. Alert
+// admission and delivery share it so a legacy value cannot silently widen a subscription.
 func HasInvalidVisaSponsorship(v url.Values) bool {
 	raw := v.Get("visa_sponsorship")
 	return raw != "" && !checkedScalars["visa_sponsorship"](raw)
@@ -47,38 +42,30 @@ func isTrue(v url.Values, param string) bool {
 	return strings.EqualFold(strings.TrimSpace(v.Get(param)), "true")
 }
 
-// ExperienceIncludeUnspecifiedParam widens the experience bounds to also admit the
-// postings that state no requirement. It is a modifier, not a filter: alone it reads
-// nothing, so it lives beside scalarFilters rather than on it (whose test demands
-// that each entry narrows a query by itself).
+// ExperienceIncludeUnspecifiedParam widens the experience bounds to also admit postings that
+// state no requirement. A modifier, not a filter: alone it reads nothing, so it stays off
+// scalarFilters (whose test demands each entry narrow a query by itself).
 const ExperienceIncludeUnspecifiedParam = "experience_include_unspecified"
 
-// SeniorityIncludeUnspecifiedParam widens the included seniority levels to also admit
-// the postings that carry no level — most of the catalogue. Like the experience one,
-// alone it reads nothing.
+// SeniorityIncludeUnspecifiedParam widens the included seniority levels to also admit postings
+// with no level. Alone it reads nothing.
 const SeniorityIncludeUnspecifiedParam = "seniority_include_unspecified"
 
-// ExperienceOnlySeniorityUnspecifiedParam confines the experience bounds to the
-// postings that carry no seniority level, so a labelled posting passes them whatever
-// years it states. Beside seniority_include_unspecified it reads "one of these levels,
-// or no level and within the bound" — a rule two independently ANDed facets cannot
-// express. Alone it reads nothing.
+// ExperienceOnlySeniorityUnspecifiedParam confines the experience bounds to postings with no
+// seniority level, so a labelled posting passes them whatever years it states. With
+// seniority_include_unspecified it reads "one of these levels, or no level and within the
+// bound", which two ANDed facets cannot express. Alone it reads nothing.
 const ExperienceOnlySeniorityUnspecifiedParam = "experience_only_seniority_unspecified"
 
-// WorkModeRemoteAnywhereParam changes how the work-mode facet composes with the
-// location facets: instead of ANDing the modes with the geography (which narrows
-// remote work to the home country), the work-mode group becomes the disjunction
-// "remote anywhere, OR a selected physical mode within the location group" —
-// remote from anywhere plus hybrid/on-site at home, the preference the profile's
-// location block collects and no AND of facets can state. See filterFromValues,
-// where the swap happens. Alone it reads nothing.
+// WorkModeRemoteAnywhereParam changes how work_mode composes with the location facets: instead
+// of ANDing them (which narrows remote work to the home country), the work-mode group becomes
+// "remote anywhere, OR a selected physical mode within the location group". See
+// filterFromValues, where the swap happens. Alone it reads nothing.
 const WorkModeRemoteAnywhereParam = "work_mode_remote_anywhere"
 
-// WorkModeRemoteRegionsParam and WorkModeRemoteCountriesParam bound the remote arm of
-// the remote-anywhere disjunction: "remote within this reach, OR a selected physical
-// mode within the location group" — the profile's remote reach and its home geography
-// kept apart. They read like `regions`/`countries` (regions expand the same way) and
-// only while the modifier is in force; alone, or with it inert, they read nothing.
+// WorkModeRemoteRegionsParam and WorkModeRemoteCountriesParam bound the remote arm of the
+// remote-anywhere disjunction, keeping remote reach apart from home geography. They read like
+// `regions`/`countries` (regions expand the same way), only while the modifier is in force.
 const (
 	WorkModeRemoteRegionsParam   = "work_mode_remote_regions"
 	WorkModeRemoteCountriesParam = "work_mode_remote_countries"
@@ -90,8 +77,8 @@ var remoteReachFacets = map[string]string{
 	WorkModeRemoteCountriesParam: "countries",
 }
 
-// scalarModifiers are params filterFromValues reads only to change how a filter
-// applies. Known to UnknownParams, never a filter on their own.
+// scalarModifiers are params filterFromValues reads only to change how a filter applies; known
+// to UnknownParams, never a filter alone.
 var scalarModifiers = []string{
 	ExperienceIncludeUnspecifiedParam,
 	SeniorityIncludeUnspecifiedParam,
@@ -101,32 +88,20 @@ var scalarModifiers = []string{
 	WorkModeRemoteCountriesParam,
 }
 
-// qSearchableFields are the fields `q` matches against, in the same order as the
-// jobs index's SearchableAttributes (see facetSettings in client.go). q_fields
-// restricts `q` to a subset of this vocabulary.
+// qSearchableFields are the fields `q` matches, in the order of the jobs index's
+// SearchableAttributes (facetSettings in client.go). q_fields restricts `q` to a subset.
 var qSearchableFields = []string{"title", "company", "description", "location"}
 
-// QFieldsFromValues resolves the q_fields query param into the
-// AttributesToSearchOn list buildSearchRequest should pass to Meilisearch. The
-// returned fields are always in qSearchableFields' canonical order regardless
-// of how the caller wrote them, because Meilisearch's ranking is sensitive to
-// attribute order and a caller-controlled order would make identical
-// restrictions rank differently for no predictable reason.
+// QFieldsFromValues resolves q_fields into the AttributesToSearchOn list for
+// buildSearchRequest. Fields come back in qSearchableFields' canonical order whatever order the
+// caller wrote, because Meilisearch ranking is sensitive to attribute order.
 //
-// q_fields reads through splitFacetValues, the same as every other facet: a
-// repeated key (`q_fields=title&q_fields=company`) and a comma-joined value
-// (`q_fields=title,company`) resolve to the same set, and a stray comma
-// fragment (`q_fields=title,` or a bare `?q_fields=`) is dropped rather than
-// treated as a named field.
+// It reads through splitFacetValues like every facet: repeated keys and comma-joined values
+// resolve to the same set, and stray comma fragments are dropped.
 //
-// When q_fields is absent or empty after that, both return values are nil: no
-// restriction, nothing to report. When it names a field outside
-// qSearchableFields, the ENTIRE value is treated as invalid — even the names
-// that were valid are dropped — and reported via the same UnknownParam shape
-// UnknownParams uses. Partial application would silently narrow a caller's
-// search past what a typo made them ask for, with no signal beyond the
-// report; whole-value drop keeps the failure in the same class as an
-// unrecognized facet: coarse, but honest.
+// Absent or empty yields nil, nil (no restriction). A name outside qSearchableFields makes the
+// ENTIRE value invalid, valid names included, reported as an UnknownParam: partial application
+// would silently narrow the search past what a typo asked for.
 func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
 	requested := make(map[string]bool)
 	for _, name := range splitFacetValues(v["q_fields"]) {
@@ -146,52 +121,39 @@ func QFieldsFromValues(v url.Values) (fields []string, ignored []UnknownParam) {
 	return fields, nil
 }
 
-// maxUnknownParamsReported bounds how many ignored params one response echoes.
-//
-// The search endpoints are public and unauthenticated, and every reported param
-// is copied from the request into the response body — so an unbounded report
-// lets a hostile query turn junk params into response bytes. A real mistake is
-// one param, or a handful; anything past this many is not someone to help.
+// maxUnknownParamsReported bounds how many ignored params one response echoes. The search
+// endpoints are public and every reported param is copied into the response body, so an
+// unbounded report would let junk params turn into response bytes.
 const maxUnknownParamsReported = 10
 
-// UnknownParam is a query param no filter reads, reported back to the caller so
-// a silently dropped filter cannot pass for a real result. DidYouMean carries the
-// vocabulary's name for it when the caller only got the grammatical number wrong
-// — the common miss, since most facets are plural (`countries`, not `country`).
-// It is empty when nothing close enough exists; a guess would mislead more than
-// silence.
+// UnknownParam is a query param no filter reads, reported so a silently dropped filter cannot
+// pass for a real result. DidYouMean carries the vocabulary's name when the caller only got the
+// grammatical number wrong (most facets are plural); empty when nothing close exists.
 type UnknownParam struct {
 	Param      string `json:"param"`
 	DidYouMean string `json:"did_you_mean,omitempty"`
 }
 
-// UnknownParams reports the query params of v that no filter in this package
-// reads, sorted by name so the report is stable. alsoKnown lets the caller
-// declare its own non-filter params (pagination, sort, response format) as
-// legitimate — this package owns the filter vocabulary and nothing else.
+// UnknownParams reports the params of v that no filter in this package reads, sorted by name.
+// alsoKnown declares the caller's own non-filter params (pagination, sort, format); this package
+// owns the filter vocabulary only.
 //
-// This is the counterpart to FilterFromValues' permissiveness: that function
-// ignores whatever it does not recognize, which keeps old saved searches and
-// shared links working, but leaves a typo indistinguishable from an unfiltered
-// query. Reporting the difference is the whole point — a caller that asked for
-// `country=it` and got the entire catalogue back needs to know why.
+// It is the counterpart to FilterFromValues, which ignores unrecognized params so old saved
+// searches and shared links keep working, but would leave a typo indistinguishable from an
+// unfiltered query.
 func UnknownParams(v url.Values, alsoKnown []string) []UnknownParam {
 	return unknownAgainst(v, knownParams(alsoKnown))
 }
 
-// ActiveFilterParams reports which of v's query params ARE part of the jobs filter
-// vocabulary (every facet, its `_exclude`/`_mode` conventions, and the scalar filters) and
-// were actually present in the request — the mirror image of UnknownParams, which reports
-// the ones that are NOT. Backed by the same knownParams list as UnknownParams so the two
-// can never drift into disagreeing about what the vocabulary is.
+// ActiveFilterParams reports which of v's params ARE in the jobs filter vocabulary (facets, their
+// `_exclude`/`_mode` forms, scalar filters), the mirror of UnknownParams and backed by the same
+// knownParams list.
 //
-// It exists for the one case a filter param this package DOES recognize still could not be
-// applied: Meilisearch rejecting the assembled filter during the deploy window a filterable
-// attribute is declared in code before the live index catches up (see AGENTS.md's "Adding a
-// filterable attribute"). The caller degrades by dropping the whole dynamic filter and
-// reports every param this returns — Meilisearch's own rejection does not reliably name
-// which single one it minded, so nothing here guesses at one. DidYouMean is never set: every
-// entry is, by construction, already-recognized vocabulary, not a typo to correct.
+// It serves the case where a recognized filter still cannot be applied: Meilisearch rejecting the
+// filter while a filterable attribute is declared in code before the live index catches up (see
+// AGENTS.md "Adding a filterable attribute"). The caller drops the whole dynamic filter and
+// reports every param returned, since Meilisearch's rejection does not reliably name one.
+// DidYouMean is never set.
 func ActiveFilterParams(v url.Values) []UnknownParam {
 	known := knownParams(nil)
 	var out []UnknownParam
@@ -203,11 +165,8 @@ func ActiveFilterParams(v url.Values) []UnknownParam {
 	return SortAndCap(out)
 }
 
-// UnknownCompanyParams is UnknownParams for the company search, whose filter
-// (CompanyFilterFromValues) reads a different vocabulary: its own facet list,
-// and none of the `_exclude` / `_mode` conventions the jobs filter honours. A
-// jobs facet sent here — `seniority=senior` on a company search — is therefore
-// ignored, and reported.
+// UnknownCompanyParams is UnknownParams for the company search, which reads its own facet list
+// and none of the `_exclude`/`_mode` conventions, so a jobs facet sent there is reported.
 func UnknownCompanyParams(v url.Values, alsoKnown []string) []UnknownParam {
 	known := make(map[string]bool, len(companyFacets)+len(alsoKnown))
 	for _, f := range companyFacets {
@@ -219,16 +178,10 @@ func UnknownCompanyParams(v url.Values, alsoKnown []string) []UnknownParam {
 	return unknownAgainst(v, known)
 }
 
-// UnknownParamsAgainst is the same report for an endpoint whose vocabulary this
-// package does not own at all — the Talent Network catalogue is the first, and it
-// filters on facets derived from a CV rather than on anything in the job index.
-//
-// The vocabulary is the caller's; only the report is shared. That split is the point:
-// the ignored-params convention is a promise the whole API makes, and a second
-// endpoint growing its own spelling of it — or its own suggestion logic — is how a
-// convention stops being one. The caller must NOT be tempted to reach for
-// UnknownParams above and pass its facets as alsoKnown: that would silently accept
-// every job-search facet as legitimate on an endpoint that reads none of them.
+// UnknownParamsAgainst is the same report for an endpoint whose vocabulary this package does not
+// own (the Talent Network catalogue filters on CV-derived facets). The vocabulary is the caller's
+// and only the report is shared, so the ignored-params convention keeps one spelling. Do not pass
+// such facets as alsoKnown to UnknownParams: that would accept every job-search facet.
 func UnknownParamsAgainst(v url.Values, known []string) []UnknownParam {
 	set := make(map[string]bool, len(known))
 	for _, param := range known {
@@ -237,13 +190,12 @@ func UnknownParamsAgainst(v url.Values, known []string) []UnknownParam {
 	return unknownAgainst(v, set)
 }
 
-// unknownAgainst is the shared body of the reports: everything in v that the
-// given vocabulary does not contain, named, suggested and bounded.
+// unknownAgainst is the shared body of the reports: everything in v outside the vocabulary,
+// named, suggested and bounded.
 func unknownAgainst(v url.Values, known map[string]bool) []UnknownParam {
 	var out []UnknownParam
 	for param := range v {
-		// "?=value" parses to an empty name. There is nothing to report about it
-		// and nothing the caller could correct.
+		// "?=value" parses to an empty name; nothing to report.
 		if param == "" || known[param] {
 			continue
 		}
@@ -252,18 +204,12 @@ func unknownAgainst(v url.Values, known map[string]bool) []UnknownParam {
 	return SortAndCap(out)
 }
 
-// SortAndCap orders an ignored-param report by name and bounds it to
-// maxUnknownParamsReported.
+// SortAndCap orders an ignored-param report by name and bounds it to maxUnknownParamsReported.
 //
-// Exported because a caller can have entries of its own to add: a param this
-// package calls legitimate vocabulary but that endpoint discards anyway (the
-// coverage endpoint's `skills`, which belong in the body). Those have to be
-// folded into the same report before it is ordered and bounded — appended
-// afterwards they would sit outside the sort and push the total past the cap
-// the bound exists to enforce.
-//
-// Capping after sorting matters: it makes the report the same prefix every
-// time, rather than whichever entries map iteration happened to reach first.
+// Exported so a caller can fold in entries of its own (a param this package calls vocabulary but
+// the endpoint discards, like the coverage endpoint's `skills`) before ordering and capping;
+// appended afterwards they would escape the sort and the cap. Capping after sorting keeps the
+// report the same prefix every time rather than whatever map iteration reached first.
 func SortAndCap(params []UnknownParam) []UnknownParam {
 	sort.Slice(params, func(i, j int) bool { return params[i].Param < params[j].Param })
 	if len(params) > maxUnknownParamsReported {
@@ -272,9 +218,8 @@ func SortAndCap(params []UnknownParam) []UnknownParam {
 	return params
 }
 
-// knownParams builds the set of every param the filter reads: each facet plus
-// its `_exclude` and `_mode` conventions, the scalar filters, and whatever the
-// caller declared as its own.
+// knownParams builds the set of every param the filter reads: each facet with its `_exclude` and
+// `_mode` forms, the scalar filters, and the caller's own.
 func knownParams(alsoKnown []string) map[string]bool {
 	known := make(map[string]bool, len(StringFacets)*3+len(scalarFilters)+len(scalarModifiers)+len(alsoKnown))
 	for param := range StringFacets {
@@ -294,16 +239,13 @@ func knownParams(alsoKnown []string) map[string]bool {
 	return known
 }
 
-// facetModifiers are the suffixes a facet param can carry. A number mistake
-// survives them (`country_exclude` for `countries_exclude`), so suggestParam has
-// to pluralize the facet name inside the key rather than at its end.
+// facetModifiers are the suffixes a facet param can carry. suggestParam pluralizes the facet name
+// inside the key, since a number mistake survives them (`country_exclude`).
 var facetModifiers = []string{"_exclude", "_mode"}
 
-// suggestParam returns the known param that differs from this one only in
-// grammatical number, or "" when there is none. It deliberately does not do
-// fuzzy matching: the observed mistake is reaching for `country` when the facet
-// is `countries`, and an edit-distance guess close enough to catch that also
-// invents suggestions for params that were never a typo at all.
+// suggestParam returns the known param differing from this one only in grammatical number, or
+// "". It avoids fuzzy matching: an edit-distance guess close enough to catch `country` for
+// `countries` also invents suggestions for params that were never typos.
 func suggestParam(param string, known map[string]bool) string {
 	name, modifier := param, ""
 	for _, mod := range facetModifiers {

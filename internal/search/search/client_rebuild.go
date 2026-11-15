@@ -10,13 +10,10 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// Rebuild is a fresh-index build session for a full reindex. Documents are streamed
-// into a throwaway index (Push enqueues each batch WITHOUT waiting, so Meilisearch
-// auto-batches consecutive tasks — the throughput lever), then Promote waits for the
-// pushes, atomically swaps the rebuild index over the live one, and drops the old
-// one. Two properties matter: search keeps serving the live index untouched until
-// the single swap (no half-built window), and indexing stays fast because the
-// rebuild index grows from empty instead of re-merging into an already-full one.
+// Rebuild is a fresh-index build session for a full reindex. Documents stream into a
+// throwaway index (Push does not wait, so Meilisearch auto-batches the tasks); Promote
+// then waits, swaps it over the live index and drops the old one. Search serves the live
+// index untouched until that single swap.
 type Rebuild struct {
 	c          *Client
 	liveUID    string
@@ -31,29 +28,23 @@ func (c *Client) NewFacetRebuild() *Rebuild {
 	return &Rebuild{c: c, liveUID: facetIndexUID, rebuildUID: facetRebuildUID, settings: facetSettings()}
 }
 
-// Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
-// receive documents. It also ensures the live index exists, since the swap in
-// Promote needs both — on a first-ever run the live index is created empty and the
-// swap replaces its contents and settings wholesale.
+// Prepare creates an empty rebuild index with this pass's settings. It also ensures the
+// live index exists, because the swap needs both (on a first run it is created empty).
 func (r *Rebuild) Prepare(ctx context.Context) error {
 	if err := r.c.createIndex(ctx, r.c.manager.Index(r.liveUID), r.liveUID, primaryKey); err != nil {
 		return err
 	}
-	// Discard any leftover rebuild index from an aborted prior run, then create it
-	// fresh so the build always starts from empty.
+	// Drop a leftover from an aborted run so the build starts empty.
 	if err := r.c.dropIndex(ctx, r.rebuildUID); err != nil {
 		return err
 	}
 	r.rebuild = r.c.manager.Index(r.rebuildUID)
-	// ensure() clears inherited embedders first, so the rebuild index carries exactly
-	// the embedders these settings declare — which is how the skill embedder reaches
-	// production at all.
+	// ensure() clears inherited embedders first, so the index carries exactly the
+	// embedders these settings declare.
 	return r.c.ensure(ctx, r.rebuild, r.rebuildUID, primaryKey, r.settings)
 }
 
-// Push enqueues a batch into the rebuild index WITHOUT waiting for it to finish —
-// the task uid is kept and awaited in Promote, so Meilisearch auto-batches the
-// consecutive document tasks instead of indexing each in isolation.
+// Push enqueues a batch without waiting; Promote awaits the kept task uids.
 func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
@@ -67,9 +58,8 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	return nil
 }
 
-// Promote waits for every enqueued document batch, then atomically swaps the
-// rebuild index over the live one and drops the now-old index. After this the live
-// uid serves the freshly built data.
+// Promote waits for every enqueued batch, swaps the rebuild index over the live one and
+// drops the old data.
 func (r *Rebuild) Promote(ctx context.Context) error {
 	for _, uid := range r.tasks {
 		if err := r.c.awaitTask(ctx, r.rebuild, uid); err != nil {
@@ -79,22 +69,19 @@ func (r *Rebuild) Promote(ctx context.Context) error {
 	if err := r.c.swapIndexes(ctx, r.liveUID, r.rebuildUID); err != nil {
 		return err
 	}
-	// After the swap the old data lives under the rebuild uid; drop it.
+	// The old data now lives under the rebuild uid.
 	return r.c.dropIndex(ctx, r.rebuildUID)
 }
 
-// Cleanup drops the rebuild index, tolerating its absence. reindexFull defers it so a
-// run that aborts before Promote (whose swap-and-drop is the normal teardown) does not
-// leave an orphan rebuild index — which otherwise eats ~index-size of disk until the
-// next run's Prepare clears it. Idempotent.
+// Cleanup drops the rebuild index, tolerating its absence. Deferred so a run that aborts
+// before Promote leaves no orphan index eating disk. Idempotent.
 func (r *Rebuild) Cleanup(ctx context.Context) error {
 	return r.c.dropIndex(ctx, r.rebuildUID)
 }
 
-// swapIndexes atomically swaps two indexes and waits for the swap to finish. It
-// calls POST /swap-indexes directly rather than via the SDK: the pinned
-// meilisearch-go always serializes a `rename` field that our engine version
-// (v1.13) rejects, so the SDK's SwapIndexes is unusable here.
+// swapIndexes atomically swaps two indexes and waits for the task. It calls
+// POST /swap-indexes directly: the pinned meilisearch-go always sends a `rename` field
+// that engine v1.13 rejects.
 func (c *Client) swapIndexes(ctx context.Context, a, b string) error {
 	payload := []map[string][]string{{"indexes": {a, b}}}
 	body, err := json.Marshal(payload)

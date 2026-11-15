@@ -12,10 +12,8 @@ import (
 // SampleInterval is how often cmd/server reads the queue depth.
 const SampleInterval = 15 * time.Second
 
-// subscriberBuffer bounds how many documents a stream subscriber may fall behind before
-// it starts missing them. Each document is complete, not a delta, so a missed one costs
-// nothing the next does not restore — unlike blocking every other client on one slow
-// reader.
+// subscriberBuffer bounds how far a stream subscriber may fall behind before it misses documents.
+// Each document is complete, not a delta, so a missed one costs nothing.
 const subscriberBuffer = 4
 
 // DepthReader reads the claimable semantic_outbox depth. *db.Queries satisfies it.
@@ -23,10 +21,9 @@ type DepthReader interface {
 	SemanticOutboxClaimableDepth(ctx context.Context) (int64, error)
 }
 
-// Sampler reads the queue depth on a tick, keeps the recent samples, rebuilds the
-// Progress document and hands it to every subscriber. It holds nothing durable: a
-// restart starts an empty ring, so the rate reads "not measured" for minRateSpan — the
-// same accepted gap as internal/job/recentfeed's broadcaster.
+// Sampler reads the queue depth on a tick, keeps the recent samples, rebuilds the Progress document
+// and hands it to every subscriber. Nothing durable: a restart starts an empty ring, so the rate
+// reads "not measured" for minRateSpan.
 type Sampler struct {
 	depth DepthReader
 	cache cache.Cache
@@ -42,8 +39,7 @@ func NewSampler(depth DepthReader, c cache.Cache, now func() time.Time) *Sampler
 	return &Sampler{depth: depth, cache: c, now: now, ring: NewRing(), subs: map[chan Progress]struct{}{}}
 }
 
-// Run samples until ctx is cancelled, starting at once so the first request after a
-// restart does not wait a whole interval for a figure.
+// Run samples until ctx is cancelled, starting at once so the first request does not wait an interval.
 func (s *Sampler) Run(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

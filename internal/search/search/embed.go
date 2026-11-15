@@ -15,53 +15,36 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// teiMaxBatch caps how many inputs go in one TEI /embed call. TEI rejects a
-// batch above its --max-client-batch-size (default 32); embedBatch chunks larger
-// inputs into sequential calls so callers can hand it a whole reindex batch.
+// teiMaxBatch caps inputs per TEI /embed call; TEI rejects a batch above its
+// --max-client-batch-size (default 32).
 const teiMaxBatch = 32
 
-// embedMaxAttempts bounds how many times embedChunk retries a transient embedding-backend
-// failure (a transport error, 429, or 5xx) before giving up. A bulk semantic reindex makes
-// hundreds of thousands of cross-network calls to a remote embedding endpoint over many
-// hours, so a single blip (a dropped connection, a brief endpoint restart) must not abort
-// the whole run — but a persistent outage, or a deterministic 4xx from a malformed batch,
-// still surfaces after the bounded retries rather than looping forever.
+// embedMaxAttempts bounds retries of a transient embedding-backend failure (transport
+// error, 429, 5xx), so one blip does not abort a bulk reindex but an outage still surfaces.
 const embedMaxAttempts = 5
 
-// embedAttemptTimeout caps a single embedding HTTP call so a hung connection is retried
-// rather than stalling the run indefinitely — http.DefaultClient has no timeout of its own.
+// embedAttemptTimeout caps one embedding HTTP call; http.DefaultClient has no timeout.
 const embedAttemptTimeout = 60 * time.Second
 
-// embedRetryBase is the backoff before the first retry; it doubles each attempt (1s, 2s,
-// 4s, …). A package var, not a const, so tests can shrink it to keep them fast.
+// embedRetryBase is the backoff before the first retry and doubles each attempt. A var so
+// tests can shrink it.
 var embedRetryBase = time.Second
 
 // JobChunkEmbedding is one embedding vector for one 0-indexed chunk of a job's
-// description, backing the pgvector job_semantic_chunks table (see openspec/changes/
-// drop-hybrid-search-pgvector-similar/design.md Decisions 1/1a). ChunkIndex matches
-// job_semantic_chunks.chunk_index.
+// description. ChunkIndex matches job_semantic_chunks.chunk_index.
 type JobChunkEmbedding struct {
 	ChunkIndex int16
 	Vector     []float32
 }
 
-// jobChunkPassages renders a job's FULL, HTML-stripped description into the texts
-// embedded for the pgvector-backed job_semantic_chunks table — one passage per chunk of
-// stripToPlainText(job.Description) (see chunkText). Every chunk carries the same
-// "passage: {title} at {company}. " prefix — e5 is asymmetric (the corpus side carries
-// "passage:", the query side "query:"; this codebase has no query-side embed call left,
-// since the CV-query path that needed one was removed alongside /me/recommendations) —
-// since each chunk becomes an independently-scored vector. A job with no description
-// text (or one that strips to nothing) yields no passages at all, not one passage of
-// just the prefix.
-// maxJobChunks caps how many chunks a single job contributes: ChunkIndex is stored as
-// int16 (see JobChunkEmbedding), so a description pathological enough to chunk past
-// math.MaxInt16 would wrap the index negative and collide with the primary key. No real
-// job description approaches this — chunkBudgetRunes is 2000, so the cap alone implies
-// a ~65M-rune description — this exists purely so a well-under-limit description never
-// silently produces corrupt indices.
+// maxJobChunks caps chunks per job: ChunkIndex is an int16, so more than math.MaxInt16
+// would wrap negative and collide with the primary key.
 const maxJobChunks = 32768
 
+// jobChunkPassages renders a job's HTML-stripped description into one embedding text per
+// chunk. Every chunk carries the "passage: {title} at {company}. " prefix (e5 is
+// asymmetric: corpus side "passage:", query side "query:") because each is scored as an
+// independent vector. A job with no description text yields no passages.
 func jobChunkPassages(job db.Job) []string {
 	chunks := chunkText(stripToPlainText(job.Description))
 	if len(chunks) == 0 {
@@ -78,16 +61,13 @@ func jobChunkPassages(job db.Job) []string {
 	return out
 }
 
-// EmbedInputHash fingerprints the inputs jobChunkPassages reads — the title, the company
-// and the raw description, and nothing else — so cmd/embed can tell a job whose embedded
-// text changed from one whose content_hash moved on a field the embedder never sees
-// (skills, geography, posted_at, every derived facet). Stored as
-// jobs.semantic_embedded_input_hash when the chunks are written (migrations/0192).
+// EmbedInputHash fingerprints exactly what jobChunkPassages reads (title, company, raw
+// description), so cmd/embed can skip a job whose content_hash moved on a field the
+// embedder never sees. Stored as jobs.semantic_embedded_input_hash.
 //
-// The raw description rather than the stripped passages: three fields joined by U+001F,
-// pinned by a test. The cost is that a markup-only edit still re-embeds, which is rare and
-// errs the safe way. A field jobChunkPassages starts reading must be added here, or its
-// changes stop reaching the vectors.
+// Fields are joined by U+001F (pinned by a test) and the description is raw, so a
+// markup-only edit still re-embeds. A field jobChunkPassages starts reading must be added
+// here, or its changes stop reaching the vectors.
 func EmbedInputHash(job db.Job) string {
 	h := sha256.New()
 	h.Write([]byte(job.Title))
@@ -98,15 +78,9 @@ func EmbedInputHash(job db.Job) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// EmbedJobChunks computes one embedding vector per chunk of each job's full,
-// HTML-stripped description, keyed by job id. It never touches Meilisearch — it feeds
-// only the pgvector-backed job_semantic_chunks table (see internal/ai/embed's open-job
-// path), the sole remaining effect of cmd/embed's TEI calls (the legacy
-// single-vector jobs.semantic_embedding write was removed — nothing reads that
-// column, see openspec/changes/drop-hybrid-search-pgvector-similar). Every job's
-// passages are flattened into ONE embedBatch call and regrouped by job afterwards. A
-// job whose description yields no chunks (jobChunkPassages returns nil — an empty or
-// markup-only description) is simply absent from the result map, not an error.
+// EmbedJobChunks computes one vector per description chunk of each job, keyed by job id,
+// for job_semantic_chunks; it never touches Meilisearch. All passages go through ONE
+// embedBatch call and are regrouped by job. A job with no chunks is absent from the map.
 func (c *Client) EmbedJobChunks(ctx context.Context, jobs []db.Job) (map[int64][]JobChunkEmbedding, error) {
 	if len(jobs) == 0 {
 		return nil, nil
@@ -145,12 +119,10 @@ func (c *Client) EmbedJobChunks(ctx context.Context, jobs []db.Job) (map[int64][
 }
 
 // embedBatch turns texts into vectors, in input order, by calling the embedding backend
-// (see embedChunk) directly rather than through Meilisearch's engine-side embedder
-// integration — the loopback TEI URI the production topology uses is not reachable from
-// inside the Meili engine, and embedding here keeps every caller on one identical path:
-// one model, one server, one vector space. Inputs are chunked to the backend's per-call
-// batch limit, and up to embedConcurrency chunks run in flight — a remote GPU endpoint
-// needs the concurrency to hide per-call latency (the CPU-bound host2 TEI runs it at 1).
+// directly rather than through Meilisearch's embedder integration (the loopback TEI URI
+// is unreachable from the engine, and this keeps every caller in one vector space).
+// Inputs are split to the backend's batch limit with up to embedConcurrency calls in
+// flight, which a remote GPU endpoint needs to hide latency.
 func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, error) {
 	type span struct{ start, end int }
 	var chunks []span
@@ -169,8 +141,7 @@ func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Each chunk writes its vectors into its own slot, so the flattened result stays in
-	// input order regardless of completion order.
+	// One slot per chunk keeps the result in input order whatever the completion order.
 	results := make([][][]float64, len(chunks))
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
@@ -211,11 +182,9 @@ func (c *Client) embedBatch(ctx context.Context, inputs []string) ([][]float64, 
 	return out, nil
 }
 
-// embedChunk embeds one TEI-sized batch and returns the vectors in input order,
-// retrying a transient backend failure with exponential backoff (see embedMaxAttempts).
-// A long bulk reindex crosses the network hundreds of thousands of times, so one blip
-// must not abort it — but a deterministic error (a 4xx, a malformed response) or a
-// cancelled parent context fails fast without burning the retry budget.
+// embedChunk embeds one TEI-sized batch in input order, retrying transient failures with
+// exponential backoff. A deterministic error (4xx, malformed response) or a cancelled
+// parent context fails fast.
 func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, error) {
 	body, err := json.Marshal(map[string]any{"inputs": inputs})
 	if err != nil {
@@ -225,8 +194,7 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 	var lastErr error
 	for attempt := 0; attempt < embedMaxAttempts; attempt++ {
 		if attempt > 0 {
-			// Back off before retrying, but abort promptly if the parent context is done
-			// (e.g. a sibling chunk failed and cancelled the batch).
+			// Abort the backoff if the parent context is done (a sibling chunk failed).
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -245,15 +213,12 @@ func (c *Client) embedChunk(ctx context.Context, inputs []string) ([][]float64, 
 	return nil, fmt.Errorf("search: embed: giving up after %d attempts: %w", embedMaxAttempts, lastErr)
 }
 
-// embedOnce makes a single embedding call and reports whether a failure is worth
-// retrying. It speaks TEI's native `/embed` shape — `{"inputs": [...]}` in, an array of
-// vectors out — which every backend we target accepts: the host2 TEI (/embed, bare array)
-// and an HF Inference Endpoint (root, `{"embeddings": [...]}`). Over-long inputs (e5 caps
-// at 512 tokens) are truncated server-side (host2 TEI's --auto-truncate; HF truncates by
-// default), so no per-input length handling is needed here.
+// embedOnce makes one embedding call and reports whether a failure is retriable. It
+// speaks TEI's `{"inputs": [...]}` shape, which both the TEI host and an HF Inference
+// Endpoint accept. Over-long inputs are truncated server-side, so none is handled here.
 //
-// Transport errors, 429, and 5xx are transient (retriable); a 4xx or a mismatched vector
-// count is deterministic (not retriable); a cancelled parent context is terminal.
+// Transport errors, 429 and 5xx are retriable; a 4xx or a wrong vector count is not; a
+// cancelled parent context is terminal.
 func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64, bool, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, embedAttemptTimeout)
 	defer cancel()
@@ -267,8 +232,8 @@ func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		// A cancelled PARENT context is terminal (the whole batch is being torn down);
-		// any other transport failure — including this attempt's own timeout — is transient.
+		// A cancelled parent is terminal; any other failure, including this attempt's own
+		// timeout, is transient.
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
 		}
@@ -281,7 +246,7 @@ func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64
 	}
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		// A body cut short mid-read is a broken connection — transient.
+		// A body cut short mid-read is a broken connection.
 		return nil, true, fmt.Errorf("search: embed read: %w", err)
 	}
 	vecs, err := parseEmbeddings(raw)
@@ -294,9 +259,8 @@ func (c *Client) embedOnce(ctx context.Context, body []byte, n int) ([][]float64
 	return vecs, false, nil
 }
 
-// parseEmbeddings decodes a TEI-style embeddings response, tolerating both the bare
-// array of vectors (`[[...], ...]`, TEI /embed) and the object form
-// (`{"embeddings": [[...], ...]}`, HF Inference Endpoints).
+// parseEmbeddings decodes a bare array of vectors (TEI /embed) or the
+// `{"embeddings": [...]}` form (HF Inference Endpoints).
 func parseEmbeddings(raw []byte) ([][]float64, error) {
 	var bare [][]float64
 	if err := json.Unmarshal(raw, &bare); err == nil && len(bare) > 0 {
@@ -311,8 +275,7 @@ func parseEmbeddings(raw []byte) ([][]float64, error) {
 	return nil, fmt.Errorf("search: embed: unrecognized response shape")
 }
 
-// toFloat32 narrows a float64 vector to the float32 the pgvector/Postgres columns
-// store.
+// toFloat32 narrows a vector to the float32 the pgvector columns store.
 func toFloat32(v []float64) []float32 {
 	f := make([]float32, len(v))
 	for i, x := range v {

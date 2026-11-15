@@ -8,10 +8,9 @@ import (
 )
 
 // buildFederatedSearch turns a q with several OR alternatives into ONE federated
-// multi-search over the jobs index. Each alternative carries the caller's filter,
-// sort and vector; federation pages, deduplicates and ranks the merged list. The
-// per-query limit/offset are cleared because Meilisearch rejects them inside a
-// federation, which is where paging lives.
+// multi-search. Each alternative carries the caller's filter, sort and vector; federation
+// pages, deduplicates and ranks. Per-query limit/offset are cleared because Meilisearch
+// rejects them inside a federation.
 func buildFederatedSearch(p SearchParams, alts []Alternative) *meilisearch.MultiSearchRequest {
 	queries := make([]*meilisearch.SearchRequest, 0, len(alts))
 	for _, a := range alts {
@@ -31,12 +30,10 @@ func buildFederatedSearch(p SearchParams, alts []Alternative) *meilisearch.Multi
 	}
 }
 
-// buildFederatedFacets is the facet-count counterpart of buildFederatedSearch:
-// the same alternatives under one filter, with the facets requested from the
-// federation (per-query facets are a 400 there) and merged per document.
-// MaxValuesPerFacet must match the index setting: federation's own default is
-// 100 and it truncates silently, the failure maxValuesPerFacet exists to avoid.
-// Limit 1, not 0: the SDK omits a zero limit, which federation reads as 20 hits.
+// buildFederatedFacets is the facet-count counterpart of buildFederatedSearch. Facets are
+// requested from the federation (per-query facets are a 400) and merged per document.
+// MaxValuesPerFacet must match the index setting: federation defaults to 100 and truncates
+// silently. Limit is 1, not 0: the SDK omits a zero limit, which federation reads as 20.
 func buildFederatedFacets(alts []Alternative, filter any, facets []string) *meilisearch.MultiSearchRequest {
 	queries := make([]*meilisearch.SearchRequest, 0, len(alts))
 	for _, a := range alts {
@@ -55,9 +52,8 @@ func buildFederatedFacets(alts []Alternative, filter any, facets []string) *meil
 	return &meilisearch.MultiSearchRequest{Federation: fed, Queries: queries}
 }
 
-// federatedAsSearchResponse reshapes a merged federated response into the
-// single-index response buildFacetResult already decodes, so the facet paths
-// share one decoder whichever way the query ran.
+// federatedAsSearchResponse reshapes a merged federated response into the single-index
+// shape, so the facet paths share one decoder.
 func federatedAsSearchResponse(resp *meilisearch.MultiSearchResponse) (*meilisearch.SearchResponse, error) {
 	out := &meilisearch.SearchResponse{Hits: resp.Hits, EstimatedTotalHits: resp.EstimatedTotalHits}
 	if len(resp.FacetDistribution) > 0 {

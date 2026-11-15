@@ -5,19 +5,16 @@ import (
 	"strings"
 )
 
-// Filter expression helpers. These build Meilisearch filter fragments so the
-// handler can express facet intent without knowing Meilisearch syntax, and so
-// untrusted query-param values are always escaped at one place (see Eq).
+// Filter expression helpers. They build Meilisearch filter fragments and escape
+// untrusted values in one place (see quote).
 
-// Eq builds an equality fragment `attr = "value"` with the value quoted and
-// escaped. Quoting is mandatory: an unescaped value could otherwise inject
-// filter logic (e.g. `senior" OR work_mode = "remote`).
+// Eq builds `attr = "value"`, quoted and escaped. Quoting is mandatory: an unescaped value
+// could inject filter logic (`senior" OR work_mode = "remote`).
 func Eq(attr, value string) string {
 	return attr + " = " + quote(value)
 }
 
-// Neq builds an inequality fragment `attr != "value"` (escaped), used by the
-// exclude facets to filter a value out.
+// Neq builds `attr != "value"` (escaped), the exclude form of Eq.
 func Neq(attr, value string) string {
 	return attr + " != " + quote(value)
 }
@@ -41,33 +38,29 @@ func quotedList(values []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// EqBool builds an equality fragment against a boolean attribute (unquoted, as
-// Meilisearch compares booleans literally).
+// EqBool builds an equality fragment against a boolean attribute (unquoted).
 func EqBool(attr string, v bool) string {
 	return attr + " = " + strconv.FormatBool(v)
 }
 
-// IsEmpty builds an `attr IS EMPTY` fragment, matching documents whose array (or
-// string) attribute is empty. It backs the regions "not specified" sentinel —
-// selecting jobs whose geography did not resolve — without a materialized column.
+// IsEmpty builds `attr IS EMPTY`, matching documents whose array or string attribute is
+// empty. It backs the regions "not specified" sentinel.
 func IsEmpty(attr string) string {
 	return attr + " IS EMPTY"
 }
 
-// IsNotEmpty builds `attr IS NOT EMPTY`, the exclude form of IsEmpty (jobs that DO
-// carry a value for the attribute).
+// IsNotEmpty builds `attr IS NOT EMPTY`, the exclude form of IsEmpty.
 func IsNotEmpty(attr string) string {
 	return attr + " IS NOT EMPTY"
 }
 
-// NotExists builds `attr NOT EXISTS`, matching documents that do not carry the
-// attribute at all — how an omitempty field the posting never stated is stored.
+// NotExists builds `attr NOT EXISTS`, matching documents without the attribute at all
+// (how an omitempty field the posting never stated is stored).
 func NotExists(attr string) string {
 	return attr + " NOT EXISTS"
 }
 
-// Exists builds `attr EXISTS`, the complement of NotExists: documents that carry the
-// attribute at all.
+// Exists builds `attr EXISTS`, the complement of NotExists.
 func Exists(attr string) string {
 	return attr + " EXISTS"
 }
@@ -82,11 +75,9 @@ func Lte(attr string, n int) string {
 	return attr + " <= " + strconv.Itoa(n)
 }
 
-// NotIn builds an `attr NOT IN [a, b, c]` fragment excluding a set of numeric
-// ids (Meilisearch's native list-exclusion operator). It is used by the swipe
-// deck to drop the caller's already-judged jobs by id. An empty set yields the
-// empty string, so the caller adds no filter fragment at all (Meilisearch has no
-// meaningful "NOT IN []").
+// NotIn builds `attr NOT IN [a, b, c]` excluding a set of numeric ids. An empty set yields
+// the empty string, so the caller adds no fragment (Meilisearch has no meaningful
+// "NOT IN []").
 func NotIn(attr string, ids []int64) string {
 	if len(ids) == 0 {
 		return ""
@@ -104,11 +95,8 @@ func NotIn(attr string, ids []int64) string {
 	return b.String()
 }
 
-// In builds an `attr IN [a, b, c]` fragment matching a set of numeric ids — the mirror
-// image of NotIn, for a caller that wants exactly a known set of documents rather than
-// everything except them (e.g. reading specific jobs' reality class back from the index by
-// id, when the caller already knows which ids it wants and has no query of its own to
-// run). An empty set yields the empty string, matching NotIn's own convention.
+// In builds `attr IN [a, b, c]` matching a set of numeric ids, the mirror of NotIn. An
+// empty set yields the empty string, like NotIn.
 func In(attr string, ids []int64) string {
 	if len(ids) == 0 {
 		return ""
@@ -126,9 +114,8 @@ func In(attr string, ids []int64) string {
 	return b.String()
 }
 
-// Filter nests OR-groups into a single AND filter for Meilisearch: fragments
-// within a group are ORed, groups are ANDed. Empty groups are dropped; the
-// result is nil when nothing remains, which Meilisearch treats as "no filter".
+// Filter nests OR-groups into one AND filter: fragments within a group are ORed, groups
+// ANDed. Empty groups are dropped; nil means no filter.
 func Filter(groups ...[]string) any {
 	out := make([][]string, 0, len(groups))
 	for _, g := range groups {
@@ -142,12 +129,9 @@ func Filter(groups ...[]string) any {
 	return out
 }
 
-// AndNotSkills narrows a base filter (as built by FilterFromValues, either a
-// [][]string or nil) to documents whose `skills` array contains none of the given
-// skills — one `skills != "<skill>"` AND group per skill, since array
-// non-membership is per-value. It backs the verdict's "uncovered vacancies" query
-// (a role's jobs listing none of the candidate's skills). Empty skills leave the
-// base unchanged; a nil base with no skills stays nil (no filter).
+// AndNotSkills narrows a base filter (nil or [][]string from FilterFromValues) to documents
+// whose `skills` contain none of the given skills: one `skills != "<skill>"` AND group per
+// skill, since array non-membership is per-value. Empty skills leave the base unchanged.
 func AndNotSkills(base any, skills []string) any {
 	groups, _ := base.([][]string)
 	for _, s := range skills {
@@ -158,31 +142,24 @@ func AndNotSkills(base any, skills []string) any {
 	return Filter(groups...)
 }
 
-// AndInStrings narrows a base filter (as built by FilterFromValues, either a [][]string or
-// nil) to documents whose attr is one of values — one more AND group holding a single IN.
-// It backs the "Hiring again" filter, a company_slug set resolved per caller rather than read
-// from the query. Values are escaped like every other. A caller whose set is EMPTY answers
-// empty itself rather than calling this: the set it asked for holds nothing, and dropping
-// the group instead would widen the search to the whole catalogue.
+// AndInStrings narrows a base filter (nil or [][]string) to documents whose attr is one of
+// values, as one more AND group holding a single IN. A caller whose set is EMPTY must answer
+// empty itself: dropping the group would widen the search to the whole catalogue.
 func AndInStrings(base any, attr string, values []string) any {
 	groups, _ := base.([][]string)
 	groups = append(groups, []string{InStrings(attr, values)})
 	return Filter(groups...)
 }
 
-// AndSkillsPresent narrows a base filter (as built by FilterFromValues) to
-// documents whose `skills` array is non-empty. It backs the verdict's
-// skill-bearing count: skill frequency is measured against vacancies that list
-// at least one tagged skill, not the whole role, so postings the tagger left
-// skill-less don't deflate every frequency.
+// AndSkillsPresent narrows a base filter to documents whose `skills` array is non-empty,
+// so skill frequency is measured only against postings that list a tagged skill.
 func AndSkillsPresent(base any) any {
 	groups, _ := base.([][]string)
 	groups = append(groups, []string{IsNotEmpty("skills")})
 	return Filter(groups...)
 }
 
-// quote wraps a value in a Meilisearch string literal, backslash-escaping the
-// double-quote and backslash characters.
+// quote wraps a value in a Meilisearch string literal, escaping `"` and `\`.
 func quote(value string) string {
 	var b strings.Builder
 	b.Grow(len(value) + 2)
