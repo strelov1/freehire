@@ -91,3 +91,20 @@ pass for `TestBoardHealthCatalogScope`, `TestProviderHealthQuietFreshnessKeepsAc
 regressions pass. Repository `gofmt -l .` is empty, sqlc regeneration is stable,
 file-size checking and staged diff whitespace checks pass. The full tagged suite
 was not run; the changed SQL and status endpoint were exercised directly.
+
+## Deployment follow-up: body refresh is opt-in
+
+A final read-only operator check found `BODY_REFRESH_DAYS` and
+`BODY_REFRESH_SLICE` absent from `/opt/freehire/.env`. The effective UKG unit
+uses that environment file and `ingest-slot.sh`; no body-refresh override was
+found in the unit files or wrapper directory. `sweep.BodyRefreshFor` disables
+periodic body refresh when the days setting is empty. The adapter preserves that
+existing mechanism, but enabling it for production remains an explicit ops
+follow-up before claiming edited UKG bodies will refresh periodically. No host
+configuration was changed. The integration agent should coordinate this with
+other newly hydrating adapters and the existing sliced refresh budget.
+
+Implementation commit: `c8a243647ce48cb791ccdb5e72b180825cf0ba33`. All pre-commit
+checks passed, including lint, sqlc drift, go vet, gitleaks, and doc links.
+The commit-message hook skipped commitlint because root pnpm dependencies were
+not installed; the title uses the repository's required Conventional Commit form.
