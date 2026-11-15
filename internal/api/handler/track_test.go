@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -178,5 +179,42 @@ func TestTrackJob_AcceptsExpired(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// benchmarkRepo answers a reply-rate sample that clears the gate on both sides.
+type benchmarkRepo struct{ stubTrackingRepo }
+
+func (benchmarkRepo) ReplyRateCounts(context.Context, int64) (userjob.ReplyRateSide, userjob.ReplyRateSide, error) {
+	return userjob.ReplyRateSide{Applications: 12, Answered: 5}, userjob.ReplyRateSide{Applications: 40, Answered: 9}, nil
+}
+
+func TestTrackingPipeline_ServesReplyRateBenchmark(t *testing.T) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &trackingHandlers{tracking: jobtracking.New(benchmarkRepo{})}
+	app := fiber.New()
+	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{trackingHandlers: h}))
+	token, _ := iss.Issue(7, testTokenVersion)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/me/tracking/pipeline", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Data struct {
+			ReplyRate userjob.ReplyRateBenchmark `json:"reply_rate"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := userjob.ReplyRateBenchmark{
+		You:    userjob.ReplyRateSide{Applications: 12, Answered: 5},
+		Global: userjob.ReplyRateSide{Applications: 40, Answered: 9},
+	}
+	if out.Data.ReplyRate != want {
+		t.Errorf("reply_rate = %+v, want %+v", out.Data.ReplyRate, want)
 	}
 }

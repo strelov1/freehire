@@ -10,31 +10,18 @@ export type MyJobCounts = components['schemas']['TrackingCounts'];
  *  so a count of nothing is readable without being confused for a missing key. */
 type PipelineStageCounts = Record<Stage, number>;
 
-/** One side of the reply-rate comparison: how many observable applications there
- *  were and how many received a reply. Raw counts, never a pre-divided percentage —
+/** One side of the reply-rate comparison: raw counts, never a pre-divided percentage —
  *  see replyRate() in pipeline.ts. */
-export interface ReplyRateSide {
-  applications: number;
-  answered: number;
-}
-
-/** The personal-vs-global employer reply-rate benchmark. Present on PipelineStats
- *  only when both sides clear the sample gate server-side — absent, never zero or
- *  an estimate, below it. Not exported: referenced only by PipelineStats below. */
-interface ReplyRateBenchmark {
-  you: ReplyRateSide;
-  global: ReplyRateSide;
-}
+export type ReplyRateSide = components['schemas']['ReplyRateSide'];
 
 /** The application-pipeline snapshot for the Pipeline tab: the caller's total
  *  application count and the count at each stage. Grouping those stages into the
  *  bands the funnel draws is the renderer's job, from the generated STAGE_GROUPS —
- *  the server does not ship a second vocabulary alongside the first. */
-export interface PipelineStats {
-  applications: number;
+ *  the server does not ship a second vocabulary alongside the first. `reply_rate` is
+ *  absent, never zero or an estimate, below the sample gate. */
+export type PipelineStats = Omit<components['schemas']['TrackingPipeline'], 'stages'> & {
   stages: PipelineStageCounts;
-  reply_rate?: ReplyRateBenchmark;
-}
+};
 
 /** The bucketing period for the job-activity time series. */
 export type ActivityGranularity = 'day' | 'week' | 'month';

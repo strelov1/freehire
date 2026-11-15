@@ -3,6 +3,7 @@
 // the jobs that fit, and the browser keeps both until an account exists.
 
 import type { Job, Report as ATSReport } from '../generated/contracts';
+import type { components } from '../generated/api.js';
 import type { ListMeta } from './companies';
 
 /** What `POST /api/v1/onboarding/cv` read from a CV. The model-read fields (name,
@@ -29,19 +30,9 @@ export interface OnboardingParse {
 
 /** One ranked job from `POST /api/v1/onboarding/matches`: the same job view the search
  *  serves, plus how well its skills match the posted ones. */
-export interface OnboardingMatch {
-  job: Job;
-  match_percent: number;
-}
-
-/** A query param the search did not read (the contract's `IgnoredParam`): unknown, or
- *  known but unreadable. Either way the answer is wider than asked for. */
-interface IgnoredParam {
-  param: string;
-  did_you_mean?: string;
-}
+export type OnboardingMatch = Omit<components['schemas']['OnboardingMatch'], 'job'> & { job: Job };
 
 export interface OnboardingMatches {
   data: OnboardingMatch[];
-  meta: ListMeta & { ignored_params?: IgnoredParam[] };
+  meta: ListMeta;
 }

@@ -61,16 +61,7 @@ export type MentorSessions = components['schemas']['MentorshipSessions'];
  *  `closure` marks the trick a raw start/end cannot express: a dated row whose start
  *  equals its end CLOSES that date, beating every other rule on it. Render it as "away",
  *  never as "10:00–10:00". */
-export interface MentorAvailabilityRule {
-  /** What the delete route needs. A rule rendered without one can be shown and never
-   *  removed. */
-  id: number;
-  weekday?: number | null;
-  date?: string | null;
-  start: string;
-  end: string;
-  closure: boolean;
-}
+export type MentorAvailabilityRule = components['schemas']['BuddyMockRuleOut'];
 
 /** The four calls an availability editor makes. The mentor cabinet and the buddy mock page
  *  share one editor over two APIs, so the editor takes them rather than importing one. */

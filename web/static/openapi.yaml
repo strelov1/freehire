@@ -4637,6 +4637,24 @@
         },
         "description": "A related company: the parent that owns this one, or a subsidiary it owns. It is a\nseparate company with its own page and jobs, not another name for this one."
       },
+      "FacetStatRange": {
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "properties": {
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "max": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The smallest and largest value of one continuous facet among the matching postings."
+      },
       "IgnoredMeta": {
         "type": "object",
         "properties": {
@@ -4979,7 +4997,8 @@
         "type": "object",
         "required": [
           "total",
-          "facets"
+          "facets",
+          "stats"
         ],
         "properties": {
           "total": {
@@ -4998,10 +5017,7 @@
           "stats": {
             "type": "object",
             "additionalProperties": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "number"
-              }
+              "$ref": "#/components/schemas/FacetStatRange"
             },
             "description": "Numeric ranges (min/max) for the continuous facets — `salary_min`, `salary_max`, `experience_years_min`."
           },

@@ -88,13 +88,14 @@ export type UsageHistoryEntry = components['schemas']['PlanHistoryEntry'];
  *  along on the same reads because a caller deciding between the two features needs both
  *  ceilings; the job page itself no longer reads it, the pre-flight tailoring dialog
  *  stating that allowance from its own /me/plan read instead. */
-export interface MatchAnalysisResponse {
-  has_cv: boolean;
-  stale: boolean;
+export type MatchAnalysisResponse = Omit<
+  components['schemas']['FitAnalysis'],
+  'analysis' | 'allowance' | 'tailor_allowance'
+> & {
   analysis: MatchAnalysisContract | null;
   allowance?: Allowance;
   tailor_allowance?: Allowance;
-}
+};
 
 /** One row of the Activity → Matches tab: a compact projection of a cached match analysis
  *  (not the full analysis). `closed` marks a job that has since closed; `stale` marks an
