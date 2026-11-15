@@ -51,6 +51,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Source:              r.Source,
 		ExternalID:          r.ExternalID,
 		URL:                 r.URL,
+		ApplicationURL:      r.ApplicationUrl,
 		Title:               r.Title,
 		Company:             r.Company,
 		CompanySlug:         r.CompanySlug,

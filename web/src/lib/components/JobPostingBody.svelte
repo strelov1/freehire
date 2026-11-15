@@ -47,7 +47,7 @@
     The posting didn't include a description.
     {#if job.url && !job.direct_apply}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-        href={job.url}
+        href={job.source_url ?? job.url}
         target="_blank"
         rel="nofollow noopener noreferrer"
         class="font-medium text-brand-strong underline underline-offset-4"

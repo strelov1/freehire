@@ -32,6 +32,18 @@ func TestApplyPathLeavesOtherPlatformsAlone(t *testing.T) {
 	}
 }
 
+func TestVerifiedDestinationDoesNotReuseTheSourceForm(t *testing.T) {
+	row := openPostingRow()
+	row.Source = "lever"
+	row.URL = "https://jobs.lever.co/acme/123"
+	row.ApplicationUrl = "https://careers.example.org/application?id=7"
+	posting := projector().JobPosting(viewOf(row), capturedForm("lever"))
+	path := posting.ApplyPaths[0]
+	if path.URL != row.ApplicationUrl+"&utm_source=freehire.me" || path.ATSProvider != "" || path.SupportsAgentSubmission || posting.OfficialJobURL != "" {
+		t.Fatalf("source form claims leaked onto a verified destination: path=%+v official=%q", path, posting.OfficialJobURL)
+	}
+}
+
 func TestDescriptionReachesTheAgentAsText(t *testing.T) {
 	// OJCP's description field is "Full job description text" and the schema offers no
 	// format parameter, unlike our own agent search. Handing over stored markup makes an

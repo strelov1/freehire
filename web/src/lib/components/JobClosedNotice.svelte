@@ -31,7 +31,7 @@
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
       {#if job.url && !job.direct_apply}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
-          href={job.url}
+          href={job.source_url ?? job.url}
           target="_blank"
           rel="nofollow noopener noreferrer"
           class="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground"

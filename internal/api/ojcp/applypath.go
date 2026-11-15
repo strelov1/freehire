@@ -67,6 +67,12 @@ type ApplyPath struct {
 func (p Projector) JobPosting(j jobview.Job, form *applyform.Form) JobPosting {
 	posting := jobPostingFrom(j, p.Origin)
 	posting.OfficialJobURL = sources.EmployerURL(p.CanonicalURLProviders, j.Source, j.URL)
+	if j.SourceURL != "" {
+		// A form captured from the original source says nothing about a separately
+		// verified destination's fields, ATS provider or submission capability.
+		form = nil
+		posting.OfficialJobURL = ""
+	}
 	posting.ApplyPaths = p.applyPaths(j, form, posting.URL)
 	return posting
 }

@@ -2670,6 +2670,9 @@ type Querier interface {
 	// There is no unique constraint behind this on purpose (a second stint at the same employer
 	// in the same role is a real career shape), so the oldest match wins and stays stable.
 	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (FindExperienceEmploymentRow, error)
+	// Match the verified destination before rewriting an application form's path to a
+	// description page. Vacancy parameters remain identity; only known tracking is noise.
+	FindOpenJobByApplicationURL(ctx context.Context, url string) (string, error)
 	// Resolve a job page URL to the posting stored under it — the second tier of
 	// /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
 	// URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
@@ -7808,6 +7811,9 @@ type Querier interface {
 	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
+	// Curator-owned destination: never written by UpsertJob. Lock posting then activity
+	// before queueing, like the posting writers, and fence competing curator edits.
+	SetJobApplicationURL(ctx context.Context, arg SetJobApplicationURLParams) (int64, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.

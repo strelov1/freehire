@@ -13,15 +13,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// catalogSlugForURL resolves the URL of a job page to the catalog posting it is, in two
+// catalogSlugForURL resolves the URL of a job page to the catalog posting it is, in three
 // tiers, exact first. The catalog's own dedup identity — (source, external_id), recovered
 // from the URL — is served by a unique index, but only a handful of ATS URL shapes carry
 // an identity a parser can read. So a URL that names no identity, or names one we have no
-// row for, falls through to matching the page against the detail URL each source stored in
-// jobs.url (normalized on both sides, see migration 0042): for aggregators and most boards
+// row for, next matches a verified application destination with its query identity intact.
+// The last tier matches the canonical detail URL each source stored in jobs.url
+// (normalized on both sides, see migration 0042): for aggregators and most boards
 // that IS the page the user is standing on.
 //
-// An empty URL resolves to nothing: it would normalize to "" in the second tier and match
+// An empty URL resolves to nothing: it would normalize to "" in a fallback lookup and match
 // a posting stored with an empty url.
 //
 // Neither tier guesses. An earlier version matched the page title against every catalog
@@ -48,6 +49,14 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings source
 		if err == nil && job.PublicSlug != "" {
 			return job.PublicSlug, nil
 		}
+	}
+
+	// A verified destination can be the form itself. Match it with its identifying
+	// query intact before canonicalisation strips a provider's /apply suffix.
+	if slug, err := queries.FindOpenJobByApplicationURL(ctx, pageURL); err == nil {
+		return slug, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
 	}
 
 	// The apply form is the same posting under a different path, and it is where a

@@ -223,7 +223,7 @@ member AS (
     JOIN jobs c ON c.duplicate_of = m.member_id
     WHERE c.closed_at IS NULL AND m.depth < 8
 )
-SELECT j.public_slug, j.location, j.url, j.posted_at,
+SELECT j.public_slug, j.location, COALESCE(NULLIF(j.application_url, ''), j.url)::text AS url, j.posted_at,
     COUNT(*) OVER()::bigint AS total
 FROM member m
 JOIN jobs j ON j.id = m.member_id
