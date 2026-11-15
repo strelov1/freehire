@@ -1,0 +1,134 @@
+# Curated company collections conventions
+
+## Scope
+The code-owned registry of curated company tags: editorial themes (Big Tech, Unicorn),
+credentials from authoritative public registers (UK/NL/US/CA/IE/DK visa sponsors), and backers (YC,
+Techstars, a16z, Sequoia, Accel, Greylock, USV, BOND, Lightspeed, Index Ventures, SoftBank Vision
+Fund, Founders Fund). This package is the source of truth for which tags exist and how members
+are matched; `cmd/import-collections` writes `companies.collections`, and the search facet
+(`jobs.collections`) serves it.
+
+## Always true
+- **The registry is code.** `All` (collections.go — 28 slugs, in display order) is
+  the fixed set; adding a tag is one entry with exactly one membership source: a static
+  `Slugs` hand list or a `Dataset`. `Kind` decides how the tag renders (editorial chip /
+  credential with issuing body and snapshot date / backer brand mark) and its zero value is
+  deliberately invalid so a forgotten one fails the registry test (collections.go:99-110).
+- **A partial dataset read reconciles the tag OFF every company it failed to reach.** A
+  `Dataset.Records` source must read completely and error otherwise — a partial read is
+  indistinguishable from a shrunken source (collections.go:34-59). `Dataset.Valid` enforces
+  exactly one of URL / embedded Data / ResolveURL / Records (collections.go:61-79).
+- **Both kinds match on `normalize.CompanySlug`** — `RegisterSlug` is now a thin caller of it
+  (register.go). Editorial matching used `normalize.Slug` until the catalogue began stripping
+  corporate forms; a dataset naming "Acme Robotics Limited" then asked for a slug ingest can no
+  longer produce, matched nothing, and said nothing. The rule has to be ONE rule because
+  `Members` looks its output up in a map keyed by the catalogue's own company slug — see
+  [docs/agents/company-identity.md](../../../docs/agents/company-identity.md). What still separates
+  a credential is `DropAmbiguous` and the gates, not the spelling.
+- **A name match is refused when the two websites disagree** (`sameSite`, site.go). A source
+  that publishes its members' sites puts them in `Record.Meta[MetaWebsite]`; `Members` compares
+  that against the company's `company_info` website and refuses the pair when both are known and
+  name different sites. Name-only matching tagged Y Combinator's shut-down "Meta" onto Meta
+  Platforms; a first dry run of the portfolios refused ~200 such collisions (YC "Apollo" is
+  apollographql.com, not the catalogue's Apollo). Unknown on either side means "trust the name".
+  Two traps it handles: a stored website that is an ATS board or a shortener
+  (`notACompanySite` — Groupon's is its Greenhouse board) counts as unknown, and a corporate
+  suffix ("yahooinc", "redditinc") still agrees. A `get`/`use`/`try`/`join` prefix deliberately
+  does NOT — that is how two unrelated startups sharing a name look ("mesh.ai" vs "usemesh.com"),
+  at the cost of a few real members whose site carries one (Handshake is joinhandshake.com). Each
+  run logs what it refused, so the trade can be judged from the output.
+- **A headcount the company outgrows refuses the match too** (`plausibleSize`, site.go). The
+  YC directory publishes each company's team size; a member is refused when the catalogue
+  company holds more than 50 open postings AND more than three per head. On 2026-10-22 every
+  false match leading the YC tag was a large same-named employer — Pennant (a team of 2) against
+  the Pennant Group's 693 nursing postings, Arrow (18) against Arrow Electronics' 534 — while the
+  busiest real member hired at 2.3x its team. The 50 floor exists because the directory's
+  headcounts go stale (it lists ShipBob as a team of one), and every false match it exists for
+  held hundreds of postings.
+- **`Exclude` is the last resort for a names-only source.** Lightspeed, Index, SoftBank and
+  Founders Fund publish no website and no headcount, so neither check can see a same-named
+  employer; a short per-collection list of catalogue slugs, each with its reason beside it,
+  refuses the ones a person found (`clark` is Clark Construction, `lever` is aggregator postings
+  filed under the ATS's name).
+- **Venture portfolios drop exits** (portfolios.go). An acquired or shut-down company is
+  dropped in the parser — it hires under its acquirer's name, so its old name only ever matched
+  someone else — while a public one stays. a16z reads the fund's own page (876 companies,
+  725 after exits), not the talent-network API's `a16z` tier (280); `a16z-speedrun` still reads
+  that API, which also means its outage blocks a full run — `-only` (below) is the way around.
+- **Hand lists are guarded, because they silently depend on that rule.** Every entry must be a
+  fixed point of `CompanySlug`; the test that pins this found three `eastern_roots.txt` entries
+  already tagging the wrong company (`epam-systems-pte-ltd`, 19 open jobs, instead of
+  `epam-systems`, 1,172). An entry the rule would never produce matches nothing, and a
+  collection that matches nothing reports no error. `TestHandListSlugsAreCompanySlugStable`
+  covers the static `Slugs` lists AND both embedded files — a new membership file must be
+  added to its map, or it is unguarded.
+- **A hand list is a list we wrote, whichever way it is delivered** (`Collection.HandList`,
+  collections.go:154-162). Both the static `Slugs` lists and the embedded `.txt` files are ours
+  to fix, so their unmatched entries are logged BY NAME; a fetched third-party dataset has
+  thousands and only its count is. The import worker drew this line as `Slugs != nil` until
+  2026-08-31, which silenced the two largest hand lists we have: a typo in `eastern_roots.txt`
+  or `indian_roots.txt` matched nothing and said nothing, which is the exact failure the
+  fixed-point test exists to catch on the other axis.
+- **`RequireCountry`'s asymmetry is the point** (register.go:54-77): a multi-token name
+  ("Acme Robotics") needs only open jobs in the register's country; a single-token name
+  ("Apple", "Spark") additionally requires HQ there, or a multinational with a local office
+  inherits a licence from a same-named local business. Unknown HQ is not a match — absence
+  of evidence is not evidence.
+- **`countryAliases` exists because a retired one-time importer left `hq_country` rows
+  its upstream's writer never normalized** (register.go:79-94): `cmd/import-yc`, the
+  column's live writer, parses through `location.Parse`, but those legacy rows still carry
+  the upstream's spelled-out value verbatim. The failure mode is silent — a company simply
+  never earns a credential it qualifies for. Whole-value comparison only: "New Great
+  Britain Holdings" is a company name, not a country.
+- **`DropAmbiguous` drops register rows whose name identifies more than one organisation**
+  (register.go:143-174), using `Dataset.IdentityKey` (UK town, NL kvk, US tin4). Rows
+  sharing a name AND an identity are one body listed once per route — they must survive for
+  `RequireRoute`. With an empty IdentityKey the guard is permissive on purpose: firing it
+  on a register that cannot disambiguate would delete its every duplicate, and the
+  geography gates are the real defence there.
+- **A company is tagged when ANY of its records passes the gate** (collections.go:493-520):
+  a register lists an organisation once per route it holds, so a work-route row must win
+  even when a temporary-route row sorts first.
+- **`Reconcile` is given live + retired slugs** so a removed or renamed tag is stripped
+  everywhere on the next run (collections.go:561-586; `RetiredSlugs` collections.go:471-476;
+  wired at cmd/import-collections/main.go:358). Tags the registry does not manage are
+  preserved untouched.
+
+- **A register row naming a local subsidiary matches its parent** (`Collection.Country`,
+  `withoutCountrySuffix` in register.go): when "Google (UK) Limited" finds no `google-uk`, the
+  slug is retried without a trailing mention of the register's OWN country. Only that
+  country — "Stantec Ireland" in the UK file stays unmatched — and never a city: "JJ London Ltd"
+  is some London business, not the catalogue's `jj`. Measured 2026-10-21 before the country
+  gate: UK +2741 name matches, IE +387, CA +221, DK +62 — Google, Salesforce, Cisco, IBM,
+  ServiceNow and SAP among them, the employers this filter is opened for. The gate still
+  requires open jobs in the country.
+- **Canada, Ireland and Denmark carry no identity field we can use**, and that is a decision,
+  not an omission. The LMIA file's only per-row discriminator is the business ADDRESS, which
+  differs per location of one employer — keyed on it, `DropAmbiguous` would delete every
+  multi-site employer. DETE's permit workbooks carry nothing but the name. (SIRI's list does
+  carry a CVR number and uses it.) The geography gate is the defence for the first two.
+- **Canada is gated by stream** (`caWorkStreams`): Primary Agriculture and Low Wage are most
+  of the LMIA rows and would badge a farm as a sponsor for an engineering role — the
+  `ukWorkRoutes` argument again.
+- **New Zealand was investigated and declined (2026-10-21).** INZ publishes its accredited
+  employer list only as a search box behind an Imperva captcha; the data comes from an
+  undocumented `list-api` POST that refuses any query matching more than ~1,000 employers.
+  There is no file to import, and mirroring it means thousands of requests per run against an
+  endpoint that can change with any redeploy. Revisit if INZ publishes a download.
+
+## How it works
+`cmd/import-collections` resolves each collection's dataset, matches records to the
+catalogue (`Members`), and writes `companies.collections` via `SetCompanyCollections`.
+`-only sequoia,accel` limits a run to the named collections and leaves every other tag as
+stored — resolution is all-or-nothing on purpose, so one upstream that is down would
+otherwise block every collection; a scoped run does not reconcile `RetiredSlugs`.
+Dataset fetches egress through `SOURCES_PROXY_URL` when set — always falling
+back to direct (main.go:196-228) — and a per-collection `<SLUG>_DATASET_URL` override
+(e.g. `YC_DATASET_URL`) wins over the pinned URL (main.go:410-425). `cmd/harvest-ats`
+re-reads the same datasets to mine new companies for board discovery
+(cmd/harvest-ats/main.go:107). Unmatched hand-list entries are logged by name, capped at
+`MaxLoggedUnmatched` (50) so a mis-edit cannot flood a run — which means a membership file
+should not carry entries it knows will not match. `indian_roots.txt` was written with a
+90-slug tail of marquee companies we do not ingest yet, on the theory that the tag would
+land the day their board arrived; a run then reports 90 intentional misses and a real typo
+sits somewhere among them. Add a company when its board lands, not before.

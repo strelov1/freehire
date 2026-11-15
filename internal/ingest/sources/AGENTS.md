@@ -1,133 +1,39 @@
 # Source ingest conventions
 
+Before editing or reviewing this area, read the applicable sections of
+[local requirements](AGENT-REFERENCE.md). Read the complete reference when changing
+architecture, contracts, authorization, state transitions or cross-module behavior.
+The reference retains all requirements previously held here.
+
+
 ## Scope
 
-Source ingest: the provider registry and its adapters, entry validation, the per-board health sidecar, and related job-lifecycle mechanics. The board catalog itself is `internal/ingest/boardcatalog`.
+Read [Scope](AGENT-REFERENCE.md#scope) before work involving this topic.
 
 ## Provider notes
 
-**Before you change, debug or add an adapter, read its note: `providers/<adapter>.md`**, named after the adapter's file (`profession.go` → [providers/profession.md](providers/profession.md)). A note holds that provider's traps: what was verified live, and why the adapter does what it does. A new provider's traps go in a new note, not in this file.
-
-A few notes cover more than one adapter, and a note can name other adapters too, so ``grep -rl '`<adapter>`' providers/`` finds every note to read:
-
-- [seek](providers/seek.md): SEEK and JobStreet / JobsDB · [pandape](providers/pandape.md): `pandapelatam` · [hirist](providers/hirist.md): iimjobs · [justjoin](providers/justjoin.md): RocketJobs
-- [dutch-public-boards](providers/dutch-public-boards.md): `werkenvoornederland`, `gemeentebanen`, `academictransfer`
-- [taiwanese-hardware-makers](providers/taiwanese-hardware-makers.md): `mediatek`, `realtek`, `foxconn`, `asus`, `quanta`
-- [work-mode-fields](providers/work-mode-fields.md): work-mode and country fields the listing hides, for `teamtailor`, `paylocity`, `workable`, `greenhouse`
+Read [Provider notes](AGENT-REFERENCE.md#provider-notes) before work involving this topic.
 
 ## Always true
 
-- **The board catalog lives in Postgres, not in `sources/`** (#2357). `cmd/ingest <provider>` reads the `boards` table through `internal/ingest/boardcatalog`; a board is added with `cmd/add-board --provider=… --board=… --company=… --apply`, which reports by default and writes only under `--apply`. **The argument is a PROVIDER KEY, not a path** — pass a file path and the run reads no boards, logs `providers=0` and exits 0, which looks exactly like an empty catalogue.
-- **The `sources/` directory is gone, and so is every board file.** `freehire-ops' provision/host2/gen-ingest-timers.sh` enumerates `SELECT provider FROM boards WHERE status IN ('pending','active')`, so a provider is SCHEDULED by the static timers because it has live boards; `cmd/ingest-scheduler` launches it only when its settings are also `enabled` and `managed` (`Settings.Schedulable`), and the timers keep running the unmanaged rest (see [ingestsched](../ingestsched/AGENTS.md)). Adding a provider is an adapter (`Source` interface), a line in `sources.All` (which maps each `provider` string to its adapter over a shared HTTP client), its boards via `cmd/add-board` — and a run of that generator on the host, which nothing deploys for you.
-- **Run-once-and-exit worker** meant for cron (one schedule per provider, so providers crawl independently). **What decides that a provider is due lives in [internal/ingest/ingestsched](../ingestsched/AGENTS.md)** — the `ingest_schedule` / `ingest_run_state` tables and `cmd/ingest-scheduler` — not in a systemd unit file. The unit name is built from the same `boards.provider` string that selects the boards, so a provider cannot be scheduled under a name no adapter answers to (as `habr_career` once was, crawling nothing behind a timer named after a retired file).
-- **A 429 holds back the whole HOST, not just the request that drew it** (`hostbackoff.go`). `Client.do` records every direct-egress 429 per host and makes every later request to that host wait — the server's `Retry-After` when it names longer, otherwise 1s, doubling to a 60s cap for each refusal that arrives after the previous hold expired (the 429s of one in-flight burst count once, or the first hold would jump straight to the cap), reset by the next 2xx. Honouring `Retry-After` per REQUEST was not enough under eight board workers: the other seven fired straight into the refusal, and once workable's budget tripped the rest of its fleet failed within minutes (see [providers/workable.md](providers/workable.md)). Held instead, the run slows to what the host admits and the boards it never reaches keep their last state. The hold also stops the client's own retries going out beneath a pacer (see [providers/workstream.md](providers/workstream.md)). The refusal fallback is a different IP and is not held.
-- **Adapters are read-only over public ATS JSON APIs.** Per-board crawl is independent: one failing board is counted (`stats.Failed`) but does not abort the rest.
-- **Sources are keyless by default.** The exceptions are `usajobs` (`USAJOBS_API_KEY`), `reed` (`REED_API_KEY`), `arc` (`ARC_SESSION_COOKIE` — see [providers/arc.md](providers/arc.md)), `francetravail` (`FRANCE_TRAVAIL_CLIENT_ID` + `FRANCE_TRAVAIL_CLIENT_SECRET`) and the WhatJobs markets (`WHATJOBS_PUBLISHER_IDS` — see [providers/whatjobs.md](providers/whatjobs.md)). The credential lives in the env, never in the catalog.
-- **`All` is the crawl registry, `Taxonomy` is the classification one — the credential gates only the first.** `sources.All(client)` omits a keyed provider whose variable is unset, so its boards fail validation before any request goes out. `sources.Taxonomy()` (`All(nil)`, no transport, never Fetch through it) is **total**: what kind of source a provider is cannot depend on whether this host can crawl it. Everything that classifies rather than crawls — `FilterableProviders`, `ProviderKind` on the status page, `AggregatorProviders` in `cmd/reindex` and `cmd/ghost-crosscheck` — reads `Taxonomy`. Conflating the two silently reclassified `whatjobs` as an ATS on every keyless host, so none of its copies were suppressed.
-- **A board is not always a tenant.** For `hh` it is a `professional_role`, for `trudvsem` an OKATO region code, for `whatjobs` a SEARCH KEYWORD, for `edjoin` a JOB-TYPE id. Such a provider is an `aggregator` (many employers, company read per posting) but NOT `boardless` — the board is what selects the slice to crawl. A central searchable index does not by itself make a provider boardless: `edjoin` has exactly one, and the board still earns its keep, because what the slice buys is a catalogue the ingest filter cannot police on its own (see [providers/edjoin.md](providers/edjoin.md)).
-- **`sweepGrace` overrides the unseen sweep window in either direction** (`sources.SweepGraceWindows` → `cmd/ingest`'s `sweepWindowFor`). Widen only where liveness cannot be probed — anything verifiable should close on evidence: `whatjobs` declares 14 days because a page-budgeted read makes deep postings look unseen. Narrow where an unseen posting already IS the evidence: `gem` lists a board's whole posting set every run and declares 24h, comfortably above its hourly cadence including a missed run or two. Narrowing the SHARED default itself would falsely close a quarter of workday's and smartrecruiters' live postings to real crawl jitter (measured in `cmd/ingest/coverage.go`).
-- **`sliceBoardListing` lets a keyword-sliced provider close per board on its grace window.** A page-budgeted board can never earn `fullBoardListing`, but with board-namespaced ids (`<keyword>:<id>`) a posting a finished board stopped listing is visible per board, so `cmd/ingest`'s board-scoped close acts on it over the provider's `sweepGrace` instead of leaving it to the company scope (see [providers/whatjobs.md](providers/whatjobs.md)). A test holds every member to a `sweepGrace`: on the 48h default the marker would close whatever sat past the budget for two days.
-- **Which page failed decides whether the board failed.** Every paginated listing walk obeys one rule: the FIRST page failing is a board-level error, a LATER page failing ends the walk with the links gathered so far. A partial crawl survives a mid-listing hiccup; a board that cannot be reached at all is reported. The canonical statement is `crawlPagedLinks` in `html.go`, and `added == 0` is what ends a walk that has run out of new links.
-
-  **The exception is the one that matters.** A `fullCatalog` provider is swept by SOURCE, so a silently-truncated walk looks like a shrunken catalogue and would mass-close every posting past the failed page. There ANY page failing must fail the whole crawl, steering the sweep back to the safe company-scoped close. `crawlAllPagedLinks` is that variant. Both `fullCatalog` providers honour it — `geekjob` through the helper, `habrcareer` in its own JSON loop with the reasoning written at the branch — which is the point: **what must not drift is the rule, not the helper.** The same inversion applies to every `fullBoardListing` adapter (next entry).
-
-  Eight adapters restate the walk by hand rather than call it (`peopleforce`, `bayt`, `teamtailor`, `neogov`, `hh`, `gusto`, `edjoin`, `workstream`), deliberately: they differ in transport (`GetHTML` / `GetTextWithHeaders` / embedded page state), in what they dedup on, in extra stop conditions (a `total`, a `totalPages`, a 404 retry), and in what a page must YIELD (`gusto`, `workstream` and `edjoin` need each item's whole listing row, not just its link). A generic over those eight would be harder than the fifteen-line loop it replaced. All but `hh` earned `fullBoardListing` (`hh` fails on any page error too, but its depth cap ends the walk softly — see its note): a later-page failure, or reaching the page cap without the board's proven end, is a hard `Fetch` failure, and **the empty-page proof is the RAW per-page item count, read before cross-page dedup** — a page of already-seen duplicates (a sort tie spanning a page boundary, a re-served page) does not prove there are no more pages; each has a regression test for that shape.
-- **`sources.fullBoardListing` marks an adapter fit for the post-run sweep's board-scoped close** (`CloseUnseenJobsForBoard`, freehire#2328 — see `docs/agents/job-lifecycle.md`'s mechanism (1a)). The bar is structural, not documented: `Fetch` must, for every board it crawls, either verify a fetched count against the source's own reported total or paginate to the source's natural end. A page/offset safety cap is permitted only as a ceiling that FAILS the crawl when reached before the end is proven — never as a silent way to end the walk as a success. `habrcareer.go`'s `fullCatalog` `Fetch` is the model to follow; `solidjobs.go` is the negative one — it caps a board at the first 500 of a much larger catalogue and reports success, which closed 110 live `solidjobs` postings in #2337's 18-minute production incident before the revert. Self-declaration by code review is not enough: solidjobs' cap was documented in a comment nobody's code read. `sources.FullBoardListingProviders(reg)` is the registry helper `cmd/ingest` consults and the list of members; `TestSolidJobsIsNotFullBoardListing` pins the negative control. An unmarked adapter is mostly unaudited rather than failing the bar; ranked by prod open-job volume, `oracle` is next to audit.
-- **`sources.emptyBoardListing` lets a finished EMPTY board close its stored postings.** Granted on top of `fullBoardListing`, per adapter, only after checking how the source answers an emptied board against an unknown or failing one: the empty answer must carry the posting collection present and empty, and an answer that decodes without it must fail `Fetch` (`errListingAbsent`). Not `smartrecruiters`: an unknown company identifier answers 200 `totalFound: 0` with an empty `content`, indistinguishable from an emptied board. Not an HTML-scraped listing: zero links parsed is what moved markup looks like. `TestEmptyBoardListingProvidersAreCheckedCompleteListings` holds every member to `fullBoardListing`, to the default sweep window and to a row in its table that pins the empty and not-empty answers (for `ashby`, `lever` and `breezy`, which have no note, that table is the only record). See `docs/agents/job-lifecycle.md` (1d).
-- **Dedup key is `jobs.UNIQUE (source, external_id)`.** `UpsertJob` is `ON CONFLICT` on it.
-- **An Indian salary LABEL goes through one parser, `inrSalary` (`salary_inr.go`)** — use it in any adapter whose structured salary field is a display string ("₹12L – ₹18L", "12-18 Lacs P.A.", "INR 50,000 per month"), never on prose. A lakh or crore figure is annual CTC, as Indian usage fixes it; a plain rupee figure is read only beside a stated period, because "₹10,000 – ₹15,000" is a year's pay for nobody and a month's stipend for an intern, and a grouped figure beside a lakh one ("₹75,000 – ₹1.5L") does not borrow its unit. "Not Disclosed" and prose read as no salary.
-- **A detail request that FAILED and a posting the platform says is GONE are different answers, and an adapter whose detail is a posting's only source must not spell them the same way.** `fetchDetails` drops a posting whose fetch returns `ok=false`; for a non-hydrating link-only adapter that drop hid a timeout or a refusal completely: `Fetch` came back shorter, `Stats.Failed` stayed 0, the board read HEALTHY, and a posting unreadable for 48 hours was closed by both sweeps as unseen. Such adapters return `unreadableDetail(...)` with `ok=true` instead, and `sources.detailUnreadable` is the one place the line is drawn: **404/410 is the platform's own answer that the posting is gone** and stays a drop; everything else — a timeout, a 403/429, a 5xx, an undecodable body, a 200 carrying no posting — is the ABSENCE of an answer and becomes a `Job{Unreadable: true}` marker the pipeline counts (`Stats.Unreadable`) and acts on (see [internal/ingest/pipeline/AGENTS.md](../pipeline/AGENTS.md)). A link with no posting id at all stays a drop: nothing was ever stored under it. **This is NOT a board failure and must not become one** — a dropped detail is a per-posting hole, and failing the board would cool it to the 24-hour ceiling and freeze its whole catalogue. A hydrating adapter (`HydratingSource`) yields a `SeenRefresh` for a seen posting and costs no detail request, so the "a drop is normal" argument does not carry over to the non-hydrating case — except that a hydrating adapter whose detail is the body's only source (`smartrecruiters`, `gupy`, `successfactors`) still marks a failed detail. An adapter whose listing is authoritative for a posting's existence (`paylocity`, `personio`, `recruitee`, `ukg`) is outside it too: a failed detail costs only the body.
-- **The same distinction exists one level up, at the BOARD, and there it does not arrive as a status code.** A platform's own "no such board" answer can be a well-formed page under HTTP 200 or a redirect, so nothing below the adapter can tell it from a working response and the adapter fails further along, on whatever it could not parse — which reads as an adapter bug in `board_health`. That hid **92 gone boards for two months** on Paycom and ApplicantPro (see [providers/paycom.md](providers/paycom.md), [providers/isolvedhire.md](providers/isolvedhire.md)), and 135 on BambooHR, whose gone board redirects (see [providers/bamboohr.md](providers/bamboohr.md)). An adapter that can recognise the platform's answer wraps `sources.ErrBoardGone`; the crawl still fails and `BoardHealth` still counts it, but these boards are now selected by a query instead of read out of error prose. The guarded `board_gone` close pass requires repeated explicit evidence and a recent successful sibling; a provider-wide outage without a healthy sibling does not retire the fleet. Match a stable FRAGMENT of the notice, never the whole sentence — vendor copy gets reworded, and a check that silently stops matching puts us back where this started.
-- **Board disappearance is distinct from a failed read.** Adapters wrap `sources.ErrBoardGone` only for a stable, platform-confirmed no-such-board answer. `cmd/close-chronic-boards --apply-board-gone` may close after three consecutive explicit gone responses spanning seven days and a different board from the provider succeeding within 48 hours. Generic 403/429, network or parser failures reset that streak; successful empty listings use the separate `feed_empty` path. The pass is dry-run by default and refuses region-ambiguous board identities.
-- **`sources.SelfClosingProviders`** lists providers whose adapters implement the `selfClosing` marker — they emit `Job{Removed: true}` for taken-down postings and are excluded from the unseen-job sweep.
-- **`board_health` holds ONLY runtime state** — the catalog itself is the `boards` table, and a row left behind for a board no longer crawled is inert. Retiring a board does not delete its health row, so `consecutive_failures` and `last_error` stay readable as the record of why it was retired.
-- **An adapter MAY yield the platform's application form (`Job.ApplyForm`), but only when its list endpoint already carries one** (today `recruitee` alone, see [providers/recruitee.md](providers/recruitee.md)). Every other adapter leaves it nil, which is not a failure. **An adapter must never issue a request to fill it** — a form that costs a request would make a crawl's duration a function of board size, and the adapter cannot tell which postings are new anyway (that answer exists only after `UpsertJob`'s `ON CONFLICT` resolves). Those platforms — `greenhouse`, `ashby`, `workable`, `lever` — are captured after ingest by `cmd/capture-apply-form`; `applyform.NeedsRequestCapture` is the gate, and it and the fetcher registry read one map so the queue cannot fill with work nothing can drain. `adzuna`'s full description uses the same after-ingest queue shape (see [providers/adzuna.md](providers/adzuna.md)).
-- **An adapter MAY implement `CompanyDescriber` to yield its board's own company-level description**, fetched once per board crawl — never once per posting, since it is a fact about the board (`greenhouse` and `workable` today; see their notes — Ashby and Pinpoint expose no such field). Sanitize it through the same `sanitizeHTML` helper posting bodies use. The pipeline (`Runner.fillCompanyDescription`) calls it at most once per board — right after the adapter lookup, independent of whether that board's own `Fetch`/`FetchStream` succeeds, and **only when the Store says the company is due** (`CompanyDescriptionDue`: no `company_info.summary` yet AND no answered fetch recorded in `companies.company_description_checked_at` within `pipeline.CompanyDescriptionRefreshWindow`, 7 days). An answered fetch is recorded even when blank (only the stamp is written), so a board with no "about us" costs one request a week rather than one a run; a failed fetch records nothing and is retried next run. A non-empty result goes to `companies.company_info.summary` via the optional `CompanyDescriptionFiller` Store capability — never `tagline`, which stays reserved for the short, curated-style values the YC directory and the Wikipedia backfill produce. A blank field, an unimplemented interface, and a fetch failure are all "no description, no write"; none propagates.
+Read [Always true](AGENT-REFERENCE.md#always-true) before work involving this topic.
 
 ## How it works
 
-**Board registry:** each adapter implements the `Source` interface and speaks a common normalized `Job` shape. `sources.All` is the registry map. Adapters are in `internal/ingest/sources/` — one `.go` file per provider (`greenhouse.go`, `lever.go`, `ashby.go`, …) with matching `_test.go` files. `config.go` holds `Config.Validate` (the registry check) and `BoardDedupeKey` (the identity two catalog rows are one crawl target under).
-
-**Ingest pipeline:** `cmd/ingest` loads the provider's live boards from the catalog, then delegates to the `pipeline.Runner` which fetches each board once, normalizes postings, and `UpsertJob`s them (idempotent on the dedup key). New postings are enqueued into `enrichment_outbox` in the same transaction (transactional-outbox).
-
-**Per-board health:** `board_health (provider, board, region)` tracks `consecutive_failures`, `cooldown_until`, `last_error`, timestamps, `last_ingested_count`. `region` (`text NOT NULL DEFAULT ''`, migration `0077`) disambiguates a board id that repeats across independent regional slices — Adzuna's `it-jobs` exists once per country — so each slice gets its own health row; every region-less provider passes `''`, matching the column's default. The `pipeline.Runner` uses an optional `BoardHealth` port (nil = feature off). It **skips a board whose `cooldown_until` is in the future** (counted `Cooled`, not `Failed`). Backoff (`pipeline.CooldownFor`): no cooldown below **3** consecutive failures, then `6h·2^(f-3)` capped at **24h**. A success self-heals. The backoff is Go-owned and unit-tested.
-
-**Incremental search indexing:** `cmd/ingest` queues each crawl's **new or content-changed** open jobs into `search_outbox` (`job_id` only, `ON CONFLICT DO NOTHING`), atomically in the same transaction as the upsert — the worker never talks to Meilisearch. The change signal is `jobs.content_hash` returned by `UpsertJob` as `inserted`/`changed`. The enqueue is unconditional on `MEILI_MASTER_KEY` — an unconfigured deployment simply never drains the queue. Draining is `cmd/search-drain`'s job, on its own schedule (see [internal/search/searchdrain/AGENTS.md](../../search/searchdrain/AGENTS.md)). Full reindex (`cmd/reindex`) stays the source of truth — it owns settings, compaction, and removing closed-job documents.
-
-**Proxy egress (opt-in, IP-blocklisted providers):** some ATS edges IP-blocklist the prod datacenter IP (e.g. eightfold 403s every prod-IP request while a residential IP is served). `SOURCES_PROXY_URL` (form `http://user:pass@host:port`) routes only the providers in the `proxiedProviders` allowlist through that egress proxy; everything else stays on the direct IP. Unset = no-op; set-but-invalid fails the run at startup. `cmd/ingest` calls `sources.ApplyProxyEgress(registry)` after `All`. The SEEK network (`seek`, `jobstreet`) is a third, narrower case: it stays direct and gets the proxy only as a fallback lane for its GraphQL detail after SEEK refuses the direct IP — see [providers/seek.md](providers/seek.md). The proxy endpoint + credentials live entirely in env — nothing is hardcoded. **SSRF caveat:** on the proxied path the guarded dialer vets the *proxy's* IP, not the ultimate target (the proxy resolves that), so `proxiedProviders` must list only trusted, fixed-host providers — never the link-following/liveness paths, which keep the direct target-guarded client.
-
-**Link-following (`internal/ingest/linksource/`):** resolves a single outbound job-detail URL into a vacancy under the destination's own identity. A `LinkSource` adapts a single detail page (unlike `sources` which adapts a whole ATS board). Matching by link host. The resolved job dedups against the same posting if another source also has it.
-
-**Job lifecycle — soft-close via `closed_at`:**
-
-1. **Ingest sweep** (`CloseUnseenJobs`): post-run sweep closes a provider's jobs unseen for 48h. A reappearing posting reopens via the upsert. Self-closing sources are excluded.
-2. **Stream-driven self-close** (`CloseJobBySourceExternalID`): self-closing sources emit `Job{Removed: true}`; the pipeline routes this to the Store's optional `closer`.
-3. **Liveness probe** (`cmd/liveness`): URL-probes orphan jobs from non-board sources. Closes after two consecutive `expired` reads (the `liveness_strikes` counter).
-
-**Telegram ingest** is a two-stage queue (crawl then LLM-extract): `cmd/tg-ingest` crawls the active `telegram_channels` rows into `telegram_posts`; `cmd/tg-extract` drains via the LLM. Both are run-once-and-exit cron workers.
+Read [How it works](AGENT-REFERENCE.md#how-it-works) before work involving this topic.
 
 ## Recent-only crawls (`RecentSource`)
 
-An adapter whose platform documents a publication-date filter implements `RecentSource.FetchRecent(ctx, e, window)`, which `cmd/ingest` calls instead of `Fetch` when the run sets `INGEST_RECENT_DAYS`. It returns only postings published inside the window and never signals a removal; the pipeline treats the result as no evidence of what is gone (no sweep, no board-health writes). An adapter without it is skipped and counted (`recent_unsupported`), never crawled in full. Adzuna is the only adopter: it sends the window as `max_days_old`.
-
-Adding another adapter takes its own change, citing the source's documented date parameter and checking it against the live API by hand: fixtures prove only the request shape. Do not adopt it by sorting newest-first and stopping early, which is a guess about the source's ordering rather than a filter.
+Read [Recent-only crawls (`RecentSource`)](AGENT-REFERENCE.md#recent-only-crawls-recentsource) before work involving this topic.
 
 ## Limitations
 
-- The ingest sweep has a trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
-- Self-closing sources: a missed `removed` event from the feed can leave a vacancy open until the next reindex.
+Read [Limitations](AGENT-REFERENCE.md#limitations) before work involving this topic.
 
 ## A crawl that reads nothing of what it listed must fail
 
-`echojobs` published `ingested=0 failed=0`, exit 0, green unit, every four hours for 19 days
-while its pages sat behind a bot wall (freehire#2588). A dropped posting never reaches the
-pipeline — `Stats` counts `saveOne` failures, not candidates an adapter discarded — so from
-every side but the adapter's, a total outage and a source with nothing to offer are the same
-result.
-
-So a hydrating adapter that listed candidates and read **none** of them returns an error.
-There is deliberately no threshold: "some candidates, none read" is the whole signal, and how
-many consecutive failures matter is `board_health`'s question. No candidates at all still
-succeeds — a quiet source is not a broken one.
+Read [A crawl that reads nothing of what it listed must fail](AGENT-REFERENCE.md#a-crawl-that-reads-nothing-of-what-it-listed-must-fail) before work involving this topic.
 
 ## The Scrapling tier (the sources no plain client reaches)
 
-`scraplingProviders` (scraplingtier.go) sends a provider's requests through
-[services/scrapling-fetch](../../../services/scrapling-fetch/README.md) on the crawl host, over
-[internal/platform/scraplingfetch](../../platform/scraplingfetch/AGENTS.md). Each row names a
-mode — `http` (one request with Chrome's TLS fingerprint, ~0.2-2 s) or `browser` (a stealth
-Chromium navigation that solves Cloudflare challenges, ~5-9 s once the first page on a host has
-paid ~110 s for the challenge) — and whether it egresses through the proxy the service holds.
-Every row is the cheapest route the 2026-10-20 spike measured to pass;
-[the design](../../../docs/superpowers/specs/2026-10-20-scrapling-fetch-design.md) has the
-per-source, per-mode table, including the sources that spike did NOT rescue (echojobs, neogov,
-dodo).
-
-Two of those were rescued on 2026-10-21, once the proxy came back from a Webshare outage that
-had poisoned the spike's measurements: `neogov` (the crawl host's IP times out at TCP connect;
-`http` + proxy reads the XHR listing and the detail pages) and `echojobs` (Vercel's checkpoint:
-`http` + proxy drew a 429 about half the time, `browser` + proxy passed 10 of 10). echojobs used
-to have a chromedp browser tier of its own (`browsertier.go`, freehire#2588); the checkpoint
-began answering it with a 403 and it was deleted in favour of this row.
-
-It replaced the hosted Firecrawl tier, which carried bayt, gulftalent, wellfound, wantapply's
-sitemap and hh's detail pages at a credit per page and ran out of credits in 2026-10.
-
-**Measure what is behind the wall before adding a provider**: `bayt`'s IT category passed
-**0 of 33** titles through `classify.IsTech` and `gulftalent`'s postings **5 of 400**
-(2026-09-07). A browser page is not free — ~1-1.7 GB per live session on the crawl host.
-
-**`ApplyScraplingEgress` must run LAST**, and `cmd/ingest` does. `gulftalent` is in
-`proxiedFingerprintProviders` and `infojobs` in `proxiedProviders`, so both tiers write the same
-registry entry — the override is *wanted* (those transports are measured as refused, this one as
-served), so it is ordered instead of being a silent last-write-wins. Without `SCRAPLING_FETCH_URL` the override does not happen
-and each keeps its earlier transport — which is also the rollback.
-
-No adapter changed: the tier is a `*Client` whose transport forwards to the service, so every
-getter, the retries and the body cap are the same code every other provider uses.
-
-**Some providers send only PART of a crawl through it.** `wantapply` reads only the .com sitemap
-there (~2 755 vacancies against the free .cy mirror's ~605) and every page on the free client.
-`startupjobs` sends only its Cloudflare-challenged site pages; its sitemap CDN and Algolia index
-stay plain. `hh` sends only detail hydration, and its listing must use a fresh, always-unproxied
-client, not the `direct` parameter (see [providers/hhru.md](providers/hhru.md)).
+Read [The Scrapling tier (the sources no plain client reaches)](AGENT-REFERENCE.md#the-scrapling-tier-the-sources-no-plain-client-reaches) before work involving this topic.

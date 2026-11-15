@@ -8,13 +8,18 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 spec=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 root=$(git -C "$here" rev-parse --show-toplevel)
+"$here/stack.sh" doctor
 eval "$("$here/stack.sh" env)"
 mkdir -p "$VERIFY_EVIDENCE" "$root/web/e2e/__verify__"
 name=$(basename "$spec" .spec.ts)
-cp "$spec" "$root/web/e2e/__verify__/$name.spec.ts"
-trap 'rm -rf "$root/web/e2e/__verify__"' EXIT
+VERIFY_EVIDENCE=$(mktemp -d "$VERIFY_EVIDENCE/$name-XXXXXX")
+export VERIFY_EVIDENCE
+journey_dir=$(mktemp -d "$root/web/e2e/__verify__/run-XXXXXX")
+trap 'rm -rf "$journey_dir"' EXIT
+cp "$spec" "$journey_dir/$name.spec.ts"
+printf 'Evidence: %s\n' "$VERIFY_EVIDENCE"
 cd "$root/web"
 # The trace (actions, network, DOM snapshots) lands next to the screenshots.
-pnpm exec playwright test "e2e/__verify__/$name.spec.ts" --reporter=list --trace=on \
+pnpm exec playwright test "${journey_dir#"$root/web/"}/$name.spec.ts" --reporter=list --trace=on \
   --output="$VERIFY_EVIDENCE/$name-playwright" 2>&1 | tee "$VERIFY_EVIDENCE/$name.log"
 exit "${PIPESTATUS[0]}"

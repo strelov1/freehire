@@ -6,7 +6,7 @@
 
 [rules]
 # The Codex rules (CDX-*) are on so that ONE of them runs, the size cap; every other one is
-# listed in disabled_rules below. Nobody works on this repository with Codex, but the cap is
+# listed in disabled_rules below. Codex is used in this repository; the cap is
 # the only check that notices an instruction file growing past what an agent reads well:
 # CDX-AG-009 warns on any AGENTS.md over 32 KiB (Codex's project_doc_max_bytes, fixed in the
 # rule). internal/ingest/sources/AGENTS.md reached 527 KiB before anything said so. A file
@@ -22,9 +22,6 @@ disabled_rules = [
   #     `pnpm check:links` already resolves every one and fails on a miss.
   #   - "Potential secret" (CDX-AG-002): all five hits were placeholders (`LLM_API_KEY=…`).
   #     gitleaks scans these files on every commit and the whole history in CI.
-  #   - The instruction-chain size (CDX-AG-010) sums the root and a nested AGENTS.md against
-  #     the same 32 KiB: with a ~32 KiB root, every package file would fail it. The per-file
-  #     cap is the gate this repository keeps.
   #   - The rest are about Codex itself — its config file (CDX-004/005/006), an
   #     AGENTS.override.md (CDX-AG-008) — or style opinions about what an AGENTS.md should
   #     say (CDX-AG-001/003/006).
@@ -34,7 +31,6 @@ disabled_rules = [
   "CDX-AG-005",
   "CDX-AG-006",
   "CDX-AG-008",
-  "CDX-AG-010",
   "CDX-004",
   "CDX-005",
   "CDX-006",

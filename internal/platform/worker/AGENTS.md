@@ -1,335 +1,43 @@
 # Worker conventions
 
+Before editing or reviewing this area, read the applicable sections of
+[local requirements](AGENT-REFERENCE.md). Read the complete reference when changing
+architecture, contracts, authorization, state transitions or cross-module behavior.
+The reference retains all requirements previously held here.
+
+
 ## Scope
-The shared bootstrap and run-outcome plumbing for the run-once-and-exit cron workers under
-`cmd/` (~40+ binaries): config + pool + signal-bound context setup, exception reporting,
-the exit-code convention, a progress heartbeat, and a corruption-tolerant keyset scanner.
+
+Read [Scope](AGENT-REFERENCE.md#scope) before work involving this topic.
 
 ## Always true
-- **`Main(run func() int)` wraps every worker's run, and Bootstrap's cleanup is deferred
-  INSIDE run** (main.go:14-26). On the normal path Main reports a non-zero status, flushes the
-  exception exporter, and exits with run's status. On a panic, the deferred `capturePanic`
-  reports it and re-panics so the process still crashes with the original
-  stack and a non-zero exit. A panic BEFORE Bootstrap (e.g. bad config) is not captured —
-  those paths already log and exit non-zero.
-- **`Bootstrap(parent)` is the one setup path** (bootstrap.go:29): `config.Load()`, the exception
-  exporter (a second owner of Main's; a malformed OTLP setup is fatal), a
-  SIGINT/SIGTERM-cancellable root context (a cron timeout or redeploy delivers SIGTERM), and
-  the pgx pool. The returned cleanup stops the signal notification, closes the pool, and
-  releases its exporter owner; a failed step releases anything already acquired.
-- **`ExitCode(failed, deadLettered)` is the convention** (exit.go:11): 0 on a clean run, 1
-  when the run finished with ANY per-item failure or dead-lettered item, so cron alerts on
-  a partially-failed run that would otherwise look successful. Deliberate divergence:
-  `internal/ingest/applyform`'s `RunStats.Degraded` rejects this rule (hundreds of thousands of
-  requests to other companies' APIs make a handful of transient failures the healthy
-  shape) — see internal/ingest/applyform/AGENTS.md.
-- **`Heartbeat(interval, report)` logs progress so a stall is visible** (heartbeat.go:11).
-  `report` runs on a background goroutine CONCURRENTLY with the work — every counter it
-  reads must be safe for concurrent access (atomic). The returned stop halts the goroutine;
-  defer it.
-- **`ResilientPage` degrades on TOAST corruption, never on anything else** (resilient.go:48-
-  99). One row's damaged TOAST fails the whole `SELECT *` (Postgres XX001); the scanner
-  then re-lists the same window as bare ids (never detoasts, so it cannot fault) and fetches
-  rows individually, collecting the readable ones and logging-skipping the corrupted.
-  Non-corruption errors always propagate unchanged. The keyset cursor advances past a
-  skipped row, so the scan never loops on it; a row that vanished mid-window (`ErrNoRows`)
-  is skipped too, staying symmetric with the fast path.
-- **One reader constructor** (resilient.go:16-46): `NewFullScanReader` keysets over the
-  whole `jobs` table via its own narrow `FullScanQueries` interface, so a worker with its
-  own store satisfies it without declaring methods the reader never calls. A second
-  constructor, `NewPostedSinceReader` (a freshness-windowed keyset over open jobs), existed
-  only to feed `reindex --semantic --posted-within` and was removed alongside it
-  (openspec/changes/drop-hybrid-search-pgvector-similar) — re-add the pattern if a future
-  worker genuinely needs a scoped scan, rather than resurrecting the old one blind.
+
+Read [Always true](AGENT-REFERENCE.md#always-true) before work involving this topic.
 
 ## The pause switch
 
-`Main` consults Redis before calling `run`, so a single command sheds load from the whole
-cron fleet. It refuses to START a run; a run already in flight is never interrupted, and the
-heaviest ingest boards take ~50 minutes to drain.
-
-```bash
-redis-cli SET freehire:pause:all 1 EX 10800     # hold everything for three hours
-redis-cli SET freehire:pause:ingest 1 EX 10800  # hold one binary
-redis-cli DEL freehire:pause:all                # lift early
-
-FREEHIRE_IGNORE_PAUSE=1 ./backfill-derive       # run one thing against the held fleet
-```
-
-- **Presence is the signal**; the value is ignored, so the key can carry a note to whoever
-  finds it. `<binary>` is `filepath.Base(os.Args[0])` — the same string as the `job` metric
-  label, so the key you type matches the label you read.
-- **The key names the binary, never the board.** One `freehire:pause:ingest` holds all ~140
-  ingest timers. Holding a single board is that board's timer's job.
-- **`EX` is a convention, not enforced.** A switch that could refuse to be set would fail at
-  the moment it is most needed; the forgotten-switch case is handled by visibility instead.
-- **`FREEHIRE_IGNORE_PAUSE` is parsed as a boolean**, unlike the keys — an operator who wrote
-  `=0` means the opposite of a bypass. systemd timer units do not carry it, so it admits only
-  a hand-started run.
-- **It fails open.** An unreachable Redis, a malformed URL, or a reply slower than 250ms logs
-  one line and the worker runs. A facility for shedding load must never become the reason the
-  catalogue stops updating.
-- **The budget is on the go-redis client, not only on the context.** go-redis applies its own
-  5s `DialTimeout` and retries three times with backoff, so a `context.WithTimeout` alone lets
-  a silent Redis stall every worker start for far longer than the deadline suggests.
-- **`EXISTS` is called with both keys at once, which is a multi-key command.** Correct against
-  the single Redis this runs on; on a cluster the two keys hash to different slots and the
-  reply is a CROSSSLOT error, which fails open — meaning the switch would silently never hold.
-  Split the lookup before moving Redis to a cluster.
-- **`Main(run, extraKeys...)` takes further keys that hold this worker**, checked in the same
-  `EXISTS`. This package knows nothing about what they mean: the outbound-mail block names them
-  (next section). `AnyHeld` is the same check (bypass, 250ms budget, fail-open) for a caller
-  that needs it mid-run, and `PauseKey(suffix)` is the one place the `freehire:pause:` prefix is
-  spelled.
+Read [The pause switch](AGENT-REFERENCE.md#the-pause-switch) before work involving this topic.
 
 ### Holding outbound mail by class
 
-Mail workers fall into three classes (`internal/engage/emailnotify/pause.go`, the table is
-`workerClass`), so an operator can keep payment confirmations flowing while digests and nudges
-wait:
-
-| Class | Key | Workers |
-|---|---|---|
-| transactional | `freehire:pause:mail:transactional` | `pro-welcome-mail` |
-| engagement | `freehire:pause:mail:engagement` | `notify`, `message-notify`, `mentorship-remind` |
-| lifecycle | `freehire:pause:mail:lifecycle` | `onboarding`, `nudge`, `remind`, `limit-nudge-mail`, `cv-lifecycle-mail` |
-| all mail | `freehire:pause:mail:all` | every worker above |
-
-```bash
-redis-cli SET freehire:pause:mail:lifecycle 1 EX 86400   # hold digests-and-nudges class
-redis-cli SET freehire:pause:mail:all 1                  # hold all outbound mail workers
-redis-cli DEL freehire:pause:mail:lifecycle              # resume one class
-```
-
-`freehire:pause:<binary>` and `freehire:pause:all` keep working unchanged.
-
-- **Whole-run holds**: `pro-welcome-mail`, `onboarding`, `limit-nudge-mail`, `cv-lifecycle-mail`, `mentorship-remind`
-  and `message-notify` pass `emailnotify.HoldKeys(<binary>)` to `Main`, so a class hold takes the
-  per-binary path: exit 0, `freehire_worker_paused=1`, no `last_run_*` series.
-  `message-notify` is whole-run because one channel succeeding marks a notice as sent;
-  withholding only email would lose it.
-- **Email-only holds**: `notify`, `nudge` and `remind` also deliver over Telegram and push, so a
-  class hold leaves the email channel out of the router (`emailnotify.EmailHeld`) and the other
-  channels run. Email items soft-skip: they stay pending and no attempt counts toward
-  dead-lettering. A `nudge`/`remind` batch that also succeeds on Telegram or push is delivered
-  without its email copy, the same as for any email outage today.
-- **Never held by a class**: the API server's mail (verification codes, password reset,
-  application mail) and the hand-run `broadcast` / `mail-preview`. A guard test fails when a
-  binary that builds an SES client is neither in the table nor exempt.
-- **It fails open, as the per-binary key does.** While Redis is unreadable a held class sends.
-  `FREEHIRE_IGNORE_PAUSE=1` lifts class holds too.
-- **Resume order after an outage: transactional, then engagement, then lifecycle.** Delete the
-  keys one class at a time and let a run complete before the next.
-- `freehire_worker_paused` is unchanged; the `freehire-ops` panel is maintained separately.
+Read [Holding outbound mail by class](AGENT-REFERENCE.md#holding-outbound-mail-by-class) before work involving this topic.
 
 ### The SES circuit breaker
 
-Workers build their SES client with `WithSendingBreaker()` (the API server does not: a latch in
-a long-lived process would outlive the outage). The first `SendingPausedException`,
-`AccountSuspendedException`, or `MessageRejected` saying sending is paused trips it, and every
-later `Send` in the run returns `emailnotify.ErrSendingPaused` without calling SES. Any other
-`MessageRejected` (bad address, unverified identity) is not account-level and does not trip it.
-`onboarding` and `cv-lifecycle-mail` end their pass on it and write no ledger row (the latter also gives back its step row), so no slot is burned; per-address
-failures still burn theirs. `notify`, `nudge` and `remind` map it to their channel soft-skip, so
-no attempt is counted. `message-notify`, `pro-welcome-mail`, `limit-nudge-mail` and
-`mentorship-remind` already leave the item retryable on any failed send. The breaker never
-writes a hold key; setting one stays the operator's decision.
+Read [The SES circuit breaker](AGENT-REFERENCE.md#the-ses-circuit-breaker) before work involving this topic.
 
 ## Prometheus metrics
 
-A run-once worker has no listener for Prometheus to scrape, so metrics go out as
-node_exporter textfile-collector files in `PROM_TEXTFILE_DIR` (unset disables it). Two
-kinds are published, and they answer different questions.
-
-**Per run, automatically** — `Main` calls `writeRunMetrics` for every worker
-(metrics.go:30), so `freehire_worker_last_run_{timestamp_seconds,duration_seconds,success}`
-exist without any worker opting in. The `job` label is the binary name and `instance` is a
-trailing board path if there is one, so ~140 ingest boards land in distinct series. This
-answers *is the worker alive*: a hung run never stamps a completion, so last-run age
-covers both "hung" and "timer stopped".
-
-**Per pipeline, by `cmd/queue-metrics`** — `freehire_queue_{depth,dead_letters,blocked,oldest_age_seconds}`
-labelled by `queue`, `freehire_boards_total` labelled by `state`,
-`freehire_catalogue_newest_job_timestamp_seconds`, and
-`freehire_notify_{pending_subscriptions,oldest_pending_age_seconds}`. This answers *is the
-worker keeping up*. The notify pair exists because a starved subscription produces no
-failure to notice: `notify` reported `delivered=1 failed=0` for weeks while 1.14M matches
-sat undelivered (2026-09-04, see [docs/agents/notifications.md](../../../docs/agents/notifications.md)).
-An oldest-pending age climbing past a few passes is the signal; `failed` never moved. Both
-are labelled `deliverable="true"|"false"` — whether the subscription's channel can reach
-anyone at all, computed in `NotifyBacklogMetrics` by the SQL twin of `notify.recipient()`
-(change one, change the other). Push with no device, an unlinked Telegram chat or a
-disabled webhook holds its matches until the 72h freshness expiry, so the `false` age sits
-at that ceiling for good; mixed in, it pinned the one age at ~72h and made it useless. Alert
-on the `true` age. Both label values are always published, as explicit zeros when empty.
-
-**Per long drain, by `cmd/enrich`** — `freehire_enrich_completed_total`, an unlabelled
-COUNTER of enrichments this process has written, republished every minute through
-`Heartbeat` into its own file (`freehire-enrich-progress.prom`, never the run file — see
-below) and once more at exit. The drain runs for days, so the per-run family is blind
-while it works: it stamps only on exit, and `last_run_success` is 0 for any run with one
-failure. The counter answers *is it still writing*: alert on
-`increase(freehire_enrich_completed_total[2h])` falling below a floor (prod writes
-~280–340/h at concurrency 4). A restart resets it to 0, which `increase()` treats as a
-counter reset; no rule divides it by anything.
-
-**Per provider, by the same worker** — `freehire_provider_boards` labelled by `provider` and
-`state` (`healthy`/`failing`/`cooled`/`uncrawled`), `freehire_provider_last_success_timestamp_seconds`
-and `freehire_provider_first_listed_timestamp_seconds`, both labelled by `provider`.
-`freehire_boards_total` is these board counts summed, so the two families cannot disagree.
-**The population is the catalogue** — every `pending`/`active` row in `boards`, with
-`board_health` joined onto it — never `board_health` alone: a board nobody has crawled yet
-has no health row, so a freshly re-keyed provider used to vanish from every provider family
-(gupy, 2026-10-19: 3,324 uncrawled boards, no series, on day 19 of its API being dead),
-while a retired provider's leftover health rows kept it exported (apploi, 5,833 retired
-boards). The last-success sample is ABSENT for a provider no live board of which has ever
-succeeded; first-listed is the fallback for that case — the oldest live board's
-`created_at`, never the newest, or adding a board would restart a failing provider's clock
-— so a rule writes `time() - (last_success or first_listed)` and gets an honest silence for
-every provider. See `ProviderIngestHealth` in `internal/platform/db/queries/metrics.sql`.
-
-**Per source, by the same worker** — `freehire_ingest_{rows_written,distinct_postings}`
-labelled by `provider`, over a ten-minute window. Every family above answers *is something
-failing*; this one answers *is what succeeded worth anything*, which is the question the
-others structurally cannot reach. On 2026-09-02 `api.apploi.com` stopped honouring its
-`employer` parameter, so all 5,833 of that provider's boards fetched the same global
-catalogue: 1,565,701 rows accumulated standing for 3,024 real jobs — 518 copies each, under
-518 different and mostly wrong employers, 12.5% of everything live search could find. Every
-crawl returned 200 with valid postings, so board health stayed green, the queues stayed
-shallow and the per-run family stayed green. It ran two weeks and was found by a person
-reading the catalogue. Dividing rows by postings in Prometheus makes it a one-line rule.
-**Divide in the rule, not here**: the tolerable multiple differs per source (a
-keyword-sliced aggregator legitimately stores one posting under two boards — jobleads
-measured 2.1 on 2026-09-16), and a ratio computed in the exporter would have to invent an
-answer for a source that wrote nothing. The window is ten minutes because that is what the
-file header's cost bar allows — measured on prod 2026-09-16, the same query costs 22ms at
-10m, 328ms at 15m, 837ms at 60m and 20.8s at 24h — and because duplication appears BETWEEN
-boards, never within one crawl, so the gap opens as soon as two of a source's boards land in
-one window.
-
-**Per gateway, by `cmd/llm-probe`** — `freehire_llm_probe_{attempts,ok,slowest_seconds}`
-labelled by `model`, **one series per alias the deployment routes through**. This answers
-*is the provider serving*, which nothing else asked.
-
-The label is what makes several aliases safe to add: the alert divides
-`freehire_llm_probe_ok` by `freehire_llm_probe_attempts` element-wise, so Prometheus matches
-each alias to itself and a new alias becomes another alert instance rather than blending into
-the first. Watching one alias was not enough — measured 2026-09-09, `flagship` answers from
-z.ai and carries the assistant, the fit analysis and enrichment, while `fast` answers from
-Gemini and carries the AI search filter, whose handler turns a gateway refusal into a 500.
-A dead `fast` would have broken AI search for everyone while this worker reported the gateway
-healthy.
-Three times in the week to 2026-09-08 a provider behind the gateway stopped serving while
-the gateway went on reporting it `active`: Cerebras on an empty wallet (402), then two Z.ai
-accounts — one rate-limited under a Fair Usage Policy (429), one with a revoked key (401).
-Each was found by a person noticing a broken feature, and the last cost about half a day
-with the fit analysis failing 55% of real users' requests before anyone read a log.
-Reachability was never the question; what the provider ANSWERED was.
-The success rate is deliberately NOT published — a rate over three probes is not a rate, so
-the numerator and denominator go out separately and the alert divides them over its own
-window. `slowest_seconds` carries the distinction that took hours to reach by hand: a
-gateway that refuses answers in milliseconds, one that is deliberating burns the whole
-budget, and no error-string parsing is needed to tell them apart.
-It probes the ALIAS, not individual keys — only the gateway host holds the raw keys (the
-admin API returns them masked), so a run anywhere else cannot name which key is dead. It
-can say what share of requests through the alias are served at all, which on 2026-09-08 was
-23%.
-`email_classification_outbox` was added for the same reason and is the worse version of it:
-`cmd/classify-mail` dead-lettered all 2726 queued messages over five weeks and then logged
-`done failed=0 dead-lettered=0` on every run afterwards — accurate, because a dead entry is
-never claimed again, and identical to what an empty queue prints. **A queue this worker does
-not measure has no signal at all**: the per-run family above stayed green throughout, since
-the binary kept exiting 0. Adding an outbox means adding it here.
-
-All ten pipeline queues are measured, which they were not: `search_delete_outbox`,
-`apply_form_outbox`, `adzuna_description_outbox`, `auto_apply_queue` and
-`push_ticket_outbox` were unmeasured while the rule above was already written down. Two of
-them do not fit the three-gauge shape and so are the reason the counts are OPTIONAL:
-`auto_apply_queue` has a third terminal state (a parked attempt needs new data, not another
-try — `freehire_queue_blocked`), and `push_ticket_outbox` carries neither `attempts` nor
-`failed_at`, so it publishes NO dead-letter sample rather than a permanent zero. Absent and
-zero differ in the other direction too: a zero would read as "given up on nothing", a claim
-about a measurement nobody took. **`freehire_queue_blocked` is new, so nothing in
-freehire-ops graphs or alerts on it yet** — adding the gauge here does not surface it there.
-These names are a contract with the dashboard and alert rules in `freehire-ops`, which
-cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
-exposition text so a rename is a visible edit rather than a silent breakage.
-
-**One worker, one filename — and the run file is written LAST.** `Main` writes the run
-outcome to `<binary>.prom` *after* `run()` returns (main.go:29-30). A worker that also
-publishes its own textfile must therefore own a DIFFERENT name, or every run will emit
-its payload and then overwrite it, leaving the collector with only the run outcome while
-the setup still looks correct. `RunMetricsFilename()` exposes the name to compare
-against; `cmd/queue-metrics` publishes as `freehire-pipeline.prom` and asserts the two
-cannot converge.
-
-**`freehire_worker_paused` reports whether the switch held this run** — published by BOTH
-writers, so it is a live 0/1 signal rather than one that merely stops being written. A refused
-run publishes it as `1` and publishes NO `last_run_*` series, deliberately: the last-run
-timestamp then ages, an existing staleness rule eventually fires for a switch nobody lifted,
-and the paused gauge beside it identifies the silence as intentional. Do not "fix" this by
-stamping a refused run as a success — that is exactly how `freehire-reindexw`'s skipped cycles
-stayed invisible while the search index went stale for days.
-
-Both renderings are pinned verbatim by `metrics_test.go`, the way `cmd/queue-metrics` pins its
-own, because the names are a contract with dashboards and alert rules in `freehire-ops` that
-cannot be compiled against this repo. **Adding the gauge here does not surface it there** — the
-ops-side panel and the staleness rule's annotation are part of shipping a change to it.
-
-**The `exported_job` trap.** node_exporter's textfile collector does not set
-`honor_labels`, so Prometheus keeps its own `job="host2-node"` and renames a worker's
-`job` label to `exported_job`. Any query against the per-run metrics must use
-`exported_job` and `exported_instance`; querying `job` returns an empty vector with no
-error, which reads exactly like a healthy silence. The queue metrics use `queue` and
-`state` labels specifically to stay clear of the collision.
-
-**Zero and absent differ.** A drained queue publishes `0`; an empty catalogue publishes
-nothing. A missing series is how an alert rule recognizes a dead exporter, so a real
-measurement of zero must never be omitted — while a zero *timestamp* would read as 1970,
-i.e. an infinitely stale catalogue, which a fresh install is not.
+Read [Prometheus metrics](AGENT-REFERENCE.md#prometheus-metrics) before work involving this topic.
 
 ## Usage sketch
-Every `cmd/<worker>/main.go` is a variation on:
 
-```go
-func main() { worker.Main(run) }
-
-func run() int {
-    ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
-    if err != nil { log.Print(err); return 1 }
-    defer cleanup()
-    // ... work, then:
-    return worker.ExitCode(failed, deadLettered)
-}
-```
+Read [Usage sketch](AGENT-REFERENCE.md#usage-sketch) before work involving this topic.
 
 ## Saying what a run did
 
-A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker.
+Read [Saying what a run did](AGENT-REFERENCE.md#saying-what-a-run-did) before work involving this topic.
 
 ## Analytics reader
 
-`AnalyticsPool` is the separate, read-only connection used by the statistics
-workers. With `ANALYTICS_DATABASE_URL` configured it requires a physical standby
-and waits up to one minute for a primary WAL fence before beginning work. An
-unavailable, paused or incorrectly configured replica fails the run; it never
-fails over to primary reads. Without this variable, local development opens a
-separate read-only primary session. The writer remains unchanged. Reader queries
-are bounded to thirty minutes, idle transactions to one minute, and two pool
-connections. Rollups compute their complete results before opening the primary
-publication transaction; failures preserve the previous published snapshot.
-
-The analytics standby needs `hot_standby_feedback=on` to protect active
-aggregates from primary vacuum cleanup. Statements retain tuples only for their
-own bounded read transaction; do not hold one snapshot across the entire run.
-Keep replay delay bounded and monitor replica lag and snapshot freshness:
-repeated recovery conflicts must fail the worker and alert on stale results.
-Production service units must require the analytics environment file. An unset
-URL logs a warning and uses the development reader on the primary.
-
-Company/day aggregates are materialized before primary publication so slow
-analytics reads cannot pin the primary publication transaction. Size worker
-memory for the retained history and enforce a service memory limit; an exhausted
-reader leaves the previous snapshot intact. If this dataset exceeds that budget,
-spool the computed snapshot before publication rather than streaming a long
-standby query inside the primary transaction.
+Read [Analytics reader](AGENT-REFERENCE.md#analytics-reader) before work involving this topic.
