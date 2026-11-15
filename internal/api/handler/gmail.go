@@ -251,8 +251,8 @@ func (h *inboxHandlers) runOAuthCallback(c *fiber.Ctx, flow oauthCallbackFlow) e
 // tab. Failures redirect with ?gmail_error (never JSON); the cause is logged first because
 // the marker tells the user nothing.
 //
-// Its exchange yields the address and its persist step is two queries; both ride closures
-// rather than widening oauthCallbackFlow for one caller.
+// Its exchange yields the address, which rides a closure rather than widening
+// oauthCallbackFlow for one caller.
 func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 	var email string
 	return h.runOAuthCallback(c, oauthCallbackFlow{
@@ -264,13 +264,12 @@ func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 			return refresh, scopes, err
 		},
 		persist: func(ctx context.Context, userID int64, enc string, scopes []string) error {
-			if err := h.queries.UpsertGmailConnection(ctx, db.UpsertGmailConnectionParams{
-				UserID: userID, Email: email, RefreshTokenEnc: enc,
-			}); err != nil {
-				return err
-			}
-			// Record what this grant covers: cal-sync selects connections by recorded scopes.
-			return h.queries.RecordGrantScopes(ctx, db.RecordGrantScopesParams{UserID: userID, Scopes: scopes})
+			// Scopes ride in the same statement as the token: cal-sync selects
+			// connections by their recorded scopes, and a separate write would let a
+			// concurrent calendar connect pair its token with this grant's scopes.
+			return h.queries.UpsertGmailConnection(ctx, db.UpsertGmailConnectionParams{
+				UserID: userID, Email: email, RefreshTokenEnc: enc, Scopes: scopes,
+			})
 		},
 	})
 }
