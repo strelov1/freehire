@@ -10,16 +10,12 @@ import (
 const dayLayout = "2006-01-02"
 
 // Counts is one (day, slug) result: two visitor counts, deduplicated independently
-// over the same visitor key.
-//
-// They are two counts and not a count plus a breakdown, because a visitor who both
-// opens the page and reads the API on that day is ONE visitor in each. Total and
-// Page therefore do not sum with an API count, and nothing should try to derive one
-// from the other beyond the invariant that Page never exceeds Total.
+// over the same visitor key. A visitor who opens the page and reads the API that day
+// is ONE visitor in each, so Total and Page do not sum with an API count; only
+// Page <= Total holds.
 type Counts struct {
-	// Total counts distinct visitors who produced either counted signal. This is what
-	// job_daily_views.uniques has always held and what GET /api/v1/stats/catalog
-	// publishes, so its value must not move.
+	// Total counts distinct visitors who produced either counted signal. Backs
+	// job_daily_views.uniques and GET /api/v1/stats/catalog, so its value must not move.
 	Total int
 	// Page counts distinct visitors who opened the page. That signal is bot-filtered
 	// and the API signal deliberately is not, which makes Page the only one of the two
@@ -28,9 +24,8 @@ type Counts struct {
 }
 
 // Visitor-key states. One map with flags rather than two sets: both counters dedup
-// over the identical key, so a second map would be a second lookup that can only ever
-// hold a subset of the first's keys — and the "Page implies seen" invariant is safer
-// expressed in the bits than in the agreement of two containers.
+// over the same key, and "Page implies seen" is safer in the bits than in the
+// agreement of two containers.
 const (
 	sawVisitor = 1 << iota
 	sawPageOpen
@@ -44,8 +39,7 @@ const (
 // known bots are dropped; API reads are never bot-filtered. Unparseable and non-view
 // lines are skipped.
 //
-// Memory is bounded by the distinct (visitor, slug, day) pairs in r — the natural
-// size of the result — so one rotated file fits comfortably in memory.
+// Memory is bounded by the distinct (visitor, slug, day) pairs in r.
 func Aggregate(r io.Reader) (map[string]map[string]Counts, error) {
 	counts := make(map[string]map[string]Counts)
 	seen := make(map[string]uint8)

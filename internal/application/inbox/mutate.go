@@ -28,16 +28,13 @@ type Verdict struct {
 // Triage records a verdict for one message and advances the linked application's
 // stage by the same rules the classification worker uses.
 //
-// It is SetEmailClassification's sibling, deliberately: status, link, provenance
-// and the classified stamp are written together, so a message is never left
-// classified-but-unstamped or linked-but-unclassified — states the worker never
-// produces and no reader expects.
+// Status, link, provenance and the classified stamp are written together, like
+// SetEmailClassification, so a message is never classified-but-unstamped or
+// linked-but-unclassified.
 //
 // An out-of-vocabulary label is REFUSED here, where mailclassify.Sanitize would
-// coerce it to `other`. The worker sanitizes because it feeds on raw model output
-// derived from an attacker-controlled body and must never persist a raw string;
-// this path carries a judgement the caller asked for, and silently rewriting it
-// would record a verdict nobody chose.
+// coerce it to `other`: the worker sanitizes untrusted model output, but this
+// path carries a judgement the caller asked for and must not rewrite it.
 func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Message, error) {
 	if !mailclassify.IsValidSignal(v.Signal) {
 		return Message{}, invalid("signal", v.Signal, mailclassify.SignalValues)
@@ -72,15 +69,11 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 	if err != nil {
 		return Message{}, err
 	}
-	// The stage move is dated and attributed by the message that implies it, so it needs
-	// that message's own store — which is why it is made after the read the response is
-	// built from rather than before it. Nothing the advance does changes what was read.
+	// Runs after the read because the stage move is attributed by the message's own store.
 	if jobID.Valid {
 		s.advanceStage(ctx, userID, jobID.Int64, id, msg.Source, mailclassify.StatusSignal(v.Signal))
 	}
-	// Triage writes status, link and provenance in one update rather than going through
-	// mutate, so it needs its own reconcile. It is the same call, deliberately: a triage
-	// that set a signal on already-linked mail is an employer reply like any other.
+	// Triage bypasses mutate, so it reconciles the ledger itself.
 	s.syncLedger(ctx, userID, id, msg.Source)
 	return msg, nil
 }
@@ -110,8 +103,7 @@ func (s *Service) Unlink(ctx context.Context, userID, id int64) (Message, error)
 
 // ResolveSuggestion answers a matcher's pending proposal: accept promotes it to a
 // confirmed link, reject dismisses it and leaves the message unlinked. Only a
-// deterministic match links mail automatically, so everything the classifier
-// proposes waits here — a suggestion nobody answers is a link that never happens.
+// deterministic match links mail automatically; classifier proposals wait here.
 func (s *Service) ResolveSuggestion(ctx context.Context, userID, id int64, accept bool) (Message, error) {
 	return s.mutate(ctx, userID, id, func() (int64, error) {
 		if accept {
@@ -122,19 +114,15 @@ func (s *Service) ResolveSuggestion(ctx context.Context, userID, id int64, accep
 }
 
 // RecordApplication records a tracked application from one of the caller's
-// messages and links the message to it in one call. It is the path for mail about
-// an application that was never recorded: plain linking needs an application to
-// point at, and there is none.
+// messages and links the message to it in one call, for mail about an
+// application that was never recorded.
 //
-// The application is dated by the message, not by now(): it demonstrably existed
-// by the time the employer wrote, so the message's timestamp is an honest upper
-// bound. The error then leans toward under-reporting elapsed silence, which is the
-// safe direction — a missed ghost is a non-event, a fabricated one tells a person
-// they were ignored when they were not.
+// The application is dated by the message, not by now(): it existed by the time
+// the employer wrote. That errs toward under-reporting silence, the safe
+// direction: a fabricated ghost tells a person they were ignored when they were not.
 //
-// Mail still carrying a pending suggestion is refused: the matcher has already
-// proposed an answer, and overwriting it silently would leave the link's
-// provenance ambiguous.
+// Mail still carrying a pending suggestion is refused, so the link's provenance
+// is not silently overwritten.
 func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug string) (Message, error) {
 	if s.apps == nil {
 		return Message{}, ErrUnavailable
@@ -187,13 +175,9 @@ func (s *Service) mutate(ctx context.Context, userID, id int64, do func() (int64
 }
 
 // syncLedger reconciles the ledger with the message's current link and classification.
-// Every inbox mutation funnels through mutate, so this one call covers confirming a
-// suggestion, a manual (re)link, unlinking, and the external-harness triage — the rule
-// lives in one place rather than in four.
 //
-// Best-effort: the mutation the caller asked for has already succeeded and is the
-// primary result. A failure here is logged, never surfaced — the reconcile is idempotent
-// and the next mutation, or the backfill, will carry it out.
+// Best-effort: the mutation already succeeded, so a failure is logged, not surfaced.
+// The reconcile is idempotent; the next mutation or the backfill retries it.
 func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource string) {
 	if err := ReconcileMailEvent(ctx, s.q, userID, id, mailSource); err != nil {
 		log.Printf("inbox: ledger sync user=%d email=%d: %v", userID, id, err)
@@ -201,24 +185,18 @@ func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource s
 }
 
 // advanceStage moves a linked application forward when the verdict implies
-// progress, by the same monotonic-forward rules the classification worker uses. It
-// is best-effort: the verdict is already durable, and a failed advance must not
-// fail the triage the caller successfully recorded.
+// progress, by the same monotonic-forward rules the classification worker uses.
+// Best-effort: the verdict is already durable, so a failed advance does not fail the triage.
 //
-// emailID and mailSource are what the ledger event the write records is dated and
-// attributed by — the message is the evidence for the move, so it is what the event names.
+// emailID and mailSource date and attribute the ledger event: the message is the evidence.
 func (s *Service) advanceStage(ctx context.Context, userID, jobID, emailID int64, mailSource string, sig mailclassify.StatusSignal) {
 	current, err := s.q.GetUserJobStage(ctx, db.GetUserJobStageParams{UserID: userID, JobID: jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		// No application row means the caller linked mail to a job they do not
-		// track; there is simply no stage to advance.
+		// The caller linked mail to a job they do not track: no stage to advance.
 		return
 	}
 	if err != nil {
-		// Anything else is the database failing to answer, which is a different fact and
-		// used to leave no trace at all — the stage silently stopped advancing for every
-		// triage while it lasted. The write below already logs; so does the worker's copy
-		// of this same read (cmd/classify-mail's CurrentStage).
+		// The database failed to answer; log it so the stage does not stall silently.
 		log.Printf("inbox: read stage user=%d job=%d: %v", userID, jobID, err)
 		return
 	}
@@ -228,9 +206,8 @@ func (s *Service) advanceStage(ctx context.Context, userID, jobID, emailID int64
 	}
 	source, err := appevent.SourceForMail(mailSource)
 	if err != nil {
-		// An unrecognised store must not be stamped as an observed one — the same refusal
-		// ReconcileMailEvent makes. Without a provenance the move cannot be recorded, and a
-		// move recorded nowhere is what this whole change is fixing, so it is not made.
+		// An unrecognised store must not be stamped as an observed one (as in
+		// ReconcileMailEvent); without provenance the move cannot be recorded, so it is not made.
 		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)
 		return
 	}
@@ -248,14 +225,11 @@ type LabelCount struct {
 	Count int64  `json:"count"`
 }
 
-// Overview is the mailbox's shape: enough to answer a broad question, and nothing
-// a reader would have to pay to keep. Labels names EVERY label the vocabulary has,
-// including the ones at zero — "no interview invitations" and "no such label" are
-// different answers, and a reader that only saw the non-empty ones could not tell
-// them apart.
+// Overview is the mailbox's shape, without any content. Labels names EVERY label
+// in the vocabulary, including zero counts, so "no interview invitations" differs
+// from "no such label".
 //
-// The labels do not sum to Total: mail nothing has judged yet carries none, and is
-// counted by Unclassified.
+// The labels do not sum to Total: unjudged mail carries none and is counted by Unclassified.
 type Overview struct {
 	Total        int64        `json:"total"`
 	Unread       int64        `json:"unread"`
@@ -292,11 +266,9 @@ func (s *Service) Overview(ctx context.Context, userID int64) (Overview, error) 
 	return out, nil
 }
 
-// IsNotFound reports whether err means "the caller cannot address that" — either
-// this package's sentinel or the store's empty result. The two are the same answer
-// to every reader: a row that is not the caller's is reported as missing, never as
-// forbidden. The HTTP handler already maps pgx.ErrNoRows to a 404 centrally; this
-// is the same rule for a reader that renders no HTTP status.
+// IsNotFound reports whether err means "the caller cannot address that": this
+// package's sentinel or the store's empty result. A row that is not the caller's
+// is reported as missing, never as forbidden.
 func IsNotFound(err error) bool {
 	return errors.Is(err, ErrNotFound) || errors.Is(err, pgx.ErrNoRows)
 }

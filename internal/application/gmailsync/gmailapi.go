@@ -225,8 +225,7 @@ func bodies(p gmailPart) (text, html string) {
 }
 
 // calendarUID walks the MIME tree for a text/calendar part and reads the meeting's
-// identifier out of it. A part that carries none, or that does not parse, yields "" —
-// an invitation whose meeting we cannot identify is still an invitation, and the mail
+// identifier out of it. A part that carries none, or does not parse, yields "": the mail
 // must not be lost over it.
 func calendarUID(p gmailPart) string {
 	var found string
@@ -263,9 +262,8 @@ func decodeB64URL(s string) string {
 
 // Search runs an arbitrary query and returns the matching messages in full.
 //
-// One page only. The recall query is already scoped to one employer inside one window, so a
-// result that overflows a page is a query that failed to narrow rather than a mailbox that
-// needs paging — and the caller is a person waiting at a button.
+// One page only: the recall query is scoped to one employer and window, and the caller is a
+// person waiting at a button.
 func (r *apiReader) Search(ctx context.Context, query string, limit int) ([]Message, error) {
 	if query == "" {
 		return nil, nil
@@ -284,8 +282,7 @@ func (r *apiReader) Search(ctx context.Context, query string, limit int) ([]Mess
 	for _, m := range page.Messages {
 		msg, err := r.GetMessage(ctx, m.ID)
 		if err != nil {
-			// One unreadable message must not lose the rest: the caller is choosing from
-			// what we found, and a short list beats an error nobody can act on.
+			// One unreadable message must not lose the rest.
 			continue
 		}
 		out = append(out, msg)

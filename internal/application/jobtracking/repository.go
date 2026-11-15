@@ -59,23 +59,19 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	// The CTE that bumps view_count makes sqlc emit a bespoke row type with the
-	// same shape as db.UserJob; convert so the interaction mapping stays shared.
+	// The view_count CTE makes sqlc emit its own row type; convert to share the mapping.
 	return toInteraction(assembledRow(row)), nil
 }
 
-// MarkApplied marks a job as applied for a user. The write runs in a
-// transaction that locks the job row first (LockJobForApply), so concurrent
-// applies serialize and applied_count cannot double-bump — the same pattern
-// the vote path uses for its counters.
+// MarkApplied marks a job as applied for a user. The transaction locks the job row
+// first (LockJobForApply), so concurrent applies serialize and applied_count cannot
+// double-bump.
 func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64, source string) (Interaction, error) {
 	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{}, source)
 }
 
-// MarkAppliedAt records an application dated by `at` rather than by now() — the
-// path for an application reconstructed from employer mail. It runs the same
-// locked transaction as MarkApplied, so the applied_count guarantee is the same
-// one, not a second implementation of it.
+// MarkAppliedAt records an application dated by `at` rather than now(), for one
+// reconstructed from employer mail. It shares MarkApplied's locked transaction.
 func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
 	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true}, source)
 }
@@ -83,17 +79,12 @@ func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int
 // MarkAppliedOn records an application on a day the candidate stated, overwriting a date
 // already held.
 //
-// It runs MarkJobApplied first and re-dates second, in one transaction, because the two
-// statements answer different halves of the request: the first creates the application when
-// there is none — carrying the applied_count bump and the ledger insert under the single
-// predicate that decides them together — and the second imposes the stated date on the
-// application either way. Neither alone is the whole operation, and a caller left to run them
-// in sequence would eventually run only the first.
+// MarkJobApplied runs first and re-dates second, in one transaction: the first creates the
+// application when there is none (applied_count bump and ledger insert under one predicate),
+// the second imposes the stated date either way.
 //
-// RedateApplication returns no row when the application carries no date, which the tracker
-// allows: a stage may be set on a job never applied to. MarkJobApplied has just set one here,
-// so the miss cannot happen on this path, and treating it as an error rather than silence keeps
-// it that way.
+// RedateApplication returns no row for an application with no date. MarkJobApplied has just
+// set one, so the miss should not happen here, and it is treated as an error, not silence.
 func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
 	stated := pgtype.Timestamptz{Time: at, Valid: true}
 
@@ -116,10 +107,7 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 		UserID: userID, JobID: jobID, At: stated,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		// The statement re-dates only an application that carries a date, and MarkJobApplied has
-		// just set one — so this cannot happen on this path today. It is mapped rather than left
-		// to surface as a 500 because "cannot happen" is an argument about the code above, not a
-		// guarantee, and the honest answer to a missing application is that it is missing.
+		// Should not happen (MarkJobApplied just set a date); mapped so it is not a 500.
 		return Interaction{}, ErrApplicationNotFound
 	}
 	if err != nil {
@@ -131,12 +119,10 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 	return toInteraction(assembledRow(row)), nil
 }
 
-// markApplied is the shared apply transaction. An invalid `at` means "stamp
-// now()", the ordinary apply.
+// markApplied is the shared apply transaction. An invalid `at` means "stamp now()".
 //
-// The `applied` ledger event is written by MarkJobApplied itself, under the same
-// predicate as the applied_count bump, so it lands inside this transaction and
-// cannot diverge from the counter.
+// MarkJobApplied writes the `applied` ledger event under the same predicate as the
+// applied_count bump, so the two cannot diverge.
 func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64, at pgtype.Timestamptz, source string) (Interaction, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -157,7 +143,7 @@ func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64
 	if err := tx.Commit(ctx); err != nil {
 		return Interaction{}, err
 	}
-	// See RecordView: the applied_count CTE yields a bespoke row of db.UserJob shape.
+	// See RecordView.
 	return toInteraction(assembledRow(row)), nil
 }
 
@@ -221,7 +207,7 @@ func (r *QueriesRepository) TrackJob(
 	if err != nil {
 		return Interaction{}, err
 	}
-	// See RecordView: the stage-event CTE yields a bespoke row of db.UserJob shape.
+	// See RecordView.
 	return toInteraction(assembledRow(row)), nil
 }
 
@@ -282,10 +268,8 @@ func (r *QueriesRepository) UntrackApplication(ctx context.Context, userID, appI
 	return applicationInteraction(row.JobID, row.AppliedAt, row.Stage, row.Notes), nil
 }
 
-// applicationRowErr maps "no row came back" to the not-found sentinel. Every one of
-// the three statements is scoped by `user_id`, so a row belonging to somebody else
-// matches nothing and arrives here indistinguishable from one that never existed —
-// which is the answer the caller is owed in both cases.
+// applicationRowErr maps "no row came back" to the not-found sentinel. The statements
+// are scoped by `user_id`, so somebody else's row is indistinguishable from a missing one.
 func applicationRowErr(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrApplicationNotFound
@@ -294,10 +278,8 @@ func applicationRowErr(err error) error {
 }
 
 // applicationInteraction builds the interaction an application-addressed write
-// returns. The marks that live on user_jobs — viewed, saved, dismissed — are absent
-// rather than zeroed-and-implied: an application whose posting is gone has no
-// user_jobs row at all, and reporting `saved_at: null` for it would be a claim we
-// cannot make. The board writes optimistically and does not read this back.
+// returns. The user_jobs marks (viewed, saved, dismissed) are left absent: an
+// application whose posting is gone has no user_jobs row to report on.
 func applicationInteraction(jobID pgtype.Int8, appliedAt pgtype.Timestamptz, stage, notes pgtype.Text) Interaction {
 	return Interaction{
 		JobID:     jobID.Int64, // 0 once the posting is gone
@@ -310,14 +292,10 @@ func applicationInteraction(jobID pgtype.Int8, appliedAt pgtype.Timestamptz, sta
 // ListInteractions returns the caller's interactions joined with the jobs in the
 // canonical jobview shape, narrowed by the already-validated filter.
 //
-// (limit, offset) addresses ONE window over the merged list — the posting-backed rows
-// first, the orphaned applications after them — and the two queries divide that window
-// between themselves. Handing the same (limit, offset) to both, which is what this did
-// until 2026-09-06, is not a merge: a client walking by response length (the SPA's own
-// Paginator does exactly that) got 2*limit rows on the first page, jumped past the window
-// it never received, and never saw those rows at all; past the posting-backed total it got
-// an empty page under a meta.total that says there is more, which is a loop that does not
-// terminate.
+// (limit, offset) addresses ONE window over the merged list, posting-backed rows
+// first and orphaned applications after, and the two queries divide that window.
+// Passing the same (limit, offset) to both would return 2*limit rows and skip rows
+// for a client paging by response length, and loop on an empty page past the total.
 func (r *QueriesRepository) ListInteractions(
 	ctx context.Context,
 	userID int64,
@@ -387,10 +365,8 @@ func (r *QueriesRepository) ListInteractions(
 		})
 	}
 
-	// Applications the catalogue no longer holds a posting for. They cannot come from
-	// the query above — it is driven by user_jobs rows, which a deleted posting cascades away —
-	// so they are read separately and merged here. Only the board and applied views owe
-	// them: a posting-less application was never a view or a bookmark.
+	// Applications whose posting is gone: the query above is driven by user_jobs rows, which
+	// cascade away with the posting. Only the board, applied and all views include them.
 	if filter == FilterBoard || filter == FilterApplied || filter == FilterAll {
 		orphanLimit := limit - int32(len(items))
 		if orphanLimit > 0 {
@@ -410,15 +386,12 @@ func (r *QueriesRepository) ListInteractions(
 	return items, nil
 }
 
-// orphanOffset says how far into the orphaned applications this page's remainder starts:
-// the requested offset less the number of posting-backed rows the filter has in total,
-// floored at zero.
+// orphanOffset says where this page's remainder starts in the orphaned applications:
+// the requested offset less the filter's total posting-backed rows, floored at zero.
 //
-// That total is usually already in hand and costs nothing. A page that returned any
-// posting-backed row at all reached the end of them at offset+fetched, so the orphans
-// begin at zero; only a page that came back EMPTY at a non-zero offset has to ask, and it
-// asks the same aggregate CountInteractions reads, under the same filter, so the boundary
-// the list draws and the boundary the count implies cannot disagree.
+// A page that returned any posting-backed row already reached their end, so orphans start
+// at zero. Only an EMPTY page at a non-zero offset has to ask, using the same aggregate as
+// CountInteractions so the list and count boundaries agree.
 func (r *QueriesRepository) orphanOffset(
 	ctx context.Context,
 	userID int64,
@@ -452,9 +425,8 @@ func postingBackedCount(row db.CountUserJobsRow, filter Filter) int64 {
 	}
 }
 
-// orphanedTracked projects orphaned application rows onto the shared card shape. They
-// carry no Job: there is no posting left to describe, which is why the employer and the
-// role title were copied onto the application record in the first place.
+// orphanedTracked projects orphaned application rows onto the shared card shape, with
+// no Job: the employer and role title live on the application record.
 func orphanedTracked(orphans []db.ListOrphanedApplicationsRow) []TrackedJob {
 	items := make([]TrackedJob, 0, len(orphans))
 	for _, o := range orphans {
@@ -478,13 +450,9 @@ func orphanedTracked(orphans []db.ListOrphanedApplicationsRow) []TrackedJob {
 
 // CountInteractions returns the per-filter counts for the caller in one pass.
 //
-// CountUserJobs is driven entirely FROM user_jobs, whose rows cascade away when a
-// posting is deleted — so it never counts an orphaned application (see
-// ListOrphanedApplications), even though ListInteractions merges those into the board,
-// applied, and all views. CountOrphanedApplications closes that gap: added into "all",
-// "applied", and "board" (the same three filters ListInteractions merges orphans into),
-// left out of "viewed"/"saved"/"dismissed" (an orphaned application was never a view or a
-// bookmark, and dismissal lives only on user_jobs).
+// CountUserJobs reads user_jobs, which cascades away with a posting, so it misses orphaned
+// applications. CountOrphanedApplications is added into "all", "applied" and "board" (the
+// filters ListInteractions merges orphans into) and left out of the rest.
 func (r *QueriesRepository) CountInteractions(ctx context.Context, userID int64) (Counts, error) {
 	row, err := r.q.CountUserJobs(ctx, userID)
 	if err != nil {
@@ -547,13 +515,9 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 }
 
 // ReplyRateCounts returns the caller's own observable/answered counts alongside the
-// global figure summed across every company, minus the caller's own contribution (see
-// userjob.ExcludeCallerFromGlobal). The personal side is computed live
-// (GetUserResponseRate reads application_events directly, scoped by user_id); the
-// global side reads the periodic per-company rollup's own numbers
-// (GetGlobalCompanyResponse), never a second independent computation. The two queries
-// are independent of each other and of Service.Pipeline's own PipelineCounts call, so
-// they run concurrently rather than as two more sequential round trips on top of it.
+// global figure minus the caller's contribution (userjob.ExcludeCallerFromGlobal). The
+// personal side is live (application_events); the global side reads the per-company
+// rollup. The queries are independent, so they run concurrently.
 func (r *QueriesRepository) ReplyRateCounts(ctx context.Context, userID int64) (you, global userjob.ReplyRateSide, err error) {
 	var (
 		youRow            db.GetUserResponseRateRow
@@ -585,10 +549,8 @@ func (r *QueriesRepository) ReplyRateCounts(ctx context.Context, userID int64) (
 }
 
 // assembledRow is the shape every write query in user_jobs.sql returns: the marks from
-// user_jobs and the process from applications, in user_jobs' historical column order.
-// sqlc emits a distinct Row type per query with identical layout, so one conversion
-// target keeps the mapping shared — db.UserJob stopped serving that once the application
-// columns were dropped from the table.
+// user_jobs and the process from applications. sqlc emits a distinct Row type per query
+// with identical layout, so one conversion target keeps the mapping shared.
 type assembledRow struct {
 	UserID       int64
 	JobID        int64
@@ -625,10 +587,8 @@ func textPtr(t pgtype.Text) *string {
 }
 
 // autoApplyStatusFor derives a board row's own auto-apply status from ListUserJobs's raw
-// columns, or nil when hasAttempt is false (no auto_apply_queue row for this (user, job)
-// pair). Mirrors autoApplyReviewInfoForJob's own derivation (internal/api/handler), scoped
-// to just the status this list needs for its badge — the full preview/unmapped detail is
-// the drawer's own, richer read.
+// columns, or nil when hasAttempt is false (no auto_apply_queue row for this (user, job)).
+// Mirrors autoApplyReviewInfoForJob's derivation (internal/api/handler), status only.
 func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview bool, reviewDecision pgtype.Text, blockedAt, failedAt, previewFailedAt, tailorFailedAt pgtype.Timestamptz) *autoapply.Status {
 	if !hasAttempt {
 		return nil
@@ -638,8 +598,7 @@ func autoApplyStatusFor(hasAttempt bool, tailoredCVID *uuid.UUID, hasPreview boo
 		HasResolvedPreview: hasPreview,
 		ReviewDecision:     reviewDecision.String,
 		Blocked:            blockedAt.Valid,
-		// Either budget exhausting counts as failed — see autoApplyReviewInfoForJob's own
-		// identical reasoning (internal/api/handler/auto_apply_review_info.go).
+		// Either budget exhausting counts as failed, as in autoApplyReviewInfoForJob.
 		Failed:       failedAt.Valid || previewFailedAt.Valid,
 		TailorFailed: tailorFailedAt.Valid,
 	})

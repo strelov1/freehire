@@ -1,17 +1,13 @@
 // Package mailbox composes a per-user hosted-mailbox address on the freehire
-// receiving domain (<username>@<domain>). It no longer allocates or suffixes
-// its own handle — the address is always the account's own username (see the
-// add-username-claim change's design.md), lazily allocated on first use via
-// UsernameEnsurer. Enrollment (the mailboxes row) is separate from the
-// username itself: releasing a mailbox stops mail delivery without touching
-// the account's username.
+// receiving domain (<username>@<domain>). The address is always the account's own
+// username, lazily allocated via UsernameEnsurer. Enrollment (the mailboxes row) is
+// separate: releasing a mailbox stops delivery without touching the username.
 package mailbox
 
 import "context"
 
-// UsernameEnsurer resolves (lazily allocating a default if the caller does
-// not already have one) an account's username. Satisfied by
-// *accounts.Service.
+// UsernameEnsurer resolves an account's username, allocating a default if it has
+// none. Satisfied by *accounts.Service.
 type UsernameEnsurer interface {
 	EnsureUsername(ctx context.Context, userID int64, email string) (string, error)
 }
@@ -25,12 +21,9 @@ type Store interface {
 }
 
 // GetOrCreate returns the user's hosted-mailbox address, enrolling them in the
-// feature on first use. Resolves the username BEFORE enrolling: the two are
-// separate, non-transactional writes, and this order means a failure between
-// them leaves an account with a username but no mailbox row — the ordinary
-// state of every non-mailbox user — rather than a mailbox row with no
-// username, which would be an anomaly every reader of that row has to
-// specifically account for.
+// feature on first use. Resolves the username BEFORE enrolling: the writes are not
+// transactional, and a failure between them must leave a username without a mailbox
+// row (an ordinary state), not a mailbox row without a username.
 func GetOrCreate(ctx context.Context, s Store, ensurer UsernameEnsurer, userID int64, email, domain string) (string, error) {
 	name, err := ensurer.EnsureUsername(ctx, userID, email)
 	if err != nil {

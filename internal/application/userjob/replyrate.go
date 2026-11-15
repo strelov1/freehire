@@ -15,12 +15,10 @@ type ReplyRateBenchmark struct {
 	Global ReplyRateSide `json:"global"`
 }
 
-// ObservableSampleGate is the minimum observable-application count a response-rate
-// figure needs before it is served — shared with
-// internal/api/handler.responseSampleGate rather than restated, because both gate the
-// identical quantity (observable applications before a response/reply rate is
-// trustworthy): the per-company figure and this personal-vs-global one. Below it,
-// absence is the honest answer, not a zero or an estimate.
+// ObservableSampleGate is the minimum observable-application count a reply-rate
+// figure needs before it is served. Shared with internal/api/handler.responseSampleGate
+// because both gate the same quantity. Below it, absence is the honest answer, not a
+// zero or an estimate.
 const ObservableSampleGate = 10
 
 // GateReplyRateBenchmark returns the comparison when both sides clear
@@ -34,13 +32,10 @@ func GateReplyRateBenchmark(you, global ReplyRateSide) *ReplyRateBenchmark {
 	return &ReplyRateBenchmark{You: you, Global: global}
 }
 
-// ExcludeCallerFromGlobal removes the caller's own observable/answered counts from a
-// platform-wide total, so the "global" side of the comparison means everyone ELSE —
-// without this, a caller with a non-trivial share of the platform's observable
-// applications would be partly comparing themselves to themselves. Each field clamps
-// at zero independently: globalTotal comes from a periodic rollup while you is read
-// live, so a caller's very recent application may not have reached the rollup yet, and
-// a negative count is nonsense to serve rather than a signal worth surfacing.
+// ExcludeCallerFromGlobal removes the caller's own counts from a platform-wide total
+// so "global" means everyone ELSE. Each field clamps at zero independently:
+// globalTotal comes from a periodic rollup while you is read live, so a very recent
+// application may not be in it yet.
 func ExcludeCallerFromGlobal(you, globalTotal ReplyRateSide) ReplyRateSide {
 	return ReplyRateSide{
 		Applications: nonNegative(globalTotal.Applications - you.Applications),

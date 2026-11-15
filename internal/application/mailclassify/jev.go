@@ -47,8 +47,7 @@ var signalRubric = map[StatusSignal]string{
 	SignalOther:                 "anything not about an application, such as a sign-in code",
 }
 
-// signalCriteria is the signal question's criteria, built once: every label in
-// SignalValues needs a rubric, and a label added without one fails at load.
+// signalCriteria is the signal question's criteria. A label in SignalValues without a rubric panics at load.
 var signalCriteria = func() map[string]string {
 	criteria := make(map[string]string, len(SignalValues))
 	for _, name := range SignalValues {

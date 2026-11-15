@@ -19,11 +19,9 @@ const (
 	defaultLeaseSeconds = 120
 	defaultBatchSize    = 20
 	defaultMaxAttempts  = 3
-	// defaultUpstreamGraceDays bounds the failures the message did NOT cause, by the
-	// entry's queue age rather than by tries — see messageAtFault. Two weeks is the same
-	// figure ENRICH_UPSTREAM_GRACE_DAYS defaults to, and is sized to outlast an outage
-	// plus the time it takes someone to notice; there is no env knob here because the
-	// mail queue has never needed one moved.
+	// defaultUpstreamGraceDays bounds failures the message did NOT cause, by queue age
+	// rather than tries (see messageAtFault). Sized to outlast an outage plus the time
+	// to notice; same default as ENRICH_UPSTREAM_GRACE_DAYS.
 	defaultUpstreamGraceDays = 14
 )
 
@@ -75,16 +73,14 @@ type Store interface {
 	// Save persists the result and deletes the outbox row in one transaction.
 	Save(ctx context.Context, outboxID, userID int64, r Result, model string) error
 	// Fail records a failed attempt under the given policy and reports whether the entry
-	// dead-lettered — reached its bound and will not be retried. The bool is not
-	// decoration: it is what the worker's exit code is built from, and without it a queue
-	// can dead-letter every entry and still exit 0.
+	// dead-lettered (reached its bound, will not be retried). The worker's exit code is
+	// built from it; without it a queue could dead-letter everything and still exit 0.
 	Fail(ctx context.Context, outboxID int64, cause string, policy FailurePolicy) (deadLettered bool, err error)
 }
 
-// FailurePolicy is how one failure should be bounded. Which of the two bounds applies is
-// decided by MessageAtFault, and the two are not interchangeable: MaxAttempts counts tries
-// at a task that may be impossible, UpstreamGraceDays waits out a dependency that is
-// expected back. See messageAtFault and FailEmailClassification.
+// FailurePolicy is how one failure should be bounded. MessageAtFault picks the bound:
+// MaxAttempts counts tries at a possibly impossible task, UpstreamGraceDays waits out
+// a dependency expected back. See messageAtFault and FailEmailClassification.
 type FailurePolicy struct {
 	MessageAtFault    bool
 	MaxAttempts       int
@@ -142,15 +138,10 @@ func (r *Runner) WithLearner(l Learner) *Runner {
 	return r
 }
 
-// Run enqueues every unclassified email, then drains the outbox wave by wave
-// until it is empty.
 // Stats is what a run reports upward. Failed and DeadLettered are mutually
-// exclusive — a dead-lettered entry counts only in DeadLettered, matching
-// internal/platform/outbox.Outcome's one-outcome-per-item shape (and applyform/adzunadesc's
-// RunStats, migrated onto the same shared runner just before this package: see
-// applyform.RunStats' doc comment for the pre-migration double-count this convention
-// corrects). cmd/classify-mail turns them into its exit code, so a mail queue that
-// quietly stops working is visible to the scheduler rather than only in journalctl.
+// exclusive: a dead-lettered entry counts only in DeadLettered, matching
+// outbox.Outcome. cmd/classify-mail turns them into its exit code, so a quietly
+// broken queue is visible to the scheduler.
 type Stats struct {
 	Failed       int
 	DeadLettered int
@@ -167,42 +158,35 @@ func (c claimAdapter) Claim(ctx context.Context, batch, leaseSeconds int) ([]Cla
 	return c.store.ClaimBatch(ctx, leaseSeconds, batch)
 }
 
+// Run enqueues every unclassified email, then drains the outbox wave by wave
+// until it is empty.
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	if _, err := r.store.EnqueuePending(ctx); err != nil {
 		return Stats{}, err
 	}
-	// A wave is mostly one user's mail, and their application list is the same for
-	// every message in it — see appCache for why the thread links are NOT cached
-	// alongside it. Created once for the whole Run (not per wave), exactly as before:
-	// the closure below captures it, and outbox.RunPool calls that same closure across
-	// every wave in this Run.
+	// A wave is mostly one user's mail, so its application list is shared (see appCache
+	// for why thread links are not). Created once per Run, not per wave.
 	cache := appCache{store: r.store, byUser: map[int64][]Application{}}
 	result, err := outbox.RunPool(ctx, claimAdapter{store: r.store}, outbox.RunOptions{
 		BatchSize:    r.batchSize,
 		LeaseSeconds: r.leaseSeconds,
-		// Strictly sequential — no goroutine spawned at all (see internal/platform/outbox's
-		// Claimer doc comment on RunPool's Concurrency<=1 branch). appCache.byUser is
-		// a plain, non-synchronized map, and a later message in the same thread must
-		// see the same wave's earlier link (ThreadLinks is read live, not cached) —
-		// both require true in-order processing, not just a small pool.
+		// Strictly sequential: appCache.byUser is an unsynchronized map, and a later
+		// message in a thread must see the same wave's earlier link.
 		Concurrency: 1,
 	}, func(ctx context.Context, c Claimed) outbox.Outcome {
 		err := r.process(ctx, cache, c)
 		if err == nil {
 			return outbox.Succeeded
 		}
-		// Which bound this failure is held to follows from its cause, so a caller cannot
-		// forget to decide: everything but the message's own fault is bounded by the
-		// entry's age instead, which is what lets an outage of any length cost nothing
-		// permanently.
+		// Everything but the message's own fault is bounded by entry age, so an outage
+		// of any length costs nothing permanently.
 		deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), FailurePolicy{
 			MessageAtFault:    messageAtFault(err),
 			MaxAttempts:       r.maxAttempts,
 			UpstreamGraceDays: r.upstreamGraceDays,
 		})
 		if ferr != nil {
-			// The dead-letter state is unknown and is not guessed — it still counts as
-			// failed (the entry is left to its lease expiry either way).
+			// Dead-letter state is unknown, so it counts as failed; the lease expires either way.
 			log.Printf("maillink: fail outbox %d: %v", c.OutboxID, ferr)
 			return outbox.Failed
 		}
@@ -220,13 +204,10 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 
 // appCache memoises one user's applications for the length of a run.
 //
-// Only this half of the per-user context may be cached. Application membership is
-// "applied, saved or staged", and the only write a run makes to it is a forward
-// stage move on a row that is already a member — so the list cannot change under
-// us. The thread links CAN: Save writes job_id onto the message it just linked,
-// and a later message in the same thread has to see that link to continue it.
-// Caching both reads as the same optimisation and silently costs thread continuity
-// within a wave.
+// Only applications may be cached: a run's only write to membership is a forward
+// stage move on an existing member. Thread links must not be, because Save writes
+// job_id onto the message it just linked and a later message in the thread has to
+// see it.
 type appCache struct {
 	store  Store
 	byUser map[int64][]Application
@@ -260,9 +241,8 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 		mailmatch.Email{ThreadID: c.ThreadID, FromName: c.FromName, Subject: c.Subject},
 		matchCandidates(apps, links),
 	)
-	// Only spend the LLM's disambiguation on the ambiguous/unmatched tail; a
-	// confident deterministic match still needs the status, so classify either way.
-	// The same predicate decides what resolveLink persists below — see autoLinks.
+	// Only spend LLM disambiguation on the ambiguous/unmatched tail; classify either
+	// way for the status. resolveLink uses the same predicate (see autoLinks).
 	var candidates []mailclassify.Candidate
 	if !r.cfg.autoLinks(m) {
 		candidates = classifyCandidates(apps)
@@ -301,23 +281,15 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 		return err
 	}
 
-	// Feed the self-learning cache: a concrete (non-"other") signal AT the same
-	// confidence bar this package already trusts to act automatically (cfg.stage —
-	// see stageAdvance) means the classifier confidently recognised
-	// application-lifecycle mail, so its sender domain is worth learning.
-	// internal/application/gmailsync/learn.go documents the write side as triggering on
-	// "confident job-mail sightings"; without a confidence check here, repeated
-	// low-confidence guesses on the same sender could still reach PromoteThreshold
-	// and promote a domain the rest of the pipeline treats as too weak to act on.
-	// Best-effort — a learn failure must not fail the email.
+	// Feed the self-learning cache, but only at the confidence bar already trusted to
+	// act (cfg.stage): repeated low-confidence guesses could otherwise reach
+	// PromoteThreshold and promote a domain the pipeline treats as too weak. Best-effort:
+	// a learn failure must not fail the email.
 	//
-	// gmail only, and that is about the SENDER rather than about the classification: what
-	// is learned is a domain read off From, and the cache it feeds decides which senders a
-	// future sync will accept. Gmail delivered the message and its From is what the
-	// provider authenticated. Hosted mail is whatever SMTP claimed (internal/application/mailingest
-	// reads From out of the MIME headers), and external mail is whatever the caller's own
-	// harness pushed — so on those two tiers anyone who can post to an address could
-	// nominate the domain they want trusted.
+	// Gmail only, because the learned domain is read off From and feeds which senders a
+	// future sync accepts. Gmail authenticates From; hosted mail is whatever SMTP claimed
+	// and external mail is whatever the caller pushed, so there anyone could nominate a
+	// domain to be trusted.
 	if r.learner != nil && c.Source == "gmail" {
 		r.learn(ctx, c.FromAddr, cls)
 	}
@@ -325,10 +297,8 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 }
 
 // learn feeds one Gmail classification to the learner. `other` counts against the sender
-// at any confidence — demoting is the safe direction, and a domain's noise is what keeps
-// it out of every user's query. The same From-authentication argument applies to misses
-// as to hits: a forged From that could demote a real ATS is the same forgery that could
-// promote one.
+// at any confidence: demoting is the safe direction. The From-authentication argument
+// applies to misses too, since a forged From could demote a real ATS.
 func (r *Runner) learn(ctx context.Context, fromAddr string, cls mailclassify.Classification) {
 	switch {
 	case cls.Signal == mailclassify.SignalOther:

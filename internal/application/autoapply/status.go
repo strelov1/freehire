@@ -1,9 +1,8 @@
 package autoapply
 
 // Status is the seven-value candidate-facing status for a live auto-apply attempt, richer
-// than the job-detail overlay's own three-value derivation (which has its own consumers
-// and its own reasons — see internal/api/handler's autoApplyEntryStatus doc comment — and
-// is left untouched by this).
+// than the job-detail overlay's three-value derivation (internal/api/handler's
+// autoApplyEntryStatus), which is left untouched.
 type Status string
 
 const (
@@ -24,23 +23,15 @@ const (
 	StatusDeclined Status = "declined"
 	// StatusFailed means an unattended submission attempt exhausted its retries.
 	StatusFailed Status = "failed"
-	// StatusTailorFailed means the tailoring run itself did not produce a CV — distinct
-	// from StatusFailed, which is a SUBMISSION that gave up with a tailored CV in hand.
-	// The two are different things to be told: one attempt has a CV the candidate can
-	// look at, the other has nothing at all.
-	//
-	// Before it existed, a failed tailoring run recorded nothing, so the derivation below
-	// fell through to StatusTailoring and the candidate was told preparation was under way
-	// — indefinitely, about work nobody was doing (freehire, 2026-09-08: three entries,
-	// one of them for over a day).
+	// StatusTailorFailed means the tailoring run itself did not produce a CV, distinct from
+	// StatusFailed, which is a SUBMISSION that gave up with a CV in hand. Without it a failed
+	// tailoring run recorded nothing and the candidate was told preparation was under way
+	// indefinitely.
 	StatusTailorFailed Status = "tailor_failed"
 )
 
-// DerivedFrom is an attempt's own raw state, as DeriveStatus reads it.
-//
-// A struct rather than the positional parameters this replaces: they were five in a row,
-// four of them bool, and a caller had no way to be wrong loudly — the state that made this
-// type worth having would have been the sixth.
+// DerivedFrom is an attempt's own raw state, as DeriveStatus reads it. A struct because
+// positional bool parameters give a caller no way to be wrong loudly.
 type DerivedFrom struct {
 	HasTailoredCV      bool
 	HasResolvedPreview bool
@@ -52,16 +43,14 @@ type DerivedFrom struct {
 	TailorFailed bool
 }
 
-// DeriveStatus derives the candidate-facing status from an attempt's own raw state. Mirrors
-// internal/api/handler's autoApplyEntryStatus precedence: declined is checked first,
-// because DeclineAutoApplyReview also sets blocked_at (it reuses MarkAutoApplyBlocked's own
-// park vocabulary) — checking blocked/failed before the review decision would misreport a
-// candidate's own decline as an operational failure.
+// DeriveStatus derives the candidate-facing status from an attempt's raw state, mirroring
+// internal/api/handler's autoApplyEntryStatus precedence. Declined is checked first:
+// DeclineAutoApplyReview also sets blocked_at, so checking blocked/failed first would report
+// a candidate's own decline as an operational failure.
 //
-// A tailoring failure is checked LAST of the operational states, below a tailored CV that
-// exists: a later run that succeeded supersedes an earlier one that did not, and telling
-// somebody their CV could not be prepared while it sits there ready is worse than saying
-// nothing. The write path clears the marker on success; this does not rely on it having.
+// A tailoring failure is checked last of the operational states, below an existing tailored
+// CV: a later success supersedes an earlier failure. The write path clears the marker on
+// success; this does not rely on it.
 func DeriveStatus(in DerivedFrom) Status {
 	switch {
 	case in.ReviewDecision == "declined":
@@ -82,9 +71,8 @@ func DeriveStatus(in DerivedFrom) Status {
 }
 
 // ResolvedAttempt is the raw state AssembleReviewInfo derives a status and a candidate-safe
-// view from. LastError is deliberately not a field here — it is an internal diagnostic
-// string never intended for a candidate to read, so the type that carries what a tracked
-// job reports has no place to put it.
+// view from. LastError is deliberately absent: it is an internal diagnostic never meant for
+// a candidate.
 type ResolvedAttempt struct {
 	QueueID         int64
 	HasTailoredCV   bool
@@ -105,9 +93,8 @@ type ResolvedAttempt struct {
 // jobtracking.StageSuggestion already follows for its own optional field.
 type AutoApplyReviewInfo struct {
 	Status Status `json:"status"`
-	// QueueID addresses the attempt for the existing POST /me/auto-apply/:queueId/review
-	// call the drawer's approve/decline banner makes — carried on every status, not just
-	// pending_review, so it costs nothing to include and never needs a second read later.
+	// QueueID addresses the attempt for POST /me/auto-apply/:queueId/review; carried on every
+	// status so no second read is needed.
 	QueueID int64 `json:"queue_id"`
 	// ResolvedPreview is set only when Status is StatusPendingReview — the one state
 	// where the candidate has a decision to make and needs to see what it covers.

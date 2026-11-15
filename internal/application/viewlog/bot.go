@@ -3,15 +3,11 @@ package viewlog
 import "strings"
 
 // botMarkers are lowercased substrings of well-known crawler/preview User-Agents.
-// The list is deliberately small and conservative: it catches the high-volume
-// crawlers that hit SSR pages for SEO and link previews, not every possible bot.
-// Missed bots only inflate the page-view number (a transparency figure), so this
-// stays a light filter rather than an exhaustive blocklist.
+// Deliberately small: missed bots only inflate the page-view number, so this is a
+// light filter, not a blocklist.
 //
-// The generic "bot" is deliberately absent, mirroring internal/platform/tracerlink's own
-// classifier: it appears inside "CUBOT," a phone brand, so a bare substring match
-// misclassifies a real visitor's page view as a crawler's. Generic bot names
-// (googlebot, bingbot, ahrefsbot, ...) are caught by botSuffixes instead.
+// The generic "bot" is absent, as in internal/platform/tracerlink's classifier: it
+// matches "CUBOT", a phone brand. Generic bot names are caught by botSuffixes.
 var botMarkers = []string{
 	"crawl", // crawler variants
 	"spider",
