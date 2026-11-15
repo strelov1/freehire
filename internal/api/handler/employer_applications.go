@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/directapply"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // The applicant inbox: the applications sent on freehire to the caller's own vacancies
@@ -59,6 +60,9 @@ func employerApplicationOut(a directapply.InboxApplication) apigen.EmployerAppli
 	return out
 }
 
+// employerApplicationParams are the query params ListEmployerApplications reads.
+var employerApplicationParams = []string{"job", "stage", "limit", "offset"}
+
 // ListEmployerApplications lists one page of the caller's delivered applications.
 func (h *employerHandlers) ListEmployerApplications(ctx context.Context, params apigen.ListEmployerApplicationsParams) (*apigen.EmployerApplicationsPage, error) {
 	userID, err := requireUserIDFromContext(ctx)
@@ -88,6 +92,8 @@ func (h *employerHandlers) ListEmployerApplications(ctx context.Context, params 
 			Limit:       int64(limit),
 			Offset:      int64(offset),
 			StageCounts: apigen.EmployerApplicationsMetaStageCounts{},
+			// The listing reads only these; anything else widens the answer, so it is named.
+			IgnoredParams: contractIgnoredParams(search.UnknownParamsAgainst(contractQuery(ctx), employerApplicationParams)),
 		},
 	}
 	for i, a := range page.Applications {

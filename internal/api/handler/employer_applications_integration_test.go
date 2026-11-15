@@ -159,6 +159,17 @@ func TestEmployerApplicationsEndToEnd(t *testing.T) {
 		}
 	})
 
+	t.Run("a param the listing does not read is named, not silently widened", func(t *testing.T) {
+		resp, body := do(t, fiber.MethodGet, "/api/v1/employer/applications?stgae=rejected", employerCookie, "")
+		if resp.StatusCode != fiber.StatusOK || !strings.Contains(string(body), `"ignored_params":[{"param":"stgae"`) {
+			t.Errorf("status = %d, body %s; want stgae in meta.ignored_params", resp.StatusCode, body)
+		}
+		_, body = do(t, fiber.MethodGet, "/api/v1/employer/applications?stage=new", employerCookie, "")
+		if strings.Contains(string(body), "ignored_params") {
+			t.Errorf("body %s; want no ignored_params when every param was read", body)
+		}
+	})
+
 	t.Run("an unknown stage filter is refused, not widened", func(t *testing.T) {
 		if resp, body := do(t, fiber.MethodGet, "/api/v1/employer/applications?stage=ghosted", employerCookie, ""); resp.StatusCode != fiber.StatusBadRequest {
 			t.Errorf("status = %d (body %s), want 400", resp.StatusCode, body)

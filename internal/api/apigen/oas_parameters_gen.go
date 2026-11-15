@@ -5829,6 +5829,7 @@ func decodeGetEmailPrefsParams(args [0]string, argsEscaped bool, r *http.Request
 
 // GetEmployerApplicationCVParams is parameters of getEmployerApplicationCV operation.
 type GetEmployerApplicationCVParams struct {
+	// The application's id. (e.g. `42`).
 	ID string
 }
 
@@ -14141,6 +14142,7 @@ func decodeMarkNotificationReadParams(args [1]string, argsEscaped bool, r *http.
 
 // MoveEmployerApplicationParams is parameters of moveEmployerApplication operation.
 type MoveEmployerApplicationParams struct {
+	// The application's id. (e.g. `42`).
 	ID string
 }
 

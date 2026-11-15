@@ -752,7 +752,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The delivered applications to the caller's vacancies, newest first. */
+        /**
+         * List the applications sent to your vacancies.
+         * @description The delivered applications to the caller's vacancies, newest first. An unknown `stage` is
+         *     a 400 rather than an unfiltered answer; a param the listing does not read is named in
+         *     `meta.ignored_params`.
+         */
         get: operations["listEmployerApplications"];
         put?: never;
         post?: never;
@@ -769,7 +774,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The CV file the application sent, exactly as it was emailed to you. 404 when none was kept. */
+        /**
+         * Open the CV an application sent.
+         * @description The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate pasted. 404 when none was kept.
+         */
         get: operations["getEmployerApplicationCV"];
         put?: never;
         post?: never;
@@ -788,7 +796,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Moves the application to a stage of your pipeline. */
+        /**
+         * Move an application through your pipeline.
+         * @description Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+         *     `interview`, `offer` and `rejected` email the candidate with your optional message. A move
+         *     to the stage it already holds changes nothing and sends nothing.
+         */
         post: operations["moveEmployerApplication"];
         delete?: never;
         options?: never;
@@ -7199,13 +7212,16 @@ export interface components {
         EmployerApplication: {
             /** Format: int64 */
             id: number;
+            /** @description The vacancy's public slug. */
             job_slug: string;
             job_title: string;
+            /** @description The candidate's address; replies to the application email reach it too. */
             candidate_email: string;
             /** @description "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file). */
             cv_kind: string;
             /** @description False for an application sent before its CV was kept: that CV reached you by email only. */
             has_cv: boolean;
+            /** @description The candidate's note, empty when none. */
             note: string;
             answers: components["schemas"]["EmployerApplicationAnswer"][];
             stage: components["schemas"]["EmployerApplicationStage"];
@@ -7214,20 +7230,27 @@ export interface components {
              * @description When you last moved it; absent while it has never been moved.
              */
             stage_changed_at?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the application reached you.
+             */
             sent_at: string;
         };
         /** @description One answered question, as asked when the candidate applied. */
         EmployerApplicationAnswer: {
+            /** @description The question's id on the vacancy's form. (e.g. `q1`) */
             id: string;
+            /** @description The question as it read when the candidate applied. */
             label: string;
             /** @description "text", "boolean" (answer "true"/"false") or "select". */
             type: string;
+            /** @description The candidate's answer. */
             answer: string;
         };
-        /** @description `message` is optional and goes only with `interview`, `offer` or `rejected`. */
         EmployerApplicationMove: {
+            /** @description The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`) */
             stage?: string;
+            /** @description Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with `interview`, `offer` or `rejected`, the stages that send one. */
             message?: string;
         };
         EmployerApplicationMoved: {
@@ -7235,7 +7258,10 @@ export interface components {
             /** @description Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
             candidate_notified: boolean;
         };
-        /** @enum {string} */
+        /**
+         * @description A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
+         * @enum {string}
+         */
         EmployerApplicationStage: "new" | "reviewing" | "interview" | "offer" | "hired" | "rejected";
         EmployerApplicationsMeta: {
             /** Format: int64 */
@@ -7248,6 +7274,8 @@ export interface components {
             stage_counts: {
                 [key: string]: number;
             };
+            /** @description Query params this listing did not read, so the answer is wider than asked; absent when every param was read. */
+            ignored_params?: components["schemas"]["IgnoredParam"][];
         };
         EmployerApplicationsPage: {
             data: components["schemas"]["EmployerApplication"][];
@@ -11763,6 +11791,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 42,
+                     *           "job_slug": "platform-engineer-acme-9f3c",
+                     *           "job_title": "Platform Engineer",
+                     *           "candidate_email": "candidate@example.com",
+                     *           "cv_kind": "tailored",
+                     *           "has_cv": true,
+                     *           "note": "Happy to talk this week.",
+                     *           "answers": [
+                     *             {
+                     *               "id": "q1",
+                     *               "label": "EU work permit?",
+                     *               "type": "boolean",
+                     *               "answer": "true"
+                     *             }
+                     *           ],
+                     *           "stage": "new",
+                     *           "sent_at": "2026-11-10T10:00:00Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1,
+                     *         "limit": 50,
+                     *         "offset": 0,
+                     *         "stage_counts": {
+                     *           "new": 1,
+                     *           "rejected": 2
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["EmployerApplicationsPage"];
                 };
             };
@@ -11782,6 +11844,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The application's id. (e.g. `42`) */
                 id: string;
             };
             cookie?: never;
@@ -11815,12 +11878,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The application's id. (e.g. `42`) */
                 id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "stage": "interview",
+                 *       "message": "Are you free on Tuesday?"
+                 *     }
+                 */
                 "application/json": components["schemas"]["EmployerApplicationMove"];
             };
         };
@@ -11831,6 +11901,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "application": {
+                     *           "id": 42,
+                     *           "job_slug": "platform-engineer-acme-9f3c",
+                     *           "job_title": "Platform Engineer",
+                     *           "candidate_email": "candidate@example.com",
+                     *           "cv_kind": "tailored",
+                     *           "has_cv": true,
+                     *           "note": "",
+                     *           "answers": [],
+                     *           "stage": "interview",
+                     *           "stage_changed_at": "2026-11-12T09:00:00Z",
+                     *           "sent_at": "2026-11-10T10:00:00Z"
+                     *         },
+                     *         "candidate_notified": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["EmployerApplicationMoved"];
                     };

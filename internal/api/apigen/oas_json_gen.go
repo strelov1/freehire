@@ -29159,13 +29159,24 @@ func (s *EmployerApplicationsMeta) encodeFields(e *jx.Encoder) {
 		e.FieldStart("stage_counts")
 		s.StageCounts.Encode(e)
 	}
+	{
+		if s.IgnoredParams != nil {
+			e.FieldStart("ignored_params")
+			e.ArrStart()
+			for _, elem := range s.IgnoredParams {
+				elem.Encode(e)
+			}
+			e.ArrEnd()
+		}
+	}
 }
 
-var jsonFieldsNameOfEmployerApplicationsMeta = [4]string{
+var jsonFieldsNameOfEmployerApplicationsMeta = [5]string{
 	0: "total",
 	1: "limit",
 	2: "offset",
 	3: "stage_counts",
+	4: "ignored_params",
 }
 
 // Decode decodes EmployerApplicationsMeta from json.
@@ -29222,6 +29233,23 @@ func (s *EmployerApplicationsMeta) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"stage_counts\"")
+			}
+		case "ignored_params":
+			if err := func() error {
+				s.IgnoredParams = make([]IgnoredParam, 0)
+				if err := d.Arr(func(d *jx.Decoder) error {
+					var elem IgnoredParam
+					if err := elem.Decode(d); err != nil {
+						return err
+					}
+					s.IgnoredParams = append(s.IgnoredParams, elem)
+					return nil
+				}); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"ignored_params\"")
 			}
 		default:
 			return d.Skip()

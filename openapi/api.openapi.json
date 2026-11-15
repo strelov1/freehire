@@ -2811,7 +2811,8 @@
     "/employer/applications": {
       "get": {
         "operationId": "listEmployerApplications",
-        "description": "The delivered applications to the caller's vacancies, newest first.",
+        "summary": "List the applications sent to your vacancies.",
+        "description": "The delivered applications to the caller's vacancies, newest first. An unknown `stage` is\na 400 rather than an unfiltered answer; a param the listing does not read is named in\n`meta.ignored_params`.",
         "parameters": [
           {
             "name": "job",
@@ -2861,6 +2862,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmployerApplicationsPage"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 42,
+                      "job_slug": "platform-engineer-acme-9f3c",
+                      "job_title": "Platform Engineer",
+                      "candidate_email": "candidate@example.com",
+                      "cv_kind": "tailored",
+                      "has_cv": true,
+                      "note": "Happy to talk this week.",
+                      "answers": [
+                        {
+                          "id": "q1",
+                          "label": "EU work permit?",
+                          "type": "boolean",
+                          "answer": "true"
+                        }
+                      ],
+                      "stage": "new",
+                      "sent_at": "2026-11-10T10:00:00Z"
+                    }
+                  ],
+                  "meta": {
+                    "total": 1,
+                    "limit": 50,
+                    "offset": 0,
+                    "stage_counts": {
+                      "new": 1,
+                      "rejected": 2
+                    }
+                  }
                 }
               }
             }
@@ -2884,12 +2917,14 @@
     "/employer/applications/{id}/cv": {
       "get": {
         "operationId": "getEmployerApplicationCV",
-        "description": "The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.",
+        "summary": "Open the CV an application sent.",
+        "description": "The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate pasted. 404 when none was kept.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "The application's id. (e.g. `42`)",
             "schema": {
               "type": "string"
             }
@@ -2939,12 +2974,14 @@
     "/employer/applications/{id}/stage": {
       "post": {
         "operationId": "moveEmployerApplication",
-        "description": "Moves the application to a stage of your pipeline.",
+        "summary": "Move an application through your pipeline.",
+        "description": "Moves the application to a stage of your pipeline. The candidate's tracking follows, and\n`interview`, `offer` and `rejected` email the candidate with your optional message. A move\nto the stage it already holds changes nothing and sends nothing.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "The application's id. (e.g. `42`)",
             "schema": {
               "type": "string"
             }
@@ -2966,6 +3003,24 @@
                     }
                   },
                   "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "application": {
+                      "id": 42,
+                      "job_slug": "platform-engineer-acme-9f3c",
+                      "job_title": "Platform Engineer",
+                      "candidate_email": "candidate@example.com",
+                      "cv_kind": "tailored",
+                      "has_cv": true,
+                      "note": "",
+                      "answers": [],
+                      "stage": "interview",
+                      "stage_changed_at": "2026-11-12T09:00:00Z",
+                      "sent_at": "2026-11-10T10:00:00Z"
+                    },
+                    "candidate_notified": true
+                  }
                 }
               }
             }
@@ -2990,6 +3045,10 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/EmployerApplicationMove"
+              },
+              "example": {
+                "stage": "interview",
+                "message": "Are you free on Tuesday?"
               }
             }
           }
@@ -26663,13 +26722,15 @@
             "format": "int64"
           },
           "job_slug": {
-            "type": "string"
+            "type": "string",
+            "description": "The vacancy's public slug."
           },
           "job_title": {
             "type": "string"
           },
           "candidate_email": {
-            "type": "string"
+            "type": "string",
+            "description": "The candidate's address; replies to the application email reach it too."
           },
           "cv_kind": {
             "type": "string",
@@ -26680,7 +26741,8 @@
             "description": "False for an application sent before its CV was kept: that CV reached you by email only."
           },
           "note": {
-            "type": "string"
+            "type": "string",
+            "description": "The candidate's note, empty when none."
           },
           "answers": {
             "type": "array",
@@ -26700,6 +26762,7 @@
           "sent_at": {
             "type": "string",
             "format": "date-time",
+            "description": "When the application reached you.",
             "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
           }
         },
@@ -26715,17 +26778,20 @@
         ],
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "The question's id on the vacancy's form. (e.g. `q1`)"
           },
           "label": {
-            "type": "string"
+            "type": "string",
+            "description": "The question as it read when the candidate applied."
           },
           "type": {
             "type": "string",
             "description": "\"text\", \"boolean\" (answer \"true\"/\"false\") or \"select\"."
           },
           "answer": {
-            "type": "string"
+            "type": "string",
+            "description": "The candidate's answer."
           }
         },
         "description": "One answered question, as asked when the candidate applied."
@@ -26734,13 +26800,14 @@
         "type": "object",
         "properties": {
           "stage": {
-            "type": "string"
+            "type": "string",
+            "description": "The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`)"
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with `interview`, `offer` or `rejected`, the stages that send one."
           }
-        },
-        "description": "`message` is optional and goes only with `interview`, `offer` or `rejected`."
+        }
       },
       "EmployerApplicationMoved": {
         "type": "object",
@@ -26767,7 +26834,8 @@
           "offer",
           "hired",
           "rejected"
-        ]
+        ],
+        "description": "A stage of the employer's hiring pipeline. Every delivered application starts at `new`."
       },
       "EmployerApplicationsMeta": {
         "type": "object",
@@ -26797,6 +26865,13 @@
               "format": "int64"
             },
             "description": "How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with none is absent."
+          },
+          "ignored_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredParam"
+            },
+            "description": "Query params this listing did not read, so the answer is wider than asked; absent when every param was read."
           }
         }
       },

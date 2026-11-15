@@ -8937,20 +8937,24 @@ func (s *EmployerAccountStatus) UnmarshalText(data []byte) error {
 // One application sent on freehire to one of the caller's vacancies.
 // Ref: #/components/schemas/EmployerApplication
 type EmployerApplication struct {
-	ID             int64  `json:"id"`
-	JobSlug        string `json:"job_slug"`
-	JobTitle       string `json:"job_title"`
+	ID int64 `json:"id"`
+	// The vacancy's public slug.
+	JobSlug  string `json:"job_slug"`
+	JobTitle string `json:"job_title"`
+	// The candidate's address; replies to the application email reach it too.
 	CandidateEmail string `json:"candidate_email"`
 	// "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file).
 	CvKind string `json:"cv_kind"`
 	// False for an application sent before its CV was kept: that CV reached you by email only.
-	HasCv   bool                        `json:"has_cv"`
+	HasCv bool `json:"has_cv"`
+	// The candidate's note, empty when none.
 	Note    string                      `json:"note"`
 	Answers []EmployerApplicationAnswer `json:"answers"`
 	Stage   EmployerApplicationStage    `json:"stage"`
 	// When you last moved it; absent while it has never been moved.
 	StageChangedAt OptDateTime `json:"stage_changed_at"`
-	SentAt         time.Time   `json:"sent_at"`
+	// When the application reached you.
+	SentAt time.Time `json:"sent_at"`
 }
 
 // GetID returns the value of ID.
@@ -9066,10 +9070,13 @@ func (s *EmployerApplication) SetSentAt(val time.Time) {
 // One answered question, as asked when the candidate applied.
 // Ref: #/components/schemas/EmployerApplicationAnswer
 type EmployerApplicationAnswer struct {
-	ID    string `json:"id"`
+	// The question's id on the vacancy's form. (e.g. `q1`).
+	ID string `json:"id"`
+	// The question as it read when the candidate applied.
 	Label string `json:"label"`
 	// "text", "boolean" (answer "true"/"false") or "select".
-	Type   string `json:"type"`
+	Type string `json:"type"`
+	// The candidate's answer.
 	Answer string `json:"answer"`
 }
 
@@ -9113,10 +9120,12 @@ func (s *EmployerApplicationAnswer) SetAnswer(val string) {
 	s.Answer = val
 }
 
-// `message` is optional and goes only with `interview`, `offer` or `rejected`.
 // Ref: #/components/schemas/EmployerApplicationMove
 type EmployerApplicationMove struct {
-	Stage   OptString `json:"stage"`
+	// The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`).
+	Stage OptString `json:"stage"`
+	// Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with
+	// `interview`, `offer` or `rejected`, the stages that send one.
 	Message OptString `json:"message"`
 }
 
@@ -9168,6 +9177,7 @@ func (s *EmployerApplicationMoved) SetCandidateNotified(val bool) {
 	s.CandidateNotified = val
 }
 
+// A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
 // Ref: #/components/schemas/EmployerApplicationStage
 type EmployerApplicationStage string
 
@@ -9246,6 +9256,9 @@ type EmployerApplicationsMeta struct {
 	// How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with
 	// none is absent.
 	StageCounts EmployerApplicationsMetaStageCounts `json:"stage_counts"`
+	// Query params this listing did not read, so the answer is wider than asked; absent when every param
+	// was read.
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
 }
 
 // GetTotal returns the value of Total.
@@ -9268,6 +9281,11 @@ func (s *EmployerApplicationsMeta) GetStageCounts() EmployerApplicationsMetaStag
 	return s.StageCounts
 }
 
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *EmployerApplicationsMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
 // SetTotal sets the value of Total.
 func (s *EmployerApplicationsMeta) SetTotal(val int64) {
 	s.Total = val
@@ -9286,6 +9304,11 @@ func (s *EmployerApplicationsMeta) SetOffset(val int64) {
 // SetStageCounts sets the value of StageCounts.
 func (s *EmployerApplicationsMeta) SetStageCounts(val EmployerApplicationsMetaStageCounts) {
 	s.StageCounts = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *EmployerApplicationsMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
 }
 
 // How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with

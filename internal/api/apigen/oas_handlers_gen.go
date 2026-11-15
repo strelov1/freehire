@@ -11321,7 +11321,8 @@ func (s *Server) handleGetEmbeddingProgressRequest(args [0]string, argsEscaped b
 
 // handleGetEmployerApplicationCVRequest handles getEmployerApplicationCV operation.
 //
-// The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.
+// The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate
+// pasted. 404 when none was kept.
 //
 // GET /employer/applications/{id}/cv
 func (s *Server) handleGetEmployerApplicationCVRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -11354,7 +11355,7 @@ func (s *Server) handleGetEmployerApplicationCVRequest(args [1]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetEmployerApplicationCVOperation,
-			OperationSummary: "",
+			OperationSummary: "Open the CV an application sent.",
 			OperationID:      "getEmployerApplicationCV",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -18241,7 +18242,9 @@ func (s *Server) handleListDismissedSlugsRequest(args [0]string, argsEscaped boo
 
 // handleListEmployerApplicationsRequest handles listEmployerApplications operation.
 //
-// The delivered applications to the caller's vacancies, newest first.
+// The delivered applications to the caller's vacancies, newest first. An unknown `stage` is a 400
+// rather than an unfiltered answer; a param the listing does not read is named in
+// `meta.ignored_params`.
 //
 // GET /employer/applications
 func (s *Server) handleListEmployerApplicationsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -18274,7 +18277,7 @@ func (s *Server) handleListEmployerApplicationsRequest(args [0]string, argsEscap
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    ListEmployerApplicationsOperation,
-			OperationSummary: "",
+			OperationSummary: "List the applications sent to your vacancies.",
 			OperationID:      "listEmployerApplications",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -22167,7 +22170,9 @@ func (s *Server) handleMergeAtomsRequest(args [0]string, argsEscaped bool, w htt
 
 // handleMoveEmployerApplicationRequest handles moveEmployerApplication operation.
 //
-// Moves the application to a stage of your pipeline.
+// Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+// `interview`, `offer` and `rejected` email the candidate with your optional message. A move to the
+// stage it already holds changes nothing and sends nothing.
 //
 // POST /employer/applications/{id}/stage
 func (s *Server) handleMoveEmployerApplicationRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -22215,7 +22220,7 @@ func (s *Server) handleMoveEmployerApplicationRequest(args [1]string, argsEscape
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    MoveEmployerApplicationOperation,
-			OperationSummary: "",
+			OperationSummary: "Move an application through your pipeline.",
 			OperationID:      "moveEmployerApplication",
 			Body:             request,
 			RawBody:          rawBody,

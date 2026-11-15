@@ -11751,7 +11751,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = ListEmployerApplicationsOperation
-								r.summary = ""
+								r.summary = "List the applications sent to your vacancies."
 								r.operationID = "listEmployerApplications"
 								r.operationGroup = ""
 								r.pathPattern = "/employer/applications"
@@ -11809,7 +11809,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "GET":
 											r.name = GetEmployerApplicationCVOperation
-											r.summary = ""
+											r.summary = "Open the CV an application sent."
 											r.operationID = "getEmployerApplicationCV"
 											r.operationGroup = ""
 											r.pathPattern = "/employer/applications/{id}/cv"
@@ -11834,7 +11834,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 										switch method {
 										case "POST":
 											r.name = MoveEmployerApplicationOperation
-											r.summary = ""
+											r.summary = "Move an application through your pipeline."
 											r.operationID = "moveEmployerApplication"
 											r.operationGroup = ""
 											r.pathPattern = "/employer/applications/{id}/stage"

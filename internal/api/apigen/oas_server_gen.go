@@ -741,7 +741,8 @@ type Handler interface {
 	GetEmbeddingProgress(ctx context.Context) (*GetEmbeddingProgressOK, error)
 	// GetEmployerApplicationCV implements getEmployerApplicationCV operation.
 	//
-	// The CV file the application sent, exactly as it was emailed to you. 404 when none was kept.
+	// The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate
+	// pasted. 404 when none was kept.
 	//
 	// GET /employer/applications/{id}/cv
 	GetEmployerApplicationCV(ctx context.Context, params GetEmployerApplicationCVParams) (*GetEmployerApplicationCVOKHeaders, error)
@@ -1278,7 +1279,9 @@ type Handler interface {
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
 	// ListEmployerApplications implements listEmployerApplications operation.
 	//
-	// The delivered applications to the caller's vacancies, newest first.
+	// The delivered applications to the caller's vacancies, newest first. An unknown `stage` is a 400
+	// rather than an unfiltered answer; a param the listing does not read is named in
+	// `meta.ignored_params`.
 	//
 	// GET /employer/applications
 	ListEmployerApplications(ctx context.Context, params ListEmployerApplicationsParams) (*EmployerApplicationsPage, error)
@@ -1574,7 +1577,9 @@ type Handler interface {
 	MergeAtoms(ctx context.Context, req *MergeAtoms) (*MergeAtomsOK, error)
 	// MoveEmployerApplication implements moveEmployerApplication operation.
 	//
-	// Moves the application to a stage of your pipeline.
+	// Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+	// `interview`, `offer` and `rejected` email the candidate with your optional message. A move to the
+	// stage it already holds changes nothing and sends nothing.
 	//
 	// POST /employer/applications/{id}/stage
 	MoveEmployerApplication(ctx context.Context, req *EmployerApplicationMove, params MoveEmployerApplicationParams) (*MoveEmployerApplicationOK, error)
