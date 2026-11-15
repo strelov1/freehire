@@ -1,3 +1,4 @@
+import { SPECIALIZATION_ALIASES } from './specializationAliases';
 // Presentation groupings for the filter modal.
 //
 // - RAIL_SECTIONS: the three headings the modal's left rail groups facets under.
@@ -8,7 +9,7 @@
 // group is a compile error (svelte-check): a newly added backend category can't
 // silently fall out of the modal.
 
-import { CATEGORY_VALUES, FACET_ALIASES, type Category } from './generated/contracts';
+import { CATEGORY_VALUES, type Category } from './generated/contracts';
 import { optionMatches } from './facetOptions';
 import { categoryLabel } from './labels';
 
@@ -133,7 +134,7 @@ export function searchCategoryGroups(query: string): CategorySection[] {
   if (!query.trim()) return CATEGORY_GROUPS;
   return CATEGORY_GROUPS.map((g) => ({
     ...g,
-    options: g.options.filter((o) => optionMatches(o, query, FACET_ALIASES)),
+    options: g.options.filter((o) => optionMatches(o, query, SPECIALIZATION_ALIASES)),
   })).filter((g) => g.options.length > 0);
 }
 

@@ -21,6 +21,17 @@ describe('matchFilterSearch', () => {
     ).toBe(true);
   });
 
+  it.each([
+    ['Computer Networking', 'network_engineering'],
+    ['Network Support', 'it_support'],
+    ['Cloud Computing', 'devops'],
+    ['Cybersecurity SOC Analyst', 'security'],
+  ])('finds the specialization for %s in the job filters', (query, category) => {
+    expect(matchFilterSearch(items, query).some((hit) => hit.param === 'category' && hit.value === category)).toBe(
+      true,
+    );
+  });
+
   it('accepts the same typos as the facet picker', () => {
     expect(matchFilterSearch(items, 'sineor').some((h) => h.value === 'senior')).toBe(true);
     expect(matchFilterSearch(items, 'backedn').some((h) => h.value === 'backend')).toBe(true);
