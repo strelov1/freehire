@@ -1,3 +1,4 @@
+import { SPECIALIZATION_ALIASES } from './specializationAliases';
 // The job-search facets, as a data-driven registry. Each entry declares its
 // query param (matching the backend search API), section label, the control to
 // render, its options (for pills/select), and whether it supports an "exclude"
@@ -24,7 +25,6 @@ import {
   COMPANY_TYPE_VALUES,
   DOMAIN_VALUES,
   INDUSTRY_VALUES,
-  FACET_ALIASES,
   AI_ARCHETYPE_VALUES,
   SKILL_LABELS,
   INDUSTRY_LABELS,
@@ -890,7 +890,7 @@ export const FACETS: FacetDef[] = [
     options: CATEGORY,
     excludable: true,
     placeholder: 'Search specializations',
-    searchAliases: FACET_ALIASES,
+    searchAliases: SPECIALIZATION_ALIASES,
   },
   {
     param: 'ai_archetype',

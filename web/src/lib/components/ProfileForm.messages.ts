@@ -26,7 +26,9 @@ export const messages = defineMessages(
     cvHintEditing:
       'PDF with selectable text, up to {max} MB · adds new skills to your profile; the file is stored to score its readiness.',
     roles: 'Roles',
-    searchRoles: 'Search specializations',
+    searchRoles: 'Search by job title or specialization',
+    rolesHint: 'Try a job title such as SOC Analyst, Cloud Engineer or Helpdesk to find its specialization.',
+    findRoleJobs: 'Find jobs in these specializations',
     deleteCvTitle: 'Delete your CV?',
     deleteCvDescription: 'Removes the stored file and its parsed profile. Your contact info stays.',
     cvReadError: 'Could not read the CV. Please try again.',
@@ -67,7 +69,9 @@ export const messages = defineMessages(
       cvHintEditing:
         'PDF с текстовым слоем, до {max} МБ · добавляет новые навыки в профиль. Файл сохраняется для оценки готовности резюме.',
       roles: 'Роли',
-      searchRoles: 'Поиск специализаций',
+      searchRoles: 'Поиск по должности или специализации',
+      rolesHint: 'Введите должность, например SOC Analyst, Cloud Engineer или Helpdesk, чтобы найти специализацию.',
+      findRoleJobs: 'Найти вакансии по этим специализациям',
       deleteCvTitle: 'Удалить резюме?',
       deleteCvDescription:
         'Сохранённый файл и извлечённые из него данные будут удалены. Контактная информация останется.',

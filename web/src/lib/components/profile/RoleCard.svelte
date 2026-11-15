@@ -3,6 +3,8 @@
   // into (it's the one piece of the old identity header that doesn't carry enough content
   // to earn its own view, unlike Contacts/Location which do). Autosaves straight to
   // profileStore on every change, the same way the Skills view does.
+  import { resolve } from '$app/paths';
+  import { SPECIALIZATION_ALIASES } from '#lib/specializationAliases.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from '../ProfileForm.messages';
@@ -83,6 +85,7 @@
     <div class={specStatus.saving ? 'pointer-events-none opacity-60' : ''}>
       <SearchSelect
         options={CATEGORY_OPTIONS}
+        searchAliases={SPECIALIZATION_ALIASES}
         include={profile.specializations}
         placeholder={s.searchRoles}
         cap={6}
@@ -90,6 +93,13 @@
         clearOnSelect
       />
     </div>
+    <p class="text-xs text-muted-foreground">{s.rolesHint}</p>
+    {#if profile.specializations.length > 0}
+      <a
+        href={resolve(`/jobs?${new URLSearchParams({ category: profile.specializations.join(',') })}`)}
+        class="text-sm text-primary underline underline-offset-4">{s.findRoleJobs}</a
+      >
+    {/if}
     {#if specError}
       <p class="text-xs text-destructive">{specError}</p>
     {/if}
