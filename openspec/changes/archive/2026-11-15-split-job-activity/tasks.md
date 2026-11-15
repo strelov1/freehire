@@ -6,7 +6,7 @@
 - [x] A4. Add reader/view completeness guards, update fixtures and documentation, and validate representative read plans.
 - [x] A5. Run unit/full integration/build/vet/lint/sqlc checks, simplify and independent review; publish and deploy additive release A; verify backfill and drain pre-A readers.
 
-- [ ] A6. Ship the compatible observation lock-order follow-up and drain unsafe initial-A ingest writers before the activity-only cutover.
+- [x] A6. Ship the compatible observation lock-order follow-up and drain unsafe initial-A ingest writers before the activity-only cutover.
 
 ## B. Switch ordinary writers to compact activity
 
@@ -20,7 +20,7 @@
 
 - [x] C1. Verify repository and operations consumers use activity; drain every legacy writer and verify current SQL does not name the old columns.
 - [x] C2. Add a new cleanup migration removing the bridge and old columns while preserving the read projection and insertion invariant.
-- [ ] C3. Run required checks and review; deploy cleanup under the documented lock/worker constraints.
-- [ ] C4. Measure tuple/WAL/read performance, record limitations, finish runtime verification and archive/sync this OpenSpec change.
+- [x] C3. Run required checks and review; deploy cleanup under the documented lock/worker constraints.
+- [x] C4. Measure tuple/WAL/read performance, record limitations, finish runtime verification and archive/sync this OpenSpec change.
 
-The writer implementation and its verification are preserved in #4545. It is temporarily deferred from the reader-repair release: pre-reader processes still consume the legacy columns. Reintroduce that patch only after A5/A6 and the external-reader, binary-drain and read-cost gates pass.
+The original writer patch in #4545 was temporarily reverted during reader repair. Its restoration shipped in #4580 after the compatibility gates. Contract migration 0266 shipped with #4601. See [rollout verification](verification.md) for runtime evidence and measurement limits.

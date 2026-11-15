@@ -93,3 +93,6 @@ backup/maintenance, invalid indexes, global pause and incidents through the
 normal deploy preflight; do not cancel scans or pause the fleet to force a slot.
 The newer jobs change-feed migration observes lifecycle columns only and does
 not depend on the removed activity columns.
+
+
+The contract rollout and final verification are recorded in [rollout verification](verification.md).

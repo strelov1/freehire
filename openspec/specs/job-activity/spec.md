@@ -1,5 +1,8 @@
-## ADDED Requirements
+# job-activity Specification
 
+## Purpose
+Keep job observations in a compact activity row while preserving posting lifecycle, public reads and safe rollout compatibility.
+## Requirements
 ### Requirement: Separate observation persistence
 Each stored posting SHALL have one activity row containing its last observation, hydration timestamp and liveness strikes. Ordinary observations SHALL preserve the main posting tuple and content-change timestamp.
 
@@ -17,7 +20,7 @@ All consumers SHALL read observation state from the activity relation after the 
 - **THEN** it uses current activity rather than legacy fields
 
 ### Requirement: Preserve concurrent lifecycle and content decisions
-A stale probe or sweep SHALL NOT close a freshly observed posting. A cheap refresh that raced a lifecycle or cheap-match-key change SHALL retry the existing full persistence path after releasing its activity lock.
+A stale probe or sweep SHALL NOT close a freshly observed posting. A fenced cheap refresh SHALL release its transaction and retry persistence from a fresh transaction, starting with another cheap attempt. The fence SHALL NOT force a full write; a fresh attempt falls through to the full path only when the cheap match no longer holds.
 
 #### Scenario: Observation precedes stale closure
 - **WHEN** an observation commits while a closer is waiting
