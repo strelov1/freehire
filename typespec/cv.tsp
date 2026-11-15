@@ -249,6 +249,23 @@ op setCVAppearanceDefaults(@body body: CvAppearanceDefaults): Data<CvAppearanceD
 @summary("List your CVs, without their documents.")
 @useAuth(SessionOrKey)
 @tag("CV")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          title: "Backend engineer",
+          template_id: "classic",
+          created_at: utcDateTime.fromISO("2026-07-01T10:00:00Z"),
+          updated_at: utcDateTime.fromISO("2026-07-20T18:30:00Z"),
+          job_slug: "senior-go-engineer-acme-1a2b",
+          job_title: "Senior Go Engineer",
+          job_company: "Acme",
+          agent_session_id: "s_9f2a41c7",
+        },
+      ],
+    },
+})
 @route("/me/cvs")
 @get
 op listCVs(): Data<CvTailored[]> | Problem;
@@ -309,6 +326,17 @@ op getCV(/** The CV id. */ @path id: string): Data<CvRecord> | Problem;
 
 @summary("Replace a CV — title, template and document.")
 @tag("CV")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+        title: "Senior Go Engineer",
+        template_id: "classic",
+        created_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        updated_at: utcDateTime.fromISO("2026-07-28T20:10:00Z"),
+      },
+    },
+})
 @route("/me/cvs/{id}")
 @put
 op updateCV(/** The CV id. */ @path id: string, @body body: CvUpdate): Data<CvMeta> | Problem;
@@ -426,6 +454,20 @@ op startBaseSession(/** The base CV id. */ @path id: string): Data<CvBaseSession
 @summary("Start tailoring a CV toward one vacancy.")
 @useAuth(SessionOrKey)
 @tag("CV")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        tailor_cv_id: "7d1a3b5c-2e4f-4a6b-8c9d-0e1f2a3b4c5d",
+        base_cv_id: "0f2c9d1e-7a3b-4e5f-8c6d-2b1a0e9f8d7c",
+        analysis: #{
+          overall_score: 72,
+          verdict: "worth_applying",
+        },
+        session_id: "s_9f2a41c7",
+        cold_start_running: true,
+      },
+    } },
+})
 @route("/me/cvs/tailor")
 @post
 op tailorCV(@body body: CvTailorRequest):

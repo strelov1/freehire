@@ -290,12 +290,50 @@ model AuthPasswordResetResult {
 
 @summary("Set your account’s IANA timezone.")
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 1,
+        email: "me@example.com",
+        role: "user",
+        beta_tester: true,
+        email_verified: true,
+        has_password: true,
+        created_at: null,
+        timezone: "Europe/Berlin",
+        language: "en",
+        onboarding_completed_at: null,
+        tier: AuthUserTier.free,
+        agent_connected: true,
+        api_tier: "",
+      },
+    },
+})
 @route("/me/timezone")
 @patch
 op updateTimezone(@body body: AccountTimezoneUpdate): Data<AuthUser> | Problem;
 
 @summary("Set your preferred interface language.")
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 1,
+        email: "me@example.com",
+        role: "user",
+        beta_tester: true,
+        email_verified: true,
+        has_password: true,
+        created_at: null,
+        timezone: null,
+        language: "en",
+        onboarding_completed_at: null,
+        tier: AuthUserTier.free,
+        agent_connected: true,
+        api_tier: "",
+      },
+    },
+})
 @route("/me/language")
 @patch
 op updateLanguage(@body body: AccountLanguageUpdate): Data<AuthUser> | Problem;
@@ -455,6 +493,34 @@ op testPushToken(): Data<PushTokenTestResult> | Problem;
 
 @summary("List your notification-center entries, newest first.")
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 5,
+          kind: NotificationKind.subscription_digest,
+          title: "Senior Go remote",
+          body: "3 new jobs",
+          public_slug: null,
+          jobs: #[
+            #{
+              title: "Senior Go Engineer",
+              company: "Acme",
+              slug: "senior-go-engineer-acme-1a2b",
+            },
+          ],
+          created_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+          read_at: null,
+        },
+      ],
+      meta: #{
+        total: 12,
+        unread_count: 3,
+        limit: 20,
+        offset: 0,
+      },
+    },
+})
 @route("/me/notifications")
 @get
 op listNotifications(/** Page size, 1–100. (e.g. `20`) */ @query limit?: string, /** Rows to skip. (e.g. `0`) */ @query offset?: string): NotificationPage | Problem;
@@ -462,6 +528,19 @@ op listNotifications(/** Page size, 1–100. (e.g. `20`) */ @query limit?: strin
 /** Another user's id, or one that does not exist, is a 404. */
 @summary("One of your notifications, including its jobs snapshot.")
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 5,
+        kind: NotificationKind.reminder,
+        title: "Senior Go Engineer",
+        body: "Thanks for the update.",
+        public_slug: "senior-go-engineer-acme-1a2b",
+        created_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+        read_at: null,
+      },
+    },
+})
 @route("/me/notifications/{id}")
 @get
 op getNotification(/** The notification id. (e.g. `5`) */ @path id: string): Data<Notification> | Problem;
@@ -491,6 +570,25 @@ op markAllNotificationsRead(): Data<NotificationsMarked> | Problem;
 @summary("The current user (cookie or API key).")
 @useAuth(SessionOrKey)
 @tag("Auth")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 1,
+        email: "me@example.com",
+        role: "user",
+        beta_tester: true,
+        email_verified: true,
+        has_password: true,
+        created_at: null,
+        timezone: null,
+        language: "en",
+        onboarding_completed_at: null,
+        tier: AuthUserTier.free,
+        agent_connected: true,
+        api_tier: "",
+      },
+    },
+})
 @route("/auth/me")
 @get
 op getAuthMe(): Data<AuthUser> | Problem;
@@ -510,6 +608,25 @@ op requestEmailVerification(): {
 
 @summary("Confirm the address with the mailed code.")
 @tag("Auth")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 1,
+        email: "me@example.com",
+        role: "user",
+        beta_tester: true,
+        email_verified: true,
+        has_password: true,
+        created_at: null,
+        timezone: null,
+        language: "en",
+        onboarding_completed_at: null,
+        tier: AuthUserTier.free,
+        agent_connected: true,
+        api_tier: "",
+      },
+    },
+})
 @route("/auth/verify/confirm")
 @post
 op confirmEmailVerification(@body body: AuthCode): Data<AuthUser> | Problem;

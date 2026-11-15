@@ -104,6 +104,52 @@ model TalentQuery {
 @summary("The public catalogue of members, filtered and paged.")
 @useAuth(NoAuth)
 @tag("Talent Network")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          handle: "backend-7f2a",
+          card: #{
+            seniority: "senior",
+            category: "backend",
+            total_years: 8,
+            skills: #[
+              "go",
+              "postgresql",
+            ],
+            roles: #[
+              #{
+                seniority: "senior",
+                category: "backend",
+                start: #{
+                  year: 2024,
+                },
+                current: true,
+                stack: #[
+                  "go",
+                ],
+              },
+            ],
+          },
+          timezone: "Europe/Berlin",
+          timezone_region: "Europe",
+          cities: #[
+            "berlin",
+          ],
+          specializations: #[
+            "platform",
+          ],
+          updated_at: utcDateTime.fromISO("2026-09-01T12:00:00Z"),
+          has_photo: true,
+        },
+      ],
+      meta: #{
+        total: 1,
+        limit: 24,
+        offset: 0,
+      },
+    },
+})
 @route("/talent")
 @get
 op listTalent(...TalentQuery, /** Page size, 1–100. Defaults to 24. (e.g. `24`) */ @query limit?: string, /** Rows to skip. (e.g. `0`) */ @query offset?: string): List<TalentMember> | Problem;
@@ -161,6 +207,34 @@ op getTalentFacets(...TalentQuery): DataWithIgnored<TalentFacets> | Problem;
 @summary("One member’s public card.")
 @useAuth(NoAuth)
 @tag("Talent Network")
+@opExample(#{
+  returnType: #{
+    cacheControl: "private, max-age=60",
+    robotsTag: "noindex",
+    body: #{
+      data: #{
+        handle: "backend-7f2a",
+        card: #{
+          seniority: "senior",
+          category: "backend",
+          total_years: 8,
+          skills: #[
+            "go",
+          ],
+          roles: #[],
+        },
+        timezone: "Europe/Berlin",
+        timezone_region: "Europe",
+        cities: #[
+          "berlin",
+        ],
+        specializations: #[],
+        updated_at: utcDateTime.fromISO("2026-09-01T12:00:00Z"),
+        has_photo: false,
+      },
+    },
+  },
+})
 @route("/talent/{handle}")
 @get
 op getTalentMember(/** The member’s minted catalogue handle. (e.g. `backend-7f2a`) */ @path handle: string): {
@@ -212,6 +286,15 @@ model TalentNetworkVisibilityUpdate {
 @summary("Your current Talent Network visibility and shareable id.")
 @useAuth(SessionOrKey)
 @tag("Talent Network")
+@opExample(#{
+  returnType: #{
+      data: #{
+        talent_network_visibility: TalentNetworkVisibility.anonymous,
+        talent_handle: "backend-7f2a",
+        listed: true,
+      },
+    },
+})
 @route("/me/talent-network")
 @get
 op getTalentNetworkMembership(): Data<TalentNetworkMembership> | Problem;
@@ -224,6 +307,15 @@ op getTalentNetworkMembership(): Data<TalentNetworkMembership> | Problem;
  */
 @summary("Join or leave the Talent Network.")
 @tag("Talent Network")
+@opExample(#{
+  returnType: #{
+      data: #{
+        talent_network_visibility: TalentNetworkVisibility.anonymous,
+        talent_handle: "backend-7f2a",
+        listed: true,
+      },
+    },
+})
 @route("/me/talent-network")
 @put
 op setTalentNetworkVisibility(@body body: TalentNetworkVisibilityUpdate): Data<TalentNetworkMembership> | Problem;

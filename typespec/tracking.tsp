@@ -212,6 +212,19 @@ model NotificationSettingsUpdate {
 @summary("Record that you viewed the job.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/view")
 @post
 op recordView(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -229,6 +242,19 @@ op recordView(/** The job `public_slug`. */ @path slug: string): Data<Interactio
 @summary("Mark the job as applied to.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: utcDateTime.fromISO("2026-07-27T12:00:00Z"),
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/apply")
 @post
 op markApplied(/** The job `public_slug`. */ @path slug: string, @body body?: ApplyJob): Data<Interaction> | Problem;
@@ -236,6 +262,19 @@ op markApplied(/** The job `public_slug`. */ @path slug: string, @body body?: Ap
 @summary("Save (bookmark) the job.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/save")
 @post
 op saveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -244,6 +283,19 @@ op saveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> 
 @summary("Unsave the job (no-op if not saved).")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/save")
 @delete
 op unsaveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -255,6 +307,19 @@ op unsaveJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction
 @summary("Dismiss (swipe away) the job.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/dismiss")
 @post
 op dismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -262,6 +327,19 @@ op dismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interactio
 @summary("Undismiss the job (no-op if not dismissed).")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/dismiss")
 @delete
 op undismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -276,6 +354,19 @@ op undismissJob(/** The job `public_slug`. */ @path slug: string): Data<Interact
 @summary("Set the application stage and/or notes.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: "interview",
+        notes: "call on Friday",
+      },
+    },
+})
 @route("/jobs/{slug}/track")
 @patch
 op trackJob(/** The job `public_slug`. */ @path slug: string, @body body: TrackJob): Data<Interaction> | Problem;
@@ -284,6 +375,19 @@ op trackJob(/** The job `public_slug`. */ @path slug: string, @body body: TrackJ
 @summary("Clear the application stage.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/stage")
 @delete
 op clearStage(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -292,6 +396,19 @@ op clearStage(/** The job `public_slug`. */ @path slug: string): Data<Interactio
 @summary("Remove the interaction record entirely.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 1,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/jobs/{slug}/track")
 @delete
 op untrack(/** The job `public_slug`. */ @path slug: string): Data<Interaction> | Problem;
@@ -307,6 +424,19 @@ op untrack(/** The job `public_slug`. */ @path slug: string): Data<Interaction> 
 @summary("Set the application stage and/or notes, addressed by row id.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: "interview",
+        notes: null,
+      },
+    },
+})
 @route("/me/applications/{id}")
 @patch
 op trackApplication(/** The tracking row id (from `/me/tracking`). (e.g. `42`) */ @path id: string, @body body: TrackJob): Data<Interaction> | Problem;
@@ -314,6 +444,19 @@ op trackApplication(/** The tracking row id (from `/me/tracking`). (e.g. `42`) *
 @summary("Remove the interaction record entirely, addressed by row id.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 1,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/me/applications/{id}")
 @delete
 op untrackApplication(/** The tracking row id. (e.g. `42`) */ @path id: string): Data<Interaction> | Problem;
@@ -321,6 +464,19 @@ op untrackApplication(/** The tracking row id. (e.g. `42`) */ @path id: string):
 @summary("Clear the application stage, addressed by row id.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job_id: 42,
+        viewed_at: null,
+        saved_at: null,
+        applied_at: null,
+        dismissed_at: null,
+        stage: null,
+        notes: null,
+      },
+    },
+})
 @route("/me/applications/{id}/stage")
 @delete
 op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: string): Data<Interaction> | Problem;
@@ -340,6 +496,46 @@ op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: strin
 @summary("Your tracked jobs joined with the job data.")
 @useAuth(SessionOrKey)
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          added_to_board_at: null,
+          id: "senior-go-engineer-acme-1a2b",
+          company_slug: "acme",
+          role_title: "Senior Go Engineer",
+          job: #{
+            public_slug: "senior-go-engineer-acme-1a2b",
+            title: "Senior Go Engineer",
+          },
+          viewed_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+          saved_at: null,
+          applied_at: utcDateTime.fromISO("2026-06-19T11:00:00Z"),
+          stage: "interview",
+          notes: "call on Friday",
+          email_count: 1,
+          last_activity_at: null,
+          days_silent: null,
+          silence_state: null,
+          followed_up_at: null,
+          cv_opened_at: null,
+        },
+      ],
+      meta: #{
+        total: 5,
+        limit: 20,
+        offset: 0,
+        counts: #{
+          all: 12,
+          viewed: 12,
+          saved: 3,
+          applied: 5,
+          board: 7,
+          dismissed: 1,
+        },
+      },
+    },
+})
 @route("/me/tracking")
 @get
 op listTrackedJobs(
@@ -463,6 +659,22 @@ op trackingPipeline(): Data<TrackingPipeline> | Problem;
 /** Session cookie only. */
 @summary("Your notification rule (gates saved-job reminders and both lifecycle nudges).")
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        inbox_digest_enabled: true,
+        enabled: true,
+        channels: #[
+          "email",
+        ],
+        digest_frequency: "daily",
+        digest_time: null,
+        digest_interval_hours: 1,
+        quiet_hours_start: null,
+        quiet_hours_end: null,
+      },
+    },
+})
 @route("/me/notification-settings")
 @get
 op getNotificationSettings(): Data<NotificationSettings> | Problem;
@@ -470,6 +682,22 @@ op getNotificationSettings(): Data<NotificationSettings> | Problem;
 /** An enabled rule needs a valid channel. Session cookie only. */
 @summary("Change your notification rule.")
 @tag("Tracking")
+@opExample(#{
+  returnType: #{
+      data: #{
+        inbox_digest_enabled: true,
+        enabled: true,
+        channels: #[
+          "email",
+        ],
+        digest_frequency: "daily",
+        digest_time: null,
+        digest_interval_hours: 1,
+        quiet_hours_start: null,
+        quiet_hours_end: null,
+      },
+    },
+})
 @route("/me/notification-settings")
 @put
 op updateNotificationSettings(@body body: NotificationSettingsUpdate): Data<NotificationSettings> | Problem;

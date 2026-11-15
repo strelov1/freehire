@@ -393,6 +393,20 @@ model SourceEntry {
 @summary("The headline catalogue-scale figures (open jobs, companies, sources, …).")
 @useAuth(NoAuth)
 @tag("Stats")
+@opExample(#{
+  returnType: #{
+      data: #{
+        open_jobs: 42130,
+        unique_open_jobs: 1,
+        companies: 6210,
+        sources: 48,
+        ats_platforms: 22,
+        telegram_channels: 340,
+        computed_at: "2026-06-18T06:00:00Z",
+        exact: true,
+      },
+    },
+})
 @route("/stats/catalog")
 @get
 op catalogScale(): Data<CatalogScale> | Problem;
@@ -519,6 +533,18 @@ op engagementStats(): Data<Engagement> | Problem;
 @summary("Facet distribution snapshot: countries, skills, seniority, work mode.")
 @useAuth(NoAuth)
 @tag("Stats")
+@opExample(#{
+  returnType: #{
+    data: #{
+      facets: #{
+        countries: #{ de: 18420, us: 15210 },
+        skills: #{ go: 4210, python: 9830 },
+        seniority: #{ senior: 9120, middle: 7340 },
+        work_mode: #{ remote: 21000, hybrid: 8200 },
+      },
+    },
+  },
+})
 @route("/stats/facets")
 @get
 op statsFacets(): Data<FacetStats> | Problem;
@@ -538,6 +564,27 @@ op skillNeighbours(@path slug: string): SkillNeighbours | Problem;
 @summary("Roles (category × seniority) ranked by openings or growth.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{
+  returnType: #{
+    body: #{
+      data: #[
+        #{
+          category: "backend",
+          seniority: "senior",
+          open_count: 1840,
+          growth: 220,
+        },
+      ],
+      meta: #{
+        country: "de",
+        category: "",
+        seniority: "",
+        sort: "open_count",
+        limit: 20,
+      },
+    },
+  },
+})
 @route("/insights/roles")
 @get
 op insightsRoles(
@@ -562,6 +609,23 @@ op insightsRoles(
 @summary("Skills ranked by openings or growth.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          skill: "go",
+          open_count: 1,
+          growth: 1,
+        },
+      ],
+      meta: #{
+        category: "backend",
+        country: "",
+        sort: "open_count",
+        limit: 1,
+      },
+    },
+})
 @route("/insights/skills")
 @get
 op insightsSkills(
@@ -578,6 +642,24 @@ op insightsSkills(
 @summary("How fast a slice of the market is hiring, over time.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          period: "2026-06-22",
+          added: 3120,
+          removed: 2740,
+        },
+      ],
+      meta: #{
+        granularity: "week",
+        from: "2026-06-01",
+        to: "2026-06-28",
+        facet_kind: "skill",
+        facet_value: "go",
+      },
+    },
+})
 @route("/insights/velocity")
 @get
 op insightsVelocity(
@@ -597,6 +679,27 @@ op insightsVelocity(
 @summary("Salary bands by category, seniority and country.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          seniority: "senior",
+          currency: "USD",
+          period: "month",
+          sample_size: 1,
+          p25: 130000,
+          p50: 165000,
+          p75: 200000,
+          quantiles: #[],
+        },
+      ],
+      meta: #{
+        category: "backend",
+        seniority: "senior",
+        country: "DE",
+      },
+    },
+})
 @route("/insights/salary")
 @get
 op insightsSalary(
@@ -622,6 +725,24 @@ op insightsSalaryHistory(
 @summary("Companies ranked by hiring activity.")
 @useAuth(NoAuth)
 @tag("Insights")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          company_slug: "acme",
+          company_name: "Acme",
+          open_now: 1,
+          open_prev_30d: 1,
+          growth_30d: 0,
+        },
+      ],
+      meta: #{
+        sort: "open_count",
+        min_open: 1,
+        limit: 1,
+      },
+    },
+})
 @route("/insights/companies")
 @get
 op insightsCompanies(
@@ -654,6 +775,36 @@ op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
 @summary("Ingest-fleet health, per provider.")
 @useAuth(NoAuth)
 @tag("Stats")
+@opExample(#{
+  returnType: #{
+      data: #{
+        overall: "operational",
+        generated_at: "2026-06-18T09:12:00Z",
+        last_job_added_at: null,
+        providers: #[
+          #{
+            provider: "greenhouse",
+            kind: "ats",
+            status: "operational",
+            total_boards: 1,
+            healthy_boards: 1,
+            cooled_boards: 1,
+            last_run: null,
+            last_success: null,
+            ingested_total: 1,
+          },
+        ],
+        site: #{
+          status: "operational",
+          database: "up",
+          error_rate: 0.015,
+          pool_pressure: 0.15,
+          window_minutes: 1,
+          history: #[],
+        },
+      },
+    },
+})
 @route("/status")
 @get
 op ingestStatus(): Data<IngestStatus> | Problem;

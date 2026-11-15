@@ -137,6 +137,40 @@ model Profile {
 @summary("Your career profile, or null if you have not saved one.")
 @useAuth(SessionOrKey)
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #{
+        specializations: #[
+          "backend",
+        ],
+        skills: #[
+          "go",
+          "postgresql",
+        ],
+        seniorities: #[],
+        excluded_skills: #[],
+        excluded_sources: #[],
+        job_languages: #[],
+        excluded_companies: #[],
+        location_preferences: #{
+          work_modes: #[
+            "remote",
+          ],
+          remote: #{},
+          base: #{
+            country: "DE",
+          },
+          relocation: #{
+            open: false,
+          },
+        },
+        derived_location: null,
+        cv: null,
+        created_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+        updated_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
+      },
+    },
+})
 @route("/me/profile")
 @get
 op getProfile(): {
@@ -150,6 +184,29 @@ op getProfile(): {
  */
 @summary("Create or replace your profile.")
 @tag("Account")
+@opExample(#{
+  returnType: #{
+      data: #{
+        specializations: #[
+          "backend",
+        ],
+        skills: #[
+          "go",
+          "postgresql",
+        ],
+        seniorities: #[],
+        excluded_skills: #[],
+        excluded_sources: #[],
+        job_languages: #[],
+        excluded_companies: #[],
+        location_preferences: null,
+        derived_location: null,
+        cv: null,
+        created_at: null,
+        updated_at: null,
+      },
+    },
+})
 @route("/me/profile")
 @put
 op putProfile(@body body: ProfileUpdate): Data<Profile> | Problem;

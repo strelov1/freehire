@@ -9830,6 +9830,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "company_slug": "acme",
+                     *           "location": "Berlin, Germany",
+                     *           "work_mode": "remote",
+                     *           "skills": [
+                     *             "go",
+                     *             "postgresql"
+                     *           ],
+                     *           "description": "## About the role\nYou will build the payments API."
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 137,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["AgentJobSearchPage"];
                 };
             };
@@ -10240,6 +10264,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "email": "me@example.com",
+                     *         "role": "user",
+                     *         "beta_tester": true,
+                     *         "email_verified": true,
+                     *         "has_password": true,
+                     *         "created_at": null,
+                     *         "timezone": null,
+                     *         "language": "en",
+                     *         "onboarding_completed_at": null,
+                     *         "tier": "free",
+                     *         "agent_connected": true,
+                     *         "api_tier": ""
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AuthUser"];
                     };
@@ -10399,6 +10442,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "email": "me@example.com",
+                     *         "role": "user",
+                     *         "beta_tester": true,
+                     *         "email_verified": true,
+                     *         "has_password": true,
+                     *         "created_at": null,
+                     *         "timezone": null,
+                     *         "language": "en",
+                     *         "onboarding_completed_at": null,
+                     *         "tier": "free",
+                     *         "agent_connected": true,
+                     *         "api_tier": ""
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AuthUser"];
                     };
@@ -10598,6 +10660,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "slug": "acme",
+                     *           "name": "Acme",
+                     *           "job_count": 12,
+                     *           "tagline": "Payments for builders",
+                     *           "industries": [
+                     *             "payments"
+                     *           ],
+                     *           "hq_country": "DE",
+                     *           "collections": [
+                     *             "yc"
+                     *           ],
+                     *           "feedback_count": 1,
+                     *           "feedback_rating_avg": null
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CompanyListItem"][];
                         meta: components["schemas"]["ListMeta"];
@@ -10842,6 +10930,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 5,
+                     *           "author": "quiet-falcon-42",
+                     *           "rating": 4,
+                     *           "feedback_type": "interview",
+                     *           "body": "Thanks for the update.",
+                     *           "created_at": "2026-06-18T09:12:00Z",
+                     *           "updated_at": "2026-06-18T09:12:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CompanyFeedback"][];
                     };
@@ -11022,6 +11125,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "upvote_count": 1,
+                     *         "downvote_count": 1,
+                     *         "my_vote": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["VoteResult"];
                     };
@@ -11056,6 +11168,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "upvote_count": 1,
+                     *         "downvote_count": 1,
+                     *         "my_vote": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["VoteResult"];
                     };
@@ -11087,6 +11208,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 5,
+                     *           "author": "quiet-falcon-42",
+                     *           "rating": 1,
+                     *           "feedback_type": "culture",
+                     *           "body": "Thanks for the update.",
+                     *           "created_at": "2026-06-18T09:12:00Z",
+                     *           "updated_at": "2026-06-18T09:12:00Z",
+                     *           "company_slug": "acme",
+                     *           "report_count": 3,
+                     *           "report_reasons": [
+                     *             "spam",
+                     *             "off-topic"
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReportedCompanyFeedback"][];
                     };
@@ -12022,6 +12164,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "company_slug": "acme",
+                     *           "company_name": "Acme",
+                     *           "open_now": 1,
+                     *           "open_prev_30d": 1,
+                     *           "growth_30d": 0
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "sort": "open_count",
+                     *         "min_open": 1,
+                     *         "limit": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["CompaniesAnswer"];
                 };
             };
@@ -12124,6 +12284,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "category": "backend",
+                     *           "seniority": "senior",
+                     *           "open_count": 1840,
+                     *           "growth": 220
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "country": "de",
+                     *         "category": "",
+                     *         "seniority": "",
+                     *         "sort": "open_count",
+                     *         "limit": 20
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["RolesAnswer"];
                 };
             };
@@ -12160,6 +12339,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "seniority": "senior",
+                     *           "currency": "USD",
+                     *           "period": "month",
+                     *           "sample_size": 1,
+                     *           "p25": 130000,
+                     *           "p50": 165000,
+                     *           "p75": 200000,
+                     *           "quantiles": []
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "category": "backend",
+                     *         "seniority": "senior",
+                     *         "country": "DE"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["SalaryAnswer"];
                 };
             };
@@ -12231,6 +12431,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "skill": "go",
+                     *           "open_count": 1,
+                     *           "growth": 1
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "category": "backend",
+                     *         "country": "",
+                     *         "sort": "open_count",
+                     *         "limit": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["SkillsAnswer"];
                 };
             };
@@ -12272,6 +12489,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "period": "2026-06-22",
+                     *           "added": 3120,
+                     *           "removed": 2740
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "granularity": "week",
+                     *         "from": "2026-06-01",
+                     *         "to": "2026-06-28",
+                     *         "facet_kind": "skill",
+                     *         "facet_value": "go"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["VelocityAnswer"];
                 };
             };
@@ -12646,6 +12881,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "public_slug": "senior-backend-engineer-acme-1a2b",
+                     *         "status": "tracked",
+                     *         "company_slug": "acme"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ResolvedJobPage"];
                     };
@@ -12751,6 +12995,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "company_slug": "acme",
+                     *           "location": "Berlin, Germany",
+                     *           "work_mode": "remote",
+                     *           "skills": [
+                     *             "go",
+                     *             "postgresql"
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 137,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["JobSearchPage"];
                 };
             };
@@ -12882,6 +13149,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": "2026-07-27T12:00:00Z",
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13128,6 +13408,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "company_name": "Acme",
+                     *         "questions": [
+                     *           {
+                     *             "id": "q1",
+                     *             "label": "Do you hold an EU work permit?",
+                     *             "type": "boolean",
+                     *             "required": true
+                     *           },
+                     *           {
+                     *             "id": "q2",
+                     *             "label": "Preferred stack",
+                     *             "type": "select",
+                     *             "required": false,
+                     *             "options": [
+                     *               "Go",
+                     *               "Rust"
+                     *             ]
+                     *           }
+                     *         ],
+                     *         "open": true,
+                     *         "applied": false,
+                     *         "prefill": {},
+                     *         "cvs": {
+                     *           "tailored": null,
+                     *           "has_resume": true
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["DirectApplyForm"];
                     };
@@ -13215,6 +13527,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": "2026-06-19T10:00:00Z",
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13249,6 +13574,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13629,6 +13967,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 3,
+                     *         "reason": "no_response",
+                     *         "details": "The posting is no longer open.",
+                     *         "status": "pending",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["JobReport"];
                     };
@@ -13663,6 +14012,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": "2026-06-19T10:00:00Z",
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13697,6 +14059,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13779,6 +14154,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13813,6 +14201,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 1,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13851,6 +14252,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": "interview",
+                     *         "notes": "call on Friday"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13885,6 +14299,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": "2026-06-19T10:00:00Z",
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -13923,6 +14350,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "upvote_count": 1,
+                     *         "downvote_count": 1,
+                     *         "my_vote": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["VoteResult"];
                     };
@@ -13957,6 +14393,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "upvote_count": 1,
+                     *         "downvote_count": 1,
+                     *         "my_vote": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["VoteResult"];
                     };
@@ -14391,6 +14836,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 1,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -14429,6 +14887,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": "interview",
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -14463,6 +14934,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job_id": 42,
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": null,
+                     *         "dismissed_at": null,
+                     *         "stage": null,
+                     *         "notes": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
@@ -15523,6 +16007,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 1,
+                     *           "url": "https://boards.greenhouse.io/acme",
+                     *           "source": "greenhouse",
+                     *           "board": "acme",
+                     *           "status": "pending",
+                     *           "surface": "web",
+                     *           "created_at": "2026-07-20T12:00:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Contribution"][];
                     };
@@ -15885,6 +16384,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "title": "Backend engineer",
+                     *           "template_id": "classic",
+                     *           "created_at": "2026-07-01T10:00:00Z",
+                     *           "updated_at": "2026-07-20T18:30:00Z",
+                     *           "job_slug": "senior-go-engineer-acme-1a2b",
+                     *           "job_title": "Senior Go Engineer",
+                     *           "job_company": "Acme",
+                     *           "agent_session_id": "s_9f2a41c7"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvTailored"][];
                     };
@@ -16038,6 +16554,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "tailor_cv_id": "7d1a3b5c-2e4f-4a6b-8c9d-0e1f2a3b4c5d",
+                     *         "base_cv_id": "0f2c9d1e-7a3b-4e5f-8c6d-2b1a0e9f8d7c",
+                     *         "analysis": {
+                     *           "overall_score": 72,
+                     *           "verdict": "worth_applying"
+                     *         },
+                     *         "session_id": "s_9f2a41c7",
+                     *         "cold_start_running": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvTailorResult"];
                     };
@@ -16119,6 +16649,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *         "title": "Senior Go Engineer",
+                     *         "template_id": "classic",
+                     *         "created_at": "2026-06-18T09:12:00Z",
+                     *         "updated_at": "2026-07-28T20:10:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CvMeta"];
                     };
@@ -17139,6 +17680,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Speechify",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "status_signal": "acknowledgement",
+                     *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17177,6 +17736,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17211,6 +17787,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "link_source": "manual",
+                     *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17279,6 +17873,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "link_source": "manual",
+                     *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17313,6 +17925,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17381,6 +18009,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "status_signal": "interview_invitation",
+                     *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17415,6 +18061,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4821,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Thank you for applying to Acme",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "status_signal": "acknowledgement"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -17446,6 +18109,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "employments": [
+                     *           {
+                     *             "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *             "kind": "job",
+                     *             "company": "Acme",
+                     *             "atoms": [
+                     *               {
+                     *                 "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *                 "claim": "Cut p99 checkout latency by 40%",
+                     *                 "provenance": "cv_import",
+                     *                 "needs_context": true,
+                     *                 "needs_metrics": true
+                     *               }
+                     *             ]
+                     *           }
+                     *         ],
+                     *         "unplaced": []
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ExperienceBank"];
                     };
@@ -17814,6 +18500,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "connected": true,
+                     *         "email": "you@gmail.com",
+                     *         "status": "ok",
+                     *         "available": true,
+                     *         "calendar_connected": true,
+                     *         "mentor_calendar_connected": true,
+                     *         "mentor_busy_sync_connected": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["GmailStatus"];
                     };
@@ -17945,6 +18644,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 4821,
+                     *           "source": "gmail",
+                     *           "external_id": "<CAF...@mail.gmail.com>",
+                     *           "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *           "from_name": "Speechify Recruiting",
+                     *           "subject": "Thank you for applying to Speechify",
+                     *           "snippet": "We have received your application.",
+                     *           "received_at": "2026-07-24T09:12:00Z",
+                     *           "read": false,
+                     *           "status_signal": "acknowledgement",
+                     *           "link_source": "auto",
+                     *           "linked_slug": "tech-lead-web-core-speechify-a1b2"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 137,
+                     *         "limit": 50,
+                     *         "offset": 0,
+                     *         "hidden": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["InboxPage"];
                 };
             };
@@ -18168,6 +18893,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "email": "me@example.com",
+                     *         "role": "user",
+                     *         "beta_tester": true,
+                     *         "email_verified": true,
+                     *         "has_password": true,
+                     *         "created_at": null,
+                     *         "timezone": null,
+                     *         "language": "en",
+                     *         "onboarding_completed_at": null,
+                     *         "tier": "free",
+                     *         "agent_connected": true,
+                     *         "api_tier": ""
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AuthUser"];
                     };
@@ -18976,6 +19720,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "inbox_digest_enabled": true,
+                     *         "enabled": true,
+                     *         "channels": [
+                     *           "email"
+                     *         ],
+                     *         "digest_frequency": "daily",
+                     *         "digest_time": null,
+                     *         "digest_interval_hours": 1,
+                     *         "quiet_hours_start": null,
+                     *         "quiet_hours_end": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["NotificationSettings"];
                     };
@@ -19011,6 +19771,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "inbox_digest_enabled": true,
+                     *         "enabled": true,
+                     *         "channels": [
+                     *           "email"
+                     *         ],
+                     *         "digest_frequency": "daily",
+                     *         "digest_time": null,
+                     *         "digest_interval_hours": 1,
+                     *         "quiet_hours_start": null,
+                     *         "quiet_hours_end": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["NotificationSettings"];
                     };
@@ -19047,6 +19823,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 5,
+                     *           "kind": "subscription_digest",
+                     *           "title": "Senior Go remote",
+                     *           "body": "3 new jobs",
+                     *           "public_slug": null,
+                     *           "jobs": [
+                     *             {
+                     *               "title": "Senior Go Engineer",
+                     *               "company": "Acme",
+                     *               "slug": "senior-go-engineer-acme-1a2b"
+                     *             }
+                     *           ],
+                     *           "created_at": "2026-06-19T10:00:00Z",
+                     *           "read_at": null
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 12,
+                     *         "unread_count": 3,
+                     *         "limit": 20,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["NotificationPage"];
                 };
             };
@@ -19117,6 +19921,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 5,
+                     *         "kind": "reminder",
+                     *         "title": "Senior Go Engineer",
+                     *         "body": "Thanks for the update.",
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "created_at": "2026-06-19T10:00:00Z",
+                     *         "read_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Notification"];
                     };
@@ -19379,6 +20196,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "specializations": [
+                     *           "backend"
+                     *         ],
+                     *         "skills": [
+                     *           "go",
+                     *           "postgresql"
+                     *         ],
+                     *         "seniorities": [],
+                     *         "excluded_skills": [],
+                     *         "excluded_sources": [],
+                     *         "job_languages": [],
+                     *         "excluded_companies": [],
+                     *         "location_preferences": {
+                     *           "work_modes": [
+                     *             "remote"
+                     *           ],
+                     *           "remote": {},
+                     *           "base": {
+                     *             "country": "DE"
+                     *           },
+                     *           "relocation": {
+                     *             "open": false
+                     *           }
+                     *         },
+                     *         "derived_location": null,
+                     *         "cv": null,
+                     *         "created_at": "2026-06-19T10:00:00Z",
+                     *         "updated_at": "2026-06-19T10:00:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Profile"] | null;
                     };
@@ -19414,6 +20265,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "specializations": [
+                     *           "backend"
+                     *         ],
+                     *         "skills": [
+                     *           "go",
+                     *           "postgresql"
+                     *         ],
+                     *         "seniorities": [],
+                     *         "excluded_skills": [],
+                     *         "excluded_sources": [],
+                     *         "job_languages": [],
+                     *         "excluded_companies": [],
+                     *         "location_preferences": null,
+                     *         "derived_location": null,
+                     *         "cv": null,
+                     *         "created_at": null,
+                     *         "updated_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Profile"];
                     };
@@ -19916,6 +20790,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "company_slug": "acme",
+                     *           "company_name": "Acme",
+                     *           "job_id": null,
+                     *           "cv_kind": "original",
+                     *           "note": "Backend, 8 years Go",
+                     *           "status": "sent",
+                     *           "created_at": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralIncomingRequest"][];
                     };
@@ -19954,6 +20844,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *         "company_slug": "acme",
+                     *         "company_name": "Acme",
+                     *         "job_id": null,
+                     *         "cv_kind": "original",
+                     *         "status": "contacted",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralIncomingRequest"];
                     };
@@ -19985,6 +20888,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "company_slug": "acme",
+                     *           "company_name": "Acme",
+                     *           "linkedin_url": "https://www.linkedin.com/in/example",
+                     *           "status": "approved",
+                     *           "decided_at": "2026-07-28T21:00:00Z",
+                     *           "created_at": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralOffer"][];
                     };
@@ -20046,6 +20964,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "company_slug": "acme",
+                     *           "company_name": "Acme",
+                     *           "job_id": null,
+                     *           "cv_kind": "original",
+                     *           "cv_id": null,
+                     *           "status": "contacted",
+                     *           "created_at": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralSeekerRequest"][];
                     };
@@ -20081,6 +21015,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *         "company_slug": "acme",
+                     *         "company_name": "Acme",
+                     *         "job_id": null,
+                     *         "cv_kind": "original",
+                     *         "cv_id": null,
+                     *         "status": "sent",
+                     *         "created_at": "2026-07-28T20:05:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralSeekerRequest"];
                     };
@@ -20408,6 +21356,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 2,
+                     *           "name": "Senior Go remote",
+                     *           "query": "q=go&seniority=senior&work_mode=remote",
+                     *           "derived_from_profile": true,
+                     *           "created_at": null,
+                     *           "updated_at": null
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["SavedSearchList"];
                 };
             };
@@ -20441,6 +21406,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 2,
+                     *         "name": "Senior Go remote",
+                     *         "query": "q=go&seniority=senior&work_mode=remote",
+                     *         "derived_from_profile": true,
+                     *         "created_at": null,
+                     *         "updated_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SavedSearch"];
                     };
@@ -20509,6 +21486,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 2,
+                     *         "name": "Senior Go — EU remote",
+                     *         "query": "q=go&seniority=senior",
+                     *         "derived_from_profile": true,
+                     *         "created_at": null,
+                     *         "updated_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["SavedSearch"];
                     };
@@ -20540,6 +21529,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 9,
+                     *           "url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "remote": true,
+                     *           "status": "pending",
+                     *           "created_at": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Submission"][];
                     };
@@ -20571,6 +21575,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 1,
+                     *           "saved_search_id": 2,
+                     *           "channel": "telegram",
+                     *           "active": true,
+                     *           "created_at": null
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["SubscriptionList"];
                 };
             };
@@ -20604,6 +21624,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "saved_search_id": 2,
+                     *         "channel": "telegram",
+                     *         "active": true,
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Subscription"];
                     };
@@ -20672,6 +21703,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "saved_search_id": 1,
+                     *         "channel": "telegram",
+                     *         "active": false,
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Subscription"];
                     };
@@ -20795,6 +21837,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "talent_network_visibility": "anonymous",
+                     *         "talent_handle": "backend-7f2a",
+                     *         "listed": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TalentNetworkMembership"];
                     };
@@ -20830,6 +21881,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "talent_network_visibility": "anonymous",
+                     *         "talent_handle": "backend-7f2a",
+                     *         "listed": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TalentNetworkMembership"];
                     };
@@ -20937,6 +21997,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 1,
+                     *         "email": "me@example.com",
+                     *         "role": "user",
+                     *         "beta_tester": true,
+                     *         "email_verified": true,
+                     *         "has_password": true,
+                     *         "created_at": null,
+                     *         "timezone": "Europe/Berlin",
+                     *         "language": "en",
+                     *         "onboarding_completed_at": null,
+                     *         "tier": "free",
+                     *         "agent_connected": true,
+                     *         "api_tier": ""
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["AuthUser"];
                     };
@@ -20979,6 +22058,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "added_to_board_at": null,
+                     *           "id": "senior-go-engineer-acme-1a2b",
+                     *           "company_slug": "acme",
+                     *           "role_title": "Senior Go Engineer",
+                     *           "job": {
+                     *             "public_slug": "senior-go-engineer-acme-1a2b",
+                     *             "title": "Senior Go Engineer"
+                     *           },
+                     *           "viewed_at": "2026-06-19T10:00:00Z",
+                     *           "saved_at": null,
+                     *           "applied_at": "2026-06-19T11:00:00Z",
+                     *           "stage": "interview",
+                     *           "notes": "call on Friday",
+                     *           "email_count": 1,
+                     *           "last_activity_at": null,
+                     *           "days_silent": null,
+                     *           "silence_state": null,
+                     *           "followed_up_at": null,
+                     *           "cv_opened_at": null
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 5,
+                     *         "limit": 20,
+                     *         "offset": 0,
+                     *         "counts": {
+                     *           "all": 12,
+                     *           "viewed": 12,
+                     *           "saved": 3,
+                     *           "applied": 5,
+                     *           "board": 7,
+                     *           "dismissed": 1
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["TrackedJobPage"];
                 };
             };
@@ -21279,6 +22398,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "job": {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "company_slug": "acme",
+                     *           "location": "Berlin, Germany"
+                     *         },
+                     *         "viewed_at": null,
+                     *         "saved_at": null,
+                     *         "applied_at": "2026-07-24T09:00:00Z",
+                     *         "stage": "interview",
+                     *         "followed_up_at": null,
+                     *         "emails": [
+                     *           {
+                     *             "id": 4821,
+                     *             "source": "gmail",
+                     *             "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *             "from_name": "Acme Recruiting",
+                     *             "subject": "Thank you for applying to Acme",
+                     *             "status_signal": "interview_invitation",
+                     *             "received_at": "2026-06-18T09:12:00Z",
+                     *             "read": true
+                     *           }
+                     *         ],
+                     *         "events": [
+                     *           {
+                     *             "id": 991,
+                     *             "kind": "employer_reply",
+                     *             "signal": "interview_invitation",
+                     *             "source": "mail_gmail",
+                     *             "observed": true,
+                     *             "occurred_at": "2026-07-29T11:04:00Z",
+                     *             "company_slug": "acme"
+                     *           },
+                     *           {
+                     *             "id": 802,
+                     *             "kind": "applied",
+                     *             "source": "user",
+                     *             "observed": false,
+                     *             "occurred_at": "2026-07-24T09:00:00Z",
+                     *             "company_slug": "acme"
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxApplicationDetail"];
                     };
@@ -21445,6 +22613,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 4822,
+                     *         "source": "gmail",
+                     *         "external_id": "18c2f4a1b3d5e6f7",
+                     *         "from_addr": "no-reply@us.greenhouse-mail.io",
+                     *         "from_name": "Acme Recruiting",
+                     *         "subject": "Interview invitation",
+                     *         "body_text": "Dear candidate, thank you for applying.",
+                     *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
+                     *         "received_at": "2026-06-18T09:12:00Z",
+                     *         "read": true,
+                     *         "link_source": "manual",
+                     *         "linked_slug": "senior-go-engineer-acme-1a2b"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["InboxEmail"];
                     };
@@ -22203,6 +23389,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "company_slug": "acme",
+                     *           "company_name": "Acme",
+                     *           "linkedin_url": "https://linkedin.com/in/you",
+                     *           "status": "pending",
+                     *           "decided_at": null,
+                     *           "created_at": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralOffer"][];
                     };
@@ -22241,6 +23442,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *         "company_slug": "acme",
+                     *         "company_name": "Acme",
+                     *         "linkedin_url": "https://www.linkedin.com/in/example",
+                     *         "status": "approved",
+                     *         "decided_at": "2026-07-28T21:00:00Z",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ReferralOffer"];
                     };
@@ -22272,6 +23486,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 3,
+                     *           "reason": "no_response",
+                     *           "details": "The posting is no longer open.",
+                     *           "status": "pending",
+                     *           "created_at": null,
+                     *           "job_slug": "senior-go-engineer-acme-1a2b",
+                     *           "job_title": "Senior Go Engineer"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["JobReport"][];
                     };
@@ -22310,6 +23539,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 3,
+                     *         "reason": "no_response",
+                     *         "details": "The posting is no longer open.",
+                     *         "status": "dismissed",
+                     *         "review_reason": "not an issue",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["JobReport"];
                     };
@@ -22348,6 +23589,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 3,
+                     *         "reason": "no_response",
+                     *         "details": "The posting is no longer open.",
+                     *         "status": "resolved",
+                     *         "created_at": null,
+                     *         "notified": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["JobReport"];
                     };
@@ -22445,6 +23698,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "open_jobs": 42130,
+                     *         "unique_open_jobs": 1,
+                     *         "companies": 6210,
+                     *         "sources": 48,
+                     *         "ats_platforms": 22,
+                     *         "telegram_channels": 340,
+                     *         "computed_at": "2026-06-18T06:00:00Z",
+                     *         "exact": true
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["CatalogScale"];
                     };
@@ -22609,6 +23876,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "facets": {
+                     *           "countries": {
+                     *             "de": 18420,
+                     *             "us": 15210
+                     *           },
+                     *           "skills": {
+                     *             "go": 4210,
+                     *             "python": 9830
+                     *           },
+                     *           "seniority": {
+                     *             "senior": 9120,
+                     *             "middle": 7340
+                     *           },
+                     *           "work_mode": {
+                     *             "remote": 21000,
+                     *             "hybrid": 8200
+                     *           }
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["FacetStats"];
                     };
@@ -22773,6 +24064,36 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "overall": "operational",
+                     *         "generated_at": "2026-06-18T09:12:00Z",
+                     *         "last_job_added_at": null,
+                     *         "providers": [
+                     *           {
+                     *             "provider": "greenhouse",
+                     *             "kind": "ats",
+                     *             "status": "operational",
+                     *             "total_boards": 1,
+                     *             "healthy_boards": 1,
+                     *             "cooled_boards": 1,
+                     *             "last_run": null,
+                     *             "last_success": null,
+                     *             "ingested_total": 1
+                     *           }
+                     *         ],
+                     *         "site": {
+                     *           "status": "operational",
+                     *           "database": "up",
+                     *           "error_rate": 0.015,
+                     *           "pool_pressure": 0.15,
+                     *           "window_minutes": 1,
+                     *           "history": []
+                     *         }
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["IngestStatus"];
                     };
@@ -22804,6 +24125,22 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 9,
+                     *           "url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "remote": true,
+                     *           "status": "pending",
+                     *           "created_at": null,
+                     *           "submitter_email": "me@example.com"
+                     *         }
+                     *       ]
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Submission"][];
                     };
@@ -22839,6 +24176,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 9,
+                     *         "url": "https://acme.com/careers/123",
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "remote": true,
+                     *         "status": "pending",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Submission"];
                     };
@@ -22930,6 +24280,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 9,
+                     *         "url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "remote": true,
+                     *         "status": "approved",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Submission"];
                     };
@@ -22968,6 +24331,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 9,
+                     *         "url": "https://boards.greenhouse.io/acme/jobs/123",
+                     *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "remote": true,
+                     *         "status": "rejected",
+                     *         "review_reason": "duplicate",
+                     *         "created_at": null
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Submission"];
                     };
@@ -23152,6 +24529,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "handle": "backend-7f2a",
+                     *           "card": {
+                     *             "seniority": "senior",
+                     *             "category": "backend",
+                     *             "total_years": 8,
+                     *             "skills": [
+                     *               "go",
+                     *               "postgresql"
+                     *             ],
+                     *             "roles": [
+                     *               {
+                     *                 "seniority": "senior",
+                     *                 "category": "backend",
+                     *                 "start": {
+                     *                   "year": 2024
+                     *                 },
+                     *                 "current": true,
+                     *                 "stack": [
+                     *                   "go"
+                     *                 ]
+                     *               }
+                     *             ]
+                     *           },
+                     *           "timezone": "Europe/Berlin",
+                     *           "timezone_region": "Europe",
+                     *           "cities": [
+                     *             "berlin"
+                     *           ],
+                     *           "specializations": [
+                     *             "platform"
+                     *           ],
+                     *           "updated_at": "2026-09-01T12:00:00Z",
+                     *           "has_photo": true
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total": 1,
+                     *         "limit": 24,
+                     *         "offset": 0
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TalentMember"][];
                         meta: components["schemas"]["ListMeta"];
@@ -23250,6 +24673,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "handle": "backend-7f2a",
+                     *         "card": {
+                     *           "seniority": "senior",
+                     *           "category": "backend",
+                     *           "total_years": 8,
+                     *           "skills": [
+                     *             "go"
+                     *           ],
+                     *           "roles": []
+                     *         },
+                     *         "timezone": "Europe/Berlin",
+                     *         "timezone_region": "Europe",
+                     *         "cities": [
+                     *           "berlin"
+                     *         ],
+                     *         "specializations": [],
+                     *         "updated_at": "2026-09-01T12:00:00Z",
+                     *         "has_photo": false
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["TalentMember"];
                     };
@@ -23318,6 +24765,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": 31,
+                     *           "subject_type": "company",
+                     *           "subject_slug": "acme",
+                     *           "title": "Anyone interviewed at Acme lately?",
+                     *           "body": "Thanks for the update.",
+                     *           "author": "quiet-falcon-42",
+                     *           "reply_count": 1,
+                     *           "status": "open",
+                     *           "created_at": "2026-07-25T10:00:00Z"
+                     *         }
+                     *       ],
+                     *       "meta": {}
+                     *     }
+                     */
                     "application/json": components["schemas"]["ThreadPage"];
                 };
             };
@@ -23351,6 +24816,21 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 31,
+                     *         "subject_type": "company",
+                     *         "subject_slug": "acme",
+                     *         "title": "Senior Go Engineer",
+                     *         "body": "Thanks for the update.",
+                     *         "author": "quiet-falcon-42",
+                     *         "reply_count": 1,
+                     *         "status": "open",
+                     *         "created_at": "2026-06-18T09:12:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["Thread"];
                     };
@@ -23459,6 +24939,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "thread": {
+                     *           "id": 1,
+                     *           "subject_type": "company",
+                     *           "subject_slug": "acme",
+                     *           "title": "Senior Go Engineer",
+                     *           "body": "Thanks for the update.",
+                     *           "author": "quiet-falcon-42",
+                     *           "reply_count": 1,
+                     *           "status": "open",
+                     *           "created_at": "2026-06-18T09:12:00Z"
+                     *         },
+                     *         "replies": [
+                     *           {
+                     *             "id": 88,
+                     *             "thread_id": 1,
+                     *             "parent_id": 1,
+                     *             "author": "quiet-falcon-42",
+                     *             "body": "Thanks for the update.",
+                     *             "created_at": "2026-07-25T12:00:00Z"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "meta": {}
+                     *     }
+                     */
                     "application/json": components["schemas"]["ThreadDetailPage"];
                 };
             };
@@ -23491,6 +24999,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 31,
+                     *         "status": "closed"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ThreadClosed"];
                     };
@@ -23529,6 +25045,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "id": 88,
+                     *         "thread_id": 1,
+                     *         "parent_id": 1,
+                     *         "author": "quiet-falcon-42",
+                     *         "body": "Thanks for the update.",
+                     *         "created_at": "2026-06-18T09:12:00Z"
+                     *       }
+                     *     }
+                     */
                     "application/json": {
                         data: components["schemas"]["ThreadReply"];
                     };

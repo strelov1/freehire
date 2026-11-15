@@ -81,6 +81,29 @@ model MergeAtoms {
 @summary("Your employments and their evidence atoms.")
 @useAuth(SessionOrKey)
 @tag("Experience")
+@opExample(#{
+  returnType: #{
+      data: #{
+        employments: #[
+          #{
+            id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+            kind: ExperienceEmploymentKind.job,
+            company: "Acme",
+            atoms: #[
+              #{
+                id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                claim: "Cut p99 checkout latency by 40%",
+                provenance: ExperienceProvenance.cv_import,
+                needs_context: true,
+                needs_metrics: true,
+              },
+            ],
+          },
+        ],
+        unplaced: #[],
+      },
+    },
+})
 @route("/me/experience")
 @get
 op listExperience(): Data<ExperienceBank> | Problem;

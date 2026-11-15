@@ -206,6 +206,19 @@ model MailboxStatus {
 @summary("Gmail connection status.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        connected: true,
+        email: "you@gmail.com",
+        status: "ok",
+        available: true,
+        calendar_connected: true,
+        mentor_calendar_connected: true,
+        mentor_busy_sync_connected: true,
+      },
+    },
+})
 @route("/me/gmail")
 @get
 op gmailStatus(): Data<GmailStatus> | Problem;
@@ -261,6 +274,32 @@ op syncGmail(): Data<GmailSyncStarted> | Problem;
 @summary("List your mail, newest first, excluding deleted.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: 4821,
+          source: "gmail",
+          external_id: "<CAF...@mail.gmail.com>",
+          from_addr: "no-reply@us.greenhouse-mail.io",
+          from_name: "Speechify Recruiting",
+          subject: "Thank you for applying to Speechify",
+          snippet: "We have received your application.",
+          received_at: utcDateTime.fromISO("2026-07-24T09:12:00Z"),
+          read: false,
+          status_signal: "acknowledgement",
+          link_source: "auto",
+          linked_slug: "tech-lead-web-core-speechify-a1b2",
+        },
+      ],
+      meta: #{
+        total: 137,
+        limit: 50,
+        offset: 0,
+        hidden: 1,
+      },
+    },
+})
 @route("/me/inbox")
 @get
 op getInbox(
@@ -332,6 +371,24 @@ op markAllReadInbox(
 @summary("One message in full. Marks it read.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Speechify",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        status_signal: "acknowledgement",
+        linked_slug: "tech-lead-web-core-speechify-a1b2",
+      },
+    },
+})
 @route("/me/emails/{id}")
 @get
 op getEmail(/** The message id. (e.g. `4821`) */ @path id: string): Data<InboxEmail> | Problem;
@@ -404,6 +461,24 @@ op ingestEmails(@body body: unknown): Data<InboxIngested> | Problem;
 @summary("Record what a message is, and optionally which application it belongs to.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        status_signal: "interview_invitation",
+        linked_slug: "tech-lead-web-core-speechify-a1b2",
+      },
+    },
+})
 @route("/me/emails/{id}/triage")
 @post
 op triageEmail(/** The message id. */ @path id: string, @body body: InboxTriage): Data<InboxEmail> | Problem;
@@ -411,6 +486,24 @@ op triageEmail(/** The message id. */ @path id: string, @body body: InboxTriage)
 @summary("Attach a message to one of your applications.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        link_source: "manual",
+        linked_slug: "tech-lead-web-core-speechify-a1b2",
+      },
+    },
+})
 @route("/me/emails/{id}/link")
 @post
 op linkEmail(/** The message id. */ @path id: string, @body body?: InboxLinkTarget): Data<InboxEmail> | Problem;
@@ -418,6 +511,23 @@ op linkEmail(/** The message id. */ @path id: string, @body body?: InboxLinkTarg
 @summary("Clear a message's application link; its classification stays.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        status_signal: "acknowledgement",
+      },
+    },
+})
 @route("/me/emails/{id}/unlink")
 @post
 op unlinkEmail(/** The message id. */ @path id: string): Data<InboxEmail> | Problem;
@@ -430,6 +540,24 @@ op unlinkEmail(/** The message id. */ @path id: string): Data<InboxEmail> | Prob
 @summary("Accept a suggested link.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        link_source: "manual",
+        linked_slug: "tech-lead-web-core-speechify-a1b2",
+      },
+    },
+})
 @route("/me/emails/{id}/confirm")
 @post
 op confirmEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> | Problem;
@@ -437,6 +565,22 @@ op confirmEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> |
 @summary("Dismiss a suggested link without attaching it.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+      },
+    },
+})
 @route("/me/emails/{id}/reject")
 @post
 op rejectEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> | Problem;
@@ -451,6 +595,23 @@ op rejectEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> | 
 @summary("Record an application from a message, and link the message to it.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4821,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Thank you for applying to Acme",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        linked_slug: "tech-lead-web-core-speechify-a1b2",
+      },
+    },
+})
 @route("/me/emails/{id}/application")
 @post
 op createApplicationFromEmail(/** The message id. */ @path id: string, @body body?: InboxLinkTarget): Data<InboxEmail> | Problem;
@@ -465,6 +626,55 @@ op createApplicationFromEmail(/** The message id. */ @path id: string, @body bod
 @summary("One tracked application, with the mail linked to it and its history.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        job: #{
+          public_slug: "senior-go-engineer-acme-1a2b",
+          title: "Senior Go Engineer",
+          company: "Acme",
+          company_slug: "acme",
+          location: "Berlin, Germany",
+        },
+        viewed_at: null,
+        saved_at: null,
+        applied_at: utcDateTime.fromISO("2026-07-24T09:00:00Z"),
+        stage: "interview",
+        followed_up_at: null,
+        emails: #[
+          #{
+            id: 4821,
+            source: "gmail",
+            from_addr: "no-reply@us.greenhouse-mail.io",
+            from_name: "Acme Recruiting",
+            subject: "Thank you for applying to Acme",
+            status_signal: "interview_invitation",
+            received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+            read: true,
+          },
+        ],
+        events: #[
+          #{
+            id: 991,
+            kind: "employer_reply",
+            signal: "interview_invitation",
+            source: "mail_gmail",
+            observed: true,
+            occurred_at: utcDateTime.fromISO("2026-07-29T11:04:00Z"),
+            company_slug: "acme",
+          },
+          #{
+            id: 802,
+            kind: "applied",
+            source: "user",
+            observed: false,
+            occurred_at: utcDateTime.fromISO("2026-07-24T09:00:00Z"),
+            company_slug: "acme",
+          },
+        ],
+      },
+    },
+})
 @route("/me/tracking/{slug}")
 @get
 op getTrackedApplication(/** The job `public_slug`. */ @path slug: string): Data<InboxApplicationDetail> | Problem;
@@ -551,6 +761,24 @@ op recallApplicationMail(/** The job `public_slug`. */ @path slug: string): Data
 @summary("Import and link one message a mail-recall sweep proposed.")
 @useAuth(SessionOrKey)
 @tag("Mail")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: 4822,
+        source: "gmail",
+        external_id: "18c2f4a1b3d5e6f7",
+        from_addr: "no-reply@us.greenhouse-mail.io",
+        from_name: "Acme Recruiting",
+        subject: "Interview invitation",
+        body_text: "Dear candidate, thank you for applying.",
+        body_html: "<p>Dear candidate, thank you for applying.</p>",
+        received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
+        read: true,
+        link_source: "manual",
+        linked_slug: "senior-go-engineer-acme-1a2b",
+      },
+    },
+})
 @route("/me/tracking/{slug}/mail-recall/link")
 @post
 op linkRecalledMail(/** The job `public_slug`. */ @path slug: string, @body body?: MailRecalledPick): Data<InboxEmail> | Problem;

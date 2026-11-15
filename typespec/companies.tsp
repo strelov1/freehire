@@ -47,6 +47,32 @@ model CompanySubindustry {
 @summary("List companies with job counts and denormalized facets; optional filters.")
 @useAuth(NoAuth)
 @tag("Companies")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          slug: "acme",
+          name: "Acme",
+          job_count: 12,
+          tagline: "Payments for builders",
+          industries: #[
+            "payments",
+          ],
+          hq_country: "DE",
+          collections: #[
+            "yc",
+          ],
+          feedback_count: 1,
+          feedback_rating_avg: null,
+        },
+      ],
+      meta: #{
+        total: 1,
+        limit: 20,
+        offset: 0,
+      },
+    },
+})
 @route("/companies")
 @get
 op listCompanies(

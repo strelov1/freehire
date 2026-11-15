@@ -115,6 +115,21 @@ model ReferralDecision {
 @summary("Your referral offers and their moderation state.")
 @useAuth(SessionOrKey)
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          company_slug: "acme",
+          company_name: "Acme",
+          linkedin_url: "https://www.linkedin.com/in/example",
+          status: ReferralOfferStatus.approved,
+          decided_at: utcDateTime.fromISO("2026-07-28T21:00:00Z"),
+          created_at: null,
+        },
+      ],
+    },
+})
 @route("/me/referrals/offers")
 @get
 op listMyReferralOffers(): Data<ReferralOffer[]> | Problem;
@@ -135,6 +150,20 @@ op withdrawReferralOffer(/** The offer id. */ @path id: string): NoContentRespon
 @summary("Ask a company's approved referrers for an intro.")
 @useAuth(SessionOrKey)
 @tag("Referrals")
+@opExample(#{
+  returnType: #{ _: 201, body: #{
+      data: #{
+        id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+        company_slug: "acme",
+        company_name: "Acme",
+        job_id: null,
+        cv_kind: ReferralCvKind.original,
+        cv_id: null,
+        status: ReferralRequestStatus.sent,
+        created_at: utcDateTime.fromISO("2026-07-28T20:05:00Z"),
+      },
+    } },
+})
 @route("/me/referrals/requests")
 @post
 op createReferralRequest(@body body: ReferralRequestCreate): {
@@ -171,6 +200,22 @@ op listReferralCVOptions(/** The company to ask. */ @query company_slug?: string
 @summary("The intros you asked for, and where they stand.")
 @useAuth(SessionOrKey)
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          company_slug: "acme",
+          company_name: "Acme",
+          job_id: null,
+          cv_kind: ReferralCvKind.original,
+          cv_id: null,
+          status: ReferralRequestStatus.contacted,
+          created_at: null,
+        },
+      ],
+    },
+})
 @route("/me/referrals/requests")
 @get
 op listMyReferralRequests(): Data<ReferralSeekerRequest[]> | Problem;
@@ -179,6 +224,22 @@ op listMyReferralRequests(): Data<ReferralSeekerRequest[]> | Problem;
 @summary("Requests waiting on you as an approved referrer.")
 @useAuth(SessionOrKey)
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          company_slug: "acme",
+          company_name: "Acme",
+          job_id: null,
+          cv_kind: ReferralCvKind.original,
+          note: "Backend, 8 years Go",
+          status: ReferralRequestStatus.sent,
+          created_at: null,
+        },
+      ],
+    },
+})
 @route("/me/referrals/incoming")
 @get
 op listIncomingReferralRequests(): Data<ReferralIncomingRequest[]> | Problem;
@@ -186,6 +247,19 @@ op listIncomingReferralRequests(): Data<ReferralIncomingRequest[]> | Problem;
 @summary("Mark an incoming request contacted or declined.")
 @useAuth(SessionOrKey)
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+        company_slug: "acme",
+        company_name: "Acme",
+        job_id: null,
+        cv_kind: ReferralCvKind.original,
+        status: ReferralRequestStatus.contacted,
+        created_at: null,
+      },
+    },
+})
 @route("/me/referrals/incoming/{id}/resolve")
 @post
 op resolveReferralRequest(/** The request id. */ @path id: string, @body body: ReferralResolve): Data<ReferralIncomingRequest> | Problem;
@@ -195,6 +269,21 @@ op resolveReferralRequest(/** The request id. */ @path id: string, @body body: R
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #[
+        #{
+          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          company_slug: "acme",
+          company_name: "Acme",
+          linkedin_url: "https://linkedin.com/in/you",
+          status: ReferralOfferStatus.pending,
+          decided_at: null,
+          created_at: null,
+        },
+      ],
+    },
+})
 @route("/referrals/offers")
 @get
 op listPendingReferralOffers(): Data<ReferralOffer[]> | Problem;
@@ -204,6 +293,19 @@ op listPendingReferralOffers(): Data<ReferralOffer[]> | Problem;
 @useAuth(SessionOrKey)
 @extension("x-audience", "moderator")
 @tag("Referrals")
+@opExample(#{
+  returnType: #{
+      data: #{
+        id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+        company_slug: "acme",
+        company_name: "Acme",
+        linkedin_url: "https://www.linkedin.com/in/example",
+        status: ReferralOfferStatus.approved,
+        decided_at: utcDateTime.fromISO("2026-07-28T21:00:00Z"),
+        created_at: null,
+      },
+    },
+})
 @route("/referrals/offers/{id}/decide")
 @post
 op decideReferralOffer(/** The offer id. */ @path id: string, @body body: ReferralDecision): Data<ReferralOffer> | Problem;
