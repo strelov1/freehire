@@ -205,26 +205,27 @@ func TestCascadeFKIndexesRunOneStatementAtATime(t *testing.T) {
 	}
 	var found *Migration
 	for i := range migs {
-		if migs[i].Version == "0264_cascade_fk_indexes.sql" {
+		if migs[i].Version == "0272_cascade_fk_indexes.sql" {
 			found = &migs[i]
 			break
 		}
 	}
 	if found == nil {
-		t.Fatal("0264_cascade_fk_indexes.sql is not in migrations/")
+		t.Fatal("0272_cascade_fk_indexes.sql is not in migrations/")
 	}
 	if !found.NoTx {
-		t.Fatal("0264 must carry the no-transaction marker; CREATE INDEX CONCURRENTLY cannot run inside the runner's transaction")
+		t.Fatal("0272 must carry the no-transaction marker; CREATE INDEX CONCURRENTLY cannot run inside the runner's transaction")
 	}
 	stmts := splitStatements(found.SQL)
-	if len(stmts) != 3 {
-		t.Fatalf("split into %d statements, want 3 so each CREATE INDEX CONCURRENTLY is its own implicit transaction", len(stmts))
+	if len(stmts) != 4 {
+		t.Fatalf("split into %d statements, want 4 so each CREATE INDEX CONCURRENTLY is its own implicit transaction", len(stmts))
 	}
 	joined := strings.Join(stmts, "\n")
 	for _, name := range []string{
 		"auto_apply_queue_job_id_idx",
 		"cover_letters_job_id_idx",
 		"application_interviews_application_id_idx",
+		"mentor_bookings_job_id_idx",
 	} {
 		if !strings.Contains(joined, name) {
 			t.Errorf("statements do not name %s", name)
