@@ -4,9 +4,11 @@
 `internal/ingest/directapply` — a candidate's application to an employer vacancy that takes
 applications on freehire (`job.IsDirectApply`: source `employer`, external id
 `freehire:<uuid>`, no URL). Checking it against the employer's questions, recording it, and
-delivering it by email to the employer account's confirmed work address. The vacancy and its
-questions are authored in [internal/ingest/employer](../employer/AGENTS.md); the design
-record is [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply).
+delivering it by email to the employer account's confirmed work address (`Service`); and the
+employer's side of it, the applicant inbox and hiring pipeline (`Inbox`, `inbox.go`). The
+vacancy and its questions are authored in [internal/ingest/employer](../employer/AGENTS.md);
+the design records are [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply)
+and `openspec/changes/add-employer-applicant-pipeline` (landing with the HTTP routes).
 
 ## Always true
 - **Recorded first, stamped sent after.** `Apply` writes the `direct_applications` row,
@@ -46,3 +48,38 @@ record is [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-a
   type, so a record still reads correctly after the employer edits the questions. A boolean
   is `"true"`/`"false"` on the wire and banked as `Yes`/`No`, because the bank also prefills
   ATS forms that ask in prose.
+
+## The applicant inbox (`Inbox`)
+- **Reached only through the vacancy, and only once delivered.** Every inbox statement joins
+  the application to its job and requires `created_by = employer AND source = 'employer'`
+  plus `sent_at IS NOT NULL` — the ownership predicate the employer's vacancy writes use.
+  Anything else, another employer's application included, is `ErrNotFound`. An unsent row is
+  not the employer's to see: they were never sent it, and the candidate's retry may replace
+  it. Every method also requires `ActiveAccount`, so a revoked account reads nothing.
+- **The CV is a copy of what was mailed** (`direct_application_cvs`, migration 0270), written
+  in the same statement as the application, so a retry replaces it with the file the retry
+  mails. It is never re-rendered from the candidate's current CV: a tailored CV edited or
+  deleted afterwards must not change what the employer was sent. It lives in Postgres, not
+  the blob store, so it cascades with the application on account deletion. Applications sent
+  before the table existed have no copy (`has_cv: false`) — their CV went by email only.
+- **The stage is the employer's record and is saved first.** `Move` writes it, then the
+  candidate's tracking follows (`StageMirror`; how far is `userjob.EmployerMay`'s call) and,
+  for interview/offer/rejected, the candidate is emailed (`StatusNotifier`, Reply-To the
+  account's work email). Neither follow-up fails the move; a failed letter is reported as
+  `candidate_notified: false`, never as sent. A repeated move to the same stage changes
+  nothing and notifies nobody (`SetDirectApplicationStage` is one UPDATE that compares
+  against the row as the update reaches it, and reports `changed`). The whole move is one
+  `ApplicationMoves` run on one pooled connection holding the application's session
+  advisory lock (`LockDirectApplication`), so an older move can never mirror or mail after
+  a newer one and a move never holds one connection while waiting for another. The stage
+  and the mirror commit together in one transaction (the mirror in a savepoint, so its
+  failure leaves the stage standing); the letter is the after-commit step, still inside the
+  lock, so it is only ever about a saved decision. The lock is released even when the
+  request's context has ended, and the connection is closed if releasing fails. A message is refused with a stage that sends no letter rather than dropped.
+- **Every stage maps onto a userjob stage** (`candidateStage`): new → applied (what the
+  record reads on arrival, so moving back undoes a stage the employer set by mistake),
+  reviewing → screening, hired → accepted, the rest by name. Whether the candidate's record
+  actually moves is `userjob.EmployerMay`'s call.
+- **Built when mail is configured, not Typst.** The inbox serves the kept CV and renders
+  nothing, but a move may email the candidate, so without a mail transport its routes answer
+  501 — wired in `handler.Register` beside `Service`.

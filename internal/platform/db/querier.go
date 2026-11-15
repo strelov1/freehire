@@ -1559,6 +1559,10 @@ type Querier interface {
 	//
 	// Soft-deleted mail is excluded, so these counts and the listing's agree.
 	CountEmailsByState(ctx context.Context, userID int64) ([]CountEmailsByStateRow, error)
+	// How many delivered applications sit at each stage, under the same vacancy narrowing as
+	// ListEmployerApplications but never its stage one: the inbox shows every stage's count
+	// beside the stage it is filtered to. A stage with no application is absent.
+	CountEmployerApplicationsByStage(ctx context.Context, arg CountEmployerApplicationsByStageParams) ([]CountEmployerApplicationsByStageRow, error)
 	// What CloseEmptyFeedBoardJobs would close, for the safety-net worker's dry-run report — same
 	// predicate including the board_health re-validation, so a dry run cannot report a count for a
 	// board that has already yielded again, and no write.
@@ -2952,6 +2956,9 @@ type Querier interface {
 	// The nudge queries coalesce the other way, and that is not a contradiction: their
 	// MATCH step already inner-joins an enabled row, so a nudge cannot exist without one.
 	GetEmailPrefs(ctx context.Context, id int64) (GetEmailPrefsRow, error)
+	// The CV file a delivered application sent, as the employer received it. No row for an
+	// application that is not the employer's, and for one written before the copy was kept.
+	GetEmployerApplicationCV(ctx context.Context, arg GetEmployerApplicationCVParams) (GetEmployerApplicationCVRow, error)
 	// The caller's newest session of one preset that has not received a message yet. The support
 	// panel reuses it instead of minting another, which bounds the sessions an account can create
 	// by the messages it actually sent. Owner-scoped like every other read in this file.
@@ -4631,6 +4638,17 @@ type Querier interface {
 	// inbox and seven assistant tools: one shared statement grown for one reader is how the
 	// two drift.
 	ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error)
+	// The employer's inbox. Every statement below reaches an application only through the
+	// vacancy it was sent to, and only when that vacancy is the employer's own on-site posting
+	// (created_by = employer AND source = 'employer') — the same ownership predicate the
+	// employer's vacancy writes use (jobs_manual.sql). An application not yet delivered
+	// (sent_at NULL) is not the employer's to see: they were never sent it, and it may still be
+	// replaced by the candidate's retry. The vacancy is read from the base table, not jobs_read:
+	// these are identity columns, not a posting read.
+	// One page of the employer's delivered applications, newest first, optionally narrowed to
+	// one vacancy and one stage — or to the one application `id` names, which is how a single
+	// application is read. Reached through jobs_created_by_idx.
+	ListEmployerApplications(ctx context.Context, arg ListEmployerApplicationsParams) ([]ListEmployerApplicationsRow, error)
 	// An employer's own dashboard list: every vacancy this actor created through this path,
 	// newest first, open and closed both (the dashboard shows a closed one with its own badge
 	// rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
@@ -5784,6 +5802,12 @@ type Querier interface {
 	// Each approval checks the registry and company_parents and then writes them, and two
 	// approvals checked against the same state could each pass while together making a chain.
 	LockCompanyRelationDecisions(ctx context.Context) error
+	// Serialises everything one employer move does to one application — the stage write, the
+	// candidate's tracking and the letter — against another move of the same application, so
+	// an older move can never mirror or mail after a newer one. Session-scoped, because the
+	// letter goes out after the move's transaction commits and must still be inside the lock;
+	// the caller releases it with UnlockDirectApplication on the same connection.
+	LockDirectApplication(ctx context.Context, id int64) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -7630,6 +7654,15 @@ type Querier interface {
 	// only widens reach, never produces a false match, so it can stay eventually
 	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
+	// Moves a delivered application to a stage in the employer's pipeline and reports what the
+	// move needs downstream: whether it changed anything (`changed` is false when it already
+	// stood there, so a repeated click notifies nobody twice), and who the candidate is and
+	// what they applied to. One UPDATE, so the comparison with the current stage is made on the
+	// row as it is when the update reaches it — a concurrent move that committed first is seen,
+	// not an older snapshot of it. stage_changed_at moves only with the stage, which is how the
+	// RETURNING tells a change from a no-op. No row: not the employer's. Callers serialise the
+	// whole move per application (LockDirectApplication).
+	SetDirectApplicationStage(ctx context.Context, arg SetDirectApplicationStageParams) (SetDirectApplicationStageRow, error)
 	// Record the outcome of examining one binding: whether the role is now held, and that it was
 	// examined just now.
 	//
@@ -8244,6 +8277,8 @@ type Querier interface {
 	UnlinkDiscordAccount(ctx context.Context, userID int64) (int64, error)
 	// Clear an email's application link (leaves the classified status intact).
 	UnlinkEmail(ctx context.Context, arg UnlinkEmailParams) (int64, error)
+	// Releases LockDirectApplication; false when this session did not hold it.
+	UnlockDirectApplication(ctx context.Context, id int64) (bool, error)
 	// Clear a job's saved mark without deleting the interaction row, so view and
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
@@ -8522,7 +8557,9 @@ type Querier interface {
 	UpsertCoverLetter(ctx context.Context, arg UpsertCoverLetterParams) error
 	// Records a candidate's application to an on-site vacancy and CLAIMS it for delivery
 	// (sending_at), or replaces the content of one they recorded earlier that never reached the
-	// employer — the retry after a failed delivery. See migration 0187.
+	// employer — the retry after a failed delivery. See migration 0187. The CV file it sends is
+	// copied into direct_application_cvs in the same statement (migration 0270), so the copy
+	// the employer's inbox serves is always the one this attempt mails, never a stale one.
 	//
 	// Returns no row in exactly three cases, which GetDirectApplication tells apart afterwards:
 	// the application was already SENT; another request holds a live claim on it (a delivery in

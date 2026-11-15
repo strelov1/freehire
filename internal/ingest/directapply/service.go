@@ -64,6 +64,8 @@ type Record struct {
 	CV      CVChoice
 	Note    string
 	Answers []Answer
+	// CVFile is the file this attempt mails, kept so the employer's inbox serves exactly it.
+	CVFile Attachment
 }
 
 // CVChoice is the CV an application sends: exactly one of the candidate's uploaded CV
@@ -302,7 +304,7 @@ func (s *Service) Apply(ctx context.Context, userID int64, slug string, app Appl
 		return err
 	}
 
-	id, recorded, err := s.repo.Record(ctx, Record{JobID: v.ID, UserID: userID, CV: app.CV, Note: note, Answers: answers}, s.dailyLimit)
+	id, recorded, err := s.repo.Record(ctx, Record{JobID: v.ID, UserID: userID, CV: app.CV, Note: note, Answers: answers, CVFile: cv}, s.dailyLimit)
 	if err != nil {
 		return err
 	}
