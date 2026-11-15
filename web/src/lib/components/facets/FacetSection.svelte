@@ -4,14 +4,8 @@
   import { messages } from './FacetSection.messages';
   import type { Snippet } from 'svelte';
   import { X } from '@lucide/svelte';
-  import {
-    dynamicLabel,
-    dynamicOptions,
-    reportedCount,
-    type FacetDef,
-    type FacetOption,
-    type FacetStore,
-  } from '#lib/facets.js';
+  import { dynamicLabel, type FacetDef, type FacetOption, type FacetStore } from '#lib/facets.js';
+  import { dynamicOptions, reportedCount } from '#lib/facetOptions.js';
   import type { FacetCounts } from '#lib/types.js';
   import PillGroup from './PillGroup.svelte';
   import RemoteSearchSelect from './RemoteSearchSelect.svelte';

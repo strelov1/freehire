@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COLLECTIONS, FILTER_COLLECTIONS } from './collections';
+import { COLLECTIONS } from './collections';
+import { FILTER_COLLECTIONS } from './filterCollections';
 import { COLLECTION_SECTIONS, sectionBySlug } from './collectionSections';
 
 describe('COLLECTION_SECTIONS', () => {

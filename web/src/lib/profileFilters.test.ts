@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { filtersFromProfile, filtersFromParams, filtersToParams, emptyFilters } from './facetModel';
+import { filtersFromParams, filtersToParams, emptyFilters } from './facetModel';
+import { filtersFromProfile } from './profileFilters';
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { LocationPreferences, UserProfile } from './types';
 

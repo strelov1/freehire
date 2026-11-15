@@ -1,4 +1,5 @@
-import { COLLECTIONS, FILTER_COLLECTIONS, collectionBySlug, toQuery } from '#lib/collections.js';
+import { COLLECTIONS, collectionBySlug, toQuery } from '#lib/collections.js';
+import { FILTER_COLLECTIONS } from '#lib/filterCollections.js';
 import { backerBadges } from '#lib/backers.js';
 import { COLLECTION_SECTIONS, type CollectionRow, type CollectionSectionDef } from '#lib/collectionSections.js';
 import COLLECTION_STACKS from '#lib/data/collectionStacks.json';

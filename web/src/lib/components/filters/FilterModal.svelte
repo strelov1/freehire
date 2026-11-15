@@ -5,14 +5,8 @@
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import {
-    companySearch,
-    EMPLOYER_CREDENTIALS,
-    FACETS,
-    JOB_COLLECTION,
-    searchCities,
-    visibleEngagementGroups,
-  } from '#lib/facets.js';
+  import { companySearch, EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, visibleEngagementGroups } from '#lib/facets.js';
+  import { searchCities } from '#lib/facetOptions.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
@@ -31,19 +25,13 @@
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
   import type { FacetCounts } from '#lib/types.js';
-  import {
-    EXPERIENCE_PRESETS,
-    FRESHNESS_PRESETS,
-    SALARY_MAX,
-    SALARY_STEP,
-    experienceLabel,
-    freshnessLabel,
-    salaryLabel,
-  } from '#lib/filterControls.js';
+  import { FRESHNESS_PRESETS, SALARY_MAX, SALARY_STEP, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
   import RangeSlider from './RangeSlider.svelte';
   import CategoryPane from './CategoryPane.svelte';
+  import ExperiencePane from './ExperiencePane.svelte';
+  import RelocationPane from './RelocationPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
   import AiFilterButton from './AiFilterButton.svelte';
@@ -460,16 +448,6 @@
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
   });
 
-  // Same snap-to-Any rule as freshness above: an off-preset bound (hand-edited or
-  // shared URL) has no exact stop, so the handle rests on the rightmost one. The
-  // LABEL still reports the real bound — see experienceLabel — so the two do not
-  // agree here on purpose: the handle says "no stop matches", the text says what
-  // is actually filtering.
-  const experienceIndex = $derived.by(() => {
-    const i = EXPERIENCE_PRESETS.findIndex((p) => p.years === staged.value.experienceYearsMax);
-    return i < 0 ? EXPERIENCE_PRESETS.length - 1 : i;
-  });
-
   // "No ceiling" is a stop of its own, one step past the highest real bound — the
   // shape of the "Any" stop on the experience and freshness sliders. Letting
   // SALARY_MAX double as it would make SALARY_MAX unreachable as a ceiling, and,
@@ -740,97 +718,7 @@
       Not stated means the posting says nothing about equity, not that it offers none.
     </p>
   {:else if entry.kind === 'experience'}
-    {@const showSeniority = !exclude.includes('seniority')}
-    {@const showRoleType = !exclude.includes('role_type')}
-    {#if showSeniority}
-      {@const noLevelPicked = (staged.value.facets.seniority?.include.length ?? 0) === 0}
-      <ChipFacet store={staged} param="seniority" label="Seniority" counts={c} />
-      <!-- Most postings carry no level, and including one drops every one of them
-           unless this is ticked. Disabled until a level is included: excluding levels
-           already keeps the unlabelled postings, so there is nothing to widen. -->
-      <label
-        class="mt-3 flex items-center gap-2 text-sm {noLevelPicked
-          ? 'cursor-not-allowed opacity-50'
-          : 'cursor-pointer'}"
-      >
-        <input
-          type="checkbox"
-          class="size-4 rounded border-border"
-          checked={staged.value.seniorityIncludeUnspecified}
-          disabled={noLevelPicked}
-          onchange={(e) => staged.setSeniorityIncludeUnspecified(e.currentTarget.checked)}
-        />
-        <span>Include postings with no level stated</span>
-      </label>
-    {/if}
-    <!-- Directly beneath seniority on purpose: the two are the axes users conflate.
-         "Lead" reads to many as a management grade, while in this catalogue it names
-         the IC ladder — of the 116,893 postings at seniority=lead, only 3,303 carry
-         any management marker. Adjacency is what makes them read as two questions. -->
-    {#if showRoleType}
-      <div class:mt-6={showSeniority}>
-        <ChipFacet store={staged} param="role_type" label="Role type" counts={c} />
-      </div>
-    {/if}
-    <div class:mt-6={showSeniority || showRoleType}>
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="text-sm font-semibold tracking-tight">Years of experience</h3>
-        <span class="text-xs font-medium text-muted-foreground">{experienceLabel(staged.value.experienceYearsMax)}</span
-        >
-      </div>
-      <input
-        type="range"
-        min="0"
-        max={EXPERIENCE_PRESETS.length - 1}
-        step="1"
-        value={experienceIndex}
-        oninput={(e) => staged.setExperienceYearsMax(EXPERIENCE_PRESETS[Number(e.currentTarget.value)]?.years ?? null)}
-        aria-label="Maximum years of experience"
-        aria-valuetext={experienceLabel(staged.value.experienceYearsMax)}
-        class="h-6 w-full accent-primary"
-      />
-      <!-- Most of the catalogue states no experience requirement at all (about two
-           thirds, measured on prod 2026-10-21: 2.42M of 3.67M open postings), and a
-           bound excludes every one of those postings unless this is ticked. Shown
-           permanently rather than only once bounded: a result count that collapses
-           without explanation is read as a broken filter, and by then the user has
-           already been misled. Disabled at "Any", where there is no bound to widen. -->
-      <label
-        class="mt-3 flex items-center gap-2 text-sm {staged.value.experienceYearsMax == null
-          ? 'cursor-not-allowed opacity-50'
-          : 'cursor-pointer'}"
-      >
-        <input
-          type="checkbox"
-          class="size-4 rounded border-border"
-          checked={staged.value.experienceIncludeUnspecified}
-          disabled={staged.value.experienceYearsMax == null}
-          onchange={(e) => staged.setExperienceIncludeUnspecified(e.currentTarget.checked)}
-        />
-        <span>Include postings that don't state experience</span>
-      </label>
-      <!-- The entry-level profile seeds this (freehire#3655): a posting labelled with a
-           picked level is answered by the level, so the limit reads only the postings
-           with no level. Shown beside the other modifier so a profile applied to /jobs
-           does not narrow the list through a switch nobody can see. -->
-      <label
-        class="mt-2 flex items-center gap-2 text-sm {staged.value.experienceYearsMax == null
-          ? 'cursor-not-allowed opacity-50'
-          : 'cursor-pointer'}"
-      >
-        <input
-          type="checkbox"
-          class="size-4 rounded border-border"
-          checked={staged.value.experienceOnlySeniorityUnspecified}
-          disabled={staged.value.experienceYearsMax == null}
-          onchange={(e) => staged.setExperienceOnlySeniorityUnspecified(e.currentTarget.checked)}
-        />
-        <span>Apply the limit only to postings with no level stated</span>
-      </label>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Most postings don't state an experience requirement. A limit hides them unless this is ticked.
-      </p>
-    </div>
+    <ExperiencePane store={staged} counts={c} {exclude} />
   {:else if entry.kind === 'work'}
     <ChipFacet store={staged} param="work_mode" label="Work format" counts={c} />
     {#if appliesWorkModeRemoteAnywhere(staged.value)}
@@ -882,77 +770,7 @@
       {#if postingDef}<FacetSection def={postingDef} store={staged} counts={c} expand />{/if}
     </div>
   {:else if entry.kind === 'relocation'}
-    <ChipFacet store={staged} param="relocation" label="Relocation" counts={c} />
-    <div class="mt-6">
-      <ChipFacet
-        store={staged}
-        param="collections"
-        label="Employer credentials"
-        counts={c}
-        options={EMPLOYER_CREDENTIALS}
-      />
-    </div>
-    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Visa</h3>
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={staged.value.visa}
-        onchange={(e) => staged.setVisa(e.currentTarget.checked)}
-      />
-      <span>Offers visa sponsorship</span>
-    </label>
-    <!-- Stated as what it hides, not as a judgement. The badge names the practice and
-         its report count; this is only the way to act on it. -->
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={staged.value.hideAIInterview}
-        onchange={(e) => staged.setHideAIInterview(e.currentTarget.checked)}
-      />
-      <span>Hide employers reported to interview with AI</span>
-    </label>
-    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Auto-apply</h3>
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={staged.value.autoApplyAvailable}
-        onchange={(e) => staged.setAutoApplyAvailable(e.currentTarget.checked)}
-      />
-      <span>Auto-apply available</span>
-    </label>
-    <p class="mt-1 text-xs text-muted-foreground">Best-effort — successful submission isn't guaranteed.</p>
-    <!-- Checked for ANY bound, not only the toggle's own: a link carrying
-         apply_questions_max=5 still narrows the list, and a box reading unchecked over
-         it would lie. Unchecking clears whichever bound it was. -->
-    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Application</h3>
-    <label class="flex cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={staged.value.applyQuestionsMax != null}
-        onchange={(e) => staged.setApplyQuestionsMax(e.currentTarget.checked ? SHORT_APPLICATION_MAX : null)}
-      />
-      <span>Short application</span>
-    </label>
-    <p class="mt-1 text-xs text-muted-foreground">
-      {staged.value.applyQuestionsMax ?? SHORT_APPLICATION_MAX} or fewer required questions beyond your CV and contact details;
-      jobs whose form we haven't read are hidden.
-    </p>
-    <!-- The levels a posting states, not a yes/no: someone who cannot hold a clearance
-         picks "No explicit reference", someone who holds Secret picks the rungs they
-         can work under. The old Hide/Only toggle is this facet's `none` chip, included
-         or excluded, and its links still read that way (facetModel.readLegacyClearance). -->
-    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
-    <ChipFacet store={staged} param="clearance_levels" label="Clearance level" counts={c} />
-    <p class="mt-2 text-xs text-muted-foreground">
-      {#if selCount(staged.value, 'clearance_levels') === 0}
-        Showing every level — select one or more to narrow.
-      {/if}
-      Other covers non-US vetting (UK SC/DV, AU NV1, NATO) and clearances stated without a level.
-    </p>
+    <RelocationPane store={staged} counts={c} clearancePicked={selCount(staged.value, 'clearance_levels')} />
   {:else if entry.kind === 'posted'}
     {#if showHideSeen}
       <div class="mb-6">

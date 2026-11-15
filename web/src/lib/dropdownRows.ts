@@ -127,3 +127,21 @@ export function dropdownRows(content: DropdownContent): DropdownRow[] {
 
   return rows;
 }
+
+const OPERATOR_HEADINGS = { company: 'Companies', source: 'Sources', title: 'Titles' } as const;
+
+/** The label above a section's first row, or null for a section that needs none.
+ *
+ *  An EMPTY box gets none. Its rows are the only thing in the panel — there is no
+ *  second section to tell them apart from — so the heading was a line of small caps
+ *  introducing a list nobody could confuse with anything. A typed box does have
+ *  neighbours (postings, companies), and there "Filter by" says what picking one of
+ *  these rows does rather than what it is. */
+export function sectionHeading(row: DropdownRow, emptyBox: boolean): string | null {
+  const kind = row.kind;
+  if (kind === 'operator') return OPERATOR_HEADINGS[row.option.key];
+  if (kind === 'text' || kind === 'link') return null;
+  if (kind === 'job') return 'Jobs';
+  if (kind === 'company') return 'Companies';
+  return emptyBox ? null : 'Filter by';
+}

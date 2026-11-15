@@ -4,7 +4,8 @@
   // immediately, the same way the Skills view's chips do). This component owns no
   // persistence itself — every edit recomputes the whole block and hands it to `onChange`;
   // the caller decides whether that means "buffer until Save" or "write it now".
-  import { COUNTRY_OPTIONS, countryLabel, REGION_OPTIONS, searchCities, WORK_MODE_OPTIONS } from '#lib/facets.js';
+  import { COUNTRY_OPTIONS, countryLabel, REGION_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
+  import { searchCities } from '#lib/facetOptions.js';
   import { api } from '#lib/api.js';
   import { ComboboxNav } from '#lib/comboboxNav.svelte.js';
   import { buildLocationPreferences } from '#lib/profileLocation.js';

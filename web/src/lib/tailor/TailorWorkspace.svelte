@@ -14,16 +14,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import {
-    Check,
-    Download,
-    PanelLeftClose,
-    PanelLeftOpen,
-    Terminal,
-    TriangleAlert,
-    ZoomIn,
-    ZoomOut,
-  } from '@lucide/svelte';
+  import { PanelLeftOpen, Terminal } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
@@ -42,11 +33,15 @@
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
   import { fitToWidthZoom } from '#lib/cvGeometry.js';
+  import { CvRevisions } from './cvRevisions.svelte';
+  import LeftPanelBar from './LeftPanelBar.svelte';
+  import { revealSelection } from './revealSelection';
+  import { workspaceOpenError } from './workspaceOpenError';
   import PanelSplitter from './PanelSplitter.svelte';
+  import PreviewToolbar from './PreviewToolbar.svelte';
   import TailorMobileTabs from './TailorMobileTabs.svelte';
   import { undoRun, openingActions, baseOpeningActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
-  import { tablist } from '#lib/actions/tablist.js';
   import { fillViewport } from '#lib/actions/fillViewport.js';
   import {
     toEditable,
@@ -57,9 +52,8 @@
     type CvJobMatch,
     type TailorResult,
   } from '#lib/cv.js';
-  import type { Analysis, AutopilotEntry, Document, RevisionView } from '#lib/generated/contracts.js';
-  import type { Allowance, Job } from '#lib/types.js';
-  import { notInPlan, resetsAtLabel } from '#lib/allowance.js';
+  import type { Analysis, AutopilotEntry, Document } from '#lib/generated/contracts.js';
+  import type { Job } from '#lib/types.js';
 
   // Two modes, one component. With `slug` it is the tailoring workspace for a vacancy. With
   // `baseCvId` it is the BASE mode: the candidate's general CV, with no vacancy — so none of the
@@ -267,19 +261,6 @@
     revealSelection(field, at);
   }
 
-  // A single-line <input> does not scroll its own text to a selection made from code, so a slot
-  // past the visible width (most bullets are longer than the panel) would be selected out of
-  // sight. Measure the text in front of it in the field's own font and scroll there, leaving a
-  // third of the width for context. A <textarea> wraps, so its selection is already in view.
-  function revealSelection(field: HTMLInputElement | HTMLTextAreaElement, at: number) {
-    if (field instanceof HTMLTextAreaElement) return;
-    const ctx = document.createElement('canvas').getContext('2d');
-    if (!ctx) return;
-    ctx.font = getComputedStyle(field).font;
-    const before = ctx.measureText(field.value.slice(0, at)).width;
-    field.scrollLeft = Math.max(0, before - field.clientWidth / 3);
-  }
-
   function guardDownload(e: MouseEvent) {
     if (placeholders.length === 0) return;
     e.preventDefault();
@@ -356,7 +337,7 @@
     // costs two renders. The history is the same kind of accessory read.
     void refreshAtsDelta();
     void refreshJobMatch();
-    void loadRevisions();
+    void history.load();
     // Not awaited either: an empty list only means the font picker has nothing to offer yet,
     // and the preview falls back to the template's own face meanwhile.
     void api
@@ -435,76 +416,22 @@
       }
       finishReady();
     } catch (e) {
-      if (e instanceof ApiError && e.status === 402) {
-        // Today's allowance is spent: surface what ran out plus when it starts over. The
-        // instant comes from the refusal itself rather than being computed here — the
-        // server owns when the day rolls, and a second opinion about it would be wrong
-        // for anybody whose clock disagrees.
-        //
-        // A plan that includes none of the feature gets no reset time at all. The server's
-        // own message already says the plan excludes this, and a reset appended under it
-        // would name a moment at which the allowance is still zero.
-        const at = e.body?.allowance as Allowance | undefined;
-        const more = at?.resets_at && !notInPlan(at) ? ` More at ${resetsAtLabel(at)}.` : '';
-        errorMsg = `${e.message}${more}`;
-      } else {
-        errorMsg =
-          e instanceof ApiError
-            ? e.message
-            : baseMode
-              ? 'Could not open this CV.'
-              : 'Could not open the tailoring workspace.';
-      }
+      errorMsg = workspaceOpenError(e, baseMode);
       status = 'error';
     }
   });
 
-  // ---- Revision history ----
-  // The feed is loaded beside the CV and refreshed after anything that writes: a save, an
-  // agent turn, an undo. `pinnedRevision` is what the preview underlines; it lives here rather
-  // than in the panel because the highlight belongs to the document, not to the tab.
-  let revisions = $state<RevisionView[]>([]);
-  let pinnedRevision = $state<RevisionView | null>(null);
-
-  async function loadRevisions(highlightNewestRun = false) {
-    if (!cvId) return;
-    try {
-      revisions = await api.listCvRevisions(cvId);
-      // After a run, what it changed is underlined without being asked: the candidate's first
-      // question is "what did it do to my CV", and the answer is on the page.
-      if (highlightNewestRun) {
-        pinnedRevision = revisions.find((r) => r.actor === 'agent' && !r.reverted) ?? pinnedRevision;
-      }
-    } catch {
-      // The history is an accessory read: a workspace that cannot list it still edits.
-      revisions = [];
-    }
-  }
-
-  // Undoing goes through undoRun's ordering for the reason it was written: the document is
-  // saved on a debounce, so undoing without flushing the pending save first lets the timer
-  // write the old text straight back a second later — the undo appears to work and then
-  // silently reverses itself. The re-read comes last, and only on success.
-  async function undoRevision(revision: RevisionView) {
-    await undoRun({
-      flush: flushPendingSave,
-      undo: () => api.undoCvRevision(cvId, revision.id).then(() => undefined),
-      refetch: afterUndo,
-    });
-  }
-
-  async function undoRevisionRun(batchId: string) {
-    await undoRun({
-      flush: flushPendingSave,
-      undo: () => api.undoCvRevisionRun(cvId, batchId).then(() => undefined),
-      refetch: afterUndo,
-    });
-  }
+  // ---- Revision history ---- (see CvRevisions)
+  const history = new CvRevisions(
+    () => cvId,
+    () => flushPendingSave(),
+    () => afterUndo(),
+  );
 
   async function afterUndo() {
     await loadCv();
     pdfVersion += 1;
-    void loadRevisions();
+    void history.load();
     void refreshAtsDelta();
     void refreshJobMatch();
   }
@@ -528,7 +455,7 @@
         },
         refetch: async () => {
           pdfVersion += 1;
-          void loadRevisions();
+          void history.load();
           void refreshAtsDelta();
           void refreshJobMatch();
         },
@@ -575,7 +502,7 @@
       lastSnapshot = snap;
       saveState = 'saved';
       pdfVersion += 1;
-      void loadRevisions();
+      void history.load();
       // Chained off the SAVE, not off the effect that schedules it: read any earlier and the
       // score would describe the document as it was before this edit landed.
       void refreshJobMatch();
@@ -607,7 +534,7 @@
 
   // Refreshes just the document, live, as a run's cv_edit calls resolve — so the preview fills
   // in while the run is still going instead of waiting for it to finish. Deliberately lighter
-  // than onTurnComplete: the accessory reads (ATS delta, job match, revisions) stay end-of-turn
+  // than onTurnComplete: the accessory reads (ATS delta, job match, history.list) stay end-of-turn
   // only, or a 30-step run would fire ten of each.
   async function onDocumentEdited() {
     try {
@@ -625,7 +552,7 @@
     try {
       await loadCv();
       pdfVersion += 1;
-      void loadRevisions(true);
+      void history.load(true);
       void refreshAtsDelta();
       void refreshJobMatch();
       // A cold start's own visible match-analysis stream (in ArtifactPanel) normally lands the
@@ -720,53 +647,13 @@
         style="--lw: {leftWidth}px"
       >
         <!-- Own tab bar (and save status) is desktop-only; the mobile bar drives the tab there. -->
-        <div class="hidden items-center justify-between gap-2 border-b border-border px-2 py-1.5 text-sm lg:flex">
-          <div
-            role="tablist"
-            aria-label="Edit this CV"
-            use:tablist={leftTab}
-            class="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto"
-          >
-            {#each leftTabs as [id, label] (id)}
-              <button
-                type="button"
-                role="tab"
-                id="tailor-left-tab-{id}"
-                aria-selected={leftTab === id}
-                aria-controls="tailor-left-panel"
-                onclick={() => (leftTab = id)}
-                class={[
-                  'shrink-0 rounded px-2 py-1 transition-colors',
-                  leftTab === id
-                    ? 'bg-brand-muted font-semibold text-brand-strong'
-                    : 'text-muted-foreground hover:text-foreground',
-                ]}
-              >
-                {label}
-              </button>
-            {/each}
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
-            {#if leftTab === 'editor' || leftTab === 'design'}
-              <span
-                class={['text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
-                aria-live="polite"
-                title={saveState === 'error' ? saveError : undefined}
-              >
-                {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save
-                  failed{/if}
-              </span>
-            {/if}
-            <button
-              type="button"
-              onclick={() => (leftCollapsed = true)}
-              aria-label="Collapse the editor panel"
-              class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <PanelLeftClose class="size-4" />
-            </button>
-          </div>
-        </div>
+        <LeftPanelBar
+          tabs={leftTabs}
+          bind:current={leftTab}
+          {saveState}
+          {saveError}
+          oncollapse={() => (leftCollapsed = true)}
+        />
         <div id="tailor-left-panel" role="tabpanel" aria-labelledby="tailor-left-tab-{leftTab}" class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
             {#if runActive}
@@ -866,84 +753,17 @@
       <div
         class={['min-w-0 min-h-0 flex-1 flex-col bg-muted/30 lg:flex', mobileView === 'preview' ? 'flex' : 'hidden']}
       >
-        <div
-          class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-b border-border bg-background px-3 py-1.5 text-sm"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                onclick={zoomOut}
-                aria-label="Zoom out"
-                class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ZoomOut class="size-4" />
-              </button>
-              <button
-                type="button"
-                onclick={() => (fitMode = true)}
-                aria-label="Zoom {zoomPct}%. Fit the page to the width"
-                title="Fit to width"
-                aria-pressed={fitMode}
-                class="w-12 rounded py-0.5 text-center text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {zoomPct}%
-              </button>
-              <button
-                type="button"
-                onclick={zoomIn}
-                aria-label="Zoom in"
-                class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ZoomIn class="size-4" />
-              </button>
-            </div>
-            {#if pageCount !== null}
-              <span
-                class={[
-                  'inline-flex items-center gap-1 text-xs tabular-nums',
-                  pageCount > 2 ? 'text-warning-strong' : 'text-muted-foreground',
-                ]}
-              >
-                {#if pageCount > 2}
-                  <TriangleAlert class="size-3.5" aria-hidden="true" />
-                  {pageCount} pages · aim for 1–2
-                {:else}
-                  <Check class="size-3.5 text-success-strong" aria-hidden="true" />
-                  {pageCount}
-                  {pageCount === 1 ? 'page' : 'pages'}
-                {/if}
-              </span>
-            {/if}
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            {#if placeholders.length > 0}
-              <button
-                type="button"
-                onclick={() => goToGap()}
-                title="Go to the next gap in the editor"
-                class="inline-flex items-center gap-1.5 rounded-md bg-warning-muted px-2.5 py-1 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted/70"
-              >
-                <TriangleAlert class="size-3.5" aria-hidden="true" />
-                <!-- Names one of the slots: "placeholder" alone did not say what was wrong. -->
-                {placeholders.length === 1
-                  ? `1 gap: ${placeholders[0]?.token}`
-                  : `${placeholders.length} gaps like ${placeholders[0]?.token}`}
-              </button>
-            {/if}
-            <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener"
-              onclick={guardDownload}
-              class="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <!-- eslint-enable svelte/no-navigation-without-resolve -->
-              <Download class="size-4" /> Download PDF
-            </a>
-          </div>
-        </div>
+        <PreviewToolbar
+          {zoomPct}
+          bind:fitMode
+          {pageCount}
+          {placeholders}
+          {pdfUrl}
+          onzoomin={zoomIn}
+          onzoomout={zoomOut}
+          ongap={() => goToGap()}
+          ondownload={guardDownload}
+        />
         <div bind:this={previewScroller} bind:clientWidth={previewWidth} class="min-h-0 flex-1 overflow-auto p-6">
           <CvHtmlPreview
             {doc}
@@ -951,7 +771,7 @@
             {zoom}
             {fonts}
             {photoSrc}
-            highlightPaths={showingPlaceholders ? placeholders.map((p) => p.path) : (pinnedRevision?.paths ?? [])}
+            highlightPaths={showingPlaceholders ? placeholders.map((p) => p.path) : (history.pinned?.paths ?? [])}
             onPageCount={(n) => (pageCount = n)}
           />
         </div>
@@ -969,14 +789,14 @@
         {atsDelta}
         {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
-        {revisions}
+        revisions={history.list}
         onPreviewRevision={(r) => {
-          pinnedRevision = r;
+          history.pinned = r;
           // Picking a revision is asking "what changed"; the gap underlines would drown it.
           placeholdersShown = false;
         }}
-        onUndoRevision={undoRevision}
-        onUndoRevisionRun={undoRevisionRun}
+        onUndoRevision={history.undo}
+        onUndoRevisionRun={history.undoRun}
         onReseed={reseed}
         resetBusy={resetLocked}
         {resetError}

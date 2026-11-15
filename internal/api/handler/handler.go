@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/browsertools"
@@ -582,28 +581,7 @@ func Register(app *fiber.App, cfg Config) {
 		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
 	)
 
-	// Allow the canonical frontend origin plus every served domain's https apex,
-	// so a cross-origin (non-credentialed) read works from either domain during a
-	// migration. Same-origin app traffic never triggers CORS; this only covers the
-	// dev Vite origin and genuine cross-origin callers.
-	// auth.BrowserOrigins is the ONE place this pair is turned into origins — the
-	// request-origin gate on session routes (requireSameOrigin) accepts a browser
-	// request's Origin/Referer only when it names a member of the same list, so the
-	// two policies cannot drift apart.
-	allowOrigins := strings.Join(auth.BrowserOrigins(cfg.FrontendOrigin, cfg.CookieDomains, cfg.ServedHosts...), ",")
-	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
-
-	app.Get("/health", a.Health)
-
-	// The public side of CV link tracing. It sits beside /health rather than under /api/v1
-	// because it lives inside a PDF a recruiter opens by hand: "freehire.me/cv/acme-x7abc" is a
-	// URL a person may read off a hover tooltip, and "/api/v1/..." would not be.
-	//
-	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
-	// and excluded, and a leaked API key must not be able to attribute or hide one.
-	//
-	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
-	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+	a.mountAppRoutes(app, cfg, queries)
 
 	api := app.Group("/api/v1")
 

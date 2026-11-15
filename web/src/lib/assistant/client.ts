@@ -113,7 +113,7 @@ export async function extractAttachment(file: File): Promise<Attachment> {
  * message — same frames, same cancellation — but carries no text: the brief and the turn's
  * ceiling are the server's, so there is nothing for a client to compose or to raise.
  */
-export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/autopilot`,
@@ -131,7 +131,7 @@ export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => voi
  * The backend refuses a rehearsal that already has a transcript, so a reload replays the
  * conversation instead of restarting the interview.
  */
-export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/opening`,
@@ -161,7 +161,7 @@ export function syncApplication(sessionId: string, onEvent: (e: TurnEvent) => vo
  * from the existing transcript (healing any dangling tool calls), so the model's context
  * is not polluted with a duplicate prompt.
  */
-export function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+function retryTurn(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
     sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/retry`,
@@ -313,5 +313,40 @@ function decodeEvent(data: string): TurnEvent | null {
   } catch (e) {
     console.error('assistant: invalid event payload', e, data);
     return null;
+  }
+}
+
+// The ways a turn begins. Autopilot and opening carry no text (server-owned brief).
+// Retry continues from the existing transcript without appending another user message —
+// re-sending the prompt would duplicate it in the model's context.
+export type TurnStart =
+  | { kind: 'message'; text: string; attachments?: Attachment[] }
+  | { kind: 'autopilot' }
+  | { kind: 'opening' }
+  | { kind: 'retry' };
+
+/** Start the turn `start` describes on `sessionId`. `base` is the API base a support
+ *  conversation sends its messages to. */
+export function startTurnFor(
+  sessionId: string,
+  start: TurnStart,
+  onEvent: (e: TurnEvent) => void,
+  base?: string,
+): Turn {
+  switch (start.kind) {
+    case 'autopilot':
+      return startAutopilot(sessionId, onEvent);
+    case 'opening':
+      return openRehearsal(sessionId, onEvent);
+    case 'retry':
+      // A failed autopilot left runActive false after endTurn; if the last user brief was
+      // the unattended run, treat the retry as that run again so the host can keep its
+      // "run in progress" affordances. We cannot see the brief here cheaply — the server
+      // already re-raises the ceiling — so only flip the flag when the host already knew
+      // a run was in play (openingActions with autopilot, or prior runActive). For the
+      // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
+      return retryTurn(sessionId, onEvent);
+    case 'message':
+      return sendTurn(sessionId, start.text, onEvent, start.attachments, base);
   }
 }

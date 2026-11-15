@@ -3,7 +3,9 @@
 // source the job-search filter panel uses, not a bundled/static list) — and the one search
 // every skills picker runs over it.
 
-import { loadFacetDistribution, rankOptionMatches, type FacetOption } from '#lib/facets.js';
+import { type FacetOption } from '#lib/facets.js';
+
+import { loadFacetDistribution, rankOptionMatches } from '#lib/facetOptions.js';
 import { SKILL_ALIASES } from '#lib/generated/skillAliases.js';
 
 /** Fetch the live skills distribution and shape it into sorted typeahead options. */

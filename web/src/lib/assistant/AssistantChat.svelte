@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
-  import { ArrowDown } from '@lucide/svelte';
-  import { resolve } from '$app/paths';
+  import { onMount, untrack } from 'svelte';
   import {
     createSession,
     listSessions,
@@ -10,35 +8,28 @@
     SessionNotFound,
     SUPPORT_BASE,
   } from '#lib/assistant/api.js';
-  import { canUseVoiceCall } from '#lib/assistant/voiceCall.js';
-  import { VOICE_CALL_ENABLED } from '#lib/assistant/audioAvailability.js';
   import { track } from '#lib/analytics.js';
   import {
-    openRehearsal,
-    retryTurn,
-    sendTurn,
     extendSession,
     TurnRefused,
-    startAutopilot,
+    startTurnFor,
     StreamInterrupted,
     syncApplication,
     type Attachment,
     type Turn,
+    type TurnStart,
   } from '#lib/assistant/client.js';
   import { initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
   import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
-  import { atBottom } from '#lib/assistant/scrolling.js';
   import { ConfirmDialog } from '#lib/ui/index.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
-  import AssistantReply from '#lib/assistant/AssistantReply.svelte';
   import ChatInputArea from './ChatInputArea.svelte';
-  import ChatStarters from './ChatStarters.svelte';
-  import UserMessage from './UserMessage.svelte';
+  import ChatGone from './ChatGone.svelte';
+  import ChatTranscript from './ChatTranscript.svelte';
+  import { PaneFollow } from './paneFollow.svelte';
   import AssistantAlerts from './AssistantAlerts.svelte';
   import type { AssistantChatProps } from './AssistantChat.props';
   import ChatSessionBar from './ChatSessionBar.svelte';
-  import { turnTimer } from './turnTimer.svelte';
-  import OpeningActions from './OpeningActions.svelte';
   import {
     fromSummary,
     upsertSession,
@@ -51,7 +42,6 @@
   import { eventsFromTranscript, type TurnEvent } from '#lib/assistant/wire.js';
   import { opensInRail, type ChatPreset, type OpeningAction } from '#lib/assistant/presets.js';
   import { messages } from './AssistantChat.messages';
-  import ThinkingIndicator from './ThinkingIndicator.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
 
@@ -91,13 +81,6 @@
   }: AssistantChatProps = $props();
 
   const s = $derived(t(messages, locale()));
-
-  // What an empty plain chat offers to start from, so the first turn is a tap rather than a
-  // blank box. Sent as the candidate's own words, in the language they are reading — unlike
-  // `profileKickoff`, which is our text put in their mouth and so stays fixed, each of these
-  // is exactly the label they chose. Each one maps to a tool every chat session carries
-  // (search_jobs + get_profile, market_fit, my_jobs, inbox_overview).
-  const starters = $derived([s.starters.findJobs, s.starters.marketFit, s.starters.applications, s.starters.inbox]);
 
   let phase = $state<Phase>('loading');
   // Startup requests may finish after the host has replaced this conversation.
@@ -163,26 +146,15 @@
   let turn: Turn | null = null;
 
   let sidebarOpen = $state(true);
-  let scroller = $state<HTMLDivElement | null>(null);
-  // Whether arriving turn events may move the pane. Set from the pane's own scroll
-  // events, so scrolling up mid-turn holds position and scrolling back resumes
-  // following with no further ceremony.
-  let stickToBottom = $state(true);
+  // Whether the transcript follows the stream (see PaneFollow).
+  const follow = new PaneFollow();
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
   let queue = $state<{ id: string; text: string; attachments: Attachment[] }[]>([]);
   let queueCounter = 0;
 
-  // Voice mode: a hands-free call on an `interview` session, replacing the composer
-  // for its duration. `voiceModeOff` latches once the server reports no Realtime
-  // gateway (501) — same reasoning as Composer's `dictationOff` — so the trigger does
-  // not keep offering a call that can only fail. `voiceSupported` starts false and is
-  // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
-  // reading navigator during SSR would disagree with the client on the first paint.
-  // It also carries VOICE_CALL_ENABLED — see audioAvailability.ts.
+  // Voice mode: a hands-free call on an `interview` session (see ChatInputArea).
   let voiceCallOpen = $state(false);
-  let voiceModeOff = $state(false);
-  let voiceSupported = $state(false);
 
   function closeVoiceCall() {
     voiceCallOpen = false;
@@ -233,35 +205,6 @@
   /** The conversation the host is currently being navigated to, or null. Held until the
    *  `session` prop catches up, so a switch we started is never undone by the stale URL. */
   let navigatingTo = $state<string | null>(null);
-
-  // The turn's elapsed seconds and spinner glyph, which the streaming reply's thinking shows.
-  const turnClock = turnTimer(() => turnActive);
-
-  /**
-   * Bring the newest content into view.
-   *
-   * `force` is the difference between a frame that ARRIVED and an act the reader
-   * PERFORMED. An arriving frame defers to where they are reading; sending a message,
-   * starting a run and opening a conversation do not, because the thing each produces
-   * is at the bottom and leaving it off screen hides the result of the act.
-   */
-  async function scrollToBottom(force = false) {
-    if (!force && !stickToBottom) return;
-    await tick();
-    // Asked again after the await: a frame that was allowed to scroll when it arrived
-    // must not still scroll if the reader started reading during that tick.
-    if (!force && !stickToBottom) return;
-    if (!scroller) return;
-    scroller.scrollTop = scroller.scrollHeight;
-    // Landing at the bottom is also a decision to follow again. The pane's own scroll
-    // event would say so a moment later; saying it here spares the next frame that wait.
-    stickToBottom = true;
-  }
-
-  /** The pane moved. Follow the stream only while the reader is at its end. */
-  function onPaneScroll() {
-    if (scroller) stickToBottom = atBottom(scroller);
-  }
 
   // --- Session orchestration -----------------------------------------------
 
@@ -482,7 +425,7 @@
     } finally {
       switching = false;
     }
-    void scrollToBottom(true);
+    void follow.toBottom(true);
   }
 
   /**
@@ -658,7 +601,7 @@
     if (event.type === 'result') {
       endTurn();
     }
-    void scrollToBottom();
+    void follow.toBottom();
   }
 
   // Composer submit: while a turn is in flight the message is queued and drained
@@ -675,20 +618,11 @@
     attachments = [];
     if (turnActive || queue.length > 0) {
       enqueue(text, docs);
-      void scrollToBottom(true);
+      void follow.toBottom(true);
       return;
     }
     void dispatch({ kind: 'message', text, attachments: docs });
   }
-
-  // The ways a turn begins. Autopilot and opening carry no text (server-owned brief).
-  // Retry continues from the existing transcript without appending another user message —
-  // re-sending the prompt would duplicate it in the model's context.
-  type TurnStart =
-    | { kind: 'message'; text: string; attachments?: Attachment[] }
-    | { kind: 'autopilot' }
-    | { kind: 'opening' }
-    | { kind: 'retry' };
 
   async function dispatch(start: TurnStart) {
     if (!activeId && deferredNew && !disposed) {
@@ -757,26 +691,13 @@
       onEvent(id, event);
     };
 
-    let started: Turn;
     if (start.kind === 'autopilot') {
       runActive = true;
       onRunStateChange?.(true);
-      started = startAutopilot(id, watch);
-    } else if (start.kind === 'opening') {
-      started = openRehearsal(id, watch);
-    } else if (start.kind === 'retry') {
-      // A failed autopilot left runActive false after endTurn; if the last user brief was
-      // the unattended run, treat the retry as that run again so the host can keep its
-      // "run in progress" affordances. We cannot see the brief here cheaply — the server
-      // already re-raises the ceiling — so only flip the flag when the host already knew
-      // a run was in play (openingActions with autopilot, or prior runActive). For the
-      // tailor workspace, refreshing after a failed run is enough via onTurnComplete.
-      started = retryTurn(id, watch);
-    } else {
-      started = sendTurn(id, start.text, watch, start.attachments, isSupport ? SUPPORT_BASE : undefined);
     }
+    const started = startTurnFor(id, start, watch, isSupport ? SUPPORT_BASE : undefined);
     turn = started;
-    void scrollToBottom(true);
+    void follow.toBottom(true);
     try {
       await started.done;
       if (!began && start.kind === 'message' && id === activeId) {
@@ -912,7 +833,7 @@
     }
     if (began) {
       endTurn();
-      void scrollToBottom(true);
+      void follow.toBottom(true);
     }
   }
 
@@ -943,12 +864,6 @@
 
   onMount(() => {
     void boot();
-    voiceSupported =
-      VOICE_CALL_ENABLED &&
-      canUseVoiceCall({
-        mediaDevices: navigator.mediaDevices,
-        RTCPeerConnection: typeof RTCPeerConnection === 'undefined' ? undefined : RTCPeerConnection,
-      });
     document.addEventListener('visibilitychange', catchUpOnReturn);
     return () => {
       disposed = true;
@@ -971,17 +886,7 @@
   />
 
   {#if notFound}
-    <div class="m-3 rounded-xl border border-border bg-card p-8 text-center">
-      <p class="text-sm text-muted-foreground">
-        {s.chatGone}
-      </p>
-      <a
-        href={resolve('/my/assistant/[[id]]', {})}
-        class="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-      >
-        {s.openYourChats}
-      </a>
-    </div>
+    <ChatGone />
   {:else}
     <div class="flex min-h-0 flex-1">
       <!-- Session rail (desktop): collapsible; hidden entirely when the host disables it. -->
@@ -1015,77 +920,21 @@
         {/if}
 
         <!-- Message list -->
-        <div bind:this={scroller} onscroll={onPaneScroll} class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-          <!-- The transcript is a log, so a screen reader hears what arrives without moving
-             to it. Busy while a turn streams (and while a conversation loads): the reply is
-             re-rendered token by token, and announcing each re-render would read the same
-             sentence dozens of times — the finished message is read once the turn ends. -->
-          <div
-            class="mx-auto flex max-w-3xl flex-col gap-3"
-            role="log"
-            aria-label={s.transcript}
-            aria-live="polite"
-            aria-relevant="additions"
-            aria-busy={phase === 'loading' || switching || turnActive}
-          >
-            {#if phase === 'loading'}
-              <p class="text-sm text-muted-foreground">{s.connecting}</p>
-            {:else if chat.messages.length === 0 && openingActions?.length}
-              <OpeningActions actions={openingActions} disabled={turnActive || switching} onRun={runOpening} />
-            {:else if chat.messages.length === 0 && !autoRun}
-              <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
-                 yet, but the run has already started — inviting the candidate to type here
-                 would contradict the "Crunching…" indicator already on screen. -->
-              <p class="text-sm text-muted-foreground">{s.askAnything}</p>
-              <!-- Starters only in a plain chat: a profile interview opens with its own
-                 kickoff, and these questions belong to the job search, not to it. -->
-              {#if activePreset === 'chat'}
-                <ChatStarters {starters} disabled={!canStartTurn()} onPick={(text) => submitText(text)} />
-              {/if}
-            {/if}
-
-            {#each chat.messages as message, i (i)}
-              {#if message.role === 'user'}
-                <UserMessage {message} />
-              {:else}
-                {@const active = i === chat.messages.length - 1 && message.streaming}
-                <AssistantReply
-                  {message}
-                  {active}
-                  glyph={turnClock.glyph}
-                  elapsedSec={turnClock.elapsedSec}
-                  onConfirm={submitText}
-                  disabled={turnActive || switching}
-                  canRetry={!isSupport && i === chat.messages.length - 1 && !turnActive && !switching}
-                  retryDisabled={!canStartTurn()}
-                  onRetry={retryFailedTurn}
-                />
-              {/if}
-            {/each}
-
-            <!-- One indicator, two states. Queued is not working: nothing is being spent yet, and
-               the elapsed counter would be timing somebody else's turn. -->
-            {#if chat.queued || turnActive}
-              <ThinkingIndicator label={chat.queued ? s.waitingForTurn : undefined} />
-            {/if}
-          </div>
-
-          <!-- Jump to latest. Sticky rather than absolute so it needs no positioned
-             ancestor: as the scroller's last child its natural place is past the bottom
-             of the scrollport, which is exactly when `bottom-2` pins it into view. -->
-          {#if !stickToBottom}
-            <div class="pointer-events-none sticky bottom-2 mt-2 flex justify-center">
-              <button
-                type="button"
-                onclick={() => scrollToBottom(true)}
-                class="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md transition-colors hover:text-foreground"
-              >
-                <ArrowDown class="size-3.5" />
-                {s.jumpToLatest}
-              </button>
-            </div>
-          {/if}
-        </div>
+        <ChatTranscript
+          {follow}
+          {phase}
+          {chat}
+          {openingActions}
+          {autoRun}
+          {activePreset}
+          {turnActive}
+          {switching}
+          canStart={canStartTurn}
+          onsubmit={submitText}
+          onrunopening={runOpening}
+          {isSupport}
+          onretry={retryFailedTurn}
+        />
 
         <ChatInputArea
           bind:draft
@@ -1096,15 +945,11 @@
           {turnActive}
           support={isSupport}
           disabled={phase !== 'ready' || switching}
-          canCall={activePreset === 'interview' && voiceSupported && !voiceModeOff}
+          interview={activePreset === 'interview'}
           onSubmit={submitText}
           onRemoveQueued={removeQueued}
           onCancel={cancelTurn}
           onClose={closeVoiceCall}
-          onUnavailable={() => {
-            voiceModeOff = true;
-            closeVoiceCall();
-          }}
         />
       </div>
     </div>

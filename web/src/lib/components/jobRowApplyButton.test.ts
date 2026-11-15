@@ -95,9 +95,13 @@ describe('JobRow direct-apply button', () => {
     expect(block).toContain('aria-label="Apply to {job.title}"');
   });
 
+  // The live region and the choice it announces live in JobRowApplyGate, which the card
+  // renders unconditionally so the region is mounted before anything is said into it.
   it('announces the apply choices through a persistently mounted live region', () => {
-    expect(ROW).toContain('<div class="sr-only" aria-live="polite" aria-atomic="true">');
-    expect(ROW).toContain('Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.');
+    const gate = readFileSync(join(import.meta.dirname, 'JobRowApplyGate.svelte'), 'utf8');
+    expect(ROW).toContain('<JobRowApplyGate');
+    expect(gate).toContain('<div class="sr-only" aria-live="polite" aria-atomic="true">');
+    expect(gate).toContain('Choose how to apply to {title}: sign in, sign up, or continue without signing in.');
   });
 });
 

@@ -33,17 +33,11 @@
     displayQuery,
   } from '#lib/filters.js';
   import { freshnessOptions } from '#lib/filterControls.js';
-  import { geoScopeOffered, loadJobFilters, markGeoScopeOffered } from '#lib/filterStorage.js';
-  import { fetchRegion, geoScopeQuery, shouldOfferGeoScope, WORLDWIDE_REGION } from '#lib/geoScope.js';
-  import {
-    bannerVisible,
-    loadOnboardingState,
-    markSeen,
-    narrowestFacet,
-    type OnboardingLifecycle,
-  } from '#lib/onboarding.js';
-  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
-  import { consumePendingAlert } from '#lib/saveSearchAlert.js';
+  import { loadJobFilters } from '#lib/filterStorage.js';
+  import { GeoScopeGuess } from '#lib/geoScopeGuess.svelte.js';
+  import { jobsSearchTarget } from '#lib/jobsSearchTarget.js';
+  import { narrowestFacet } from '#lib/onboarding.js';
+  import { OnboardingNudge } from '#lib/onboardingNudge.svelte.js';
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
@@ -160,30 +154,13 @@
   // count announcement on, so turning a page does not re-announce the same total.
   const resultSetKey = $derived(filtersToParams(filters.applied).toString());
 
-  // What `shouldOfferGeoScope` decides on, read fresh each call — the address bar and
-  // storage both move under us. Client-only: `location` does not exist on the server.
-  // Shared with `offerGeoScope`, which asks the same question again after its round
-  // trip; two copies of these three keys would be two things to keep in step.
-  const geoScopeGuards = () => ({
-    search: location.search,
-    storedFilters: loadJobFilters(),
-    offered: geoScopeOffered(),
-  });
-
-  // Whether an opening scope is still to be guessed from the visitor's IP country, and
-  // so whether the facet measurement below is worth making yet. Asked here, at setup,
-  // because the answer is knowable without the network: `offerGeoScope` clears the same
-  // guards before it fetches anything, and only a first-time visitor landing on a bare
-  // URL gets past them. Everybody else — a repeat visitor, a link carrying filters, a
-  // restored set — is false here and waits for nothing.
-  //
-  // What the wait buys: measured from Brazil on 2026-08-21, a cold feed spent 778ms on
-  // a facet count of the unscoped catalogue that `/geo/region` (330ms) then replaced
-  // wholesale, and the two overlapped, so the discarded one was also competing for the
-  // connection the useful one needed. One scope, measured once.
-  //
-  // Never true on the server, where `browser` short-circuits before `location` is read.
-  let geoGuessPending = $state(untrack(() => browser && standalone && shouldOfferGeoScope(geoScopeGuards())));
+  // The opening scope guessed for a first-time visitor (see GeoScopeGuess). Its `pending`
+  // holds the facet measurement until the guess has been made or ruled out.
+  const geo = new GeoScopeGuess(
+    filters,
+    untrack(() => standalone),
+    () => (holdover = jobs.items),
+  );
 
   // The live facet distribution (value → count per facet), feeding the dynamic
   // selects (skills, countries) so the user sees which values exist and how many
@@ -280,48 +257,11 @@
   // how anyone paged; the page links made it visible.
   let lastSearchKey = untrack(() => filtersToParams(filters.applied).toString());
 
-  // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
-  // lives in localStorage (client-only); seed it at init on the client so a returning
-  // (dismissed/completed) visitor never flashes a banner before mount. The banner is
-  // the sole entry — once dismissed or completed it retires; there is no persistent
-  // re-open control. "Set up" now navigates to /onboarding (registration is a step
-  // there, and it carries straight on into role/skills/level) rather than opening a
-  // local wizard that wrote to the anonymous filter query.
-  // Starts 'unseen' on both sides so the hydrated markup matches the server's; the
-  // stored value arrives on mount, by which point app.css has already hidden the
-  // banner for anyone who dismissed or completed it. Reading localStorage here
-  // instead would make the client disagree with the SSR output on the very first
-  // frame. Same shape as CliBanner's `dismissed`.
-  let onboardingState = $state<OnboardingLifecycle>('unseen');
-  // The ephemeral post-onboarding Telegram-alert offer (set after the wizard, or on
-  // mount to resume a pending alert after sign-in). Dismissible; not persisted.
-  let alertBanner = $state<{ query: string; autostart: boolean } | null>(null);
-  // Show only to an un-nudged visitor with no active facet filters AND no text query,
-  // so a shared search/filter link is never interrupted (activeFilterCount ignores the
-  // query, so check it explicitly).
-  //
-  // Deliberately NOT gated on `browser`. It was, and that is what made this banner
-  // the site's largest source of layout shift: the feed rendered without it, then
-  // hydration inserted 74px directly above the rows. Lab Lighthouse missed it
-  // (0.066) because it never carries a returning visitor's localStorage; CrUX put
-  // the mobile home page at CLS 0.28. It is server-rendered now, and hidden before
-  // first paint by app.css for a visitor who has already seen it.
-  const showBanner = $derived(
-    standalone && bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
+  // The onboarding nudge and the alert offer after it (see OnboardingNudge).
+  const nudge = new OnboardingNudge(
+    untrack(() => standalone),
+    () => filters.active > 0 || filters.value.q.trim() !== '',
   );
-
-  function dismissBanner() {
-    markSeen();
-    onboardingState = 'seen';
-  }
-  function openOnboarding() {
-    // The nudge has done its job whether or not the visitor follows through — it
-    // retires the same way dismissing it does, just via a different exit.
-    markSeen();
-    onboardingState = 'seen';
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
-    void goto(onboardingUrl(page.url.pathname + page.url.search));
-  }
   // Narrow-feed relief: the single narrowest applied facet to drop (skills → regions →
   // seniority; never the role), or null if none. Shared by the empty-state guard and
   // the relax action so they can't disagree. Never broadens on its own.
@@ -329,18 +269,6 @@
   function relaxFeed() {
     if (relaxTarget) filters.clearFacet(relaxTarget);
   }
-
-  // Resume a save the user started before signing in. Reactive on the session so it
-  // fires whether auth resolved server-side (an OAuth full-page redirect — mount is
-  // already authed) or flipped in-tab (an in-dialog sign-in re-resolves page.data.user
-  // without a remount). Consumed exactly once; standalone list only; skipped if a banner
-  // is already showing.
-  $effect(() => {
-    if (!untrack(() => standalone) || alertBanner) return; // effect: client-only, no browser guard
-    if (!isAuthenticated()) return;
-    const pending = consumePendingAlert();
-    if (pending !== null) alertBanner = { query: pending, autostart: true };
-  });
 
   // Live disjunctive facet counts for the staged filter set (built by the modal),
   // merged with the fixed scope params (e.g. company_slug) so every control's counts —
@@ -368,49 +296,21 @@
     // Catch up with the stored lifecycle now that localStorage is readable. For a
     // returning visitor this drops the server-rendered banner — with no shift,
     // because app.css already took it out of the flow before first paint.
-    onboardingState = loadOnboardingState();
+    nudge.load();
     if (isAuthenticated()) {
       ensureViewedLoaded();
       ensureSavedLoaded();
       ensureDismissedLoaded();
       ensureAppliedCompaniesLoaded();
     }
-    // Register this page's store so the header search drives it. This holds for the
-    // standalone /jobs list AND the company page's embedded, scoped list — on
-    // /companies/:slug the header search filters that company's postings (there's
-    // no inline box), so both modes route their text search through the header.
-    // The adapter also exposes `filterScope` (the store + a reactive counts getter)
-    // so the header renders its Location & work-format popover on these jobs-backed
-    // lists; the company list registers a bare store with no filterScope, so the
-    // popover stays hidden there.
-    setListSearchTarget({
-      get value() {
-        return filters.value;
-      },
-      commitQuery: (q) => filters.commitQuery(q),
-      filterScope: { store: filters, counts: () => counts, variant: 'jobs', inferred: () => scopeInferred },
-      suggest: {
+    // Register this page's store so the header search drives it (see jobsSearchTarget).
+    setListSearchTarget(
+      jobsSearchTarget(filters, {
         counts: () => counts,
-        apply: (suggestion) => {
-          // Its own event, not a flag on `search`: the question this answers is how
-          // often the dropdown is what puts a facet on. The kind rides along so the
-          // empty box's starters can be told apart from a typed completion.
-          track('role_suggestion', { role: suggestion.slug, kind: suggestion.kind });
-          // A starter comes from the EMPTY box, so there is no typed text to drop —
-          // this is an ordinary facet write, the same one the filter modal makes.
-          filters.setSign('category', suggestion.slug, 'include');
-        },
-        applyParts: (plan) => {
-          track('role_suggestion', {
-            role: plan.facets.map(([, v]) => v).join('+') || (plan.q && displayQuery(plan.q)),
-            kind: 'completion',
-          });
-          filters.applyParts(plan.facets, plan.q ?? '', plan.qFields ?? null);
-        },
-      },
-      openFilters: () => (modalOpen = true),
-      activeFilters: () => filters.active,
-    });
+        inferred: () => geo.inferred,
+        openFilters: () => (modalOpen = true),
+      }),
+    );
     return () => {
       setListSearchTarget(null);
       filters.dispose();
@@ -527,7 +427,7 @@
     void filters.applied; // track the debounced snapshot
     // Read outside untrack: clearing the hold is what re-runs this, and it is the only
     // thing that ever will for a visitor whose guess came back empty.
-    if (geoGuessPending) return;
+    if (geo.pending) return;
     untrack(() => {
       refreshCounts();
     });
@@ -607,88 +507,6 @@
     });
   });
 
-  // The opening scope guessed from the visitor's IP country, once it has been
-  // applied — null whenever the scope is theirs rather than ours. The header trigger
-  // reads it to say the scope was inferred; see `scopeInferred` below.
-  let guessedRegion = $state<string | null>(null);
-
-  // The guess is only still ours while the geography is EXACTLY what we set: our
-  // region plus worldwide, nothing excluded, no country or city of their own. Any
-  // edit to the scope fails this and the marking drops, with no event to subscribe
-  // to and no flag to remember to clear. Filters outside geography (seniority, a
-  // search term) leave it standing — they did not touch the scope.
-  const scopeInferred = $derived.by(() => {
-    if (guessedRegion === null) return false;
-    const f = filters.value;
-    const untouched = (param: string) => {
-      const st = f.facets[param];
-      return !st || (st.include.length === 0 && st.exclude.length === 0);
-    };
-    const ours = [guessedRegion, WORLDWIDE_REGION];
-    const regions = f.facets.regions;
-    return (
-      !!regions &&
-      regions.exclude.length === 0 &&
-      regions.include.length === ours.length &&
-      ours.every((r) => regions.include.includes(r)) &&
-      untouched('countries') &&
-      untouched('metros') &&
-      untouched('cities')
-    );
-  });
-
-  // Ours until the geography first stops matching, and not ours again after that.
-  // Without the latch, someone who clears the guess and then picks the same region
-  // by hand lands back in a state the check above cannot tell from the guess, and
-  // the trigger would tell them the site inferred a scope they chose themselves.
-  $effect(() => {
-    if (guessedRegion !== null && !scopeInferred) untrack(() => (guessedRegion = null));
-  });
-
-  // Open a first-time visitor on their own region plus worldwide. The precedence
-  // itself lives in `shouldOfferGeoScope`, where it is a pure function and a test
-  // can state each rule; this reads the browser and acts on the answer.
-  //
-  // The URL is written directly and re-read rather than going through
-  // `filters.apply()`: apply() is an explicit write, and on the standalone list an
-  // explicit write mirrors itself into `hire.jobFilters`. Storage records what the
-  // visitor chose, and this is a guess. Writing the address bar and re-seeding from
-  // it is the same path an ordinary navigation takes, which by construction persists
-  // nothing. It is also safe by now — `replaceState` is not available during the
-  // initial `enter`, but a network round trip has passed since.
-  async function offerGeoScope() {
-    // The page this offer is for. A request is in flight for a few hundred
-    // milliseconds and the visitor can leave in that time — onto a job page, onto
-    // /companies — and every one of those routes has an empty query string, so the
-    // guards below would pass and the scope would land on a page it was never meant
-    // for. The pathname captured here is the only thing that can tell those apart.
-    const pathname = location.pathname;
-    if (!shouldOfferGeoScope(geoScopeGuards())) return;
-
-    const region = await fetchRegion();
-    // Nothing was offered, so nothing is marked: a deployment whose edge sends no
-    // country would otherwise spend its one chance per browser on a null answer.
-    if (!region) return;
-    // Re-read the world, do not trust the snapshot: while we were asking they may
-    // have navigated away, filtered, or been offered the scope by another mount.
-    // Any of those outranks a guess; ours is dropped, not queued.
-    if (location.pathname !== pathname || !shouldOfferGeoScope(geoScopeGuards())) return;
-
-    // A guess that cannot be recorded is a guess that re-applies on every visit and
-    // cannot be dismissed, so a failed write means no scope at all.
-    if (!markGeoScopeOffered()) return;
-    // Keep what is on screen until the scoped page arrives, so the swap happens in
-    // place instead of through a spinner the height of the whole list.
-    holdover = jobs.items;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
-    replaceState(`${pathname}?${geoScopeQuery(region)}`, {});
-    filters.syncFromUrl();
-    // Claimed only now that the filters already carry the scope. Set before the
-    // re-seed, it would sit for a tick beside geography that does not match it, and
-    // the latch below would drop it before the trigger ever said anything.
-    guessedRegion = region;
-  }
-
   // Re-seed the filters from the URL on every real navigation (initial load, the
   // "Jobs" nav link, back/forward). On the standalone list a navigation that lands
   // on a bare /jobs (empty URL) instead restores the last persisted filters, so an
@@ -715,7 +533,7 @@
         filters.apply(stored);
         // A restored set outranks the guess, so nothing is going to be asked for and
         // the facet measurement must not keep waiting on an answer that is not coming.
-        geoGuessPending = false;
+        geo.pending = false;
       } else {
         filters.syncFromUrl();
         // Last in the precedence chain, and the only branch that runs on a cold
@@ -725,7 +543,7 @@
         // re-read, storage refused the marker — because the facet measurement is held
         // behind this and a path that forgot to release would leave the filter panel
         // permanently countless.
-        void offerGeoScope().finally(() => (geoGuessPending = false));
+        void geo.offer().finally(() => (geo.pending = false));
       }
     });
   } else {
@@ -875,16 +693,16 @@
     <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;
          each shows once (until dismissed or completed), then retires. Never blocks
          the feed below. -->
-    {#if showBanner || alertBanner}
+    {#if nudge.show || nudge.alert}
       <div class="mt-3">
-        {#if showBanner}
-          <OnboardingBanner onOpen={openOnboarding} onDismiss={dismissBanner} />
+        {#if nudge.show}
+          <OnboardingBanner onOpen={nudge.open} onDismiss={nudge.dismiss} />
         {/if}
-        {#if alertBanner}
+        {#if nudge.alert}
           <OnboardingAlertBanner
-            query={alertBanner.query}
-            autostart={alertBanner.autostart}
-            onDismiss={() => (alertBanner = null)}
+            query={nudge.alert.query}
+            autostart={nudge.alert.autostart}
+            onDismiss={() => (nudge.alert = null)}
           />
         {/if}
       </div>

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  FILTER_COLLECTIONS,
   collectionBySlug,
   collectionForCategory,
   collectionForSkill,
@@ -10,6 +9,7 @@ import {
   relatedCollectionSlugs,
   skillForCollection,
 } from './collections';
+import { FILTER_COLLECTIONS } from './filterCollections';
 import { POPULAR_COLLECTIONS, POPULAR_COLLECTION_FALLBACK } from './popularCollections';
 import type { Job } from './types';
 import { FACETS } from './facets';

@@ -1,4 +1,5 @@
-import type { CollectionKind, FilterCollectionGroup, SeeAlsoMark } from './collections';
+import type { CollectionKind, SeeAlsoMark } from './collections';
+import type { FilterCollectionGroup } from './filterCollections';
 
 // A section of the /collections hub: one card there, and its own page at
 // /collections/group/:slug listing every collection in it. A filter collection

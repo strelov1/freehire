@@ -1,5 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
-import { countryFromSlug, countryLabel, countrySlug } from '#lib/facets.js';
+import { countryLabel } from '#lib/facets.js';
+import { countryFromSlug, countrySlug } from '#lib/countrySlugs.js';
 import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import {
   categoryFromSlug,

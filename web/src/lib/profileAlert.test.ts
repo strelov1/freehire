@@ -38,7 +38,8 @@ vi.mock('#lib/notifications.svelte.js', () => ({
 }));
 
 vi.mock('#lib/filters.js', async () => {
-  const { filtersFromProfile, filtersToParams } = await import('./facetModel');
+  const { filtersToParams } = await import('./facetModel');
+  const { filtersFromProfile } = await import('./profileFilters');
   return { filtersFromProfile, filtersToParams };
 });
 

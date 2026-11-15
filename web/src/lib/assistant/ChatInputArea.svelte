@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { Phone } from '@lucide/svelte';
+  import { VOICE_CALL_ENABLED } from './audioAvailability';
+  import { canUseVoiceCall } from './voiceCall';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import type { Attachment } from './client';
@@ -8,8 +11,7 @@
   import { messages } from './AssistantChat.messages';
 
   // AssistantChat's input area: the composer, or a hands-free voice call in its place while
-  // `voiceCallOpen`. `canCall` offers the call (an interview session where voice works);
-  // `onUnavailable` is told when the server has no Realtime gateway.
+  // `voiceCallOpen`, offered on an `interview` session where this browser can hold one.
   let {
     draft = $bindable(),
     attachments = $bindable(),
@@ -19,12 +21,11 @@
     turnActive,
     support,
     disabled,
-    canCall,
+    interview,
     onSubmit,
     onRemoveQueued,
     onCancel,
     onClose,
-    onUnavailable,
   }: {
     draft: string;
     attachments: Attachment[];
@@ -34,15 +35,37 @@
     turnActive: boolean;
     support: boolean;
     disabled: boolean;
-    canCall: boolean;
+    interview: boolean;
     onSubmit: (text: string, docs: Attachment[]) => void;
     onRemoveQueued: (id: string) => void;
     onCancel: () => void;
     onClose: () => void;
-    onUnavailable: () => void;
   } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  // Voice mode: a hands-free call on an `interview` session, replacing the composer
+  // for its duration. `voiceModeOff` latches once the server reports no Realtime
+  // gateway (501) — same reasoning as Composer's `dictationOff` — so the trigger does
+  // not keep offering a call that can only fail. `voiceSupported` starts false and is
+  // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
+  // reading navigator during SSR would disagree with the client on the first paint.
+  // It also carries VOICE_CALL_ENABLED — see audioAvailability.ts.
+  let voiceModeOff = $state(false);
+  let voiceSupported = $state(false);
+  const canCall = $derived(interview && voiceSupported && !voiceModeOff);
+  onMount(() => {
+    voiceSupported =
+      VOICE_CALL_ENABLED &&
+      canUseVoiceCall({
+        mediaDevices: navigator.mediaDevices,
+        RTCPeerConnection: typeof RTCPeerConnection === 'undefined' ? undefined : RTCPeerConnection,
+      });
+  });
+  function onUnavailable() {
+    voiceModeOff = true;
+    onClose();
+  }
 </script>
 
 {#if voiceCallOpen && sessionId}
