@@ -34,7 +34,7 @@ func run() int {
 	cfg := config.Load()
 	if !cfg.LinkedInDigestConfigured() {
 		log.Print("linkedin-token-refresh: the LinkedIn channel is not configured, nothing to renew")
-		return 0
+		return worker.Skip("LINKEDIN_CLIENT_ID+LINKEDIN_CLIENT_SECRET+LINKEDIN_REDIRECT_URI+LINKEDIN_ORGANIZATION_ID")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())

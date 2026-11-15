@@ -42,7 +42,7 @@ func run() int {
 	cfg := config.Load()
 	if !cfg.DiscordPaidAccessConfigured() {
 		log.Print("discord-sync: Discord paid channels are not configured, nothing to reconcile")
-		return 0
+		return worker.Skip("DISCORD_CLIENT_ID+DISCORD_CLIENT_SECRET+DISCORD_BOT_TOKEN+DISCORD_GUILD_ID+DISCORD_PAID_ROLE_ID")
 	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())

@@ -35,7 +35,7 @@ func run() int {
 	g := cfg.OAuth["google"]
 	if g.ClientID == "" || g.ClientSecret == "" || len(cfg.GmailTokenKey) != 32 {
 		log.Print("mentor-busy-sync: not configured (Google OAuth client / GMAIL_TOKEN_KEY) — nothing to do")
-		return 0
+		return worker.Skip("OAUTH_GOOGLE_CLIENT_ID+OAUTH_GOOGLE_CLIENT_SECRET+GMAIL_TOKEN_KEY")
 	}
 	cipher, err := tokencrypt.New(cfg.GmailTokenKey)
 	if err != nil {
