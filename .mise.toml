@@ -51,7 +51,7 @@ run = [
   # A container another checkout started may publish another port than this one's URLs name.
   "port=$(docker compose port db 5432 | sed 's/.*://'); [ \"$port\" = \"$DB_HOST_PORT\" ] || { echo \"the shared db publishes :$port, this checkout expects :$DB_HOST_PORT (DB_HOST_PORT)\" >&2; exit 1; }",
   "docker compose exec -T db psql -U hire -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname = '$HIRE_DB_NAME'\" | grep -q 1 || docker compose exec -T db createdb -U hire \"$HIRE_DB_NAME\"",
-  "go run ./cmd/migrate",
+  "make migrate",
 ]
 
 [tasks."db:drop"]

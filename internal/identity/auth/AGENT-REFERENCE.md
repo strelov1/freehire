@@ -5,7 +5,7 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 
 ## Always true
 - **JWT is HS256 and carries `sub` (user id) plus `tv` (the account's session generation).** It survives new sign-in methods and a later swap to opaque sessions. `tv` is what makes a stateless token revocable: it is compared against `users.token_version` on every authenticated request, so a bump (sign-out-everywhere, password change or reset, an OAuth seizure of an unverified account) strands every outstanding token. Accounts start at generation **1**, so a token minted before versioning — which has no `tv` claim, decoding to zero — can never match. The version load **fails closed**, which is also what terminates a *deleted* account's sessions everywhere: the row is gone, the read errors, every outstanding cookie is 401. Do not soften that error path into "tolerate a hiccup" — it would re-admit deleted accounts, whose writes then hit foreign-key 500s instead of a clean 401.
-- **Transport is an `HttpOnly; SameSite=Lax` cookie**, never a `Bearer` header or `localStorage` — XSS-safe, same-origin CSRF defense (no CSRF token needed yet).
+- **SPA transport is an `HttpOnly; SameSite=Lax` cookie**, never a `Bearer` header or `localStorage` — XSS-safe, same-origin CSRF defense (no CSRF token needed yet). The browser extension uses a Bearer session JWT, as described below.
 - **SPA and API must be same-origin.** In dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the backend.
 - `users.password_hash` is **nullable** — passwordless sign-in creates accounts with no password; password login rejects a null hash with a generic `401`.
 - `email` is the canonical account key (`UNIQUE (lower(email))`); external providers link via `user_identities`.

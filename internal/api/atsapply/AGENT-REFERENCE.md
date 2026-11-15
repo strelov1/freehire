@@ -25,8 +25,8 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   the host's own address. Their DOM is still scanned here first, so a field the platform API
   never declares (Greenhouse's `country`) reaches the plan the agent is handed. A white-label (unrecognized-layout) Greenhouse posting has
   no `MergedField` schema to build a `Plan` from in the first place, since chromedp's own
-  DOM scan is what failed there; a captcha-protected posting (Lever, or
-  `reasonCaptchaProtected`) is never routed here — that would be an attempt to bypass a
+  DOM scan is what failed there; a posting with a detected reCAPTCHA footprint
+  parks with `reasonCaptchaProtected` before the executor — that would be an attempt to bypass a
   platform's bot protection, not this backend's purpose. **Recruitee reaches a `Plan` now
   (its schema-fetch gap is closed — see `fetchSchema`'s stored-form fallback, below) but was never added
   here**: it is in neither `fillProviders` (no live DOM-scan built for it) nor
@@ -116,7 +116,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   preferring storage unconditionally would risk a REAL submission reading a possibly-stale,
   display-captured row instead of a fresh fetch for providers that already work fine. A
   live fetcher, when one is registered, is always tried first; `c.forms` is reached only
-  when `fetchSchema` would otherwise return `errNoSchemaFetcher`. **This does not make
+  when no live fetcher exists or its fetch fails. **This does not make
   Recruitee submit** — see this file's own note on `browserUseProviders`, above: reaching a
   `Plan` is not the same as having anything to hand it to. See
   `openspec/changes/atsapply-recruitee-stored-schema`.
