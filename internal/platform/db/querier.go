@@ -12,6 +12,12 @@ import (
 )
 
 type Querier interface {
+	// Consumes a live invitation to an active account and makes user_id a member, in one
+	// statement, so a link cannot be accepted twice. Refused (no row) when the token is unknown
+	// or expired, the account is not active, or the user already acts for a company — as its
+	// claimant here, or as a member through company_account_members' primary key, which a
+	// concurrent acceptance hits as a unique violation.
+	AcceptCompanyInvitation(ctx context.Context, arg AcceptCompanyInvitationParams) (string, error)
 	// Flip a board's first successful crawl from pending to active. A no-op (0 rows) when
 	// the board is already active or does not exist, so the caller need not check first.
 	ActivateBoard(ctx context.Context, arg ActivateBoardParams) (int64, error)
@@ -1909,6 +1915,11 @@ type Querier interface {
 	DeleteCompanyAccount(ctx context.Context, userID int64) (int64, error)
 	// Remove the caller's own feedback in one category on a company (no-op when absent).
 	DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFeedbackParams) error
+	// Withdraws one of a company's invitations; its link stops working at once.
+	DeleteCompanyInvitation(ctx context.Context, arg DeleteCompanyInvitationParams) (int64, error)
+	// Withdraws the invitation a failed letter carried — only while it still holds that token:
+	// a resend that replaced the token in the meantime mailed a link that must keep working.
+	DeleteCompanyInvitationByToken(ctx context.Context, arg DeleteCompanyInvitationByTokenParams) (int64, error)
 	// Whatever links still name the retiring slug: its own parent (the canon may have another,
 	// or be a parent itself, and one level is the rule), and a link to the canon it has just
 	// become.
@@ -2868,7 +2879,7 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
-	// A company account's team: who acts for it
+	// A company account's team: its members and the invitations that bring them in
 	// (migration 0271). The claimant stays the account (company_accounts); members act for it.
 	// The account a user acts for, as its claimant or as a member, in whatever status the account
 	// is in. acting_email is the user's own work address — the claimant's work_email, or the one
@@ -2885,6 +2896,10 @@ type Querier interface {
 	// One company's open count now and as of the growth window ago. No row means nothing
 	// open at either point; the caller serves zeros.
 	GetCompanyGrowth(ctx context.Context, companySlug string) (GetCompanyGrowthRow, error)
+	// The live invitation a link names, with the company and the status of the account it
+	// invites to. No row: no such token (never issued, already accepted, withdrawn or replaced by
+	// a resend), or it has expired.
+	GetCompanyInvitationByToken(ctx context.Context, tokenHash []byte) (GetCompanyInvitationByTokenRow, error)
 	// One company's posting lifetime. No row means no qualifying closure; the caller
 	// applies its own sample gate on `closed`.
 	GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error)
@@ -3805,6 +3820,9 @@ type Querier interface {
 	// Whether some retired slug already redirects here. Such a slug cannot itself retire: the
 	// registry resolves one hop, so its aliases would land on a slug with no jobs.
 	IsCanonicalCompanySlug(ctx context.Context, slug string) (bool, error)
+	// Whether the user acts for the company — as its claimant or a member — right now. Read
+	// under LockEmployerCompany, so a removal that committed first is seen.
+	IsCompanyActor(ctx context.Context, arg IsCompanyActorParams) (bool, error)
 	// Whether a normalized host (see submission.normalizeHost) is on the submission blocklist.
 	IsHostBlocked(ctx context.Context, host string) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
@@ -4489,6 +4507,8 @@ type Querier interface {
 	// rows that already hold industries, but the merge pass must also reach companies
 	// with none, and one query serving both keeps the two walks identical.
 	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
+	// A company's invitations that can still be accepted, newest first.
+	ListCompanyInvitations(ctx context.Context, companySlug string) ([]ListCompanyInvitationsRow, error)
 	// A company page's parent (role 'parent') and subsidiaries (role 'subsidiary') in one round
 	// trip, since every company read pays for it and almost every company has neither. The join
 	// through companies hides a relative that has no row any more. Subsidiaries come hiring
@@ -4508,6 +4528,9 @@ type Querier interface {
 	// former-name slug candidates, instead of one CompanyExists round trip per
 	// candidate per entry (the dataset runs several thousand entries deep).
 	ListCompanySlugs(ctx context.Context) ([]string, error)
+	// Everyone who acts for a company: the claimant first (holder), then members by when they
+	// joined. The claimant joined when the account was verified.
+	ListCompanyTeam(ctx context.Context, companySlug string) ([]ListCompanyTeamRow, error)
 	// ListCompanyWebsites returns the companies whose curated record holds a website, which
 	// is the only population cmd/publish-logo-domains can publish a domain for. ~17,900 rows
 	// of ~480,000 companies as of 2026-09-16.
@@ -5827,6 +5850,12 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Locks a member row FOR UPDATE ahead of RemoveCompanyMember, in its own statement: it waits
+	// for an in-flight vacancy write holding the row FOR KEY SHARE to commit, so the removal's
+	// statement that follows takes a snapshot that sees the new vacancy and hands it over too
+	// (one statement waiting inside its DELETE would keep its earlier snapshot for the hand-over
+	// and miss it). No row: not a member of this company.
+	LockCompanyMemberForRemoval(ctx context.Context, arg LockCompanyMemberForRemovalParams) (int64, error)
 	// Serializes approvals for the transaction (key "fhcr", listed in internal/platform/migrate).
 	// Each approval checks the registry and company_parents and then writes them, and two
 	// approvals checked against the same state could each pass while together making a chain.
@@ -5842,6 +5871,10 @@ type Querier interface {
 	// concurrent statements would each check a snapshot without the other's row; taken first in
 	// the same transaction, this lock makes the second write's check see the first's commit.
 	LockEmployerActor(ctx context.Context, userID int64) error
+	// Serialises every change to one company's team — inviting, accepting, removing — so the
+	// invitation cap holds, and a member being removed cannot have an invitation of theirs
+	// inserted after the removal withdrew the others. Transaction-scoped.
+	LockEmployerCompany(ctx context.Context, companySlug string) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -7174,6 +7207,13 @@ type Querier interface {
 	// Give a claim back after every channel failed, so the next run retries. Guarded on the
 	// stamp being the claim's own: a participant re-notified since keeps its newer one.
 	ReleaseUnread(ctx context.Context, arg ReleaseUnreadParams) error
+	// Removes a member from a company's team, and in the same statement hands the vacancies they
+	// published to the account's claimant — a vacancy belongs to the team, and one left created
+	// by somebody outside it would stop taking applications and drop out of every teammate's
+	// dashboard — and withdraws the invitations they sent, which would otherwise let them invite
+	// an address of their own and walk straight back in. The claimant is never a member row, so
+	// cannot be removed here. Returns how many members were removed (0 or 1).
+	RemoveCompanyMember(ctx context.Context, arg RemoveCompanyMemberParams) (int64, error)
 	// Remove a company by the slug a page carries, together with any stored alias of it that no
 	// company row still holds (that one is a company of its own, and stays).
 	RemoveFromWatchlist(ctx context.Context, arg RemoveFromWatchlistParams) error
@@ -8575,6 +8615,13 @@ type Querier interface {
 	// CONFLICT names the target partial index directly since the unique index
 	// excludes NULL user_id.
 	UpsertCompanyFeedback(ctx context.Context, arg UpsertCompanyFeedbackParams) (CompanyFeedback, error)
+	// Invites an address to a company's team, or replaces the token and expiry of the live or
+	// expired invitation already sent to it — a resend leaves exactly one working link. It is
+	// refused (no row) once the company holds max_live invitations that can still be accepted,
+	// unless it renews one that is itself still live; reviving an expired one needs a free slot.
+	// The cap bounds how much mail one account can make freehire send. Callers hold the
+	// company's lock (LockEmployerCompany), so two invitations cannot both pass the count.
+	UpsertCompanyInvitation(ctx context.Context, arg UpsertCompanyInvitationParams) (UpsertCompanyInvitationRow, error)
 	// A subsidiary has one parent, so a newer approved decision replaces the older one.
 	UpsertCompanyParent(ctx context.Context, arg UpsertCompanyParentParams) error
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.

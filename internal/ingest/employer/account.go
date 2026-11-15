@@ -43,6 +43,11 @@ type Service struct {
 
 	jobs   JobRepository
 	minter Minter
+
+	// The company team (team.go), set by WithTeam.
+	team    TeamRepository
+	invites InviteMailer
+	joinURL string
 }
 
 // New creates a Service backed by the given account Repository, code issuer, claim mailer,
