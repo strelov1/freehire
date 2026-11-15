@@ -24,6 +24,21 @@ comment block, before the first statement — quoted inside a sentence it does n
 argument. Suppress a rule with `-- squawk-ignore <rule-name>` on the line before the
 statement, with the reason beside it.
 
+## Migration numbers: `pnpm check:migration-numbers`
+
+A migration's numeric prefix is how people name it, and 69 prefixes were already shared
+when the check landed (`0144` seven times, `0135` five times, and the rest of that set).
+Initdb and `cmd/migrate` order by the whole filename and record that filename, so the
+history is applied and must not be renumbered. `pnpm check:migration-numbers`
+(`scripts/check-migration-numbers.mjs`, the `migrations` CI job) reads every
+`migrations/*.sql` and fails when a prefix is used more times than
+`ALLOWED_DUPLICATE_COUNTS` records. The map is those existing duplicate prefixes, each
+with its file count, so the current tree passes and one more file on `0144` — or two
+new files sharing a fresh number — does not. A prefix used once is not listed. The
+escape hatch for a corrective file that must sort beside an immutable migration is to
+update that count in the same change and say why; [the SQL notes](../../internal/platform/db/AGENTS.md)
+still require the filename order and forbid repeating a data copy.
+
 ## Generated SQL layer: `make sqlc`
 
 `internal/platform/db/` is generated: edit `internal/platform/db/queries/*.sql` and run
