@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 )
 
 // jobleadsHTTP is the transport surface jobleads needs: a Chrome-fingerprint JSON POST for
-// the search endpoint and a JSON GET for the detail endpoint. fingerprintHTTP satisfies it,
-// and pacedJobleadsPoster wraps it without widening the interface.
+// the search endpoint and a fetch()-shaped JSON GET for the detail endpoint. fingerprintHTTP
+// satisfies it, and pacedJobleadsPoster wraps it without widening the interface.
 type jobleadsHTTP interface {
 	PostJSON(ctx context.Context, url string, body, v any) error
-	GetJSON(ctx context.Context, url string, v any) error
+	FetchJSON(ctx context.Context, url string, v any) error
 }
 
 // jobleads adapts jobleads.com, a multi-country job aggregator. Its search API is
@@ -38,28 +39,39 @@ type jobleads struct {
 	// maxNewPerBoard bounds how many new postings one board hydrates per run; non-positive
 	// takes jobleadsMaxNewPerBoard.
 	maxNewPerBoard int
+	// details caches a fetched description by feed id for the adapter's life (one registry
+	// build, i.e. one ingest run). The keyword windows of one country overlap heavily and the
+	// pipeline stores a row per board (ids are board-namespaced), so every board that lists a
+	// new posting still yields it, but only the first one pays the detail request. nil (a
+	// literal jobleads{}) disables the cache.
+	details *sync.Map
 }
 
 const (
-	jobleadsBaseURL    = "https://www.jobleads.com"
-	jobleadsSearchURL  = jobleadsBaseURL + "/job-search/search"
-	jobleadsDetailURL  = jobleadsBaseURL + "/api/v3/job/detailsForAppNew/en/%s"
-	jobleadsPageSize   = 100
+	jobleadsBaseURL   = "https://www.jobleads.com"
+	jobleadsSearchURL = jobleadsBaseURL + "/job-search/search"
+	jobleadsDetailURL = jobleadsBaseURL + "/api/v3/job/detailsForAppNew/en/%s"
+	// jobleadsPageSize is the largest page the search serves (limit 1000 answered 1000 in every
+	// one of 41 markets, ~1 s, measured 2026-11-15). The search is the stricter-limited endpoint,
+	// so a big page buys the same depth for a tenth of the requests.
+	jobleadsPageSize   = 1000
 	jobleadsSweepGrace = 14 * 24 * time.Hour
 	// jobleadsMaxPages bounds the page walk: loop safety, and a relevance cutoff since on-topic
 	// density decays fast with depth. A posting cut here reappears in another keyword's window and
 	// the 14-day sweepGrace absorbs the partial walk. A real, shallower window ends the walk on an
 	// empty page first.
-	jobleadsMaxPages = 50
+	jobleadsMaxPages = 5 // 5,000 postings deep, as 50 pages of 100 were
 	// jobleadsMaxNewPerBoard bounds one board's detail requests per run. All boards share one
-	// ~1 req/s limiter (pacedJobleadsPoster) and a board writes nothing until its crawl returns, so
-	// an unbounded backlog outlasts the unit's time budget and stores nothing. The rest are
-	// deferred (not yielded, still new) to a later run.
-	jobleadsMaxNewPerBoard = 60
+	// ~2 req/s limiter (pacedJobleadsPoster) and a board writes nothing until its crawl returns, so
+	// an unbounded backlog outlasts the unit's time budget and stores nothing; a run cut by its
+	// deadline closes nothing either (jobleads has no board scope). 779 boards (19 keywords x 41
+	// markets) x 25 details plus 5 search pages each is ~23k requests, ~3.2 h at 2 req/s. The
+	// rest are deferred (not yielded, still new) to a later run.
+	jobleadsMaxNewPerBoard = 25
 )
 
 // NewJobleads builds the JobLeads adapter over the given transport.
-func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c} }
+func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c, details: &sync.Map{}} }
 
 func (jobleads) Provider() string { return "jobleads" }
 
@@ -188,6 +200,14 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			return true
 		}
+		// Another board already fetched it: free, so outside the budget.
+		if s.details != nil {
+			if d, ok := s.details.Load(p.ID); ok {
+				base.Description = d.(string)
+				jobs = append(jobs, base)
+				return true
+			}
+		}
 		// A deferred posting still counts as found, so the walk goes on to refresh the seen
 		// postings further down the window.
 		if hydrated == budget {
@@ -201,6 +221,9 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 				log.Printf("jobleads: detail %s failed; ingesting list-only: %v", p.ID, err)
 			} else {
 				base.Description = d.description()
+				if s.details != nil {
+					s.details.Store(p.ID, base.Description)
+				}
 			}
 		}
 		jobs = append(jobs, base)
@@ -243,7 +266,7 @@ func (s jobleads) fetchDetail(ctx context.Context, detailID string) (jobleadsDet
 			Content jobleadsDetail `json:"content"`
 		} `json:"payload"`
 	}
-	if err := s.http.GetJSON(ctx, fmt.Sprintf(jobleadsDetailURL, detailID), &resp); err != nil {
+	if err := s.http.FetchJSON(ctx, fmt.Sprintf(jobleadsDetailURL, detailID), &resp); err != nil {
 		return jobleadsDetail{}, err
 	}
 	return resp.Payload.Content, nil
@@ -359,6 +382,10 @@ func (d jobleadsDetail) description() string {
 // one registry build, so every board's search pages and detail fan-out share one token bucket
 // (both hit the same Cloudflare-scored edge). The rate is deliberately gentle: a burst
 // re-enters the bot-scoring that 403s/429s the edge, while under-shooting only lengthens a run.
+// Measured 2026-11-15 from the crawl host, 60 s each: 2 req/s served every request, 5 req/s had
+// 75% of searches refused (429). A rotating proxy does not lift it: the edge limits the client,
+// not the address (5 req/s through a fresh exit per request still lost 45% of searches, and
+// details at 10-20 req/s plateaued at ~1.4 served a second), and its exits draw extra 403s.
 func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 	return pacedJobleads{
 		c:   c,
@@ -367,7 +394,7 @@ func pacedJobleadsPoster(c jobleadsHTTP) jobleadsHTTP {
 }
 
 const (
-	jobleadsRequestInterval = time.Second // ~1 req/s
+	jobleadsRequestInterval = 500 * time.Millisecond // ~2 req/s
 	jobleadsRequestBurst    = 1
 )
 
@@ -385,9 +412,9 @@ func (p pacedJobleads) PostJSON(ctx context.Context, url string, body, v any) er
 	return p.c.PostJSON(ctx, url, body, v)
 }
 
-func (p pacedJobleads) GetJSON(ctx context.Context, url string, v any) error {
+func (p pacedJobleads) FetchJSON(ctx context.Context, url string, v any) error {
 	if err := p.lim.Wait(ctx); err != nil {
 		return err
 	}
-	return p.c.GetJSON(ctx, url, v)
+	return p.c.FetchJSON(ctx, url, v)
 }
