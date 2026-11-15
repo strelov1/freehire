@@ -1,17 +1,25 @@
-# Join
+# JOIN
 
-The board is the numeric company ID. Its public jobs API caps `pageSize` at 5.
-Read every declared page, require an explicit `items` array and nonnegative
-`rowCount`/`pageCount`, and reject changing totals, repeated identities, malformed
-items, or a final count different from the declared row count. A failed later
-page fails the entire listing; no page cap may silently truncate it.
+The board is the numeric company ID. Since 2026-11-15, the careers site's public
+API is GraphQL at `https://join.com/candidate-api/graphql`. The old
+`/api/public/companies/<id>/jobs` and `/api/public/jobs/<id>` routes return
+`404 Cannot GET` even for JOIN's own live company (54); that is not board deletion.
 
-Verified on 2026-11-11: company 176781 returns `items: []` and pagination
-`rowCount: 0, pageCount: 0, page: 1, pageSize: 0`. The unknown company
-999999999999 returns HTTP 404 rather than this empty envelope. These responses
-justify the full and empty board listing markers.
+POST `publicJobs(input: PublicJobsQueryInput!)` with `companyId` and
+`paginationPage: {page, pageSize}`. Retain the UI's page size of five and the
+existing 1.5 requests/second pace across listing and detail requests. Read every
+declared page, require explicit `items` and nonnegative `pageInfo.rowCount` and
+`pageCount`, and reject changing totals, repeated identities, malformed items or
+an incomplete final count. GraphQL errors fail the operation, including HTTP 200
+responses carrying partial data.
 
-The native posting ID differs from the display ID in its public URL. Detail
-requests use the native ID. A detail 404/410 proves removal; transport failures
-and missing bodies retain an unreadable identity, protecting that listed job
-from the unseen sweep.
+`publicJob(input: PublicJobInput!)` takes the native posting `id` and returns
+`descriptionHtml` and `company.domain`. Sanitize the HTML directly. Display URLs
+use the list's `idParam`, which differs from the native identity. Failed, null or
+bodyless details retain an unreadable listed identity.
+
+Live control: company 54 returns three postings; native job 14771122 returns a
+complete HTML body. Company 176781 and unknown company 999999999 both return
+`items: []`, `pageCount: 0`, `rowCount: 0`. Therefore JOIN grants full listing
+coverage but no verified-empty marker. Neither the old 404 nor the new zero
+response alone justifies retiring a catalog company.

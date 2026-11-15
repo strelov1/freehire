@@ -165,16 +165,6 @@ const (
 	joinRequestBurst    = 2
 )
 
-// pacedJoinGetter wraps a getter with a fresh limiter shared across one registry build. Listing
-// and detail paths are both wrapped because both hit the same metered host (unlike seek, whose
-// listing was never refused).
-func pacedJoinGetter(c JSONGetter) JSONGetter {
-	return rateLimitedJSONGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(joinRequestInterval), joinRequestBurst),
-	}
-}
-
 // rateLimitedJSONPoster is the JSON-POST counterpart of rateLimitedHTMLGetter, for detail
 // endpoints that are not GETs (SEEK's is a GraphQL POST).
 type rateLimitedJSONPoster struct {

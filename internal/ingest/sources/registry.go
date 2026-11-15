@@ -104,7 +104,7 @@ func All(c HTTPClient) map[string]Source {
 			// refusing for minutes. See gohire.go.
 			NewGoHire(gohirePacedGetter(c)),
 			NewHrmos(c),
-			NewJoin(pacedJoinGetter(c)),
+			NewJoin(c),
 			NewRapyd(c),
 			NewCareerPlug(c),
 			NewHRMDirect(c),
