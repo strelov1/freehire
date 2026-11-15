@@ -145,20 +145,27 @@ type StatusMail struct {
 type Inbox struct {
 	repo      InboxRepository
 	employers Employers
-	mirror    StageMirror
 	notifier  StatusNotifier
-	locks     ApplicationLocker
+	moves     MoveRunner
 }
 
-// ApplicationLocker runs fn while no other caller runs a function for the same
-// application. ApplicationLocks satisfies it.
-type ApplicationLocker interface {
-	Serialize(ctx context.Context, id int64, fn func(context.Context) error) error
+// MoveScope is what one move works through: the inbox's persistence and the candidate's
+// tracking, both on the move's own transaction.
+type MoveScope struct {
+	Repo   InboxRepository
+	Mirror StageMirror
+}
+
+// MoveRunner runs fn as one move of an application: serialised against every other move
+// of the same application, with all its database work on the one transaction that holds
+// that serialisation, committed when fn succeeds. ApplicationMoves satisfies it.
+type MoveRunner interface {
+	RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error
 }
 
 // NewInbox builds an Inbox. Every dependency is required.
-func NewInbox(repo InboxRepository, employers Employers, mirror StageMirror, notifier StatusNotifier, locks ApplicationLocker) *Inbox {
-	return &Inbox{repo: repo, employers: employers, mirror: mirror, notifier: notifier, locks: locks}
+func NewInbox(repo InboxRepository, employers Employers, notifier StatusNotifier, moves MoveRunner) *Inbox {
+	return &Inbox{repo: repo, employers: employers, notifier: notifier, moves: moves}
 }
 
 // Inbox page bounds.
@@ -243,26 +250,27 @@ func (in *Inbox) Move(ctx context.Context, employerID, id int64, st Stage, messa
 		return MoveResult{}, fmt.Errorf("%w: the message is longer than %d characters", ErrInvalid, maxMessage)
 	}
 
-	// The whole move runs under the application's lock: two moves of one application never
-	// interleave, so an older move cannot mirror or mail after a newer one has.
+	// The whole move is one MoveRunner run: two moves of one application never interleave,
+	// so an older move cannot mirror or mail after a newer one has, and the move's database
+	// work shares the connection that holds that guarantee rather than queueing for more.
 	var res MoveResult
-	err = in.locks.Serialize(ctx, id, func(ctx context.Context) error {
+	err = in.moves.RunMove(ctx, id, func(ctx context.Context, sc MoveScope) error {
 		var err error
-		res, err = in.move(ctx, acc, employerID, id, st, message)
+		res, err = in.move(ctx, sc, acc, employerID, id, st, message)
 		return err
 	})
 	return res, err
 }
 
-// move is Move's body, run under the application's lock.
-func (in *Inbox) move(ctx context.Context, acc employer.Account, employerID, id int64, st Stage, message string) (MoveResult, error) {
-	mv, err := in.repo.SetStage(ctx, employerID, id, st)
+// move is Move's body, run as one move of the application.
+func (in *Inbox) move(ctx context.Context, sc MoveScope, acc employer.Account, employerID, id int64, st Stage, message string) (MoveResult, error) {
+	mv, err := sc.Repo.SetStage(ctx, employerID, id, st)
 	if err != nil {
 		return MoveResult{}, err
 	}
 	var notified bool
 	if mv.Changed {
-		if _, err := in.mirror.Mirror(ctx, mv.CandidateID, mv.JobID, candidateStage[st]); err != nil {
+		if _, err := sc.Mirror.Mirror(ctx, mv.CandidateID, mv.JobID, candidateStage[st]); err != nil {
 			log.Printf("directapply: candidate's tracking not updated for application %d: %v", id, err)
 		}
 		if st.Notifies() {
@@ -282,7 +290,7 @@ func (in *Inbox) move(ctx context.Context, acc employer.Account, employerID, id 
 		}
 	}
 
-	app, err := in.repo.Get(ctx, employerID, id)
+	app, err := sc.Repo.Get(ctx, employerID, id)
 	if err != nil {
 		return MoveResult{}, err
 	}

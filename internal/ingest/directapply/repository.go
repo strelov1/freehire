@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -243,28 +244,37 @@ func (r *QueriesRepository) SetStage(ctx context.Context, employerID, id int64, 
 	}, nil
 }
 
-// ApplicationLocks serialises work per application with a transaction-scoped advisory
-// lock (LockDirectApplication). Rolling the transaction back releases it however fn ends.
-type ApplicationLocks struct {
+// ApplicationMoves runs each move of an application on one transaction that first takes the
+// application's advisory lock (LockDirectApplication): moves of one application are
+// serialised, and the move's own reads and writes — the stage, the candidate's tracking —
+// use that transaction's connection, so a move never holds one connection while waiting
+// for another (which, with enough concurrent moves, would exhaust the pool). The stage
+// write and the candidate's mirror commit together. The candidate's letter is sent inside
+// the run, before the commit, so letters keep the order of the moves; a commit that then
+// fails is reported as the move failing.
+type ApplicationMoves struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
 }
 
-// NewApplicationLocks builds ApplicationLocks over the pool.
-func NewApplicationLocks(q *db.Queries, pool *pgxpool.Pool) *ApplicationLocks {
-	return &ApplicationLocks{pool: pool, q: q}
+// NewApplicationMoves builds ApplicationMoves over the pool.
+func NewApplicationMoves(q *db.Queries, pool *pgxpool.Pool) *ApplicationMoves {
+	return &ApplicationMoves{pool: pool, q: q}
 }
 
-// Serialize runs fn holding the application's lock. fn does its own work on its own
-// connections; the lock lives on the transaction this method holds open meanwhile.
-func (l *ApplicationLocks) Serialize(ctx context.Context, id int64, fn func(context.Context) error) error {
-	tx, err := l.pool.Begin(ctx)
+// RunMove runs fn as one move of application id; see ApplicationMoves.
+func (m *ApplicationMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error {
+	tx, err := m.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := l.q.WithTx(tx).LockDirectApplication(ctx, id); err != nil {
+	qtx := m.q.WithTx(tx)
+	if err := qtx.LockDirectApplication(ctx, id); err != nil {
 		return err
 	}
-	return fn(ctx)
+	if err := fn(ctx, MoveScope{Repo: NewQueriesRepository(qtx), Mirror: jobtracking.NewEmployerStages(qtx)}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

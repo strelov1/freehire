@@ -105,18 +105,20 @@ func (n *fakeNotifier) SendStatusUpdate(_ context.Context, m StatusMail) error {
 	return nil
 }
 
-// fakeLocks records which applications a move held the lock of, and whether the move's
-// work ran inside it.
-type fakeLocks struct {
+// fakeMoves records which applications a move ran for, and whether the move's work ran
+// inside the run; its scope is the harness's own repository and mirror.
+type fakeMoves struct {
+	repo   InboxRepository
+	mirror StageMirror
 	held   int64
 	locked []int64
 }
 
-func (l *fakeLocks) Serialize(ctx context.Context, id int64, fn func(context.Context) error) error {
-	l.locked = append(l.locked, id)
-	l.held = id
-	defer func() { l.held = 0 }()
-	return fn(ctx)
+func (m *fakeMoves) RunMove(ctx context.Context, id int64, fn func(context.Context, MoveScope) error) error {
+	m.locked = append(m.locked, id)
+	m.held = id
+	defer func() { m.held = 0 }()
+	return fn(ctx, MoveScope{Repo: m.repo, Mirror: m.mirror})
 }
 
 type inboxHarness struct {
@@ -124,15 +126,17 @@ type inboxHarness struct {
 	employers fakeEmployers
 	mirror    *fakeMirror
 	notifier  *fakeNotifier
-	locks     *fakeLocks
+	locks     *fakeMoves
 }
 
 func newInboxHarness() *inboxHarness {
-	return &inboxHarness{repo: newFakeInbox(), mirror: &fakeMirror{}, notifier: &fakeNotifier{}, locks: &fakeLocks{}}
+	h := &inboxHarness{repo: newFakeInbox(), mirror: &fakeMirror{}, notifier: &fakeNotifier{}}
+	h.locks = &fakeMoves{repo: h.repo, mirror: h.mirror}
+	return h
 }
 
 func (h *inboxHarness) inbox() *Inbox {
-	return NewInbox(h.repo, h.employers, h.mirror, h.notifier, h.locks)
+	return NewInbox(h.repo, h.employers, h.notifier, h.locks)
 }
 
 func TestInboxList_CountsEveryStageAndTotalsTheFilter(t *testing.T) {

@@ -202,15 +202,15 @@ func TestInboxRepository_ApplicationsGoWithTheCandidate(t *testing.T) {
 	}
 }
 
-func TestApplicationLocks_SerialiseOneApplication(t *testing.T) {
+func TestApplicationMoves_SerialiseOneApplication(t *testing.T) {
 	f := newInboxFixture(t)
-	locks := directapply.NewApplicationLocks(db.New(f.pool), f.pool)
+	moves := directapply.NewApplicationMoves(db.New(f.pool), f.pool)
 	ctx := context.Background()
 
 	firstIn, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- locks.Serialize(ctx, 42, func(context.Context) error {
+		done <- moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) error {
 			close(firstIn)
 			<-release
 			return nil
@@ -220,7 +220,7 @@ func TestApplicationLocks_SerialiseOneApplication(t *testing.T) {
 
 	secondRan := make(chan struct{})
 	go func() {
-		_ = locks.Serialize(ctx, 42, func(context.Context) error { close(secondRan); return nil })
+		_ = moves.RunMove(ctx, 42, func(context.Context, directapply.MoveScope) error { close(secondRan); return nil })
 	}()
 	select {
 	case <-secondRan:
@@ -228,16 +228,47 @@ func TestApplicationLocks_SerialiseOneApplication(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 	// Another application is not held up.
-	if err := locks.Serialize(ctx, 43, func(context.Context) error { return nil }); err != nil {
-		t.Fatalf("Serialize(43): %v", err)
+	if err := moves.RunMove(ctx, 43, func(context.Context, directapply.MoveScope) error { return nil }); err != nil {
+		t.Fatalf("RunMove(43): %v", err)
 	}
 	close(release)
 	if err := <-done; err != nil {
-		t.Fatalf("first Serialize: %v", err)
+		t.Fatalf("first RunMove: %v", err)
 	}
 	select {
 	case <-secondRan:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the second move never ran after the first released the lock")
+	}
+}
+
+func TestApplicationMoves_RunTheMoveOnItsOwnTransaction(t *testing.T) {
+	f := newInboxFixture(t)
+	ctx := context.Background()
+	id := f.apply(t, f.vacancy, f.candidate, "cv", true)
+	moves := directapply.NewApplicationMoves(db.New(f.pool), f.pool)
+
+	// A failed run rolls its stage write back.
+	failed := errors.New("boom")
+	if err := moves.RunMove(ctx, id, func(ctx context.Context, sc directapply.MoveScope) error {
+		if _, err := sc.Repo.SetStage(ctx, f.employer, id, directapply.StageRejected); err != nil {
+			return err
+		}
+		return failed
+	}); !errors.Is(err, failed) {
+		t.Fatalf("RunMove err = %v, want the callback's", err)
+	}
+	if a, err := f.repo.Get(ctx, f.employer, id); err != nil || a.Stage != directapply.StageNew {
+		t.Fatalf("stage after a failed run = %+v, %v; want new", a.Stage, err)
+	}
+	// A successful one commits it.
+	if err := moves.RunMove(ctx, id, func(ctx context.Context, sc directapply.MoveScope) error {
+		_, err := sc.Repo.SetStage(ctx, f.employer, id, directapply.StageInterview)
+		return err
+	}); err != nil {
+		t.Fatalf("RunMove: %v", err)
+	}
+	if a, err := f.repo.Get(ctx, f.employer, id); err != nil || a.Stage != directapply.StageInterview {
+		t.Fatalf("stage after a successful run = %+v, %v; want interview", a.Stage, err)
 	}
 }
