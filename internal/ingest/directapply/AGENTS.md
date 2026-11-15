@@ -8,7 +8,7 @@ delivering it by email to the employer account's confirmed work address (`Servic
 employer's side of it, the applicant inbox and hiring pipeline (`Inbox`, `inbox.go`). The
 vacancy and its questions are authored in [internal/ingest/employer](../employer/AGENTS.md);
 the design records are [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply)
-and `openspec/changes/add-employer-applicant-pipeline` (landing with the HTTP routes).
+and `openspec/changes/add-employer-applicant-pipeline` (landing with the web inbox).
 
 ## Always true
 - **Recorded first, stamped sent after.** `Apply` writes the `direct_applications` row,

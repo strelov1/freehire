@@ -8934,6 +8934,422 @@ func (s *EmployerAccountStatus) UnmarshalText(data []byte) error {
 	}
 }
 
+// One application sent on freehire to one of the caller's vacancies.
+// Ref: #/components/schemas/EmployerApplication
+type EmployerApplication struct {
+	ID int64 `json:"id"`
+	// The vacancy's public slug.
+	JobSlug  string `json:"job_slug"`
+	JobTitle string `json:"job_title"`
+	// The candidate's address; replies to the application email reach it too.
+	CandidateEmail string `json:"candidate_email"`
+	// "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file).
+	CvKind string `json:"cv_kind"`
+	// False for an application sent before its CV was kept: that CV reached you by email only.
+	HasCv bool `json:"has_cv"`
+	// The candidate's note, empty when none.
+	Note    string                      `json:"note"`
+	Answers []EmployerApplicationAnswer `json:"answers"`
+	Stage   EmployerApplicationStage    `json:"stage"`
+	// When you last moved it; absent while it has never been moved.
+	StageChangedAt OptDateTime `json:"stage_changed_at"`
+	// When the application reached you.
+	SentAt time.Time `json:"sent_at"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerApplication) GetID() int64 {
+	return s.ID
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *EmployerApplication) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// GetJobTitle returns the value of JobTitle.
+func (s *EmployerApplication) GetJobTitle() string {
+	return s.JobTitle
+}
+
+// GetCandidateEmail returns the value of CandidateEmail.
+func (s *EmployerApplication) GetCandidateEmail() string {
+	return s.CandidateEmail
+}
+
+// GetCvKind returns the value of CvKind.
+func (s *EmployerApplication) GetCvKind() string {
+	return s.CvKind
+}
+
+// GetHasCv returns the value of HasCv.
+func (s *EmployerApplication) GetHasCv() bool {
+	return s.HasCv
+}
+
+// GetNote returns the value of Note.
+func (s *EmployerApplication) GetNote() string {
+	return s.Note
+}
+
+// GetAnswers returns the value of Answers.
+func (s *EmployerApplication) GetAnswers() []EmployerApplicationAnswer {
+	return s.Answers
+}
+
+// GetStage returns the value of Stage.
+func (s *EmployerApplication) GetStage() EmployerApplicationStage {
+	return s.Stage
+}
+
+// GetStageChangedAt returns the value of StageChangedAt.
+func (s *EmployerApplication) GetStageChangedAt() OptDateTime {
+	return s.StageChangedAt
+}
+
+// GetSentAt returns the value of SentAt.
+func (s *EmployerApplication) GetSentAt() time.Time {
+	return s.SentAt
+}
+
+// SetID sets the value of ID.
+func (s *EmployerApplication) SetID(val int64) {
+	s.ID = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *EmployerApplication) SetJobSlug(val string) {
+	s.JobSlug = val
+}
+
+// SetJobTitle sets the value of JobTitle.
+func (s *EmployerApplication) SetJobTitle(val string) {
+	s.JobTitle = val
+}
+
+// SetCandidateEmail sets the value of CandidateEmail.
+func (s *EmployerApplication) SetCandidateEmail(val string) {
+	s.CandidateEmail = val
+}
+
+// SetCvKind sets the value of CvKind.
+func (s *EmployerApplication) SetCvKind(val string) {
+	s.CvKind = val
+}
+
+// SetHasCv sets the value of HasCv.
+func (s *EmployerApplication) SetHasCv(val bool) {
+	s.HasCv = val
+}
+
+// SetNote sets the value of Note.
+func (s *EmployerApplication) SetNote(val string) {
+	s.Note = val
+}
+
+// SetAnswers sets the value of Answers.
+func (s *EmployerApplication) SetAnswers(val []EmployerApplicationAnswer) {
+	s.Answers = val
+}
+
+// SetStage sets the value of Stage.
+func (s *EmployerApplication) SetStage(val EmployerApplicationStage) {
+	s.Stage = val
+}
+
+// SetStageChangedAt sets the value of StageChangedAt.
+func (s *EmployerApplication) SetStageChangedAt(val OptDateTime) {
+	s.StageChangedAt = val
+}
+
+// SetSentAt sets the value of SentAt.
+func (s *EmployerApplication) SetSentAt(val time.Time) {
+	s.SentAt = val
+}
+
+// One answered question, as asked when the candidate applied.
+// Ref: #/components/schemas/EmployerApplicationAnswer
+type EmployerApplicationAnswer struct {
+	// The question's id on the vacancy's form. (e.g. `q1`).
+	ID string `json:"id"`
+	// The question as it read when the candidate applied.
+	Label string `json:"label"`
+	// "text", "boolean" (answer "true"/"false") or "select".
+	Type string `json:"type"`
+	// The candidate's answer.
+	Answer string `json:"answer"`
+}
+
+// GetID returns the value of ID.
+func (s *EmployerApplicationAnswer) GetID() string {
+	return s.ID
+}
+
+// GetLabel returns the value of Label.
+func (s *EmployerApplicationAnswer) GetLabel() string {
+	return s.Label
+}
+
+// GetType returns the value of Type.
+func (s *EmployerApplicationAnswer) GetType() string {
+	return s.Type
+}
+
+// GetAnswer returns the value of Answer.
+func (s *EmployerApplicationAnswer) GetAnswer() string {
+	return s.Answer
+}
+
+// SetID sets the value of ID.
+func (s *EmployerApplicationAnswer) SetID(val string) {
+	s.ID = val
+}
+
+// SetLabel sets the value of Label.
+func (s *EmployerApplicationAnswer) SetLabel(val string) {
+	s.Label = val
+}
+
+// SetType sets the value of Type.
+func (s *EmployerApplicationAnswer) SetType(val string) {
+	s.Type = val
+}
+
+// SetAnswer sets the value of Answer.
+func (s *EmployerApplicationAnswer) SetAnswer(val string) {
+	s.Answer = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationMove
+type EmployerApplicationMove struct {
+	// The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`).
+	Stage OptString `json:"stage"`
+	// Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with
+	// `interview`, `offer` or `rejected`, the stages that send one.
+	Message OptString `json:"message"`
+}
+
+// GetStage returns the value of Stage.
+func (s *EmployerApplicationMove) GetStage() OptString {
+	return s.Stage
+}
+
+// GetMessage returns the value of Message.
+func (s *EmployerApplicationMove) GetMessage() OptString {
+	return s.Message
+}
+
+// SetStage sets the value of Stage.
+func (s *EmployerApplicationMove) SetStage(val OptString) {
+	s.Stage = val
+}
+
+// SetMessage sets the value of Message.
+func (s *EmployerApplicationMove) SetMessage(val OptString) {
+	s.Message = val
+}
+
+// Ref: #/components/schemas/EmployerApplicationMoved
+type EmployerApplicationMoved struct {
+	Application EmployerApplication `json:"application"`
+	// Whether the candidate was emailed about this move. False when the stage sends no letter, nothing
+	// changed, or the letter failed.
+	CandidateNotified bool `json:"candidate_notified"`
+}
+
+// GetApplication returns the value of Application.
+func (s *EmployerApplicationMoved) GetApplication() EmployerApplication {
+	return s.Application
+}
+
+// GetCandidateNotified returns the value of CandidateNotified.
+func (s *EmployerApplicationMoved) GetCandidateNotified() bool {
+	return s.CandidateNotified
+}
+
+// SetApplication sets the value of Application.
+func (s *EmployerApplicationMoved) SetApplication(val EmployerApplication) {
+	s.Application = val
+}
+
+// SetCandidateNotified sets the value of CandidateNotified.
+func (s *EmployerApplicationMoved) SetCandidateNotified(val bool) {
+	s.CandidateNotified = val
+}
+
+// A stage of the employer's hiring pipeline. Every delivered application starts at `new`.
+// Ref: #/components/schemas/EmployerApplicationStage
+type EmployerApplicationStage string
+
+const (
+	EmployerApplicationStageNew       EmployerApplicationStage = "new"
+	EmployerApplicationStageReviewing EmployerApplicationStage = "reviewing"
+	EmployerApplicationStageInterview EmployerApplicationStage = "interview"
+	EmployerApplicationStageOffer     EmployerApplicationStage = "offer"
+	EmployerApplicationStageHired     EmployerApplicationStage = "hired"
+	EmployerApplicationStageRejected  EmployerApplicationStage = "rejected"
+)
+
+// AllValues returns all EmployerApplicationStage values.
+func (EmployerApplicationStage) AllValues() []EmployerApplicationStage {
+	return []EmployerApplicationStage{
+		EmployerApplicationStageNew,
+		EmployerApplicationStageReviewing,
+		EmployerApplicationStageInterview,
+		EmployerApplicationStageOffer,
+		EmployerApplicationStageHired,
+		EmployerApplicationStageRejected,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s EmployerApplicationStage) MarshalText() ([]byte, error) {
+	switch s {
+	case EmployerApplicationStageNew:
+		return []byte(s), nil
+	case EmployerApplicationStageReviewing:
+		return []byte(s), nil
+	case EmployerApplicationStageInterview:
+		return []byte(s), nil
+	case EmployerApplicationStageOffer:
+		return []byte(s), nil
+	case EmployerApplicationStageHired:
+		return []byte(s), nil
+	case EmployerApplicationStageRejected:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *EmployerApplicationStage) UnmarshalText(data []byte) error {
+	switch EmployerApplicationStage(data) {
+	case EmployerApplicationStageNew:
+		*s = EmployerApplicationStageNew
+		return nil
+	case EmployerApplicationStageReviewing:
+		*s = EmployerApplicationStageReviewing
+		return nil
+	case EmployerApplicationStageInterview:
+		*s = EmployerApplicationStageInterview
+		return nil
+	case EmployerApplicationStageOffer:
+		*s = EmployerApplicationStageOffer
+		return nil
+	case EmployerApplicationStageHired:
+		*s = EmployerApplicationStageHired
+		return nil
+	case EmployerApplicationStageRejected:
+		*s = EmployerApplicationStageRejected
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/EmployerApplicationsMeta
+type EmployerApplicationsMeta struct {
+	Total  int64 `json:"total"`
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+	// How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with
+	// none is absent.
+	StageCounts EmployerApplicationsMetaStageCounts `json:"stage_counts"`
+	// Query params this listing did not read, so the answer is wider than asked; absent when every param
+	// was read.
+	IgnoredParams []IgnoredParam `json:"ignored_params"`
+}
+
+// GetTotal returns the value of Total.
+func (s *EmployerApplicationsMeta) GetTotal() int64 {
+	return s.Total
+}
+
+// GetLimit returns the value of Limit.
+func (s *EmployerApplicationsMeta) GetLimit() int64 {
+	return s.Limit
+}
+
+// GetOffset returns the value of Offset.
+func (s *EmployerApplicationsMeta) GetOffset() int64 {
+	return s.Offset
+}
+
+// GetStageCounts returns the value of StageCounts.
+func (s *EmployerApplicationsMeta) GetStageCounts() EmployerApplicationsMetaStageCounts {
+	return s.StageCounts
+}
+
+// GetIgnoredParams returns the value of IgnoredParams.
+func (s *EmployerApplicationsMeta) GetIgnoredParams() []IgnoredParam {
+	return s.IgnoredParams
+}
+
+// SetTotal sets the value of Total.
+func (s *EmployerApplicationsMeta) SetTotal(val int64) {
+	s.Total = val
+}
+
+// SetLimit sets the value of Limit.
+func (s *EmployerApplicationsMeta) SetLimit(val int64) {
+	s.Limit = val
+}
+
+// SetOffset sets the value of Offset.
+func (s *EmployerApplicationsMeta) SetOffset(val int64) {
+	s.Offset = val
+}
+
+// SetStageCounts sets the value of StageCounts.
+func (s *EmployerApplicationsMeta) SetStageCounts(val EmployerApplicationsMetaStageCounts) {
+	s.StageCounts = val
+}
+
+// SetIgnoredParams sets the value of IgnoredParams.
+func (s *EmployerApplicationsMeta) SetIgnoredParams(val []IgnoredParam) {
+	s.IgnoredParams = val
+}
+
+// How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with
+// none is absent.
+type EmployerApplicationsMetaStageCounts map[string]int64
+
+func (s *EmployerApplicationsMetaStageCounts) init() EmployerApplicationsMetaStageCounts {
+	m := *s
+	if m == nil {
+		m = map[string]int64{}
+		*s = m
+	}
+	return m
+}
+
+// Ref: #/components/schemas/EmployerApplicationsPage
+type EmployerApplicationsPage struct {
+	Data []EmployerApplication    `json:"data"`
+	Meta EmployerApplicationsMeta `json:"meta"`
+}
+
+// GetData returns the value of Data.
+func (s *EmployerApplicationsPage) GetData() []EmployerApplication {
+	return s.Data
+}
+
+// GetMeta returns the value of Meta.
+func (s *EmployerApplicationsPage) GetMeta() EmployerApplicationsMeta {
+	return s.Meta
+}
+
+// SetData sets the value of Data.
+func (s *EmployerApplicationsPage) SetData(val []EmployerApplication) {
+	s.Data = val
+}
+
+// SetMeta sets the value of Meta.
+func (s *EmployerApplicationsPage) SetMeta(val EmployerApplicationsMeta) {
+	s.Meta = val
+}
+
 // Ref: #/components/schemas/EmployerClaim
 type EmployerClaim struct {
 	CompanyName OptString `json:"company_name"`
@@ -10824,6 +11240,68 @@ func (s *GetEmbeddingProgressOK) GetData() EmbeddingProgress {
 // SetData sets the value of Data.
 func (s *GetEmbeddingProgressOK) SetData(val EmbeddingProgress) {
 	s.Data = val
+}
+
+type GetEmployerApplicationCVOK struct {
+	Data io.Reader
+}
+
+// Read reads data from the Data reader.
+//
+// Kept to satisfy the io.Reader interface.
+func (s GetEmployerApplicationCVOK) Read(p []byte) (n int, err error) {
+	if s.Data == nil {
+		return 0, io.EOF
+	}
+	return s.Data.Read(p)
+}
+
+// GetEmployerApplicationCVOKHeaders wraps GetEmployerApplicationCVOK with response headers.
+type GetEmployerApplicationCVOKHeaders struct {
+	CacheControl       string
+	ContentDisposition string
+	ContentType        string
+	Response           GetEmployerApplicationCVOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetEmployerApplicationCVOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetContentDisposition returns the value of ContentDisposition.
+func (s *GetEmployerApplicationCVOKHeaders) GetContentDisposition() string {
+	return s.ContentDisposition
+}
+
+// GetContentType returns the value of ContentType.
+func (s *GetEmployerApplicationCVOKHeaders) GetContentType() string {
+	return s.ContentType
+}
+
+// GetResponse returns the value of Response.
+func (s *GetEmployerApplicationCVOKHeaders) GetResponse() GetEmployerApplicationCVOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetEmployerApplicationCVOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetContentDisposition sets the value of ContentDisposition.
+func (s *GetEmployerApplicationCVOKHeaders) SetContentDisposition(val string) {
+	s.ContentDisposition = val
+}
+
+// SetContentType sets the value of ContentType.
+func (s *GetEmployerApplicationCVOKHeaders) SetContentType(val string) {
+	s.ContentType = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetEmployerApplicationCVOKHeaders) SetResponse(val GetEmployerApplicationCVOK) {
+	s.Response = val
 }
 
 // A single item: `{"data": ...}`.
@@ -17035,6 +17513,21 @@ func (s *ModeratedUser) SetBannedAt(val NilDateTime) {
 // SetBanReason sets the value of BanReason.
 func (s *ModeratedUser) SetBanReason(val NilString) {
 	s.BanReason = val
+}
+
+// A single item: `{"data": ...}`.
+type MoveEmployerApplicationOK struct {
+	Data EmployerApplicationMoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *MoveEmployerApplicationOK) GetData() EmployerApplicationMoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *MoveEmployerApplicationOK) SetData(val EmployerApplicationMoved) {
+	s.Data = val
 }
 
 // A single item: `{"data": ...}`.

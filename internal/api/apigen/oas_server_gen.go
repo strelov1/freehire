@@ -739,6 +739,13 @@ type Handler interface {
 	//
 	// GET /stats/embeddings
 	GetEmbeddingProgress(ctx context.Context) (*GetEmbeddingProgressOK, error)
+	// GetEmployerApplicationCV implements getEmployerApplicationCV operation.
+	//
+	// The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate
+	// pasted. 404 when none was kept.
+	//
+	// GET /employer/applications/{id}/cv
+	GetEmployerApplicationCV(ctx context.Context, params GetEmployerApplicationCVParams) (*GetEmployerApplicationCVOKHeaders, error)
 	// GetEmployerCompany implements getEmployerCompany operation.
 	//
 	// The caller's own account in any status, with the company profile.
@@ -1270,6 +1277,14 @@ type Handler interface {
 	//
 	// GET /me/tracking/dismissed
 	ListDismissedSlugs(ctx context.Context) (*ListDismissedSlugsOK, error)
+	// ListEmployerApplications implements listEmployerApplications operation.
+	//
+	// The delivered applications to the caller's vacancies, newest first. An unknown `stage` is a 400
+	// rather than an unfiltered answer; a param the listing does not read is named in
+	// `meta.ignored_params`.
+	//
+	// GET /employer/applications
+	ListEmployerApplications(ctx context.Context, params ListEmployerApplicationsParams) (*EmployerApplicationsPage, error)
 	// ListEmployerPendingClaims implements listEmployerPendingClaims operation.
 	//
 	// Moderators only: the claims that could not auto-activate.
@@ -1560,6 +1575,14 @@ type Handler interface {
 	//
 	// POST /me/experience/atoms/merge
 	MergeAtoms(ctx context.Context, req *MergeAtoms) (*MergeAtomsOK, error)
+	// MoveEmployerApplication implements moveEmployerApplication operation.
+	//
+	// Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+	// `interview`, `offer` and `rejected` email the candidate with your optional message. A move to the
+	// stage it already holds changes nothing and sends nothing.
+	//
+	// POST /employer/applications/{id}/stage
+	MoveEmployerApplication(ctx context.Context, req *EmployerApplicationMove, params MoveEmployerApplicationParams) (*MoveEmployerApplicationOK, error)
 	// MyCompanyFeedback implements myCompanyFeedback operation.
 	//
 	// All of the caller's own reviews of the company, one per category; empty when none.

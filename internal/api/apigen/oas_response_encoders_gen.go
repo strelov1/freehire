@@ -1512,6 +1512,61 @@ func encodeGetEmbeddingProgressResponse(response *GetEmbeddingProgressOK, w http
 	return nil
 }
 
+func encodeGetEmployerApplicationCVResponse(response *GetEmployerApplicationCVOKHeaders, w http.ResponseWriter) error {
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+	// Encoding response headers.
+	{
+		h := uri.NewHeaderEncoder(w.Header())
+		// Encode "Cache-Control" header.
+		{
+			cfg := uri.HeaderParameterEncodingConfig{
+				Name:    "Cache-Control",
+				Explode: false,
+			}
+			if err := h.EncodeParam(cfg, func(e uri.Encoder) error {
+				return e.EncodeValue(conv.StringToString(response.CacheControl))
+			}); err != nil {
+				return errors.Wrap(err, "encode Cache-Control header")
+			}
+		}
+		// Encode "Content-Disposition" header.
+		{
+			cfg := uri.HeaderParameterEncodingConfig{
+				Name:    "Content-Disposition",
+				Explode: false,
+			}
+			if err := h.EncodeParam(cfg, func(e uri.Encoder) error {
+				return e.EncodeValue(conv.StringToString(response.ContentDisposition))
+			}); err != nil {
+				return errors.Wrap(err, "encode Content-Disposition header")
+			}
+		}
+		// Encode "Content-Type" header.
+		{
+			cfg := uri.HeaderParameterEncodingConfig{
+				Name:    "Content-Type",
+				Explode: false,
+			}
+			if err := h.EncodeParam(cfg, func(e uri.Encoder) error {
+				return e.EncodeValue(conv.StringToString(response.ContentType))
+			}); err != nil {
+				return errors.Wrap(err, "encode Content-Type header")
+			}
+		}
+	}
+	w.WriteHeader(200)
+
+	writer := w
+	if closer, ok := response.Response.Data.(io.Closer); ok {
+		defer closer.Close()
+	}
+	if _, err := io.Copy(writer, response.Response); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetEmployerCompanyResponse(response *GetEmployerCompanyOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -2575,6 +2630,19 @@ func encodeListDismissedSlugsResponse(response *ListDismissedSlugsOK, w http.Res
 	return nil
 }
 
+func encodeListEmployerApplicationsResponse(response *EmployerApplicationsPage, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeListEmployerPendingClaimsResponse(response *ListEmployerPendingClaimsOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -3124,6 +3192,19 @@ func encodeMatchTextResponse(response *MatchTextOK, w http.ResponseWriter) error
 }
 
 func encodeMergeAtomsResponse(response *MergeAtomsOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeMoveEmployerApplicationResponse(response *MoveEmployerApplicationOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 

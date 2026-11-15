@@ -227,3 +227,22 @@ func (m directApplyMailer) SendApplication(ctx context.Context, mail directapply
 		CVContentType:  mail.CV.ContentType,
 	})
 }
+
+// directApplyStatusMailer translates the inbox's StatusMail into emailnotify's, for the
+// same reason directApplyMailer exists.
+type directApplyStatusMailer struct {
+	mailer *emailnotify.ApplicationMailer
+	origin string
+}
+
+func (m directApplyStatusMailer) SendStatusUpdate(ctx context.Context, mail directapply.StatusMail) error {
+	return m.mailer.SendStatusUpdate(ctx, emailnotify.ApplicationStatusMail{
+		To:          mail.To,
+		ReplyTo:     mail.ReplyTo,
+		CompanyName: mail.CompanyName,
+		JobTitle:    mail.JobTitle,
+		JobURL:      strings.TrimRight(m.origin, "/") + "/jobs/" + mail.JobSlug,
+		Stage:       string(mail.Stage),
+		Message:     mail.Message,
+	})
+}

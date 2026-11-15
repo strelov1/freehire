@@ -203,3 +203,188 @@ op rejectEmployerClaim(@path user_id: string): Data<EmployerRejected> | Problem;
 @route("/employer/claims/{user_id}/revoke")
 @post
 op revokeEmployerAccount(@path user_id: string): Data<EmployerAccount> | Problem;
+
+// ── The applicant inbox ─────────────────────────────────────────────────────────────
+// The applications sent on freehire to the caller's own vacancies, and the caller's
+// hiring pipeline over them. Only delivered applications are listed. Every stage shows in
+// the candidate's own tracking (new as applied, reviewing as screening, hired as
+// accepted), and `interview`, `offer` and `rejected` email the candidate (Reply-To the
+// account's work email).
+
+/** A stage of the employer's hiring pipeline. Every delivered application starts at `new`. */
+enum EmployerApplicationStage {
+  new,
+  reviewing,
+  interview,
+  offer,
+  hired,
+  rejected,
+}
+
+/** One answered question, as asked when the candidate applied. */
+model EmployerApplicationAnswer {
+  /** The question's id on the vacancy's form. (e.g. `q1`) */
+  id: string;
+
+  /** The question as it read when the candidate applied. */
+  label: string;
+
+  /** "text", "boolean" (answer "true"/"false") or "select". */
+  type: string;
+
+  /** The candidate's answer. */
+  answer: string;
+}
+
+/** One application sent on freehire to one of the caller's vacancies. */
+model EmployerApplication {
+  id: int64;
+
+  /** The vacancy's public slug. */
+  job_slug: string;
+
+  job_title: string;
+
+  /** The candidate's address; replies to the application email reach it too. */
+  candidate_email: string;
+
+  /** "tailored" (a CV made for this vacancy) or "resume" (the candidate's uploaded file). */
+  cv_kind: string;
+
+  /** False for an application sent before its CV was kept: that CV reached you by email only. */
+  has_cv: boolean;
+
+  /** The candidate's note, empty when none. */
+  note: string;
+
+  answers: EmployerApplicationAnswer[];
+  stage: EmployerApplicationStage;
+
+  /** When you last moved it; absent while it has never been moved. */
+  stage_changed_at?: utcDateTime;
+
+  /** When the application reached you. */
+  sent_at: utcDateTime;
+}
+
+model EmployerApplicationsMeta {
+  ...PageMeta;
+
+  /** How many applications sit at each stage under the `job` filter, whatever `stage` is; a stage with none is absent. */
+  stage_counts: Record<int64>;
+
+  /** Query params this listing did not read, so the answer is wider than asked; absent when every param was read. */
+  ignored_params?: IgnoredParam[];
+}
+
+model EmployerApplicationsPage {
+  data: EmployerApplication[];
+  meta: EmployerApplicationsMeta;
+}
+
+model EmployerApplicationMove {
+  /** The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`) */
+  stage?: string;
+
+  /** Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with `interview`, `offer` or `rejected`, the stages that send one. */
+  message?: string;
+}
+
+model EmployerApplicationMoved {
+  application: EmployerApplication;
+
+  /** Whether the candidate was emailed about this move. False when the stage sends no letter, nothing changed, or the letter failed. */
+  candidate_notified: boolean;
+}
+
+/**
+ * The delivered applications to the caller's vacancies, newest first. An unknown `stage` is
+ * a 400 rather than an unfiltered answer; a param the listing does not read is named in
+ * `meta.ignored_params`.
+ */
+@summary("List the applications sent to your vacancies.")
+@tag("Employer")
+@opExample(#{
+  parameters: #{ stage: "new" },
+  returnType: #{
+    data: #[
+      #{
+        id: 42,
+        job_slug: "platform-engineer-acme-9f3c",
+        job_title: "Platform Engineer",
+        candidate_email: "candidate@example.com",
+        cv_kind: "tailored",
+        has_cv: true,
+        note: "Happy to talk this week.",
+        answers: #[#{ id: "q1", label: "EU work permit?", type: "boolean", answer: "true" }],
+        stage: EmployerApplicationStage.new,
+        sent_at: utcDateTime.fromISO("2026-11-10T10:00:00Z"),
+      },
+    ],
+    meta: #{ total: 1, limit: 50, offset: 0, stage_counts: #{ new: 1, rejected: 2 } },
+  },
+})
+@route("/employer/applications")
+@get
+op listEmployerApplications(
+  /** Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`) */
+  @query job?: string,
+  /** Only applications at this stage. (e.g. `new`) */
+  @query stage?: string,
+  /** Page size, 1–100. (e.g. `50`) */
+  @query limit?: string,
+  /** Rows to skip. (e.g. `0`) */
+  @query offset?: string,
+): EmployerApplicationsPage | Problem;
+
+/** The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate pasted. 404 when none was kept. */
+@summary("Open the CV an application sent.")
+@tag("Employer")
+@opExample(#{ parameters: #{ id: "42" } })
+@route("/employer/applications/{id}/cv")
+@get
+op getEmployerApplicationCV(
+  /** The application's id. (e.g. `42`) */
+  @path id: string,
+): {
+  @header contentType: string;
+  @header("Content-Disposition") contentDisposition: string;
+  @header("Cache-Control") cacheControl: string;
+  @body cv: bytes;
+} | Problem;
+
+/**
+ * Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+ * `interview`, `offer` and `rejected` email the candidate with your optional message. A move
+ * to the stage it already holds changes nothing and sends nothing.
+ */
+@summary("Move an application through your pipeline.")
+@tag("Employer")
+@opExample(#{
+  parameters: #{ id: "42", body: #{ stage: "interview", message: "Are you free on Tuesday?" } },
+  returnType: #{
+    data: #{
+      application: #{
+        id: 42,
+        job_slug: "platform-engineer-acme-9f3c",
+        job_title: "Platform Engineer",
+        candidate_email: "candidate@example.com",
+        cv_kind: "tailored",
+        has_cv: true,
+        note: "",
+        answers: #[],
+        stage: EmployerApplicationStage.interview,
+        stage_changed_at: utcDateTime.fromISO("2026-11-12T09:00:00Z"),
+        sent_at: utcDateTime.fromISO("2026-11-10T10:00:00Z"),
+      },
+      candidate_notified: true,
+    },
+  },
+})
+@route("/employer/applications/{id}/stage")
+@post
+op moveEmployerApplication(
+  /** The application's id. (e.g. `42`) */
+  @path id: string,
+  @body body: EmployerApplicationMove,
+): Data<EmployerApplicationMoved> | Problem;

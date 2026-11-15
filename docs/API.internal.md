@@ -4134,6 +4134,130 @@ curl -X PATCH "https://freehire.me/api/v1/me/email-groups" -b cookies.txt
 
 ## Employer
 
+### `GET /employer/applications`
+
+**Auth:** Session only
+
+List the applications sent to your vacancies.
+
+The delivered applications to the caller's vacancies, newest first. An unknown `stage` is
+a 400 rather than an unfiltered answer; a param the listing does not read is named in
+`meta.ignored_params`.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job` | string | no | Only this vacancy's applications. (e.g. `platform-engineer-acme-9f3c`) |
+| `stage` | string | no | Only applications at this stage. (e.g. `new`) |
+| `limit` | string | no | Page size, 1–100. (e.g. `50`) |
+| `offset` | string | no | Rows to skip. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/employer/applications" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "job_slug": "platform-engineer-acme-9f3c",
+      "job_title": "Platform Engineer",
+      "candidate_email": "candidate@example.com",
+      "cv_kind": "tailored",
+      "has_cv": true,
+      "note": "Happy to talk this week.",
+      "answers": [
+        {
+          "id": "q1",
+          "label": "EU work permit?",
+          "type": "boolean",
+          "answer": "true"
+        }
+      ],
+      "stage": "new",
+      "sent_at": "2026-11-10T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "limit": 50,
+    "offset": 0,
+    "stage_counts": {
+      "new": 1,
+      "rejected": 2
+    }
+  }
+}
+```
+
+### `GET /employer/applications/{id}/cv`
+
+**Auth:** Session only
+
+Open the CV an application sent.
+
+The CV file the application sent, exactly as it was emailed to you: a PDF, or the text the candidate pasted. 404 when none was kept.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The application's id. (e.g. `42`) |
+
+```bash
+curl "https://freehire.me/api/v1/employer/applications/<id>/cv" -b cookies.txt
+```
+
+### `POST /employer/applications/{id}/stage`
+
+**Auth:** Session only
+
+Move an application through your pipeline.
+
+Moves the application to a stage of your pipeline. The candidate's tracking follows, and
+`interview`, `offer` and `rejected` email the candidate with your optional message. A move
+to the stage it already holds changes nothing and sends nothing.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The application's id. (e.g. `42`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `stage` | string | no | The stage to move to: new, reviewing, interview, offer, hired or rejected. (e.g. `interview`) |
+| `message` | string | no | Your words to the candidate, at most 2000 characters, quoted in their email. Accepted only with `interview`, `offer` or `rejected`, the stages that send one. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/applications/<id>/stage" -b cookies.txt -H 'Content-Type: application/json' -d '{"stage":"interview","message":"Are you free on Tuesday?"}'
+```
+
+```json
+{
+  "data": {
+    "application": {
+      "id": 42,
+      "job_slug": "platform-engineer-acme-9f3c",
+      "job_title": "Platform Engineer",
+      "candidate_email": "candidate@example.com",
+      "cv_kind": "tailored",
+      "has_cv": true,
+      "note": "",
+      "answers": [],
+      "stage": "interview",
+      "stage_changed_at": "2026-11-12T09:00:00Z",
+      "sent_at": "2026-11-10T10:00:00Z"
+    },
+    "candidate_notified": true
+  }
+}
+```
+
 ### `POST /employer/claim`
 
 **Auth:** Session only
