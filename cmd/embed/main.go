@@ -29,11 +29,8 @@ func run() int {
 	}
 	defer cleanup()
 
-	// Unlike cmd/reindex, this worker no longer requires MEILI_MASTER_KEY: it never
-	// touches Meilisearch (the jobs_semantic index it used to upsert into is gone —
-	// see openspec/changes/drop-hybrid-search-pgvector-similar). search.NewClient still
-	// takes cfg.MeiliURL/cfg.MeiliKey positionally, but nothing here exercises the I/O
-	// they would configure.
+	// This worker needs no MEILI_MASTER_KEY: it never touches Meilisearch. search.NewClient still
+	// takes the URL and key positionally, but nothing here uses them.
 	ecfg, err := config.LoadEmbed()
 	if err != nil {
 		log.Printf("embed: %v", err)

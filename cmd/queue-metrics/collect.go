@@ -13,9 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// metricsQueries is the slice of *db.Queries this worker needs, declared here so the
-// assembly and its error handling are testable against a fake rather than a container.
-// Narrow by intent, matching internal/platform/worker's FullScanQueries.
+// metricsQueries is the slice of *db.Queries this worker needs, so collect is testable against a fake.
 type metricsQueries interface {
 	SearchOutboxMetrics(context.Context) (db.SearchOutboxMetricsRow, error)
 	SearchDeleteOutboxMetrics(context.Context) (db.SearchDeleteOutboxMetricsRow, error)
@@ -45,10 +43,8 @@ var employmentBoilerplateKinds = []string{
 	"permanent_status",
 }
 
-// collect runs one measurement pass. Any query failure aborts the pass: a partial
-// exposition would publish some families and silently drop others, and a dropped family
-// reads downstream as a dead exporter — a louder and more misleading signal than the one
-// failed run this returns.
+// collect runs one measurement pass. Any query failure aborts it: a partial exposition would
+// silently drop families, which downstream reads as a dead exporter.
 func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	search, err := q.SearchOutboxMetrics(ctx)
 	if err != nil {
@@ -122,11 +118,9 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	}
 	providers := make([]providerHealth, len(health))
 	for i, r := range health {
-		// An invalid Timestamptz is max() over a provider whose every live board has never
-		// succeeded. It stays the zero time here and is dropped by render, because the
-		// alternative — a Unix zero — reads downstream as a provider overdue since 1970.
-		// firstListed and the board counts carry that provider instead: they are always
-		// present.
+		// An invalid Timestamptz means no live board has ever succeeded. It stays the zero time
+		// and render drops it (a Unix zero would read as overdue since 1970); firstListed and
+		// the board counts still carry the provider.
 		p := providerHealth{
 			name:      r.Provider,
 			uncrawled: r.Uncrawled,
@@ -143,9 +137,8 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		providers[i] = p
 	}
 
-	// Carried through untouched, never divided or thresholded here: which multiple is a
-	// problem depends on the source, and that judgement belongs to the alert rule (see
-	// render.go). A source that wrote nothing in the window is simply absent from the rows.
+	// Carried through untouched: which multiple is a problem depends on the source, so the
+	// alert rule decides (see render.go).
 	volume, err := q.IngestDuplicationMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("ingest duplication metrics: %w", err)
@@ -159,8 +152,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		}
 	}
 
-	// Read from the snapshot cmd/rollup-stats rebuilds, not measured here: the measurement
-	// is a full scan of the open catalogue. Carried untouched, like the ingest pair above.
+	// Read from the snapshot cmd/rollup-stats rebuilds; measuring here would be a full catalogue scan.
 	quality, err := q.SourceQualityMetrics(ctx)
 	if err != nil {
 		return snapshot{}, fmt.Errorf("source quality metrics: %w", err)
@@ -181,10 +173,8 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 	}
 
 	return snapshot{
-		// Every queue in the pipeline, because a queue this worker does not measure has
-		// no signal at all: each of these is drained by a worker that exits 0 whether it
-		// kept up or not, so the per-run family stays green through any backlog. Adding
-		// an outbox means adding it here.
+		// Every pipeline queue must be listed: their workers exit 0 whether or not they kept up,
+		// so an unmeasured queue has no signal. Adding an outbox means adding it here.
 		queues: []queueMetrics{
 			{name: "search_outbox", depth: search.Depth, deadLetters: &search.DeadLetters, oldestAgeSeconds: search.OldestAgeSeconds},
 			{name: "search_delete_outbox", depth: searchDelete.Depth, deadLetters: &searchDelete.DeadLetters, oldestAgeSeconds: searchDelete.OldestAgeSeconds},
@@ -193,18 +183,13 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			{name: "email_classification_outbox", depth: mail.Depth, deadLetters: &mail.DeadLetters, oldestAgeSeconds: mail.OldestAgeSeconds},
 			{name: "apply_form_outbox", depth: applyForms.Depth, deadLetters: &applyForms.DeadLetters, oldestAgeSeconds: applyForms.OldestAgeSeconds},
 			{name: "adzuna_description_outbox", depth: adzunaDescriptions.Depth, deadLetters: &adzunaDescriptions.DeadLetters, oldestAgeSeconds: adzunaDescriptions.OldestAgeSeconds},
-			// The only queue with a third state: a parked attempt needs new data, not
-			// another try, so it is neither depth nor a dead letter. See
-			// AutoApplyQueueMetrics for why folding it into either would misread it.
+			// The only queue with a third state: a parked attempt needs new data, not a retry,
+			// so it is neither depth nor a dead letter (see AutoApplyQueueMetrics).
 			{name: "auto_apply_queue", depth: autoApply.Depth, deadLetters: &autoApply.DeadLetters, blocked: &autoApply.Blocked, oldestAgeSeconds: autoApply.OldestAgeSeconds},
-			// No dead letters at all — the table carries neither attempts nor failed_at.
-			// A nil says so; a zero would claim a measurement nobody took.
+			// No dead letters: the table has neither attempts nor failed_at. Nil, not zero.
 			{name: "push_ticket_outbox", depth: pushTickets.Depth, oldestAgeSeconds: pushTickets.OldestAgeSeconds},
-			// Not an outbox by name, but the same thing by shape and by hazard: a queue
-			// one worker drains, whose given-up entries nothing ever claims again. A
-			// queue this worker does not measure has no signal at all — cmd/apple-revoke
-			// exits 0 either way, so the per-run family stays green through a backlog of
-			// identities stranded in revocation_pending.
+			// Not an outbox by name but the same by shape: cmd/apple-revoke exits 0 either way, so
+			// a backlog stranded in revocation_pending is invisible without this.
 			{name: "apple_revocation_jobs", depth: appleRevocations.Depth, deadLetters: &appleRevocations.DeadLetters, oldestAgeSeconds: appleRevocations.OldestAgeSeconds},
 		},
 		notifyDeliverable:   notifyDeliverable,
@@ -234,9 +219,8 @@ func countEmploymentBoilerplate(rows []db.EmploymentBoilerplateCandidatesRow) em
 	return employmentBoilerplate{counts: counts, sampleSize: int64(len(rows)), truncated: truncated}
 }
 
-// newestJobTime reports when the catalogue last gained an open posting, or the zero time
-// when it holds none. An empty catalogue answers with no row, which is a fresh-install
-// state rather than a failure — every other family still deserves to be published.
+// newestJobTime reports when the catalogue last gained an open posting, or the zero time when
+// it holds none (no row is a fresh install, not a failure).
 func newestJobTime(ctx context.Context, q metricsQueries) (time.Time, error) {
 	newest, err := q.NewestOpenJobCreatedAt(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {

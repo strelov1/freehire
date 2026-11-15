@@ -212,9 +212,8 @@ func runResolve(inputFile string) int {
 type seedEntry struct {
 	Board   string `json:"board"`
 	Company string `json:"company,omitempty"`
-	// ExpectID names a posting the board must carry for harvest-boards to keep it. It is set
-	// only on the offline-derived candidates, whose slug is a guess: the id is what turns that
-	// guess into something the platform's own API can confirm or refute.
+	// ExpectID names a posting the board must carry for harvest-boards to keep it. Set only on
+	// offline-derived candidates, whose slug is a guess the platform's API can confirm or refute.
 	ExpectID string `json:"expect_id,omitempty"`
 }
 

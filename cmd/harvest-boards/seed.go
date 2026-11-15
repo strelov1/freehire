@@ -6,15 +6,13 @@ import (
 	"os"
 )
 
-// seedItem is one candidate board from a seed file. A seed may be a plain JSON array of
-// board tokens (Company empty) or an array of {board, company} objects — the latter lets a
-// discovery source that already knows the employer (e.g. harvest-role, which reads it from
-// role.com's JSON-LD) supply a name for providers whose own API exposes none (Oracle).
+// seedItem is one candidate board from a seed file: a plain board token, or a {board, company}
+// object so a discovery source that knows the employer (e.g. harvest-role) can name it for providers
+// whose API exposes none (Oracle).
 //
-// ExpectID names a posting the board is expected to contain, in the platform's own id space.
-// A discovery source that read the id off a posting elsewhere (harvest-linkedin, harvest-role)
-// can supply it, and the probe then identifies the board by that evidence instead of by a
-// name resemblance — which is what makes a slug guessed offline safe to propose.
+// ExpectID names a posting the board is expected to contain, in the platform's id space. The probe
+// then identifies the board by that evidence instead of by name resemblance, which makes a slug
+// guessed offline safe to propose.
 type seedItem struct {
 	Board    string `json:"board"`
 	Company  string `json:"company"`
@@ -44,9 +42,8 @@ func loadSeedItems(path string) ([]seedItem, error) {
 }
 
 // chooseCompany picks the board entry's company label. A prober returns "" when the platform
-// publishes no employer name of its own (the contract every prober follows), so a non-empty
-// name is always the platform's own and wins; otherwise a seed-supplied company fills in, and
-// the board id is the last resort.
+// publishes no employer name, so a non-empty name is always the platform's and wins; then the seed's
+// company; the board id is the last resort.
 func chooseCompany(proberName, seedCompany, board string) string {
 	if proberName != "" {
 		return proberName

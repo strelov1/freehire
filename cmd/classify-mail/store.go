@@ -64,9 +64,8 @@ func (s *dbStore) ClaimBatch(ctx context.Context, leaseSeconds, batchSize int) (
 	return out, nil
 }
 
-// claimedFrom copies one claim row into the port's shape. It is a named function rather than a
-// literal inside the loop above so that store_test.go can hold it to taking every field: this
-// mapping silently dropped Source for five weeks, which stopped the whole queue.
+// claimedFrom copies one claim row into the port's shape. A named function so store_test.go
+// can hold it to copying every field.
 func claimedFrom(r db.ClaimEmailClassificationBatchRow) maillink.Claimed {
 	return maillink.Claimed{
 		OutboxID: r.ID,
@@ -138,10 +137,8 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		return fmt.Errorf("set classification: %w", err)
 	}
 	if r.AdvanceStageTo != "" {
-		// The move records a stage_set event beside the column, dated by the message's own
-		// received_at and attributed to the mailbox that carried it — the same provenance
-		// ReconcileMailEvent derives below, from the same field, through the same refusal
-		// for an unrecognised store.
+		// The move records a stage_set event dated by the message's received_at and attributed to
+		// the carrying mailbox, the same provenance ReconcileMailEvent derives below.
 		source, err := appevent.SourceForMail(r.MailSource)
 		if err != nil {
 			return fmt.Errorf("advance stage: %w", err)
@@ -156,10 +153,8 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 			return fmt.Errorf("advance stage: %w", err)
 		}
 	}
-	// Reconcile the ledger inside the same transaction that persisted the link, so an
-	// employer_reply event cannot exist for a classification that rolled back — nor be
-	// missing for one that committed. This is now literally the function the inbox's manual
-	// paths call, rather than a second copy of it asserting the rule has one home.
+	// Reconcile the ledger in the same transaction that persisted the link, so an employer_reply
+	// event cannot exist for a rolled-back classification or be missing for a committed one.
 	if err := inbox.ReconcileMailEvent(ctx, qtx, userID, r.EmailID, r.MailSource); err != nil {
 		return err
 	}
@@ -169,10 +164,8 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 	return tx.Commit(ctx)
 }
 
-// Fail records the attempt and reports whether the entry dead-lettered, which the statement
-// tells us by stamping failed_at — the same signal the enrichment and semantic queues return.
-// Which of the policy's two bounds decides that is the statement's own business; this only
-// carries the verdict across.
+// Fail records the attempt and reports whether the entry dead-lettered (the statement stamps
+// failed_at). Which of the policy's bounds decides is the statement's business.
 func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, policy maillink.FailurePolicy) (bool, error) {
 	row, err := s.q.FailEmailClassification(ctx, db.FailEmailClassificationParams{
 		LastError:         cause,

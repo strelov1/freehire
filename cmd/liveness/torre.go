@@ -12,33 +12,24 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// torre's crawl reads the whole sitemap, but its sweep is company-scoped (the sitemap still
-// names a few closed postings, so it is not fullCatalog — see the Torre traps in
-// internal/ingest/sources/AGENTS.md), so the last posting of a company that leaves the sitemap
-// stays open. This is that leak's evidence path.
+// torre's sweep is company-scoped (the sitemap still names some closed postings, so it is
+// not fullCatalog; see the Torre traps in internal/ingest/sources/AGENTS.md), so the last
+// posting of a company that leaves the sitemap stays open. This is that leak's evidence path.
 //
-// What it reads is the posting page's own state. Torre keeps serving a closed posting's page
-// with HTTP 200 and the full layout around it, so the status code says nothing; the page's
-// embedded state assigns the opportunity's status, `<v>.status="closed"` or `"open"`, right
-// after its prefilledStatus. Measured 2026-10-29 over 41 stale rows: 36 closed, 4 answering 404
-// (an unknown id redirects to /404, which answers 404) and 1 open; six rows the crawl still
-// lists all read open.
-//
-// Torre's own API (/api/suite/opportunities/<id>) carries the same status in a fraction of the
-// bytes, but robots.txt disallows /api/, and the adapter reads only what it allows.
+// It reads the posting page's own state: Torre serves a closed posting with HTTP 200, so the
+// status code says nothing, but the embedded state assigns `<v>.status="closed"` or `"open"`
+// right after prefilledStatus. The API carries the same status but robots.txt disallows /api/.
 
 // torrePostPage is a posting page by id; Torre redirects it to the slugged canonical URL.
 const torrePostPage = "https://torre.ai/post/%s"
 
 const (
-	// torreProbeInterval spaces torre probes. Two requests a second (a page and the API) drew
-	// 503s on half of them; one page every two seconds drew none in 41 (2026-10-29).
+	// torreProbeInterval spaces torre probes; faster than one page per two seconds drew 503s.
 	torreProbeInterval = 2 * time.Second
-	// torreMaxProbesPerRun bounds one run to ~20 minutes. ~250 torre postings were past the
-	// sweep window when this landed, so one run reaches all of them.
+	// torreMaxProbesPerRun bounds one run to ~20 minutes.
 	torreMaxProbesPerRun = 600
-	// torreReadLimit is how much of a page is read. The status sits 390-450 KB into pages of
-	// 450-700 KB, behind the inlined bundle.
+	// torreReadLimit is how much of a page is read; the status sits behind the inlined
+	// bundle, 390-450 KB in.
 	torreReadLimit = 1 << 20
 )
 

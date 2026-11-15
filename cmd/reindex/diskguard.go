@@ -7,23 +7,19 @@ import (
 )
 
 // guardDisk refuses a swap-rebuild when free space on dir is below minFreeGB (GiB).
-// A full rebuild transiently holds a second copy of the index, so on a tight disk it
-// fills the volume, aborts before the swap, and leaves an orphan rebuild index that
-// eats ~index-size until dropped by hand. Aborting up front trades a stale index (the
-// facet index stays fresh via incremental ingest anyway) for never risking a disk-full
-// outage. minFreeGB <= 0 disables the guard. The probe is injected so the threshold
-// logic is unit-tested without a real filesystem.
+// A full rebuild transiently holds a second copy of the index, so on a tight disk it can fill the volume
+// and leave an orphan rebuild index. Aborting up front trades a stale index (incremental ingest keeps it
+// fresh) for never risking a disk-full outage. minFreeGB <= 0 disables the guard. The probe is injected
+// so the threshold logic is testable without a real filesystem.
 func guardDisk(dir string, minFreeGB int, probe func(string) (uint64, error)) error {
 	if minFreeGB <= 0 {
 		return nil
 	}
 	free, err := probe(dir)
 	if err != nil {
-		// Fail open: the guard is a best-effort safety net, not a correctness gate. If the
-		// dir cannot be measured (e.g. it does not exist off the prod host, as in CI/dev),
-		// skip the guard rather than block reindex everywhere. A misconfigured MEILI_DATA_DIR
-		// on prod thus silently disables the guard, so log it loudly — the disk alert is the
-		// backstop.
+		// Fail open: the guard is a best-effort safety net. If the dir cannot be measured (e.g. off the prod
+		// host, as in CI/dev), skip it rather than block reindex. A misconfigured MEILI_DATA_DIR on prod thus
+		// disables the guard silently, so log loudly; the disk alert is the backstop.
 		log.Printf("reindex: disk-guard skipped — cannot measure free space on %s: %v", dir, err)
 		return nil
 	}
@@ -42,7 +38,6 @@ func statfsFree(dir string) (uint64, error) {
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return 0, err
 	}
-	// Bavail (not Bfree) is the space usable by non-root writers — what Meilisearch
-	// actually gets.
+	// Bavail (not Bfree) is the space usable by non-root writers, which is what Meilisearch gets.
 	return st.Bavail * uint64(st.Bsize), nil
 }

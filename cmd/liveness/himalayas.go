@@ -10,21 +10,10 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// himalayasSitemapIndexURL is himalayas.app's own index of what is currently live (see
-// its robots.txt: "Sitemap: https://himalayas.app/sitemap-jobs.xml.gz"). Unlike the job
-// page itself — which Cloudflare's bot management 403s on every plain GET, verified from
-// both a dev machine and prod — this endpoint answers with a normal 200, no challenge,
-// no proxy needed. himalayas pages its own ingest feed to a recency-limited slice (see
-// internal/ingest/sources/himalayas.go's himalayasMaxPages), which is what leaves an aged-out
-// company's posting unreachable by the ingest sweep in the first place; the sitemap
-// carries no such limit, so it is real evidence of what is still live rather than a
-// guess, at the cost of one run-wide fetch (a few MB) instead of one GET per candidate.
+// himalayasSitemapIndexURL is himalayas.app's own index of what is currently live. Unlike the job page, which Cloudflare's bot management 403s on every plain GET, it answers a normal 200. himalayas pages its own ingest feed to a recency-limited slice (see himalayasMaxPages in internal/ingest/sources/himalayas.go), which leaves an aged-out company's posting unreachable by the ingest sweep; the sitemap has no such limit, so it is real evidence at the cost of one run-wide fetch instead of one GET per candidate.
 const himalayasSitemapIndexURL = "https://himalayas.app/sitemap-jobs.xml.gz"
 
-// sitemapIndex is the top-level <sitemapindex> at himalayasSitemapIndexURL, listing the
-// per-shard sitemap files that together cover every currently live URL. The shard count
-// is sized to himalayas's catalogue (3 as of writing) and must be discovered from the
-// index rather than hardcoded, so catalogue growth needs no code change here.
+// sitemapIndex is the top-level <sitemapindex> at himalayasSitemapIndexURL, listing the per-shard sitemap files that cover every live URL. The shard count must be discovered from the index, not hardcoded.
 type sitemapIndex struct {
 	Sitemaps []struct {
 		Loc string `xml:"loc"`
@@ -39,11 +28,7 @@ type sitemapURLSet struct {
 	} `xml:"url"`
 }
 
-// fetchHimalayasLiveJobURLs downloads himalayas's sitemap and returns the set of URLs it
-// currently lists. Any failure — the index, or any one shard — discards whatever was
-// fetched and returns an error rather than a partial set: a partial set would make a
-// still-live job look absent and wrongly strike it, and under-closing is the only
-// acceptable failure mode here (see the rest of the liveness worker's own bias).
+// fetchHimalayasLiveJobURLs downloads himalayas's sitemap and returns the set of URLs it lists. Any failure discards what was fetched and returns an error rather than a partial set: a partial set would make a live job look absent and wrongly strike it, and under-closing is the only acceptable failure mode.
 func fetchHimalayasLiveJobURLs(ctx context.Context, client *http.Client) (map[string]struct{}, error) {
 	return fetchSitemapLiveURLs(ctx, client, himalayasSitemapIndexURL)
 }

@@ -6,13 +6,9 @@ import (
 )
 
 // phenomProber validates a Phenom career site (board = the site host) with one refineSearch
-// request at page size 1, whose totalHits is the site's open-posting count. The adapter
-// prober it replaces lists every page and then fetches each posting's detail — measured
-// 2026-10-21, more than 20 minutes for one board, so a 197-candidate harvest would have
-// taken over a day. The probe never reads a description, so it never needs the detail.
-//
-// The site exposes no employer name of its own in that response, so the seed's company
-// labels the board.
+// request at page size 1, whose totalHits is the site's open-posting count. The adapter prober
+// lists every page and fetches each posting's detail (minutes per board), which a count never
+// needs. The response exposes no employer name, so the seed's company labels the board.
 type phenomProber struct{}
 
 func (phenomProber) dedupKey(board string) string { return strings.ToLower(board) }

@@ -13,25 +13,21 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// velorahrProber validates a Velora HR career site (the board is its numeric id) the way
-// internal/ingest/sources/velorahr.go crawls it, which is unexported: the site's configuration
-// names the employer and answers 404 when there is no such site, and the site's listing is
-// counted for the offers it OWNS — a master site re-lists its child sites' offers, each naming
-// its owner, and the adapter leaves those to the owner's board.
+// velorahrProber validates a Velora HR career site (the board is its numeric id) the way the
+// unexported internal/ingest/sources/velorahr.go crawls it: the site's configuration names the
+// employer and answers 404 for no such site, and the listing is counted for the offers the site OWNS
+// (a master site re-lists its children's offers; the adapter leaves those to the owner's board).
 //
-// Two kinds of site are declined. The vendor's demo sites live on tenant hosts named "demo"
-// (demo-mango, demo-velora-antonio, velora-demo-tech, demo-clientes-ant, measured 2026-10-27)
-// and are dressed as prospects — one calls itself Inditex. And discovery keeps one site of a
-// twin: a tenant often publishes the same offers on two sites (Circet, Magic Costa Blanca, OCN),
-// and since the pipeline namespaces a posting by its board, two boards would store each offer
-// twice.
+// Two kinds of site are declined. The vendor's demo sites (tenant hosts named "demo") are dressed as
+// prospects, one calls itself Inditex. And of a twin pair discovery keeps one site: a tenant often
+// publishes the same offers on two sites, and since the pipeline namespaces a posting by its board,
+// two boards would store each offer twice.
 type velorahrProber struct{}
 
 const (
 	velorahrProbeAPI = "https://api.velorahr.com/api/public/career-site/"
 	// velorahrDiscoveryGap is how many consecutive ids without a site end the walk. Site ids are
-	// sparse — 2026-10-27, 1 and 5 exist, 2 and 37 do not, the highest was 345 — and the widest
-	// measured gap between two live sites is under 60.
+	// sparse; the widest gap between two live sites was under 60.
 	velorahrDiscoveryGap = 100
 )
 
@@ -68,9 +64,8 @@ func (velorahrProber) probe(ctx context.Context, c httpClient, board string) (st
 	return company, len(owned), nil
 }
 
-// discover walks the site ids from 1 until velorahrDiscoveryGap ids in a row have no site, and
-// proposes every live, non-demo site that owns an offer no other site owns — of two sites owning
-// the same offers, the lower id.
+// discover walks site ids from 1 until velorahrDiscoveryGap ids in a row have no site, proposing
+// every live, non-demo site that owns an offer no other site owns (of two twins, the lower id).
 func (velorahrProber) discover(ctx context.Context, c httpClient) ([]string, error) {
 	var ids []int
 	owned := map[int]map[int64]bool{}

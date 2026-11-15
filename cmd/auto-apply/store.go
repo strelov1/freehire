@@ -50,10 +50,8 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]autoapp
 			ExternalID: r.ExternalID,
 			JobURL:     r.URL,
 		}
-		// Never nil in practice — ClaimAutoApplyBatch's WHERE requires tailored_cv_id IS
-		// NOT NULL — but a claim with no tailored CV degrades to a zero-value id rather
-		// than panicking on a nil dereference, consistent with everything else here
-		// treating a surprising row as data, not a crash.
+		// Never nil in practice (ClaimAutoApplyBatch requires tailored_cv_id IS NOT NULL), but a
+		// missing id degrades to zero rather than a nil dereference.
 		if r.TailoredCvID != nil {
 			c.TailoredCVID = *r.TailoredCvID
 		}
@@ -62,19 +60,15 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]autoapp
 	return out, nil
 }
 
-// Submit records the application and retires the queue entry in ONE transaction — split
-// apart, the two halves fail in opposite bad ways: a recorded application with a live queue
-// entry gets reclaimed and the sidecar asked to submit again (the spec's "never twice"
-// requirement is what this transaction is FOR), and a retired entry with no application
-// recorded loses the fact that a real submission happened.
+// Submit records the application and retires the queue entry in ONE transaction. Split, a
+// recorded application with a live queue entry is reclaimed and submitted again (the "never
+// twice" requirement), and a retired entry with no application loses the fact that a
+// submission happened.
 //
-// LockJobForApply first, then MarkJobApplied, is the exact same locked-transaction shape
-// jobtracking.QueriesRepository.MarkApplied already runs for a candidate's own manual apply
-// — reused directly rather than re-derived, so the applied_count/ledger guarantee is the one
-// guarantee, not a second implementation of it. EventSource is appevent.SourceAutoApply, not
-// the shared SourceSystem: internal/engage/nudge's MATCH scan for a successful auto-apply
-// submission needs this to be a stated, queryable fact rather than an accident of SourceSystem
-// happening to pair only with KindApplied here today.
+// LockJobForApply then MarkJobApplied is the same locked shape as
+// jobtracking.QueriesRepository.MarkApplied, reused so the applied_count/ledger guarantee has
+// one implementation. EventSource is appevent.SourceAutoApply, not SourceSystem, so
+// internal/engage/nudge can query a successful auto-apply submission as a stated fact.
 func (s *dbStore) Submit(ctx context.Context, c autoapply.Claimed) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -131,10 +125,9 @@ func (s *dbStore) DeadLetterUncertain(ctx context.Context, queueID int64, reason
 }
 
 // FailCaptcha is Fail's counterpart for the one refusal safe to retry, on captcha_attempts
-// rather than Fail's attempts (migration 0157). It shares failed_at: running out of asks is
-// still the entry giving up, and the candidate is told the same way. Separating the counter
-// is what stops the captcha's generous budget from spending down the one a genuinely
-// transient error depends on — the same trap FailPreview below already documents.
+// rather than attempts. It shares failed_at: running out of asks is still the entry giving up.
+// The separate counter stops the captcha's generous budget from spending down the one a
+// transient error depends on.
 func (s *dbStore) FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
 	row, err := s.q.RecordAutoApplyCaptchaRefusal(ctx, db.RecordAutoApplyCaptchaRefusalParams{
 		ID:          queueID,
@@ -147,10 +140,9 @@ func (s *dbStore) FailCaptcha(ctx context.Context, queueID int64, errMsg string,
 	return row.FailedAt.Valid, nil
 }
 
-// FailPreview is Fail's own counterpart for the preview pass, on preview_attempts/
-// preview_failed_at rather than Fail's attempts/failed_at (migration 0140) — a code review
-// caught the two passes sharing one budget, which let a transient preview error dead-letter
-// a row before a submission was ever attempted.
+// FailPreview is Fail's counterpart for the preview pass, on
+// preview_attempts/preview_failed_at, so a transient preview error cannot dead-letter a row
+// before a submission was attempted.
 func (s *dbStore) FailPreview(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (bool, error) {
 	row, err := s.q.RecordAutoApplyPreviewFailure(ctx, db.RecordAutoApplyPreviewFailureParams{
 		ID:          queueID,
@@ -181,8 +173,7 @@ func (s *dbStore) ClaimForPreview(ctx context.Context, batch, leaseSeconds int) 
 			ExternalID: r.ExternalID,
 			JobURL:     r.URL,
 		}
-		// Never nil in practice — ClaimAutoApplyPreviewBatch's WHERE requires
-		// tailored_cv_id IS NOT NULL, mirroring Claim's own comment above.
+		// Never nil in practice, as in Claim.
 		if r.TailoredCvID != nil {
 			c.TailoredCVID = *r.TailoredCvID
 		}
@@ -191,11 +182,10 @@ func (s *dbStore) ClaimForPreview(ctx context.Context, batch, leaseSeconds int) 
 	return out, nil
 }
 
-// SetPreview persists the resolved answer preview and, on the write that first sets one
-// (pgx.ErrNoRows means a stale/retried pass lost the race to an already-decided entry —
-// see SetAutoApplyResolvedPreview's own guard), records the notification that used to fire
-// at tailor-completion (openspec/changes/auto-apply-review-tracking moves it here: a
-// candidate notified before there is anything to review would land on an empty screen).
+// SetPreview persists the resolved answer preview and, on the write that first sets one,
+// records the ready-for-review notification (sent here, not at tailor-completion, so the
+// candidate never lands on an empty screen). pgx.ErrNoRows means a stale or retried pass lost
+// the race to an already-decided entry; see SetAutoApplyResolvedPreview's guard.
 func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapply.ResolvedPreview) error {
 	payload, err := json.Marshal(preview)
 	if err != nil {
@@ -217,8 +207,7 @@ func (s *dbStore) SetPreview(ctx context.Context, queueID int64, preview autoapp
 		Body:       fmt.Sprintf("We tailored your CV for %s at %s — take a look before it goes out.", row.Title, row.Company),
 		PublicSlug: pgtype.Text{String: row.PublicSlug, Valid: true},
 	}); err != nil {
-		// Best-effort, the same convention every other engine's RecordNotification call
-		// already follows — a failure here must never fail the preview write it accompanies.
+		// Best-effort: a failure here must never fail the preview write.
 		log.Printf("auto-apply: recording ready-for-review notification for queue entry %d: %v", queueID, err)
 	}
 	return nil

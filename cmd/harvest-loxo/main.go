@@ -1,13 +1,10 @@
-// Command harvest-loxo curates Loxo agency boards from an operator-supplied footprint.
-// Loxo exposes no public directory of agencies, so the operator gathers footprint URLs
-// (careers pages and /job/<base64> links, e.g. from a `site:app.loxo.co` search) and pipes
-// them in; this tool extracts each board's (host, slug), live-validates it via the loxo
-// adapter, and counts how many postings classify as tech.
+// Command harvest-loxo curates Loxo agency boards from an operator-supplied footprint. Loxo has no
+// public agency directory, so the operator gathers footprint URLs (careers pages and /job/<base64>
+// links, e.g. from a `site:app.loxo.co` search) and pipes them in; this tool extracts each board's
+// (host, slug), live-validates it via the loxo adapter, and counts postings that classify as tech.
 //
-// It reports by default and writes only under --apply, the same convention as
-// cmd/add-board: the per-board job and tech counts are printed for review before
-// anything is persisted. A kept board enters the catalog at status='pending' (all
-// hub: true — a Loxo board is an agency's, not one employer's).
+// It reports by default and writes only under --apply, like cmd/add-board. A kept board enters at
+// status='pending' with hub: true (a Loxo board is an agency's, not one employer's).
 //
 //	go run ./cmd/harvest-loxo < footprint-urls.txt
 //	go run ./cmd/harvest-loxo footprint-urls.txt
@@ -105,9 +102,8 @@ func run() int {
 	return addBoards(ctx, repo, kept)
 }
 
-// addBoards persists the validated boards at status='pending'. A duplicate is counted,
-// not an error: a board another run landed first is the unique index doing its job, and
-// the run should still add the rest.
+// addBoards persists the validated boards at status='pending'. A duplicate is counted, not an error:
+// another run landing the board first is the unique index doing its job.
 func addBoards(ctx context.Context, repo boardcatalog.Repository, kept []result) int {
 	ins := boardcatalog.NewInserter(repo, sources.All(sources.NewClient()))
 	added, duplicate := 0, 0
@@ -127,8 +123,7 @@ func addBoards(ctx context.Context, repo boardcatalog.Repository, kept []result)
 			log.Printf("harvest-loxo: add %s: %v", board, err)
 			return 1
 		case b.Status == boardcatalog.StatusRejected:
-			// Validation refused a board the loxo adapter just crawled successfully:
-			// that is a bug here, not a bad candidate.
+			// Validation refused a board the adapter just crawled: a bug, not a bad candidate.
 			log.Printf("harvest-loxo: %s rejected by validation: %s", board, b.RejectedReason)
 			return 1
 		default:
@@ -159,8 +154,7 @@ func readLines(args []string) ([]string, error) {
 	return lines, sc.Err()
 }
 
-// extractCandidates parses footprint URLs into a distinct, order-preserving careers-board
-// candidate set.
+// extractCandidates parses footprint URLs into a distinct, order-preserving candidate set.
 func extractCandidates(lines []string) []candidate {
 	var out []candidate
 	seen := map[string]bool{}
@@ -179,9 +173,8 @@ func extractCandidates(lines []string) []candidate {
 	return out
 }
 
-// candidateFromURL turns a Loxo footprint URL into a careers-board (host, slug), ok=false
-// for job-detail, auth, and non-Loxo URLs. A careers page is a single non-reserved path
-// segment; a /job/<base64> URL has two segments and carries no slug.
+// candidateFromURL turns a footprint URL into a careers-board (host, slug), ok=false for job-detail,
+// auth and non-Loxo URLs. A careers page is one non-reserved path segment; /job/<base64> has two.
 func candidateFromURL(raw string) (candidate, bool) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || !isLoxoHost(u.Host) {
@@ -229,8 +222,8 @@ func probeAll(ctx context.Context, client sources.HTTPClient, adapter sources.So
 	return kept
 }
 
-// probe live-validates one board: the loxo adapter must return at least one posting. It
-// counts tech postings by title and reads the agency's display name from the listing title.
+// probe live-validates one board: the adapter must return ≥1 posting. Tech postings are counted by
+// title and the agency name comes from the listing title.
 func probe(ctx context.Context, client sources.HTTPClient, adapter sources.Source, c candidate) (result, bool) {
 	jobs, err := adapter.Fetch(ctx, sources.CompanyEntry{
 		Board: c.host + "/" + c.slug, Company: c.slug, Hub: true, Provider: "loxo",
@@ -268,8 +261,7 @@ func agencyName(listingHTML string) string {
 	return ""
 }
 
-// isTechCategory reports whether a classified title category counts as tech: a resolved
-// category that is not one of the confidently non-tech ones.
+// isTechCategory reports whether a resolved category is not one of the confidently non-tech ones.
 func isTechCategory(category string) bool {
 	if category == "" {
 		return false
@@ -282,8 +274,7 @@ func isTechCategory(category string) bool {
 	return true
 }
 
-// loadExistingBoards returns the set of "host/slug" boards already live in the catalog,
-// so the run never re-probes or re-proposes a known board.
+// loadExistingBoards returns the "host/slug" boards already live, so the run never re-probes them.
 func loadExistingBoards(ctx context.Context, repo boardcatalog.Repository) (map[string]bool, error) {
 	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 	if err != nil {

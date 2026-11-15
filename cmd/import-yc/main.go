@@ -1,15 +1,12 @@
-// Command import-yc is a run-once host worker that enriches companies from the
-// yc-oss directory (yc-oss.github.io/api/companies/all.json — the same source the
-// yc collection tag uses, but here we read the full record). Each entry is mapped
-// (internal/job/ycdir) and upserted by normalized-name slug: an existing company has
-// its YC-owned columns and the curated yc_batch/yc_status facets refreshed, and an
-// unmatched entry is inserted as a reference row (is_reference=true) so we hold the
-// full YC directory. Idempotent.
+// Command import-yc is a run-once host worker that enriches companies from the yc-oss
+// directory (yc-oss.github.io/api/companies/all.json). Each entry is mapped
+// (internal/job/ycdir) and upserted by normalized-name slug: an existing company has its
+// YC-owned columns and the yc_batch/yc_status facets refreshed, and an unmatched entry is
+// inserted as a reference row (is_reference=true). Idempotent.
 //
-// Three columns this worker writes are shared with other sources and are therefore
-// merged, not replaced — tagline fills only a blank, company_info merges key-wise,
-// and industries union. Industries also pass through internal/dict/industrytag, so the
-// directory cannot add a second spelling of an industry we already name.
+// Three columns are shared with other sources and so merged, not replaced: tagline fills
+// only a blank, company_info merges key-wise, and industries union (through
+// internal/dict/industrytag, so the directory adds no second spelling).
 //
 //	import-yc            # needs DATABASE_URL; YC_DATASET_URL overrides the source
 package main
@@ -115,9 +112,7 @@ type loadStats struct{ matched, inserted, collisions, skipped int }
 // reference vs skipped-collision (a matched company that dwarfs the YC entry — a
 // homonym) vs skipped blank names.
 func load(ctx context.Context, s store, entries []ycdir.Entry) (loadStats, error) {
-	// Load the existing slug set once — a plain SELECT, not one CompanyExists
-	// round trip per (entry × current-plus-former-slug candidate) — the yc-oss
-	// dataset runs several thousand entries deep.
+	// Load the existing slug set once rather than one CompanyExists round trip per candidate.
 	slugs, err := s.ListCompanySlugs(ctx)
 	if err != nil {
 		return loadStats{}, err
@@ -134,13 +129,11 @@ func load(ctx context.Context, s store, entries []ycdir.Entry) (loadStats, error
 			stats.skipped++
 			continue
 		}
-		// Resolve to an existing company by current-name slug or any former-name
-		// slug (first match wins); otherwise insert under the current-name slug.
+		// Match by current-name slug or any former-name slug (first wins); else insert.
 		target, matched := resolveTarget(existing, rec)
 		if matched {
-			// Homonym guard: a well-known non-YC company can share a normalized name
-			// with a small YC startup. If the matched company holds far more open jobs
-			// than the YC entry has employees, it is not the same entity — skip it.
+			// Homonym guard: a big non-YC company can share a normalized name with a small
+			// YC startup; far more open jobs than the entry has employees means skip.
 			jobCount, err := s.CompanyJobCountBySlug(ctx, target)
 			if err != nil {
 				return stats, err
@@ -164,10 +157,9 @@ func load(ctx context.Context, s store, entries []ycdir.Entry) (loadStats, error
 	return stats, nil
 }
 
-// isCollision reports whether an existing company with jobCount open jobs is too big
-// to be the matched YC startup of teamSize employees (a homonym): it holds more open
-// jobs than the startup has people, above a small floor. A zero/unknown team size is
-// never a collision (no signal to disambiguate).
+// isCollision reports whether a company with jobCount open jobs is too big to be the YC
+// startup of teamSize employees (a homonym): more open jobs than people, above a small
+// floor. An unknown team size is never a collision.
 func isCollision(jobCount, teamSize int) bool {
 	return teamSize > 0 && jobCount >= collisionJobFloor && jobCount > teamSize
 }
@@ -198,9 +190,7 @@ func recordToParams(r ycdir.Record) db.UpsertYCCompanyParams {
 	return db.UpsertYCCompanyParams{
 		Slug: r.Slug,
 		Name: r.Name,
-		// Through the dictionary, so the directory cannot introduce a second
-		// spelling of an industry the vocabulary already names. Canonicalize
-		// returns a non-nil slice, so nonNil is not needed here.
+		// Canonicalize returns a non-nil slice, so nonNil is not needed here.
 		Industries:    industrytag.Canonicalize(r.Industries),
 		Subindustry:   text(r.Subindustry),
 		YearFounded:   int4(r.YearFounded),

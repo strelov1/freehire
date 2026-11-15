@@ -33,16 +33,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// pageSize is the keyset page for both walks. Large enough that 380k companies do
-// not cost 380k round trips, small enough that one page's rows stay cheap to hold.
+// pageSize is the keyset page for both walks.
 const pageSize = 1000
 
-// maxLineBytes bounds one dump record. A company's market list is a few hundred
-// bytes; a megabyte means the file is not what we think it is.
+// maxLineBytes bounds one dump record; a megabyte means the file is not the expected dump.
 const maxLineBytes = 1 << 20
 
-// droppedReportLimit is how many unrecognized labels the run prints. The tail is a
-// long list of one-off labels; the head is what a dictionary edit should act on.
+// droppedReportLimit is how many unrecognized labels the run prints; the tail is one-offs.
 const droppedReportLimit = 30
 
 type record struct {
@@ -102,8 +99,7 @@ func readSource(path string) (map[string][]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Read-only, so a close error carries nothing a caller could act on — but it is
-	// discarded explicitly rather than left for errcheck to flag.
+	// Read-only, so a close error is not actionable; discarded explicitly for errcheck.
 	defer func() { _ = f.Close() }()
 	return parseSource(f)
 }
@@ -137,9 +133,8 @@ func parseSource(r io.Reader) (map[string][]string, error) {
 	return out, sc.Err()
 }
 
-// normalizeStored walks every company and rewrites its industries through the
-// dictionary, tallying the labels the dictionary did not recognize. Without that
-// tally a dict-only rule is indistinguishable from silent data loss.
+// normalizeStored walks every company and rewrites its industries through the dictionary,
+// tallying unrecognized labels so a dict-only drop is not silent data loss.
 func normalizeStored(ctx context.Context, s store) (int, map[string]int, error) {
 	dropped := map[string]int{}
 	after, changed := "", 0
@@ -216,8 +211,7 @@ func mergeSource(ctx context.Context, s store, byKey map[string][]string) (int, 
 	}
 }
 
-// reportDropped prints what the dictionary failed to recognize, most frequent
-// first, so the next dictionary edit is driven by volume rather than by guesswork.
+// reportDropped prints the unrecognized labels, most frequent first.
 func reportDropped(dropped map[string]int) {
 	if len(dropped) == 0 {
 		return
@@ -246,8 +240,7 @@ func reportDropped(dropped map[string]int) {
 	}
 }
 
-// cmpString breaks ties by label so the report is stable between runs over the same
-// data — a report that reshuffles is one nobody diffs.
+// cmpString breaks ties by label so the report is stable between runs.
 func cmpString(a, b string) int {
 	switch {
 	case a < b:

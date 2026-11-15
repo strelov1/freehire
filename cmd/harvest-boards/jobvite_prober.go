@@ -6,10 +6,9 @@ import (
 	"regexp"
 )
 
-// jobviteJobLinkPattern matches a Jobvite job permalink's /<board>/job/<code> segment. The
-// /<board>/jobs listing and /<board>/jobAlerts nav links carry no /job/<code> segment and are
-// not counted. Mirrors sources.jobviteJobIDPattern (unexported; this tool lives outside the
-// package).
+// jobviteJobLinkPattern matches a Jobvite job permalink's /<board>/job/<code> segment; the
+// /<board>/jobs listing and /<board>/jobAlerts nav links carry none and are not counted. Mirrors
+// sources.jobviteJobIDPattern (unexported).
 var jobviteJobLinkPattern = regexp.MustCompile(`/job/[A-Za-z0-9]+(?:[/?#]|$)`)
 
 // jobviteProber probes a Jobvite careersite. Jobvite exposes no public JSON list, so liveness

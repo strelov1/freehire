@@ -12,12 +12,10 @@ import (
 )
 
 // easycruitProber validates a Visma EasyCruit career site (the <board> of lentis.easycruit.com)
-// by reading the list export the adapter reads, /export/xml/vacancy/list.xml, and counting its
-// vacancies. It mirrors internal/ingest/sources/easycruit.go, which is unexported.
-//
-// The export names no site title; the employer is read from the first vacancy's department (the
-// customer's own unit name), so a site with no openings is reported without one. An unknown
-// label answers 404: a skip.
+// by counting the vacancies in /export/xml/vacancy/list.xml, which the adapter reads. It mirrors
+// internal/ingest/sources/easycruit.go, which is unexported. The export names no site title, so
+// the employer is the first vacancy's department; a site with no openings is reported without
+// one. An unknown label answers 404: a skip.
 type easycruitProber struct{}
 
 var easycruitBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

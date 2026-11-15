@@ -1,6 +1,6 @@
 // Command report-company-website-twins is a hand-run, read-only report of merge candidates:
-// companies with open jobs that state the same website host under different slugs
-// (freehire#3895). It writes nothing and is on no timer. A person reads the list and proposes
+// companies with open jobs that state the same website host under different slugs.
+// It writes nothing and is on no timer. A person reads the list and proposes
 // the merges from the company page, where a moderator decides them
 // (internal/job/companyrelation).
 //

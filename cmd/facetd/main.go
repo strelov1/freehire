@@ -1,8 +1,7 @@
 // Command facetd is the in-memory facet engine that answers facet counts, totals and
-// distinct counts beside Meilisearch (openspec/changes/facetd). Unlike the run-once
-// workers it is long-lived (Restart=always), serves HTTP on localhost, and needs no
-// DATABASE_URL: it is fed by search-drain (/write) and by `reindex -facetd-only` or
-// FACETD_URL (/rebuild/*).
+// distinct counts beside Meilisearch. Unlike the run-once workers it is long-lived
+// (Restart=always), serves HTTP on localhost, and needs no DATABASE_URL: it is fed by
+// search-drain (/write) and by `reindex -facetd-only` or FACETD_URL (/rebuild/*).
 //
 // Env: FACETD_ADDR (default 127.0.0.1:8095), FACETD_SNAPSHOT_PATH (empty disables
 // snapshots), FACETD_SNAPSHOT_INTERVAL (default 5m), FACETD_WAL_PATH (default

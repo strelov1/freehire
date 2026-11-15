@@ -23,15 +23,12 @@ import (
 
 // A Pandapé board is a career-site tenant label (<tenant>.<domain>), the key sources.pandape
 // lists by. Each deployment is its own provider with its own tenant namespace: InfoJobs Brasil's
-// (pandape, <tenant>.pandape.infojobs.com.br) and Computrabajo's Latin-American one
-// (pandapelatam, <tenant>.pandape.computrabajo.com).
+// (pandape) and Computrabajo's Latin-American one (pandapelatam).
 const (
-	// pandapeSitemapIndex is the sitemap robots.txt names: a gzip index of gzip shards, each
-	// up to 1,000 vacancy URLs (115 shards, ~113.6k URLs, 3,347 tenant labels on 2026-10-23).
-	// It is the only public list that spans tenants. It is NOT the catalogue — a tenant's
-	// own listing carries more than its sitemap entries (braspress: 54 against 20) — so it
-	// serves discovery only. It names Brazilian tenants only: the Latin-American domain's
-	// robots.txt points at this same file.
+	// pandapeSitemapIndex is the sitemap robots.txt names: a gzip index of gzip shards of vacancy
+	// URLs. It is the only public list that spans tenants, but NOT the catalogue (a tenant's own
+	// listing carries more than its sitemap entries), so it serves discovery only. It names
+	// Brazilian tenants only: the Latin-American robots.txt points at this same file.
 	pandapeSitemapIndex = "https://www.pandape.com.br/pandapeindexofertas.xml.gz"
 	// pandapeLatamCrawlPattern is the Common Crawl query for the Latin-American domain, which
 	// publishes no sitemap of its own: every tenant subdomain, no path glob.
@@ -72,17 +69,15 @@ var pandapeTitle = regexp.MustCompile(`^(.+?) - (?:Trabalhe Conosco|Trabaja con 
 
 // probe reads the career site's vacancy list page (/Vacancies): the employer from its title and
 // the open-vacancy count from its "subTotal" counter. The list page, not the home page: a
-// tenant on the platform's richer home template renders its vacancies only behind a link, and
-// its home carries no counter (avos-tech: none on /, 1,241 on /Vacancies). An unknown tenant
-// answers 404 ("A Página de Carreiras desta empresa não está mais disponível no Pandapé") and a
-// site with no vacancy counts 0; both are a skip. Any other failure is returned, so probeAll
-// counts it. A tenant stating more vacancies than the pager can list is logged and skipped.
+// tenant on the richer home template renders vacancies only behind a link and carries no
+// counter. An unknown tenant answers 404 and a site with no vacancy counts 0; both are a skip.
+// Any other failure is returned, so probeAll counts it. A tenant stating more vacancies than
+// the pager can list is logged and skipped.
 func (p pandapeProber) probe(ctx context.Context, c httpClient, tenant string) (string, int, error) {
 	root, err := c.GetHTML(ctx, "https://"+tenant+"."+p.host+"/Vacancies")
 	if err != nil {
-		// Only the platform's 404 says the tenant is gone. Anything else — the burst 403
-		// above all — is a probe that did not happen, and is surfaced as a failure rather
-		// than counted as an absent board.
+		// Only the platform's 404 says the tenant is gone. Anything else (the burst 403 above all) is
+		// a probe that did not happen, surfaced as a failure rather than counted as an absent board.
 		var se *sources.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusNotFound {
 			return "", 0, nil

@@ -11,8 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// dbStore adapts the generated queries + pool to applyform.Store. It is the only place the
-// runner's domain operations meet the DB layer.
+// dbStore adapts the generated queries + pool to applyform.Store.
 type dbStore struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
@@ -46,10 +45,9 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int, skip []str
 	return out, nil
 }
 
-// Save stores the form and retires the queue entry in ONE transaction. Split apart, the
-// two halves fail in opposite bad ways: a stored form with a live entry is re-fetched
-// forever (the enqueue gate would never open again, but the claim keeps coming back), and
-// a retired entry without a stored form loses the capture with nothing left to re-queue it.
+// Save stores the form and retires the queue entry in ONE transaction. Split, a stored form
+// with a live entry is re-fetched forever, and a retired entry without a stored form loses the
+// capture with nothing left to re-queue it.
 func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, form applyform.Form) error {
 	payload, err := json.Marshal(form)
 	if err != nil {
@@ -77,8 +75,8 @@ func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, form applyfor
 	return tx.Commit(ctx)
 }
 
-// Discard retires a capture whose posting the platform no longer has. No form is stored:
-// there is nothing to store, and the posting itself will be closed by the unseen sweep.
+// Discard retires a capture whose posting the platform no longer has; the unseen sweep closes
+// the posting itself.
 func (s *dbStore) Discard(ctx context.Context, outboxID int64) error {
 	return s.q.DeleteApplyFormEntry(ctx, outboxID)
 }

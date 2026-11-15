@@ -10,20 +10,16 @@ import (
 )
 
 // oracleProber validates an Oracle Recruiting Cloud board "<host>/<site>" by listing one
-// requisition from its public candidate-experience API. Oracle exposes no employer name
-// (the host is an opaque tenant code), so it returns an empty name and leans on the
-// seed-supplied company; see internal/ingest/sources/oracle.go for the board-id shape.
+// requisition from its public candidate-experience API. Oracle exposes no employer name (the
+// host is an opaque tenant code), so it returns an empty name and leans on the seed's company;
+// see internal/ingest/sources/oracle.go for the board-id shape.
 type oracleProber struct{}
 
-// dedupKey folds an Oracle board's site segment to lower case. Oracle answers a requisition
-// listing for any spelling of the site — CX_2001, cx_2001 and Cx_2001 all return the same 51
-// jobs on tenant eetz.fa.us6 (checked live) — so two spellings are one board, and a candidate
-// derived from a job URL carries whatever case that URL happened to use. Without folding it is
-// filed beside the board we already crawl, which is the same defect Paycom's hex keys had.
-//
-// The HOST half is folded too: DNS is case-insensitive, so it cannot distinguish boards either.
-// This does not collapse a tenant's several real sites (CX, CX_1, CX_2001 are different names,
-// not different spellings) — only the case of one name.
+// dedupKey folds an Oracle board's site segment to lower case. Oracle answers a listing for any
+// spelling of the site (CX_2001, cx_2001 and Cx_2001 return the same jobs), so a candidate
+// derived from a job URL would otherwise be filed beside the board we already crawl. The HOST
+// half is folded too, since DNS is case-insensitive. This does not collapse a tenant's several
+// real sites (CX, CX_1, CX_2001), only the case of one name.
 func (oracleProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 func (oracleProber) probe(ctx context.Context, c httpClient, boardID string) (string, int, error) {
@@ -56,11 +52,10 @@ func (oracleProber) probe(ctx context.Context, c httpClient, boardID string) (st
 	return "", n, nil
 }
 
-// jazzhrProber validates a JazzHR board "<slug>" by counting the postings linked from its
-// single /apply listing page ("<slug>.applytojob.com/apply"). JazzHR's listing exposes no
-// employer name, but the page titles itself "<Company> - Career Page", so the prober reads
-// the employer there and the board can be gated against the name the seed expected rather
-// than accepted on liveness alone.
+// jazzhrProber validates a JazzHR board "<slug>" by counting the postings linked from its single
+// /apply listing page ("<slug>.applytojob.com/apply"). The listing exposes no employer name,
+// but the page titles itself "<Company> - Career Page", so the board can be gated against the
+// name the seed expected rather than accepted on liveness alone.
 type jazzhrProber struct{}
 
 // jazzhrApplyHref captures a posting's token from a JazzHR job link (/apply/<token>/<slug>),
@@ -95,10 +90,9 @@ func (jazzhrProber) probe(ctx context.Context, c httpClient, slug string) (strin
 	return jazzhrEmployer(pageTitle(root)), len(tokens), nil
 }
 
-// jazzhrEmployer pulls the employer out of a JazzHR career-page title, which renders as
-// "<Company> - Career Page". A title without that suffix names nobody in particular, so it
-// yields "" and the board falls back to the seed's label rather than being gated against a
-// generic word.
+// jazzhrEmployer pulls the employer out of a JazzHR career-page title, "<Company> - Career
+// Page". A title without that suffix yields "", so the board falls back to the seed's label
+// rather than being gated against a generic word.
 func jazzhrEmployer(title string) string {
 	name, ok := strings.CutSuffix(strings.TrimSpace(title), " - Career Page")
 	if !ok {

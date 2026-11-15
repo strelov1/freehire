@@ -17,19 +17,15 @@ import (
 // the job board page "<slug>.hireclick.com/jobboard/jobboard.aspx" carries the tenant's
 // organisation GUID in #hdnOrgGuid, and "/api/Controllers/JobBoard/GetSettingsAndJobs?orgGUID="
 // answers the whole list as a JSON string holding the JSON document.
-//
-// It is two requests rather than one, and still worth writing: the adapter fallback would run a
-// whole crawl, and every HireClick posting page weighs 1-3 MB (the tenant logo inlined as
-// base64), so a probe through it costs a board's postings times that. A subdomain no tenant owns
-// lands on a maintenance page with no GUID, which reads as a dead board.
-//
+// Two requests are still cheaper than the adapter fallback: a whole crawl, with every posting
+// page weighing 1-3 MB (tenant logo inlined as base64). A subdomain no tenant owns lands on a
+// maintenance page with no GUID, which reads as a dead board.
 // It reads over its OWN long-timeout client, not the harvest's: the board page is served
-// uncompressed at ~80-160 KB/s and measured 13-40s, past the standard 15s timeout, and a probe
-// that timed out would report a live board as dead. The cost is the one adapterProber's doc
-// comment names: these requests fall outside the run's paced, counting client. The registry
-// entry builds it with the client set; a zero value has none.
-//
-// It reports no company name: the list carries none, and the seed's name labels the board.
+// uncompressed and slowly (13-40s), past the standard 15s timeout, and a timeout would report a
+// live board as dead. These requests fall outside the run's paced, counting client (see
+// adapterProber's doc comment). The registry entry builds it with the client set; a zero value
+// has none. It reports no company name: the list carries none, and the seed's name labels the
+// board.
 type hireclickProber struct {
 	client interface {
 		sources.HTMLGetter

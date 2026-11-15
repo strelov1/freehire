@@ -8,8 +8,7 @@
 //
 // Telegram and email register only when their credential is configured
 // (TELEGRAM_BOT_TOKEN, or AWS_REGION+NOTIFY_EMAIL_FROM); push registers
-// unconditionally, since Expo's relay needs no server-held credential (see
-// add-push-notification-channel design decision #6). A reminder whose channel is
+// unconditionally, since Expo's relay needs no server-held credential. A reminder whose channel is
 // not configured, or whose recipient has no usable destination on that channel
 // (unlinked Telegram, no registered push device), is soft-skipped and retried next
 // pass, so one channel's absence never blocks another.
@@ -43,9 +42,8 @@ func run() int {
 
 	queries := db.New(pool)
 
-	// Register every configured delivery channel; the Router dispatches each
-	// reminder to its channel and soft-skips one that is not configured. Channel
-	// names are shared with subscriptions via the notify vocabulary.
+	// Register every configured delivery channel; the Router soft-skips a reminder whose channel is not
+	// configured. Channel names are shared with subscriptions via the notify vocabulary.
 	router := reminder.Router{}
 	if cfg.TelegramBotToken != "" {
 		router[notify.ChannelTelegram] = reminder.NewTelegramNotifier(telegramnotify.NewClient(cfg.TelegramBotToken), cfg.FrontendOrigin)
@@ -55,9 +53,8 @@ func run() int {
 		// pending with no attempt counted, and the other channels still deliver.
 		log.Printf("remind: email channel held by a mail pause key, skipping it this run")
 	} else if cfg.AWSRegion != "" && cfg.NotifyEmailFrom != "" {
-		// A failure to build the SES client disables only the email channel — email
-		// reminders soft-skip and retry next pass while any other configured channel
-		// still delivers this run (channels are independent).
+		// A failure to build the SES client disables only the email channel: its reminders soft-skip and
+		// retry next pass while other channels still deliver.
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("remind: email channel disabled: %v", err)
 		} else {
@@ -65,9 +62,8 @@ func run() int {
 			router[notify.ChannelEmail] = reminder.NewEmailNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}
-	// Push needs no server-held credential (Expo's relay holds the APNs/FCM
-	// credential), so it registers unconditionally — no "feature globally off"
-	// state to represent for it.
+	// Push needs no server-held credential (Expo's relay holds the APNs/FCM credential), so it
+	// registers unconditionally.
 	pushStore := pushnotify.NewQueriesStore(queries)
 	router[notify.ChannelPush] = reminder.NewPushNotifier(queries, pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore))
 

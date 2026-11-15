@@ -38,11 +38,10 @@ func main() {
 		log.Fatalf("mail-preview: %v", err)
 	}
 
-	// Three files per mail: the one that gets sent (which follows the reader's
-	// preference) plus a pinned copy per scheme, which is what the contact sheet's
-	// light/dark toggle switches between. Swapping a file is the only way to force a
-	// scheme inside a frame — a page cannot override what the OS reports, and reading
-	// a sibling file to rewrite it is blocked when the sheet is opened off disk.
+	// Three files per mail: the sent one (follows the reader's preference) plus a pinned
+	// copy per scheme for the contact sheet's light/dark toggle. Swapping files is the only
+	// way to force a scheme in a frame: a page can't override the OS, and rewriting a
+	// sibling file is blocked when the sheet is opened off disk.
 	for _, s := range samples {
 		for suffix, body := range map[string]string{
 			".html":       s.HTML,

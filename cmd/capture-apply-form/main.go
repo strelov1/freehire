@@ -3,10 +3,9 @@
 // exits. Run it on a schedule (e.g. cron); it drains what is queued and stops.
 //
 // It is the second half of a deliberate split. Recruitee's form arrives inside the board
-// listing ingest already downloads and is written during the crawl; Greenhouse and Ashby
-// expose theirs only per posting, and fetching that mid-crawl would turn one board request
-// into hundreds while the adapter still could not tell which postings are new — that
-// answer exists only after the upsert resolves. So the crawl enqueues and this drains.
+// listing ingest already downloads; Greenhouse and Ashby expose theirs only per posting, and
+// fetching that mid-crawl would turn one board request into hundreds before the adapter can
+// tell which postings are new. So the crawl enqueues and this drains.
 //
 // It exits non-zero when the run had any failures or dead letters, so cron can alert.
 package main
@@ -36,9 +35,8 @@ func run() int {
 	cfg := config.LoadApplyForm()
 
 	// The crawl's HTTP client: the endpoints are the platforms' own public job-board APIs, so
-	// its user agent, timeouts and size caps are exactly right here. Every request egresses
-	// through the proxy — this worker is what drove Workable into banning the host's own
-	// address for 23 hours on 2026-10-25 (sources.NewFormClientFromEnv).
+	// its user agent, timeouts and size caps fit. Every request egresses through the proxy so
+	// this worker cannot get the host's own address banned (sources.NewFormClientFromEnv).
 	client, proxied, err := sources.NewFormClientFromEnv()
 	if err != nil {
 		log.Printf("capture-apply-form: %v", err)
@@ -62,8 +60,8 @@ func run() int {
 
 	log.Printf("capture-apply-form done: captured=%d gone=%d failed=%d dead_lettered=%d deferred=%d",
 		stats.Captured, stats.Gone, stats.Failed, stats.DeadLettered, stats.Deferred)
-	// Deliberately not worker.ExitCode: see RunStats.Degraded for why a few retryable
-	// failures are the healthy shape of this particular worker rather than a bad run.
+	// Deliberately not worker.ExitCode: see RunStats.Degraded; a few retryable failures are
+	// this worker's healthy shape.
 	if stats.Degraded() {
 		return 1
 	}

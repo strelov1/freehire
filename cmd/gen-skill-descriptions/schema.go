@@ -21,13 +21,9 @@ var (
 	schemaErr  error
 )
 
-// requestSchema derives the schema once and reuses it: it is a pure function of the
-// type, so a second derivation could only produce the same document.
-//
-// It exists because the wave-1 run met a gateway that handed back the model's object
-// wrapped in a string under its own key. A schema is the first line against that. It is
-// NOT a proof — internal/platform/llm/AGENTS.md is explicit that a gateway which stops
-// honouring one still answers 200 — which is why describedIn unwraps an envelope anyway.
+// requestSchema derives the schema once and reuses it. A schema is the first line against a
+// gateway wrapping the model's object in a string, but not a proof
+// (internal/platform/llm/AGENTS.md), which is why describedIn unwraps an envelope anyway.
 func requestSchema() (llmschema.Schema, error) {
 	schemaOnce.Do(func() {
 		schema, schemaErr = llmschema.Of[answerShape]()

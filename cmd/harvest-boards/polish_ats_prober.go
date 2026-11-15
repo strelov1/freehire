@@ -11,10 +11,10 @@ import (
 )
 
 // erecruiterProber validates an eRecruiter board (the 32-hex cfg of skk.erecruiter.pl) with the
-// adapter's own first list page and names the employer from the first offer — two requests, where
-// running the adapter would read every offer's detail. A board's cfg cannot be guessed, so the
-// seed is the discovery (Common Crawl's Offer.aspx URLs carry it); see cmd/harvest-erecruiter for
-// the careers-page route to the same token.
+// adapter's own first list page and names the employer from the first offer: two requests,
+// where the adapter would read every offer's detail. A board's cfg cannot be guessed, so the
+// seed is the discovery (Common Crawl's Offer.aspx URLs carry it); see cmd/harvest-erecruiter
+// for the careers-page route to the same token.
 type erecruiterProber struct{}
 
 var erecruiterCfgPattern = regexp.MustCompile(`^[0-9A-Fa-f]{32}$`)

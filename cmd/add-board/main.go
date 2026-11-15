@@ -1,18 +1,12 @@
-// Command add-board is how a curator adds or retires a board catalog row by hand — the
-// database-backed replacement for editing sources/*.yml directly.
+// Command add-board adds, retires or renames a board catalog row by hand.
 //
-// It reports by default and writes only under --apply, like cmd/merge-companies: the
-// candidate is validated and printed before anything is persisted. A curator-added board
-// starts at status='active' (a curator addition is already verified, so there is no
-// unproven pending period to model, unlike a crowdsourced contribution). Retiring a board
-// sets its status to 'retired' rather than deleting the row, preserving history, and closes
-// the board's open postings ('board_retired'), since nothing will crawl or close them again.
-// Retiring an already-retired board closes whatever its earlier retirement left open.
+// It reports by default and writes only under --apply, like cmd/merge-companies. A curator-
+// added board starts 'active' (already verified). Retiring sets status 'retired' instead of
+// deleting the row and closes the board's open postings ('board_retired'); retiring an
+// already-retired board closes whatever is still open.
 //
-// A crowdsourced board is seeded with a company placeholder derived from the board slug
-// (boardcatalog.PlaceholderCompany) — a URL-only submission never carries the real
-// display name. --rename corrects it once a curator, reviewing the pending list, knows
-// the real one.
+// A crowdsourced board is seeded with a placeholder company from the board slug
+// (boardcatalog.PlaceholderCompany); --rename replaces it with the real name.
 //
 // Usage:
 //
@@ -68,9 +62,8 @@ func run() int {
 	}
 }
 
-// withDB opens a real database connection (worker.Bootstrap, i.e. DATABASE_URL) and
-// hands it to action, closing the connection afterward. The one thing runAdd, runRetire,
-// and runRename each do once they decide to actually write.
+// withDB opens the database (worker.Bootstrap, i.e. DATABASE_URL), runs action and closes the
+// connection.
 func withDB(action func(ctx context.Context, pool *pgxpool.Pool) int) int {
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -81,10 +74,8 @@ func withDB(action func(ctx context.Context, pool *pgxpool.Pool) int) int {
 	return action(ctx, pool)
 }
 
-// runAdd is the CLI entry point for adding a board: it reports the candidate, and under
-// apply delegates to addBoard over a real database connection. Split from addBoard so a
-// test can exercise addBoard directly against a throwaway database instead of the
-// environment's real one.
+// runAdd reports the candidate and, under apply, delegates to addBoard. Split so tests can
+// call addBoard against a throwaway database.
 func runAdd(provider, board, region, company string, hub bool, tenantsFlag string, apply bool) int {
 	if company == "" {
 		log.Print("add-board: --company is required when adding")

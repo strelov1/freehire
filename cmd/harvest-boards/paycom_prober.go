@@ -8,8 +8,8 @@ import (
 )
 
 // paycomProber validates a Paycom portal "<clientkey>" by reading the per-portal session JWT
-// from its SSR page, then counting open postings via the regional Mantle API. Paycom exposes
-// the employer name at /api/ats/company-name. See internal/ingest/sources/paycom.go for the contract.
+// from its SSR page, then counting open postings via the regional Mantle API. The employer name
+// is at /api/ats/company-name. See internal/ingest/sources/paycom.go for the contract.
 type paycomProber struct{}
 
 var (
@@ -18,9 +18,8 @@ var (
 )
 
 // dedupKey folds a Paycom client key to lower case. The key is hex and the portal serves the
-// same employer in either case, so an upper-case spelling of a board the file already holds is
-// the same board — without this it probes live, passes the name gate against its own employer,
-// and is appended a second time.
+// same employer in either case, so without folding an upper-case spelling of a held board
+// probes live, passes the name gate, and is appended a second time.
 func (paycomProber) dedupKey(clientkey string) string { return strings.ToLower(clientkey) }
 
 func (paycomProber) probe(ctx context.Context, c httpClient, clientkey string) (string, int, error) {

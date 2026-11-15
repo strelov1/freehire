@@ -6,12 +6,9 @@
 //	./broadcast -campaign discord-invite -to me@example.com   # send only to me
 //	./broadcast -campaign discord-invite -half a              # only side a of a split test
 //
-// It is not a timer worker in the usual sense. It is scheduled once, for the day of
-// the announcement, and then it is done — which is also why it refuses to guess:
-// without -campaign it lists what exists and exits non-zero rather than picking one.
-//
-// -dry-run exists because a campaign is irreversible and reaches everyone. Seeing
-// the number first is cheap; unsending is impossible.
+// It is scheduled once, for the day of the announcement, and refuses to guess: without
+// -campaign it lists what exists and exits non-zero. -dry-run exists because a campaign is
+// irreversible and reaches everyone.
 package main
 
 import (
@@ -82,13 +79,11 @@ func run() int {
 	tracked := broadcast.NewMailer(trackedSES, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
 	runner := broadcast.New(db.New(pool), tracked, int32(*maxPerRun))
 
-	// A single address, for looking at the letter in a real client. The ledger is
-	// left alone: inspecting a campaign must not consume anybody's one delivery, and it
-	// goes out untracked, so it cannot count toward the campaign's rates.
+	// A single address, for looking at the letter in a real client. The ledger is left alone
+	// (inspecting must not consume anybody's one delivery) and it goes out untracked, so it
+	// cannot count toward the campaign's rates.
 	if *only != "" {
-		// The mail carries a real unsubscribe link for a real account, so -to needs
-		// to say whose. Sending a campaign whose only working control belongs to
-		// nobody is how an inspection becomes an unanswerable mail.
+		// The mail carries a real unsubscribe link, so -to must say whose account it is.
 		if *onlyUser <= 0 {
 			log.Print("broadcast: -to also needs -to-user, the account id the address belongs to")
 			return 2

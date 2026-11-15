@@ -17,19 +17,12 @@ import (
 )
 
 // publishSnapshot measures the catalogue and publishes the figures every public surface
-// quotes (internal/ingest/catalogstats).
+// quotes (internal/ingest/catalogstats). It lives here because this worker already scans
+// jobs for the rollups.
 //
-// It lives in this worker because the exact counts are a full catalogue scan and this
-// worker is already scanning jobs for the rollups — one more aggregate on a run that is
-// already doing heavier work, against a new cron unit that would cost real ops surface.
-//
-// The error is returned rather than acted on: the rollups are this worker's primary job
-// and have already committed by the time this runs, so whether a failed snapshot should
-// fail the run is the caller's decision, and the caller's answer is no.
-//
-// The open-jobs figure is also recorded as the day's catalogue size (catalog_size_daily), the
-// series behind the size-over-time chart. It is recorded only once the snapshot is stored, so
-// the history never holds a figure no surface published.
+// The error is returned, not acted on: the rollups have already committed, and a failed
+// snapshot does not fail the run. The open-jobs figure is also recorded as the day's
+// catalogue size (catalog_size_daily), only once the snapshot is stored.
 func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c cache.Cache, history sizeRecorder, telegramChannels int, uniqueOpenJobs int64) error {
 	snapshot, err := catalogstats.Compute(ctx, counts, telegramChannels, uniqueOpenJobs)
 	if err != nil {
@@ -48,8 +41,8 @@ func publishSnapshot(ctx context.Context, counts catalogstats.ExactCounter, c ca
 	return nil
 }
 
-// sizeRecorder stores one day's measured catalogue size. *db.Queries on the writer satisfies
-// it; the counts come from the analytics replica, the history must not.
+// sizeRecorder stores one day's measured catalogue size. The history must be written
+// through the writer (*db.Queries), not the analytics replica the counts come from.
 type sizeRecorder interface {
 	RecordCatalogSize(ctx context.Context, arg db.RecordCatalogSizeParams) error
 }
@@ -66,9 +59,8 @@ func snapshotCache(redisURL string) (cache.Cache, func(), error) {
 }
 
 // configuredTelegramChannels counts the channels the crawler is configured to read.
-// catalogstats takes the count rather than finding it itself: the channel list is not
-// part of the catalogue it measures, and reaching for it there would put a second,
-// unrelated query behind Compute.
+// catalogstats takes the count because the channel list is not part of the catalogue it
+// measures.
 func configuredTelegramChannels(ctx context.Context, q telegram.ChannelLister) (int, error) {
 	cfg, err := telegram.LoadChannels(ctx, q)
 	if err != nil {
@@ -77,12 +69,10 @@ func configuredTelegramChannels(ctx context.Context, q telegram.ChannelLister) (
 	return len(cfg.Channels), nil
 }
 
-// uniqueOpenJobs reads Meilisearch's own count of de-duplicated open postings: an
-// unfiltered, one-hit search, whose `Total` is Meilisearch's estimated total for the
-// query — the same field `/jobs/search` itself returns for zero filters. catalogstats
-// takes the count rather than finding it itself: a live index isn't part of the
-// catalogue Compute measures from Postgres, and reaching for Meilisearch there would
-// put an unrelated dependency (and a second failure mode) behind it.
+// uniqueOpenJobs reads Meilisearch's count of de-duplicated open postings: an unfiltered,
+// one-hit search whose `Total` is the same field `/jobs/search` returns for zero filters.
+// catalogstats takes the count because a live index is not part of what Compute measures
+// from Postgres.
 func uniqueOpenJobs(ctx context.Context, client *search.Client) (int64, error) {
 	res, err := client.Search(ctx, search.SearchParams{Limit: 1})
 	if err != nil {
@@ -91,12 +81,9 @@ func uniqueOpenJobs(ctx context.Context, client *search.Client) (int64, error) {
 	return res.Total, nil
 }
 
-// resolveUniqueOpenJobs decides the figure this run publishes: fresh when this
-// run's Meilisearch call succeeded, otherwise previous — the figure already
-// published by an earlier run. A transient outage must not overwrite a real count
-// with a bare zero, which would read as "no unique jobs" rather than "not measured
-// this run"; see uniqueOpenJobs' call site for the same reasoning Load already
-// applies to the whole snapshot.
+// resolveUniqueOpenJobs decides the figure this run publishes: fresh when this run's
+// Meilisearch call succeeded, otherwise previous. A transient outage must not overwrite a
+// real count with a zero, which would read as "no unique jobs" instead of "not measured".
 func resolveUniqueOpenJobs(previous, fresh int64, err error) int64 {
 	if err != nil {
 		return previous

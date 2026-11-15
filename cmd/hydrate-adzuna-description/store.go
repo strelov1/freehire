@@ -40,11 +40,9 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]adzunad
 }
 
 // Save rewrites the job's description, recomputing content_hash from the row's OTHER
-// indexed fields so the row re-indexes correctly (mirrors cmd/backfill-echojobs), queues it
-// for the live search index so the fuller text reaches search without a manual `make
-// reindex`, marks the job hydrated (closing the ingest enqueue gate for good), and retires
-// the queue entry — all in one transaction, so a capture is never stored without also being
-// retired and marked, nor the reverse.
+// indexed fields (mirrors cmd/backfill-echojobs), queues it for the search index, marks the
+// job hydrated (closing the ingest enqueue gate) and retires the queue entry, all in one
+// transaction.
 func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, description string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -80,8 +78,7 @@ func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, description s
 }
 
 // Discard retires a capture whose URL drifted to the ad-network redirect since it was
-// enqueued. No description is stored and the job is NOT marked hydrated, so a later crawl
-// that finds it eligible again (Adzuna's own hosted page) is free to re-enqueue it.
+// enqueued. The job is NOT marked hydrated, so a later crawl may re-enqueue it.
 func (s *dbStore) Discard(ctx context.Context, outboxID int64) error {
 	return s.q.DeleteAdzunaDescriptionEntry(ctx, outboxID)
 }

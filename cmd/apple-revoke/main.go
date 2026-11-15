@@ -41,8 +41,7 @@ func run() int {
 	}
 	log.Printf("apple-revoke: processed=%d revoked=%d retried=%d failed=%d",
 		stats.Processed, stats.Revoked, stats.Retried, stats.Failed)
-	// A job given up on is this queue's dead letter: nothing claims it again, and an
-	// abandoned `unlink` leaves its identity in revocation_pending where it can never be
-	// unlinked. Printing processed=100 and exiting 0 made that invisible.
+	// A job given up on is this queue's dead letter and nothing claims it again, so it must fail
+	// the run (an abandoned `unlink` stays in revocation_pending forever).
 	return worker.ExitCode(stats.Retried, stats.Failed)
 }

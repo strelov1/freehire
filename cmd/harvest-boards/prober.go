@@ -15,14 +15,11 @@ import (
 	"golang.org/x/net/html"
 )
 
-// greenhouseBoardsAPI is the public boards API root (mirrors sources.greenhouseBaseURL,
-// which is unexported; this tool lives outside the sources package).
+// greenhouseBoardsAPI mirrors the unexported sources.greenhouseBaseURL.
 const greenhouseBoardsAPI = "https://boards-api.greenhouse.io/v1/boards"
 
-// httpClient is the transport a prober needs: most platforms list over GetJSON, Workday's
-// CXS listing is POST-only (PostJSON), iCIMS/Deel read an XML sitemap (GetXML), and
-// Freshteam has no API so its prober reads the listing HTML (GetHTML). The real
-// *sources.Client implements all four.
+// httpClient is the transport a prober needs: GetJSON, PostJSON (Workday CXS), GetXML (iCIMS/Deel
+// sitemaps) and GetHTML (Freshteam). *sources.Client implements all of them.
 type httpClient interface {
 	sources.JSONGetter
 	sources.JSONPoster
@@ -33,36 +30,26 @@ type httpClient interface {
 	sources.HeaderJSONPoster
 }
 
-// prober checks one candidate board on its ATS platform, returning the company name the
-// platform reports and the number of open jobs. A board that is absent, closed, or
-// unreachable yields ("", 0, nil) — a skip, never a fatal error — so one dead candidate
-// cannot abort the harvest. A non-nil error is reserved for failures a prober genuinely
-// wants surfaced (the caller logs and skips those too).
+// prober checks one candidate board, returning the platform's company name and open-job count.
+// An absent, closed or unreachable board yields ("", 0, nil), a skip that never aborts the
+// harvest; a non-nil error is for failures worth surfacing (the caller logs and skips those too).
 type prober interface {
 	probe(ctx context.Context, c httpClient, slug string) (company string, openJobs int, err error)
 }
 
-// seededProber is the optional half of the prober contract for a prober that needs the
-// employer the seed names for a candidate in order to probe it at all — today only
-// adapterProber, whose adapters may refuse a company-less board entry. probeAll calls it in
-// place of probe, passing "" when the seed names no company.
+// seededProber is the optional half for a prober that needs the seed's employer to probe at all
+// (today only adapterProber). probeAll calls it instead of probe, passing "" for a company-less seed.
 type seededProber interface {
 	probeSeeded(ctx context.Context, c httpClient, slug, company string) (string, int, error)
 }
 
-// idProber is the optional half of the prober contract: it reports the ids of a board's live
-// postings, in the platform's own id space, so a seed that knows one posting's id can identify
-// the board by evidence instead of by a name resemblance.
+// idProber is the optional half that reports the ids of a board's live postings, so a seed that
+// knows one posting's id can identify the board by evidence instead of by a name resemblance.
 //
-// It is optional because the check reads a missing id as "wrong board", which is only sound
-// where one request yields the COMPLETE live list. A prober that pages, or that asks for a
-// single posting to settle liveness, must not implement it — its silence leaves the expected
-// id inert, which is the safe reading of partial evidence.
+// Implement it only where one request yields the COMPLETE live list, because a missing id reads as
+// "wrong board". A prober that pages, or asks per posting, must not: its silence leaves the id inert.
 //
-// This re-requests the listing probe already fetched, rather than widening prober's return to
-// carry ids through the ~35 implementations that have no use for them. The extra request is
-// only spent on the seeds that name a posting — the offline-derived candidates, which are a
-// minority and which produce no board at all without it.
+// It re-requests the listing rather than widening prober's return, and only for seeds naming a posting.
 type idProber interface {
 	postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error)
 }
@@ -76,8 +63,7 @@ func greenhouseJobsURL(slug string) string {
 	return fmt.Sprintf("%s/%s/jobs", greenhouseBoardsAPI, slug)
 }
 
-// postingIDs lists the board's live posting ids. The jobs endpoint returns every live posting
-// in one response, so an id it does not carry is genuinely not on the board.
+// postingIDs lists the live posting ids; one response carries the complete list.
 func (greenhouseProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
 	var jr struct {
 		Jobs []struct {
@@ -100,8 +86,7 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 			ID int64 `json:"id"`
 		} `json:"jobs"`
 	}
-	// A missing/moved board returns 4xx and the client surfaces it as an error. For harvest
-	// that simply means "not a live greenhouse board" — skip silently, do not propagate.
+	// A missing or moved board is a 4xx error: skip it, don't propagate.
 	if err := c.GetJSON(ctx, greenhouseJobsURL(slug), &jr); err != nil {
 		return "", 0, nil
 	}
@@ -119,12 +104,8 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 	return name, len(jr.Jobs), nil
 }
 
-// greenhouseBoardsHost is the web host Greenhouse boards are served under, the surface
-// Common Crawl's crawler actually visits (unlike greenhouseBoardsAPI, which the crawler
-// never touches — it's an API, not a page). Validation still goes through
-// greenhouseBoardsAPI in probe/postingIDs; a discovered candidate's redirect from this host
-// to Greenhouse's newer "job-boards.greenhouse.io" frontend (visible in raw Common Crawl
-// records) doesn't affect that.
+// greenhouseBoardsHost is the web host Common Crawl actually visits. Validation still goes through
+// greenhouseBoardsAPI.
 const greenhouseBoardsHost = "boards.greenhouse.io"
 
 // discover finds Greenhouse board candidates from the Common Crawl CDX index: every URL
@@ -133,10 +114,8 @@ func (greenhouseProber) discover(ctx context.Context, c httpClient) ([]string, e
 	return commonCrawlCandidates(ctx, c, greenhouseBoardsHost+"/*", commonCrawlSlug)
 }
 
-// dedupKey folds a Greenhouse board id to lower case, like Workday's and Ashby's. The boards
-// API is case-insensitive (boards-api.greenhouse.io/v1/boards/adyen and .../Adyen both
-// resolve to the same company, confirmed live) — without folding, Common Crawl discovery
-// surfacing a different case than an already-known board dedups as a distinct one.
+// dedupKey folds case: the boards API is case-insensitive, so a differently cased Common Crawl hit
+// is the same board.
 func (greenhouseProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 // leverProber probes the Lever postings API. The JSON-mode endpoint returns a bare array
@@ -149,8 +128,7 @@ func leverPostingsURL(slug string) string {
 	return fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", slug)
 }
 
-// postingIDs lists the board's live posting ids. The JSON-mode endpoint returns every live
-// posting in one array, so an id it does not carry is genuinely not on the board.
+// postingIDs lists the live posting ids; one response carries the complete list.
 func (leverProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
 	var postings []struct {
 		ID string `json:"id"`
@@ -178,26 +156,19 @@ func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string
 	return storefrontEmployer(ctx, c, fmt.Sprintf("https://jobs.lever.co/%s", slug), ""), len(postings), nil
 }
 
-// ashbyProber probes the Ashby public job-board API. The list endpoint returns the live
-// postings, so a non-empty list is a live board. The posting API exposes no company name, but
-// the storefront titles itself "<Company> Jobs", so the name is read there once the board is
-// known to be live. The job-board API is case-insensitive (posting-api/job-board/abridge and
-// .../Abridge both resolve to the same company, confirmed live) — see dedupKey.
+// ashbyProber probes the Ashby job-board API. A non-empty list is a live board; the name is read
+// from the storefront title "<Company> Jobs". The API is case-insensitive, see dedupKey.
 type ashbyProber struct{}
 
-// dedupKey folds an Ashby board id to lower case, like Workday's. Common Crawl discovery
-// surfaces the same company under whatever case a crawled inbound link happened to use, and
-// without folding, "abridge" and "Abridge" dedup as two different boards even though the API
-// serves identical content for both — verified live, and by a stale duplicate this folding
-// removes from sources/ashby.yml (see the CDX-discovery change that added it).
+// dedupKey folds case: the API serves identical content for "abridge" and "Abridge", so they are
+// one board.
 func (ashbyProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 func ashbyBoardURL(slug string) string {
 	return fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", slug)
 }
 
-// postingIDs lists the board's live posting ids. The list endpoint returns every live posting
-// in one response, so an id it does not carry is genuinely not on the board.
+// postingIDs lists the live posting ids; one response carries the complete list.
 func (ashbyProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
 	var resp struct {
 		Jobs []struct {
@@ -229,9 +200,7 @@ func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string
 	return storefrontEmployer(ctx, c, fmt.Sprintf("https://jobs.ashbyhq.com/%s", slug), " Jobs"), len(resp.Jobs), nil
 }
 
-// ashbyBoardsHost is the web host Ashby boards are served under, the surface Common Crawl's
-// crawler actually visits (unlike the api.ashbyhq.com host probe/postingIDs validate
-// against).
+// ashbyBoardsHost is the host Common Crawl visits, unlike the api host probe validates against.
 const ashbyBoardsHost = "jobs.ashbyhq.com"
 
 // discover finds Ashby board candidates from the Common Crawl CDX index: every URL Common
@@ -259,11 +228,8 @@ func (bamboohrProber) probe(ctx context.Context, c httpClient, slug string) (str
 	return "", len(list.Result), nil
 }
 
-// workdayProber probes Workday's public CXS listing (POST-only). The board id is
-// "<host>/<site>" (e.g. "aig.wd1.myworkdayjobs.com/early_careers"); the tenant is the
-// host's first dot-label. The listing carries no company name, so it falls back to the
-// tenant (slug-fallback doctrine). The CXS site path is case-insensitive, so the seed's
-// lowercased sites work unchanged.
+// workdayProber probes Workday's POST-only CXS listing. The board id is "<host>/<site>"; the tenant
+// is the host's first label and doubles as the name fallback. The site path is case-insensitive.
 type workdayProber struct{}
 
 func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (string, int, error) {
@@ -296,22 +262,16 @@ func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (s
 	return "", n, nil
 }
 
-// icimsProber probes an iCIMS career site by its slug. iCIMS exposes no JSON list API, so
-// liveness is judged from the site's XML sitemap: a live board lists ≥1 job-posting URL
-// (a /jobs/<id>/ entry). This rejects both a missing site (404 → getter error) and a
-// present-but-empty one (200 with only the non-posting /jobs/search and /jobs/intro
-// entries). The sitemap carries no company name, so the name falls back to the slug.
+// icimsProber judges liveness from the XML sitemap (no JSON API): a live board lists ≥1 /jobs/<id>/
+// URL. A missing site 404s; an empty one lists only /jobs/search and /jobs/intro. The name is the slug.
 type icimsProber struct{}
 
-// icimsJobLocPattern matches an iCIMS job-posting URL's /jobs/<id>/ segment, the same shape
-// the adapter keys off. It is duplicated here (a small literal) rather than exported from
-// internal/ingest/sources, to avoid widening that package's API for a dev tool.
+// icimsJobLocPattern matches the /jobs/<id>/ segment the adapter keys off; duplicated to avoid
+// widening the sources API.
 var icimsJobLocPattern = regexp.MustCompile(`/jobs/\d+/`)
 
-// icimsHost mirrors internal/ingest/sources/icims.go: a board containing a dot IS the careers host, and
-// anything else is a bare slug the host is rebuilt from. Probing every candidate as the rebuilt
-// form asks for "careers-<host>.icims.com" whenever the board is a vanity one, which resolves
-// nowhere — so every vanity board would be reported dead instead of probed.
+// icimsHost mirrors internal/ingest/sources/icims.go: a board containing a dot IS the careers host,
+// anything else is a bare slug. Rebuilding a vanity host would resolve nowhere and report it dead.
 func icimsHost(board string) string {
 	if strings.Contains(board, ".") {
 		return board
@@ -319,11 +279,8 @@ func icimsHost(board string) string {
 	return "careers-" + board + ".icims.com"
 }
 
-// dedupKey folds "careers-<slug>.icims.com" to "<slug>". The catalogue holds both spellings of
-// the same board (57 of 1921 entries carry the full host), so a candidate derived from a job URL
-// as the bare slug would otherwise look new and be filed alongside the board we already crawl.
-// Only the "careers-" form folds: "pppl-princeton.icims.com" and a bare "pppl-princeton" name
-// DIFFERENT hosts, so collapsing them would hide a real board instead of a duplicate.
+// dedupKey folds "careers-<slug>.icims.com" to "<slug>", since the catalogue holds both spellings.
+// Only that form folds: "pppl-princeton.icims.com" and bare "pppl-princeton" are different hosts.
 func (icimsProber) dedupKey(boardID string) string {
 	id := strings.ToLower(boardID)
 	if host, isHost := strings.CutSuffix(id, ".icims.com"); isHost {
@@ -355,11 +312,8 @@ func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string
 	return "", n, nil
 }
 
-// discoverer is the opt-in capability of a prober whose boards are not available as a seed
-// list: it enumerates its own candidate board ids from the platform API. When a provider's
-// prober implements it and the tool is run with no seed file, discovery supplies the
-// candidates that a seed would otherwise provide. Mirrors the optional-marker idiom of
-// seedMapper/dedupKeyer.
+// discoverer is the opt-in capability of a prober that enumerates its own candidate board ids;
+// used when the tool runs without a seed file.
 type discoverer interface {
 	discover(ctx context.Context, c httpClient) ([]string, error)
 }
@@ -371,9 +325,8 @@ type probeClienter interface {
 	probeClient() *sources.Client
 }
 
-// seedMapper converts a provider's raw seed token into its canonical board id. Providers
-// whose seed token already IS the board id (greenhouse/lever/ashby/bamboohr/icims) do not
-// implement it. Mirrors the optional-marker idiom of sources.boardless.
+// seedMapper converts a provider's raw seed token into its canonical board id. Providers whose
+// seed token already IS the board id do not implement it.
 type seedMapper interface {
 	boardID(seedToken string) string
 }
@@ -393,8 +346,7 @@ type dedupKeyer interface {
 	dedupKey(boardID string) string
 }
 
-// dedupKey folds a Workday board id to lower case: Workday's CXS API is case-insensitive,
-// so "acme.wd1.myworkdayjobs.com/Careers" and ".../careers" are the same board.
+// dedupKey folds case: Workday's CXS API is case-insensitive.
 func (workdayProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 // boardID turns a "tenant|dc|site" seed token into "<tenant>.<dc>.myworkdayjobs.com/<site>".
@@ -428,15 +380,10 @@ func (workableProber) probe(ctx context.Context, c httpClient, slug string) (str
 	return resp.Name, len(resp.Jobs), nil
 }
 
-// storefrontEmployer reads the employer name from a board's public storefront page title,
-// trimming the platform's boilerplate suffix. It is called only once a board is known to have
-// jobs, so it costs one request per LIVE board rather than one per candidate — the same
-// discipline greenhouse's board-metadata fetch follows.
-//
-// Anything unreadable yields "": an unreachable page, a title that is only the boilerplate
-// (an unknown ashby slug still serves a 200 titled just "Jobs"), or a platform 404. A board
-// whose name cannot be read is kept on liveness and labelled from the seed, exactly as before
-// — the gate simply cannot fire for it.
+// storefrontEmployer reads the employer name from a board's storefront page title, trimming the
+// boilerplate suffix. Call it only for boards known to have jobs: one request per LIVE board.
+// Anything unreadable yields "" (unreachable page, a title that is only the boilerplate, a 404), and
+// the board is then kept on liveness, so the name gate cannot fire for it.
 func storefrontEmployer(ctx context.Context, c httpClient, url, suffix string) string {
 	root, err := c.GetHTML(ctx, url)
 	if err != nil {
@@ -482,10 +429,8 @@ func (smartRecruitersProber) probe(ctx context.Context, c httpClient, slug strin
 	return meta.Name, n, nil
 }
 
-// dedupKey folds a SmartRecruiters board id to lower case, like Workday's, Greenhouse's and
-// Ashby's. Without this, a name-derived candidate that only differs in case from an existing
-// entry (e.g. "archirodongroup" vs the stored "ArchirodonGroup") reads as new — confirmed live
-// twice (see #1884, #1888) — even though SmartRecruiters' API treats the two identically.
+// dedupKey folds case: SmartRecruiters' API treats "archirodongroup" and "ArchirodonGroup" alike, so
+// a name-derived candidate differing only in case must not read as new.
 func (smartRecruitersProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 // recruiteeProber probes the Recruitee per-subdomain offers API. A non-empty offers array is
@@ -497,8 +442,7 @@ func recruiteeOffersURL(slug string) string {
 	return fmt.Sprintf("https://%s.recruitee.com/api/offers/", slug)
 }
 
-// postingIDs lists the board's live posting ids. The offers endpoint returns every live offer
-// in one response, so an id it does not carry is genuinely not on the board.
+// postingIDs lists the live posting ids; one response carries the complete list.
 func (recruiteeProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
 	var resp struct {
 		Offers []struct {
@@ -572,18 +516,14 @@ func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (strin
 	return postings[0].Company.Name, len(postings), nil
 }
 
-// teamtailorProber probes a Teamtailor career site, whose board is the host itself (the vendor
-// sub-domain `acme.teamtailor.com` or the employer's own `careers.acme.com`). The platform
-// serves its listing as HTML on both — there is no JSON feed — so liveness is judged the way
-// the ingest adapter reads the same page: a live board links at least one posting permalink.
-// The employer is the page's og:site_name, which every Teamtailor site sets to the company
-// (measured 2026-10-24 on a vendor sub-domain and two employer domains), so a board found from
-// a name-derived seed is gated against the employer it was proposed for.
+// teamtailorProber probes a Teamtailor career site, whose board is the host itself (vendor
+// sub-domain or the employer's own). There is no JSON feed, so liveness is judged like the adapter:
+// a live board links ≥1 posting permalink. The employer is og:site_name, which every site sets to
+// the company, so a name-derived seed is gated against it.
 type teamtailorProber struct{}
 
-// boardID turns a seed token into the host a board lives on. A name-derived seed carries a bare
-// company name, and the only host such a name can predict is the vendor sub-domain; a token that
-// already contains a dot names a host and is kept as it is.
+// boardID turns a seed token into a host. A bare company name can only predict the vendor
+// sub-domain; a token containing a dot already names a host and is kept.
 func (teamtailorProber) boardID(token string) string {
 	if strings.Contains(token, ".") {
 		return token
@@ -591,9 +531,8 @@ func (teamtailorProber) boardID(token string) string {
 	return token + ".teamtailor.com"
 }
 
-// teamtailorJobPattern is the posting permalink on a Teamtailor listing: /jobs/<numeric id>.
-// It must not match the bare /jobs nav anchor, which every listing carries whether or not it
-// has postings.
+// teamtailorJobPattern is the posting permalink /jobs/<numeric id>. It must not match the bare
+// /jobs nav anchor, which every listing carries.
 var teamtailorJobPattern = regexp.MustCompile(`/jobs/\d+`)
 
 func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (string, int, error) {
@@ -605,13 +544,10 @@ func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (s
 	if n == 0 {
 		return "", 0, nil
 	}
-	// A vendor sub-domain often redirects to the employer's own careers domain (tibber.teamtailor.com
-	// serves jobs.tibber.com), and the client follows it silently. Kept, that is the SAME board under
-	// a second id: ingest namespaces postings by board, so every posting would be stored twice — prod
-	// already carries tibber both ways. og:url names the host that actually served the page; a board
-	// is only this host if it says so. The board it DID find is real, though, and may be one the
-	// catalogue lacks, so its host is logged in a fixed shape: a second run over those hosts probes
-	// them under their own id, and dedup drops the ones already listed.
+	// A vendor sub-domain often redirects to the employer's own domain (tibber.teamtailor.com serves
+	// jobs.tibber.com); kept, that is the SAME board under a second id and ingest would store every
+	// posting twice. og:url names the host that served the page; a board is only this host if it says
+	// so. The redirect target is logged in a fixed shape so a second run can probe it under its own id.
 	if u, err := url.Parse(metaProperty(root, "og:url")); err == nil && u.Host != "" && !strings.EqualFold(u.Host, host) {
 		log.Printf("harvest-boards: teamtailor %s serves %s", host, strings.ToLower(u.Host))
 		return "", 0, nil
@@ -638,8 +574,7 @@ func (trakstarProber) probe(ctx context.Context, c httpClient, slug string) (str
 	return trakstarEmployer(feed.Title), len(feed.Items), nil
 }
 
-// trakstarEmployer pulls the employer out of a Trakstar feed title, which renders as
-// "Jobs at <Company>". A title without that prefix names nobody, so it yields "".
+// trakstarEmployer pulls the employer from a feed title "Jobs at <Company>"; anything else yields "".
 func trakstarEmployer(title string) string {
 	name, ok := strings.CutPrefix(strings.TrimSpace(title), "Jobs at ")
 	if !ok {
@@ -648,11 +583,9 @@ func trakstarEmployer(title string) string {
 	return strings.TrimSpace(name)
 }
 
-// gethiredProber probes a GetHired tenant's RSS feed (<board>.easyapply.co/rss) — the one
-// request the adapter itself makes. A non-empty channel is a live board, and the channel
-// title is the employer's name as the tenant set it, so the board can be gated against the
-// name the seed expected. A subdomain the platform does not serve redirects to its sign-in
-// page, whose HTML fails the decode and is skipped like any absent board.
+// gethiredProber probes a GetHired tenant's RSS feed (<board>.easyapply.co/rss), the adapter's own
+// request. A non-empty channel is a live board and its title is the employer. An unserved subdomain
+// redirects to a sign-in page whose HTML fails the decode and is skipped.
 type gethiredProber struct{}
 
 func (gethiredProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
@@ -669,11 +602,9 @@ func (gethiredProber) probe(ctx context.Context, c httpClient, slug string) (str
 	return strings.TrimSpace(feed.Title), len(feed.Items), nil
 }
 
-// taleobeProber probes a Taleo Business Edition career site ("<ORG>:<cws>") through the same
-// dispatcher-routed RSS request the adapter makes. A non-empty channel is a live board, and the
-// channel title names the employer ("Adelphi University Job Feed"). An unknown org, a
-// deactivated one, or a career-site number the org does not have all redirect to an HTML
-// page, whose decode fails and is skipped like any absent board.
+// taleobeProber probes a Taleo Business Edition career site ("<ORG>:<cws>") through the adapter's
+// RSS request. A non-empty channel is a live board and its title names the employer. An unknown or
+// deactivated org, or a missing career-site number, redirects to HTML and fails the decode.
 type taleobeProber struct{}
 
 func (taleobeProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
@@ -694,13 +625,10 @@ func (taleobeProber) probe(ctx context.Context, c httpClient, board string) (str
 	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(feed.Title), " Job Feed")), len(feed.Items), nil
 }
 
-// personioProber probes a Personio board the way the adapter lists it: the public XML feed
-// on the .com host, and — when the tenant has that feed switched off, which it answers with
-// a 404 — search.json, which keeps listing the same positions. A non-empty list on the path
-// the adapter would take is a live board; a feed that answers but is empty is not, since
-// the adapter does not fall back from it either. A tenant served only on a regional TLD
-// (.de/.es) 404s on both and is skipped — correctly, since the adapter could not crawl it.
-// Neither listing carries a company name, so it falls back to the slug.
+// personioProber lists a board like the adapter: the XML feed on the .com host, and search.json when
+// the tenant's feed answers 404. An empty feed that answers is not live, since the adapter does not
+// fall back from it either. A tenant served only on a regional TLD (.de/.es) is skipped, as the
+// adapter could not crawl it. No company name, so it falls back to the slug.
 type personioProber struct{}
 
 func (personioProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
@@ -723,14 +651,12 @@ func (personioProber) probe(ctx context.Context, c httpClient, slug string) (str
 	return "", len(jobs), nil
 }
 
-// freshteamJobPattern matches a Freshteam job permalink's /jobs/<12-char-id> segment, the
-// same id shape the adapter keys off. It anchors to a path boundary so non-job paths
-// (/jobs, /jobs/search) do not match.
+// freshteamJobPattern matches a job permalink's /jobs/<12-char-id> segment, anchored to a path
+// boundary so /jobs and /jobs/search do not match.
 var freshteamJobPattern = regexp.MustCompile(`/jobs/[A-Za-z0-9_-]{12}(?:[/?#]|$)`)
 
-// freshteamProber probes a Freshteam career site. Freshteam exposes no public JSON list
-// (its API is auth-gated), so liveness is judged from the listing HTML: a live board links
-// ≥1 job permalink. The page carries no reliable company name, so it falls back to the slug.
+// freshteamProber probes a Freshteam career site. Its API is auth-gated, so liveness is judged from
+// the listing HTML: a live board links ≥1 job permalink. No reliable company name; falls back to the slug.
 type freshteamProber struct{}
 
 func (freshteamProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
@@ -745,9 +671,8 @@ func (freshteamProber) probe(ctx context.Context, c httpClient, slug string) (st
 	return "", n, nil
 }
 
-// countMatchingLinks counts the <a href> values in the tree whose value matches pat. It is
-// the prober's own minimal anchor walk (the sources package's link helpers are unexported),
-// used only for liveness, so a duplicate link inflating the count is harmless.
+// countMatchingLinks counts <a href> values matching pat. A duplicate link inflating the count is
+// harmless, since it is only used for liveness.
 func countMatchingLinks(root *html.Node, pat *regexp.Regexp) int {
 	n := 0
 	var walk func(*html.Node)
@@ -768,10 +693,8 @@ func countMatchingLinks(root *html.Node, pat *regexp.Regexp) int {
 	return n
 }
 
-// joinProber probes a Join.com company by its numeric company id (the board id the adapter
-// stores — the slug path returns empty). A non-zero rowCount is a live board; the company
-// name comes from the company endpoint, fetched only once the board is known to have jobs.
-// The seed is numeric ids: a slug is resolved to its id during seed building, not here.
+// joinProber probes a Join.com company by its numeric id (the slug path returns empty); a slug is
+// resolved to its id during seed building. A non-zero rowCount is a live board.
 type joinProber struct{}
 
 func (joinProber) probe(ctx context.Context, c httpClient, id string) (string, int, error) {
@@ -793,8 +716,7 @@ func (joinProber) probe(ctx context.Context, c httpClient, id string) (string, i
 	return meta.Name, jobs.Pagination.RowCount, nil
 }
 
-// probers maps a provider key to its prober. Adding an ATS is one entry here plus the
-// prober type — the same shape as sources.All.
+// probers maps a provider key to its prober. Adding an ATS is one entry here plus the prober type.
 var probers = map[string]prober{
 	"adp":               adpProber{},
 	"adpmyjobs":         adpMyJobsProber{},

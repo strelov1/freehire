@@ -1,14 +1,11 @@
 // Command hydrate-adzuna-description drains the Adzuna description capture queue: for each
-// queued posting it fetches the full text from Adzuna's own hosted job page (the API gives
-// only a ~500-character snippet) and rewrites the stored description, then exits. Run it on
-// a schedule (e.g. cron); it drains what is queued and stops.
+// queued posting it fetches the full text from Adzuna's hosted job page (the API gives only
+// a snippet) and rewrites the stored description, then exits. Run it on a schedule.
 //
-// cmd/ingest enqueues a job here right after a successful write, but only when its stored
-// URL is Adzuna's own hosted page rather than the ad-network tracking redirect (see
-// adzunadesc.Eligible) — the tracking shape answers its own "Access Denied" page to a
-// request like this one's.
+// cmd/ingest enqueues a job only when its URL is Adzuna's hosted page, not the ad-network
+// tracking redirect (see adzunadesc.Eligible), which answers "Access Denied".
 //
-// It exits non-zero when the run had any failures or dead letters, so cron can alert.
+// It exits non-zero on any failure or dead letter, so cron can alert.
 package main
 
 import (
@@ -35,9 +32,7 @@ func run() int {
 
 	cfg := config.LoadAdzunaDescription()
 
-	// The same HTTP client the crawl uses: Adzuna's hosted job page is the one endpoint
-	// this fleet already talks to for this posting, so its user agent, timeouts and size
-	// caps are exactly right here.
+	// The same HTTP client the crawl uses, so its user agent, timeouts and size caps apply.
 	client := sources.NewClient()
 	fetch := func(ctx context.Context, url string) (string, error) {
 		return adzunadesc.FetchDescription(ctx, client, url)

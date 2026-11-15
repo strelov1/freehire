@@ -1,60 +1,33 @@
-// Command backfill-descriptions repairs job descriptions that were stored still
-// percent-encoded. The Taleo adapter decoded its description HTML with the strict
-// url.PathUnescape, which rejects the whole string on a single stray "%" — common in
-// Word-pasted postings (CSS "line-height:115%") — and the old fallback stored the raw,
-// fully percent-encoded blob (rendered as literal "%3Cp class=%22..."). The adapter now
-// decodes leniently (internal/ingest/sources.LenientPercentUnescape); this one-off worker fixes the
-// rows already in the catalogue.
+// Command backfill-descriptions repairs stored job descriptions that carry markup damage. It
+// pages by keyset and rewrites every row whose description still carries a repair marker,
+// re-running the adapters' sanitize+decode pipeline and refreshing content_hash so the row
+// re-indexes. The markers are source-agnostic (open or closed rows alike). Idempotent: a
+// repaired row carries no marker, so a second run rewrites nothing.
 //
-// It also repairs the other way a source can store markup as text: HTML entity-encoding
-// ("&lt;p&gt;"), which arbeitnow serves for part of its feed. sanitizeHTML cannot recover that on
-// its own — bluemonday reads "&lt;p&gt;" as a text node and re-encodes it — so the adapter now
-// decodes it (internal/ingest/sources.UnescapeEncodedHTML). Because the arbeitnow job-board API is a
-// rolling window of recent postings, rows that aged out of it can never be reached by a
-// re-ingest; in-place repair is the only route.
+// Repairs, each now fixed at ingest and needed here for rows already stored:
+//   - percent-encoded bodies ("%3C"): Taleo's strict url.PathUnescape rejected the whole string
+//     on one stray "%" (sources.LenientPercentUnescape).
+//   - HTML entity-encoded bodies ("&lt;p&gt;"), served by arbeitnow (sources.UnescapeEncodedHTML).
+//     sanitizeHTML cannot recover them, and arbeitnow's feed is a rolling window, so aged-out
+//     rows are reachable only by in-place repair.
+//   - the Himalayas "Originally posted on Himalayas" trailer (sources.StripHimalayasSelfPromo).
+//     Scope it with `backfill-descriptions himalayas`: the feed is recency-ordered, so the crawl
+//     never revisits older rows.
+//   - anchors ("<a"): descriptions no longer carry links, so a body still containing one predates
+//     that rule and is re-sanitized. Universal and by far the largest.
+//   - a literal "\n" left by double-escaped JSON.
+//   - quote references ("&#39;", "&#34;", and the doubled "&amp;#39;" / "&amp;#34;"): Sanitize now
+//     writes those two as characters, so plain-text readers that only strip tags show them clean.
 //
-// A third kind of damage is not an encoding at all: Himalayas brands the bodies it mirrors,
-// ending every posting with an "Originally posted on Himalayas" trailer. The adapter now strips
-// it (internal/ingest/sources.StripHimalayasSelfPromo); because the feed is a recency-ordered window the
-// crawl only ever revisits its freshest slice, so the rows already in the catalogue can only be
-// repaired in place. Scope this one to its provider (`backfill-descriptions himalayas`).
+// BACKFILL_PAUSE_MS (default 100) is how long the sweep waits after a page in which it wrote
+// rows: descriptions live in TOAST, and rewriting millions back to back saturates disk I/O. Set
+// 0 for a small targeted repair; raise it if the host is under load.
 //
-// The fourth repair is universal and by far the largest: descriptions no longer carry links at
-// all. sanitizeHTML unwraps every anchor to its text (and drops the ones whose text merely
-// repeated their own address), so a stored body that still contains "<a" predates that rule and
-// is re-sanitized here. Expect this to rewrite most of the catalogue on its first run — see the
-// pacing note below.
+// With no argument it sweeps the whole catalogue. A source name as the first argument (e.g.
+// `backfill-descriptions taleo`) scopes it to that provider and skips detoasting every other row.
 //
-// The fifth repair is also universal. html.EscapeString, which bluemonday uses to write text
-// nodes, stores an apostrophe as &#39; and a quotation mark as &#34;. That is valid HTML, and
-// the job page renders it, but every plain-text reader that only strips tags shows the reference.
-// Sanitize now writes those two as characters (an ampersand stays &amp;, which HTML requires).
-// A stored body that still contains either reference predates that and is re-sanitized here.
-// The doubled form (&amp;#39; / &amp;#34;) is the same quote stored one escape earlier.
-// This rewrites a large share of the catalogue on its first run; the pause below is what keeps
-// that from saturating the host.
-//
-// It pages by keyset and rewrites every row whose description still carries a repair marker — an
-// encoding ("%3C" or "&lt;"), an anchor ("<a"), a literal "\n", or a quote reference ("&#39;"
-// or "&#34;", including the doubled "&amp;#39;" / "&amp;#34;") — re-running the same
-// sanitize+decode pipeline the adapters use and refreshing content_hash so the row re-indexes.
-// The markers are source-agnostic: any such description is
-// repaired the same way, open or closed. Idempotent — a repaired row carries none of the markers,
-// so a second run rewrites nothing.
-//
-// BACKFILL_PAUSE_MS (default 100) is how long the sweep waits after a page in which it actually
-// wrote rows. Postgres on the app host is untuned and a description lives in TOAST, so rewriting
-// millions of them back to back saturates disk I/O and takes the site down with it. Set it to 0
-// for a small, targeted repair; raise it if the host is already under load.
-//
-// With no argument it sweeps the whole catalogue (universal). Pass a source name as the first
-// argument (e.g. `backfill-descriptions taleo`) to scope the sweep to that provider — the
-// affected rows are known to be a single provider's, and scoping skips detoasting every other
-// row, so a targeted repair does not read the whole table.
-//
-// Follow it with `cmd/backfill-derive` — the rewritten body changes what the deterministic
-// columns derive from, and role_fingerprint hashes the description — and then `make reindex` so
-// the search/recommendation index picks up the fixed text.
+// Follow it with `cmd/backfill-derive` (the rewritten body changes what the deterministic
+// columns derive from, and role_fingerprint hashes the description) and then `make reindex`.
 package main
 
 import (
@@ -78,43 +51,37 @@ import (
 const backfillBatchSize = 500
 
 // defaultPause is how long the sweep rests after a page in which it wrote rows, when
-// BACKFILL_PAUSE_MS says nothing. It is deliberately non-zero: the universal link strip
-// rewrites most of the catalogue, and each rewrite is a TOAST write.
+// BACKFILL_PAUSE_MS is unset. Non-zero because each rewrite is a TOAST write.
 const defaultPause = 100 * time.Millisecond
 
-// A row needing repair announces it in its stored text. Two markers are encodings, each the
-// signature of a different upstream habit: percent-encoded ("%3C", the strict-PathUnescape
-// fallback the Taleo adapter used to hit) or HTML entity-encoded ("&lt;", which arbeitnow
-// serves for part of its feed). The third is an anchor, which no description may carry any
-// more. Any of them selects candidate rows cheaply, without a content-scanning SQL predicate.
+// A row needing repair announces it in its stored text. Two markers are encodings:
+// percent-encoded ("%3C") or HTML entity-encoded ("&lt;"). The third is an anchor, which no
+// description may carry any more. They select candidate rows without a content-scanning SQL
+// predicate.
 const (
 	percentEncodedMarker = "%3C"
 	entityEncodedMarker  = "&lt;"
 	anchorMarker         = "<a"
-	// literalNewlineMarker is the fourth signature: a backslash followed by an "n", left by an
-	// aggregator that escaped its JSON twice (whatjobs markets and adzuna, which resell through
-	// the same upstream network). Unlike the encodings this needs no decoder of its own — the
-	// sanitizer repairs it — so the marker only has to select the row.
+	// literalNewlineMarker is a backslash followed by an "n", left by an aggregator that
+	// escaped its JSON twice. It needs no decoder of its own (the sanitizer repairs it), so
+	// the marker only selects the row.
 	literalNewlineMarker = `\n`
-	// apostropheMarker and quoteMarker are the fifth signature. They are what html.EscapeString
-	// writes for ' and ", and what Sanitize no longer emits. The doubled markers are the same
-	// quote with the ampersand escaped once more (&amp;#39;). &amp; alone is deliberately not a
-	// marker: rewriting it would put a bare & back into stored HTML, and the next sanitize
-	// would escape it again.
+	// apostropheMarker and quoteMarker are what html.EscapeString writes for ' and ", which
+	// Sanitize no longer emits; the doubled markers are the same quote escaped once more.
+	// &amp; alone is deliberately not a marker: rewriting it would put a bare & back into
+	// stored HTML, and the next sanitize would escape it again.
 	apostropheMarker        = "&#39;"
 	quoteMarker             = "&#34;"
 	doubledApostropheMarker = "amp;#39;"
 	doubledQuoteMarker      = "amp;#34;"
 )
 
-// himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
-// (a promo trailer plus self-backlinks over every company mention). Unlike the encoding markers
-// this repair is not source-agnostic: the same links under another provider are the employer's.
+// himalayasSource is the one provider whose stored bodies carry the aggregator's own branding.
+// That repair is not source-agnostic: the same links under another provider are the employer's.
 const himalayasSource = "himalayas"
 
-// jobStore is the slice of the data layer the backfill needs: page rows by keyset (whole table or
-// one source) and rewrite a row's description + content_hash. *db.Queries satisfies it; the test
-// uses a fake.
+// jobStore is the slice of the data layer the backfill needs. *db.Queries satisfies it; the
+// test uses a fake.
 type jobStore interface {
 	ListJobsByIDAfter(ctx context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error)
 	ListJobsBySourceAfter(ctx context.Context, arg db.ListJobsBySourceAfterParams) ([]db.Job, error)
@@ -153,12 +120,11 @@ func run() int {
 
 // backfillAll pages jobs by keyset (id > last seen, so concurrent writes cannot skip or repeat
 // rows) and repairs the ones whose stored description still carries a marker. An empty source
-// sweeps the whole table; a non-empty source scopes the sweep to that provider. The repair
-// reproduces the adapter pipeline exactly (decode then SanitizeHTML), so the recomputed
-// content_hash matches what a re-ingest would produce.
+// sweeps the whole table. The repair reproduces the adapter pipeline exactly (decode then
+// SanitizeHTML), so the recomputed content_hash matches a re-ingest.
 //
-// pause rests between pages that wrote rows, keeping a catalogue-wide sweep from monopolising
-// the database's disk. A page that changed nothing costs nothing, so it does not wait.
+// pause rests between pages that wrote rows, so a catalogue-wide sweep does not monopolise the
+// disk; a page that changed nothing does not wait.
 func backfillAll(ctx context.Context, store jobStore, source string, pause time.Duration) (scanned, updated int, err error) {
 	var afterID int64
 	for {
@@ -213,34 +179,24 @@ func backfillPause() time.Duration {
 	return defaultPause
 }
 
-// repairDescription reproduces the adapters' pipeline for a stored description: decode whichever
-// encoding the row was stored with, then re-sanitize, then drop the branding the serving
-// aggregator added. It returns stored unchanged when there was nothing to repair, so a row with
-// no marker is never rewritten.
+// repairDescription reproduces the adapters' pipeline for a stored description: decode
+// whichever encoding the row was stored with, re-sanitize, then drop the serving aggregator's
+// branding. It returns stored unchanged when there was nothing to repair.
 //
-// Each decoder runs only when its own marker is present, so a row mangled by one encoding is
-// never put through the other's decoder — percent-decoding an entity-encoded body would rewrite
-// unrelated "%NN"-looking prose. The entity decode is itself conditional on encoded markup
-// outweighing live markup (see sources.UnescapeEncodedHTML), which is what leaves a posting that
-// merely writes "&lt;" as a less-than sign alone.
+// Each decoder runs only when its own marker is present, so percent-decoding never touches an
+// entity-encoded body (which would rewrite unrelated "%NN"-looking prose). The entity decode is
+// itself conditional on encoded markup outweighing live markup (sources.UnescapeEncodedHTML),
+// which leaves a posting that merely writes "&lt;" as a less-than sign alone.
 //
-// A stored literal "\n" sends the body through the sanitizer for the same reason as an anchor:
-// the repair lives there (see internal/ingest/sources.repairLiteralNewlines), not in a decoder here,
-// because deciding what an escape meant needs the markup around it. The marker is narrow enough
-// to select almost nothing — 15 rows in a 20k-row sample of the live catalogue — so it does not
-// widen the universal sweep in any meaningful way.
+// A stored literal "\n" or anchor sends the body through the sanitizer, whatever its source:
+// the repair lives there (sources.repairLiteralNewlines, sources.sanitizeHTML), not in a decoder
+// here. This leans on the sanitizer being idempotent, which its own test pins. The anchor marker
+// is a plain prefix, so it also matches "<abbr" and friends; those elements are not on the
+// allowlist either, so the sanitizer has work to do on such a row regardless.
 //
-// A stored anchor also sends the body through the sanitizer, whatever its source: descriptions
-// carry no links any more (see internal/ingest/sources.sanitizeHTML), and the rows stored before that
-// rule can only be brought in line by re-running it. Unlike the decodes this path does lean on
-// the sanitizer being idempotent, which its own test pins. The marker is a plain prefix, so it
-// also matches "<abbr" and friends — those elements are not on the allowlist either, so the
-// sanitizer has work to do on such a row regardless.
-//
-// The de-branding is keyed on source, not on a marker: an "Originally posted on Himalayas"
-// trailer under any other provider is that employer's own text. It also runs on a body nothing
-// else touched, which is the normal case — branding rides on well-formed HTML — so it sits
-// outside the repair gate.
+// The de-branding is keyed on source, not a marker: an "Originally posted on Himalayas" trailer
+// under another provider is that employer's own text. It sits outside the repair gate because
+// branding rides on well-formed HTML nothing else touched.
 func repairDescription(source, stored string) string {
 	decoded := stored
 	if strings.Contains(decoded, percentEncodedMarker) {
@@ -261,9 +217,8 @@ func repairDescription(source, stored string) string {
 	return repaired
 }
 
-// pageJobs fetches one keyset page after afterID — from the whole table when source is empty, or
-// scoped to a single provider otherwise (which lets the query use the (source, ...) index and
-// skip detoasting every other row).
+// pageJobs fetches one keyset page after afterID, from the whole table when source is empty or
+// scoped to one provider (which uses the (source, ...) index).
 func pageJobs(ctx context.Context, store jobStore, source string, afterID int64) ([]db.Job, error) {
 	if source == "" {
 		return store.ListJobsByIDAfter(ctx, db.ListJobsByIDAfterParams{

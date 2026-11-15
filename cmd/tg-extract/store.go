@@ -68,21 +68,18 @@ func (s *extractStore) Complete(ctx context.Context, post telegram.PendingPost, 
 	return s.write(ctx, post, jobs)
 }
 
-// CompleteLinks writes link-resolved jobs — each already carrying the destination platform's
-// own source identity rather than the Telegram post's. By the time they reach here that is the
-// only thing that ever distinguished them from an extracted job, and it is already spent, so
-// both go through one writer.
+// CompleteLinks writes link-resolved jobs, which already carry the destination platform's own
+// source identity rather than the Telegram post's. Nothing else distinguishes them from an
+// extracted job, so both go through one writer.
 func (s *extractStore) CompleteLinks(ctx context.Context, post telegram.PendingPost, jobs []job.Job) error {
 	return s.write(ctx, post, jobs)
 }
 
-// write persists every job through the canonical UpsertJob (which upserts the company and
-// gates on the dedup key), enqueues each for enrichment and for the live facet index, and
-// marks the post extracted — all in one transaction, so a crash never half-persists a post.
-//
-// It maps and nothing else. Building the aggregate, and refusing a mis-extraction that has no
-// title or identity, is the runner's — which is what lets a run report how many it refused
-// instead of dropping them here and counting them as written.
+// write persists every job through the canonical UpsertJob (which upserts the company and gates
+// on the dedup key), enqueues each for enrichment and for the live facet index, and marks the
+// post extracted, all in one transaction so a crash never half-persists a post. It only maps:
+// building the aggregate and refusing a mis-extraction is the runner's, so a run can report how
+// many it refused.
 func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, jobs []job.Job) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -103,10 +100,8 @@ func (s *extractStore) write(ctx context.Context, post telegram.PendingPost, job
 		}); err != nil {
 			return fmt.Errorf("enqueue enrichment %s/%s: %w", f.Source, f.ExternalID, err)
 		}
-		// And for the live facet index, in the same transaction — otherwise an extracted
-		// vacancy reaches /jobs/search and the facet counts only on the next full
-		// rebuild-and-swap. This is a stream, not the occasional curated write: every
-		// other write path (cmd/ingest, cmd/hydrate-adzuna-description) queues here too.
+		// And for the live facet index, in the same transaction, so an extracted vacancy reaches
+		// /jobs/search and the facet counts without waiting for the next full rebuild.
 		if err := qtx.EnqueueSearchOutbox(ctx, saved.ID); err != nil {
 			return fmt.Errorf("enqueue search outbox %s/%s: %w", f.Source, f.ExternalID, err)
 		}

@@ -11,12 +11,10 @@ import (
 // postings means a live board. The employer name comes from the seed.
 type apploiProber struct{}
 
-// apploiNumericSlugRE matches apploi's own employer-id shape: digits only. A name-derived
-// candidate (e.g. "101-edu") is never a valid employer id, but api.apploi.com doesn't error on
-// one — it silently ignores an `employer` value it can't parse and answers with a non-empty,
-// "live" jobs list regardless. Fed a 5,216-candidate name-derived seed, that read as a 100%
-// hit rate (confirmed live — see #1884). Reject non-numeric slugs up front rather than trust
-// the API to say no.
+// apploiNumericSlugRE matches apploi's own employer-id shape: digits only. api.apploi.com
+// silently ignores an `employer` value it can't parse and answers with a non-empty "live" jobs
+// list, so a name-derived candidate (e.g. "101-edu") would read as a hit. Reject non-numeric
+// slugs up front rather than trust the API to say no.
 var apploiNumericSlugRE = regexp.MustCompile(`^\d+$`)
 
 func (apploiProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {

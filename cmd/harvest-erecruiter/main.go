@@ -1,14 +1,11 @@
-// Command harvest-erecruiter turns a list of company careers pages into validated
-// eRecruiter catalog boards. eRecruiter's board id is a cfg token embedded in each
-// company's own careers page (there is no slug to guess and no cfg in the justjoin apply
-// forms), so onboarding a company means resolving its cfg from its careers URL and
-// confirming the board is live before adding it.
+// Command harvest-erecruiter turns a list of company careers pages into validated eRecruiter catalog
+// boards. The board id is a cfg token embedded in each company's careers page (no slug to guess), so
+// onboarding means resolving the cfg from the careers URL and confirming the board is live.
 //
-// Input is one company per line, "Company Name<TAB>https://careers.url" (a line without a
-// tab is treated as a bare URL, with the host as the company name). For each: fetch the
-// page, extract the cfg widget token, probe its first list page, and keep it only when
-// the board returns offers and the cfg is not already in the catalog. A company that
-// fails any step is logged and skipped without aborting the run.
+// Input is one company per line, "Company Name<TAB>https://careers.url" (a line without a tab is a
+// bare URL, the host being the company name). Per line: fetch the page, extract the cfg widget token,
+// probe its first list page, and keep it only when the board returns offers and the cfg is not
+// already in the catalog. A failing company is logged and skipped.
 //
 // It reports by default and writes only under --apply, the same convention as
 // cmd/add-board. A kept board enters at status='pending'.
@@ -108,9 +105,8 @@ func run() int {
 	return 0
 }
 
-// addBoard persists one validated cfg at status='pending'. A duplicate is not an error:
-// another run may have landed the same cfg between the catalog read and this insert, and
-// the run should still onboard the rest.
+// addBoard persists one validated cfg at status='pending'. A duplicate is not an error: another run
+// may have landed the same cfg since the catalog read.
 func addBoard(ctx context.Context, ins *boardcatalog.Inserter, cfg, company string) error {
 	b, err := ins.Insert(ctx, boardcatalog.InsertInput{
 		Provider: provider,
@@ -124,8 +120,7 @@ func addBoard(ctx context.Context, ins *boardcatalog.Inserter, cfg, company stri
 	case err != nil:
 		return fmt.Errorf("add %s: %w", cfg, err)
 	case b.Status == boardcatalog.StatusRejected:
-		// Validation refused a cfg that just answered with offers: a bug here, not a
-		// bad input.
+		// Validation refused a cfg that just answered with offers: a bug, not bad input.
 		return fmt.Errorf("cfg %s rejected by validation: %s", cfg, b.RejectedReason)
 	}
 	return nil
@@ -137,8 +132,8 @@ type input struct {
 	careersURL string
 }
 
-// resolve fetches a careers page, extracts its eRecruiter cfg, and live-probes it, returning
-// the cfg and its first-page offer count (0 when absent or empty).
+// resolve fetches a careers page, extracts its cfg, and live-probes it, returning the cfg and its
+// first-page offer count (0 when absent or empty).
 func resolve(ctx context.Context, client *sources.Client, careersURL string) (string, int, error) {
 	page, err := client.GetText(ctx, careersURL)
 	if err != nil {
@@ -155,8 +150,8 @@ func resolve(ctx context.Context, client *sources.Client, careersURL string) (st
 	return cfg, offers, nil
 }
 
-// readInputs parses the "Company<TAB>URL" worklist; a line without a tab is a bare URL whose
-// host becomes the company name. Blank lines and lines without a usable URL are skipped.
+// readInputs parses the "Company<TAB>URL" worklist; a tab-less line is a bare URL whose host is the
+// company name. Blank lines and lines without a usable URL are skipped.
 func readInputs(path string) ([]input, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -188,8 +183,8 @@ func readInputs(path string) ([]input, error) {
 	return out, sc.Err()
 }
 
-// existingCfgs returns the cfg board ids already live in the catalog (lower-cased for a
-// case-insensitive compare), so a re-run does not re-propose a company already onboarded.
+// existingCfgs returns the lower-cased cfg board ids already in the catalog, so a re-run does not
+// re-propose an onboarded company.
 func existingCfgs(ctx context.Context, repo boardcatalog.Repository) (map[string]bool, error) {
 	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 	if err != nil {

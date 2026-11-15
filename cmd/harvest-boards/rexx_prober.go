@@ -14,14 +14,11 @@ import (
 )
 
 // rexxProber validates a rexx portal (a host, optionally with a path) by walking its listing,
-// <base>/stellenangebote.html?start=<offset>, 100 postings a page, and counting the distinct
-// posting permalinks (/<slug>-<lang>-j<id>.html). It mirrors internal/ingest/sources/rexx.go,
-// which is unexported.
+// <base>/stellenangebote.html?start=<offset>, 100 postings a page, and counting the distinct posting
+// permalinks (/<slug>-<lang>-j<id>.html). It mirrors the unexported internal/ingest/sources/rexx.go.
 //
-// It then reads ONE posting page and requires its schema.org JobPosting: the adapter reads a
-// posting from nothing else, and a portal that renders none (voss, measured 2026-10-25) would
-// yield an unreadable marker per posting every run. That page also names the employer —
-// hiringOrganization, minus the " Jobportal" suffix a third of portals append.
+// It then reads ONE posting page and requires its schema.org JobPosting, the only thing the adapter
+// reads a posting from. That page also names the employer (hiringOrganization, minus a " Jobportal" suffix).
 type rexxProber struct{}
 
 var (

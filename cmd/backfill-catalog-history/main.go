@@ -1,8 +1,7 @@
-// Command backfill-catalog-history fills catalog_size_daily for the days before cmd/rollup-stats
-// began measuring the catalogue's size. It replays today's jobs as daily flows (created minus
-// closed, listed postings only) and adds back the postings the removed cmd/prune hard-deleted,
-// dated by their ids. Every row it writes is marked reconstructed: it applies today's
-// duplicate verdicts to the past.
+// Command backfill-catalog-history fills catalog_size_daily for the days before cmd/rollup-
+// stats began measuring. It replays today's jobs as daily flows (created minus closed, listed
+// postings only) and adds back postings the removed cmd/prune hard-deleted, dated by id. Every
+// row is marked reconstructed: it applies today's duplicate verdicts to the past.
 //
 // The prune also took closed postings and duplicates, and its archive does not say which, so
 // -pruned-share (0..1) says what fraction of them to count as listed. It has no default: pick

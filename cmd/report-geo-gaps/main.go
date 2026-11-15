@@ -29,16 +29,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// defaultChunkSize is how many ids one chunk's id range spans. Like
-// cmd/report-classify-drift, the query GROUPs BY with no row LIMIT and reads no
-// description, so the range width alone bounds one statement's cost.
+// defaultChunkSize is how many ids one chunk's id range spans. The query GROUPs BY with no row
+// LIMIT and reads no description, so the range width alone bounds one statement's cost.
 const defaultChunkSize = 50_000
 
 // defaultTopN is how many ranked candidates each of the two sections prints.
 const defaultTopN = 200
 
-// pauseBetweenChunks lets the host breathe between statements, the same courtesy
-// every other chunked one-off tool in this repo pays.
+// pauseBetweenChunks lets the host breathe between statements.
 const pauseBetweenChunks = 200 * time.Millisecond
 
 func main() { worker.Main(run) }

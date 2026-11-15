@@ -32,15 +32,12 @@ type jsonModel interface {
 }
 
 // postingTextResolver names a placeholder board's employer from its stored posting text, for
-// an ATS that states the employer nowhere else. ADP is the case it exists for: measured
-// 2026-10-25 in a headless browser, its career center renders only a logo image with a
-// random file name, and neither the listing, the requisition detail nor any of the page's
-// six configuration requests names the client — while 7 of 10 sampled boards name it in the
-// first lines of the posting ("Black River Health is seeking…").
+// an ATS that states the employer nowhere else (ADP: its career center renders only a logo
+// with a random file name, while most boards name the client in the first lines of a posting).
 //
-// The model READS, it does not decide: companyname.GroundedName admits its answer only when
-// the answer appears verbatim in the postings it was given, and returns the postings' own
-// spelling of it. A name the model inferred, paraphrased or knew from elsewhere is refused.
+// The model READS, it does not decide: companyname.GroundedName admits its answer only when it
+// appears verbatim in the postings given, and returns the postings' own spelling. A name the
+// model inferred, paraphrased or knew from elsewhere is refused.
 type postingTextResolver struct {
 	q      descriptionLister
 	model  jsonModel
@@ -95,14 +92,12 @@ func (r postingTextResolver) Name(ctx context.Context, board string) (string, er
 }
 
 // capProvider keeps at most n of one provider's rows, taken from a window that starts at
-// offset and wraps, plus every other provider's — how a run bounds the boards it asks a model
-// about without touching the providers that cost nothing. n <= 0 keeps everything.
+// offset and wraps, plus every other provider's: how a run bounds the boards it asks a model
+// about without touching free providers. n <= 0 keeps everything.
 //
-// The window has to MOVE between runs. A board the model cannot name stays a placeholder and
-// stays in the list, so a window fixed at the front fills with refusals within a few runs and
-// the boards behind them are never read — the failure backfill-derive carried until
-// freehire#2864. The caller passes an offset that advances by n each day, so successive runs
-// sweep the whole list, and a refused board is asked again only once per sweep.
+// The window has to MOVE between runs: a board the model cannot name stays in the list, so a
+// fixed window fills with refusals and the boards behind it are never read. The caller
+// advances offset by n each day, so successive runs sweep the whole list.
 func capProvider(rows []db.ListPlaceholderCompanyBoardsRow, provider string, n, offset int64) []db.ListPlaceholderCompanyBoardsRow {
 	if n <= 0 {
 		return rows

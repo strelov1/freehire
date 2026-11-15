@@ -62,11 +62,9 @@ func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAt
 	return row.FailedAt.Valid, nil
 }
 
-// deletionStore adapts the generated queries + pool to searchdrain.DeletionStore.
-//
-// A separate type rather than more methods on dbStore: the two queues are different tables
-// with the same shape, so one type carrying both would need Claim/Complete/Fail twice under
-// invented names, and every call site would have to remember which was which.
+// deletionStore adapts the generated queries + pool to searchdrain.DeletionStore. It is a
+// separate type because the two queues are different tables with the same shape, and one
+// type would need Claim/Complete/Fail twice under invented names.
 type deletionStore struct {
 	q *db.Queries
 }

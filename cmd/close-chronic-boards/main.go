@@ -1,21 +1,14 @@
-// Command close-chronic-boards is the safety net for a board (or a boardless provider) that
-// has proven unreachable for a long time — not merely cooling down from a recent run of
-// failures (openspec change close-chronically-unreachable-boards, issue #2017).
+// Command close-chronic-boards is the safety net for a board (or boardless provider) that has
+// been unreachable for a long time, not merely cooling down.
 //
-// The ordinary per-run unseen sweep (cmd/ingest) deliberately never closes a board's jobs
-// unless THAT RUN proved it covered the board — see job-lifecycle spec's shouldSweep /
-// boardQualifies / sweepableCompanies. That guard is correct against a transient failure but
-// has no upper bound: a board that is permanently gone keeps its stale jobs open forever,
-// since it can never re-qualify. This worker is the deliberate, separate escape hatch: once
-// board_health.ListChronicBoards proves a board has had no successful crawl for the closure
-// window (default 60 days, CHRONIC_BOARD_CLOSE_WINDOW_DAYS overrides), its open jobs are
-// closed with their own 'board_unreachable' reason — never conflated with the ordinary sweep's
-// 'unseen'.
+// The per-run unseen sweep (cmd/ingest) never closes a board's jobs unless that run proved it
+// covered the board, so a permanently gone board keeps stale jobs open forever. Once
+// board_health.ListChronicBoards proves no successful crawl for the closure window (default 60
+// days, CHRONIC_BOARD_CLOSE_WINDOW_DAYS overrides), its open jobs close with their own
+// 'board_unreachable' reason, never 'unseen'.
 //
-// Dry-run by default, reporting what it would close; --apply writes. Per design.md's Migration
-// Plan, ship this dry-run-only on its timer until a human has read at least one full closure
-// window's report — a board a curator would rather retire or fix stays a curation decision,
-// not a fait accompli.
+// Dry-run by default; --apply writes. Ship it dry-run on its timer until a human has read at
+// least one full closure window's reports.
 //
 // Needs only DATABASE_URL.
 package main
@@ -30,20 +23,14 @@ import (
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// chronicBoardCloseWindowDaysDefault is deliberately longer than the per-run report's chronic
-// window (cmd/ingest's chronicBoardWindowDaysDefault, 30 days): a curator who reads that report
-// has the gap between the two windows to retire or fix a board before this worker would have
-// closed it anyway (design.md Decision 1).
+// chronicBoardCloseWindowDaysDefault is longer than the per-run report's chronic window
+// (cmd/ingest's chronicBoardWindowDaysDefault, 30 days), leaving a curator the gap to retire or
+// fix a board before this worker closes it.
 const chronicBoardCloseWindowDaysDefault int32 = 60
 
-// emptyFeedCloseWindowDaysDefault is deliberately SHORTER than the unreachable window above,
-// because the two windows are waiting out different uncertainties. An unreachable board is
-// waiting out OUR side — a blocked crawler, a rotated URL, an adapter that needs a fix — and
-// sixty days is the room a curator is given to act before the safety net does. An empty feed has
-// already told us its answer, successfully, on every run: there is nothing here. Thirty days is
-// how long we insist it keeps saying so before believing it, which is generous against the one
-// benign reading (a seasonal or deliberately paused board) and still an order of magnitude
-// tighter than leaving the postings open forever, which is what happened before this existed.
+// emptyFeedCloseWindowDaysDefault is shorter than the unreachable window: an unreachable board
+// waits out our side (blocked crawler, rotated URL), while an empty feed has already answered,
+// successfully, on every run. 30 days guards against a seasonal or paused board.
 const emptyFeedCloseWindowDaysDefault int32 = 30
 
 // Board-gone needs repeated explicit platform evidence, so one week is enough separation from
@@ -54,12 +41,9 @@ func main() { worker.Main(run) }
 
 func run() int {
 	apply := flag.Bool("apply", false, "actually close chronically UNREACHABLE boards; without it that pass only reports")
-	// A second, separate switch rather than letting --apply arm both passes. The unit file's
-	// own comment tells a future operator to add --apply once they have read a full closure
-	// window's worth of the UNREACHABLE pass's reports — and if that one flag also armed this
-	// one, following that instruction would silently start closing jobs on evidence nobody had
-	// reviewed, which is precisely the posture the dry-run default exists to prevent. Each
-	// safety net is armed by a person who has read that net's own reports.
+	// A separate switch rather than letting --apply arm both passes: the unit file tells an operator
+	// to add --apply after reading the unreachable pass's reports, and that must not silently arm a
+	// pass whose reports nobody reviewed.
 	applyEmptyFeed := flag.Bool("apply-empty-feed", false, "actually close reachable-but-EMPTY boards; without it that pass only reports")
 	applyBoardGone := flag.Bool("apply-board-gone", false, "actually close boards with repeated explicit board-gone evidence; without it that pass only reports")
 	flag.Bool("dry-run", false, "no-op: reporting is the default, --apply flags are what close")
@@ -120,11 +104,9 @@ func run() int {
 	log.Printf("close-chronic-boards: %d chronic board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
 		report.boardsProcessed, report.boardsSkippedAmbiguous, verb, report.jobsAffected)
 
-	// The empty-feed pass runs after the unreachable one and never instead of it: the two select
-	// disjoint sets by construction (a board qualifying here must have succeeded inside its own
-	// window, which is exactly what a chronic board has not), so neither can take work from the
-	// other, and a board that somehow moved between the two states between the passes is simply
-	// examined twice against predicates the close statements re-validate anyway.
+	// The empty-feed pass runs after the unreachable one, never instead of it. The two select
+	// disjoint sets (this one needs a recent success, a chronic board has none), and the close
+	// statements re-validate anyway.
 	empty, err := closeEmptyFeedBoards(ctx, q, emptyDays, maxChronicBoardsPerRun, *applyEmptyFeed)
 	if err != nil {
 		log.Printf("close-chronic-boards: %v", err)
@@ -137,11 +119,8 @@ func run() int {
 	log.Printf("close-chronic-boards: %d empty-feed board(s) (%d skipped as region-ambiguous), %s %d job(s) total",
 		empty.boardsProcessed, empty.boardsSkippedAmbiguous, emptyVerb, empty.jobsAffected)
 
-	// Publish the same verdict where it outlives the journal. This worker's whole design asks
-	// a person to read a closure window's reports before arming it, and until now those
-	// reports rotated away inside a day — six days of them were gone before anyone looked.
-	// Best-effort and last: the close (or the refusal to close) is the job, and a metrics
-	// write that fails must not turn a successful run red.
+	// Publish the verdict where it outlives the journal. Best-effort and last: a failed metrics
+	// write must not turn a successful run red.
 	publishMetrics(report, empty, gone, *apply, *applyEmptyFeed, *applyBoardGone)
 	return 0
 }

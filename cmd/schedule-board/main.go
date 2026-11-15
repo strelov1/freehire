@@ -1,14 +1,12 @@
-// Command schedule-board is how a curator reads and edits the ingest schedule — the
-// database-backed replacement for editing the constants in freehire-ops' provision/host2/gen-ingest-timers.sh
-// and re-running it over ssh.
+// Command schedule-board is how a curator reads and edits the ingest schedule stored in
+// the database.
 //
 // It reports by default and writes only under --apply, like cmd/add-board.
 //
 // The roster is the boards table; this command edits OVERRIDES. A provider with no row is
-// scheduled on documented defaults and shows as "default" in the report. Turning a
-// provider OFF requires a reason, enforced by the table itself: "nobody configured it" and
-// "we decided not to crawl it" must not be the same state, because that is precisely what
-// hid two dead providers in production for weeks.
+// scheduled on documented defaults and shows as "default". Turning a provider OFF requires
+// a reason, enforced by the table itself, so "nobody configured it" and "we decided not
+// to crawl it" are never the same state.
 //
 // Usage:
 //
@@ -108,14 +106,13 @@ type editFlags struct {
 }
 
 // edit turns the flags into a partial override. It is split from run so it can be tested
-// without a database — every check here is about the flags, not about the store.
+// without a database.
 func edit(provider string, f editFlags) (ingestsched.OverrideInput, error) {
 	in := ingestsched.OverrideInput{Provider: provider}
 
 	if err := ingestsched.ValidateProviderKey(provider); err != nil {
-		// Refusing here rather than at the next scheduler tick: a typo written into the
-		// table would otherwise sit there being reported as refused every minute, and the
-		// person who typed it would be gone.
+		// Refuse here rather than at the next scheduler tick, where a typo would sit in the
+		// table being reported as refused every minute.
 		return in, err
 	}
 	if f.disable && f.enable {
@@ -130,10 +127,9 @@ func edit(provider string, f editFlags) (ingestsched.OverrideInput, error) {
 	if f.disable && strings.TrimSpace(f.reason) == "" {
 		return in, fmt.Errorf("--disable requires --reason: an unexplained disable is the silence this table exists to remove")
 	}
-	// The table bounds this too. Refusing here as well is what turns a fat-fingered zero
-	// into a message rather than a constraint name — and the constraint is the only thing
-	// standing between a typo and a generate_series that outlives the scheduler's timeout
-	// on every tick.
+	// The table bounds this too. Refusing here turns a fat-fingered zero into a message
+	// rather than a constraint name; the constraint is all that stands between a typo and a
+	// generate_series that outlives the scheduler's timeout.
 	if f.shards > maxShards {
 		return in, fmt.Errorf("--shards=%d exceeds the maximum of %d; the largest real value is paylocity's 24", f.shards, maxShards)
 	}
@@ -237,8 +233,7 @@ func report(ctx context.Context, repo *ingestsched.QueriesRepository) int {
 	return 0
 }
 
-// source is the distinction the spec asks the report to draw: a provider running on
-// defaults versus one somebody configured.
+// source tells a provider running on defaults from one somebody configured.
 func source(r ingestsched.ProviderReport) string {
 	if r.Overridden {
 		return "override"
@@ -246,9 +241,8 @@ func source(r ingestsched.ProviderReport) string {
 	return "default"
 }
 
-// shardsColumn shows the intended count and, when they differ, what run state actually
-// holds — a shard-count change that has not been reconciled is exactly the drift this
-// whole change is about, so it must be visible rather than averaged away.
+// shardsColumn shows the intended count and, when they differ, what run state holds: an
+// unreconciled shard-count change must be visible rather than averaged away.
 func shardsColumn(r ingestsched.ProviderReport) string {
 	if r.ShardsInState == r.Shards {
 		return fmt.Sprintf("%d", r.Shards)
@@ -256,10 +250,9 @@ func shardsColumn(r ingestsched.ProviderReport) string {
 	return fmt.Sprintf("%d (state:%d)", r.Shards, r.ShardsInState)
 }
 
-// poolColumn shows which of the scheduler's two concurrency pools a provider draws from —
-// ingestsched.Settings.IsHeavy is otherwise invisible here, the exact gap that let it ship
-// with no way for a curator to see or set the explicit half of the decision. Named apart
-// from run's own local pgx `pool` variable to avoid a shadowing lookalike.
+// poolColumn shows which of the scheduler's two concurrency pools a provider draws from
+// (ingestsched.Settings.IsHeavy), otherwise invisible here. Named apart from run's local
+// pgx `pool` variable to avoid a shadowing lookalike.
 func poolColumn(r ingestsched.ProviderReport) string {
 	if r.IsHeavy() {
 		return "heavy"
@@ -272,10 +265,8 @@ func state(r ingestsched.ProviderReport) string {
 	case !r.Enabled:
 		return "disabled"
 	case !r.Managed:
-		// "not-managed", not "static-timer": between §9 (the generated units are deleted)
-		// and §8.5 (the column is dropped) a provider in this state is scheduled by
-		// NOTHING, and a label asserting a timer that no longer exists would read as
-		// healthy.
+		// "not-managed", not "static-timer": a provider in this state is scheduled by
+		// nothing, and a label asserting a timer would read as healthy.
 		return "not-managed"
 	case r.InFlight > 0:
 		return fmt.Sprintf("running:%d", r.InFlight)

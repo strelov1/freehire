@@ -11,14 +11,12 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// homerunProber validates a Homerun tenant (the <board> of douglas.homerun.co) by reading the
-// Atom feed the adapter lists from, feed.homerun.co/<board>, and counting its entries. It mirrors
+// homerunProber validates a Homerun tenant (the <board> of douglas.homerun.co) by counting the
+// entries of the Atom feed the adapter lists from, feed.homerun.co/<board>. It mirrors
 // internal/ingest/sources/homerun.go, which is unexported.
-//
-// The feed's title is the career site's, which is the employer's name or a heading built on it
-// ("Vacatures - Werken bij Douglas NL", "Werken bij Belsimpel"); the heading words are cut. An
-// unknown or switched-off tenant's feed redirects to 404.homerun.co, which answers 404: a skip.
-//
+// The feed's title is the career site's: the employer's name, or a heading built on it
+// ("Werken bij Belsimpel"); the heading words are cut. An unknown or switched-off tenant's feed
+// redirects to 404.homerun.co, which answers 404: a skip.
 // Homerun refuses by rate and then blocks the address (see homerunRequestInterval in
 // internal/ingest/sources/pacer.go): run it with -pace 2 or slower.
 type homerunProber struct{}
@@ -49,8 +47,7 @@ func (homerunProber) probe(ctx context.Context, c httpClient, board string) (str
 }
 
 // discover enumerates candidate tenants from Common Crawl's index of *.homerun.co. Homerun's DNS
-// answers every label, so a sweep proves nothing; the crawl's tenant hosts are the seed (874
-// labels in five snapshots on 2026-10-25, 623 with a feed).
+// answers every label, so a sweep proves nothing; the crawl's tenant hosts are the seed.
 func (homerunProber) discover(ctx context.Context, c httpClient) ([]string, error) {
 	return commonCrawlCandidates(ctx, c, "*.homerun.co", recognizedBoard("homerun"))
 }

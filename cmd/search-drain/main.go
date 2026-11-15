@@ -1,19 +1,13 @@
-// Command search-drain is the standalone incremental facet-search worker. It drains
-// the search_outbox queue: each wave of jobs cmd/ingest queued (new or content-
-// changed, since its last drain) is pushed into the live Meilisearch `jobs` index as
-// ONE batch, then the wave's outbox entries are deleted. Run it on a schedule (e.g.
-// cron); it drains what is queued and exits. It is the incremental sibling of
-// cmd/embed, and the only routine path to the index: the full `reindex` swap-rebuild is a
-// by-hand step after a backfill (internal/search/searchdrain/AGENTS.md). It exits non-zero
-// when the run had any failures or dead-letters, so cron can alert.
+// Command search-drain is the standalone incremental facet-search worker. It drains the
+// search_outbox queue: each wave of jobs cmd/ingest queued (new or content-changed) is
+// pushed into the live Meilisearch `jobs` index as one batch, then the wave's outbox
+// entries are deleted. It drains what is queued and exits, non-zero when the run had any
+// failures or dead-letters. It is the incremental sibling of cmd/embed and the only
+// routine path to the index: the full `reindex` swap-rebuild is a by-hand step after a
+// backfill (internal/search/searchdrain/AGENTS.md).
 //
-// This replaces cmd/ingest's previous inline push (search.Client.SubmitJobs called
-// once per ingest run): with ~169 independent per-board ingest processes, that meant
-// one Meili task per board per crawl, each forcing a full index re-merge (observed at
-// 50-90s regardless of batch size on the production catalogue) — the dominant cause
-// of a prod disk-IO saturation that produced nginx 504s. Routing every write through
-// one outbox drained on its own schedule collapses however many boards changed in a
-// window into one Meili task.
+// Routing every write through one outbox collapses however many boards changed in a
+// window into one Meilisearch task; a task per board forced a full index re-merge each.
 package main
 
 import (

@@ -11,9 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// locTag captures the URL inside each <loc> element of a sitemap or sitemap index, in
-// document order. role.com's sitemaps carry no namespacing quirks, so a tag scan is
-// enough — no XML decoder needed.
+// locTag captures the URL inside each <loc> element. role.com's sitemaps have no namespace
+// quirks, so a tag scan is enough.
 var locTag = regexp.MustCompile(`<loc>([^<]+)</loc>`)
 
 // sitemapLocs returns every <loc> URL in a sitemap (or sitemap index) document, in order.
@@ -26,10 +25,9 @@ func sitemapLocs(xml []byte) []string {
 	return out
 }
 
-// strideSample returns up to n items evenly spaced across items (always starting at the
-// first), or all of them in order when n exceeds the length. It spreads a bounded fetch
-// budget across a sitemap's postings — and across the sitemaps themselves — so a capped
-// run discovers boards from the whole catalogue rather than draining one id-range.
+// strideSample returns up to n items evenly spaced across items (starting at the first), or
+// all of them when n exceeds the length. A capped run thus samples the whole catalogue
+// rather than draining one id-range.
 func strideSample(items []string, n int) []string {
 	if n <= 0 || len(items) == 0 {
 		return nil
@@ -45,11 +43,10 @@ func strideSample(items []string, n int) []string {
 	return out
 }
 
-// classifyDetail parses a role.com job page and resolves its outbound apply link to the
-// (provider, board) of a source adapter we can crawl, alongside the employer name from the
-// page's JobPosting JSON-LD. ok is false when the page carries no apply link or the link is
-// not a supported, board-yielding ATS URL. The company carries through to the seed so a
-// provider whose own API exposes no name (Oracle) still gets a real employer label.
+// classifyDetail parses a role.com job page and resolves its apply link to the (provider,
+// board) of a crawlable adapter, plus the employer name from the page's JobPosting JSON-LD.
+// ok is false when there is no apply link or it is not a supported ATS URL. The company is
+// kept so providers whose API exposes no name (Oracle) still get an employer label.
 func classifyDetail(page []byte) (provider, board, company string, ok bool) {
 	root, err := html.Parse(bytes.NewReader(page))
 	if err != nil {

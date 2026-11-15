@@ -10,17 +10,11 @@ import (
 )
 
 // manatalProber validates a Manatal board "<tenant>" by counting the postings linked from its
-// hosted career page ("careers-page.com/<tenant>") and reading the tenant's own name off that
-// page's title.
-//
-// The name matters more here than on most platforms. Manatal is heavily used by recruitment
-// AGENCIES, so a posting's hiring company is routinely NOT the board's owner — a seed built
-// from an aggregator's hiringOrganization labelled three different agency boards with the same
-// client, and the adapter stamps every posting with the entry's company. The career page names
-// the tenant that owns the board, which is the only correct label.
-//
-// Without this the provider fell through to adapterProber, which runs a whole crawl per
-// candidate and publishes no name at all.
+// hosted career page ("careers-page.com/<tenant>") and reading the tenant's name off that page's
+// title. The name matters here: Manatal is heavily used by recruitment AGENCIES, so a posting's
+// hiring company is routinely NOT the board's owner, while the adapter stamps every posting with
+// the entry's company. The career page names the tenant that owns the board, the only correct
+// label.
 type manatalProber struct{}
 
 // manatalJobLink captures a posting's id from a Manatal career-page job link
@@ -68,9 +62,9 @@ func (manatalProber) probe(ctx context.Context, c httpClient, board string) (str
 }
 
 // manatalTenantName pulls the tenant out of a Manatal career-page title, which reads
-// " - <tenant> | Career Page". It cuts at the LAST suffix occurrence so a tenant whose own
-// name contains a pipe survives, and returns "" when the title carries no name — the caller
-// then falls back rather than storing a fragment of boilerplate as a company.
+// " - <tenant> | Career Page". It cuts at the LAST suffix occurrence so a tenant whose own name
+// contains a pipe survives, and returns "" when the title carries no name, so the caller falls
+// back rather than storing boilerplate as a company.
 func manatalTenantName(title string) string {
 	i := strings.LastIndex(title, manatalTitleSuffix)
 	if i < 0 {

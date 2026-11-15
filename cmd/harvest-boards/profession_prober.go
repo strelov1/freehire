@@ -10,42 +10,27 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
-// professionProber harvests Profession.hu, whose boards are not employers but the
-// platform's own job categories. Three things follow, and they are why it has a prober of
-// its own rather than falling through to adapterProber.
+// professionProber harvests Profession.hu, whose boards are the platform's own job categories, not
+// employers. It has its own prober rather than falling through to adapterProber:
 //
-// It DISCOVERS. The platform publishes one sitemap index naming every category it
-// currently has, which is the complete and authoritative board list — there is no seed
-// file to write and nothing to keep in step by hand. A category the platform adds appears
-// on the next harvest; one it retires stops being offered.
+// It DISCOVERS: the platform's sitemap index lists every current category, so there is no seed file.
 //
-// It probes CHEAPLY. adapterProber measures a board by running the source adapter over it,
-// which for this provider means crawling the category: a detail request per posting,
-// against ~12k postings across the categories. Counting the URLs a category's sitemap
-// lists costs one request and answers the same question, because liveness here is exactly
-// "does this category still list postings".
+// It probes CHEAPLY: adapterProber would crawl the category (a detail request per posting, ~12k
+// postings); counting the URLs in the category's sitemap is one request and answers the same question.
 //
-// It reads the index ONCE. probeAll runs candidates concurrently, so a prober that
-// resolved the index per candidate would ask for the same document 23 times in parallel.
-// Measured live on 2026-09-06 the platform answered the first such request and closed the
-// connection on the rest — which arrives as every category being unreachable, and looks
-// nothing like the crawl asking too often. The map discovery already fetched is therefore
-// kept and probe() is a lookup plus one request for the category's own sitemap.
+// It reads the index ONCE. probeAll runs candidates concurrently, and resolving the index per
+// candidate sends the same request many times in parallel; the platform answers the first and closes
+// the connection on the rest, which looks like every category being unreachable. The map discovery
+// fetched is kept, so probe() is a lookup plus one sitemap request.
 //
-// The board it yields is a category id, and no employer name exists to report, so the
-// label names the platform and the category — the shape the two IT rows already carry. A
-// curator who wants the platform's own wording for a category renames the row afterwards
-// (cmd/add-board --rename); nothing about the crawl depends on it.
-// It reads over its OWN client, not the harvest's. The platform mishandles a connection it
-// has already answered on, and the shared client pools — so a prober that used it would
-// report the whole catalogue as unreachable after the first candidate or two, which is
-// precisely the failure that took the crawl down between 2026-09-04 and 2026-09-06. The
-// cost is the one adapterProber's doc comment already names for its own case: this
-// prober's requests fall outside the run's paced, counting client.
-// Build it with newProfessionProber. The zero value is NOT usable — its index is a nil
-// pointer, and the first thing discover does is take a lock through it — and a zero value
-// is exactly what a struct literal in the registry decays to when a field is dropped. That
-// is not hypothetical: it shipped, and the first harvest panicked before making a request.
+// It reads over its OWN client: the platform mishandles a connection it already answered on, and the
+// shared pooled client would report the catalogue as unreachable after a candidate or two. The cost
+// is that its requests fall outside the run's paced, counting client (as with adapterProber).
+//
+// The board is a category id with no employer name, so the label names the platform and category;
+// a curator may rename the row afterwards (cmd/add-board --rename).
+//
+// Build it with newProfessionProber: the zero value has a nil index and panics on first use.
 type professionProber struct {
 	index  *professionCategoryIndex
 	client sources.XMLGetter
@@ -59,8 +44,7 @@ func newProfessionProber() professionProber {
 }
 
 // professionCategoryIndex memoizes the category-to-sitemap map for one harvest run. Only a
-// successful read is kept: a transient failure on the first candidate must not decide the
-// other 22.
+// successful read is kept, so a transient failure on one candidate does not decide the rest.
 type professionCategoryIndex struct {
 	mu       sync.Mutex
 	sitemaps map[string]string
@@ -80,13 +64,9 @@ func (i *professionCategoryIndex) get(ctx context.Context, c sources.XMLGetter) 
 	return sitemaps, nil
 }
 
-// discover returns only the categories the crawl will accept — the platform's two IT
-// sections. It still earns its keep at two: it proves the platform still publishes them
-// under those names and fails loudly if one is renamed, which no seed file would.
-//
-// It deliberately does NOT offer the other 21. The adapter refuses them (see
-// profession.go for the audit that decided it), so offering them would be offering a
-// curator boards that cannot be crawled.
+// discover returns only the categories the crawl accepts, the platform's two IT sections. It fails
+// loudly if the platform renames one, which no seed file would. The adapter refuses the other
+// categories (see profession.go), so offering them would offer boards that cannot be crawled.
 func (p professionProber) discover(ctx context.Context, _ httpClient) ([]string, error) {
 	sitemaps, err := p.index.get(ctx, p.client)
 	if err != nil {
@@ -108,9 +88,8 @@ func (p professionProber) probe(ctx context.Context, _ httpClient, board string)
 	}
 	sitemap, ok := sitemaps[board]
 	if !ok {
-		// The index does not publish this category. That is not an empty board and must
-		// not be reported as one: an empty category is live and may fill up again, while
-		// this one no longer exists.
+		// The index does not publish this category. Not an empty board: an empty category is live and
+		// may fill up again, while this one no longer exists.
 		return "", 0, fmt.Errorf("profession: category %s is not in the sitemap index", board)
 	}
 	open, err := sources.ProfessionSitemapPostings(ctx, p.client, sitemap)

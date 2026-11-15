@@ -6,51 +6,37 @@ package main
 //
 // # Why a list and not a rule
 //
-// Every entry below has the same shape — a base name with a numeric or parenthesised
-// suffix — and that shape is NOT safe to automate. Measured across the catalogue's 447,148
-// companies on 2026-09-06, folding "one folded name is a prefix of another" yields 32,880
-// pairs, and 1,206 of them differ by a trailing number. Most are board artefacts ("Pwc 1",
-// "Accenture 2", "aecom2"). Some are not:
+// Every entry has the same shape (a base name with a numeric or parenthesised suffix), and
+// that shape is NOT safe to automate. Most such pairs are board artefacts ("Pwc 1",
+// "aecom2"), but some are separate companies:
 //
-//	Intel        (376 open jobs)  vs  intel471   — Intel 471 is a separate company
-//	Four Seasons (824 open jobs)  vs  Four Seasons Certified Home Health Agency
-//	SpaceX      (1009 open jobs)  vs  SpaceXAI
-//	Blend        (141 open jobs)  vs  Blend360
+//	Intel        vs  intel471   (Intel 471 is a separate company)
+//	Four Seasons vs  Four Seasons Certified Home Health Agency
+//	SpaceX       vs  SpaceXAI
+//	Blend        vs  Blend360
 //
-// A rule that collapsed the shape would merge those four, and a wrong merge is far more
-// expensive than a missed one: the alias is what the 301 reads, so it moves a public URL
-// onto the wrong employer and the re-key rewrites closed postings too. Naming each pair is
-// the honest cost of a judgement no name-shaped rule can make.
+// A rule that collapsed the shape would merge those, and a wrong merge is far worse than a
+// missed one: the alias drives the 301, moving a public URL onto the wrong employer, and the
+// re-key rewrites closed postings too. So each pair is named.
 //
 // # What earns an entry
 //
-// The name is the CANDIDATE and the postings are the PROOF. Every pair here was confirmed by
-// counting the roles the two slugs share among their open postings, and the count is recorded
-// beside it.
+// The name is the candidate and the postings are the proof: each pair was confirmed by
+// counting the roles the two slugs share among their open postings, recorded beside it.
 //
-// Read the overlap as a SHARE of the SMALLER side, not as an absolute. `blend` / `blend-360`
-// is the rejection that shape is for: 10 shared against blend's own 87 open postings — the
-// smaller side, and barely a tenth of it — while the name alone said they were one employer.
-// The absolute says nothing at all about a small duplicate: `micro1-ai` carries nine postings
-// in total, so a floor of twenty was unreachable no matter how completely it duplicated the
-// other side, and it would have rejected a pair the domain settles outright.
+// Read the overlap as a share of the SMALLER side, not an absolute: `blend` / `blend-360`
+// shared only 10 of blend's 87 open postings despite the name, while a small real duplicate
+// like `micro1-ai` (nine postings in total) could never reach an absolute floor.
 //
-// Compare roles, not raw titles. The same posting syndicated twice is "General Counsel" on
-// one board and "General Counsel - Remote" on the other, and an equality on the title scores
-// that pair at ZERO — micro1's did, across 76 legal postings on one side and 9 on the other.
-// Strip the trailing clause first, which is why the query below splits on " - ".
+// Compare roles, not raw titles: a syndicated "General Counsel - Remote" never equals
+// "General Counsel", so strip the trailing clause first (the query splits on " - ").
+// That split is a cheap stand-in for jobhash.RoleKey and deliberately looser (RoleKey keeps
+// "Data Engineer (Semi Senior)" distinct); it is read by a person deciding one entry, where
+// over-counting shows. Use RoleKey's exact fold only if that stops being true.
 //
-// That split is a cheap STAND-IN for jobhash.RoleKey, not the same normalisation: RoleKey also
-// unwraps parentheses and KEEPS the words inside, so "Data Engineer (Semi Senior)" stays
-// distinct from "Data Engineer" there and collapses onto it here. It is deliberately the
-// looser of the two — this query is scoped to two slugs and read by a person deciding one
-// entry, where over-counting shows up as a pair that does not survive the eye. Reach for
-// RoleKey's exact fold only if that ever stops being true.
-//
-// A shared DOMAIN outranks both. If the surviving slug's postings link to the employer's own
-// site and the retiring name reads as that domain (micro1's `req.micro1.ai` beside a board
-// calling itself "micro1 AI"), that is the employer naming itself, and no title count is
-// going to say it more clearly.
+// A shared DOMAIN outranks both: if the surviving slug's postings link to the employer's own
+// site and the retiring name reads as that domain (`req.micro1.ai` beside "micro1 AI"), the
+// employer is naming itself.
 //
 // # How to add one
 //
@@ -64,63 +50,41 @@ package main
 // hold — canonical slug is a fixed point of the slug rule, and no entry points at a slug
 // that is itself retiring — are enforced by TestCuratedAliasesAreWellFormed, not by review.
 var curatedAliases = map[string]string{
-	// Exadel runs two Greenhouse boards under different display names. 110 shared open titles
-	// between this pair — about half of each side's catalogue. Found because both spellings
-	// reached the same daily digest, where the per-company cap read them as two employers.
+	// Exadel runs two Greenhouse boards under different display names; 110 shared open titles,
+	// about half of each side.
 	"exadel-inc-website": "exadel",
 
-	// Two aggregator spellings of the same employer, and the WEAKEST entries in this file —
-	// recorded as such rather than dressed up. `exadelinc` is one whatjobs-pl posting and
-	// `exadel-1` is two from aijobs; neither is a Greenhouse board of Exadel's, so neither
-	// inherits the proof above, and a side of one or two postings can never reach an overlap
-	// count in the first place.
-	//
-	// What is left is the name: "exadelinc" is "Exadel Inc" with the spaces gone, and
-	// "Exadel 1" is an aggregator's numbering. That is the reasoning this file otherwise
-	// calls unsafe — and it is admitted here only because the cost is bounded on both sides.
-	// Three postings cannot bend a company page, and if the judgement is wrong the damage is
-	// three postings filed under a neighbour, not a 301 pointing a real employer's URL
-	// somewhere else. Do not read these two as licence to add a pair on the name alone where
-	// the counts are large enough to be measured.
+	// Two aggregator spellings (one and two postings), the WEAKEST entries here: with so few
+	// postings no overlap count is possible, so they rest on the name alone ("Exadel Inc"
+	// without spaces, an aggregator's numbering). Admitted only because the cost is bounded:
+	// if wrong, three postings sit under a neighbour, not a 301 on a real employer. This is
+	// no licence to add a pair on the name alone where counts can be measured.
 	"exadelinc": "exadel",
 	"exadel-1":  "exadel",
 
-	// micro1 posts from its own domain (req.micro1.ai, 336 open postings); the duplicate is an
-	// Adzuna feed calling the employer "micro1 AI" — the domain read as a name — with 9 legal
-	// postings against micro1's own 76. 3 shared roles out of those 9, and ZERO shared raw
-	// titles, because the feed suffixes every one of them with " - Remote". The pair the
-	// seeded absolute floor would have thrown away, and the reason the paragraph above now
-	// talks about shares and domains.
+	// micro1 posts from its own domain (req.micro1.ai); the duplicate is an Adzuna feed calling
+	// the employer "micro1 AI" (the domain read as a name). 3 of its 9 postings share a role,
+	// and none a raw title because the feed suffixes " - Remote".
 	"micro1-ai": "micro1",
 
-	// MTR Legal names its Personio employer MTR Legal; the Himalayas company is
-	// MTR Legal Rechtsanwälte with website mtrlegal.com, also the domain of employer
-	// assets on its official Personio job/2515502. The same unusual Applied AI role
-	// is truncated at Evalua in Himalayas (#4041). Measured 2026-11-02: 33 Himalayas
-	// postings (all closed), versus 57 Personio postings (54 open). Preserve the
-	// canonical employer identity even if a closed syndicated copy reopens later.
+	// The Himalayas company is MTR Legal Rechtsanwälte (mtrlegal.com, also the domain of the
+	// employer assets on its Personio board). Keeps the canonical identity if a closed
+	// syndicated copy reopens later.
 	"mtr-legal-rechtsanwalte": "mtr-legal",
 
 	// Krka's full register name, "KRKA, tovarna zdravil, d.d., Novo mesto" ("pharmaceutical
-	// factory"), as public-employment feeds copy it. The seat and the form are rules
-	// (normalize.CloseSpacedForms), but the business description in the middle is not. Dropping
-	// it would be a judgement about words, so this one pair is named here. Reported in
-	// freehire#3895 with the same posting under both spellings ("Vodja projekta v službi za
-	// tehnološko-tehnični inženiring"). Measured 2026-11-03 through the public company search:
-	// `krka` has 68 open jobs, this spelling 12, and `krka-d-d-novo-mesto` 13. The last one is
-	// named too, because the seat rule leaves a one-word name its seat.
+	// factory"), as public-employment feeds copy it. The seat and form are rules
+	// (normalize.CloseSpacedForms) but the business description in the middle is a judgement
+	// about words, so the pair is named. `krka-d-d-novo-mesto` is named too because the seat
+	// rule leaves a one-word name its seat.
 	"krka-tovarna-zdravil-d-d-novo-mesto": "krka",
 	"krka-d-d-novo-mesto":                 "krka",
-	// The same spelling as the seat rule now keys it. A posting ingested before the alias
-	// row exists lands here, so the wave retires it too.
+	// The seat rule's own key for the same spelling; covers postings ingested before the alias.
 	"krka-tovarna-zdravil": "krka",
 
 	// BRG's Workday tenant is named for its domain (thinkbrg.wd5.myworkdayjobs.com), so the
 	// board stored the host label as the company. The domain settles it: the
-	// berkeley-research-group company records homepage thinkbrg.com, and the same "Senior
-	// Engineering Manager" posting (Second Sight Solutions, a BRG subsidiary) sits under both
-	// slugs — builtin under the name, Workday under the tenant. Measured 2026-11-07 through the
-	// public company API: thinkbrg 47 open jobs, berkeley-research-group 4.
+	// berkeley-research-group company records homepage thinkbrg.com.
 	"thinkbrg": "berkeley-research-group",
 
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
@@ -144,8 +108,8 @@ var curatedAliases = map[string]string{
 }
 
 // curatedCanons is the set of slugs the list elects. A canonical slug joins its own curated
-// group rather than the folded group its name would otherwise land in — without that it
-// stays in the natural grouping and the curated members have no one to merge into.
+// group rather than the folded group its name would land in, or the curated members would
+// have no one to merge into.
 func curatedCanons(aliases map[string]string) map[string]bool {
 	out := make(map[string]bool, len(aliases))
 	for _, canon := range aliases {
@@ -154,7 +118,7 @@ func curatedCanons(aliases map[string]string) map[string]bool {
 	return out
 }
 
-// curatedGroupKey is the grouping key for a curated decision. It is prefixed with a rune
-// normalize.CompanyKey can never emit, so a curated group can never collide with a folded
-// one — CompanyKey strips everything but letters and digits.
+// curatedGroupKey is the grouping key for a curated decision, prefixed with a rune
+// normalize.CompanyKey never emits (it keeps only letters and digits) so it cannot collide
+// with a folded group.
 func curatedGroupKey(canon string) string { return "\x00curated\x1e" + canon }
