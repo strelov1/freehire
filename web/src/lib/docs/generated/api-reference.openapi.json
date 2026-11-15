@@ -18901,6 +18901,40 @@
         },
         "description": "A seeker's own request: the target and status, no referrer identity."
       },
+      "ReplyRateBenchmark": {
+        "type": "object",
+        "required": [
+          "you",
+          "global"
+        ],
+        "properties": {
+          "you": {
+            "$ref": "#/components/schemas/ReplyRateSide"
+          },
+          "global": {
+            "$ref": "#/components/schemas/ReplyRateSide"
+          }
+        },
+        "description": "The caller's own reply rate against everyone else's, counted the same way."
+      },
+      "ReplyRateSide": {
+        "type": "object",
+        "required": [
+          "applications",
+          "answered"
+        ],
+        "properties": {
+          "applications": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "answered": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "Observable applications (a connected mailbox would have seen a reply) and how many were answered."
+      },
       "ResolveJobRequest": {
         "type": "object",
         "properties": {
@@ -21169,6 +21203,7 @@
             }
           },
           "reply_rate": {
+            "$ref": "#/components/schemas/ReplyRateBenchmark",
             "description": "The reply-rate benchmark, only when it clears its sample gate."
           }
         },

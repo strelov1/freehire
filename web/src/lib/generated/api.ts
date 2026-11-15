@@ -7317,6 +7317,13 @@ export interface components {
             /** Format: int32 */
             max: number;
         };
+        /** @description The smallest and largest value of one continuous facet among the matching postings. */
+        FacetStatRange: {
+            /** Format: double */
+            min: number;
+            /** Format: double */
+            max: number;
+        };
         FacetStats: {
             /** @description Facet param, then value, then count. Every covered facet is present. */
             facets: unknown;
@@ -7893,10 +7900,8 @@ export interface components {
                 };
             };
             /** @description Numeric ranges (min/max) for the continuous facets — `salary_min`, `salary_max`, `experience_years_min`. */
-            stats?: {
-                [key: string]: {
-                    [key: string]: number;
-                };
+            stats: {
+                [key: string]: components["schemas"]["FacetStatRange"];
             };
             /**
              * @description Present only when `facets=` names `company_slug`: the exact number of distinct
@@ -8852,6 +8857,18 @@ export interface components {
             countries?: string[];
             cities?: string[];
         };
+        /** @description The caller's own reply rate against everyone else's, counted the same way. */
+        ReplyRateBenchmark: {
+            you: components["schemas"]["ReplyRateSide"];
+            global: components["schemas"]["ReplyRateSide"];
+        };
+        /** @description Observable applications (a connected mailbox would have seen a reply) and how many were answered. */
+        ReplyRateSide: {
+            /** Format: int64 */
+            applications: number;
+            /** Format: int64 */
+            answered: number;
+        };
         /** @description A review with what a moderator triages by. */
         ReportedCompanyFeedback: {
             /** Format: int64 */
@@ -9660,7 +9677,7 @@ export interface components {
                 [key: string]: number;
             };
             /** @description The reply-rate benchmark, only when it clears its sample gate. */
-            reply_rate?: unknown;
+            reply_rate?: components["schemas"]["ReplyRateBenchmark"];
         };
         /** @description Today's AI use on the account's own model credential. No money: the plan bounds use. */
         Usage: {

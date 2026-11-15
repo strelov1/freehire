@@ -791,6 +791,7 @@ describe('the weekly schedule editor', () => {
   const slotRule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
     id,
     weekday,
+    date: null,
     start,
     end,
     closure: false,

@@ -19930,6 +19930,52 @@ func (o OptRejectSubmissionRequest) Or(d RejectSubmissionRequest) RejectSubmissi
 	return d
 }
 
+// NewOptReplyRateBenchmark returns new OptReplyRateBenchmark with value set to v.
+func NewOptReplyRateBenchmark(v ReplyRateBenchmark) OptReplyRateBenchmark {
+	return OptReplyRateBenchmark{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptReplyRateBenchmark is optional ReplyRateBenchmark.
+type OptReplyRateBenchmark struct {
+	Value ReplyRateBenchmark
+	Set   bool
+}
+
+// IsSet returns true if OptReplyRateBenchmark was set.
+func (o OptReplyRateBenchmark) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptReplyRateBenchmark) Reset() {
+	var v ReplyRateBenchmark
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptReplyRateBenchmark) SetTo(v ReplyRateBenchmark) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptReplyRateBenchmark) Get() (v ReplyRateBenchmark, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptReplyRateBenchmark) Or(d ReplyRateBenchmark) ReplyRateBenchmark {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptResolveJobReportRequest returns new OptResolveJobReportRequest with value set to v.
 func NewOptResolveJobReportRequest(v ResolveJobReportRequest) OptResolveJobReportRequest {
 	return OptResolveJobReportRequest{
@@ -22852,6 +22898,60 @@ func (s *ReplaceResumeContactsFromCvOK) SetData(val jx.Raw) {
 
 // ReplaceWeeklyAvailabilityNoContent is response for ReplaceWeeklyAvailability operation.
 type ReplaceWeeklyAvailabilityNoContent struct{}
+
+// The caller's own reply rate against everyone else's, counted the same way.
+// Ref: #/components/schemas/ReplyRateBenchmark
+type ReplyRateBenchmark struct {
+	You    ReplyRateSide `json:"you"`
+	Global ReplyRateSide `json:"global"`
+}
+
+// GetYou returns the value of You.
+func (s *ReplyRateBenchmark) GetYou() ReplyRateSide {
+	return s.You
+}
+
+// GetGlobal returns the value of Global.
+func (s *ReplyRateBenchmark) GetGlobal() ReplyRateSide {
+	return s.Global
+}
+
+// SetYou sets the value of You.
+func (s *ReplyRateBenchmark) SetYou(val ReplyRateSide) {
+	s.You = val
+}
+
+// SetGlobal sets the value of Global.
+func (s *ReplyRateBenchmark) SetGlobal(val ReplyRateSide) {
+	s.Global = val
+}
+
+// Observable applications (a connected mailbox would have seen a reply) and how many were answered.
+// Ref: #/components/schemas/ReplyRateSide
+type ReplyRateSide struct {
+	Applications int64 `json:"applications"`
+	Answered     int64 `json:"answered"`
+}
+
+// GetApplications returns the value of Applications.
+func (s *ReplyRateSide) GetApplications() int64 {
+	return s.Applications
+}
+
+// GetAnswered returns the value of Answered.
+func (s *ReplyRateSide) GetAnswered() int64 {
+	return s.Answered
+}
+
+// SetApplications sets the value of Applications.
+func (s *ReplyRateSide) SetApplications(val int64) {
+	s.Applications = val
+}
+
+// SetAnswered sets the value of Answered.
+func (s *ReplyRateSide) SetAnswered(val int64) {
+	s.Answered = val
+}
 
 // ReportCompanyFeedbackNoContent is response for ReportCompanyFeedback operation.
 type ReportCompanyFeedbackNoContent struct{}
@@ -28387,7 +28487,7 @@ type TrackingPipeline struct {
 	Applications int64                  `json:"applications"`
 	Stages       TrackingPipelineStages `json:"stages"`
 	// The reply-rate benchmark, only when it clears its sample gate.
-	ReplyRate jx.Raw `json:"reply_rate"`
+	ReplyRate OptReplyRateBenchmark `json:"reply_rate"`
 }
 
 // GetApplications returns the value of Applications.
@@ -28401,7 +28501,7 @@ func (s *TrackingPipeline) GetStages() TrackingPipelineStages {
 }
 
 // GetReplyRate returns the value of ReplyRate.
-func (s *TrackingPipeline) GetReplyRate() jx.Raw {
+func (s *TrackingPipeline) GetReplyRate() OptReplyRateBenchmark {
 	return s.ReplyRate
 }
 
@@ -28416,7 +28516,7 @@ func (s *TrackingPipeline) SetStages(val TrackingPipelineStages) {
 }
 
 // SetReplyRate sets the value of ReplyRate.
-func (s *TrackingPipeline) SetReplyRate(val jx.Raw) {
+func (s *TrackingPipeline) SetReplyRate(val OptReplyRateBenchmark) {
 	s.ReplyRate = val
 }
 

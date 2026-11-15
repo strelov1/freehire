@@ -87,11 +87,7 @@ export type PrefillResult = components['schemas']['SubmissionPrefill'];
 
 /** A related company on a company page: the parent that owns it, or a subsidiary it owns.
  *  A separate employer with its own page and jobs (freehire#3895). */
-export interface CompanyRef {
-  slug: string;
-  name: string;
-  job_count: number;
-}
+export type CompanyRef = components['schemas']['CompanyRef'];
 
 /** What a person can claim about two companies: `same` (one employer under two names, the
  *  page's company retires into the target) or `subsidiary` (the page's company is owned by

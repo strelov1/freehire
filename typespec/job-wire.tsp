@@ -237,7 +237,7 @@ model JobFacetCounts {
   facets: Record<Record<integer>>;
 
   /** Numeric ranges (min/max) for the continuous facets — `salary_min`, `salary_max`, `experience_years_min`. */
-  stats?: Record<Record<float>>;
+  stats: Record<FacetStatRange>;
 
   /**
    * Present only when `facets=` names `company_slug`: the exact number of distinct
@@ -251,6 +251,12 @@ model JobFacetCounts {
    */
   @maxItems(50)
   top_companies?: TopCompany[];
+}
+
+/** The smallest and largest value of one continuous facet among the matching postings. */
+model FacetStatRange {
+  min: float64;
+  max: float64;
 }
 
 /** A company and how many of the matching postings it holds. */

@@ -153,13 +153,25 @@ model TrackedJobPage {
   meta: TrackingMeta;
 }
 
+/** Observable applications (a connected mailbox would have seen a reply) and how many were answered. */
+model ReplyRateSide {
+  applications: int64;
+  answered: int64;
+}
+
+/** The caller's own reply rate against everyone else's, counted the same way. */
+model ReplyRateBenchmark {
+  you: ReplyRateSide;
+  global: ReplyRateSide;
+}
+
 /** The application count and the count at each stage, zero included. */
 model TrackingPipeline {
   applications: int64;
   stages: Record<int64>;
 
   /** The reply-rate benchmark, only when it clears its sample gate. */
-  reply_rate?: unknown;
+  reply_rate?: ReplyRateBenchmark;
 }
 
 model NotificationSettings {

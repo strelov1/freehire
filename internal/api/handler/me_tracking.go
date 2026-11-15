@@ -192,11 +192,10 @@ func (h *trackingHandlers) TrackingPipeline(ctx context.Context) (*apigen.Tracki
 
 	out := apigen.TrackingPipeline{Applications: pipeline.Applications, Stages: apigen.TrackingPipelineStages(pipeline.Stages)}
 	if pipeline.ReplyRate != nil {
-		reply, err := json.Marshal(pipeline.ReplyRate)
-		if err != nil {
-			return nil, err
-		}
-		out.ReplyRate = jx.Raw(reply)
+		out.ReplyRate = apigen.NewOptReplyRateBenchmark(apigen.ReplyRateBenchmark{
+			You:    apigen.ReplyRateSide(pipeline.ReplyRate.You),
+			Global: apigen.ReplyRateSide(pipeline.ReplyRate.Global),
+		})
 	}
 	return &apigen.TrackingPipelineOK{Data: out}, nil
 }
