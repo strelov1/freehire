@@ -244,7 +244,7 @@ op createReply(/** The thread id. */ @path id: string, @body body: CreateReplyRe
   returnType: #{
       data: #{
         id: 31,
-        status: ThreadStatus.open,
+        status: ThreadStatus.closed,
       },
     },
 })

@@ -525,7 +525,6 @@ op linkEmail(/** The message id. */ @path id: string, @body body?: InboxLinkTarg
         received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
         read: true,
         status_signal: "acknowledgement",
-        linked_slug: "",
       },
     },
 })
@@ -579,7 +578,6 @@ op confirmEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> |
         body_html: "<p>Dear candidate, thank you for applying.</p>",
         received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
         read: true,
-        suggested_slug: "",
       },
     },
 })

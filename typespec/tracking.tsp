@@ -501,7 +501,7 @@ op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: strin
       data: #[
         #{
           added_to_board_at: null,
-          id: "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+          id: "senior-go-engineer-acme-1a2b",
           company_slug: "acme",
           role_title: "Senior Go Engineer",
           job: #{

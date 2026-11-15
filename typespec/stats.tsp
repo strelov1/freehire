@@ -539,7 +539,7 @@ op engagementStats(): Data<Engagement> | Problem;
       facets: #{
         countries: #{ de: 18420, us: 15210 },
         skills: #{ go: 4210, python: 9830 },
-        seniority: #{ senior: 9120, mid: 7340 },
+        seniority: #{ senior: 9120, middle: 7340 },
         work_mode: #{ remote: 21000, hybrid: 8200 },
       },
     },
@@ -566,7 +566,6 @@ op skillNeighbours(@path slug: string): SkillNeighbours | Problem;
 @tag("Insights")
 @opExample(#{
   returnType: #{
-    cacheControl: "public, max-age=300",
     body: #{
       data: #[
         #{
@@ -621,7 +620,7 @@ op insightsRoles(
       ],
       meta: #{
         category: "backend",
-        country: "DE",
+        country: "",
         sort: "open_count",
         limit: 1,
       },
@@ -647,7 +646,7 @@ op insightsSkills(
   returnType: #{
       data: #[
         #{
-          period: "2026-07-20",
+          period: "2026-06-22",
           added: 3120,
           removed: 2740,
         },
@@ -686,7 +685,7 @@ op insightsVelocity(
         #{
           seniority: "senior",
           currency: "USD",
-          period: "2026-06-22",
+          period: "month",
           sample_size: 1,
           p25: 130000,
           p50: 165000,
@@ -798,8 +797,8 @@ op insightsRolePulse(@query category?: string): RolePulseAnswer | Problem;
         site: #{
           status: "operational",
           database: "up",
-          error_rate: 1.5,
-          pool_pressure: 1.5,
+          error_rate: 0.015,
+          pool_pressure: 0.15,
           window_minutes: 1,
           history: #[],
         },

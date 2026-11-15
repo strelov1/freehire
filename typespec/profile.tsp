@@ -156,8 +156,12 @@ model Profile {
           work_modes: #[
             "remote",
           ],
+          remote: #{},
           base: #{
             country: "DE",
+          },
+          relocation: #{
+            open: false,
           },
         },
         derived_location: null,

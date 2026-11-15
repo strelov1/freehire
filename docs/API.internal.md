@@ -839,8 +839,7 @@ curl -X POST "https://freehire.me/api/v1/submissions/<id>/approve" -b cookies.tx
     "company": "Acme",
     "remote": true,
     "status": "approved",
-    "created_at": null,
-    "job_slug": "senior-go-engineer-acme-1a2b"
+    "created_at": null
   }
 }
 ```
@@ -2471,7 +2470,7 @@ curl -X POST "https://freehire.me/api/v1/threads/<id>/close" -b cookies.txt
 {
   "data": {
     "id": 31,
-    "status": "open"
+    "status": "closed"
   }
 }
 ```

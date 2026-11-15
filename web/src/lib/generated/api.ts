@@ -12345,7 +12345,7 @@ export interface operations {
                      *         {
                      *           "seniority": "senior",
                      *           "currency": "USD",
-                     *           "period": "2026-06-22",
+                     *           "period": "month",
                      *           "sample_size": 1,
                      *           "p25": 130000,
                      *           "p50": 165000,
@@ -12442,7 +12442,7 @@ export interface operations {
                      *       ],
                      *       "meta": {
                      *         "category": "backend",
-                     *         "country": "DE",
+                     *         "country": "",
                      *         "sort": "open_count",
                      *         "limit": 1
                      *       }
@@ -12493,7 +12493,7 @@ export interface operations {
                      * @example {
                      *       "data": [
                      *         {
-                     *           "period": "2026-07-20",
+                     *           "period": "2026-06-22",
                      *           "added": 3120,
                      *           "removed": 2740
                      *         }
@@ -17937,8 +17937,7 @@ export interface operations {
                      *         "body_text": "Dear candidate, thank you for applying.",
                      *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
                      *         "received_at": "2026-06-18T09:12:00Z",
-                     *         "read": true,
-                     *         "suggested_slug": ""
+                     *         "read": true
                      *       }
                      *     }
                      */
@@ -18075,8 +18074,7 @@ export interface operations {
                      *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
                      *         "received_at": "2026-06-18T09:12:00Z",
                      *         "read": true,
-                     *         "status_signal": "acknowledgement",
-                     *         "linked_slug": ""
+                     *         "status_signal": "acknowledgement"
                      *       }
                      *     }
                      */
@@ -20217,8 +20215,12 @@ export interface operations {
                      *           "work_modes": [
                      *             "remote"
                      *           ],
+                     *           "remote": {},
                      *           "base": {
                      *             "country": "DE"
+                     *           },
+                     *           "relocation": {
+                     *             "open": false
                      *           }
                      *         },
                      *         "derived_location": null,
@@ -22061,7 +22063,7 @@ export interface operations {
                      *       "data": [
                      *         {
                      *           "added_to_board_at": null,
-                     *           "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+                     *           "id": "senior-go-engineer-acme-1a2b",
                      *           "company_slug": "acme",
                      *           "role_title": "Senior Go Engineer",
                      *           "job": {
@@ -23882,7 +23884,7 @@ export interface operations {
                      *           },
                      *           "seniority": {
                      *             "senior": 9120,
-                     *             "mid": 7340
+                     *             "middle": 7340
                      *           },
                      *           "work_mode": {
                      *             "remote": 21000,
@@ -24078,8 +24080,8 @@ export interface operations {
                      *         "site": {
                      *           "status": "operational",
                      *           "database": "up",
-                     *           "error_rate": 1.5,
-                     *           "pool_pressure": 1.5,
+                     *           "error_rate": 0.015,
+                     *           "pool_pressure": 0.15,
                      *           "window_minutes": 1,
                      *           "history": []
                      *         }
@@ -24281,8 +24283,7 @@ export interface operations {
                      *         "company": "Acme",
                      *         "remote": true,
                      *         "status": "approved",
-                     *         "created_at": null,
-                     *         "job_slug": "senior-go-engineer-acme-1a2b"
+                     *         "created_at": null
                      *       }
                      *     }
                      */
@@ -24996,7 +24997,7 @@ export interface operations {
                      * @example {
                      *       "data": {
                      *         "id": 31,
-                     *         "status": "open"
+                     *         "status": "closed"
                      *       }
                      *     }
                      */

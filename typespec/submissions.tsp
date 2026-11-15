@@ -241,7 +241,6 @@ op listPendingSubmissions(): Data<Submission[]> | Problem;
         remote: true,
         status: SubmissionStatus.approved,
         created_at: null,
-        job_slug: "senior-go-engineer-acme-1a2b",
       },
     },
 })

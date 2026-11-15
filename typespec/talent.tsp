@@ -209,7 +209,7 @@ op getTalentFacets(...TalentQuery): DataWithIgnored<TalentFacets> | Problem;
 @tag("Talent Network")
 @opExample(#{
   returnType: #{
-    cacheControl: "public, max-age=300",
+    cacheControl: "private, max-age=60",
     robotsTag: "noindex",
     body: #{
       data: #{

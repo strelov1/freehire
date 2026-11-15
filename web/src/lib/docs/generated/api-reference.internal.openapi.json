@@ -8930,8 +8930,7 @@
                     "company": "Acme",
                     "remote": true,
                     "status": "approved",
-                    "created_at": null,
-                    "job_slug": "senior-go-engineer-acme-1a2b"
+                    "created_at": null
                   }
                 }
               }
@@ -9284,7 +9283,7 @@
                 "example": {
                   "data": {
                     "id": 31,
-                    "status": "open"
+                    "status": "closed"
                   }
                 }
               }

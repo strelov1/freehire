@@ -2286,7 +2286,7 @@ curl "https://freehire.me/api/v1/me/tracking" -H "Authorization: Bearer $FREEHIR
   "data": [
     {
       "added_to_board_at": null,
-      "id": "b71e0c3a-5f4d-4c1e-9a2b-3d8f6e7a1c90",
+      "id": "senior-go-engineer-acme-1a2b",
       "company_slug": "acme",
       "role_title": "Senior Go Engineer",
       "job": {
@@ -3279,8 +3279,12 @@ curl "https://freehire.me/api/v1/me/profile" -H "Authorization: Bearer $FREEHIRE
       "work_modes": [
         "remote"
       ],
+      "remote": {},
       "base": {
         "country": "DE"
+      },
+      "relocation": {
+        "open": false
       }
     },
     "derived_location": null,
@@ -3553,7 +3557,7 @@ curl "https://freehire.me/api/v1/stats/facets"
       },
       "seniority": {
         "senior": 9120,
-        "mid": 7340
+        "middle": 7340
       },
       "work_mode": {
         "remote": 21000,
@@ -3683,8 +3687,8 @@ curl "https://freehire.me/api/v1/status"
     "site": {
       "status": "operational",
       "database": "up",
-      "error_rate": 1.5,
-      "pool_pressure": 1.5,
+      "error_rate": 0.015,
+      "pool_pressure": 0.15,
       "window_minutes": 1,
       "history": []
     }
@@ -5089,8 +5093,7 @@ curl -X POST "https://freehire.me/api/v1/me/emails/<id>/reject" -H "Authorizatio
     "body_text": "Dear candidate, thank you for applying.",
     "body_html": "<p>Dear candidate, thank you for applying.</p>",
     "received_at": "2026-06-18T09:12:00Z",
-    "read": true,
-    "suggested_slug": ""
+    "read": true
   }
 }
 ```
@@ -5189,8 +5192,7 @@ curl -X POST "https://freehire.me/api/v1/me/emails/<id>/unlink" -H "Authorizatio
     "body_html": "<p>Dear candidate, thank you for applying.</p>",
     "received_at": "2026-06-18T09:12:00Z",
     "read": true,
-    "status_signal": "acknowledgement",
-    "linked_slug": ""
+    "status_signal": "acknowledgement"
   }
 }
 ```
@@ -5987,7 +5989,7 @@ curl "https://freehire.me/api/v1/insights/salary"
     {
       "seniority": "senior",
       "currency": "USD",
-      "period": "2026-06-22",
+      "period": "month",
       "sample_size": 1,
       "p25": 130000,
       "p50": 165000,
@@ -6054,7 +6056,7 @@ curl "https://freehire.me/api/v1/insights/skills"
   ],
   "meta": {
     "category": "backend",
-    "country": "DE",
+    "country": "",
     "sort": "open_count",
     "limit": 1
   }
@@ -6086,7 +6088,7 @@ curl "https://freehire.me/api/v1/insights/velocity"
 {
   "data": [
     {
-      "period": "2026-07-20",
+      "period": "2026-06-22",
       "added": 3120,
       "removed": 2740
     }
