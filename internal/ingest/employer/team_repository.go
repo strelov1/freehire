@@ -163,6 +163,15 @@ func (r *QueriesRepository) Accept(ctx context.Context, userID int64, tokenHash 
 // requests changing nothing.
 func (r *QueriesRepository) Remove(ctx context.Context, companySlug string, actorID, memberID int64) error {
 	return r.asCompanyActor(ctx, companySlug, actorID, func(q *db.Queries) error {
+		// The row lock first, in its own statement (see LockCompanyMemberForRemoval), so the
+		// hand-over sees a vacancy the member published while the removal waited.
+		_, err := q.LockCompanyMemberForRemoval(ctx, db.LockCompanyMemberForRemovalParams{MemberID: memberID, CompanySlug: companySlug})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrMemberNotFound
+		}
+		if err != nil {
+			return err
+		}
 		n, err := q.RemoveCompanyMember(ctx, db.RemoveCompanyMemberParams{MemberID: memberID, CompanySlug: companySlug})
 		if err != nil {
 			return err

@@ -340,6 +340,29 @@ func (q *Queries) LockCompanyAccountBySlug(ctx context.Context, companySlug stri
 	return user_id, err
 }
 
+const lockCompanyMemberForRemoval = `-- name: LockCompanyMemberForRemoval :one
+SELECT user_id FROM company_account_members
+WHERE user_id = $1 AND company_slug = $2
+FOR UPDATE
+`
+
+type LockCompanyMemberForRemovalParams struct {
+	MemberID    int64  `json:"member_id"`
+	CompanySlug string `json:"company_slug"`
+}
+
+// Locks a member row FOR UPDATE ahead of RemoveCompanyMember, in its own statement: it waits
+// for an in-flight vacancy write holding the row FOR KEY SHARE to commit, so the removal's
+// statement that follows takes a snapshot that sees the new vacancy and hands it over too
+// (one statement waiting inside its DELETE would keep its earlier snapshot for the hand-over
+// and miss it). No row: not a member of this company.
+func (q *Queries) LockCompanyMemberForRemoval(ctx context.Context, arg LockCompanyMemberForRemovalParams) (int64, error) {
+	row := q.db.QueryRow(ctx, lockCompanyMemberForRemoval, arg.MemberID, arg.CompanySlug)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const lockEmployerActor = `-- name: LockEmployerActor :exec
 SELECT pg_advisory_xact_lock(hashtextextended('employer_actor:' || $1::bigint::text, 0))
 `

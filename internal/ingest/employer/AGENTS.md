@@ -168,6 +168,10 @@ for the full design record.
   (`WithdrawToken`), so a resend that replaced the token meanwhile keeps its working link.
 - **Removal also withdraws the member's invitations** — otherwise someone about to be
   removed could invite an address of their own and walk back in.
+- **Removal locks the member row in its own statement first**
+  (`LockCompanyMemberForRemoval`, FOR UPDATE): it waits for a vacancy write holding the row,
+  and the hand-over statement after it then sees the new vacancy. Inside one statement the
+  DELETE would wait but the hand-over would keep the earlier snapshot and miss it.
 - **A member deleting their freehire account hands their vacancies over too**, by the
   `users_employer_hand_over` BEFORE DELETE trigger (0271). It must run before the row goes:
   `jobs.created_by` is ON DELETE SET NULL and that action fires before the member row's own

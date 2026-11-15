@@ -135,6 +135,16 @@ INSERT INTO company_account_members (user_id, company_slug, work_email, invited_
 SELECT sqlc.arg(user_id), inv.company_slug, inv.email, inv.invited_by FROM inv
 RETURNING company_slug;
 
+-- name: LockCompanyMemberForRemoval :one
+-- Locks a member row FOR UPDATE ahead of RemoveCompanyMember, in its own statement: it waits
+-- for an in-flight vacancy write holding the row FOR KEY SHARE to commit, so the removal's
+-- statement that follows takes a snapshot that sees the new vacancy and hands it over too
+-- (one statement waiting inside its DELETE would keep its earlier snapshot for the hand-over
+-- and miss it). No row: not a member of this company.
+SELECT user_id FROM company_account_members
+WHERE user_id = sqlc.arg(member_id) AND company_slug = sqlc.arg(company_slug)
+FOR UPDATE;
+
 -- name: RemoveCompanyMember :one
 -- Removes a member from a company's team, and in the same statement hands the vacancies they
 -- published to the account's claimant — a vacancy belongs to the team, and one left created

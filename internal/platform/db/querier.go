@@ -5850,6 +5850,12 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Locks a member row FOR UPDATE ahead of RemoveCompanyMember, in its own statement: it waits
+	// for an in-flight vacancy write holding the row FOR KEY SHARE to commit, so the removal's
+	// statement that follows takes a snapshot that sees the new vacancy and hands it over too
+	// (one statement waiting inside its DELETE would keep its earlier snapshot for the hand-over
+	// and miss it). No row: not a member of this company.
+	LockCompanyMemberForRemoval(ctx context.Context, arg LockCompanyMemberForRemovalParams) (int64, error)
 	// Serializes approvals for the transaction (key "fhcr", listed in internal/platform/migrate).
 	// Each approval checks the registry and company_parents and then writes them, and two
 	// approvals checked against the same state could each pass while together making a chain.

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/employer"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 func (f teamFixture) invite(t *testing.T, email string, expires time.Time) []byte {
@@ -265,5 +266,55 @@ func TestTeam_AnInvitationMakesAMember(t *testing.T) {
 	}
 	if err := f.repo.Remove(ctx, "acme", f.holder, f.holder); !errors.Is(err, employer.ErrMemberNotFound) {
 		t.Errorf("removing the holder err = %v, want ErrMemberNotFound", err)
+	}
+}
+
+// Removing a member while they publish a vacancy: the removal waits for the write (which
+// holds the member's row), and then hands the new vacancy to the claimant too — it must not
+// stay with the removed member, outside the team, to follow them into their next company.
+func TestTeam_RemovalHandsOverAVacancyPublishedWhileItWaited(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	member := f.member(t, "someone@gmail.com", "dev@acme.test")
+
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := db.New(tx)
+	if _, err := q.LockAuthor(ctx, member); err != nil {
+		t.Fatalf("LockAuthor: %v", err)
+	}
+	if _, err := q.LockCompanyAccountBySlug(ctx, "acme"); err != nil {
+		t.Fatalf("LockCompanyAccountBySlug: %v", err)
+	}
+	if _, err := q.LockActingMembership(ctx, member); err != nil {
+		t.Fatalf("LockActingMembership: %v", err)
+	}
+
+	removed := make(chan error, 1)
+	go func() { removed <- f.repo.Remove(ctx, "acme", f.holder, member) }()
+	waitForLockWait(t, f.pool, removed)
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug, created_by)
+		VALUES ('employer', 'freehire:late', '', 'Platform Engineer', 'Acme', 'acme', 'late-vacancy', $1)`, member); err != nil {
+		t.Fatalf("insert vacancy: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit write: %v", err)
+	}
+	select {
+	case err := <-removed:
+		if err != nil {
+			t.Fatalf("Remove: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the removal never finished after the write committed")
+	}
+	var createdBy int64
+	if err := f.pool.QueryRow(ctx, `SELECT created_by FROM jobs WHERE public_slug = 'late-vacancy'`).Scan(&createdBy); err != nil || createdBy != f.holder {
+		t.Errorf("the vacancy published during the removal: created_by = %d (err %v), want the claimant %d", createdBy, err, f.holder)
 	}
 }
