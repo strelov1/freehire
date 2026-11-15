@@ -26,14 +26,24 @@ FROM gmail_connections
 WHERE user_id = $1;
 
 -- name: UpsertGmailConnection :exec
--- Connect (or reconnect) a user's Gmail: store the encrypted refresh token and
--- mark connected, preserving the sync cursor on reconnect.
-INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status)
-VALUES ($1, $2, $3, 'connected')
+-- Connect (or reconnect) a user's Gmail: store the encrypted refresh token, mark
+-- connected, preserving the sync cursor on reconnect, and record what the grant covers.
+--
+-- Token and scopes go in one statement, so the row always holds a token together with
+-- the scopes reported for it. Written separately, a calendar connect landing between the
+-- two would leave its token next to this grant's scopes, and cal-sync (which selects by
+-- scope) would skip the account. Scopes replace, as in UpsertCalendarGrant; an empty
+-- list means the exchange did not say and keeps what we held.
+INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status, scopes)
+VALUES (sqlc.arg(user_id), sqlc.arg(email), sqlc.arg(refresh_token_enc), 'connected', COALESCE(sqlc.arg(scopes)::text[], '{}'))
 ON CONFLICT (user_id) DO UPDATE
 SET email = EXCLUDED.email,
     refresh_token_enc = EXCLUDED.refresh_token_enc,
-    status = 'connected';
+    status = 'connected',
+    scopes = CASE
+                 WHEN cardinality(EXCLUDED.scopes) > 0 THEN EXCLUDED.scopes
+                 ELSE gmail_connections.scopes
+             END;
 
 -- name: ListConnectedGmailUsers :many
 -- Drives the sync worker: every connection still authorized AND holding a mailbox.
