@@ -182,7 +182,13 @@ const minQuoteWords = 3
 // sentence into a denial ("I did NOT lead the migration"). Checked within the quote's
 // sentence only. Deliberately blunt and high-recall: a false rejection just falls back to
 // agent_inferred, a false acceptance would write a denial into a CV.
-var negationCues = []string{"n't", " not ", " not,", " never ", "no longer", "without ever", "cannot "}
+var negationCues = []string{
+	"n't", "n’t", " not ", " not,", " never ", "no longer", "without ever", "cannot ",
+	" не ", " нет ", " никогда ", // Russian
+	" no ", " não ", " nunca ", // Spanish and Portuguese
+	" nicht ", " nie ", " kein", // German, including inflected forms of kein
+	" ne ", " n'", " n’", " pas ", " jamais ", // French
+}
 
 // UserSaid reports whether quote appears in what the user typed in this conversation,
 // compared case-insensitively with whitespace collapsed, and is not negated by its sentence.
