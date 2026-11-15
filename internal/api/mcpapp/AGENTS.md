@@ -1,432 +1,70 @@
 # internal/api/mcpapp
 
-The MCP at `/api/v1/mcp` (`mixed.go`) serves the catalogue and account tools to a
-signed-in caller only. There is no anonymous session: a request without a credential is a
-401 with `WWW-Authenticate` before it reaches this package (`mcpAuthenticate` in
-`internal/api/handler/mcpapp_account.go`), and `mcpapp.Handler` refuses with a 500 a request
-that arrives with no stamped identity, because that is a wiring error.
-
-**Why no anonymous part (2026-11-13).** The 401 on the FIRST request is the MCP
-authorization spec's only signal that a server needs sign-in. Claude.ai, Grok, Cursor and the
-CLIs act on it while a connector is being added, and never later. When this endpoint also
-served anonymous catalogue reads (#4161), Claude.ai's "Add custom connector" got a 200 on
-initialize and reported "Couldn't determine how this server signs in". The in-band
-`mcp/www_authenticate` challenge that let anonymous ChatGPT sessions step up is an Apps SDK
-mechanism the other hosts ignore. Patching it per User-Agent (`Claude-User`,
-`grok-connectors-manager`) did not reach the connector-add probe. Re-adding an anonymous
-surface brings that failure back for every host except ChatGPT.
-
-Every tool declares `_meta.securitySchemes` `oauth2`. The eleven catalogue tools keep
-their schemas, previews and widgets. The in-app assistant's own `search_jobs`, `get_job`
-and `get_company` are never registered here (`catalogueOwned`); the catalogue's are.
-`/api/v1/mcp/account`, the earlier signed-in address, is served by the same server: connectors
-saved with it must keep working (removing it in #4539 broke every one of them with a 404).
-
-Fiber authentication clears external `AccountUserIDHeader` values before resolving
-credentials. Invalid credentials fail closed. Both the root
-`/.well-known/oauth-protected-resource` and the path-inserted
-`/.well-known/oauth-protected-resource/api/v1/mcp` (`ResourceMetadataPath`, the one the
-challenge names) describe `/api/v1/mcp`. Connectors saved with `/api/v1/mcp/account` derive
-their metadata URL from that address (RFC 9728 §3.3: `resource` must equal it), so it has its
-own document, `resource` `<origin>/api/v1/mcp/account`, at the path-inserted
-`/.well-known/oauth-protected-resource/api/v1/mcp/account` (SvelteKit proxy to
-`/api/v1/oauth/metadata/protected-resource/account`) and at the path-appended form some clients
-try, `/api/v1/mcp/account/.well-known/oauth-protected-resource`. `/api/v1/mcp/.well-known/oauth-protected-resource`
-serves the `/api/v1/mcp` document the same way. Both appended forms are API routes (under `/api`),
-not SvelteKit ones.
-
-An OAuth grant is **bound to the resource it was requested for** (RFC 8707 `resource` on
-/authorize and /token, `oauth_grants.resource`): the URI must be on this deployment's origin
-(scheme and host case-insensitive, default port ignored, no query or fragment) with path
-`/api/v1/mcp` (one trailing slash tolerated), else `invalid_target`; `/api/v1/mcp/account` is
-accepted and bound as `/api/v1/mcp`. Only the PATH is stored, so a frontend-origin change cannot
-orphan a grant. `AuthenticateOAuthGrant` matches on the endpoint path, so a grant stored with the
-old `/api/v1/mcp/account` path is refused like an unknown token (401 `invalid_token`) without
-touching `last_used_at`. A grant with NULL `resource` (legacy, or a client that sent none)
-stays valid. REST does not read the binding: a
-grant is admitted wherever a key goes, and REST is not an MCP server. No refresh tokens exist.
-
-It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
-grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
-key and no grant, manages job alerts through these same tools instead of a second
-implementation. `mcpKeyTools` omits OAuth-only actions: auto-apply, dictionary
-suggestions, problem reports and the interview-buddy tools. Dictionary suggestions and the
-buddy tools (`internal/api/handler/buddy_mcp_tools.go`: membership, mock hosts, slots,
-booking, cancelling and the hosting schedule) preserve the cookie-only REST gate, and so does
-`update_profile` (`assistant_profile_write_tool.go`: a partial update of the saved job-search
-profile: preferences plus the headline and summary text, never a CV document), and so do
-the guided-setup tools below; problem reports use the signed-in agent's reporting workflow.
-A narrow (`cv`) key is a 403.
+Before editing or reviewing this area, read the applicable sections of
+[local requirements](AGENT-REFERENCE.md). Read the complete reference when changing
+architecture, contracts, authorization, state transitions or cross-module behavior.
+The reference retains all requirements previously held here.
 
 ## Guided setup: `get_setup_status` and `add_cv`
 
-For a person who connects before uploading a CV (`internal/api/handler/assistant_setup_status_tool.go`,
-`assistant_cv_add_tool.go`, openspec/changes/mcp-cv-setup). `get_setup_status` derives, on every
-call and from existing state only, the steps `cv` → `preferences` → `alerts` → optional
-`paid_plan` and `agents_may_apply`, and ONE `next_step` (a tool or a page URL) — always a core
-step; once those are done it is `search_jobs`. `add_cv` takes the person's OWN CV, verbatim, as
-text (100–30,000 characters) — a CV they pasted or a CV file they gave the agent, never one an
-agent composed or summarised; a person with no CV is sent to `/my/profile`. It goes through
-`storeFirstCV`, the website's own upload use case — so the stored document, the free extraction
-(`plan.WithFreeAI`, set inside the derivation) and the experience import are a paste on the
-profile page, including its skills merge: once the work history is read, skills found in it are
-added to the profile's skills (removable with `update_profile`). Its atoms are `cv_import`,
-which is honest only because the text is the person's CV document. It refuses an account that
-already has a CV (409) — replacing the person's document stays a website act — under the
-per-user upload lock (`resume.Store.PutIfAbsent`, `pg_advisory_xact_lock`) every upload takes,
-so a concurrent website upload or second call cannot slip between the check and the write. It
-returns suggested `specializations`/`seniorities`/`skills` that `update_profile` saves once
-confirmed.
-
-OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
-or company industry cannot be resolved; zero search hits alone do not prove a gap.
-`report_problem` records a brief redacted account-bound report for failed operations or
-missing capabilities, without a separate reporting request. Reports stay private to
-operators. Report once per issue, never recursively report a reporting failure, and
-continue the original task where possible. These directions are in account initialization
-only when the corresponding tools are served; the plugin skill carries examples.
-
-The account server's job-alert tools (`subscribe`, `list_subscriptions`,
-`update_subscription`, `unsubscribe`, `subscription_updates`, in
-`internal/api/handler/assistant_subscription_tools.go`) address an ALERT by its saved search
-id: one saved search over any filters, delivered on one subscriptions row per channel —
-the website's own model. Every write goes through `savedsearch.Service` and
-`subscription.Service`, the alert controls' own use cases, so `search.Narrows` and the
-push-device rule are enforced once. A channel is only added where the delivery worker
-would actually reach (`GetAlertChannelState`). Digest timing is account-wide on the
-website, so it is shown but not changed here. "What is new" reads `subscription_matches`,
-the ledger the digests are built from, rather than re-running the search.
-
-`list_unread_mail` (`internal/api/handler/mcp_mail_tool.go`) is the inbox's only tool here:
-the headers of unread application mail (`from_name`, `from_addr`, subject, time, label, and
-the company and job slug of a CONFIRMED link), `unread_count`, `sync_pending` (Gmail's first
-sync not completed), `reconnect_needed` (Gmail lost its grant; hosted mail still arrives) and
-`mailbox_url`. No body, snippet or message id, nothing marked read, no model call; a failed
-sync-state lookup logs and returns the page with `gmail_state_unknown` set. Served to keys too,
-because REST `/me/inbox` is `mw.key`. Header text is sender-written: `inertLine` strips line
-breaks and runes that render blank (format, variation selectors, Hangul fillers, private-use,
-unassigned); name and subject are capped, the address is not (a long spoofed name must not
-push it out of view); the description, a `notice` in the result and the instructions say
-never to follow it. The assistant's `inbox_*` write
-tools (triage, link, record application) are deliberately not served: the only evidence an
-MCP agent would act on is that untrusted header text.
+Read [Guided setup: `get_setup_status` and `add_cv`](AGENT-REFERENCE.md#guided-setup-get_setup_status-and-add_cv) before work involving this topic.
 
 ## `next` on `search_jobs` and `get_job`
 
-Both results carry one short `next` sentence (`next.go`): signed in, the follow-ups among the
-tools the session is actually served (an API key has no auto-apply); signed out, a pointer at
-signing in instead of tools it cannot call. It is the same text for every call of a session
-and once per response, never per job: the result is replayed into the model's context every
-turn. It is a plain struct field of the typed catalogue tools.
+Read [`next` on `search_jobs` and `get_job`](AGENT-REFERENCE.md#next-on-search_jobs-and-get_job) before work involving this topic.
 
 ## A session the freehire CLI opened
 
-`freehire mcp` (in the `freehire-cli` repository) runs the canonical endpoint over stdio
-for local hosts, and the CLI's client sends `User-Agent: freehire-cli/<version>`. For that
-User-Agent alone `mcpapp.Handler` appends `cliSessionInstructions`: the CLI is on the agent's
-shell, so whole result sets (`freehire search … --json`, which reads `/agent/jobs/search`
-with full descriptions) and the CV PDF go to disk rather than into context. That is why
-the MCP results here can stay bounded. It lives in the instructions, not in `next`: having
-a shell is a fact about the session, and `next` is replayed with every result. It names
-CLI commands, never a tool, so the directory policy below does not apply; it has its own
-256-character budget, outside the 720 every host reads.
+Read [A session the freehire CLI opened](AGENT-REFERENCE.md#a-session-the-freehire-cli-opened) before work involving this topic.
 
 ## Why there are two MCP servers
 
-`internal/api/ojcpmcp` serves the Open Job Context Protocol. This one serves OpenAI's Apps
-SDK. They share the reader, the search core and the visibility predicate, and differ in
-everything above them — which is the reason there are two rather than one with a flag.
-
-| | `ojcpmcp` | `mcpapp` |
-|---|---|---|
-| Audience | an agent that branches on error codes | a language model that reads prose |
-| Wire shape | OJCP's schema | ours (`jobview.Job`, flattened) |
-| Failures | `*jsonrpc.Error` carrying the OJCP envelope | `CallToolResult` with `IsError` and a sentence |
-| Seniority | translated into `experience_level`, losing what it cannot name | passed through |
-| Bound by | a published conformance suite (9/9) | OpenAI's app review |
-
-The OJCP projection drops 34 of `jobview.Job`'s fields, and 18.1% of open postings carry a
-seniority (`intern`/`staff`/`principal`) its vocabulary cannot name. Widening the OJCP
-surface to please ChatGPT would put a conformance-tested surface at risk for an audience it
-was not built for; narrowing this one into OJCP's schema would publish less than the website
-shows. Neither is a trade worth making.
-
-**Do not make them share a tool registration.** What they must share — and do — is the
-`Reader`, so they cannot disagree about what is in the catalogue.
+Read [Why there are two MCP servers](AGENT-REFERENCE.md#why-there-are-two-mcp-servers) before work involving this topic.
 
 ## Semantic search
 
-`search_jobs` still takes `semantic: true`, but it is currently not available: the index
-carries no description vectors, so the request is answered by keywords and the result's
-`semantic` says `unavailable` — never an error. The outcome is decided by
-`semanticOutcomeFor` (`internal/api/handler/semantic_search.go`), shared with OJCP and
-`/agent/jobs/search`, so the three cannot disagree.
+Read [Semantic search](AGENT-REFERENCE.md#semantic-search) before work involving this topic.
 
 ## What the tools must not do
 
-- **Hand an internal error's text to the agent.** On the signed-in server a failed tool's
-  text reaches a third-party model verbatim, so `agentErrorText` (`account.go`) shows it
-  only for a `*fiber.Error` or a bad argument (`assistant.ErrInvalidArguments`); anything
-  else reads as a generic sentence. That text is NOT logged: it can interpolate what the caller
-  sent (`jobNotFound` embeds the slug). The tool log's `error` attribute carries only a
-  constant the call site opted in with, `assistant.WithLogReason(err, "fixed sentence")`
-  (the diagnostics' `reason`, flattened to one line, 200 runes); an error without one logs
-  its `error_code` alone, and a decode failure its argument names in `bad_args`. Never build a
-  reason from arguments or data. A message written for the agent ("slug is required", "no such answer")
-  is therefore a `fiber.NewError` with its status, never `errors.New`: a plain one reaches
-  the agent as "something went wrong". Its status is also what the metrics count it as.
-- **Return a full description from `search_jobs`.** `/agent/jobs/search` rehydrates every
-  hit's body from Postgres, deliberately, because a programmatic consumer reading whole
-  bodies is what it is for. Here ten of those in one turn is the context window spent on
-  text the model reduces to a line each. `summaryMaxChars` bounds the preview here rather
-  than trusting the caller, because the bound is a property of this tool and not of whoever
-  filled the field. The in-app assistant's own copy
-  rehydrates and is never served over MCP: the catalogue's `search_jobs`
-  answers there, with the index preview. Before 2026-11-05 MCP served the rehydrating copy,
-  ~130 KB a call. The signed-in `facets` is bounded the same way: `mcpKeyTools` swaps in
-  `facets(false)`, which answers with the filter names and how many values each has, and lists one filter's values when named in `facet` (narrowed by
-  `contains`, which shares `ContainsMatcher` with `list_filter_values`). The whole vocabulary
-  was ~125 KB. `facets` stays beside `list_filter_values` because the latter does not cover every
-  facet: metros, `company_slug`, the boolean facets and the numeric ranges (`stats`) are only here.
-- **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
-  `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
-  resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a
-  per-provider predicate, and each call rebuilt all 223 adapters (35µs, 394 allocations),
-  which a ten-result page paid ten times over. An
-  aggregator's stored URL points at the aggregator, and this channel renders it as a link a
-  person clicks expecting the employer. The tag is stripped too (`outboundurl.Untag`):
-  `jobview` stamps `utm_source` on everything it serves, and this field is what a consumer
-  deduplicates and domain-verifies against. Our own `url` keeps the tag.
-- **Narrow on a value the catalogue cannot filter on.** Measured against production on
-  2026-09-18: `/jobs/search?category=ai` answers 0 results and reports nothing ignored. Over
-  REST that is a client's problem; here the client summarises the zero as "freehire has no
-  AI jobs" and says it to a person. So a value outside a closed vocabulary is DROPPED and
-  named in `ignored_params`, and the free text still runs. Which vocabularies are closed is
-  `search.UnknownFacetValue`'s answer — the same table REST's `meta.ignored_values` reads —
-  never a list here. `skills`/`exclude_skills` are closed since 2026-10-27 (`skills=golangg`
-  answered `total: 0` and named nothing): the facet is written by `skilltag` alone, so a
-  value `skilltag.Resolve` cannot read matches no posting. An alias it CAN read (`golang`)
-  is kept and the search core reads it as `go`.
+Read [What the tools must not do](AGENT-REFERENCE.md#what-the-tools-must-not-do) before work involving this topic.
 
 ## `list_filter_values`
 
-The vocabulary lookup, so a model can check a value before a search rather than learn of it
-from `ignored_params` after one. It is the account server's `facets` narrowed to ONE filter
-per call (skills alone are ~1,200 values), keyed by `search_jobs`' own field names
-(`sources`, not `source`) and read from the website's unfiltered facet distribution and its
-cache entry. `contains` filters by substring; for skills it also returns the canonical an
-alias resolves to, because "golang" is not a substring of "go". `company_slugs` is not
-listable — an employer is found by name through `search_companies`.
+Read [`list_filter_values`](AGENT-REFERENCE.md#list_filter_values) before work involving this topic.
 
 ## Liveness is computed on read, and only in `get_job`
 
-`get_job` publishes `last_seen_at`, `reality`, `fake_freshness`, `ghost_level` and
-`ghost_criteria`, computed by the handler's `attachReality` (the same `realityAttacher` the
-OJCP surface uses). A search result carries only `first_seen_at`.
-
-- **Not the index's reality class.** It is computed when a document is pushed, and
-  `cmd/reindex` pushes only documents whose content hash moved — so a posting indexed at three
-  days old would still read "fresh" a quarter later. `first_seen_at` is a fact that cannot go
-  stale; the model can compare it with `posted_at` itself.
-- **Not ghost on search.** It costs two Postgres reads per page (absence stamps and outcome
-  evidence), and `get_job` is one call away for the posting a person actually picked.
-- **Absent, not false.** A lookup that fails leaves every signal off the wire. An empty level
-  or a `false` flag would read as a clean bill of health nobody issued.
+Read [Liveness is computed on read, and only in `get_job`](AGENT-REFERENCE.md#liveness-is-computed-on-read-and-only-in-get_job) before work involving this topic.
 
 ## `check_jobs_open`, `search` and `fetch`
 
-- **`check_jobs_open`** answers open / closed / not_found for up to `maxOpenChecks` (50)
-  slugs in one Postgres read (`ListJobLivenessBySlugs`). It reports a CLOSED posting as closed
-  — that is the point of the tool — so it does not reuse `publishedToAgents`, which refuses
-  closed postings; private and duplicate postings still answer not_found.
-- **`get_job`** loads through `agentJobBySlug`, NOT
-  `publishedToAgents`: search reads an index that trails the database, so it hands out slugs
-  that closed or became duplicates since the push, and a not_found for a slug the previous
-  turn returned is what four agent reports in one day were about (2026-11-07). A closed
-  posting is served with `closed_at`, a duplicate as its canonical posting (or as itself when
-  that one is not public); only a private posting is a miss.
-  Slugs past the cap are named back in `unchecked`, never dropped. A failed lookup is an error,
-  never a page of not_found.
-- **`search` / `fetch`** exist for ChatGPT's deep-research and company-knowledge connectors,
-  which call exactly these names and read exactly these shapes (`{results: [{id, title, url}]}`
-  and `{id, title, text, url, metadata}`) from the tool's TEXT content — the SDK fills that
-  from the typed output when a handler leaves `Content` empty. They adapt `SearchJobs` and
-  `JobDetail` (`research.go`); they are not a second catalogue view and add nothing to the
-  `Reader`.
+Read [`check_jobs_open`, `search` and `fetch`](AGENT-REFERENCE.md#check_jobs_open-search-and-fetch) before work involving this topic.
 
 ## `similar_jobs`, `salary_stats` and `job_market_stats`
 
-All three read what the website already computes, through functions the website's own
-handlers now share, so the two cannot quote different figures:
-
-- **`similar_jobs`** — the website's Meilisearch related-jobs search with mandatory
-  location and specialization filters, ranked by keywords on the source's title.
-  The source and rehydrated results must pass `publishedToAgents`; private and absent
-  source slugs answer identically. No offline similarity backfill is needed.
-- **`salary_stats`** — `salaryBands` (handler/insights.go), the `/insights/salary` read,
-  including its per-seniority breakdown for a category alone. Unknown scope values are dropped
-  and named, as on `search_jobs`.
-- **`job_market_stats`** — `cachedFacetCounts` + `facetView` (handler/facets.go) over the
-  filter `search_jobs` would build for the same input, sharing the website's facet cache. The
-  projector keeps the top `marketTopValues` of the facets in `marketFacets`; cities are left
-  out, their long tail is noise in a chat turn.
-
-Trends (`/insights/companies`, `/insights/skills`) are deliberately not exposed yet: the
-company ranking is led by aggregator boards rather than employers.
+Read [`similar_jobs`, `salary_stats` and `job_market_stats`](AGENT-REFERENCE.md#similar_jobs-salary_stats-and-job_market_stats) before work involving this topic.
 
 ## Prompts
 
-`prompts.go` registers three prompts — `jobs_for_my_stack`, `check_my_shortlist`,
-`salary_check` — templates a PERSON picks in their client (Claude lists them as commands); the
-model never calls them. Each renders one plain user request and names no tool: which tool
-answers it is the server instructions' job. A missing required argument is an error; an
-omitted optional one leaves no trace in the text.
-
-An argument whose values come from a closed dictionary (`seniority`, `role`) declares it in
-its spec's `vocabularies`, and `completion/complete` offers the dictionary's values as the
-person types — the vocabulary itself, never a copy. A free-text argument (`stack`,
-`postings`) offers nothing: a client replaces the whole field with what it picks, so a
-suggestion for one word of "Go and Kubernetes" would erase the rest.
-
-Every session (with a grant or key) also gets
-`accountPrompts` (`account_prompts.go`): `jobs_for_my_profile`, `set_up_my_profile`,
-`whats_new_in_my_alerts` and `apply_to_saved_jobs`. They DO name tools and their order, since the
-sequence is the point; each is offered only when every tool it needs is served, so an API key
-never sees the auto-apply one.
+Read [Prompts](AGENT-REFERENCE.md#prompts) before work involving this topic.
 
 ## The widget
 
-`search_jobs` and `get_job` render in an MCP Apps widget (`widget.go`, `widget/jobs.html`):
-one self-contained page an MCP Apps host — ChatGPT, Claude — draws the result in as cards,
-instead of the model retelling it as prose. The tools' contracts are untouched; a client
-that ignores `_meta.ui` sees exactly what it saw before.
-
-- **It is hand-written HTML, not a `web/` build, on purpose** — see
-  `openspec/changes/archive/2026-10-20-chatgpt-app-widgets/design.md`. If it ever grows
-  independent sign-in, complex forms or direct network requests, that is the point to
-  move it. Saving and profile-match reads use the host bridge and existing tools, not
-  another HTTP client or credential store.
-- **The URI is the page's hash.** Hosts cache by URI; editing the file changes it. Never
-  hard-code the URI anywhere else.
-- **Wire data lives only in `result`, `job` and `req`** inside the page.
-  `TestTheWidgetReadsOnlyFieldsTheWireShapeHas` greps those names and checks every field
-  against `wire.go`, so a renamed field fails the build instead of rendering as nothing.
-  Reading wire data through any other name blinds it.
-- **Safe text, no direct network requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
-  `innerHTML` and friends and every network API; the CSP admits only
-  `https://logo.freehire.me` images. A URL is used only when it is `https:`.
-- **Saving is an explicit host-mediated call.** `Save job` calls `save_job` with
-  only the selected slug, never notes. Controls require the host's `serverTools`
-  capability and never handle credentials. Stage editing stays in the tracking board
-  and assistant tools rather than the card.
-- **The match strip uses exact profile skill overlap**, like the website's
-  `JobMatchBar`: percentage and matched/total job skills, case-insensitive. One
-  successful host-mediated `get_profile` read serves the whole widget when a posting has
-  skills; a failed read may retry on the next tool result. No profile, no skills or an
-  unavailable host read means no strip, never a fabricated zero score. The profile
-  response is not rendered; only the coverage is shown. Strips update in place so a late
-  profile reply preserves focused controls and pending-save status announcements.
-- **Success needs a server confirmation.** The returned tracking record must have
-  a valid job id and saved timestamp. An unknown
-  result or timeout locks writes until the person explicitly confirms their tracking
-  board shows no change and chooses `I checked, allow retry`. Unlocking never sends
-  a request: Save still needs its own click. Timed-out request ids are
-  removed, so late replies cannot confirm a new operation. A confirmed refusal
-  permits an explicit retry. Pending calls stay locked across
-  result re-renders. `web/scripts/mcp-widget.test.mjs` drives the real embedded
-  page's DOM and host protocol, including failure and source-spoofing cases.
-- **Only a tool whose result the page can draw may name it** — a host draws the widget for
-  every tool that does.
-- **The handshake's field names are the specification's** (`appInfo`, not `clientInfo`),
-  and a test holds them. The reference `AppBridge` accepts the wrong one without complaint,
-  so a manual check cannot catch it.
-- **Checking it by eye**: bundle the official host, `AppBridge` from
-  `@modelcontextprotocol/ext-apps/app-bridge`, feed it real `tools/call` results from
-  production, and drive it in a real browser (`agent-browser`). Connect the bridge BEFORE
-  setting the iframe's `srcdoc` — the page's `ui/initialize` is its first act, and a bridge
-  connected after load never hears it. Headless Chrome's `--virtual-time-budget` drops the
-  iframe's `postMessage` traffic and renders an empty frame; do not use it.
+Read [The widget](AGENT-REFERENCE.md#the-widget) before work involving this topic.
 
 ## Descriptions say what a tool returns, never which tool to call
 
-Anthropic's directory policy rules out tool descriptions that instruct the model about other
-tools ("call get_job for the full text" was in three places). A tool or field description
-states what comes back; cross-tool guidance, where needed, goes in the server instructions (`newServer`).
-`TestNoToolDescriptionDirectsTheModelToAnotherTool` walks the registered tools and both
-schemas to hold the line.
+Read [Descriptions say what a tool returns, never which tool to call](AGENT-REFERENCE.md#descriptions-say-what-a-tool-returns-never-which-tool-to-call) before work involving this topic.
 
 ## Annotations are load-bearing
 
-Every tool declares `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: true`.
-Incorrect annotation of these three is a named rejection reason in OpenAI's submission
-guidelines. The block is written once (`ReadOnly()`) and a test walks the REGISTERED tools
-rather than a list beside them — checked by removing one annotation and watching it fail.
-
-A catalogue tool stays read-only even though every caller is signed in now: a write belongs
-in the account tool set (`mixed.go`'s personal tools), whose annotations come from each
-tool's `assistant.Effect`. Do not add a write tool to the catalogue.
-
-The account server's annotations come from each tool's own `assistant.Effect` —
-`EffectReads`, `EffectAdds` (nothing already held is lost: `save_job`, `apply_job`) or
-`EffectOverwrites` (`unsave_job`, and `track_job`, which REPLACES the note). The zero value
-is `EffectOverwrites` on purpose: a tool that declares nothing is announced as one that may
-lose data. `TestMCPAccountTools_DeclareTheirEffect` walks the set the mount actually serves,
-so a tool joining it must be classified there.
-
-The account server also serves auto-apply and the screening answers
-(`internal/api/handler/assistant_auto_apply_tools.go`, openspec/changes/auto-apply-over-mcp):
-start, list, get, review, retry and cancel an attempt, plus the answer bank and the six typed
-screening facts. The four that ACT on an attempt refuse unless the account turned on
-`users.agents_may_apply`, which only a browser session can write — reading never needs it.
-An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is sent): this
-server only ever acts for the person who approved the connection. `accountInstructions`
-describes the account boundary and the tool groups actually served, opens with one line on what
-freehire can do (search, save/track, alerts, auto-apply prepared for review) and says to call
-`get_profile` before the first search and, with auto-apply served, `get_plan` before auto-apply. Its budget is 720 characters;
-Claude Code cuts server instructions at 2048. Search and application
-workflows belong to the packaged skill; initialization describes capabilities and result
-states without prescribing a call sequence or presentation.
-
-`get_plan` (`internal/api/handler/mcp_plan_tool.go`, openspec/changes/mcp-plan-standing) lets
-an agent read the tier and today's per-feature allowances before it queues metered work,
-instead of learning them from a 402. It reads `loadPlan`, the use case `GET /me/plan` serves,
-so the two cannot disagree; it is an allowlist carrying no price or payment source (those are
-the support agent's `my_account`, not a third-party model's). Grants and full-scope keys alike.
-
-`present_jobs` is NOT served there (`mcpAccountTools`). It draws cards in our own chat UI and
-its description tells the model never to write a job link; in a client with no card renderer
-a model obeying it showed the person no vacancies at all.
-
-Every server — both here and the OJCP one — introduces itself through `Identity`, which adds
-the site's logo and website link when the origin is known.
+Read [Annotations are load-bearing](AGENT-REFERENCE.md#annotations-are-load-bearing) before work involving this topic.
 
 ## Testing
 
-Build fixtures with `jobview.FromRow(db.Job{...})`, never as a `jobview.Job` literal — the
-same rule `internal/api/ojcp/AGENTS.md` records, and for the same reason: the literal skips
-`outboundurl.Tag` and the facet normalisation. Three assertions in this package were green
-against a literal and failed the moment the fixture went through a real read path.
-
-**The dictionary columns win.** `seniority`, `category`, `employment_type`, `english_level`
-and `education_level` are folded over the model's enrichment by `jobview`, always. A fixture
-that sets them inside the enrichment JSON sets nothing at all.
-
-Drive the server through the SDK's in-memory transport, not by calling handler functions: a
-tool that registers but cannot be called is invisible to a direct call.
-
-The official MCP conformance suite (`mcp-conformance` job in `contract.yml`) cannot check
-this server: it sends no credential and `/api/v1/mcp` answers it 401. Only OJCP is covered; see
-[ci-checks](../../../docs/agents/ci-checks.md#mcp-protocol-conformance-modelcontextprotocolconformance).
+Read [Testing](AGENT-REFERENCE.md#testing) before work involving this topic.
 
 ## Measured, not assumed
 
-- The SDK **rejects an argument the input schema does not declare** before the handler runs
-  (`isError`, handler never reached) — it derives the schema from the Go type with
-  `additionalProperties: false`. An invented parameter is therefore not a case this has to
-  report; a value outside our vocabularies is. The spec's requirement is written around that
-  measurement rather than around the guess that preceded it.
-- Resolving `EmployerURLProviders()` costs **35µs and 394 allocations** — it constructs all
-  223 adapters. Once per projector, never per posting.
-- Meilisearch filter comparison is **case-insensitive**: `countries=de` and `countries=DE`
-  both answered 59,942 on 2026-09-18. The vocabulary check folds case to match, because a
-  check stricter than the thing it guards would report a working filter as unsupported.
+Read [Measured, not assumed](AGENT-REFERENCE.md#measured-not-assumed) before work involving this topic.

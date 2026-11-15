@@ -87,14 +87,12 @@ down: ## Stop and remove containers
 logs: ## Tail application logs
 	$(COMPOSE) logs -f app
 
-migrate: ## Apply migrations manually to a running DB (for an existing volume)
-	@for f in migrations/*.sql; do \
-		echo "applying $$f"; \
-		$(COMPOSE) exec -T db psql -U hire -d hire -f /docker-entrypoint-initdb.d/$$(basename $$f); \
-	done
+migrate: ## Apply pending migrations to DATABASE_URL (use mise for this checkout's DB)
+	@sh scripts/check-migration-history.sh
+	go run ./cmd/migrate
 
-psql: ## Open psql in the database
-	$(COMPOSE) exec db psql -U hire -d hire
+psql: ## Open psql at DATABASE_URL (use mise for this checkout's DB)
+	psql "$${DATABASE_URL:?DATABASE_URL is required; run make through mise exec}"
 
 cover: ## Unit tests with coverage profile → coverage/unit.out
 	@mkdir -p $(COVERAGE_DIR)

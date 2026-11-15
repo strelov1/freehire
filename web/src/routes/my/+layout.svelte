@@ -1,7 +1,5 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { setContext } from 'svelte';
-  import { accountHeaderActions } from '#lib/accountHeader.js';
   import { onMount } from 'svelte';
   import { browser } from '$app/env';
   import { page } from '$app/state';
@@ -65,44 +63,9 @@
   let drawerOpen = $state(false);
   const activeItem = $derived(activeSection(path, accountNav));
 
-  setContext(accountHeaderActions, mobileActions);
-
   let helpOpen = $state(false);
   const helpLabel = $derived(t(supportMessages, locale()).title);
 </script>
-
-{#snippet mobileActions()}
-  <div class="-mr-3 flex max-w-3/5 shrink-0 items-center gap-1 lg:hidden">
-    <button
-      type="button"
-      onclick={() => (helpOpen = !helpOpen)}
-      aria-haspopup="dialog"
-      aria-expanded={helpOpen}
-      title={helpLabel}
-      class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-    >
-      <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
-      <span class="hidden min-[390px]:inline">{helpLabel}</span>
-    </button>
-    <button
-      type="button"
-      onclick={() => (drawerOpen = true)}
-      aria-haspopup="dialog"
-      aria-expanded={drawerOpen}
-      class="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
-    >
-      <span class="sr-only">{s.shell.accountSections}:</span>
-      {#if activeItem}
-        {@const Icon = accountNavIcons[activeItem.href]}
-        <Icon class="size-4 shrink-0" aria-hidden="true" />
-        <span class="truncate">{navLabel(s, activeItem.href, activeItem.label)}</span>
-      {:else}
-        {s.rail.menu}
-      {/if}
-      <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
-  </div>
-{/snippet}
 
 <svelte:head>
   <!-- Personal pages: keep the whole section out of search results, set once here. -->
@@ -173,6 +136,36 @@
       </div>
 
       <div class="min-w-0 flex-1">
+        <div class="mb-2 flex min-w-0 items-center justify-end gap-1 lg:hidden">
+          <button
+            type="button"
+            onclick={() => (helpOpen = !helpOpen)}
+            aria-haspopup="dialog"
+            aria-expanded={helpOpen}
+            title={helpLabel}
+            class="flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <LifeBuoy class="size-4 shrink-0" aria-hidden="true" />
+            <span class="sr-only min-[390px]:not-sr-only">{helpLabel}</span>
+          </button>
+          <button
+            type="button"
+            onclick={() => (drawerOpen = true)}
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
+            class="flex min-h-8 min-w-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+          >
+            <span class="sr-only">{s.shell.accountSections}:</span>
+            {#if activeItem}
+              {@const Icon = accountNavIcons[activeItem.href]}
+              <Icon class="size-4 shrink-0" aria-hidden="true" />
+              <span class="truncate">{navLabel(s, activeItem.href, activeItem.label)}</span>
+            {:else}
+              {s.rail.menu}
+            {/if}
+            <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+        </div>
         {@render children()}
       </div>
     </div>

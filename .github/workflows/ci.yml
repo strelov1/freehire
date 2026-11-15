@@ -390,6 +390,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install source-search dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ripgrep
+
       - name: Test scripts
         run: |
           for f in scripts/test_*.py; do
