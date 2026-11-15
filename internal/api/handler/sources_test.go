@@ -125,7 +125,7 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 func TestBuildSourceEntriesCarriesHealthWhenThereIsARecord(t *testing.T) {
 	health := []db.ProviderHealthRollupRow{{
 		Provider: "greenhouse", TotalBoards: 900, HealthyBoards: 890, CooledBoards: 10,
-		LastRunAt: ts(sourcesNow.Add(-time.Hour)), LastSuccessAt: ts(sourcesNow.Add(-time.Hour)),
+		LastRunAt: ts(sourcesNow.Add(-time.Hour)), LastSuccessAt: ts(sourcesNow.Add(-time.Hour)), FreshnessAt: ts(sourcesNow.Add(-time.Hour)),
 		IngestedTotal: 4321,
 	}}
 
@@ -244,5 +244,40 @@ func TestBuildSourceEntriesLeavesAFamilyUnmeasuredWhenAMemberIs(t *testing.T) {
 
 	if b := got["whatjobs"].Jobs.Value.Browsable; !b.Null {
 		t.Errorf("browsable = %+v, want null: a partial sum would read as a measurement", b)
+	}
+}
+
+func TestHealthBlockUsesQuietPolicyButReportsActualSuccess(t *testing.T) {
+	actual := sourcesNow.Add(-60 * time.Hour)
+	row := db.ProviderHealthRollupRow{
+		Provider: "ukg", TotalBoards: 1, HealthyBoards: 1,
+		LastSuccessAt: ts(actual), FreshnessAt: ts(sourcesNow),
+	}
+	got := healthBlock(row, sourcesNow)
+	if got.Status != "operational" || got.LastSuccess.Null || got.LastSuccess.Value != actual.Format(time.RFC3339) {
+		t.Fatalf("health = %+v", got)
+	}
+	row.FreshnessAt = row.LastSuccessAt
+	if got := healthBlock(row, sourcesNow); got.Status != "down" {
+		t.Fatalf("expired quiet policy = %+v", got)
+	}
+}
+
+func TestFoldHealthFamiliesKeepsPolicySeparateFromSuccess(t *testing.T) {
+	actual := ts(sourcesNow.Add(-60 * time.Hour))
+	rows := foldHealthFamilies([]db.ProviderHealthRollupRow{
+		{Provider: "whatjobs-br", LastSuccessAt: actual, FreshnessAt: actual},
+		{Provider: "whatjobs-ca", LastSuccessAt: actual, FreshnessAt: ts(sourcesNow)},
+	})
+	if len(rows) != 1 {
+		t.Fatalf("family rows = %+v", rows)
+	}
+	for _, row := range rows {
+		if !row.LastSuccessAt.Time.Equal(actual.Time) {
+			t.Fatalf("fabricated success: %+v", row)
+		}
+	}
+	if !rows[0].FreshnessAt.Time.Equal(sourcesNow) {
+		t.Fatalf("lost policy freshness: %+v", rows)
 	}
 }

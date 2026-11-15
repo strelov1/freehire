@@ -49,6 +49,11 @@ func seedBoardHealth(t *testing.T, pool *pgxpool.Pool, provider, board string, f
 	if err != nil {
 		t.Fatalf("seed board_health %s/%s: %v", provider, board, err)
 	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO boards (provider, board, company, status)
+ VALUES ($1,$2,$2,'active') ON CONFLICT DO NOTHING`, provider, board); err != nil {
+		t.Fatal(err)
+	}
+
 }
 
 func daysAgo(d int) time.Time {
