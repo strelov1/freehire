@@ -21,8 +21,7 @@ import (
 // wuzzuf adapts WUZZUF (wuzzuf.net), Egypt's largest general job board, whose postings each
 // name their own employer — mostly in Egypt, with a minority in Saudi Arabia, the UAE and
 // further afield. Board-based aggregator: a board is one of the platform's own job ROLES
-// ("IT/Software Development"), which is what keeps a general board on its technical slice —
-// 436 of 5,266 active postings on 2026-10-18.
+// ("IT/Software Development"), which is what keeps a general board on its technical slice.
 //
 // The whole site, its API included, sits behind a Cloudflare challenge, so the crawl reads the
 // site's own search pages through the Scrapling tier's browser. Each page embeds the store
@@ -46,9 +45,8 @@ const (
 	wuzzufSearchPageURL = wuzzufSiteURL + "search/jobs/"
 	// wuzzufPageSize is how many rows the site's search page shows; it is not ours to choose.
 	wuzzufPageSize = 15
-	// wuzzufMaxPages is a ceiling three times above the IT role's size (437 postings on
-	// 2026-10-21), never the expected end: a role whose count does not fit it FAILS rather than
-	// being read in part.
+	// wuzzufMaxPages is a ceiling well above the IT role's size, never the expected end: a role
+	// whose count does not fit it FAILS rather than being read in part.
 	wuzzufMaxPages = 100
 )
 
@@ -63,8 +61,8 @@ var (
 	wuzzufURIRE = regexp.MustCompile(`^(?:[a-z]+/)+[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
-// wuzzufPageInterval paces the search pages. On 2026-10-21 nine pages ~6 s apart were served
-// and the tenth answered 429; at one per 12 s a run of ~30 pages takes ~6 minutes.
+// wuzzufPageInterval paces the search pages: nine pages ~6 s apart were served and the tenth
+// answered 429, so one per 12 s.
 const wuzzufPageInterval = 12 * time.Second
 
 // pacedWuzzufSite paces the search-page requests of one run.
@@ -365,8 +363,7 @@ func (d wuzzufDoc) toJob(company string) (Job, bool) {
 	return job, true
 }
 
-// wuzzufPostedAt reads the API's "MM/DD/YYYY HH:MM:SS", which is Cairo wall time: a posting
-// read at 18:00 UTC carried 20:19 as its posting time.
+// wuzzufPostedAt reads the API's "MM/DD/YYYY HH:MM:SS", which is Cairo wall time, not UTC.
 func wuzzufPostedAt(s string) *time.Time {
 	t, err := time.ParseInLocation("01/02/2006 15:04:05", strings.TrimSpace(s), wuzzufCairo)
 	if err != nil {
@@ -390,8 +387,8 @@ var wuzzufEmploymentTypes = map[string]string{
 	"internship":        "internship",
 }
 
-// employmentType is stated only when the posting names exactly one work type: 14 of 436 IT
-// postings name several ("full_time, part_time, freelance_project"), which says nothing.
+// employmentType is stated only when the posting names exactly one work type: several
+// ("full_time, part_time, freelance_project") say nothing.
 func (d wuzzufDoc) employmentType() string {
 	if len(d.Attributes.WorkTypes) != 1 {
 		return ""

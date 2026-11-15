@@ -14,8 +14,8 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// host without it must not register a provider whose every board would fail to authenticate,
 	// so its board file fails config validation before a request goes out. The taxonomy path
 	// (c == nil, see Taxonomy) registers all four regardless, empty credential included.
-	// Conflating the two classified whatjobs — a CPC reseller of first-party ATS postings — as
-	// an ATS on every keyless host, so none of its copies was ever suppressed.
+	// Conflating the two would classify whatjobs, a CPC reseller of first-party ATS postings,
+	// as an ATS on every keyless host, so none of its copies would be suppressed.
 	if key := os.Getenv("USAJOBS_API_KEY"); c == nil || key != "" {
 		registry["usajobs"] = NewUSAJobs(c, key)
 	}
@@ -50,7 +50,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// added), every account's id lives in the single WHATJOBS_PUBLISHER_IDS variable, a
 	// comma-separated "code:id" list keyed by whatjobsMarket.code (e.g. "us:7065,br:7076"). All
 	// configured accounts share ONE in-flight cap: the feed rate-limits the pipeline's parallel
-	// board crawl by simultaneity (8 of 10 boards 429'd on the first prod run) though it serves
+	// board crawl by simultaneity though it serves
 	// sequential requests fine, and that trigger reads as edge-wide rather than per-account, so
 	// every provider must contend for the same semaphore rather than each getting its own budget.
 	// On the taxonomy path there is nothing to wrap.
@@ -93,8 +93,8 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// Civil Service Jobs answers every path with a proof-of-work check whose verdict is a
 	// session cookie. See civilservicejobs.go.
 	registry["civilservicejobs"] = cookieSessionSource[csjHTTP](c, NewCivilServiceJobs)
-	// Empregos.com.br's search API answers up to 15,000 whole postings at once (~35 MB, ~12 s),
-	// past the standard 15s client timeout. See empregos.go.
+	// Empregos.com.br's search API answers up to 15,000 whole postings at once (a very large
+	// response), past the standard 15s client timeout. See empregos.go.
 	if c == nil {
 		registry["empregos"] = NewEmpregos(nil)
 	} else {
@@ -102,7 +102,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	}
 	// DigitalRecruiters (Cegid, France): board = the careers HOST, almost always the employer's
 	// own domain, read through the vendor's public JSON API at one request a second. A 1,000-posting
-	// listing page measured 6-33 s to answer (2026-10-28), past the standard 15s client timeout.
+	// listing page can take tens of seconds, past the standard 15s client timeout.
 	// See digitalrecruiters.go.
 	if c == nil {
 		registry["digitalrecruiters"] = NewDigitalrecruiters(nil)
@@ -111,7 +111,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	}
 	// Prospective (JobCloud, Switzerland): board = a MEDIUM id, read through the vendor's public
 	// JSON API at one request a second, each new job's employer from its page's JobPosting. A
-	// listing page of 1,000 measured 66 s (2026-10-29), so pages are 200 on the long-timeout
+	// listing page of 1,000 can take over a minute, so pages are 200 on the long-timeout
 	// client. See prospective.go.
 	if c == nil {
 		registry["prospective"] = NewProspective(nil, nil)
@@ -119,9 +119,8 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 		lc := NewLongTimeoutClient()
 		registry["prospective"] = NewProspective(lc, lc)
 	}
-	// HumanBit's listing page is a single, unpaginated ~5.6 MB payload that measured ~18s to
-	// fetch — past the standard 15s client timeout, which made every crawl fail
-	// intermittently with "context deadline exceeded" in production. Swap in the
+	// HumanBit's listing page is a single, unpaginated multi-MB payload that can take ~18s to
+	// fetch, past the standard 15s client timeout ("context deadline exceeded"). Swap in the
 	// long-timeout transport only when there is a real client to serve; the taxonomy path
 	// (c == nil, e.g. FilterableProviders) must stay transport-free, per the invariant
 	// Taxonomy documents.
@@ -131,8 +130,8 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 		registry["humanbit"] = NewHumanBit(NewLongTimeoutClient())
 	}
 	// Jobboardly: hosted niche job boards, board = tenant subdomain. A board's whole catalogue
-	// is one unpaginated /jobs.json rendered on request, and the largest board measured
-	// (remotejobs: 1,723 postings, 31 MB) took ~28s to its first byte — past the standard 15s
+	// is one unpaginated /jobs.json rendered on request, and a large board
+	// can take ~28s to its first byte, past the standard 15s
 	// client timeout, the HumanBit case again. See jobboardly.go.
 	if c == nil {
 		registry["jobboardly"] = NewJobboardly(nil)
@@ -140,34 +139,32 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 		registry["jobboardly"] = NewJobboardly(NewLongTimeoutClient())
 	}
 	// HR-Manager: Danish ATS, board = customer alias, one job-portal API request per board with
-	// every advertisement body inline. The largest customer (663 postings) is a 12 MB answer
-	// that took 5s from the prod host and 25s from a residential line — past the standard 15s
-	// timeout, the HumanBit case again. See hrmanager.go.
+	// every advertisement body inline. The largest customer's answer is
+	// ~12 MB and can take 25s on a slow line, past the standard 15s timeout, the HumanBit case again. See hrmanager.go.
 	if c == nil {
 		registry["hrmanager"] = NewHRManager(nil)
 	} else {
 		registry["hrmanager"] = NewHRManager(NewLongTimeoutClient())
 	}
 	// Tenstreet: US trucking carriers' Pulse pages, board = numeric company id, hydrating each
-	// new posting from its page. Posting pages run to ~1.8 MB and some stall for 30 s or more,
-	// so the adapter rides the long-timeout transport, paced at the rate measured as refused
-	// nothing (see tenstreetRequestInterval).
+	// new posting from its page. Posting pages are large and some stall for 30 s or more,
+	// so the adapter rides the long-timeout transport, paced at a rate that drew no refusals (see tenstreetRequestInterval).
 	if c == nil {
 		registry["tenstreet"] = NewTenstreet(nil)
 	} else {
 		registry["tenstreet"] = NewTenstreet(pacedHTMLGetter(NewLongTimeoutClient(), tenstreetRequestInterval, tenstreetRequestBurst))
 	}
-	// Paradox: frontline-hiring ATS, board = "<host>/<site>". The listing API spends ~50 ms per
-	// row, so a 100-row page took up to 11 s — too close to the standard 15 s timeout — and the
+	// Paradox: frontline-hiring ATS, board = "<host>/<site>". The listing API is slow per
+	// row, so a 100-row page can take ~11 s, too close to the standard 15 s timeout — and the
 	// API meters a per-IP request budget, so the run is paced. See paradox.go.
 	if c == nil {
 		registry["paradox"] = NewParadox(nil)
 	} else {
 		registry["paradox"] = NewParadox(pacedParadoxGetter(NewLongTimeoutClient()))
 	}
-	// HireClick serves its pages uncompressed at ~80-160 KB/s per connection while they weigh
+	// HireClick serves its pages uncompressed slowly while they weigh
 	// 1-3 MB (the tenant logo inlined as base64, plus an ASP.NET view state), so a board page
-	// measured 13-40s and a posting page ~11s — past the standard 15s timeout, the HumanBit
+	// can take 13-40s and a posting page ~11s, past the standard 15s timeout, the HumanBit
 	// case again. Every request is also held under one in-flight cap (limitedHireClick): the
 	// origin is one small pipe that degraded under a default-fan-out crawl. See hireclick.go.
 	if c == nil {
@@ -307,7 +304,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	registry["posaohr"] = cookieSessionSource[posaoHRGetter](c, NewPosaoHR)
 	// ESS: the Employment Service of Slovenia's job search, read through the public JSON API its
 	// search page calls, each new vacancy's body from the detail endpoint. A listing page of 500
-	// takes ~8 s to answer, near the standard 15s client timeout. See ess.go.
+	// is slow to answer, near the standard 15s client timeout. See ess.go.
 	if c == nil {
 		registry["ess"] = NewESS(nil)
 	} else {

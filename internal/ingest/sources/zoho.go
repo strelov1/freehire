@@ -95,10 +95,9 @@ func (z zoho) toJob(ctx context.Context, base string, e CompanyEntry, o zohoOpen
 var zohoDescPattern = regexp.MustCompile(`\\x22Job_Description\\x22:\\x22(.*?)\\x22,\\x22[A-Za-z_]`)
 
 // zohoOpenedPattern captures the same record's Date_Opened, a plain date the blob writes with
-// escaped hyphens ("2024\-11\-11"). The listing's #jobs array carries it too, but only on the
-// tenants that publish the field there (8 of 15 sampled 2026-10-23 did not); the detail record
-// carried it on 9 of the 10 checked, those 8 included, and the detail page is fetched for the
-// body anyway. A tenant that does not use the field at all leaves the posting undated.
+// escaped hyphens ("2024\-11\-11"). The listing's #jobs array carries it too, but only on
+// tenants that publish the field there; the detail page is fetched for the body anyway. A
+// tenant that does not use the field at all leaves the posting undated.
 var zohoOpenedPattern = regexp.MustCompile(`\\x22Date_Opened\\x22:\\x22([0-9\\-]+)\\x22`)
 
 // zohoDetail is what a posting's detail page contributes to its Job.

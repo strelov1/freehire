@@ -17,10 +17,9 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// shine adapts Shine.com (www.shine.com), the HT Media group's Indian general job board: ~223k
-// public postings, a sixth or so of them technical, many posted by recruitment consultancies.
-// It is boardless and an aggregator — the employer is read per posting. See the "Shine traps"
-// section of AGENTS.md for the measurements behind each rule.
+// shine adapts Shine.com (www.shine.com), the HT Media group's Indian general job board, many
+// postings on it by recruitment consultancies. It is boardless and an aggregator: the employer is
+// read per posting. See the "Shine traps" section of AGENTS.md.
 //
 // The posting set comes from the job sitemaps (robots.txt disallows the site's API), which carry
 // nothing but each posting's URL, so every fact is bought with the posting page's schema.org
@@ -52,12 +51,10 @@ const (
 	// shineDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 	shineDetailWorkers = 2
 	// shineMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a second
-	// is 25 minutes. The rest of the scheduler's default 2,400 s crawl budget goes to the ~22
-	// sitemaps, the coverage probe over ~62k employers and the writes after the fetch — and a run
-	// that meets its deadline stores nothing, so the margin is the point. ~10k postings reach the
-	// sitemaps a day — under the ~18k twelve two-hourly runs read — and the first runs face the
-	// whole catalogue, so it is taken in slices, newest first; a posting past the bound is read by
-	// a later run.
+	// is 25 minutes. The rest of the scheduler's default 2,400 s crawl budget goes to the sitemaps,
+	// the coverage probe and the writes after the fetch, and a run that meets its deadline stores
+	// nothing, so the margin is the point. The first runs face the whole catalogue, so it is taken
+	// in slices, newest first; a posting past the bound is read by a later run.
 	shineMaxNewPerRun = 1500
 )
 

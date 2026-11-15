@@ -18,10 +18,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
-// mojedelo adapts MojeDelo (www.mojedelo.com), Slovenia's largest general job board: ~4k open
-// postings, every trade, a few percent technical, a few dozen abroad (mostly Austria). It is
-// boardless and an aggregator — the employer is read per posting. See the "MojeDelo traps"
-// section of AGENTS.md for the measurements behind each rule.
+// mojedelo adapts MojeDelo (www.mojedelo.com), Slovenia's largest general job board: every trade,
+// only a few percent technical, a few dozen postings abroad (mostly Austria). It is boardless and
+// an aggregator, so the employer is read per posting. See the "MojeDelo traps" section of
+// AGENTS.md for the rules.
 //
 // The site is a single-page app over its own JSON API (api.mojedelo.com). The search lists each
 // posting's title, employer, place, country and arrangement — everything but the body, which
@@ -36,8 +36,7 @@ type mojedelo struct {
 const (
 	mojedeloAPI = "https://api.mojedelo.com"
 	// mojedeloSearchURL is the public search with no filter: the whole catalogue, promoted
-	// postings first, then newest first. The order is stable: a full walk read 3,960 distinct
-	// postings in 3,960 rows.
+	// postings first, then newest first. The order is stable.
 	mojedeloSearchURL = mojedeloAPI + "/job-ads-search?pageSize=%d&startFrom=%d"
 	mojedeloJobURL    = mojedeloAPI + "/job-ads/%s"
 	mojedeloPageURL   = "https://www.mojedelo.com/oglas/%s/%s"
@@ -45,15 +44,15 @@ const (
 	// mojedeloPageSize is the largest page the search serves: it validates pageSize up to 200
 	// but answers 500 to anything above 100.
 	mojedeloPageSize = 100
-	// mojedeloMaxPages is a safety ceiling: 40 pages on 2026-10-29.
+	// mojedeloMaxPages is a safety ceiling.
 	mojedeloMaxPages = 200
 	// mojedeloRequestInterval paces every request of a run, search page and posting alike, at
 	// one a second — a courtesy ceiling, not a measured limit.
 	mojedeloRequestInterval = time.Second
 	mojedeloDetailWorkers   = 2
-	// mojedeloMaxNewPerRun bounds the posting reads of one run: the 40 search pages take ~5
-	// minutes (each answers in ~7 s), so 1,200 postings at one a second and the writes after
-	// them fit the scheduler's 2,400 s crawl budget. A cold catalogue is taken in slices.
+	// mojedeloMaxNewPerRun bounds the posting reads of one run so the search pages, the reads at one
+	// a second and the writes after them fit the scheduler's 2,400 s crawl budget. A cold catalogue
+	// is taken in slices.
 	mojedeloMaxNewPerRun   = 1200
 	mojedeloDeadlineMargin = 5 * time.Minute
 )

@@ -15,9 +15,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// velorahr adapts Velora HR, a Spanish ATS whose customers — contract caterers and cleaners
-// (Serunion, Derichebourg, ONET), retail chains (Grupo Batta in Mexico, Tiendas MGI, Herbolario
-// Navarro), hotels and restaurants — publish career sites at
+// velorahr adapts Velora HR, a Spanish ATS whose customers publish career sites at
 // https://<tenant>.career.velorahr.com/<slug>-<site id>. The board is that numeric CAREER-SITE
 // id: one tenant may run several sites, and the site, not the tenant host, is what the
 // platform's public API is keyed by:
@@ -53,8 +51,7 @@ func (velorahr) fullBoardListing() {}
 
 const (
 	velorahrAPIBase = "https://api.velorahr.com/api/public/career-site/"
-	// velorahrWindow is how many offers the listing request asks for. The largest site measured
-	// (2026-10-27) lists 310.
+	// velorahrWindow is how many offers the listing request asks for, far more than any site lists.
 	velorahrWindow = 1000
 	// velorahrRequestInterval spaces the provider's requests to the one API host.
 	velorahrRequestInterval = time.Second

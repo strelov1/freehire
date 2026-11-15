@@ -10,26 +10,22 @@ import (
 )
 
 // seekDetailNetwork is the one GraphQL jobDetails client the whole SEEK network shares: seek
-// (AU/NZ) and jobstreet (JobStreet/JobsDB) answer the same operation from the same
-// infrastructure, and a ban one of them provokes is a ban on both (2026-10-15: www.seek.com.au,
-// sg.jobstreet.com and th.jobsdb.com all refused jobDetails at once). It is built once per
-// registry and handed to both adapters, the same way the single pacedSeekPoster was.
+// (AU/NZ) and jobstreet (JobStreet/JobsDB) use the same infrastructure, so a ban on one is a ban
+// on both. It is built once per registry and handed to both adapters.
 //
 // It owns three run-scoped decisions no single board can make:
 //
-//   - which egress LANE a detail request takes: the direct IP first, then — after the first
-//     RATE_LIMITED refusal on it — the proxy, which has its own pacer (see seekProxyDetailInterval);
-//   - when to STOP hydrating: a refusal on the proxy lane too, or a refusal on the direct lane with
-//     no proxy configured, ends detail traffic for the rest of the run;
+//   - which egress LANE a detail request takes: the direct IP first, then, after the first
+//     RATE_LIMITED refusal on it, the proxy, which has its own pacer (see seekProxyDetailInterval);
+//   - when to STOP hydrating: a refusal on the proxy lane too, or on the direct lane with no
+//     proxy configured, ends detail traffic for the rest of the run;
 //   - how many requests the run may SPEND at all (budget, see seekDetailRunBudget).
 //
-// A posting that gets no body because the network stopped is deferred exactly like a failed
-// detail (seek never stores a posting body-less), so a stopped run costs latency, not data.
+// A posting that gets no body because the network stopped is deferred like a failed detail (seek
+// never stores a posting body-less), so a stopped run costs latency, not data.
 //
-// The state is per process, and cmd/ingest crawls one provider per process — so in production the
-// shared budget and the shared stop bind within a run of one provider; nothing carries a ban
-// across runs, which is deliberate: every run re-probes the direct IP, and the budget bounds what
-// that probe can cost if the ban is still in force.
+// State is per process and cmd/ingest crawls one provider per process, so nothing carries a ban
+// across runs: every run re-probes the direct IP, and the budget bounds what that probe costs.
 type seekDetailNetwork struct {
 	direct JSONPoster // paced (pacedSeekPoster)
 	proxy  JSONPoster // paced on its own bucket (pacedSeekProxyPoster); nil = no proxy configured
@@ -61,13 +57,9 @@ func (l seekLane) String() string {
 }
 
 // seekDetailRunBudget caps the jobDetails requests one run may send across the whole network,
-// both lanes counted. The 2026-10-15 ban arrived after the first JobStreet bootstrap had sent
-// roughly 4k-7k requests (~4.3k bodies hydrated, 50 minutes at ~2 req/s) — a cumulative budget,
-// not a per-second one, since the rate itself had been clean for a month. 1,500 is about a third
-// of the LOW end of that range and ~12.5 minutes at the direct pace. Runs come every 2 hours, so
-// it still drains up to ~18k new postings a day per provider against a steady state of a few
-// hundred; a bootstrap of thousands now accretes over several runs instead of sustaining 50
-// minutes of detail traffic, and the postings past the cap are deferred to the next run.
+// both lanes counted. SEEK bans on cumulative volume, not rate, so this is a budget rather than a
+// pacer. Postings past the cap are deferred to the next run, so a large bootstrap accretes over
+// several runs.
 const seekDetailRunBudget = 1500
 
 // newSeekDetailNetwork wires the shared detail client. direct and proxy must already be paced; a
@@ -87,9 +79,8 @@ const (
 )
 
 // seekDetailQuery is the description-fetching GraphQL operation. Its variables are declared exactly
-// as used: SEEK's endpoint rejects an unused variable with GRAPHQL_VALIDATION_FAILED rather than
-// ignoring it — which is the useful half of the bargain, since a drifted field fails loudly instead
-// of silently emptying every body.
+// as used: SEEK rejects an unused variable with GRAPHQL_VALIDATION_FAILED, so a drifted field fails
+// loudly instead of silently emptying every body.
 const seekDetailQuery = `query jobDetails($jobId: ID!) {
   jobDetails(id: $jobId) {
     job {
@@ -156,8 +147,7 @@ func (n *seekDetailNetwork) content(ctx context.Context, provider, host, id stri
 	}
 }
 
-// seekRefused reports a volume refusal: the GraphQL RATE_LIMITED that the 2026-10-15 ban answered
-// with, or the HTTP 429 the unpaced August crawl was answered with.
+// seekRefused reports a volume refusal: the GraphQL RATE_LIMITED or an HTTP 429.
 func seekRefused(err error, resp seekDetailResponse) bool {
 	var se *StatusError
 	if errors.As(err, &se) {

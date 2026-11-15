@@ -17,12 +17,10 @@ import (
 // with no JSON API behind them, and the listing carries the board's whole open catalogue in
 // one page — there is no pagination.
 //
-// Only the enumeration reads the listing. Tenants pick among several listing templates and
-// the markup around a posting's title and location differs between them (one theme wraps the
-// whole listing in the employer's own website chrome), but every posting page renders from
-// the same labelled cells. So the adapter takes just the links from the listing — the one
-// thing every template shares — and reads every field from a per-posting detail fetch
-// (bounded-concurrency), like the other HTML detail adapters (jazzhr, betterteam).
+// Only the enumeration reads the listing: tenants pick among several listing templates whose
+// markup around a title and location differs, but every posting page renders from the same
+// labelled cells. So the adapter takes just the links from the listing and reads every field
+// from a per-posting detail fetch (bounded-concurrency), like jazzhr and betterteam.
 //
 // The element ids those cells carry are prefixed "gnewton", after the ATS Paycor built this
 // on. They are the stable hooks: the CSS classes beside them are what a tenant restyles.

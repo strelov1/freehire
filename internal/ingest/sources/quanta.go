@@ -12,15 +12,15 @@ import (
 // which the ukgready adapter already crawls; this site is the parent's.
 //
 // The whole board is ONE anonymous GET that returns every open vacancy with its duties and
-// requirements inline — the site's own page fetches it once and searches it in the browser — so
+// requirements inline (the site's own page fetches it once and searches it in the browser), so
 // there is no pagination and no detail request. The query string is ignored by the server.
 //
 // Everything is Traditional Chinese, which our title dictionary cannot read, so the site's own
 // job category is what states the discipline (quantaCategories).
 //
-// Not fullBoardListing: the dump states no total to check it against, and a live run on
-// 2026-10-25 once received 8 of its 244 vacancies under a 200 with well-formed JSON. Granting the
-// board-scoped close on that evidence would have closed the other 236.
+// Not fullBoardListing: the dump states no total to check it against, and the server has been
+// seen answering 200 with well-formed JSON holding only a few of the vacancies. Granting the
+// board-scoped close on that evidence would close the rest.
 type quanta struct {
 	http JSONGetter
 }
@@ -31,11 +31,9 @@ const (
 	quantaJobURL = "https://hr.quantatw.com/QuantaRecruit/Home/Job?serial="
 )
 
-// quantaCategories maps the site's job category (caponm) onto vocab.CategoryValues where it
-// names one discipline. The rest — sales-and-marketing (FAE beside account sales), validation
-// (EMC and safety labs beside system test), the fresh-graduate, overseas, "other" and the
-// alternative-military-service R&D zones (mechanical beside software) — span several and are
-// left to the dictionaries.
+// quantaCategories maps the site's job category (caponm) onto vocab.CategoryValues where it names
+// one discipline. The rest (sales-and-marketing, validation, the fresh-graduate, overseas, "other"
+// and alternative-military-service R&D zones) span several and are left to the dictionaries.
 var quantaCategories = map[string]string{
 	"硬體研發": "hardware",             // hardware R&D
 	"電源研發": "hardware",             // power-supply R&D

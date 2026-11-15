@@ -12,10 +12,9 @@ import (
 // posting's company from the feed. The /api/jobs endpoint pages by page number over a
 // reported totalPages, and ships each posting's full description inline (no detail call).
 //
-// Note: remotli.ch's robots.txt disallows /api/ for every listed user agent. The endpoint is
-// public and unauthenticated, and the crawl is a scheduled job rather than a search-engine
-// crawler, but this is flagged here because it was flagged in the adapter's tracking issue as
-// a conscious call rather than a silent one.
+// Note: remotli.ch's robots.txt disallows /api/ for every user agent. The endpoint is public
+// and unauthenticated and the crawl is a scheduled job, not a search-engine crawler; this is
+// a conscious call.
 type remotli struct {
 	http JSONGetter
 }
@@ -98,9 +97,8 @@ func (p remotliPosting) toJob() (Job, bool) {
 		Title:      p.Title,
 		Company:    p.Company,
 		Location:   p.Location,
-		// Remote is the shared free-text heuristic: unlike weworkremotely/nodesk, this board
-		// mixes onsite Swiss postings (e.g. "Zürich, Switzerland") in with remote ones, and the
-		// API carries no structured remote flag (remotePolicy is always null in practice), so
+		// Remote is the shared free-text heuristic: this board mixes onsite Swiss postings in
+		// with remote ones and has no structured remote flag (remotePolicy is always null), so
 		// WorkMode is left for the pipeline's location dictionary to derive.
 		Remote:         isRemote(p.Location),
 		Description:    sanitizeHTML(p.Description),

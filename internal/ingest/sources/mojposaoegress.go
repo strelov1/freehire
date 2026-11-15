@@ -16,12 +16,11 @@ import (
 )
 
 // mojposaoLane is how the Croatian MojPosao market is reached at all. mojposao.hr sits behind a
-// CloudFront WAF that answers "403 Request blocked" to both crawl hosts, to the fixed proxy exit
-// and to the Scrapling tier, while the rotating gateway's exits split: of 24 exits pinned by
-// number, 13 were served and 11 refused, and each kept its verdict across rounds (2026-10-29).
-// So the lane pins one exit of the rotating gateway, keeps it while it is served, and moves to
-// the next exit when it is refused — a handful of tries finds a served exit, where a fresh random
-// exit per request would pay the ~45% refusal rate on every request.
+// CloudFront WAF that answers "403 Request blocked" to both crawl hosts, the fixed proxy exit and
+// the Scrapling tier, while the rotating gateway's exits split into served and refused, each
+// keeping its verdict across rounds. So the lane pins one exit of the rotating gateway, keeps it
+// while it is served, and moves to the next exit when it is refused; a fresh random exit per
+// request would pay the refusal rate on every request.
 //
 // A request takes at most mojposaoLaneTries exits; a 404/410 is the platform's answer and is
 // returned at once. After mojposaoLaneMaxRefusals consecutive refusals the lane refuses every

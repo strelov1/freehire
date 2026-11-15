@@ -12,23 +12,23 @@ import (
 	"golang.org/x/net/html"
 )
 
-// trinethire adapts TriNet Hire (app.trinethire.com), the applicant tracker TriNet bundles with
-// its US PEO. A board is the company's path segment, "<numeric id>-<name slug>"
+// trinethire adapts TriNet Hire (app.trinethire.com), the applicant tracker TriNet bundles with its
+// US PEO. A board is the company's path segment, "<numeric id>-<name slug>"
 // (app.trinethire.com/companies/16150-automox-inc/jobs), stored as the platform spells it in a
-// posting link. Only the numeric id addresses the company — "/companies/16150/jobs" and
-// "/companies/16150-anything/jobs" serve the same page (measured 2026-10-24) — so two spellings
-// differing in the slug are one crawl target, and boardIdentity folds them onto the id.
+// posting link. Only the numeric id addresses the company ("/companies/16150/jobs" and
+// "/companies/16150-anything/jobs" serve the same page), so two spellings differing in the slug are
+// one crawl target, and boardIdentity folds them onto the id.
 //
 // Both pages are server-rendered Rails HTML with no JSON behind them and no schema.org markup:
-//   - the listing is ONE unpaginated table (the largest of 100 tenants held 30 rows), each row
-//     carrying the title, the employment type and the tenant's own LOCATION NAME — a label the
-//     employer chose ("Remote in the Midwest", "Automox Inc. HQ"), not an address;
+//   - the listing is ONE unpaginated table, each row carrying the title, the employment type and
+//     the tenant's own LOCATION NAME, a label the employer chose ("Remote in the Midwest", "Automox
+//     Inc. HQ"), not an address;
 //   - the posting page is the only source of the body, and adds a "City, ST" address, the
-//     platform's experience picklist and, on about half the postings, a salary line.
+//     platform's experience picklist and, on some postings, a salary line.
 //
-// So this is a HydratingSource: a stored posting is re-listed as a SeenRefresh and costs no
-// detail request. There is no posting date on either page. It does not claim fullBoardListing:
-// nothing on the page states a total to check the table against.
+// So this is a HydratingSource: a stored posting is re-listed as a SeenRefresh and costs no detail
+// request. There is no posting date on either page. It does not claim fullBoardListing: nothing on
+// the page states a total to check the table against.
 type trinethire struct {
 	http HTMLGetter
 }
@@ -229,8 +229,8 @@ func trinethireLocation(label, address string) string {
 	return loc
 }
 
-// trinethireEmploymentTypes maps the platform's closed "Type" picklist (the same five values on
-// the listing and the posting page across 300 sampled postings).
+// trinethireEmploymentTypes maps the platform's closed "Type" picklist (the same five values on the
+// listing and the posting page).
 var trinethireEmploymentTypes = map[string]string{
 	"Full-time":  "full_time",
 	"Part-time":  "part_time",
@@ -253,12 +253,11 @@ var trinethireSeniorities = map[string]string{
 var trinethireSalaryAmount = regexp.MustCompile(`\$([0-9][0-9,]*(?:\.[0-9]+)?)`)
 
 // trinethireSalary reads the posting page's salary line, which the platform renders from a
-// structured pay field: "$90,000 - $120,000", "$165,000", or "$45.00 - $50.00 per hour". Of 300
-// postings sampled the only unit the platform ever printed was "per hour"; a line without one is
-// the annual pay type. That reading is checked rather than trusted: two postings typed an hourly
-// figure ("$23 - $25") with no unit, so an annual figure under 1,000 is dropped rather than
-// published as a $25 salary. The currency is the dollar sign the line prints — TriNet's PEO
-// serves US employers.
+// structured pay field: "$90,000 - $120,000", "$165,000", or "$45.00 - $50.00 per hour". The only
+// unit the platform prints is "per hour"; a line without one is the annual pay type. That reading
+// is checked rather than trusted: some postings typed an hourly figure ("$23 - $25") with no unit,
+// so an annual figure under 1,000 is dropped rather than published as a $25 salary. The currency is
+// the dollar sign the line prints, since TriNet's PEO serves US employers.
 func trinethireSalary(line string) (lo, hi *int, currency, period string) {
 	if line == "" {
 		return nil, nil, "", ""

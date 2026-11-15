@@ -22,11 +22,10 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// turijobs adapts Turijobs (www.turijobs.com), Spain's hospitality and tourism job board: ~2.5k
-// open postings from hotel chains, restaurants and travel agencies, most in Spain and the rest
-// in Portugal, France and the Caribbean. It is boardless and an aggregator — the employer is read
-// per posting. See the "Turijobs traps" section of AGENTS.md for the measurements behind each
-// rule.
+// turijobs adapts Turijobs (www.turijobs.com), Spain's hospitality and tourism job board: hotel
+// chains, restaurants and travel agencies, most in Spain and the rest in Portugal, France and the
+// Caribbean. It is boardless and an aggregator; the employer is read per posting. See the "Turijobs
+// traps" section of AGENTS.md for the reasoning behind each rule.
 //
 // The posting set is the active-offers sitemap, which carries only each posting's URL, so every
 // fact is bought with the posting page's schema.org JobPosting. The pages sit behind Akamai bot
@@ -53,9 +52,9 @@ const (
 	// not a measured limit.
 	turijobsRequestInterval = time.Second
 	turijobsDetailWorkers   = 2
-	// turijobsMaxNewPerRun bounds how many unseen postings one run reads: 600 pages at one a
-	// second is ten minutes. The first runs face the whole ~2.5k catalogue, so it is taken in
-	// slices, newest first.
+	// turijobsMaxNewPerRun bounds how many unseen postings one run reads: 600 pages at one a second
+	// is ten minutes. The first runs face the whole catalogue, so it is taken in slices, newest
+	// first.
 	turijobsMaxNewPerRun   = 600
 	turijobsDeadlineMargin = 5 * time.Minute
 )
@@ -259,8 +258,7 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	var ld turijobsLD
 	if !ldJobPosting(root, &ld) {
-		// ~10% of pages (measured on the first crawl, 56 of 600) carry no JobPosting; the
-		// page's own Next.js state always holds the offer.
+		// Some pages carry no JobPosting; the page's own Next.js state always holds the offer.
 		next, found, blind := turijobsFromNextData(root)
 		if !found {
 			return Job{}, false, errTurijobsNoPosting

@@ -25,7 +25,7 @@ import (
 //
 // The listing is server-rendered HTML, 50 cards a page. It is filtered to the site's own direct
 // postings (employment types e01+e02+e03; e05 is the agency type): unfiltered, the edition is
-// 94% agency referrals (人材紹介) that link off-site to a separate service and hide the employer
+// mostly agency referrals (人材紹介) that link off-site to a separate service and hide the employer
 // as 社名非公開. A card carries everything but the body, so this is a HydratingSource that buys a
 // posting's body from its detail page's schema.org JobPosting only when the catalogue lacks it,
 // up to mynaviDetailBudget a run. See the Mynavi traps in AGENTS.md.
@@ -40,17 +40,15 @@ const (
 	mynaviBase = "https://tenshoku.mynavi.jp"
 	// mynaviDirectTypes is the employment-type filter that keeps the site's own postings.
 	mynaviDirectTypes = "e01+e02+e03"
-	// mynaviMaxPages is a safety ceiling, not the platform's: o16 held 6,802 direct postings
-	// (137 pages) on 2026-10-25. A walk that reaches it is logged.
+	// mynaviMaxPages is a safety ceiling, not the platform's. A walk that reaches it is logged.
 	mynaviMaxPages = 400
-	// The crawl egresses through the proxy (the origin refuses datacenter IPs), where a page
-	// takes ~3.5 s, so the pace is a ceiling the workers rarely reach.
+	// The crawl egresses through the proxy (the origin refuses datacenter IPs), where a page is
+	// slow, so the pace is a ceiling the workers rarely reach.
 	mynaviRequestInterval = time.Second
 	mynaviRequestBurst    = 1
 	mynaviDetailWorkers   = 2
-	// mynaviDetailBudget bounds one run's detail requests. Measured on prod 2026-10-26, a run of
-	// o16 alone (137 listing pages + 800 details) took 16 minutes; with o17's ~180 listing pages
-	// and its own share of details a run stays near 35 minutes, inside the scheduler's 3000 s.
+	// mynaviDetailBudget bounds one run's detail requests so a run over both boards stays inside the
+	// scheduler's crawl budget.
 	mynaviDetailBudget = 1600
 	// mynaviBoardDetailShare caps one board's claim on the run's budget: half of it, so each of
 	// the two boards gets its share whichever is crawled first and neither cold backlog starves
@@ -380,8 +378,8 @@ func (s mynavi) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	return base, true, nil
 }
 
-// mynaviSalary copies the posting's structured salary: whole yen, a year on every posting
-// observed. A posting that states only a floor keeps the floor and no ceiling.
+// mynaviSalary copies the posting's structured salary: whole yen, a year. A posting that states
+// only a floor keeps the floor and no ceiling.
 func mynaviSalary(j *Job, p mynaviPosting) {
 	v := p.BaseSalary.Value
 	if p.BaseSalary.Currency != "JPY" || !strings.EqualFold(v.Unit, "YEAR") {

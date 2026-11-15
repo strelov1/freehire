@@ -14,17 +14,15 @@ import (
 )
 
 // techInAsia adapts the Tech in Asia job board (techinasia.com/jobs), a Southeast Asian startup
-// board whose postings each name their own employer — a boardless aggregator. 274 postings were
-// live on 2026-10-15, 250 of them in Indonesia.
+// board whose postings each name their own employer: a boardless aggregator.
 //
-// The listing is the public Algolia index (`job_postings`) the site's own search page queries,
-// and a hit carries the whole posting, body included, so the crawl is a handful of requests and
-// no hydration. The search key is read from the site's current app bundle on every run: the
-// bundle name rotates with each deploy and the key with it.
+// The listing is the public Algolia index (`job_postings`) the site's own search page queries, and
+// a hit carries the whole posting, body included, so the crawl is a handful of requests and no
+// hydration. The search key is read from the current app bundle on every run: the bundle name
+// rotates with each deploy and the key with it.
 //
-// Every run reads the WHOLE index and fails unless the distinct postings it read equal the
-// index's own exhaustive count, which is what earns fullCatalog. See the Tech in Asia traps in
-// AGENTS.md.
+// Every run reads the WHOLE index and fails unless the distinct postings read equal the index's own
+// exhaustive count, which is what earns fullCatalog. See the Tech in Asia traps in AGENTS.md.
 type techInAsia struct {
 	http techInAsiaHTTP
 }
@@ -44,8 +42,8 @@ const (
 	techInAsiaIndex      = "job_postings"
 	// techInAsiaHitsPerPage is Algolia's per-request ceiling; the whole board fits one page.
 	techInAsiaHitsPerPage = 1000
-	// techInAsiaMaxPages is a ceiling ten times above anything the board has carried, never the
-	// expected end: reaching it before the index's own last page FAILS the crawl.
+	// techInAsiaMaxPages is a ceiling far above the board's size, never the expected end: reaching
+	// it before the index's last page FAILS the crawl.
 	techInAsiaMaxPages = 50
 )
 
@@ -64,9 +62,9 @@ var techInAsiaShorteners = map[string]bool{
 	"t.co": true, "tinyurl.com": true,
 }
 
-// techInAsiaTechPositions are the platform's own position values whose postings are all
-// software or IT work. "Data & Analytics" and "Hardware & Embedded Systems" are not here: they
-// carried a newsroom "Researcher" and a "Pilot Drone" on 2026-10-15.
+// techInAsiaTechPositions are the platform's own position values whose postings are all software or
+// IT work. "Data & Analytics" and "Hardware & Embedded Systems" are excluded: they carry non-IT
+// roles (a newsroom "Researcher", a "Pilot Drone").
 var techInAsiaTechPositions = map[string]bool{
 	"Software Engineer":             true,
 	"Web Development":               true,
@@ -301,9 +299,8 @@ func (h techInAsiaHit) toJob(linkCounts map[string]int) (Job, bool) {
 	return job, true
 }
 
-// salary takes the posting's published range. The platform states no period, but its own
-// salary pages and every observed amount are monthly (IDR 7,500,000-8,000,000; SGD 8,000-11,000
-// for a senior product manager). An all-zero range is the shape of "not stated".
+// salary takes the posting's published range. The platform states no period, but every observed
+// amount is monthly. An all-zero range means "not stated".
 func (h techInAsiaHit) salary(job *Job) {
 	if h.IsSalaryVisible != 1 || h.Currency == nil {
 		return

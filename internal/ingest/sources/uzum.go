@@ -20,10 +20,9 @@ import (
 // It lists every vacancy twice, under /career/ru/ and /career/uz/ with the same id; only the
 // Russian copy is read, since the payload's "_en" fields hold the UZBEK text, not English.
 //
-// A vacancy page is Next.js App Router, and the posting is read from its RSC flight rather
-// than from its ld+json, because the site publishes a JobPosting block only for office and
-// hybrid roles: measured 2026-10-14, 23 of 66 vacancies — every remote one — carry no
-// JobPosting at all. The flight's `vacancy` object is present on all of them and is the
+// A vacancy page is Next.js App Router, and the posting is read from its RSC flight rather than
+// its ld+json, because the site publishes a JobPosting block only for office and hybrid roles, so
+// every remote vacancy has none. The flight's `vacancy` object is on all of them and is the
 // richer record anyway (work mode, experience level and trainee flag as enums).
 type uzum struct {
 	http uzumHTTP
@@ -74,12 +73,10 @@ func (u uzum) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-// detail reads one vacancy page. A 404/410 and a vacancy the payload marks withdrawn are
-// drops — the site's own word that it is gone. Measured 2026-10-14, one sitemap entry (3700)
-// answered 404 while still rendering a published payload; the status is what the site says to
-// every reader, so it is what decides. Anything else that yields no vacancy is an
-// unreadableDetail marker, since a whole site answering that way is a markup change, not a
-// mass closure.
+// detail reads one vacancy page. A 404/410 and a vacancy the payload marks withdrawn are drops:
+// the status is what the site tells every reader (a sitemap entry can answer 404 while still
+// rendering a published payload), so it decides. Anything else that yields no vacancy is an
+// unreadableDetail marker, since a whole site answering that way is a markup change, not a mass closure.
 func (u uzum) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bool) {
 	id := uzumVacancyID(loc)
 	if id == "" {
@@ -173,11 +170,10 @@ func uzumVacancyOf(flight, id string) (uzumVacancy, bool) {
 	return v, true
 }
 
-// uzumBodyHTML renders a vacancy body. The site stores it as its page builder's document —
-// {"components":[{"type":"text","value":{"body":"<html>"}}]} on all 66 vacancies measured —
-// and the text components' HTML is the posting. A component of another type costs only
-// itself: it is authored by hand, so a new type is a content decision, not a crawl failure.
-// A body that is not such a document is taken to be the HTML itself.
+// uzumBodyHTML renders a vacancy body. The site stores it as its page builder's document,
+// {"components":[{"type":"text","value":{"body":"<html>"}}]}, and the text components' HTML is the
+// posting. A component of another type costs only itself (hand-authored content, not a crawl
+// failure). A body that is not such a document is taken to be the HTML itself.
 func uzumBodyHTML(body string) string {
 	var doc struct {
 		Components []struct {

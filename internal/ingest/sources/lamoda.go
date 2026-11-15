@@ -71,9 +71,8 @@ func (l lamoda) list(ctx context.Context) ([]lamodaItem, error) {
 			return nil, fmt.Errorf("lamoda: list start %d: %w", start, err)
 		}
 		all = append(all, resp.Data...)
-		// Advance by what the page actually returned; stop on an empty page or once we
-		// have collected every posting the server reports (an empty page guards against
-		// a total that never rounds down to zero).
+		// Advance by what the page returned; stop on an empty page (guards a total that never reaches
+		// zero) or once every reported posting is collected.
 		start += len(resp.Data)
 		if len(resp.Data) == 0 || start >= resp.Meta.Total {
 			break

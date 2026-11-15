@@ -15,15 +15,14 @@ import (
 
 // kontur adapts SKB Kontur's careers site (kontur.ru/career/vacancies), a single-company source
 // with no per-tenant board id (boardless). The listing is one server-rendered page holding every
-// vacancy as an <a class="vacancy"> card grouped by rubric (39 on 2026-10-15); the vacancy page,
+// vacancy as an <a class="vacancy"> card grouped by rubric; the vacancy page,
 // /career/vacancies/<id>, carries a schema.org JobPosting ld+json block plus the full body in its
 // main text column. The body costs a request per posting, so the adapter is a HydratingSource.
 //
-// Egress: kontur.ru throttles datacenter IPs — from both hydra and prod every HTML page stops
-// after ~20 KB and never completes, while the residential proxy is served the whole page in ~2s —
-// so the provider is in proxiedProviders. Recon also saw a short stub with no vacancies when the
-// request lacked a browser Accept header; the shared client's GetHTML always sends
-// "Accept: text/html", and kontur_test.go pins that the listing request carries it.
+// Egress: kontur.ru throttles datacenter IPs (every HTML page stops after ~20 KB and never
+// completes), so the provider is in proxiedProviders. A request without a browser Accept header
+// gets a short stub with no vacancies; the shared client's GetHTML always sends "Accept:
+// text/html", and kontur_test.go pins that the listing request carries it.
 type kontur struct {
 	http HTMLGetter
 }

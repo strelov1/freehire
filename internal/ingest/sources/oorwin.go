@@ -10,29 +10,26 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// oorwin adapts Oorwin (oorwin.com), an applicant-tracking and CRM suite used mostly by IT
-// staffing firms in the US and India. Each customer's career portal is an Angular app at
-// https://<board>.oorwin.com/careers/ that reads one POST-only JSON API shared by every tenant
-// and keyed by the portal's label in the body:
+// oorwin adapts Oorwin (oorwin.com), an ATS/CRM suite used by IT staffing firms. Each customer's
+// career portal is an Angular app at https://<board>.oorwin.com/careers/ that reads one POST-only
+// JSON API shared by every tenant and keyed by the portal's label in the body:
 //
 //	api.oorwin.ai/api/v2/careers/getJobList  {"sub_domain": <board>, "limit", "page", ...}
 //	api.oorwin.ai/api/v2/careers/job_view    {"sub_domain": <board>, "job_id": <sha1>}
 //
-// The listing carries a posting's title, location, work arrangement, job type and experience
-// range but no body, so this is a HydratingSource. It honours a limit far above any board's
-// size (5000 answered asiapower's 2560 postings in one page, measured 2026-10-26), and states
-// its own total, which is what the walk is held to. A label the platform does not know answers
-// 200 with {"status":404,"message":"Invalid request! ..."} — the board is gone — while a known
-// portal with nothing open answers success with total 0.
+// The listing carries title, location, work arrangement, job type and experience range but no
+// body, so this is a HydratingSource. It honours a limit far above any board's size and states
+// its own total, which the walk is held to. An unknown label answers 200 with
+// {"status":404,"message":"Invalid request! ..."} (board gone); a known portal with nothing open
+// answers success with total 0.
 //
-// The detail is heavy: besides the posting it carries the whole application form (~600 KB
-// uncompressed, ~60 KB gzipped) and takes 3-6 s to answer, so the first crawl of a large board
-// is bounded per run (oorwinMaxNewPerRun) and the fan-out shares a small in-flight cap across
-// the whole run (oorwinMaxInFlight). A posting taken down answers success 0 "The job was no
-// longer active or expired".
+// The detail is heavy (the whole application form, ~600 KB uncompressed) and slow (3-6 s), so
+// the first crawl of a large board is bounded per run (oorwinMaxNewPerRun) and the fan-out
+// shares one in-flight cap across the run (oorwinMaxInFlight). A posting taken down answers
+// success 0 "The job was no longer active or expired".
 //
-// Tenants on Oorwin's US instance (<board>.oorwin.us, api.oorwinai.us) are not read: no board
-// in the catalogue lives there yet. The seam is the API host.
+// Tenants on Oorwin's US instance (<board>.oorwin.us, api.oorwinai.us) are not read; the seam is
+// the API host.
 type oorwin struct {
 	http         JSONPoster
 	maxNewPerRun int
@@ -50,21 +47,16 @@ func (oorwin) fullBoardListing() {}
 const (
 	oorwinAPI      = "https://api.oorwin.ai/api/v2/careers/"
 	oorwinPageSize = 5000
-	// oorwinMaxPages is a safety ceiling: at oorwinPageSize no board measured needs a second
-	// page, so reaching it without the stated total means the paging is not doing what it
-	// says, and the crawl fails rather than reporting a truncated board.
+	// oorwinMaxPages is a safety ceiling: one page normally holds a whole board, so reaching it
+	// without the stated total fails the crawl rather than reporting a truncated board.
 	oorwinMaxPages = 20
 	// oorwinDetailWorkers is the per-board detail fan-out; oorwinMaxInFlight bounds the whole
 	// run, since every tenant's detail is answered by the same API host.
 	oorwinDetailWorkers = 4
 	oorwinMaxInFlight   = 4
-	// oorwinMaxNewPerRun bounds how many unseen postings one board hydrates per run. A detail
-	// takes ~4 s and the run keeps four in flight, so the provider hydrates ~1 posting a second
-	// in total. A buffered board persists only when its Fetch returns, so the bound is sized for
-	// the WHOLE run to fit the 3000 s ingest timeout: seven portals hold more than 150 postings,
-	// so a first run hydrates ~1,650 (~28 minutes) and the 7.6k backlog drains over about five
-	// runs. A posting past the bound is not yielded (nothing is stored for it yet) and is
-	// hydrated by a later run.
+	// oorwinMaxNewPerRun bounds how many unseen postings one board hydrates per run. A buffered
+	// board persists only when its Fetch returns, so the bound is sized for the WHOLE run to fit
+	// the ingest timeout. A posting past the bound is not yielded and is hydrated by a later run.
 	oorwinMaxNewPerRun = 150
 )
 
@@ -105,9 +97,8 @@ type oorwinListResponse struct {
 	} `json:"data"`
 }
 
-// oorwinListing is one listing row; a field the portal sends as null decodes as "". The numeric id is not read: it is per-tenant and its JSON
-// type varies (a number on one portal, a string on another); the SHA-1 is what the portal
-// addresses a posting by.
+// oorwinListing is one listing row; a null field decodes as "". The numeric id is not read: it is
+// per-tenant and its JSON type varies; the portal addresses a posting by the SHA-1.
 type oorwinListing struct {
 	SHA1            string `json:"computed_sha1_job_id"`
 	Title           string `json:"title"`
@@ -271,8 +262,7 @@ func oorwinLocation(city, state, country string) string {
 	return place + ", " + country
 }
 
-// oorwinWorkMode maps the portal's remote status — OnSite, Hybrid or Remote, measured across
-// 1,665 listed postings, the first hundred of each of 53 portals (147 state none).
+// oorwinWorkMode maps the portal's remote status: OnSite, Hybrid, Remote, or none.
 func oorwinWorkMode(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "onsite":
@@ -285,9 +275,8 @@ func oorwinWorkMode(v string) string {
 	return ""
 }
 
-// oorwinEmploymentType maps the job type. Measured on the same sample: Contractual 902, Permanent 276, Full Time
-// 205, C2H (contract-to-hire) 8, none 273. "Permanent" says how long, not how many hours, so it
-// stays "" like none; C2H starts as a contract.
+// oorwinEmploymentType maps the job type. "Permanent" says how long, not how many hours, so it
+// stays ""; C2H (contract-to-hire) starts as a contract.
 func oorwinEmploymentType(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "contractual", "contract", "c2h":

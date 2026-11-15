@@ -10,11 +10,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-// opencats adapts a self-hosted OpenCATS career portal. The board is the portal root — a host,
-// optionally followed by the path the portal is mounted under, since installs differ on that
-// (atscareers.g4s.com serves it at the web root, careers.boomit.pt/careers nests it). The
-// listing at index.php?m=careers&p=showAll links every open posting; the showJob detail page
-// carries the labelled fields and the body. There is no pagination — the listing is complete.
+// opencats adapts a self-hosted OpenCATS career portal. The board is the portal root: a host,
+// optionally followed by the path the portal is mounted under (installs differ). The listing at
+// index.php?m=careers&p=showAll links every open posting; the showJob detail page carries the
+// labelled fields and the body. There is no pagination.
 type opencats struct {
 	http HTMLGetter
 }
@@ -41,10 +40,8 @@ func (s opencats) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one posting's page for the fields the listing cannot be trusted to carry,
-// returning ok=false when the fetch fails so the caller skips just that posting. Location and
-// body come from the detail page rather than a listing column because listing columns are
-// positional and differ per install; the detail page names its fields.
+// detail fetches one posting's page; ok=false when the fetch fails. Location and body come from
+// the detail page because listing columns are positional and differ per install.
 func (s opencats) detail(ctx context.Context, e CompanyEntry, c opencatsListing) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, c.URL)
 	if err != nil {
@@ -66,11 +63,10 @@ func (s opencats) detail(ctx context.Context, e CompanyEntry, c opencatsListing)
 	}, true
 }
 
-// opencatsBodyContainers name the elements installs put the posting body in, as an id or a
-// class. The shipped template uses "descriptive"; installs that rebuilt the page rename it, and
-// one carries the rename's typo (careers.crewlogix.com ships "job-decription"). This is a
-// dictionary rather than a fuzzy match on purpose: an unknown container yields no description,
-// which is visible and fixable, where guessing yields navigation chrome stored as a job body.
+// opencatsBodyContainers name the elements installs put the posting body in, as an id or class.
+// The shipped template uses "descriptive"; rebuilt installs rename it ("job-decription" is a real
+// typo). A dictionary, not a fuzzy match: an unknown container yields no description, where
+// guessing would store navigation chrome as a job body.
 var opencatsBodyContainers = []string{
 	"descriptive",
 	"job-description",
@@ -92,10 +88,8 @@ func opencatsBody(root *html.Node) *html.Node {
 	return nil
 }
 
-// opencatsLocation reads the posting's location, preferring the labelled field and falling back
-// to the first row of the details table. The fallback exists because installs serve the portal
-// in their own language (opencats.gorgany.com labels it "Місцезнаходження"), and while the label
-// text is translated, the shipped template's row order is not: location is the first row.
+// opencatsLocation reads the labelled location field, falling back to the first row of the
+// details table: installs translate the label but not the template's row order.
 func opencatsLocation(root *html.Node) string {
 	if v := opencatsLabelledField(root, "location"); v != "" {
 		return v
@@ -134,9 +128,8 @@ func firstElementChild(n *html.Node) *html.Node {
 	return nil
 }
 
-// opencatsLabelledField reads a value from the posting's details table by its label, matching
-// case-insensitively on a substring so a template that renames "Location" to "Work Location"
-// still resolves. The value is the next element cell after the label cell.
+// opencatsLabelledField reads a details-table value by label, matching case-insensitively on a
+// substring ("Work Location" still resolves). The value is the cell after the label cell.
 func opencatsLabelledField(root *html.Node, label string) string {
 	var value string
 	walk(root, func(n *html.Node) bool {
@@ -154,11 +147,9 @@ func opencatsLabelledField(root *html.Node, label string) string {
 	return value
 }
 
-// opencatsGeneralApplicationMarkers name the talent-pool entries installs park in the portal
-// alongside real openings ("Can't find what you're looking for? Apply here" is the one seen in
-// the wild). They use the posting route but are a standing form, not a position. The markers
-// are phrases rather than single words so a genuine role — an Application Security Engineer, a
-// General Manager — is not swallowed with them.
+// opencatsGeneralApplicationMarkers name the talent-pool entries installs park among real
+// openings: a standing form on the posting route, not a position. Phrases rather than single
+// words, so "Application Security Engineer" or "General Manager" survive.
 var opencatsGeneralApplicationMarkers = []string{
 	"apply here",
 	"general application",
@@ -197,15 +188,11 @@ type opencatsListing struct {
 	Title string
 }
 
-// opencatsJobIDPattern captures the native posting id from a careers-route URL. The id is
-// matched independently of parameter order, since a rewritten template may emit them in any
-// sequence.
+// opencatsJobIDPattern captures the native posting id, independent of parameter order.
 var opencatsJobIDPattern = regexp.MustCompile(`[?&]ID=(\d+)`)
 
-// opencatsJobID extracts the native posting id from a portal URL, or "" when the URL is not a
-// job posting. A URL only counts as a posting when it carries the showJob route: the portal
-// reuses the same id on other routes (candidateRegistration, for one), which are actions on a
-// posting rather than postings themselves.
+// opencatsJobID extracts the native posting id from a portal URL, or "" when it is not a posting.
+// Only the showJob route counts: other routes (candidateRegistration) reuse the id for actions.
 func opencatsJobID(loc string) string {
 	if !strings.Contains(loc, "p=showJob") {
 		return ""
@@ -213,12 +200,10 @@ func opencatsJobID(loc string) string {
 	return firstSubmatch(opencatsJobIDPattern, loc)
 }
 
-// opencatsListings parses each posting from a portal listing. Installs customise the template
-// freely — CSS classes, element types, column order, and column count differ between them — so
-// this reads the one thing a rewrite cannot change without breaking the portal itself: the
-// showJob route. Postings are de-duplicated by id, keeping the first carrier, because a
-// listing commonly points at one posting twice (its title and an apply button) and the title
-// comes first.
+// opencatsListings parses each posting from a portal listing. Installs customise classes,
+// elements and columns freely, so it reads the one thing a rewrite cannot change: the showJob
+// route. Postings are de-duplicated by id, keeping the first carrier, since a listing often
+// points at one posting twice (title, then apply button).
 func opencatsListings(base *url.URL, root *html.Node) []opencatsListing {
 	var out []opencatsListing
 	seen := map[string]struct{}{}
@@ -252,11 +237,9 @@ func opencatsListings(base *url.URL, root *html.Node) []opencatsListing {
 	return out
 }
 
-// opencatsRouteCarrier returns the posting URL an element points at and the title that goes
-// with it, or ("", "") when the element points at no posting. Two carriers exist in the wild:
-// an anchor, whose own text is the title, and a clickable table row, which navigates from an
-// onclick handler and has no anchor text — there the title is the row's first cell. Both are
-// the same routing invariant; only the carrier differs.
+// opencatsRouteCarrier returns the posting URL an element points at and its title, or ("", "").
+// Carriers are an anchor (its text is the title) and a clickable table row that navigates from
+// an onclick handler (the title is the row's first cell).
 func opencatsRouteCarrier(n *html.Node) (loc, title string) {
 	if n.Data == "a" {
 		return Attr(n, "href"), strings.TrimSpace(textContent(n))

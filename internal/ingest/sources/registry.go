@@ -19,7 +19,7 @@ func All(c HTTPClient) map[string]Source {
 	// SEEK, JobStreet and JobsDB share the same frontend/GraphQL infrastructure and our
 	// crawl egresses from one IP, so their detail requests must compete for ONE token bucket
 	// and share one ban state and run budget (seekDetailNetwork). Two independent networks would
-	// silently double the measured safe rate. The proxy lane is attached by ApplyProxyEgress.
+	// silently double the safe rate. The proxy lane is attached by ApplyProxyEgress.
 	seekNetworkDetail := newSeekDetailNetwork(pacedSeekPoster(c), nil)
 	// Alfa-Bank, Positive Technologies and Tochka Bank serve certificates issued by the
 	// Russian Trusted Root CA, which no standard trust store carries, so they fail the TLS
@@ -30,12 +30,12 @@ func All(c HTTPClient) map[string]Source {
 		NewGreenhouse(c),
 		NewLever(c),
 		NewAshby(c),
-		// Rate-paced (pacedWorkableGetter): all ~4k boards share one metered widget host, and
-		// unpaced the run 429s after ~1,500 boards. See pacer.go.
+		// Rate-paced (pacedWorkableGetter): all boards share one metered widget host, and
+		// unpaced the run 429s. See pacer.go.
 		NewWorkable(pacedWorkableGetter(c)),
 		NewWorkableMarketplace(c),
 		NewRecruitee(c),
-		// Rate-paced (pacedSmartRecruitersGetter): all 5,204 boards share one metered API host,
+		// Rate-paced (pacedSmartRecruitersGetter): all boards share one metered API host,
 		// and unpaced the run's own aggregate volume 429s nearly all of them. See pacer.go.
 		NewSmartRecruiters(pacedSmartRecruitersGetter(c)),
 		NewISmartRecruit(c),
@@ -64,7 +64,7 @@ func All(c HTTPClient) map[string]Source {
 		NewWorkday(c),
 		NewHuntflow(c),
 		// FriendWork: Russian ATS, board = career-portal token; one keyless JSON request returns
-		// the whole list with bodies. Run sequentially at a measured pace (see pacer.go).
+		// the whole list with bodies. Run sequentially at a conservative pace (see pacer.go).
 		NewFriendWork(limitedFriendWorkGetter(c)),
 		// Potok: Russian ATS, board = tenant subdomain; one server-rendered listing page, bodies
 		// hydrated from posting pages for new postings only.
@@ -74,8 +74,7 @@ func All(c HTTPClient) map[string]Source {
 		NewGem(c),
 		NewSuccessFactors(c),
 		NewSelfRecruit(c),
-		// Paced: its per-posting detail fan-out fired ~37k requests in 10 minutes and Teamtailor
-		// 403'd nearly half the fleet (see teamtailorRequestInterval).
+		// Paced: an unpaced per-posting detail fan-out drew Teamtailor 403s across the fleet (see teamtailorRequestInterval).
 		NewTeamtailor(pacedTeamtailorGetter(c)),
 		NewHurma(c),
 		NewICIMS(c),
@@ -94,7 +93,7 @@ func All(c HTTPClient) map[string]Source {
 		NewApplicantPro(c),
 		NewPaylocity(c),
 		NewJibe(c),
-		// Rate-paced (pacedPhenomGetter): all ~380 boards share Phenom People's platform
+		// Rate-paced (pacedPhenomGetter): all boards share Phenom People's platform
 		// infrastructure, and the run's own aggregate volume 403s a large fraction of them
 		// unpaced. See pacer.go.
 		NewPhenom(pacedPhenomGetter(c)),
@@ -126,13 +125,13 @@ func All(c HTTPClient) map[string]Source {
 		NewPaycor(c),
 		NewLuxoft(c),
 		NewEPAM(c),
-		// Rate-paced (pacedADPGetter): all ~2,800 boards share one ADP host, and the run's own
+		// Rate-paced (pacedADPGetter): all boards share one ADP host, and the run's own
 		// aggregate volume 429s most of them unpaced. See pacer.go.
 		NewADP(pacedADPGetter(c)),
 		// ADP MyJobs: ADP's OTHER career-site product, addressed by site slug rather than by
 		// Workforce Now's cid+ccId pair, so a company on it is unreachable through NewADP above.
 		// Rate-paced on a limiter of its OWN, not the one above — see pacedADPMyJobsGetter for
-		// why sharing would be an assertion nothing has measured.
+		// why sharing would be unverified.
 		NewADPMyJobs(pacedADPMyJobsGetter(c)),
 		NewITechArt(c),
 		NewVention(c),
@@ -145,15 +144,14 @@ func All(c HTTPClient) map[string]Source {
 		NewFreshteam(c),
 		NewSoftgarden(c),
 		// TalentBrew (Radancy): white-labelled onto each employer's own host, so the board is the host
-		// (plus locale path). Unpaced: the few requests made while probing four boards drew no limit
-		// and the platform documents none; detail hydration runs under the shared 8-worker bound.
+		// (plus locale path). Unpaced: no limit was observed or documented; detail hydration runs under the shared 8-worker bound.
 		NewTalentbrew(c),
 		// Recruiter (recruiter.co.kr): Saramin's career-site builder. One listing POST per board
 		// plus one detail GET per open posting against a shared API host; boards are small
-		// (42 postings on the largest measured) and no limit was observed, so it is unpaced.
+		// and no limit was observed, so it is unpaced.
 		NewRecruiterCoKR(c),
 		// Abacus Umantis: board is the careers host (recruitingapp-<n>.umantis.com or a customer's
-		// vanity domain). Unpaced: tenants are separate hosts, each small (tens of postings), so the
+		// vanity domain). Unpaced: tenants are separate hosts, each small, so the
 		// run's load never concentrates on one origin the way a shared-host ATS does. See umantis.go.
 		NewUmantis(c),
 		NewBetterteam(c),
@@ -161,7 +159,7 @@ func All(c HTTPClient) map[string]Source {
 		// served under the vendor's domain and under each reseller's.
 		NewHiringThing(c),
 		// Intervieweb (Zucchetti): the board is the careers host. Unpaced: the listing is one
-		// landing page plus one POST per further page (12 for the largest sample board) and
+		// landing page plus one POST per further page and
 		// bodies are hydrated for new postings only; no rate limit was observed or documented.
 		NewIntervieweb(c),
 		// HCS Hiring: symplr's US healthcare career centers, <tenant>.hcshiring.com. A keyless
@@ -248,8 +246,8 @@ func All(c HTTPClient) map[string]Source {
 		NewFirefish(c),
 		// Dover: boarded ATS (board = company slug), public JSON API with no bot protection on
 		// the data endpoints — only the browser apply-submission flow gates behind Turnstile.
-		// Paced (pacedDoverGetter): an unpaced multi-board run drew 22 429s from 31 boards
-		// within ~2s (see doverRequestInterval's incident note in pacer.go).
+		// Paced (pacedDoverGetter): an unpaced multi-board run draws 429s (see
+		// doverRequestInterval in pacer.go).
 		NewDover(pacedDoverGetter(c)),
 		NewJobylon(c),
 		// Emply: Danish multi-tenant ATS, one career site per board (<slug>.career.emply.com or
@@ -335,7 +333,7 @@ func All(c HTTPClient) map[string]Source {
 		NewLikeit(c),
 		NewArbeitsagentur(c),
 		// EURES: the EU's cross-border public employment portal, aggregating national PES
-		// and partner-board feeds across ~31 EU/EFTA countries. Board-based (board =
+		// and partner-board feeds across EU/EFTA countries. Board-based (board =
 		// country), aggregator-marked (see eures.go for the confirmed re-listing evidence).
 		NewEures(c),
 		// International single-company adapters (boardless).
@@ -451,7 +449,7 @@ func All(c HTTPClient) map[string]Source {
 		// same keyword-as-board shape as whatjobs.
 		NewSolidJobs(c),
 		// SchoolSpring: the US K-12 education job board, multi-company aggregator over one central
-		// keyless API, enumerated by search keyword (board) because 0.4% of its 80k postings are
+		// keyless API, enumerated by search keyword (board) because few of its postings are
 		// technical and the platform's own category taxonomy cannot select them. Hydrating.
 		NewSchoolSpring(c),
 		// SEEK: the dominant AU/NZ job board, multi-company aggregator enumerated by ICT
@@ -640,7 +638,7 @@ func All(c HTTPClient) map[string]Source {
 		NewTBank(newRussianTrustedRootClient(tbankTimeout)),
 		NewMTS(c),
 		// MegaFon walks its listing city by city (the unfiltered feed's order is unstable and
-		// deterministically hides ~14% of postings) and hydrates bodies; see megafon.go.
+		// deterministically hides some postings) and hydrates bodies; see megafon.go.
 		NewMegafon(c),
 		NewRostelecom(c),
 		NewVK(c),

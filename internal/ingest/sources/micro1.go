@@ -140,13 +140,10 @@ func micro1WorkMode(locationType string) string {
 // micro1Skills canonicalizes micro1's required_skills through the shared skilltag dictionary,
 // so the Skills facet carries canonical names rather than the platform's raw spellings.
 //
-// Parse, not Canonicalize, and deliberately: unlike the other aggregators' structured skill
-// lists, micro1's own entries are not always atomic names — a live-captured entry reads
-// "Basics C++", a qualifier word ahead of the actual technology (confirmed in
-// TestMicro1Detail's fixture) — so an entry must still be MINED, not merely matched whole.
-// Joining into one blob keeps that substring-mining ability; the corroboration rule's
-// downside (a lone ambiguous entry needs a second strong term) is the accepted trade-off
-// for it here, same as it always was.
+// Parse, not Canonicalize, deliberately: micro1's entries are not always atomic names ("Basics
+// C++", a qualifier ahead of the technology), so an entry must be MINED, not matched whole.
+// Joining into one blob keeps that ability; the cost is that a lone ambiguous entry needs a
+// second strong term (corroboration rule).
 func micro1Skills(skills []string) []string {
 	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }
@@ -175,9 +172,8 @@ var micro1ReferralCodePattern = regexp.MustCompile(
 
 // micro1ReferralHost is the host micro1's own share links point a referred candidate at. It is
 // NOT the board host the sitemap enumerates, but the two share one posting-id space: a posting
-// id taken from jobs.micro1.ai/post/<uuid> renders the same vacancy at req.micro1.ai/post/<uuid>
-// (verified live across several of our own stored ids). The referral host is the one micro1
-// hands out, so it is the one we hand on.
+// id from jobs.micro1.ai/post/<uuid> renders the same vacancy at req.micro1.ai/post/<uuid>. The
+// referral host is the one micro1 hands out, so it is the one we hand on.
 const micro1ReferralHost = "https://req.micro1.ai/post/"
 
 // applyURL rewrites a canonical board posting URL into micro1's own referral share link, so a
@@ -186,9 +182,8 @@ const micro1ReferralHost = "https://req.micro1.ai/post/"
 // the query — so the code has to still be in the URL at the moment the candidate applies, which
 // is exactly what carrying it on the stored outbound link achieves.
 //
-// The utm_* triple mirrors what micro1's share button emits verbatim rather than being invented
-// here: they are micro1's own campaign tags, and a link that differs from the one they generate
-// is a link whose attribution we would be guessing at.
+// The utm_* triple mirrors what micro1's share button emits verbatim: they are micro1's own
+// campaign tags, and a differing link would leave attribution to guesswork.
 //
 // An unset code (or a URL that is not a canonical posting) leaves the board URL alone.
 func (m micro1) applyURL(jobURL string) string {

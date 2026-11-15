@@ -5,9 +5,8 @@
 // The public JSON API lives under /careers-api on the same host and is reachable WITHOUT the
 // Cloudflare challenge that fronts the HTML career pages: the job-search listing is a POST to
 // /careers-api/talent-job-search ({"segmentCodes":[board], ...}) and each posting's detail is a
-// GET to /careers-api/job/<board>/<urlCode>/<advertUrlCode>. Both verified live 2026-11-03
-// (flybuys: 6 postings listed, detail returning the full HTML description). The anonymous token
-// endpoints the SPA fetches before searching are not needed for these two calls.
+// GET to /careers-api/job/<board>/<urlCode>/<advertUrlCode>. The anonymous token endpoints the
+// SPA fetches before searching are not needed for these two calls.
 //
 // The listing carries structured facets (work type, flexible-work option, location, country,
 // salary range text, posted/close dates) but no body; the description lives only on the detail
@@ -75,9 +74,8 @@ type livehireSearchRequest struct {
 }
 
 // livehireSearchResponse is one listing page. hasMoreResults and totalCount both end the walk:
-// a page that returns fewer postings than its size is not itself proof of the end (the endpoint
-// has been observed re-serving the full set regardless of the requested page), so the walk
-// stops when hasMoreResults is false or nothing new was gathered.
+// a short page is not proof of the end (the endpoint can re-serve the full set regardless of the
+// requested page), so the walk stops when hasMoreResults is false or nothing new was gathered.
 type livehireSearchResponse struct {
 	Jobs           []livehirePosting `json:"jobs"`
 	TotalCount     int               `json:"totalCount"`
@@ -174,8 +172,8 @@ func (s livehire) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 }
 
 // list pages the search endpoint until hasMoreResults is false. The endpoint re-serves the full
-// set on later pages (verified live: page 2 at pageSize 2 returned all 6 postings again), so
-// cross-page dedup by external id keeps the set honest and an unchanged set ends the walk.
+// set on later pages, so cross-page dedup by external id keeps the set honest and an unchanged
+// set ends the walk.
 func (s livehire) list(ctx context.Context, board string) ([]livehirePosting, error) {
 	var all []livehirePosting
 	seen := map[string]bool{}

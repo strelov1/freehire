@@ -10,9 +10,8 @@ import (
 
 // recruiterflow adapts RecruiterFlow agency career pages (recruiterflow.com/<board>/jobs).
 // The board is the agency's own path segment; a RecruiterFlow board IS a recruiting agency
-// (its ld+json hiringOrganization names the agency itself, never a per-posting end-client —
-// confirmed live), the same single-tenant-per-board shape huntflow's agency/hub boards
-// already have. The listing page is a legacy jQuery SPA with no server-rendered job links
+// (its ld+json hiringOrganization names the agency itself, never a per-posting end-client),
+// the same single-tenant-per-board shape as huntflow's agency/hub boards. The listing page is a legacy jQuery SPA with no server-rendered job links
 // and no discoverable XHR endpoint — the whole board is instead embedded as a bare
 // JavaScript variable assignment, `window.jobsList = {...};`, found only by reading the raw
 // page HTML rather than by capturing network traffic. Its "department" key groups every open
@@ -37,8 +36,7 @@ func (recruiterflow) Provider() string { return "recruiterflow" }
 // fullBoardListing: the board has no pagination mechanism at all — the whole listing is
 // embedded in one page load, so there is no further page a truncated read could ever miss.
 // A detail-fetch failure for one posting becomes an Unreadable marker rather than a silent
-// drop, the same contract a listing-then-detail adapter like recrutei/humanbit already
-// gives. A listing fetch or decode failure fails the whole Fetch outright.
+// drop, as in recrutei/humanbit. A listing fetch or decode failure fails the whole Fetch outright.
 func (recruiterflow) fullBoardListing() {}
 
 func (s recruiterflow) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -140,9 +138,8 @@ func (s recruiterflow) detail(ctx context.Context, e CompanyEntry, it recruiterf
 }
 
 // recruiterflowEmploymentType maps RecruiterFlow's employment_type onto
-// vocab.EmploymentTypeValues. "Full time"/"Part time"/"Contract" are confirmed live; the
-// defensive "Internship" sibling follows this codebase's usual mapping for a self-evident
-// business-vocabulary field (e.g. humanbitEmploymentType), not a guess at an opaque code.
+// vocab.EmploymentTypeValues. "Internship" is a defensive sibling of the observed
+// "Full time"/"Part time"/"Contract", mapped like humanbitEmploymentType.
 func recruiterflowEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full time", "full-time", "fulltime":

@@ -17,8 +17,7 @@ import (
 // per-posting detail request is needed. That document is the XML feed (/xml) when the
 // tenant has it switched on, and search.json when it does not: many tenants disable the
 // feed, which then answers 404, while search.json keeps listing the same positions under
-// the same ids (measured 2026-10-25: of 146 German tenants, 24 had jobs over XML and 144
-// over search.json). Neither carries a posting URL, so the adapter builds one from the
+// the same ids. Neither carries a posting URL, so the adapter builds one from the
 // board and position id — identical on both paths, so a tenant that toggles its feed keeps
 // every posting's (source, external_id).
 //
@@ -216,7 +215,7 @@ type personioSearchJob struct {
 
 // search lists a board through search.json, for a tenant whose XML feed is switched off.
 // The bare endpoint returns no body at all, so it asks for German — the locale of most
-// Personio tenants (1394 of 1440 bodies in the 2026-10-25 measurement) — and, best-effort,
+// Personio tenants — and, best-effort,
 // for English when some posting came back without one. It returns the positions in the
 // shape the XML feed yields, plus the English bodies keyed by id.
 func (p personio) search(ctx context.Context, host string) ([]personioPosition, map[string]string, error) {

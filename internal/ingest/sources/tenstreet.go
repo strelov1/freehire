@@ -34,12 +34,10 @@ func NewTenstreet(c HTMLGetter) Source { return tenstreet{http: c} }
 
 func (tenstreet) Provider() string { return "tenstreet" }
 
-// Tenstreet's posting pages are slow and uneven: measured 2026-10-20, 357 sequential-ish
-// requests at four in flight averaged ~2.2 req/s with no refusal, but a handful stalled for
-// 30-78 s (and one of a 60-request burst at eight in flight took 15.6 s). The posting page
-// repeats the whole posting once per hiring location, so a nationwide one is ~1.8 MB. Hence
-// the long-timeout client, a narrow detail pool, and a pacer held at that measured rate across
-// every board of a run — the ceiling above it was never measured.
+// Tenstreet's posting pages are slow and uneven: a few stall for tens of seconds, and the page
+// repeats the whole posting once per hiring location, so a nationwide one is ~1.8 MB. Hence the
+// long-timeout client, a narrow detail pool, and a pacer held at a modest rate across every board
+// of a run.
 const (
 	tenstreetDetailWorkers   = 4
 	tenstreetRequestInterval = 500 * time.Millisecond // ~2 req/s
@@ -213,10 +211,9 @@ func parseTenstreetPosting(root *html.Node, postingID string) (Job, bool) {
 	if title == "" {
 		return Job{}, false
 	}
-	// A posting with no description and no requirements at all is the platform's own answer,
-	// not a failed read (4 of Dupré Logistics' 64 postings on 2026-10-20, an "EDI Integration
-	// Analyst" among them), so it is yielded body-less rather than deferred forever; the
-	// pipeline re-offers a body-less row for its hydration-retry window anyway.
+	// A posting with no description and no requirements at all is the platform's own answer, not a
+	// failed read, so it is yielded body-less rather than deferred forever; the pipeline re-offers
+	// a body-less row for its hydration-retry window anyway.
 	job := Job{ExternalID: postingID, Title: title, Description: tenstreetDescription(first)}
 	if states := tenstreetStates(rows); len(states) > 0 {
 		job.Location = strings.Join(states, ", ") + ", US"

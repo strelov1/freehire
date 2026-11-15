@@ -160,8 +160,8 @@ func (s taleo) listRequisitions(ctx context.Context, b taleoBoard, portal string
 
 	var reqs []taleoRequisition
 	// taleoMaxPages caps the pagination loop so a bogus totalCount can never spin the crawl
-	// indefinitely (cf. the yandex runaway-cursor incident). 200 pages ≈ 5k jobs covers every
-	// board we onboard; the loop normally stops far earlier on totalCount or an empty page.
+	// indefinitely. 200 pages ≈ 5k jobs covers every board we onboard; the loop normally stops far
+	// earlier on totalCount or an empty page.
 	const taleoMaxPages = 200
 	reachedNaturalEnd := false
 	for page := 1; page <= taleoMaxPages; page++ {
@@ -187,8 +187,7 @@ func (s taleo) listRequisitions(ctx context.Context, b taleoBoard, portal string
 		// The cap — not an empty page or totalCount — ended the walk: the listing was still
 		// yielding requisitions, so it stopped short of the tail rather than exhausting it.
 		// Returning what was gathered would look like a genuinely small board and let the
-		// sweep's board-scoped close retire everything past the cap (the same partial-success
-		// shape that forced freehire#2337's revert) — fail instead.
+		// sweep's board-scoped close retire everything past the cap — fail instead.
 		return nil, fmt.Errorf("taleo: %s/%s: still yielding requisitions after the %d-page cap: walk truncated, not exhausted", b.host, b.section, taleoMaxPages)
 	}
 	return reqs, nil

@@ -16,8 +16,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// talentclue adapts Talent Clue, a Spanish ATS whose customers — McDonald's Spain, Decathlon,
-// Grupo Quirónsalud, Henneo/Hiberus, Basque industrial cooperatives — publish their openings at
+// talentclue adapts Talent Clue, a Spanish ATS whose customers publish their openings at
 // https://<tenant>.talentclue.com. The board is the customer's 32-hex CLIENT ID, the key the
 // platform's own embeddable widget reads its listing with:
 //
@@ -71,7 +70,7 @@ const (
 	// talentclueCrawlDelay is robots.txt's Crawl-delay on the API and the tenant hosts.
 	talentclueCrawlDelay = 10 * time.Second
 	// talentclueMaxNewPerBoard bounds the pages one board buys in a run: at the crawl delay, 150
-	// pages is 25 minutes, so McDonald's 828 openings (measured 2026-10-27) arrive over six runs.
+	// pages is 25 minutes, so a big board arrives over several runs.
 	talentclueMaxNewPerBoard = 150
 	// talentclueDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	talentclueDeadlineMargin = 5 * time.Minute

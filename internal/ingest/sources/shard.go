@@ -40,14 +40,12 @@ func ParseShard(s string) (i, n int, err error) {
 // another shard owns. i is 1-based (1..n); n <= 1 returns the config unchanged. The
 // file's default provider is preserved.
 //
-// The key is CompanyKey and not normalize.Slug, which is what this used until the split
-// it caused was measured: the pipeline stores the company under normalize.CompanySlug
-// (plus the alias canon), so "The Ensign Group" and "The Ensign Group, Inc." are ONE
-// employer to the sweep and were two shard keys here — 75 companies across the sharded
-// providers, one of them 12 boards split 10 and 2. Whichever shard ran second closed the
-// other's live postings. CompanyKey folds the legal form and the word break, the same
-// fold company_slug_aliases.folded_key is keyed by, so it is never finer than the stored
-// slug; a key coarser than the sweep's can only merge two shards, never over-close.
+// The key is CompanyKey, not normalize.Slug: the pipeline stores the company under
+// normalize.CompanySlug (plus the alias canon), so "The Ensign Group" and "The Ensign Group, Inc."
+// are one employer to the sweep and must not be two shard keys, or whichever shard ran second
+// would close the other's live postings. CompanyKey folds the legal form and the word break like
+// company_slug_aliases.folded_key, so it is never finer than the stored slug; a coarser key can
+// only merge shards, never over-close.
 func (c Config) Shard(i, n int) Config {
 	if n <= 1 {
 		return c

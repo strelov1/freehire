@@ -19,17 +19,16 @@ import (
 )
 
 // servicepublic adapts Choisir le service public (choisirleservicepublic.gouv.fr), the French
-// civil service's own job board: ~54k open postings from the State, local authorities and
-// public hospitals, every trade, under the government's "Numérique" domain for its IT roles. It
-// is boardless and an aggregator — the employer is read per posting. See the "Choisir le service
-// public traps" section of AGENTS.md for the measurements behind each rule.
+// civil service's own job board (State, local authorities, public hospitals), using the
+// government's "Numérique" domain for its IT roles. It is boardless and an aggregator: the
+// employer is read per posting. See the "Choisir le service public traps" section of AGENTS.md.
 //
-// The listing is the site's own paginated offer list, newest first, 25 cards a page. A card
-// names the title, the employer, the place, the domain and the day it went online, so the
-// coverage gate is asked before a page is bought; the body is the posting page. A whole walk is
-// ~2,200 pages of ~190 KB (each page embeds every search filter), too much for one run, so a run
-// reads the head of the list until it is all known, plus a window of the rest that moves on every
-// run, and the unseen sweep waits long enough for the window to come round.
+// The listing is the site's paginated offer list, newest first, 25 cards a page. A card names
+// the title, employer, place, domain and online date, so the coverage gate is asked before a
+// page is bought; the body is the posting page. A whole walk is thousands of ~190 KB pages (each
+// embeds every search filter), too much for one run, so a run reads the head of the list until it
+// is all known, plus a window of the rest that moves on every run, and the unseen sweep waits
+// long enough for the window to come round.
 type servicepublic struct {
 	http HTMLGetter
 	// headPages bounds the newest-first walk; windowPages is how many further pages a run reads
@@ -52,28 +51,23 @@ const (
 	// toward a public service, not a measured limit.
 	servicepublicRequestInterval = time.Second
 	servicepublicDetailWorkers   = 2
-	// servicepublicHeadPages stops the newest-first walk on a quiet list: ~1,200 postings go
-	// online a day (~50 pages), so a run three hours after the last meets known postings within
-	// a few pages, and a cold start reads this many before turning to the window.
+	// servicepublicHeadPages stops the newest-first walk on a quiet list: a run a few hours after the
+	// last meets known postings within a few pages; a cold start reads this many before the window.
 	servicepublicHeadPages = 150
 	// servicepublicWindowPages and servicepublicWindowStep size the refresh window: 600 pages a
-	// run at an offset that advances 50 pages an hour. A run can come late — the scheduler has
-	// held runs back for hours when the fleet is saturated — and an offset that advanced faster
-	// than a window is wide would step over the pages between two runs. At 50 an hour a 600-page
-	// window still meets the previous one after a twelve-hour gap, and the ~2,500-page cycle
-	// comes round in ~50 hours, inside the 72 h grace.
+	// run at an offset that advances 50 pages an hour. Runs can come hours late, and an offset that
+	// advanced faster than a window is wide would step over the pages between two runs; at 50 an
+	// hour a window still meets the previous one after a twelve-hour gap.
 	servicepublicWindowPages = 600
 	servicepublicWindowStep  = 50
 	// servicepublicWindowCycle is the granularity the window's cycle is rounded up to.
 	servicepublicWindowCycle = 500
-	// servicepublicSweepGrace leaves the window two turns of its ~50-hour cycle before a stored
-	// posting it has not re-listed is closed: a window cut short by a failed page, or a run that
-	// comes very late, can miss a page for one turn.
+	// servicepublicSweepGrace leaves the window two turns of its cycle before a stored posting it has
+	// not re-listed is closed: a cut-short window or a very late run can miss a page for one turn.
 	servicepublicSweepGrace = 120 * time.Hour
-	// servicepublicMaxNewPerRun bounds the posting pages of one run: up to ~750 listing pages
-	// (~1-2 s each) and 600 posting pages at one a second, plus the writes, fit the 3,000 s run
-	// timeout this provider is scheduled with. A cold catalogue is taken newest first over many
-	// runs.
+	// servicepublicMaxNewPerRun bounds the posting pages of one run so the listing pages, posting
+	// pages at one a second and the writes fit the run timeout this provider is scheduled with. A
+	// cold catalogue is taken newest first over many runs.
 	servicepublicMaxNewPerRun   = 600
 	servicepublicDeadlineMargin = 5 * time.Minute
 )
@@ -258,10 +252,9 @@ func (s servicepublic) list(ctx context.Context, seen func(string) bool) ([]serv
 // servicepublicWindow is the run's refresh window: up to windowPages absolute page numbers past
 // the head, at an offset that advances by servicepublicWindowStep every hour around a cycle of
 // the page count rounded up to the next 500. The cycle must not follow the head or the exact page
-// count, both of which move between runs (the head ends wherever known postings begin, the list
-// grows ~50 pages a day): an offset taken modulo a value that moves by one jumps to an arbitrary
-// page, and consecutive windows stop sweeping the list in order. Rounded up, the cycle changes
-// only every ten days or so, and the pages of the cycle past the list's end are skipped.
+// count, both of which move between runs: an offset taken modulo a moving value jumps to an
+// arbitrary page, and consecutive windows stop sweeping the list in order. Rounded up, the cycle
+// changes rarely, and the pages of the cycle past the list's end are skipped.
 func servicepublicWindow(head, pages, windowPages int, now time.Time) []int {
 	if pages <= head || windowPages <= 0 {
 		return nil

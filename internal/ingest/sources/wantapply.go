@@ -11,24 +11,18 @@ import (
 	"golang.org/x/net/html"
 )
 
-// wantapply adapts the Wantapply job aggregator (wantapply.com). The .com host sits behind a WAF
-// that 403s non-browser clients, so this adapter crawls the .cy mirror, which serves identical
-// content (same backend — sitemap lastmod matches to the millisecond) without the WAF.
+// wantapply adapts the Wantapply job aggregator. The wantapply.com host sits behind a WAF that
+// 403s non-browser clients, and the .cy mirror (same backend, no WAF) lists only a fraction of
+// the vacancies .com does and answers most others with an empty shell (no JobPosting). Crawling
+// the mirror therefore drops most of the catalogue, so production reads both sitemap and pages
+// from .com through the Scrapling tier's browser (NewWantapplyOnCom, scraplingtier.go).
 //
-// The mirroring does NOT hold for the whole catalogue, which is most of it. .cy enumerates a
-// fraction of the vacancies .com does (~605 against 2 755 on 2026-09-07), and measured
-// 2026-10-20 it answers most of the ones it does not list with an empty shell — 5 of 6 sampled
-// .com vacancies had no JobPosting on .cy, while 4 of those 5 were served in full on .com (the
-// fifth was closed). A run that read .com's sitemap and fetched pages from .cy dropped 2 045 of
-// 2 489 vacancies that way. So production reads both from .com, whose WAF the Scrapling tier's
-// browser passes (NewWantapplyOnCom, scraplingtier.go). Wantapply
-// is a directApply aggregator (many employers, no per-tenant board), so the adapter is boardless
-// and stays in the source facet, taking each posting's company from the JSON-LD. Its sitemap
-// enumerates every vacancy as a single-segment slug page and each page server-renders a schema.org
-// JobPosting ld+json — the dataart/successfactors shape (sitemap to enumerate, per-vacancy detail
-// fetch). It hydrates detail only for vacancies the catalogue does not already have
-// (HydratingSource), and is NOT self-closing: it re-lists all current vacancies each run, so the
-// pipeline's unseen-sweep is the close signal (a vacancy that drops out of the sitemap is closed).
+// Wantapply is a directApply aggregator (many employers, no per-tenant board), so the adapter is
+// boardless and stays in the source facet, taking each posting's company from the JSON-LD. Its
+// sitemap enumerates every vacancy as a single-segment slug page and each page server-renders a
+// schema.org JobPosting ld+json (the dataart/successfactors shape). It hydrates detail only for
+// vacancies the catalogue does not already have (HydratingSource), and is NOT self-closing: it
+// re-lists all current vacancies each run, so the pipeline's unseen-sweep is the close signal.
 type wantapply struct {
 	http wantapplyHTTP
 	// sitemapURL is the enumeration to read, and host the hostname its entries must carry; the
@@ -52,9 +46,9 @@ const (
 	wantapplyComSitemapURL = "https://wantapply.com/sitemap.xml"
 	wantapplyComHostname   = "wantapply.com"
 	// wantapplyDetailWorkers bounds the detail-fetch fan-out below the shared default (8): a burst
-	// at 8 is throttled hard (a residential-IP crawl landed ~32% at 8 vs ~100% at 4). Prod egresses
-	// through a proxy whose IP the .cy edge rate-caps per window, so one run still lands only part
-	// of the catalogue — the HydratingSource re-crawl accretes the rest across subsequent runs.
+	// at 8 is throttled hard. Prod egresses through a proxy whose IP the .cy edge rate-caps per
+	// window, so one run lands only part of the catalogue; the HydratingSource re-crawl accretes
+	// the rest across runs.
 	wantapplyDetailWorkers = 4
 )
 
@@ -109,11 +103,9 @@ func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 // fetchCounting is the shared body, returning how many vacancies were DROPPED alongside the
 // jobs. Both entry points discard the count after it is logged; the tests read it.
 //
-// The count exists because a dropped vacancy never reaches the pipeline — Stats counts saveOne
-// failures, not candidates an adapter discarded — so a crawl that enumerated thousands and read
-// almost none is indistinguishable from a small source. That is not hypothetical here: when the
-// enumeration moved to the .com sitemap the list went from ~605 vacancies to 2 755 and the
-// catalogue did not move, with nothing anywhere saying where the rest went.
+// A dropped vacancy never reaches the pipeline (Stats counts saveOne failures, not candidates an
+// adapter discarded), so a crawl that enumerated thousands and read almost none is otherwise
+// indistinguishable from a small source; hence the count.
 func (s wantapply) fetchCounting(ctx context.Context, seen func(string) bool) ([]Job, int64, error) {
 	vacancies, err := s.crawl(ctx)
 	if err != nil {

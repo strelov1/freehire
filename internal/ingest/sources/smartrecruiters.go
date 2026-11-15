@@ -31,11 +31,10 @@ func (smartRecruiters) Provider() string { return "smartrecruiters" }
 // interface for the bar.
 func (smartRecruiters) fullBoardListing() {}
 
-// smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto
-// freehire's seniority vocabulary. Values not in the map (notably "not_applicable",
-// the plurality, plus any unknown/empty id) yield "" so the Job carries no structured
-// seniority and the pipeline's title dictionary decides — structured signal only,
-// never a guess (the sources.Job.Seniority contract).
+// smartRecruitersSeniorityMap maps the SmartRecruiters experienceLevel enum onto freehire's
+// seniority vocabulary. Values not in the map (notably "not_applicable", plus any unknown/empty
+// id) yield "" so the Job carries no structured seniority and the pipeline's title dictionary
+// decides: structured signal only, never a guess (the sources.Job.Seniority contract).
 var smartRecruitersSeniorityMap = map[string]string{
 	"internship":       "intern",
 	"entry_level":      "junior",
@@ -84,10 +83,10 @@ func (s smartRecruiters) Fetch(ctx context.Context, e CompanyEntry) ([]Job, erro
 }
 
 // FetchNew is Fetch that spends a detail request only on postings the catalogue does not hold.
-// The detail is this adapter's whole cost — one request per posting against a single metered
-// host — and re-reading every stored body each run is what kept a 50-minute run to ~230 of
-// ~8,000 boards (2026-10-19). A seen posting is re-listed as a SeenRefresh carrying the
-// listing's identity, so its liveness refreshes and its hydrated body and facets are kept.
+// The detail is this adapter's whole cost (one request per posting against a single metered
+// host), so re-reading every stored body each run is wasteful. A seen posting is re-listed as a
+// SeenRefresh carrying the listing's identity, so its liveness refreshes and its hydrated body
+// and facets are kept.
 func (s smartRecruiters) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.listPostings(ctx, e.Board)
 	if err != nil {
@@ -163,19 +162,17 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 	}
 
 	// A 200 is not the same as an answer. A body that is empty, `null`, or an interstitial
-	// decodes without error and leaves every detail field zero — and because the LISTING
-	// supplied the id, the title and the location, the posting would go on looking read while
-	// carrying no URL and no description at all. That is this whole change's defect wearing a
-	// success: the run would count it toward its coverage and the sweep would still close it.
-	// postingUrl is the tell, since every real detail payload carries one.
+	// decodes without error and leaves every detail field zero; because the LISTING supplied the
+	// id, title and location, the posting would look read while carrying no URL or description,
+	// count toward the run's coverage, and the sweep would still close it. postingUrl is the
+	// tell, since every real detail payload carries one.
 	if strings.TrimSpace(d.PostingURL) == "" {
 		return unreadableDetail(p.ID, url, e.Company), true
 	}
 
-	// companyDescription is excluded while the role sections carry text — it is boilerplate,
-	// not the role. It is NOT excluded when they are all empty: some tenants write the whole
-	// ad into that one section, and dropping it there stores a posting with no body at all
-	// (freehire#1866). A preference for the role text, not a ban on the company text.
+	// companyDescription is excluded while the role sections carry text: it is boilerplate, not
+	// the role. It is NOT excluded when they are all empty: some tenants write the whole ad into
+	// that one section, and dropping it there stores a posting with no body at all.
 	sec := d.JobAd.Sections
 	body := sec.JobDescription.Text + sec.Qualifications.Text + sec.AdditionalInformation.Text
 	if strings.TrimSpace(body) == "" {

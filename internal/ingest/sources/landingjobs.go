@@ -12,30 +12,21 @@ import (
 // per-tenant board) and multi-company, so it stays in the source facet and takes each
 // posting's employer from the posting rather than from the config entry.
 //
-// Two shapes make it unlike its neighbours.
-//
 // **The employer is not in the payload.** There is no company field, so it comes from the
 // posting URL, `https://landing.jobs/at/<company-slug>/<job-slug>`, humanized from the first
 // segment. A posting whose URL does not have that shape is skipped rather than ingested under a
 // guessed employer, which would break its company slug. The posting's own numeric `id` is the
-// external id — the slug pair was used for that in the first draft and is not durable enough:
-// live slugs bake in a year (`…-in-lisbon-2025`), so a slug the board regenerates would
-// silently duplicate the posting instead of updating it.
+// external id: live slugs bake in a year (`…-in-lisbon-2025`), so a regenerated slug would
+// duplicate the posting instead of updating it.
 //
-// **Paged by `offset`, not by `page`.** `?page=N` is ignored by the endpoint — pages 1 and 2
-// come back byte-for-byte identical (verified live 2026-08-13, issue #1627) — and so is `limit`
-// (`?limit=200` still answers 50). `?offset=N` IS honoured: measured 2026-10-27, the bare request
-// answered 50 postings and `?offset=50` the remaining 7, while the adapter read only the first
-// request and prod held exactly 50 open. The walk therefore steps the offset by the size of the
-// page it just read and stops on a short or empty page. A page that adds no new id also ends it:
-// should the endpoint ever start ignoring `offset` as it ignores `page`, the walk must not spin
-// to its cap re-reading the same postings.
+// **Paged by `offset`, not by `page`.** `?page=N` is ignored by the endpoint (pages 1 and 2 come
+// back identical), and so is `limit`. `?offset=N` IS honoured. The walk steps the offset by the
+// size of the page it just read and stops on a short or empty page. A page that adds no new id
+// also ends it, so an endpoint that starts ignoring `offset` cannot spin the walk to its cap.
 //
 // Note: landing.jobs' robots.txt disallows /api/ for every listed user agent. The endpoint is
-// public and unauthenticated, and the crawl is a scheduled job rather than a search-engine
-// crawler, but this is recorded here — as it is on remotli, the other adapter in this position —
-// because it was raised in the adapter's tracking issue as a conscious call rather than a silent
-// one.
+// public and unauthenticated and the crawl is a scheduled job, not a search-engine crawler; this
+// is a conscious call, as on remotli.
 type landingjobs struct {
 	http JSONGetter
 }
@@ -60,9 +51,8 @@ func (landingjobs) aggregator() {}
 //
 // The feed also carries `tags`, `gross_salary_low`/`gross_salary_high` and `currency_code`,
 // none of which are declared. Salary has no home on Job (enrichment owns it), and the element
-// shape of `tags` was not confirmed — declaring a wrong Go type for it would fail the decode of
-// the WHOLE feed rather than that one field, so the skills dictionary mines the description
-// instead. Adding it is a small change once the shape is verified.
+// shape of `tags` is unconfirmed: a wrong Go type would fail the decode of the WHOLE feed, so the
+// skills dictionary mines the description instead.
 type landingjobsPosting struct {
 	ID               int64              `json:"id"`
 	Title            string             `json:"title"`
@@ -79,8 +69,9 @@ type landingjobsPosting struct {
 }
 
 // landingjobsPlace is one entry of a posting's locations. The array is null for a fully-remote
-// role, and carries SEVERAL entries for a role open in more than one city — 28% of a live
-// sample — so neither reader may stop at the first.
+// landingjobsPlace is one entry of a posting's locations. The array is null for a fully-remote
+// role and can carry SEVERAL entries for a role open in more than one city, so neither reader
+// may stop at the first.
 type landingjobsPlace struct {
 	City        string `json:"city"`
 	CountryCode string `json:"country_code"`
@@ -91,8 +82,7 @@ func (p landingjobsPlace) label() string {
 	return joinNonEmpty(strings.TrimSpace(p.City), strings.TrimSpace(p.CountryCode))
 }
 
-// landingjobsMaxPages bounds the offset walk. The live catalogue is ~60 postings (two pages);
-// the cap only stops a misbehaving endpoint from walking forever.
+// landingjobsMaxPages bounds the offset walk; it only stops a misbehaving endpoint from walking forever.
 const landingjobsMaxPages = 40
 
 // Fetch walks the feed by offset. Any page failing fails the board, not just the first: the
@@ -145,9 +135,9 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 	if !ok || p.ID == 0 || p.Title == "" {
 		return Job{}, false
 	}
-	// remote is a structured boolean, so it may set WorkMode — but only in the direction the
-	// field actually states. false means "not flagged remote", which is not the same as onsite
-	// (the board carries hybrid roles too), so the mode is left for the pipeline to derive.
+	// remote is a structured boolean, so it may set WorkMode, but only in the direction it states:
+	// false means "not flagged remote", not onsite (the board carries hybrid roles too), so the mode
+	// is left for the pipeline to derive.
 	mode := ""
 	if p.Remote {
 		mode = "remote"
@@ -162,9 +152,9 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 		Remote:      p.Remote,
 		WorkMode:    mode,
 		Countries:   landingjobsCountries(p.Locations),
-		// The board states the employment type in a structured field ("Full-time"), which the
-		// shared schema.org mapper resolves once the separator matches its vocabulary — the same
-		// hyphen-to-underscore step remotli applies to the identical case format.
+		// The board states the employment type in a structured field ("Full-time"), which the shared
+		// schema.org mapper resolves once the separator matches its vocabulary (same hyphen-to-underscore
+		// step as remotli).
 		EmploymentType: schemaEmploymentType(strings.ReplaceAll(p.Type, "-", "_")),
 		PostedAt:       parseRFC3339(firstNonEmpty(p.PublishedAt, p.CreatedAt)),
 	}, true
@@ -173,13 +163,12 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 // landingjobsCompanyFromURL humanizes the employer out of a posting URL.
 //
 // `https://landing.jobs/at/acme-corp/senior-go-engineer` yields "Acme Corp". Both path segments
-// must be present: `/at/acme-corp` alone is the company's own page rather than a posting, and
-// treating it as one would file a job under a URL that never named it. ok is false otherwise.
+// must be present: `/at/acme-corp` alone is the company's own page, not a posting. ok is false
+// otherwise.
 //
-// The last check is on the humanized NAME rather than on the slug it came from. A slug that is
-// all separators ("---") is non-empty and clears every path check, but humanizes to nothing —
-// and ok=true with no name is the one outcome this function exists to prevent, since the caller
-// reads it as "the employer resolved" and would emit a posting with no company to slug.
+// The last check is on the humanized NAME, not the slug: a slug of all separators ("---") clears
+// every path check but humanizes to nothing, and ok=true with no name would emit a posting with
+// no company to slug.
 func landingjobsCompanyFromURL(rawURL string) (company string, ok bool) {
 	_, after, found := strings.Cut(rawURL, landingjobsPathMarker)
 	if !found {
@@ -216,10 +205,9 @@ func landingjobsCompany(slug string) string {
 	return strings.Join(words, " ")
 }
 
-// landingjobsLocation renders every place the posting states, not just the first: a role open in
-// Munich, Lisbon and Cologne says so in the feed, and keeping one city would hide it from a
-// search for the others. "Remote" is appended when the posting is flagged remote, and stands
-// alone when there is no place at all (the array is null for fully-remote roles).
+// landingjobsLocation renders every place the posting states, not just the first, so a role open
+// in several cities is found by a search for any of them. "Remote" is appended when the posting
+// is flagged remote, and stands alone when there is no place at all.
 func landingjobsLocation(p landingjobsPosting) string {
 	places := distinctJoin(p.Locations, "; ", landingjobsPlace.label)
 	if !p.Remote {

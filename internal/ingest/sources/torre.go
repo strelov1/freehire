@@ -15,12 +15,11 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// torre adapts Torre (torre.ai), a Latin-American-born talent marketplace whose postings each
-// name their own employer. The provider is boardless: the site's sitemap index names the whole
-// live catalogue — 2,440 posting pages over 34 sitemaps on 2026-10-15, English and Spanish — and
-// is pruned as postings close (its oldest sitemap, from 2023, still names exactly one posting
-// whose validThrough lies ahead). Every posting page carries a schema.org JobPosting, so this is
-// a HydratingSource that buys a page only for a posting the catalogue lacks.
+// torre adapts Torre (torre.ai), a Latin-American-born talent marketplace whose postings each name
+// their own employer. The provider is boardless: the site's sitemap index names the whole live
+// catalogue (English and Spanish, many sitemaps) and is pruned as postings close. Every posting
+// page carries a schema.org JobPosting, so this is a HydratingSource that buys a page only for a
+// posting the catalogue lacks.
 //
 // The search API the site once used (search.torre.co) now refuses every request, and the job
 // search moved into the app under /app, which robots.txt disallows; the sitemaps and /post/
@@ -37,7 +36,7 @@ type torreHTTP interface {
 const torreSitemapIndexURL = "https://torre.ai/sitemap-index.xml"
 
 // torrePostRE is a posting page: /post/<id>, optionally followed by a slug of the employer and
-// title. Only the id is the external id; four live sitemap entries carry no slug at all.
+// title. Only the id is the external id; some sitemap entries carry no slug at all.
 var torrePostRE = regexp.MustCompile(`^https://torre\.ai/post/([A-Za-z0-9]+)(?:-[^/?#]*)?$`)
 
 func NewTorre(c torreHTTP) Source { return torre{http: c} }
@@ -281,10 +280,10 @@ func torreEmploymentType(raw json.RawMessage) string {
 	return ""
 }
 
-// torreUnescape undoes the second string escaping Torre applies to the JobPosting description:
-// once JSON-decoded it still carries \uXXXX for every non-ASCII character, \/ for a slash and
-// \t for a tab. Decoding it again as a JSON string literal restores the text; a description that
-// does not decode (it never did on the sampled pages) is kept as it is.
+// torreUnescape undoes the second string escaping Torre applies to the JobPosting description: once
+// JSON-decoded it still carries \uXXXX for every non-ASCII character, \/ for a slash and \t for a
+// tab. Decoding it again as a JSON string literal restores the text; a description that does not
+// decode is kept as it is.
 //
 // A posting Torre crawled from elsewhere can also carry its markup entity-escaped inside a
 // paragraph ("<p>&lt;p&gt;Blue Recruitment Personnel is recruiting…"), which would render as

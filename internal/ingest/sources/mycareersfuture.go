@@ -10,8 +10,7 @@ import (
 // Boardless (one public API, no per-tenant board) and multi-company, so it stays in the
 // source facet and takes each posting's company from the API. The v2 jobs endpoint carries
 // every posting's body inline and paginates by page, so there is no per-posting detail
-// request. The portal is large (~85k postings, all sectors), so a full crawl is sizeable —
-// the cron schedule governs how often it runs.
+// request. The portal is large, so a full crawl is sizeable.
 type mycareersfuture struct {
 	http JSONGetter
 }
@@ -59,9 +58,9 @@ type mcfPosting struct {
 	} `json:"salary"`
 }
 
-// mcfSalaryPeriod maps MyCareersFuture's salary type onto freehire's salary_period. Every
-// sampled posting (2026-10-31) said "Monthly"; an unrecognised type maps to "" and the
-// salary is dropped rather than published against a guessed period.
+// mcfSalaryPeriod maps MyCareersFuture's salary type onto freehire's salary_period. An
+// unrecognised type maps to "" and the salary is dropped rather than published against a guessed
+// period.
 func mcfSalaryPeriod(t string) string {
 	switch t {
 	case "Monthly":
@@ -116,7 +115,7 @@ func (s mycareersfuture) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, erro
 
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no
 // uuid, which would collide on the dedup key, or no company which would break the slug).
-// The public job page is keyed by uuid (verified to resolve).
+// The public job page is keyed by uuid.
 func (p mcfPosting) toJob() (Job, bool) {
 	if p.UUID == "" || p.PostedCompany.Name == "" {
 		return Job{}, false

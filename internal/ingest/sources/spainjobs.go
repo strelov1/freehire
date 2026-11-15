@@ -22,11 +22,10 @@ import (
 )
 
 // spainjobs adapts SpainJobs.io (www.spainjobs.io), an English-language board that gathers the
-// open roles of ~3.5k employers in Spain from their own career pages: ~92k postings, each
-// rewritten in English with the employer's own apply link. It is boardless and an aggregator — the
-// employer is read per posting. Its value to the catalogue is the employers whose career pages
-// sit on their own domains, which no ATS adapter can reach. See the "SpainJobs.io traps" section
-// of AGENTS.md for the measurements behind each rule.
+// open roles of Spanish employers from their own career pages, each posting rewritten in English
+// with the employer's own apply link. It is boardless and an aggregator — the employer is read per
+// posting. Its value to the catalogue is the employers whose career pages sit on their own
+// domains, which no ATS adapter can reach. See the "SpainJobs.io traps" section of AGENTS.md.
 //
 // The posting set is the job sitemaps, which carry only each posting's URL, and that URL spells
 // the employer's slug — so the coverage gate is asked before a page is bought, and a posting of
@@ -60,8 +59,8 @@ const (
 	spainjobsDetailWorkers   = 2
 	// spainjobsMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a
 	// second is 25 minutes, inside the scheduler's default 2,400 s crawl budget with the
-	// sitemaps. ~2k postings reach the sitemaps a day; the first runs face the whole catalogue,
-	// less what the gate condemns, so it is taken in slices, most recently modified first.
+	// sitemaps. The first runs face the whole catalogue, less what the gate condemns, so it is
+	// taken in slices, most recently modified first.
 	spainjobsMaxNewPerRun   = 1500
 	spainjobsDeadlineMargin = 5 * time.Minute
 )
@@ -288,8 +287,8 @@ func (s spainjobs) detail(ctx context.Context, p spainjobsPosting) (Job, bool, e
 	}
 	var ld spainjobsLD
 	if !ldJobPosting(root, &ld) {
-		// About one page in ten (mostly staffing agencies' adverts) carries no JobPosting; the
-		// page itself still holds the advert.
+		// Some pages (mostly staffing agencies' adverts) carry no JobPosting; the page itself
+		// still holds the advert.
 		ld = spainjobsFromPage(root)
 	}
 	job, ok := spainjobsJob(ld, p, spainjobsApplyURL(root))

@@ -9,11 +9,9 @@ import (
 // meituan adapts Meituan's careers site, zhaopin.meituan.com. Single-company and boardless.
 //
 // The crawl is scoped to the site's own 技术类 (Technology) job family: our title dictionary
-// cannot read Chinese titles (classify resolved a category for 3 of 665 technology titles and
-// confirmed none non-technical), so the source's family is what states a posting is technical,
-// and it sets IsTechHint. Experienced (社招), campus graduate (校招) and intern (实习) postings
-// are all read — all three are real postings on the site — one walk per hire type, so the type
-// can be stated: 351, 121 and 193 technology postings on 2026-10-15.
+// cannot read Chinese titles, so the source's family is what states a posting is technical, and
+// it sets IsTechHint. Experienced (社招), campus graduate (校招) and intern (实习) postings are
+// all read, one walk per hire type, so the type can be stated.
 //
 // The listing is a keyless JSON POST whose rows carry the whole posting, body included; no
 // hydration.
@@ -32,8 +30,7 @@ const (
 	// (GET /api/official/job/search/enum?enumType=JF).
 	meituanTechFamily     = "11001"
 	meituanTechFamilyName = "技术类"
-	// meituanPageSize is one request's rows; the site serves 500 and the largest hire type's
-	// technology slice is 351.
+	// meituanPageSize is one request's rows; the site serves 500, above any hire type's technology slice.
 	meituanPageSize = 500
 	// meituanMaxPages bounds a walk well past any hire type; reaching it fails the crawl.
 	meituanMaxPages = 20

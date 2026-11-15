@@ -7,8 +7,8 @@ import "strings"
 // resolves nothing while "Hsinchu" resolves the city and the country. cnCities serves the
 // mainland sites and is Simplified (台湾, 东京), so it cannot be reused for these.
 //
-// The list is the names seen on those sites' live catalogues (2026-10-25), not a gazetteer. A
-// country is stated as its English name, a city or campus as the place our dictionary knows.
+// The list is the names seen on those sites' catalogues, not a gazetteer. A country is stated as
+// its English name, a city or campus as the place our dictionary knows.
 // Every key is spelled with 台, never 臺: the sites use both for the same word (ASUS writes 臺北,
 // Realtek 台北), and twPlace folds the variant before looking it up.
 var twPlaces = map[string]cnCityPlace{

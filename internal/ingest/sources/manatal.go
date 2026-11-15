@@ -13,11 +13,9 @@ import (
 // remote flag, and contract type inline, so there is no per-posting detail request; it
 // paginates DRF-style via a top-level "next" link, walked until it is null.
 //
-// This is the JSON path for the same platform careers-page.com serves as server-rendered
-// HTML: the careerspage adapter crawls a tenant's <slug>.careers-page.com pages and fetches
-// each posting's ld+json detail, whereas this reads the whole board from one paginated JSON
-// feed with the description and facets already inline — so a Manatal tenant is best onboarded
-// here rather than under careerspage.
+// This is the JSON path for the same platform careers-page.com serves as server-rendered HTML
+// (the careerspage adapter crawls those pages and fetches each posting's ld+json detail), so a
+// Manatal tenant is best onboarded here rather than under careerspage.
 type manatal struct {
 	http JSONGetter
 }
@@ -34,8 +32,8 @@ const (
 	// manatalJobURL is the public human-facing posting page, keyed by the tenant slug and the
 	// posting hash (the id that appears in the career-page URL).
 	manatalJobURL = "https://www.careers-page.com/%s/job/%s"
-	// manatalMaxPages bounds the next-link walk so a feed that never stops handing out a next
-	// page cannot loop forever (the largest boards seen are ~10 pages; this is ample headroom).
+	// manatalMaxPages bounds the next-link walk so a feed that never stops handing out a next page
+	// cannot loop forever.
 	manatalMaxPages = 200
 )
 

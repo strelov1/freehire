@@ -7,15 +7,13 @@ import (
 	"log"
 )
 
-// remotedotcom adapts remote.com's public board, a curated remote-jobs aggregator (~5.7k live
-// postings). Boardless (one public listing, no per-tenant board) and multi-company, so it stays
-// in the source facet and takes each posting's employer from the listing.
+// remotedotcom adapts remote.com's public board, a curated remote-jobs aggregator. Boardless
+// (one public listing, no per-tenant board) and multi-company, so it stays in the source facet
+// and takes each posting's employer from the listing.
 //
-// remote.com is a Next.js App Router app, so there is no REST API and no Pages-Router
-// _next/data endpoint — the data is the RSC flight. Sending "RSC: 1" makes both the listing and
-// a posting page answer text/x-component instead of HTML, which is both the only machine
-// readable shape and much the cheaper one (a listing page measured 33 KB against 389 KB of
-// equivalent HTML, a posting page 20-60 KB against 144 KB).
+// remote.com is a Next.js App Router app with no REST API; the data is the RSC flight.
+// Sending "RSC: 1" makes both the listing and a posting page answer text/x-component instead
+// of HTML, which is the only machine-readable shape and far smaller than the HTML.
 //
 // The two shapes carry different halves of a posting and are read differently:
 //
@@ -25,10 +23,9 @@ import (
 //   - a POSTING PAGE carries the body, as a schema.org JobPosting in a flight TEXT ROW (not an
 //     application/ld+json <script>, which the RSC response has no HTML to hold).
 //
-// That split is why this is a HydratingSource: a body costs one request per posting, and a
-// posting with no body is excluded from the search index (search.DescriptionMissing), so the
-// listing alone would ingest a catalogue nobody can find. Fetching the body only for postings
-// the catalogue does not already have makes an ordinary run cost a request per NEW posting.
+// That split is why this is a HydratingSource: a posting with no body is excluded from the
+// search index (search.DescriptionMissing), and a body costs one request, so bodies are
+// fetched only for postings the catalogue does not already have.
 type remotedotcom struct {
 	http HeaderTextGetter
 }
@@ -39,17 +36,14 @@ const (
 	// remotedotcomJobURL is both the public posting page and, with the RSC header, its data
 	// endpoint. It takes the company slug then the posting slug.
 	remotedotcomJobURL = "https://remote.com/jobs/%s/%s"
-	// remotedotcomMaxPages bounds the walk against a listing that stops honouring totalPages.
-	// The walk normally ends on totalPages (288 at 5,745 postings, confirmed live 2026-08-16);
-	// this is the backstop that keeps a broken response from paging forever, sized with room
-	// for the board to grow several times over.
+	// remotedotcomMaxPages is the backstop against a listing that stops honouring totalPages;
+	// the walk normally ends on totalPages.
 	remotedotcomMaxPages = 2000
 )
 
 // remotedotcomRSC is the header that makes remote.com answer with its RSC flight rather than
 // the rendered page. Next-Router-State-Tree is NOT sent: the flight comes back complete
-// without it (confirmed live across listing and posting pages, 2026-08-16), and a router state
-// tree is a client-side cache key we would only be guessing at.
+// without it.
 var remotedotcomRSC = map[string]string{"RSC": "1"}
 
 // NewRemotedotcom builds the remote.com adapter over the given HTTP client.
@@ -160,10 +154,8 @@ func (s remotedotcom) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 }
 
 // FetchNewGated is FetchNew told which employers the coverage gate will discard. It matters
-// more here than it would on most aggregators: remote.com curates postings from employers who
-// overwhelmingly run their own ATS, and prod measured ~4.1k of its ~5.7k listings already
-// covered. Those postings are never stored, so they are never seen, so the plain hydrating
-// crawl bought — and threw away — 4.1k bodies every hour.
+// here because most remote.com employers run their own ATS: those postings are never stored,
+// so they are never seen, and the plain hydrating crawl would buy their bodies every run.
 func (s remotedotcom) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	postings, err := s.crawl(ctx)
 	if err != nil {
@@ -344,12 +336,8 @@ func (p remotedotcomPosting) location() string {
 		})
 	case "timezone":
 		if h.Timezone != nil && h.Timezone.Name != "" {
-			// The zone is named after a city ("Chicago" for america-chicago), and that name
-			// alone is a claim the posting does not make: the location dictionary reads a bare
-			// "Chicago" as the city Chicago in the US, filing a work-from-anywhere-in-this-zone
-			// posting under a place nobody has to be. Naming it a timezone is both what the
-			// posting says and, because the dictionary matches whole phrases, what stops the
-			// city from being invented.
+			// The zone is named after a city ("Chicago"); a bare city name would be read by the
+			// location dictionary as that city. Naming it a timezone stops the city being invented.
 			return h.Timezone.Name + " timezone"
 		}
 	}
@@ -380,11 +368,8 @@ func (p remotedotcomPosting) countryCodes() []string {
 
 // applySalary maps remote.com's structured compensation onto the job's salary fields.
 //
-// The bounds are MINOR units. The listing states one posting as 1000000-1500000 USD/yearly
-// while that same posting's schema.org baseSalary states 10000-15000 (confirmed live
-// 2026-08-16), so reading the listing verbatim would inflate every salary a hundredfold —
-// which is also why the salary is not folded into the description as text: this is a
-// structured field, and Job's structured salary is where a structured field belongs.
+// The bounds are MINOR units (the listing says 1000000-1500000 where the posting's schema.org
+// baseSalary says 10000-15000), so reading them verbatim would inflate salaries a hundredfold.
 func (p remotedotcomPosting) applySalary(job *Job) {
 	c := p.Compensation
 	if c == nil || c.Currency.Code == "" {
@@ -417,10 +402,8 @@ func remotedotcomWorkMode(t string) string {
 }
 
 // remotedotcomSalaryPeriod maps remote.com's compensation frequency onto
-// vocab.SalaryPeriodValues. Only yearly, monthly and hourly were observed live; daily is
-// mapped because freehire names it, and anything else — a weekly rate, which freehire's
-// vocabulary cannot express — yields "" and drops the whole salary rather than filing an
-// amount under a period it does not have.
+// vocab.SalaryPeriodValues. Anything the vocabulary cannot express (a weekly rate) yields ""
+// and drops the whole salary rather than filing an amount under a wrong period.
 func remotedotcomSalaryPeriod(frequency string) string {
 	switch frequency {
 	case "yearly":
@@ -437,7 +420,7 @@ func remotedotcomSalaryPeriod(frequency string) string {
 }
 
 // remotedotcomEmploymentType maps remote.com's employment type onto
-// vocab.EmploymentTypeValues. Only full_time and contractor were observed live.
+// vocab.EmploymentTypeValues.
 func remotedotcomEmploymentType(t string) string {
 	switch t {
 	case "full_time":
@@ -454,15 +437,11 @@ func remotedotcomEmploymentType(t string) string {
 }
 
 // remotedotcomSeniority maps remote.com's seniority onto vocab.SeniorityValues. The field is
-// an array but every posting observed live carries at most one value, so the first recognized
-// one is taken.
+// an array but postings carry at most one value, so the first recognized one is taken.
 //
-// The management rungs need a decision freehire's ladder does not make for us: it names lead,
-// staff and principal, of which only lead is a management rank. classify's own title dictionary
-// already answers it the same way — it reads "head of", "vice president" and "директор" as
-// c_level — so director and executive land there and manager lands on lead. These come from a
-// STRUCTURED rank field, not from guessing at a title, which is what makes the mapping sound
-// where reading "Manager" out of a job title would not be.
+// Of freehire's lead/staff/principal rungs only lead is a management rank, so manager lands on
+// lead and director and executive on c_level, matching classify's title dictionary ("head of",
+// "vice president", "директор"). The rank is structured, not guessed from a title.
 func remotedotcomSeniority(values []string) string {
 	for _, v := range values {
 		switch v {

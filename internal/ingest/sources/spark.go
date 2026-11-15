@@ -21,8 +21,8 @@ const (
 	sparkPageSize   = 100
 	// sparkMaxPages bounds the page walk well above any single workspace's postings.
 	sparkMaxPages = 100
-	// sparkActive is the vacancyStatusId marking a live posting (the platform's status enum
-	// is Upcoming=10, Active=20, Closed=30, Discarded=40, Expired=50); anything else is skipped.
+	// sparkActive is the vacancyStatusId marking a live posting (the status enum is Upcoming=10,
+	// Active=20, Closed=30, Discarded=40, Expired=50); anything else is skipped.
 	sparkActive = 20
 )
 

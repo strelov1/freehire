@@ -13,8 +13,7 @@ import (
 // staffy adapts Staffy (jobs.wearestaffy.com), a single recruiting/staffing agency's own
 // job board — boardless, like lumenalta, since the domain names exactly one company. Both
 // the listing and every detail page are fully server-rendered static HTML with no XHR or
-// client-side data fetch at all (confirmed live via a full network capture) — the simplest
-// shape of any adapter in this initiative, needing only the shared DOM-walking helpers.
+// client-side data fetch, so only the shared DOM-walking helpers are needed.
 type staffy struct {
 	http HTMLGetter
 }
@@ -30,11 +29,10 @@ func (staffy) boardless() {}
 const staffyListingURL = "https://jobs.wearestaffy.com/vacantes"
 
 // fullBoardListing: the listing's own declared total ("NN activas") is verified against
-// the number of distinct posting links found, the same "prove wholeness against a
-// declared count" posture scalis/recrutei/pyjamahr already established. A mismatch, a
-// listing fetch failure, or finding no declared total at all fails the whole Fetch. A
-// detail-fetch failure for one posting becomes an Unreadable marker rather than a silent
-// drop, the same contract every other listing-then-detail adapter in this package gives.
+// the number of distinct posting links found, the same "prove wholeness against a declared
+// count" posture scalis/recrutei/pyjamahr use. A mismatch, a listing fetch failure, or finding
+// no declared total at all fails the whole Fetch. A detail-fetch failure for one posting
+// becomes an Unreadable marker rather than a silent drop.
 func (staffy) fullBoardListing() {}
 
 func (s staffy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -99,12 +97,10 @@ func (s staffy) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bo
 	if titleNode == nil {
 		return unreadableDetail(id, loc, e.Company), true
 	}
-	// A missing metadata block means the page's markup has drifted from the shape this
-	// adapter depends on: staffyDescriptionHTML's direct-child walk needs it to know
-	// where the prose sections begin, and without it every structured field is lost too
-	// — mark the whole posting Unreadable rather than silently ship an empty/mis-mapped
-	// job, the same "page read successfully but doesn't have what we need" posture every
-	// other DOM-scraping adapter in this package already gives a missing element.
+	// A missing metadata block means the page's markup has drifted from the shape this adapter
+	// depends on: staffyDescriptionHTML's direct-child walk needs it to know where the prose
+	// sections begin, and without it every structured field is lost too. Mark the posting
+	// Unreadable rather than ship an empty or mis-mapped job.
 	spans := staffyMetadataSpans(root)
 	if len(spans) < 3 {
 		return unreadableDetail(id, loc, e.Company), true
@@ -126,8 +122,7 @@ func (s staffy) detail(ctx context.Context, e CompanyEntry, loc string) (Job, bo
 	}, true
 }
 
-// firstH1 returns the first <h1> descendant of n, or n itself if none is found (defensive
-// fallback, never observed live).
+// firstH1 returns the first <h1> descendant of n, or n itself if none is found (defensive).
 func firstH1(n *html.Node) *html.Node {
 	var found *html.Node
 	walk(n, func(c *html.Node) bool {
@@ -147,8 +142,7 @@ func firstH1(n *html.Node) *html.Node {
 }
 
 // staffyMetadataSpans returns the text of every <span> inside the page's .metadata block,
-// in document order — confirmed live to always be exactly [location, work arrangement,
-// seniority].
+// in document order: always [location, work arrangement, seniority].
 func staffyMetadataSpans(root *html.Node) []string {
 	block := firstByClass(root, "metadata")
 	if block == nil {
@@ -165,10 +159,10 @@ func staffyMetadataSpans(root *html.Node) []string {
 }
 
 // staffyDescriptionHTML concatenates every <h2>-delimited prose section below the
-// position's metadata into one HTML blob, sanitized by the caller. Walks only the
-// article's DIRECT children (the confirmed-live flat structure) rather than the whole
-// subtree, so the leading "New opportunity" eyebrow paragraph above the metadata block
-// is never mistaken for part of the description.
+// position's metadata into one HTML blob, sanitized by the caller. Walks only the article's
+// DIRECT children (the page's flat structure) rather than the whole subtree, so the leading
+// "New opportunity" eyebrow paragraph above the metadata block is never mistaken for part of
+// the description.
 func staffyDescriptionHTML(article *html.Node) string {
 	meta := firstByClass(article, "metadata")
 	var b strings.Builder
@@ -205,11 +199,9 @@ func staffyJobID(loc string) string {
 
 // staffySeniority maps the detail page's third metadata span onto vocab.SeniorityValues,
 // using the standard Argentina/LatAm-market IT abbreviations (Jr/Ssr/Sr for
-// Junior/Semi-Senior/Senior). Confirmed live across a 30+-posting sample: "Junior", "Jr",
-// "Semi senior", "Semi Senior" (capitalization varies by posting), "Ssr", "Senior", "Sr",
-// and "Staff". A compound/ambiguous label a posting itself doesn't commit to one level
-// (e.g. "Senior/ Semi senior", also confirmed live) maps to "" rather than a guess, the
-// same as any other unrecognized label.
+// Junior/Semi-Senior/Senior); capitalization varies by posting. A compound/ambiguous label a
+// posting itself doesn't commit to one level (e.g. "Senior/ Semi senior") maps to "" rather
+// than a guess, the same as any other unrecognized label.
 func staffySeniority(label string) string {
 	switch strings.ToLower(strings.TrimSpace(label)) {
 	case "junior", "jr":

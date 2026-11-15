@@ -15,20 +15,21 @@ import (
 
 // occ adapts OCC Mundial (occ.com.mx), Mexico's dominant general job board, whose postings each
 // name their own employer. Board-based aggregator: a board is one of the site's own 23 job
-// CATEGORIES ("tecnologias-de-la-informacion-sistemas" held 4,361 postings on 2026-10-15). The
+// CATEGORIES (e.g. "tecnologias-de-la-informacion-sistemas"). The
 // catalogue is broader than IT, so every category is a board; only the IT one hints its
 // postings technical (occITBoard), the rest are left to the classifier.
 //
 // The listing is the server-rendered category search (/empleos/trabajo-en-<board>/?page=N, 20
-// cards a page). Since 2026-10 it sits behind a Cloudflare challenge to datacenter IPs, so in
-// production it is read through the Scrapling tier's browser (scraplingtier.go); the posting
-// JSON is not challenged and keeps a plain client (occSplit). The posting itself is the JSON the site's own split view loads from
+// cards a page). It sits behind a Cloudflare challenge to datacenter IPs, so in production it is
+// read through the Scrapling tier's browser (scraplingtier.go); the posting JSON is not challenged
+// and keeps a plain client (occSplit). The posting itself is the JSON the site's own split view
+// loads from
 // oferta.occ.com.mx, so this is a HydratingSource that buys one small JSON document only for a
 // posting the catalogue lacks.
 //
 // The walk follows the ordinary "which page failed decides" rule and claims no
-// fullBoardListing: a full walk read 4,360 distinct postings against a stated 4,361, so the
-// stated total cannot serve as the proof. See the OCC traps in AGENTS.md.
+// fullBoardListing: a full walk reads fewer distinct postings than the stated total (off by one
+// in practice), so the stated total cannot serve as the proof. See the OCC traps in AGENTS.md.
 type occ struct {
 	http occHTTP
 	// maxNewPerBoard bounds how many new postings one board hydrates per run; non-positive
@@ -55,7 +56,7 @@ const (
 	occBlindLabel = "Empresa confidencial"
 	// occITBoard is the one category whose postings the site itself files as technical.
 	occITBoard = "tecnologias-de-la-informacion-sistemas"
-	// occMaxNewPerBoard bounds one board's posting-JSON requests per run. The first run over 23
+	// occMaxNewPerBoard bounds one board's posting-JSON requests per run. The first run over all
 	// categories meets every posting as new; a board writes nothing until its crawl returns, so
 	// the rest are deferred — not yielded, so still new — to the next run.
 	occMaxNewPerBoard = 2000
@@ -160,7 +161,7 @@ func parseOCCCards(root *xhtml.Node) []occCard {
 }
 
 // hydrate buys the posting JSON only for a posting the catalogue lacks. A posting whose card
-// hides the employer ("Empresa confidencial", ~8% of cards) is skipped before any request: it
+// hides the employer ("Empresa confidencial") is skipped before any request: it
 // names no employer to file it under. A detail that could not be read defers the posting to a
 // later run rather than storing it body-less.
 func (s occ) hydrate(ctx context.Context, board string, cards []occCard, seen func(string) bool) ([]Job, error) {
@@ -267,8 +268,8 @@ func (d occDetail) toJob(id string, tech bool) (Job, bool) {
 		EmploymentType: occEmploymentTypes[o.EmployURL],
 		IsTechHint:     tech,
 		// OCC is the Mexican board: a town it names without a state ("Puebla",
-		// "Veracruz") is also a namesake elsewhere, and 16% of its open postings had no
-		// country (2026-10-27). Mexico is read only when the line states none.
+		// "Veracruz") is also a namesake elsewhere, and many open postings carry no country.
+		// Mexico is read only when the line states none.
 		FallbackCountries: []string{"mx"},
 	}
 	occSalary(&job, o.SalaryMin, o.SalaryMax, o.SalaryText)
@@ -302,7 +303,7 @@ var occWorkModes = map[string]string{
 	"/empleos/tipo-home-office-remoto": "remote",
 }
 
-// occEmploymentTypes keys the site's schedule filter link, the two values seen on 162 sampled
+// occEmploymentTypes keys the site's schedule filter link, the two values the site uses.
 // postings. "Honorarios" (a fee-based contract) is filed under either of them by the site, so
 // the label beside the link is not read.
 var occEmploymentTypes = map[string]string{

@@ -26,8 +26,7 @@ import (
 // each posting as /<customer>/<job>/pub/<publication>/index.html, where one job is published
 // several times — once per channel (pub/1, pub/6) and per language (pub/de, pub/it, pub/rm).
 //
-// robots.txt advertises the posting set as a list of sitemaps (rec01/0 … rec02/9; 1,735 jobs
-// across 120 customers on 2026-10-29) and disallows only two of them, which it does not list.
+// robots.txt advertises the posting set as a list of sitemaps (rec01/0 … rec02/9) and disallows only two of them, which it does not list.
 // The adapter is boardless: it reads the sitemaps robots.txt names, collapses each job's
 // publications to one, and reads the employer per posting. Refline offers no job API or feed.
 //
@@ -52,8 +51,7 @@ const (
 
 	reflineRequestInterval = time.Second
 	reflineDetailWorkers   = 2
-	// reflineFreshPerRun and reflineBacklogPerRun bound one run's page reads to twenty minutes;
-	// the catalogue of 2026-10-29 (1,735 jobs) is taken in two runs.
+	// reflineFreshPerRun and reflineBacklogPerRun bound one run's page reads to twenty minutes.
 	reflineFreshPerRun    = 900
 	reflineBacklogPerRun  = 300
 	reflineDeadlineMargin = 5 * time.Minute

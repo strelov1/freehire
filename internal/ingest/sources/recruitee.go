@@ -8,8 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
-// recruiteeSalary is Recruitee's salary object — every field is present but null when
-// unstated, confirmed live 2026-08-14. min/max are JSON strings, not numbers.
+// recruiteeSalary is Recruitee's salary object: every field is present but null when unstated.
+// min/max are JSON strings, not numbers.
 type recruiteeSalary struct {
 	Min      *string `json:"min"`
 	Max      *string `json:"max"`
@@ -37,8 +37,8 @@ func (recruitee) Provider() string { return "recruitee" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (recruitee) fullBoardListing() {}
 
-// emptyBoardListing: an unknown board answers 404, and an emptied one
-// answers 200 with "offers": [] (2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+// emptyBoardListing: an unknown board answers 404, and an emptied one answers 200 with
+// "offers": []; an envelope without the array fails Fetch. See the emptyBoardListing interface.
 func (recruitee) emptyBoardListing() {}
 
 func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {

@@ -139,10 +139,8 @@ func (s kenjo) detail(ctx context.Context, e CompanyEntry, board string, p kenjo
 		}
 		return Job{}, false
 	}
-	// A detail that is not this position is a reshaped answer. One that is, but carries no
-	// jobDescription, is a position its employer published without a body (five1's three,
-	// measured 2026-10-25): that is the answer, and it is the same every run, so it is stored
-	// body-less rather than marked unreadable for good.
+	// A detail that is not this position is a reshaped answer. One that is, but has no jobDescription,
+	// is a position published without a body: stored body-less, since the answer is the same every run.
 	if strings.TrimSpace(d.ID) != strings.TrimSpace(p.ID) {
 		return unreadableDetail(p.ID, pageURL, e.Company), true
 	}
@@ -162,11 +160,10 @@ func (s kenjo) detail(ctx context.Context, e CompanyEntry, board string, p kenjo
 	return j, true
 }
 
-// kenjoEmploymentType maps the position type. The listing localises it ("Vollzeit"); the
-// detail states the picklist's own key, which is what is mapped — measured across 177 positions
-// on 55 sites: Full-time, Flexible, Freelance, Apprentice, Intern, Student, and none at all.
-// "Flexible", "Apprentice" and "Student" (Werkstudent) have no value in the vocabulary and stay
-// "", as does no work arrangement at all: Kenjo records none, so WorkMode is the parser's.
+// kenjoEmploymentType maps the position type. The listing localises it ("Vollzeit"); the detail
+// states the picklist's own key, which is what is mapped. "Flexible", "Apprentice" and "Student"
+// (Werkstudent) have no vocabulary value and stay ""; Kenjo records no work arrangement, so
+// WorkMode is the parser's.
 func kenjoEmploymentType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "full-time", "vollzeit":

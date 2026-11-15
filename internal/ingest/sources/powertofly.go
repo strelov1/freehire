@@ -21,10 +21,9 @@ const (
 	// powertoflyMaxPages bounds pagination so a feed that never stops handing out a
 	// next_page cannot loop forever. It is a ceiling that FAILS the crawl, never a silent end:
 	// the adapter is fullCatalog, so a walk cut short here would read as a shrunken catalogue
-	// and the source-scoped sweep would close every posting past it. The feed was ~192 pages at
-	// onboarding and 709 (35,405 postings at 50/page) on 2026-10-23, when the old cap of 400
-	// was truncating every run at exactly 20,000 postings. 1000 leaves ~40% headroom while a
-	// full walk (~2 s a page) still fits the scheduler's default 3000 s run timeout.
+	// and the source-scoped sweep would close every posting past it. Keep it well above the
+	// feed's real length; a full walk (~2 s a page) must still fit the scheduler's default
+	// 3000 s run timeout.
 	powertoflyMaxPages = 1000
 )
 
@@ -42,7 +41,7 @@ func (powertofly) aggregator() {}
 // fullCatalog: Fetch pages the one feed to its natural end (meta.next_page null) and fails on
 // any page error, on an empty page that still names a next page, and on reaching
 // powertoflyMaxPages before the end. A run is therefore the whole catalogue or an error, which
-// is what lets the sweep close by source. That matters here more than for most feeds: ~98% of
+// is what lets the sweep close by source. That matters here more than for most feeds: most of
 // a run's postings are skipped as already covered by the employer's own ATS, so their stored
 // copies are never refreshed, and the company-scoped sweep, which reaches only the companies
 // a run wrote, never closed them. See the fullCatalog interface (source.go).

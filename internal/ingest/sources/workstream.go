@@ -19,38 +19,33 @@ import (
 //	https://www.workstream.us/j/965a796b/moxies     <- one of its brands
 //	https://www.workstream.us/j/965a796b/moxies/pickering-79247/server-b8dc419f  <- a posting
 //
-// That the employer — not the brand and not the store — is the board was settled live:
-// Workstream's own careers URL, "/j/<employer-slug>" (the "finecasual", "sarku_japan",
-// "hdl_management_usa_corporation" spellings), 301-redirects onto "/j/<hex>", and the employer
-// listing at "/j/<hex>/positions" unions every brand's postings (verified: FineCasual's 32
-// postings arrive under both "moxies" and "chop-steakhouse-bar"). Crawling brands instead would
-// need a second discovery pass to learn which brands an employer runs, and would miss the ones
-// it never saw.
+// The employer, not the brand or store, is the board: Workstream's own careers URL
+// "/j/<employer-slug>" 301-redirects onto "/j/<hex>", and the employer listing at
+// "/j/<hex>/positions" unions every brand's postings. Crawling brands instead would need a
+// second discovery pass to learn which brands an employer runs.
 //
-// Traps, all verified live against the platform on 2026-09-02:
+// Traps:
 //
 //   - "/j/<board>/positions" is the employer-wide listing only for an employer running more than
 //     one brand. An employer running exactly one is 301-redirected to that brand's root, which is
 //     a LOCATIONS listing, not a positions one. Both pages state where their positions listing is
-//     in an inline "var searchBaseUrl" — so the crawl asks for the employer listing, reads that
-//     variable, and walks whatever it names. Comparing it against the URL asked for is what keeps
-//     the multi-brand case at one request rather than two.
+//     in an inline "var searchBaseUrl", so the crawl asks for the employer listing, reads that
+//     variable, and walks whatever it names; comparing it against the URL asked for keeps the
+//     multi-brand case at one request.
 //   - "var totalPages" bounds the walk exactly (unlike SEEK's totalCount): the last page is short
 //     and the page after it renders no cards at all, so the added==0 rule agrees with it.
 //   - Ten cards a page, and a card carries every field except the body — hence HydratingSource.
 //   - The pay line is the platform's own compensation field rendered to a fixed grammar, but its
-//     "$" is UNQUALIFIED and Workstream serves US and Canadian employers alike (Chop Steakhouse &
-//     Bar's postings are in Vaughan, Ontario), so the symbol alone cannot say which dollar it is.
-//     The line is stated in the description verbatim rather than guessed into the structured
-//     salary fields — SEEK's salaryLabel reading, for a different cause.
+//     "$" is UNQUALIFIED and Workstream serves US and Canadian employers alike, so the symbol
+//     alone cannot say which dollar it is. The line is stated in the description verbatim
+//     rather than guessed into the structured salary fields.
 //   - Neither page states a publish date in any form, so PostedAt is always nil.
 //   - The employer account is what the board file names, so a multi-brand group's postings all
-//     file under the group. The brand is in the posting URL and in the posting page's breadcrumb,
-//     but nowhere on a listing card — reading it would cost the SeenRefresh path a request it
-//     exists to save, and would leave the employer named two different ways across the two paths.
-//   - The origin is AWS API Gateway and it meters by request RATE per IP: measured live, 1 req/s
-//     was refused nothing over 40 cold boards while ~1.4 req/s was refused 48%, and the penalty
-//     outlives the burst that earned it. Hence the pacer (workstreamRequestInterval).
+//     file under the group. The brand is not on a listing card; reading it would cost the
+//     SeenRefresh path a request it exists to save.
+//   - The origin is AWS API Gateway and it meters by request RATE per IP: about 1 req/s is not
+//     refused, noticeably more is, and the penalty outlives the burst. Hence the pacer
+//     (workstreamRequestInterval).
 //   - A retired employer answers 410 Gone rather than 404.
 type workstream struct {
 	http workstreamHTTP
@@ -73,8 +68,7 @@ func (workstream) fullBoardListing() {}
 
 const (
 	workstreamBaseURL = "https://www.workstream.us"
-	// workstreamMaxPages caps the walk when the page states no totalPages. Ten cards a page puts
-	// it well above the largest employer met live (86 postings); it is a backstop against a
+	// workstreamMaxPages caps the walk when the page states no totalPages: a backstop against a
 	// markup change that keeps yielding new links, not an expected limit.
 	workstreamMaxPages = 200
 )
@@ -413,9 +407,8 @@ func workstreamScripts(root *html.Node) string {
 	return b.String()
 }
 
-// workstreamEmploymentType maps a card's schedule tag onto the freehire vocabulary. Live crawls
-// rendered exactly two tags; anything else maps to "" so the description parser decides, per the
-// structured-signal-only rule.
+// workstreamEmploymentType maps a card's schedule tag onto the freehire vocabulary; anything
+// else maps to "" so the description parser decides.
 func workstreamEmploymentType(tag string) string {
 	switch tag {
 	case "Full-time":

@@ -36,8 +36,8 @@ import (
 // payload, the employer's application link; so this is a HydratingSource that buys a page only
 // for a posting the catalogue lacks.
 //
-// The adapter does NOT claim fullBoardListing or fullCatalog: the sitemap has been read as a
-// whole catalogue once, which is a snapshot, not a proven bar. See the WORK180 traps in AGENTS.md.
+// The adapter does NOT claim fullBoardListing or fullCatalog: the sitemap is a snapshot, not a
+// proven bar. See the WORK180 traps in AGENTS.md.
 type work180 struct {
 	sitemap XMLGetter  // the region's jobs sitemap (one request per board per run)
 	pages   HTMLGetter // posting pages, paced to the site's Crawl-delay
@@ -58,17 +58,16 @@ var work180Locales = map[string]string{
 }
 
 // robots.txt declares "Crawl-delay: 5" for every user agent, and the catalogue is small enough
-// (~8.6k postings across the three regions, measured 2026-10-18) to honour it literally: the
-// steady state is the day's new postings, and the first run's backlog accretes over several runs
-// under work180MaxNewPerBoard. Every posting page goes through this one limiter, across boards.
-// The three sitemap requests a run makes are not paced.
+// to honour it literally: the steady state is the day's new postings, and the first run's
+// backlog accretes over several runs under work180MaxNewPerBoard. Every posting page goes through
+// this one limiter, across boards. The three sitemap requests a run makes are not paced.
 const (
 	work180RequestInterval = 5 * time.Second
 	work180RequestBurst    = 1
 )
 
-// work180MaxNewPerBoard caps one board's hydration in one run: 120 pages a board, 360 a run, is
-// 30 minutes at the Crawl-delay pace. The newest postings go first, so a run that stops at the
+// work180MaxNewPerBoard caps one board's hydration in one run (120 pages a board, 360 a run, is
+// 30 minutes at the Crawl-delay pace). The newest postings go first, so a run that stops at the
 // cap still takes the day's new postings before the backlog.
 const work180MaxNewPerBoard = 120
 
@@ -103,10 +102,9 @@ func (s work180) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 }
 
 // FetchNewGated is FetchNew told which employers the pipeline is going to discard as already
-// crawled first-party. Such a posting is never stored, so it is never seen, so without the gate
-// every run would buy its page again — at five seconds a page, and out of a per-run cap that the
-// backlog of genuinely new postings needs. A covered posting is still yielded, body-less, so the
-// pipeline makes and counts the decision.
+// crawled first-party. Such a posting is never stored, so never seen, so without the gate every
+// run would buy its page again, out of a per-run cap the genuinely new backlog needs. A covered
+// posting is still yielded, body-less, so the pipeline makes and counts the decision.
 //
 // The sitemap states no employer NAME, only the employer's slug on WORK180, so the slug is what
 // the coverage probe is asked about and what a covered posting carries as its company — the same

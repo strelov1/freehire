@@ -38,8 +38,8 @@ func (polymer) fullBoardListing() {}
 
 const (
 	polymerAPI = "https://api.polymer.co/v1/hire/organizations/"
-	// polymerMaxPages bounds the listing walk. The largest board measured (2026-10-24, 61 live
-	// boards) holds 11 postings on a single page; the cap only stops a pager that never ends.
+	// polymerMaxPages bounds the listing walk; boards are small (one page), so the cap only
+	// stops a pager that never ends.
 	polymerMaxPages = 50
 )
 

@@ -48,7 +48,7 @@ const (
 
 	// naukriUserAgent is the Android app's HTTP stack. The edge (Akamai) answers 403 Access
 	// Denied to our own string, "recaptcha required" to a browser string, and serves the app's
-	// API to this one alone (measured 2026-10-18). robots.txt disallows nothing under /jobapi/.
+	// API to this one alone. robots.txt disallows nothing under /jobapi/.
 	naukriUserAgent = "okhttp/4.9.0"
 
 	// naukriPageSize is the most rows a search page serves (noOfResults=100 answered 100).
@@ -56,9 +56,8 @@ const (
 	// naukriMaxPages is the platform's own deepest page: page 150 answers, page 151 answers
 	// 400 "Invalid value" at any page size, so no query reaches past 15,000 rows.
 	naukriMaxPages = 150
-	// naukriJobAge is the freshness window in days (jobAge). Area 5 held 18,920 postings in
-	// 7 days and 56,950 in 30 on 2026-10-18; 7 keeps every area but 5 inside the page window
-	// and area 5's truncation to its newest 15,000.
+	// naukriJobAge is the freshness window in days (jobAge). 7 keeps every area but 5 inside the
+	// page window; area 5 is truncated to its newest 15,000.
 	naukriJobAge = 7
 	// naukriSweepGrace absorbs the window: a posting not refreshed by its employer leaves the
 	// 7-day search while it is still live, and the posting API is not a liveness probe the
@@ -67,18 +66,15 @@ const (
 	naukriSweepGrace = 14 * 24 * time.Hour
 )
 
-// The posting API served 150 requests at four concurrent (~4 req/s) through the shared proxy
-// without a refusal (2026-10-18). Half that rate leaves room for the proxy's other providers.
-// A cold start is ~23k postings across the three technical areas, so a RUN — every board
-// cmd/ingest crawls in one process — hydrates at most naukriDetailBudget (~12.5 minutes at the
-// pace above) and the backlog accretes over the next runs; steady state is a few hundred new
-// postings a run.
+// The posting API tolerated four concurrent requests (~4 req/s) through the shared proxy without
+// a refusal; half that rate leaves room for the proxy's other providers. A cold start is many
+// thousand postings across the three technical areas, so a RUN (every board cmd/ingest crawls in
+// one process) hydrates at most naukriDetailBudget and the backlog accretes over the next runs.
 //
 // One board may spend at most naukriBoardDetailShare of it, a third for the three technical
-// areas, so area 5's 15k cold backlog cannot take the whole run while 8 and 3 wait. A fourth
+// areas, so area 5's large cold backlog cannot take the whole run while 8 and 3 wait. A fourth
 // board gets only what the others leave, which during a cold start is nothing; the shares drain
-// each saturated backlog at 500 a run (area 5's in ~30 runs), after which every board's new
-// postings fit and nothing is starved for good.
+// each saturated backlog over successive runs, after which every board's new postings fit.
 const (
 	naukriRequestInterval  = 500 * time.Millisecond
 	naukriRequestBurst     = 2
@@ -92,8 +88,8 @@ const (
 var naukriAppHeaders = map[string]string{"appid": "105", "systemid": "105"}
 
 // naukriTechAreas are the functional areas that are technical by the platform's own filing,
-// so their postings set IsTechHint. classify.IsTech accepts only 80 of 300 such titles
-// ("Tcs is hiring For Swift, Objective C_Bangalore") while confirming none non-technical.
+// so their postings set IsTechHint. classify.IsTech misses many such titles ("Tcs is hiring For
+// Swift, Objective C_Bangalore").
 // Area 4 (Engineering - Hardware & Networks) mixes in hardware roles and is not listed.
 var naukriTechAreas = map[string]bool{"3": true, "5": true, "8": true}
 
@@ -171,9 +167,7 @@ func (s naukri) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 
 // FetchNewGated is FetchNew that buys no body for a posting the pipeline will discard anyway.
 // Without it the budget went to exactly those postings: a discarded posting is never stored, so
-// it stays unseen, and newest-first hydration bought the same covered postings every run —
-// measured 2026-10-25, every one of a board's 500 details a run was skipped as "company already
-// covered", and the catalogue sat at ~4k open postings for four days.
+// it stays unseen and newest-first hydration would buy the same covered postings every run.
 func (s naukri) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	if !naukriBoardRE.MatchString(e.Board) {
 		return nil, fmt.Errorf("naukri: board %q is not a functional area id", e.Board)
@@ -311,12 +305,10 @@ func (s naukri) claimDetail(board *atomic.Int64) bool {
 	return s.spent.Add(1) <= naukriDetailBudget
 }
 
-// naukriRefusalLimit is how many refusals end a run's hydration. Through the fixed proxy exit
-// the first refusal was the IP's verdict and every later request was refused too (2026-10-19);
-// through the rotating gateway each request leaves from a different exit, and a refusal is one
-// bad exit: on 2026-10-25 two of four runs met a single 406 that ended the whole run's
-// hydration, one of them after 30 seconds. Ten refusals is still nothing beside a run's budget
-// when the egress really is refused, and no longer a coin toss when it is not.
+// naukriRefusalLimit is how many refusals end a run's hydration. Through the fixed proxy exit a
+// refusal is the IP's verdict and every later request is refused too; through the rotating
+// gateway a refusal is one bad exit, so a single one must not end the run. Ten refusals is still
+// nothing beside a run's budget when the egress really is refused.
 const naukriRefusalLimit = 10
 
 // refused reports whether the run has met naukriRefusalLimit refusals.
