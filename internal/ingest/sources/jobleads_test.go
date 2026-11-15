@@ -343,36 +343,27 @@ func TestJobleadsFetchNewDefersNewPostingsPastTheBudget(t *testing.T) {
 	}
 }
 
-// TestJobleadsFetchNewHydratesAPostingOncePerRun pins the cross-board dedup: keyword windows
-// overlap, so a new posting two boards list costs one detail request, yielded by the board that
-// fetched it. The same board asked again (link resolution in a long-running process) still
-// yields it.
-func TestJobleadsFetchNewHydratesAPostingOncePerRun(t *testing.T) {
+// TestJobleadsFetchNewFetchesADetailOncePerRun pins the cross-board detail cache: keyword
+// windows overlap and the pipeline stores a row per board, so every board listing a new posting
+// yields it with the body, while only the first pays the detail request.
+func TestJobleadsFetchNewFetchesADetailOncePerRun(t *testing.T) {
 	fake := &jobleadsFake{
 		pages:   []string{jobleadsSearchPage(jobleadsP2)},
 		details: map[string]string{"e6a7e4e033a20bc1da22e2a6bc665ee03": `{"payload":{"content":{"jobSummary":"<p>x</p>"}}}`},
 	}
 	s := NewJobleads(fake).(HydratingSource)
-	unseen := func(string) bool { return false }
-	fetch := func(board string) []Job {
-		t.Helper()
-		jobs, err := s.FetchNew(context.Background(), CompanyEntry{Board: board, Region: "IT"}, unseen)
+	for _, board := range []string{"React Developer", "Frontend Developer"} {
+		jobs, err := s.FetchNew(context.Background(), CompanyEntry{Board: board, Region: "IT"},
+			func(string) bool { return false })
 		if err != nil {
 			t.Fatalf("FetchNew %s: %v", board, err)
 		}
-		return jobs
+		if len(jobs) != 1 || jobs[0].Description != "<p>x</p>" {
+			t.Errorf("%s: got %+v, want the posting with its body", board, jobs)
+		}
 	}
-	if got := fetch("React Developer"); len(got) != 1 || got[0].Description == "" {
-		t.Fatalf("first board: got %+v, want the hydrated posting", got)
-	}
-	if got := fetch("Frontend Developer"); len(got) != 0 {
-		t.Errorf("second board: got %d jobs, want 0 (the first board yielded it)", len(got))
-	}
-	if got := fetch("React Developer"); len(got) != 1 {
-		t.Errorf("same board again: got %d jobs, want 1", len(got))
-	}
-	if fake.detailCalls != 2 {
-		t.Errorf("detail calls = %d, want 2 (none for the second board)", fake.detailCalls)
+	if fake.detailCalls != 1 {
+		t.Errorf("detail calls = %d, want 1", fake.detailCalls)
 	}
 }
 

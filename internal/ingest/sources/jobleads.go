@@ -39,13 +39,12 @@ type jobleads struct {
 	// maxNewPerBoard bounds how many new postings one board hydrates per run; non-positive
 	// takes jobleadsMaxNewPerBoard.
 	maxNewPerBoard int
-	// fetchedBy maps a feed id to the board (keyword + region) that sent its detail request.
-	// The keyword windows of one country overlap heavily, so without it a new posting is
-	// fetched once per board that lists it; the claiming board yields it and other boards skip
-	// it. Only a DIFFERENT board skips: the registry also lives in long-running processes
-	// (link resolution), where the same board asked again must still yield the posting. nil
-	// (a literal jobleads{}) disables the dedup.
-	fetchedBy *sync.Map
+	// details caches a fetched description by feed id for the adapter's life (one registry
+	// build, i.e. one ingest run). The keyword windows of one country overlap heavily and the
+	// pipeline stores a row per board (ids are board-namespaced), so every board that lists a
+	// new posting still yields it, but only the first one pays the detail request. nil (a
+	// literal jobleads{}) disables the cache.
+	details *sync.Map
 }
 
 const (
@@ -72,7 +71,7 @@ const (
 )
 
 // NewJobleads builds the JobLeads adapter over the given transport.
-func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c, fetchedBy: &sync.Map{}} }
+func NewJobleads(c jobleadsHTTP) Source { return jobleads{http: c, details: &sync.Map{}} }
 
 func (jobleads) Provider() string { return "jobleads" }
 
@@ -201,17 +200,19 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			return true
 		}
+		// Another board already fetched it: free, so outside the budget.
+		if s.details != nil {
+			if d, ok := s.details.Load(p.ID); ok {
+				base.Description = d.(string)
+				jobs = append(jobs, base)
+				return true
+			}
+		}
 		// A deferred posting still counts as found, so the walk goes on to refresh the seen
 		// postings further down the window.
 		if hydrated == budget {
 			deferred++
 			return true
-		}
-		if s.fetchedBy != nil {
-			board := e.Board + "\x00" + e.Region
-			if by, dup := s.fetchedBy.LoadOrStore(p.ID, board); dup && by != board {
-				return true // another board fetched and yielded it
-			}
 		}
 		hydrated++
 		if detailID := jobleadsDetailID(p.JobLink); detailID != "" {
@@ -220,6 +221,9 @@ func (s jobleads) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 				log.Printf("jobleads: detail %s failed; ingesting list-only: %v", p.ID, err)
 			} else {
 				base.Description = d.description()
+				if s.details != nil {
+					s.details.Store(p.ID, base.Description)
+				}
 			}
 		}
 		jobs = append(jobs, base)
