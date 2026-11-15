@@ -99,28 +99,18 @@ func (q *Queries) LockActingMembership(ctx context.Context, userID int64) (strin
 }
 
 const lockCompanyAccountBySlug = `-- name: LockCompanyAccountBySlug :one
-SELECT company_slug FROM company_accounts WHERE company_slug = $1 FOR KEY SHARE
+SELECT user_id FROM company_accounts WHERE company_slug = $1 FOR KEY SHARE
 `
 
 // Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
-// waits for an in-flight vacancy write of its team. No row: the account is gone.
-func (q *Queries) LockCompanyAccountBySlug(ctx context.Context, companySlug string) (string, error) {
+// waits for an in-flight vacancy write of its team. Taken BEFORE LockActingMembership, the
+// order the account's deletion takes the two. Returns the claimant. No row: the account is
+// gone.
+func (q *Queries) LockCompanyAccountBySlug(ctx context.Context, companySlug string) (int64, error) {
 	row := q.db.QueryRow(ctx, lockCompanyAccountBySlug, companySlug)
-	var company_slug string
-	err := row.Scan(&company_slug)
-	return company_slug, err
-}
-
-const lockCompanyAccountByUser = `-- name: LockCompanyAccountByUser :one
-SELECT company_slug FROM company_accounts WHERE user_id = $1 FOR KEY SHARE
-`
-
-// LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
-func (q *Queries) LockCompanyAccountByUser(ctx context.Context, userID int64) (string, error) {
-	row := q.db.QueryRow(ctx, lockCompanyAccountByUser, userID)
-	var company_slug string
-	err := row.Scan(&company_slug)
-	return company_slug, err
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
 }
 
 const lockEmployerActor = `-- name: LockEmployerActor :exec

@@ -39,7 +39,7 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool, targetVersion int32
 // ClaimSearchOutboxBatch already skips an entry whose job has since closed or become a
 // non-canonical repost. cmd/search-drain applies the CategoryUnresolved/DescriptionMissing
 // rules on the way out, so nothing is gated here that is not gated there.
-func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID, conflictOwnedBy int64) (job.Job, job.Extras, error) {
+func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID int64, owner EmployerOwner) (job.Job, job.Extras, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
@@ -51,13 +51,13 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID, c
 	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
 	// every other write path. The mint query also folds the manual salary into the
 	// enrichment payload so it displays at once.
-	if conflictOwnedBy != 0 {
-		if err := lockActingCompany(ctx, qtx, conflictOwnedBy); err != nil {
+	if owner.UserID != 0 {
+		if err := lockActingCompany(ctx, qtx, owner); err != nil {
 			return job.Job{}, job.Extras{}, err
 		}
 	}
 	params := f.UpsertManualParams(actorID)
-	params.OwnerTeamOf = pgtype.Int8{Int64: conflictOwnedBy, Valid: conflictOwnedBy != 0}
+	params.OwnerTeamOf = pgtype.Int8{Int64: owner.UserID, Valid: owner.UserID != 0}
 	id, err := qtx.UpsertManualJob(ctx, params)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The conflict's owner guard refused the update: the row is another team's.
@@ -151,19 +151,25 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 	return job.FromRow(row)
 }
 
-// lockActingCompany holds, for the write's transaction, the rows that make userID act for a
-// company — their membership (if any) and the company account — so a concurrent removal or
-// account deletion waits for the write and then sees the posting it made. ErrNoCompany when
-// the user acts for none.
-func lockActingCompany(ctx context.Context, q *db.Queries, userID int64) error {
-	slug, err := q.LockActingMembership(ctx, userID)
-	switch {
-	case err == nil:
-		_, err = q.LockCompanyAccountBySlug(ctx, slug)
-	case errors.Is(err, pgx.ErrNoRows):
-		_, err = q.LockCompanyAccountByUser(ctx, userID)
-	}
+// lockActingCompany holds, for the write's transaction, the rows that make the author act for
+// the company the write was prepared for: the company-account row first, then their
+// membership row (absent for the claimant) — the order a company-account delete takes them
+// (the account, then the memberships it cascades to), so the two never wait on each other in
+// a cycle. A concurrent removal or account deletion then waits for the write and sees the
+// posting it made. ErrNoCompany when the account is gone or the author no longer acts for it.
+func lockActingCompany(ctx context.Context, q *db.Queries, owner EmployerOwner) error {
+	claimant, err := q.LockCompanyAccountBySlug(ctx, owner.CompanySlug)
 	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoCompany
+	}
+	if err != nil {
+		return err
+	}
+	if claimant == owner.UserID {
+		return nil
+	}
+	slug, err := q.LockActingMembership(ctx, owner.UserID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && slug != owner.CompanySlug) {
 		return ErrNoCompany
 	}
 	return err

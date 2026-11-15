@@ -135,9 +135,9 @@ func (m *fakeMinter) Create(ctx context.Context, actorID int64, in moderation.Cr
 		externalID = in.ExternalID
 	}
 	// The real upsert's owner guard: an existing row of another team is not updated.
-	if m.repo != nil && in.ConflictOwnedBy != 0 {
+	if m.repo != nil && in.Employer.UserID != 0 {
 		if owner, ok := m.repo.byExternalID[externalID]; ok {
-			if ours, _ := m.repo.Teammates(ctx, in.ConflictOwnedBy, owner); !ours {
+			if ours, _ := m.repo.Teammates(ctx, in.Employer.UserID, owner); !ours {
 				return job.Job{}, job.Extras{}, moderation.ErrOwnedElsewhere
 			}
 		}
@@ -261,7 +261,7 @@ func TestCreateVacancy_RefusesAColludingURLFromADifferentEmployer(t *testing.T) 
 	if got := jobs.byExternalID["https://shared.example/jobs/1"]; got != 1 {
 		t.Errorf("the colliding URL's row now belongs to %d; another employer's write must change nothing", got)
 	}
-	if len(minterB.calls) != 1 || minterB.calls[0].ConflictOwnedBy != 2 {
+	if len(minterB.calls) != 1 || minterB.calls[0].Employer.UserID != 2 {
 		t.Errorf("mint calls = %+v; want one, carrying the caller as the conflict's owner guard", minterB.calls)
 	}
 }

@@ -43,9 +43,7 @@ SELECT company_slug FROM company_account_members WHERE user_id = sqlc.arg(user_i
 
 -- name: LockCompanyAccountBySlug :one
 -- Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
--- waits for an in-flight vacancy write of its team. No row: the account is gone.
-SELECT company_slug FROM company_accounts WHERE company_slug = sqlc.arg(company_slug) FOR KEY SHARE;
-
--- name: LockCompanyAccountByUser :one
--- LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
-SELECT company_slug FROM company_accounts WHERE user_id = sqlc.arg(user_id) FOR KEY SHARE;
+-- waits for an in-flight vacancy write of its team. Taken BEFORE LockActingMembership, the
+-- order the account's deletion takes the two. Returns the claimant. No row: the account is
+-- gone.
+SELECT user_id FROM company_accounts WHERE company_slug = sqlc.arg(company_slug) FOR KEY SHARE;

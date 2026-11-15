@@ -163,23 +163,17 @@ func TestTeam_AnInFlightVacancyWriteIsDetachedWithTheAccount(t *testing.T) {
 	ctx := context.Background()
 	member := f.member(t, "dev.personal@example.test", "dev@acme.test")
 
+	// The write takes the account row first, as moderation's lockActingCompany does; the
+	// deletion then starts BETWEEN the write's two locks — the interleaving that would
+	// deadlock if the write took the membership first.
 	tx, err := f.pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := db.New(tx)
-	slug, err := q.LockActingMembership(ctx, member)
-	if err != nil {
-		t.Fatalf("LockActingMembership: %v", err)
-	}
-	if _, err := q.LockCompanyAccountBySlug(ctx, slug); err != nil {
+	if _, err := q.LockCompanyAccountBySlug(ctx, "acme"); err != nil {
 		t.Fatalf("LockCompanyAccountBySlug: %v", err)
-	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug, created_by)
-		VALUES ('employer', 'freehire:inflight', '', 'Platform Engineer', 'Acme', 'acme', 'inflight', $1)`, member); err != nil {
-		t.Fatalf("insert in flight: %v", err)
 	}
 
 	deleted := make(chan error, 1)
@@ -189,8 +183,16 @@ func TestTeam_AnInFlightVacancyWriteIsDetachedWithTheAccount(t *testing.T) {
 	}()
 	select {
 	case err := <-deleted:
-		t.Fatalf("the account was deleted while a vacancy write held its rows (err %v)", err)
+		t.Fatalf("the account was deleted while a vacancy write held its row (err %v)", err)
 	case <-time.After(300 * time.Millisecond):
+	}
+	if slug, err := q.LockActingMembership(ctx, member); err != nil || slug != "acme" {
+		t.Fatalf("LockActingMembership with the deletion waiting = %q, %v", slug, err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug, created_by)
+		VALUES ('employer', 'freehire:inflight', '', 'Platform Engineer', 'Acme', 'acme', 'inflight', $1)`, member); err != nil {
+		t.Fatalf("insert in flight: %v", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatalf("commit: %v", err)
@@ -216,7 +218,28 @@ func TestTeam_AWriteByAUserWhoActsForNoCompanyIsRefused(t *testing.T) {
 	mod := moderation.New(moderation.NewQueriesRepository(db.New(f.pool), f.pool, enrich.Version))
 	_, _, err := mod.Create(ctx, nobody, moderation.CreateInput{
 		URL: "https://acme.test/jobs/9", Source: "employer", Title: "Go Engineer", Company: "Acme",
-		Description: "Build things.", ConflictOwnedBy: nobody,
+		Description: "Build things.", Employer: moderation.EmployerOwner{UserID: nobody, CompanySlug: "acme"},
+	})
+	if !errors.Is(err, moderation.ErrNoCompany) {
+		t.Errorf("err = %v, want ErrNoCompany", err)
+	}
+}
+
+func TestTeam_AWriteForACompanyTheAuthorLeftIsRefused(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	member := f.member(t, "dev.personal@example.test", "dev@acme.test")
+	mod := moderation.New(moderation.NewQueriesRepository(db.New(f.pool), f.pool, enrich.Version))
+	// Prepared for acme, but by the time it runs the author acts for globex.
+	if _, err := f.pool.Exec(ctx, `DELETE FROM company_account_members WHERE user_id = $1`, member); err != nil {
+		t.Fatalf("leave acme: %v", err)
+	}
+	if _, err := f.repo.InsertPending(ctx, member, "globex", "Globex", "dev@globex.test"); err != nil {
+		t.Fatalf("claim globex: %v", err)
+	}
+	_, _, err := mod.Create(ctx, member, moderation.CreateInput{
+		URL: "https://acme.test/jobs/10", Source: "employer", Title: "Go Engineer", Company: "Acme",
+		Description: "Build things.", Employer: moderation.EmployerOwner{UserID: member, CompanySlug: "acme"},
 	})
 	if !errors.Is(err, moderation.ErrNoCompany) {
 		t.Errorf("err = %v, want ErrNoCompany", err)

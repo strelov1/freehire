@@ -183,7 +183,7 @@ func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, [
 // employer-job-authoring's "re-creating reopens" requirement — UpsertManualJob's own
 // ON CONFLICT clears closed_at, so no separate reopen path is needed). A URL already owned
 // by a DIFFERENT company is refused as ErrURLTaken, never overwritten: the mint sets
-// moderation.CreateInput.ConflictOwnedBy, so the ownership check is made inside the upsert
+// moderation.CreateInput.Employer, so the ownership check is made inside the upsert
 // itself (its conflict updates only a row of the caller's team). No pre-check races it, and
 // no change of team membership between a check and the write can cross companies.
 func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInput) (job.Job, job.Extras, error) {
@@ -257,16 +257,16 @@ func (s *Service) createOnSite(ctx context.Context, userID int64, acc Account, i
 func (in VacancyInput) createInput(actorID int64, acc Account, url, externalID string) moderation.CreateInput {
 	return moderation.CreateInput{
 		// The upsert may update an existing row only if this account's team created it.
-		ConflictOwnedBy: actorID,
-		URL:             url,
-		ExternalID:      externalID,
-		Source:          jobSource,
-		Title:           in.Title,
-		Company:         acc.CompanyName,
-		Location:        in.Location,
-		Remote:          in.Remote,
-		Description:     in.Description,
-		PostedAt:        in.PostedAt,
+		Employer:    moderation.EmployerOwner{UserID: actorID, CompanySlug: acc.CompanySlug},
+		URL:         url,
+		ExternalID:  externalID,
+		Source:      jobSource,
+		Title:       in.Title,
+		Company:     acc.CompanyName,
+		Location:    in.Location,
+		Remote:      in.Remote,
+		Description: in.Description,
+		PostedAt:    in.PostedAt,
 
 		Skills:         in.Skills,
 		Regions:        in.Regions,

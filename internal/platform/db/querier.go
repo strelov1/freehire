@@ -5808,10 +5808,10 @@ type Querier interface {
 	// LATER statement to see a leave or block that committed while this one waited.
 	LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error
 	// Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
-	// waits for an in-flight vacancy write of its team. No row: the account is gone.
-	LockCompanyAccountBySlug(ctx context.Context, companySlug string) (string, error)
-	// LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
-	LockCompanyAccountByUser(ctx context.Context, userID int64) (string, error)
+	// waits for an in-flight vacancy write of its team. Taken BEFORE LockActingMembership, the
+	// order the account's deletion takes the two. Returns the claimant. No row: the account is
+	// gone.
+	LockCompanyAccountBySlug(ctx context.Context, companySlug string) (int64, error)
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go

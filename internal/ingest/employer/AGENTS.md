@@ -54,8 +54,8 @@ for the full design record.
   protects a URL two employers could both name, and a UUID is one nobody else can.
 - **`CreateVacancy` guards a real gap in `UpsertManualJob`, inside the upsert itself.** Its
   `ON CONFLICT` would otherwise let employer B take over employer A's vacancy by resubmitting
-  the same URL under `source='employer'`. The mint sets `moderation.CreateInput.ConflictOwnedBy`
-  to the caller, and the conflict then updates only a row created by the caller's company
+  the same URL under `source='employer'`. The mint sets `moderation.CreateInput.Employer`
+  (the caller and their company), and the conflict then updates only a row created by the caller's company
   team (`owner_team_of`, employer_team); for another company's row nothing is written and
   `moderation.ErrOwnedElsewhere` comes back, mapped to `ErrURLTaken`. A pre-check could not do
   this: two employers racing, or a member changing team between check and write, slipped
@@ -149,12 +149,14 @@ for the full design record.
   `jobs.created_by` is ON DELETE SET NULL and that action fires before the member row's own
   cascade. Account deletion lives in `identity`, which cannot import this block, so the rule
   lives in the database.
-- **An employer vacancy write holds its author's team rows.** With `ConflictOwnedBy` set,
-  moderation's `Create` takes the author's membership row and company-account row
-  `FOR KEY SHARE` in its transaction (`LockActingMembership`, `LockCompanyAccountBy*`). A
-  removal or account deletion running meanwhile waits for the write to commit, then hands
-  over or detaches the new vacancy too — its snapshot can no longer miss it. A user who acts
-  for no company by then is refused (`moderation.ErrNoCompany` → `ErrNotActive`).
+- **An employer vacancy write holds its author's team rows.** With `CreateInput.Employer`
+  set, moderation's `Create` takes the company-account row, then the author's membership
+  row, `FOR KEY SHARE` in its transaction (`LockCompanyAccountBySlug`, `LockActingMembership`)
+  — the order an account deletion takes them, so the two never deadlock. A removal or account
+  deletion running meanwhile waits for the write to commit, then hands over or detaches the
+  new vacancy too. An author who no longer acts for the company the write was prepared for
+  (removed, the account gone, or moved to another company) is refused
+  (`moderation.ErrNoCompany` → `ErrNotActive`).
 - **Known limit:** a CLAIMANT deleting their freehire account deletes the company account,
   and its team and invitations cascade with it; its vacancies stop taking applications, as
   before teams existed. The members' vacancies are detached first (`created_by` NULL, the
