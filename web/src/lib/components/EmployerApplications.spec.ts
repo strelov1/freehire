@@ -95,7 +95,7 @@ describe('EmployerApplications', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Move' }));
 
     expect(moveEmployerApplication).toHaveBeenCalledWith(1, 'rejected', 'Thanks for your time.');
-    expect(await screen.findByText('Moved. The candidate was emailed.')).toBeTruthy();
+    expect(await screen.findByText('c@example.test: Moved. The candidate was emailed.')).toBeTruthy();
     const stages = screen.getByRole('group', { name: 'Stage' });
     expect(within(stages).getByRole('button', { name: /Rejected\s*1/ })).toBeTruthy();
   });
@@ -107,5 +107,48 @@ describe('EmployerApplications', () => {
     await fireEvent.click(await screen.findByRole('button', { name: /c@example\.test/ }));
     expect(screen.getByText('This CV reached you by email only.')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Open CV/ })).toBeNull();
+  });
+
+  it('keeps the outcome visible when the moved application leaves the filtered list', async () => {
+    listEmployerApplications
+      .mockResolvedValueOnce(page([application()], { new: 1 }))
+      .mockResolvedValueOnce(page([application()], { new: 1 }))
+      .mockResolvedValue(page([], { rejected: 1 }));
+    moveEmployerApplication.mockResolvedValue({
+      application: application({ stage: 'rejected' }),
+      candidate_notified: false,
+    });
+    render(EmployerApplications);
+
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Stage' })).getByRole('button', { name: /New/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: /c@example\.test/ }));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Stage' }), { target: { value: 'rejected' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toMatch(/c@example\.test: Moved, but the email to the candidate failed/);
+  });
+
+  it('leaves the draft in another open application alone when an earlier move completes', async () => {
+    let resolveMove!: (v: unknown) => void;
+    listEmployerApplications.mockResolvedValue(
+      page([application(), application({ id: 2, candidate_email: 'd@example.test' })], { new: 2 }),
+    );
+    moveEmployerApplication.mockImplementation(() => new Promise((r) => (resolveMove = r)));
+    render(EmployerApplications);
+
+    await fireEvent.click(await screen.findByRole('button', { name: /c@example\.test/ }));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Stage' }), { target: { value: 'rejected' } });
+    await fireEvent.input(screen.getByLabelText(/Message to the candidate/), { target: { value: 'For A' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+
+    // Open B and start a message while A's move is still in flight.
+    await fireEvent.click(screen.getByRole('button', { name: /d@example\.test/ }));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Stage' }), { target: { value: 'rejected' } });
+    await fireEvent.input(screen.getByLabelText(/Message to the candidate/), { target: { value: 'For B' } });
+
+    resolveMove({ application: application({ stage: 'rejected' }), candidate_notified: true });
+    expect(await screen.findByText(/c@example\.test: Moved/)).toBeTruthy();
+    expect((screen.getByLabelText(/Message to the candidate/) as HTMLTextAreaElement).value).toBe('For B');
   });
 });

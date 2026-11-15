@@ -3,7 +3,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     intro:
-      'Applications sent on freehire to your vacancies. Every stage but New shows in the candidate’s own tracking; Interview, Offer and Rejected also email them, with your message if you write one.',
+      'Applications sent on freehire to your vacancies. Every stage shows in the candidate’s own tracking (New as Applied); Interview, Offer and Rejected also email them, with your message if you write one.',
     loadError: "Couldn't load applications.",
     empty:
       'No applications yet. They arrive here, and by email, when candidates apply on a vacancy that takes applications on freehire.',
@@ -25,13 +25,14 @@ export const messages = defineMessages(
     messageHint: 'Sent with the email. Replies come to your work email.',
     emailsCandidate: 'The candidate is emailed about this stage.',
     tracksOnly: 'The candidate sees this stage in their tracking; no email is sent.',
-    newOnly: 'Back to New: the candidate’s tracking is left as it is.',
+    newOnly: 'Back to New: if you had moved the candidate on, their tracking returns to Applied. No email is sent.',
     save: 'Move',
     saving: 'Moving…',
     moveError: 'Could not move the application. Please try again.',
     movedNotified: 'Moved. The candidate was emailed.',
     movedMailFailed: 'Moved, but the email to the candidate failed. Reply to their application email instead.',
     moved: 'Moved.',
+    movedOutcome: '{email}: {outcome}',
     stages: {
       new: 'New',
       reviewing: 'Reviewing',
@@ -44,7 +45,7 @@ export const messages = defineMessages(
   {
     ru: {
       intro:
-        'Отклики, отправленные на freehire на ваши вакансии. Кандидат видит в своём трекинге каждую стадию, кроме «Новый»; при переводе в «Интервью», «Оффер» и «Отказ» ему также уходит письмо — с вашим сообщением, если вы его напишете.',
+        'Отклики, отправленные на freehire на ваши вакансии. Кандидат видит в своём трекинге каждую стадию («Новый» — как «Откликнулся»); при переводе в «Интервью», «Оффер» и «Отказ» ему также уходит письмо — с вашим сообщением, если вы его напишете.',
       loadError: 'Не удалось загрузить отклики.',
       empty:
         'Откликов пока нет. Они появляются здесь и приходят на почту, когда кандидаты откликаются на вакансию с откликом на freehire.',
@@ -66,13 +67,15 @@ export const messages = defineMessages(
       messageHint: 'Уйдёт вместе с письмом. Ответ придёт на вашу рабочую почту.',
       emailsCandidate: 'Кандидату уйдёт письмо об этой стадии.',
       tracksOnly: 'Кандидат увидит стадию в своём трекинге; письмо не отправляется.',
-      newOnly: 'Возврат в «Новый»: трекинг кандидата не меняется.',
+      newOnly:
+        'Возврат в «Новый»: если вы уже двигали кандидата, его трекинг вернётся к «Откликнулся». Письмо не отправляется.',
       save: 'Перевести',
       saving: 'Переводим…',
       moveError: 'Не удалось перевести отклик. Попробуйте ещё раз.',
       movedNotified: 'Готово. Кандидату отправлено письмо.',
       movedMailFailed: 'Стадия сохранена, но письмо кандидату не ушло. Ответьте на письмо с его откликом.',
       moved: 'Готово.',
+      movedOutcome: '{email}: {outcome}',
       stages: {
         new: 'Новый',
         reviewing: 'Рассматривается',

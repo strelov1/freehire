@@ -36,13 +36,15 @@
   let stage = $state<EmployerApplicationStage | ''>('');
   let counts = $state<Record<string, number>>({});
 
-  // The shared Paginator owns the list, its paging and its load states; the fetch reads the
-  // live filters at call time, so a filter change just restarts it from the first page. Each
-  // page also carries the stage counts under the vacancy filter.
+  // The shared Paginator owns the list, its paging and its load states (and drops a response
+  // a newer filter superseded); the fetch reads the live filters at call time, so a filter
+  // change just restarts it from the first page. Each page also carries the stage counts
+  // under the vacancy filter, applied only while that filter is still the one shown.
   const pager = new Paginator<EmployerApplication>(
     async (limit, offset) => {
-      const page = await api.listEmployerApplications({ job, stage: stage || undefined, limit, offset });
-      counts = page.stageCounts;
+      const filter = { job, stage: stage || undefined };
+      const page = await api.listEmployerApplications({ ...filter, limit, offset });
+      if (filter.job === job && (filter.stage ?? '') === stage) counts = page.stageCounts;
       return page;
     },
     { limit: PAGE, keyOf: (a) => a.id },
@@ -62,8 +64,11 @@
   let target = $state<EmployerApplicationStage>('new');
   let message = $state('');
   let moving = $state(false);
-  let moveNote = $state<string | null>(null);
-  let moveError = $state<string | null>(null);
+  // The last move's outcome, shown above the list rather than inside the row: a row moved
+  // out of the stage filter disappears, and the outcome (above all "the email failed") must
+  // not disappear with it. It names the candidate, since another application may be open by
+  // the time it arrives.
+  let outcome = $state<{ text: string; tone: 'ok' | 'error' } | null>(null);
 
   function toggle(a: EmployerApplication) {
     if (openId === a.id) {
@@ -73,15 +78,13 @@
     openId = a.id;
     target = a.stage;
     message = '';
-    moveNote = null;
-    moveError = null;
   }
 
   async function move(a: EmployerApplication) {
     if (moving || target === a.stage) return;
     moving = true;
-    moveNote = null;
-    moveError = null;
+    outcome = null;
+    const sent = { job, stage };
     try {
       const moved = await api.moveEmployerApplication(
         a.id,
@@ -89,22 +92,32 @@
         NOTIFIES.has(target) ? message.trim() || undefined : undefined,
       );
       const next = moved.application;
-      // The counts move with it; the row leaves a list filtered to the stage it left.
-      counts = {
-        ...counts,
-        [a.stage]: Math.max(0, (counts[a.stage] ?? 0) - 1),
-        [next.stage]: (counts[next.stage] ?? 0) + 1,
+      const filtersUnchanged = sent.job === job && sent.stage === stage;
+      if (filtersUnchanged && stage && next.stage !== stage) {
+        // It left the list shown: reload it, so the counts are fresh and the next page's
+        // offset still lines up (a hole in the loaded window would skip an applicant).
+        void pager.start();
+      } else if (filtersUnchanged) {
+        counts = {
+          ...counts,
+          [a.stage]: Math.max(0, (counts[a.stage] ?? 0) - 1),
+          [next.stage]: (counts[next.stage] ?? 0) + 1,
+        };
+        pager.items = pager.items.map((x) => (x.id === a.id ? next : x));
+      }
+      // Only the form this move came from is reset; another application opened meanwhile keeps
+      // what was typed into it.
+      if (openId === a.id) message = '';
+      const text = !NOTIFIES.has(next.stage) ? s.moved : moved.candidate_notified ? s.movedNotified : s.movedMailFailed;
+      outcome = {
+        text: format(s.movedOutcome, { email: a.candidate_email, outcome: text }),
+        tone: NOTIFIES.has(next.stage) && !moved.candidate_notified ? 'error' : 'ok',
       };
-      pager.items =
-        stage && next.stage !== stage
-          ? pager.items.filter((x) => x.id !== a.id)
-          : pager.items.map((x) => (x.id === a.id ? next : x));
-      message = '';
-      moveNote = !NOTIFIES.has(next.stage) ? s.moved : moved.candidate_notified ? s.movedNotified : s.movedMailFailed;
-      announce(moveNote);
+      announce(outcome.text);
     } catch (err) {
-      moveError = err instanceof ApiError ? err.message : s.moveError;
-      announce(moveError, 'assertive');
+      const text = err instanceof ApiError ? err.message : s.moveError;
+      outcome = { text: format(s.movedOutcome, { email: a.candidate_email, outcome: text }), tone: 'error' };
+      announce(outcome.text, 'assertive');
     } finally {
       moving = false;
     }
@@ -148,6 +161,12 @@
       </label>
     {/if}
   </div>
+
+  {#if outcome}
+    <p role="status" class={outcome.tone === 'error' ? 'text-sm text-destructive' : 'text-sm text-brand-strong'}>
+      {outcome.text}
+    </p>
+  {/if}
 
   {#if pager.status === 'loading'}
     <States state="loading" rows={3} />
@@ -257,11 +276,6 @@
                     ></textarea>
                     <span class="text-xs text-muted-foreground">{s.messageHint}</span>
                   </label>
-                {/if}
-                {#if moveError}
-                  <p class="text-sm text-destructive">{moveError}</p>
-                {:else if moveNote}
-                  <p class="text-sm text-brand-strong">{moveNote}</p>
                 {/if}
                 <Button type="submit" size="sm" class="w-fit" disabled={moving || target === a.stage}>
                   {moving ? s.saving : s.save}
