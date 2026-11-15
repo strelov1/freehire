@@ -16,7 +16,7 @@
 
   $effect(() => {
     const owner = userID;
-    refresh;
+    void refresh;
     attempts = [];
     status = 'loading';
     if (!owner) return;
