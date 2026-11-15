@@ -88,6 +88,7 @@ logs: ## Tail application logs
 	$(COMPOSE) logs -f app
 
 migrate: ## Apply pending migrations to DATABASE_URL (use mise for this checkout's DB)
+	@sh scripts/check-migration-history.sh
 	go run ./cmd/migrate
 
 psql: ## Open psql at DATABASE_URL (use mise for this checkout's DB)

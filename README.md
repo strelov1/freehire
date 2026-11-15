@@ -133,9 +133,10 @@ curl localhost:8080/api/v1/jobs
 
 Migrations are applied automatically on first Postgres volume init
 (the `migrations/` folder is mounted into `/docker-entrypoint-initdb.d`).
-Changing a migration does not re-apply to an existing volume — recreate it with
-`docker compose down -v && make up`, or apply pending files manually with
-`make migrate` with `DATABASE_URL` set to that database.
+Changing a migration does not re-apply to an existing volume. `make migrate`
+upgrades databases with recorded migration history. For older initdb volumes
+without that history, follow the transition below before upgrading. Recreating
+the volume with `docker compose down -v && make up` deletes its data.
 
 If port 8080 is already taken, pick another host port:
 
@@ -159,6 +160,25 @@ Compose uses the shared `hire` project: `make up` starts the full stack and
 work, use `mise run db:up`, then `mise exec -- make run`, `mise exec -- make psql`
 or `mise exec -- make migrate`. These commands share the checkout environment
 from `scripts/dev-env.sh`; migrations already recorded are skipped.
+
+For an older Compose database without migration history, `make migrate` refuses
+to run: the migration runner would otherwise mark every current file as applied,
+including pending changes. First identify the Git commit whose migration files
+were last applied to that database. With `DATABASE_URL` targeting that database,
+baseline only that known set, then apply the current files:
+
+```bash
+applied_commit=<commit-whose-migrations-are-already-applied>
+baseline_dir=$(mktemp -d)
+git archive "$applied_commit" migrations | tar -x -C "$baseline_dir"
+go run ./cmd/migrate -baseline -dir "$baseline_dir/migrations"
+rm -rf "$baseline_dir"
+make migrate
+```
+
+Do not guess the applied commit or baseline the current directory. If the
+applied set is unknown, recover it from the database's setup records or recreate
+a disposable development database after preserving any data you need.
 
 ## Commands
 
