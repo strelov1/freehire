@@ -10,29 +10,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// StateCookieName carries the CSRF state between the start redirect and the
-// provider callback. Most providers' callback is a top-level GET navigation,
-// where Lax cookies are sent; Apple's is a cross-site POST, which needs
-// SameSite=None instead — see writeCookie.
+// StateCookieName carries the CSRF state from the start redirect to the provider callback.
 const StateCookieName = "hire_oauth_state"
 
-// ReturnCookieName remembers where to send the browser after a successful
-// sign-in, so signing in from a deep page returns there instead of the home
-// page. It rides the same short-lived round-trip as the state cookie.
+// ReturnCookieName remembers where to send the browser after sign-in.
 const ReturnCookieName = "hire_oauth_return"
 
-// PlatformCookieName remembers that a sign-in was started by the mobile app
-// (`?platform=mobile`), so the callback finishes with a custom-scheme deep link
-// carrying a one-time code instead of setting the session cookie and redirecting
-// to the web frontend. Rides the same short-lived round-trip.
+// PlatformCookieName remembers a sign-in started by the mobile app (`?platform=mobile`),
+// so the callback ends with a deep link carrying a one-time code instead of a cookie.
 const PlatformCookieName = "hire_oauth_platform"
 
-// PlatformMobile is the only recognized platform value; anything else means the
-// default web flow.
+// PlatformMobile is the only recognized platform value; anything else is the web flow.
 const PlatformMobile = "mobile"
 
-// stateTTL bounds how long a started sign-in stays completable. Ten minutes
-// covers a slow consent screen without leaving stale states around.
+// stateTTL bounds how long a started sign-in stays completable.
 const stateTTL = 10 * time.Minute
 
 // NewState returns a fresh URL-safe random state value.
@@ -54,15 +45,13 @@ func ClearStateCookie(c *fiber.Ctx, secure bool) {
 	ClearStateCookieNamed(c, StateCookieName, secure)
 }
 
-// SetStateCookieNamed is SetStateCookie under a caller-chosen cookie name, for
-// OAuth round-trips that must not clobber the sign-in state cookie (e.g. the
-// Gmail connect flow, which a signed-in user can start mid-sign-in of another
-// tab — one shared cookie name would overwrite the other flow's state).
+// SetStateCookieNamed is SetStateCookie under a caller-chosen name, for flows that must
+// not clobber the sign-in state cookie (e.g. Gmail connect in another tab).
 func SetStateCookieNamed(c *fiber.Ctx, name, state string, secure bool) {
 	writeCookie(c, name, state, time.Now().Add(stateTTL), secure)
 }
 
-// ClearStateCookieNamed removes a named state cookie (single-use, like the state).
+// ClearStateCookieNamed removes a named state cookie.
 func ClearStateCookieNamed(c *fiber.Ctx, name string, secure bool) {
 	writeCookie(c, name, "", time.Now().Add(-time.Hour), secure)
 }
@@ -72,7 +61,7 @@ func SetReturnCookie(c *fiber.Ctx, path string, secure bool) {
 	writeCookie(c, ReturnCookieName, path, time.Now().Add(stateTTL), secure)
 }
 
-// ClearReturnCookie removes the return cookie (single-use, like the state).
+// ClearReturnCookie removes the return cookie.
 func ClearReturnCookie(c *fiber.Ctx, secure bool) {
 	writeCookie(c, ReturnCookieName, "", time.Now().Add(-time.Hour), secure)
 }
@@ -82,24 +71,17 @@ func SetPlatformCookie(c *fiber.Ctx, platform string, secure bool) {
 	writeCookie(c, PlatformCookieName, platform, time.Now().Add(stateTTL), secure)
 }
 
-// ClearPlatformCookie removes the platform cookie (single-use, like the state).
+// ClearPlatformCookie removes the platform cookie.
 func ClearPlatformCookie(c *fiber.Ctx, secure bool) {
 	writeCookie(c, PlatformCookieName, "", time.Now().Add(-time.Hour), secure)
 }
 
-// writeCookie is the single place these short-lived sign-in cookies get their
-// attributes, so set and clear can't drift apart (same pattern as the session
-// cookie).
+// writeCookie is the one place these sign-in cookies get their attributes, so set and
+// clear match.
 //
-// SameSite is None (not Lax) when secure, because Apple's callback arrives as
-// a cross-site POST (response_mode=form_post) — browsers only attach a Lax
-// cookie to a cross-site *top-level GET* navigation, never to a cross-site
-// POST, so a Lax state cookie never reaches the server on Apple's callback
-// and every Apple sign-in fails with a false "state mismatch". None is
-// rejected by browsers unless Secure is set, so an insecure (http, dev-only)
-// deployment keeps Lax instead of silently losing the cookie altogether;
-// Google/GitHub/LinkedIn's GET callbacks are unaffected either way, since Lax
-// already covers cross-site top-level GETs and None is a strict superset.
+// SameSite is None when secure: Apple's callback is a cross-site POST (form_post), which
+// never carries a Lax cookie and would fail with a false "state mismatch". Browsers
+// reject None without Secure, so insecure dev keeps Lax.
 func writeCookie(c *fiber.Ctx, name, value string, expires time.Time, secure bool) {
 	sameSite := fiber.CookieSameSiteLaxMode
 	if secure {
@@ -116,11 +98,9 @@ func writeCookie(c *fiber.Ctx, name, value string, expires time.Time, secure boo
 	})
 }
 
-// SafeReturnPath validates a post-login return target the SPA supplies. It
-// accepts only same-origin relative paths so the open redirect can't bounce a
-// user to an attacker's site; anything else (absolute URL, scheme-relative
-// "//host", non-rooted, or unparseable) collapses to "/". The query is kept;
-// scheme and host are never echoed back.
+// SafeReturnPath validates a post-login return target. Only same-origin relative paths
+// pass, preventing an open redirect; anything else (absolute, "//host", non-rooted,
+// unparseable) collapses to "/". The query is kept.
 func SafeReturnPath(raw string) string {
 	const fallback = "/"
 	if raw == "" {

@@ -10,12 +10,8 @@ import (
 	"time"
 )
 
-// PublicPrice is one thing a visitor may buy, as a pricing page needs it.
-//
-// The money is read from the PROVIDER, never from our configuration. A price written into
-// an environment variable beside its id is a second source of truth about what something
-// costs, and the two disagree the first time one is changed — on the page a customer can
-// hold us to.
+// PublicPrice is one thing a visitor may buy, as a pricing page needs it. The money is read
+// from the provider, never from our configuration, to keep one source of truth.
 type PublicPrice struct {
 	ID string `json:"id"`
 	// AmountCents is the smallest currency unit, as the provider stores it. The page
@@ -26,60 +22,41 @@ type PublicPrice struct {
 	Interval string `json:"interval"`
 	// Default marks the price a new subscriber is sold unless they choose otherwise.
 	Default bool `json:"default"`
-	// Tier is which plan this price buys — "pro" or "ultra", or "api"/"api_data" for the
-	// API product (see APITier). It is derived from which
-	// configured list the id appears in, which is the same thing that decides what a
-	// subscription confers, so a page can never offer a price under the wrong heading.
-	//
-	// A string rather than plan.Tier because this package does not import internal/ai/plan
-	// and must not start: plan reads users.pro_until through platform/db and the two never
-	// meet. The vocabulary is shared through the wire, where it already was.
+	// Tier is which plan this price buys: "pro", "ultra", or "api"/"api_data" (see APITier).
+	// It comes from the configured list the id appears in, the same thing that decides what a
+	// subscription confers. A string, not plan.Tier, because this package must not import
+	// internal/ai/plan.
 	Tier string `json:"tier"`
 }
 
-// Price tier names as they travel on the wire. They match internal/ai/plan's own spellings
-// deliberately — a page reading both would otherwise need a translation table.
+// Price tier names as they travel on the wire; they match internal/ai/plan's spellings.
 const (
 	tierPro   = "pro"
 	tierUltra = "ultra"
 )
 
-// priceCacheTTL bounds how stale a displayed price may be.
-//
-// The endpoint is public and unauthenticated, so without a cache a crawler would turn every
-// page view into a provider call. Five minutes is short enough that a deliberate price
-// change appears within one coffee break, and long enough that the page costs nothing.
+// priceCacheTTL bounds how stale a displayed price may be. The endpoint is public, so
+// without a cache a crawler would turn every page view into a provider call.
 const priceCacheTTL = 5 * time.Minute
 
-// priceRetryAfter is how long a FAILED read is honoured for.
-//
-// A failure has to expire the cache too, or an unreachable provider turns every request
-// into another attempt at it — which is the load pattern this cache exists to prevent,
-// arriving exactly when the provider can least take it, and spending the rate limit that
-// the webhook's own reads need. Shorter than the TTL because a page with no price recovers
-// on its own rather than waiting out a full cycle.
+// priceRetryAfter is how long a failed read is honoured, so an unreachable provider is not
+// retried per request (and the webhook's rate limit is not spent). Shorter than the TTL so a
+// page with no price recovers sooner.
 const priceRetryAfter = 30 * time.Second
 
-// priceCache holds the last answer and decides who goes and gets the next one.
-//
-// The lock covers the FIELDS and never a provider call. Holding it across the network would
-// serialise every visitor behind one request to a third party — on a public page, in front
-// of crawler traffic — which is a self-inflicted outage rather than a cache.
+// priceCache holds the last answer and decides who fetches the next one. The lock covers
+// the fields, never a provider call, or every visitor would serialise behind it.
 type priceCache struct {
 	mu sync.Mutex
-	// until is when the held answer stops being served. Set on success and on failure
-	// alike, so a provider outage backs off instead of retrying per request.
+	// until is when the held answer stops being served. Set on failure too, so an outage
+	// backs off.
 	until    time.Time
 	entries  []PublicPrice
 	fetching bool
 }
 
-// claim reports whether this caller is the one that should refresh, and hands back what is
-// currently held either way.
-//
-// At most one refresh is in flight. The others are not queued behind it — they are served
-// the previous answer immediately, because a pricing page that renders a five-minute-old
-// price now is better than one that renders the current price after a provider timeout.
+// claim reports whether this caller should refresh, and returns what is held either way.
+// At most one refresh is in flight; the others get the previous answer immediately.
 func (p *priceCache) claim() (entries []PublicPrice, mine bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -103,15 +80,10 @@ func (p *priceCache) publish(entries []PublicPrice, err error) []PublicPrice {
 	return entries
 }
 
-// PublicPrices lists what may be bought, cheapest interval first as configured.
-//
-// A provider that cannot be reached returns the last good answer if there is one, and an
-// empty list otherwise. An empty list is the honest failure: the page then shows the plan
-// comparison without a price, rather than a price that might be wrong.
+// PublicPrices lists what may be bought, in configured order. An unreachable provider yields
+// the last good answer, else an empty list, so the page shows no price rather than a wrong one.
 func (s *Service) PublicPrices(ctx context.Context) []PublicPrice {
-	// Asked of the configuration directly rather than through the engine. This surface is
-	// Stripe's alone — there is no store equivalent of a price list we can quote — so routing
-	// the question through the provider seam would only add a hop to reach the same answer.
+	// Stripe only: there is no store price list, so this skips the provider seam.
 	if !s.cfg.Enabled() {
 		return nil
 	}
@@ -120,18 +92,14 @@ func (s *Service) PublicPrices(ctx context.Context) []PublicPrice {
 	if !mine {
 		return held
 	}
-	// The claim is released by publish on every path, including the error one — a refresh
-	// that returned without clearing the flag would leave the cache frozen on its last
-	// answer for the life of the process.
+	// publish clears the claim on every path, or the cache would freeze on its last answer.
 	return s.prices.publish(s.fetchPrices(ctx))
 }
 
 // fetchPrices reads every configured price from the provider.
 //
-// All or nothing PER PRODUCT. A partial list is worse than none, because a page showing one
-// of two plans looks complete — so a single failure discards what was already read of that
-// product. The API product is read apart: it is a different thing to buy, and a mistyped API
-// price id must not take the Pro and Ultra prices off the page with it.
+// All or nothing per product: a partial list looks complete. The API product is read apart
+// so a mistyped API price id cannot take the Pro and Ultra prices off the page.
 func (s *Service) fetchPrices(ctx context.Context) ([]PublicPrice, error) {
 	out, err := s.readTiers(ctx, []priceTier{{tierPro, s.cfg.Prices}, {tierUltra, s.cfg.UltraPrices}})
 	if err != nil {
@@ -159,8 +127,7 @@ func (s *Service) readTiers(ctx context.Context, tiers []priceTier) ([]PublicPri
 			if err != nil {
 				return nil, err
 			}
-			// The first of each list is that tier's default, so a page offering two
-			// intervals knows which one to open on for each plan.
+			// The first of each list is that tier's default.
 			p.Default = i == 0
 			p.Tier = list.tier
 			out = append(out, p)
@@ -190,9 +157,8 @@ func (c *client) price(ctx context.Context, id string) (PublicPrice, error) {
 	}, nil
 }
 
-// Sells reports whether this price is one we offer. The checkout route asks before creating
-// a session, because the price arrives from the browser and a caller who could name any
-// price could name one costing nothing.
+// Sells reports whether this price is one we offer. Checkout asks first because the price
+// comes from the browser and could otherwise name one costing nothing.
 func (c Config) Sells(priceID string) bool {
 	return slices.Contains(c.Prices, priceID) || slices.Contains(c.UltraPrices, priceID) ||
 		slices.Contains(c.APIPrices, priceID) || slices.Contains(c.APIDataPrices, priceID)

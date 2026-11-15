@@ -6,31 +6,24 @@ import (
 	"strings"
 )
 
-// ErrInvalidTarget is RFC 8707's invalid_target: the requested resource is not
-// one this server protects.
+// ErrInvalidTarget is RFC 8707's invalid_target: not a resource this server protects.
 var ErrInvalidTarget = errors.New("invalid_target")
 
-// MCPResourcePath is the one MCP resource (MCPAccountResourcePath is its alias). A grant is bound to it by PATH, never
-// the origin-qualified URL, so a later change of the frontend origin (domain move,
-// www/apex) does not orphan bound grants. The origin is checked when the resource
-// is requested. "/api/v1/mcp/account" was a second resource; it is now an alias of the
-// same server, so asking for it binds MCPResourcePath. A grant already stored with the
-// old path is refused (invalid_token) and the client signs in again.
+// MCPResourcePath is the one MCP resource (MCPAccountResourcePath is its alias). A grant
+// binds to the PATH, not the origin-qualified URL, so a frontend origin change does not
+// orphan grants; the origin is checked on request. A grant stored under the old
+// "/api/v1/mcp/account" path is refused (invalid_token) and the client signs in again.
 const (
 	MCPResourcePath        = "/api/v1/mcp"
 	MCPAccountResourcePath = "/api/v1/mcp/account"
 )
 
-// CanonicalResource validates the `resource` values a request carried against
-// this deployment's origin and returns the single MCP resource PATH to bind, or
-// "" when none was sent.
+// CanonicalResource validates a request's `resource` values against this origin and
+// returns the single MCP resource PATH to bind, or "" when none was sent.
 //
-// Each value must be an absolute URI whose scheme and host (case-insensitive,
-// default port ignored) are origin's and whose path, compared exactly, is the
-// MCP endpoint, with one trailing slash tolerated (clients
-// canonicalise inconsistently). No query (a bare "?" included), fragment or
-// userinfo is accepted. A request names one resource, so several distinct
-// values are refused.
+// Each value must be an absolute URI with origin's scheme and host (case-insensitive,
+// default port ignored) and exactly the MCP path, one trailing slash tolerated. Query
+// (even a bare "?"), fragment and userinfo are refused, as are several distinct values.
 func CanonicalResource(origin string, raw []string) (string, error) {
 	var bound string
 	for _, r := range raw {
@@ -66,8 +59,7 @@ func resourcePath(wantOrigin, raw string) (string, error) {
 	return "", ErrInvalidTarget
 }
 
-// originKey reduces a URL to its lowercase scheme://host[:port], dropping the
-// scheme's default port, so two spellings of one origin compare equal.
+// originKey reduces a URL to lowercase scheme://host[:port] without the default port.
 func originKey(raw string) (string, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" {

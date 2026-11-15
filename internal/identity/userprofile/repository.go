@@ -16,9 +16,8 @@ import (
 // Compile-time proof that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository adapts *db.Queries to the Repository. It maps the no-row condition on
-// Get to ErrNotFound; Upsert and Delete need no mapping (the PRIMARY KEY (user_id) makes
-// Upsert conflict-free and Delete is idempotent).
+// QueriesRepository adapts *db.Queries to the Repository, mapping no-row on Get to
+// ErrNotFound.
 type QueriesRepository struct {
 	q *db.Queries
 }
@@ -105,8 +104,7 @@ func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64,
 	return profileFromRow(row), nil
 }
 
-// profileFromRow maps the generated db row to the package domain type, dropping the
-// internal bookkeeping columns the use case does not need.
+// profileFromRow maps the generated db row to the domain type.
 func profileFromRow(row db.UserProfile) Profile {
 	return Profile{
 		UserID:              row.UserID,
@@ -123,8 +121,7 @@ func profileFromRow(row db.UserProfile) Profile {
 	}
 }
 
-// Delete removes the user's profile. The affected-row count is ignored: deleting when
-// none exists is not an error (idempotent).
+// Delete removes the user's profile; the affected-row count is ignored (idempotent).
 func (r *QueriesRepository) Delete(ctx context.Context, userID int64) error {
 	_, err := r.q.DeleteUserProfile(ctx, userID)
 	return err

@@ -16,23 +16,20 @@ import (
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 )
 
-// maxUserinfoBytes caps an identity-provider JSON response. Userinfo payloads are
-// small; a multi-MB body is a misbehaving or hostile endpoint, not a real payload.
+// maxUserinfoBytes caps an identity-provider JSON response.
 const maxUserinfoBytes = 1 << 20 // 1 MiB
 
 // userinfoTimeout bounds the OAuth token-exchange and userinfo round-trips.
 const userinfoTimeout = 15 * time.Second
 
-// oidcProvider covers every provider that exposes a standard OIDC userinfo
-// endpoint (Google, LinkedIn): exchange the code, then one GET for
-// sub/email/email_verified.
+// oidcProvider covers providers with a standard OIDC userinfo endpoint (Google, LinkedIn).
 type oidcProvider struct {
 	name        string
 	cfg         *oauth2.Config
 	userinfoURL string
 }
 
-// NewGoogle returns the Google provider ("Sign in with Google" via OIDC).
+// NewGoogle returns the Google provider.
 func NewGoogle(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &oidcProvider{
 		name: "google",
@@ -47,8 +44,8 @@ func NewGoogle(creds config.OAuthCredentials, redirectURL string) Provider {
 	}
 }
 
-// NewLinkedIn returns the LinkedIn provider ("Sign In with LinkedIn using
-// OpenID Connect" — the product must be enabled on the LinkedIn app).
+// NewLinkedIn returns the LinkedIn provider; "Sign In with LinkedIn using OpenID Connect"
+// must be enabled on the LinkedIn app.
 func NewLinkedIn(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &oidcProvider{
 		name: "linkedin",

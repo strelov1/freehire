@@ -1,9 +1,8 @@
-// Package apiusage counts the API requests each account makes per UTC day, for the
-// account's own API page.
+// Package apiusage counts API requests per account per UTC day for the account's API page.
 //
-// Requests are counted in memory and added to api_usage_daily in one statement per
-// flush, so the request path never waits on the database. A failed flush keeps its counts
-// for the next one; a crash loses at most one interval.
+// Counts are buffered in memory and added to api_usage_daily in one statement per flush,
+// so the request path never waits on the database. A failed flush keeps its counts; a
+// crash loses at most one interval.
 package apiusage
 
 import (

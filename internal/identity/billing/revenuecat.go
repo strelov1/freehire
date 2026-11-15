@@ -19,9 +19,8 @@ import (
 // revenuecatName is what billing_events.provider records for this provider.
 const revenuecatName = "revenuecat"
 
-// revenuecatSignatureHeader is the header RevenueCat signs each delivery with. The scheme is
-// the one verifySignature already implements — `t=<unix>,v1=<hex>` over "<t>.<raw body>" —
-// so only the name differs from Stripe's.
+// revenuecatSignatureHeader is the header RevenueCat signs deliveries with, using the scheme
+// verifySignature implements (`t=<unix>,v1=<hex>` over "<t>.<raw body>").
 const revenuecatSignatureHeader = "X-RevenueCat-Webhook-Signature"
 
 // revenuecatAPIBaseURL is the provider's REST API. Overridden only by tests.
@@ -30,60 +29,39 @@ const revenuecatAPIBaseURL = "https://api.revenuecat.com/v1"
 // defaultRevenueCatEntitlement is the entitlement id a purchase must confer to mean Pro.
 const defaultRevenueCatEntitlement = "pro"
 
-// revenuecatSignatureWindow bounds how old a signed delivery may be.
-//
-// WIDER THAN STRIPE'S FIVE MINUTES, and provisionally so. Stripe re-signs every retry, which
-// is what lets its window be narrow — the window bounds the age of the SIGNATURE, not of the
-// event. RevenueCat's documentation does not say whether it re-signs, and its last retry
-// arrives 80 minutes after the first. If it does not re-sign, a five-minute window would
-// reject every retry and leave the reconciler as the only path, silently.
-//
-// So this fails in the safe direction until somebody inspects a real retried delivery: a
-// too-narrow window drops paid subscriptions, while a too-wide one only lengthens the life of
-// a captured delivery whose replay is already idempotent by event id. Narrow it to five
-// minutes once the answer is known — see task 7.2.
+// revenuecatSignatureWindow bounds how old a signed delivery may be. It is wider than Stripe's
+// five minutes because RevenueCat's docs do not say whether retries are re-signed and its last
+// retry arrives 80 minutes after the first; a narrow window would silently drop every retry and
+// paid subscriptions with it. A too-wide window only lengthens the life of a captured delivery,
+// whose replay is idempotent by event id. Narrow it once a real retried delivery is inspected.
 const revenuecatSignatureWindow = 90 * time.Minute
 
 // revenuecatLifetimeHorizon is how far a NON-EXPIRING entitlement is written forward.
+// RevenueCat returns a null `expires_date` for a lifetime purchase or a dashboard promo grant.
+// We sell no such product, so nobody would notice this being wrong.
 //
-// RevenueCat returns a null `expires_date` for an entitlement that does not expire — a
-// lifetime purchase, or a promotional grant made in the dashboard. We sell no such product,
-// which is exactly why this must be right: nobody would notice it being wrong.
+// The column cannot say "forever", and a sentinel is the hazard entitlement.go documents, so
+// "forever" is written as "for as long as we keep confirming": the reconciler's second pass
+// re-reads accounts near expiry and pushes the horizon out, and the grant lapses within a month
+// if revoked or if we stop asking (failing closed).
 //
-// The column is a timestamp and cannot say "forever", and inventing a sentinel that means it
-// is the hazard entitlement.go already documents: the first Stripe draft had one, and a
-// misread field would have turned every subscriber into a permanent one whose cancellation
-// never took effect. So "forever" is written as "for as long as we keep confirming". The
-// reconciler's second pass re-reads accounts near their expiry and pushes the horizon out
-// again, so the grant persists while RevenueCat still reports it, and lapses within a month
-// if it is revoked or if we stop asking. Failing closed on a stalled reconciler is the right
-// direction; failing open would be indefinite.
-//
-// IT IS COUPLED TO THE RECONCILER'S WINDOW, and the coupling is the fragile part. A row at
-// now+35d enters `dueSoon`'s band once, about 34 days later, and stays in it for twice the
-// window. Miss every pass in that band — the worker down for two days, the pass erroring, the
-// account past BILLING_SYNC_MAX_PER_RUN each time — and the row leaves the band for good: a
-// non-expiring entitlement generates no further webhooks, so nothing else would ever look at
-// it. The grant then lapses silently at the horizon.
-//
-// That is the failing-closed direction, which is why it is tolerable rather than a bug. It is
-// bounded by two requirements, both asserted in TestTheLifetimeHorizonOutlivesTheSyncWindow:
-// the horizon must exceed the window, and the hourly schedule must give many passes inside
-// it. Shortening one or widening the other without reading this is how it would break.
+// It is COUPLED TO THE RECONCILER'S WINDOW. A row at now+35d enters `dueSoon`'s band once and
+// stays for twice the window; a non-expiring entitlement sends no webhooks, so if every pass in
+// that band is missed the grant lapses silently at the horizon. Tolerable because it fails
+// closed, and bounded by two requirements asserted in
+// TestTheLifetimeHorizonOutlivesTheSyncWindow: the horizon must exceed the window, and the
+// hourly schedule must give many passes inside it.
 const revenuecatLifetimeHorizon = 35 * 24 * time.Hour
 
-// RevenueCatConfig is everything the environment decides about the store provider.
-//
-// Deliberately separate from Config rather than fields added to it: the two providers are
-// configured, enabled and disabled independently. A deployment that sells only on the web is
-// a legitimate one, and so is a self-hoster who sells nothing.
+// RevenueCatConfig is everything the environment decides about the store provider. It is
+// separate from Config because the two providers are enabled and disabled independently.
 type RevenueCatConfig struct {
 	// APIKey is RevenueCat's SECRET key (sk_…), used server-side only.
 	APIKey string
 	// WebhookSecret signs incoming deliveries. See verifySignature.
 	WebhookSecret string
-	// Entitlement is the entitlement id that means Pro. Everything else a subscriber holds
-	// is somebody else's product.
+	// Entitlement is the entitlement id that means Pro; anything else a subscriber holds is
+	// another product.
 	Entitlement string
 }
 
@@ -101,38 +79,30 @@ func RevenueCatConfigFromEnv() RevenueCatConfig {
 	return cfg
 }
 
-// Enabled reports whether the store provider can do its job: verify a delivery and read a
-// subscriber's state, and know which entitlement it is looking for.
-//
-// The entitlement is required rather than assumed even though it has a default, for the same
-// reason Stripe's price list is: without a name to match, every sync would derive "no Pro"
-// and quietly downgrade every store subscriber — a failure that looks exactly like nobody
-// having bought anything.
+// Enabled reports whether the store provider can verify a delivery, read a subscriber's state
+// and knows which entitlement to look for. The entitlement is required despite its default:
+// without a name to match, every sync would derive "no Pro" and quietly downgrade every store
+// subscriber.
 func (c RevenueCatConfig) Enabled() bool {
 	return c.APIKey != "" && c.WebhookSecret != "" && c.Entitlement != ""
 }
 
-// RevenueCat is the App Store and Google Play, behind the shared engine.
-//
-// It has no counterpart to Stripe's checkout, portal, prices or receipts, and that absence is
-// the product rather than a gap: a store subscription is bought, changed, cancelled and
-// refunded inside the store, where we have no API and no business having one. What is left is
-// exactly the engine — accept a delivery, record it, re-read the subscriber, write one column.
+// RevenueCat is the App Store and Google Play, behind the shared engine. It has no checkout,
+// portal, prices or receipts: store subscriptions are managed inside the store, where we have
+// no API.
 type RevenueCat struct {
 	*engine
 	cfg RevenueCatConfig
 }
 
-// NewRevenueCat constructs the store provider. It never fails; an unconfigured one reports
-// itself disabled and refuses every operation with ErrDisabled.
+// NewRevenueCat constructs the store provider. It never fails; an unconfigured one is disabled
+// and refuses every operation with ErrDisabled.
 func NewRevenueCat(cfg RevenueCatConfig, q *db.Queries) *RevenueCat {
 	return NewRevenueCatWithBase(cfg, q, revenuecatAPIBaseURL)
 }
 
-// NewRevenueCatWithBase is NewRevenueCat pointed at a different base URL, for tests that
-// stand a stub in front of it. It dials without the SSRF guard for the reason NewWithBase
-// gives: the guard refuses the loopback address every stub listens on, and the production
-// base URL is a constant rather than anything a caller supplies.
+// NewRevenueCatWithBase is NewRevenueCat pointed at a different base URL, for tests with a
+// stub. It dials without the SSRF guard for the reason NewWithBase gives.
 func NewRevenueCatWithBase(cfg RevenueCatConfig, q *db.Queries, baseURL string) *RevenueCat {
 	p := &revenuecatProvider{cfg: cfg, q: q, baseURL: baseURL}
 	if cfg.Enabled() {
@@ -168,26 +138,19 @@ func (p *revenuecatProvider) accept(raw []byte, signature string, now time.Time)
 	return parseRevenueCatEvent(raw)
 }
 
-// account is one lookup and no database at all, because `app_user_id` IS our users.id.
+// account resolves the user with one lookup and no database write, because `app_user_id` IS
+// our users.id (Stripe needs a stored customer id because a first purchase arrives before any
+// binding).
 //
-// This is the single largest difference between the two providers, and the reason the seam is
-// cut where it is. Stripe needs a stored customer id and two resolution routes because a
-// first purchase arrives before any binding exists; here the identifier travelled outward
-// from us in the first place.
-// It still CONFIRMS the account exists, and that is not belt-and-braces. billing_events has a
-// foreign key on user_id, so a delivery naming a numeric id we no longer have — an account
-// deleted between purchase and delivery, or a sandbox app pointed at production — would fail
-// the insert, answer 500, and be retried five times. After that RevenueCat may disable the
-// endpoint, taking every other subscriber's deliveries with it. Returning false instead
-// records the event with a NULL user, which is what "an event we could not attribute" already
-// means here.
-// It reads CustomerID when UserRef is empty, and that fallback is what makes the replay work.
-// `applyPending` rebuilds an event from the stored row and can only fill UserRef from a
-// non-NULL user_id — but a NULL user_id is precisely the row that still needs attributing.
-// Without the fallback the replay resolved nobody, the worker read that as "nothing to apply"
-// and STAMPED the row processed: a purchase marked done having conferred nothing, and never
-// retried. For this provider both fields carry the same string, so reading either is reading
-// `app_user_id`.
+// It still CONFIRMS the account exists: billing_events has a foreign key on user_id, so a
+// delivery naming a deleted account or a sandbox app pointed at production would fail the
+// insert, answer 500, and after five retries RevenueCat may disable the endpoint for everyone.
+// Returning false records the event with a NULL user instead.
+//
+// It falls back to CustomerID when UserRef is empty: `applyPending` rebuilds an event from the
+// stored row and can fill UserRef only from a non-NULL user_id, which is exactly the row that
+// needs attributing. Without the fallback the worker would read "nothing to apply" and stamp a
+// purchase processed. Both fields carry the same string for this provider.
 func (p *revenuecatProvider) account(ctx context.Context, ev Event) (int64, bool) {
 	ref := ev.UserRef
 	if ref == "" {
@@ -204,21 +167,15 @@ func (p *revenuecatProvider) account(ctx context.Context, ev Event) (int64, bool
 	return id, true
 }
 
-// bind is a no-op, and an honest one rather than a stub.
-//
-// There is no second identifier to remember: the reconciler reaches a subscriber by the same
-// users.id the webhook carried. Nothing can be lost here, which is why nothing is stored.
+// bind is a no-op: there is no second identifier to remember, since the reconciler reaches a
+// subscriber by the same users.id the webhook carried.
 func (p *revenuecatProvider) bind(context.Context, int64, Event) error { return nil }
 
 // knows reports whether RevenueCat has ever been heard from about this account: a recorded
-// delivery of theirs, or a store entitlement we already hold.
-//
-// It exists because the v1 subscribers endpoint CREATES the subscriber when the identifier is
-// unknown — a read with a write's consequence. A pass that walked the user table without
-// asking this first would register every account we have with the provider, permanently.
-//
-// An unreadable answer counts as "not known", which is the direction that cannot do damage:
-// the cost is a sync that does not happen and will be retried.
+// delivery of theirs, or a store entitlement we already hold. The v1 subscribers endpoint
+// CREATES the subscriber for an unknown identifier, so a pass over the user table without this
+// check would register every account with the provider. An unreadable answer counts as "not
+// known": the sync is merely retried.
 func (p *revenuecatProvider) knows(ctx context.Context, userID int64) (bool, error) {
 	known, err := p.q.HasRevenueCatFootprint(ctx, userID)
 	if err != nil {
@@ -227,14 +184,10 @@ func (p *revenuecatProvider) knows(ctx context.Context, userID int64) (bool, err
 	return known.Valid && known.Bool, nil
 }
 
-// reach reads the subscriber's current entitlements and reduces the configured one to how far
-// it extends.
-//
-// It does not ask knows() itself. Whether an unknown account may be asked about depends on WHO
-// is asking, and only the caller knows that — see engine.SyncUser and engine.SyncCaller.
-// It answers ZERO for ultra, because there is no Ultra product in either store. The zero is
-// reported rather than the field left out: this provider owns that column, and a provider
-// that never wrote a column could never clear it either.
+// reach reads the subscriber's entitlements and reduces the configured one to how far it
+// extends. It does not ask knows(): whether an unknown account may be asked about depends on
+// WHO is asking (see engine.SyncUser and engine.SyncCaller). Ultra is reported as ZERO, not
+// omitted, because this provider owns that column and could never clear it otherwise.
 func (p *revenuecatProvider) reach(ctx context.Context, userID int64) (entitlement, error) {
 	body, err := p.subscriberBody(ctx, userID)
 	if err != nil {
@@ -247,11 +200,8 @@ func (p *revenuecatProvider) reach(ctx context.Context, userID int64) (entitleme
 	return entitlement{Pro: until}, nil
 }
 
-// store writes both of this provider's source columns — the Ultra one always NULL today.
-//
-// Writing a column for a product that does not exist looks like waste and is not: it is what
-// makes the column revocable on the day one does, and until then it keeps this provider's
-// two columns in the same state as each other rather than one written and one never touched.
+// store writes both of this provider's source columns, Ultra always NULL today. Writing the
+// column for a nonexistent product keeps it revocable on the day one exists.
 func (p *revenuecatProvider) store(ctx context.Context, userID int64, ent entitlement) error {
 	return p.q.SetRevenueCatEntitlement(ctx, db.SetRevenueCatEntitlementParams{
 		ProUntil:   nullable(ent.Pro),
@@ -260,8 +210,8 @@ func (p *revenuecatProvider) store(ctx context.Context, userID int64, ent entitl
 	})
 }
 
-// dueSoon reaches the accounts whose store entitlement is about to lapse. The candidate set is
-// the accounts that hold one, which is also the set reach() is allowed to ask about.
+// dueSoon reaches the accounts whose store entitlement is about to lapse: those that hold one,
+// which is also the set reach() may ask about.
 func (p *revenuecatProvider) dueSoon(ctx context.Context, from, to time.Time, max int32) ([]int64, error) {
 	return p.q.ListSubscribersNearProExpiryRevenueCat(ctx, db.ListSubscribersNearProExpiryRevenueCatParams{
 		FromTime: stamp(from),
@@ -270,11 +220,8 @@ func (p *revenuecatProvider) dueSoon(ctx context.Context, from, to time.Time, ma
 	})
 }
 
-// subscriberBody fetches one subscriber, whole, as received.
-//
-// The identifier is a PATH SEGMENT and is escaped as one. It is a users.id today, so escaping
-// changes nothing — which is exactly when an unescaped interpolation gets written and then
-// stops being harmless the day the identifier's shape changes.
+// subscriberBody fetches one subscriber, whole, as received. The identifier is escaped as a
+// PATH SEGMENT even though a users.id needs none, so a change in its shape is not an injection.
 func (p *revenuecatProvider) subscriberBody(ctx context.Context, userID int64) ([]byte, error) {
 	path := p.baseURL + "/subscribers/" + url.PathEscape(fmt.Sprint(userID))
 
@@ -296,10 +243,7 @@ func (p *revenuecatProvider) subscriberBody(ctx context.Context, userID int64) (
 		return nil, fmt.Errorf("billing: GET %s: provider returned %d: %s", path, resp.StatusCode, snippet)
 	}
 
-	// Bounded, because the body is decided by the provider and an unbounded read is a way for
-	// one unlucky response to become this worker's memory ceiling. A subscriber carries a
-	// handful of entitlements and their dates; a megabyte is orders of magnitude more room
-	// than that needs and still small enough to be harmless.
+	// Bounded: the body is decided by the provider, and a subscriber needs far less than 1 MiB.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, subscriberBodyLimit))
 	if err != nil {
 		return nil, fmt.Errorf("billing: reading GET %s: %w", path, err)
@@ -310,15 +254,12 @@ func (p *revenuecatProvider) subscriberBody(ctx context.Context, userID int64) (
 // subscriberBodyLimit caps how much of a subscriber response is read.
 const subscriberBodyLimit = 1 << 20
 
-// revenuecatSubscriber is the reply shape, trimmed to what decides a plan. Everything else
-// RevenueCat knows — products, stores, receipts, the management URL — stays with RevenueCat,
-// which is its source of truth.
-// The date fields are json.RawMessage rather than *string so that ABSENT and NULL stay
-// distinguishable. That distinction decides money: a present-but-null expiry means a
-// non-expiring entitlement and confers Pro, while an object carrying neither key is an
-// entitlement we cannot read — a renamed field, a shape we do not know — and must confer
-// nothing. Decoded into pointers, `{}` and `{"expires_date":null}` are the same value, and
-// the first would silently grant a plan nobody bought.
+// revenuecatSubscriber is the reply shape, trimmed to what decides a plan.
+//
+// The date fields are json.RawMessage, not *string, so ABSENT and NULL stay distinguishable: a
+// present-but-null expiry means non-expiring and confers Pro, while an object with neither key
+// is an unreadable entitlement and must confer nothing. As pointers, `{}` and
+// `{"expires_date":null}` would be equal and the first would grant a plan nobody bought.
 type revenuecatSubscriber struct {
 	Subscriber struct {
 		Entitlements map[string]struct {
@@ -328,16 +269,12 @@ type revenuecatSubscriber struct {
 	} `json:"subscriber"`
 }
 
-// revenuecatReach reduces a subscriber's entitlements to the single instant
-// users.pro_until_revenuecat holds: how far the configured entitlement still stands.
+// revenuecatReach reduces a subscriber's entitlements to the instant users.pro_until_revenuecat
+// holds: how far the configured entitlement stands. The zero time with no error means this
+// provider confers nothing, NOT that the account is free; another source may confer.
 //
-// The zero time with no error means this provider confers nothing — the entitlement is absent,
-// or the subscriber holds only somebody else's product. That is NOT the same as the account
-// being free: another source may still confer, which is what the derived column is for.
-//
-// An entitlement whose reach cannot be read returns an error and the zero time, deliberately
-// together: failing closed costs a subscriber one support message, and failing open costs the
-// revenue and hides that it is doing so.
+// An entitlement whose reach cannot be read returns an error and the zero time: failing closed
+// costs a support message, failing open costs revenue unnoticed.
 func revenuecatReach(body []byte, entitlement string, now time.Time) (time.Time, error) {
 	var raw revenuecatSubscriber
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -349,11 +286,8 @@ func revenuecatReach(body []byte, entitlement string, now time.Time) (time.Time,
 		return time.Time{}, nil
 	}
 
-	// NEITHER KEY PRESENT is an entitlement we cannot read, not a lifetime one. We sell no
-	// non-expiring product, so the shape that reaches the horizon below should only ever be a
-	// deliberate dashboard grant — while `{}` is what a renamed field or an unfamiliar shape
-	// looks like, and granting a month of Pro for it fails open in the one direction that
-	// hides itself.
+	// NEITHER KEY PRESENT is an unreadable entitlement, not a lifetime one: `{}` is what a renamed
+	// field looks like, and granting a month of Pro for it would fail open invisibly.
 	if len(ent.ExpiresDate) == 0 && len(ent.GracePeriodExpiresDate) == 0 {
 		return time.Time{}, fmt.Errorf("billing: entitlement %q carries neither an expiry nor a grace period", entitlement)
 	}
@@ -367,9 +301,7 @@ func revenuecatReach(body []byte, entitlement string, now time.Time) (time.Time,
 		return time.Time{}, fmt.Errorf("billing: entitlement %q has an unreadable grace period: %w", entitlement, err)
 	}
 
-	// Present and explicitly null on both — the provider's way of saying "this does not
-	// expire". See revenuecatLifetimeHorizon for why that becomes a date the reconciler
-	// renews rather than a sentinel.
+	// Present and explicitly null on both: "this does not expire". See revenuecatLifetimeHorizon.
 	if expires.IsZero() && grace.IsZero() {
 		if expiresNull || graceNull {
 			return now.Add(revenuecatLifetimeHorizon), nil
@@ -382,12 +314,9 @@ func revenuecatReach(body []byte, entitlement string, now time.Time) (time.Time,
 	return expires, nil
 }
 
-// parseRevenueCatDate reads one ISO 8601 instant, and reports whether the field was present
-// and explicitly null.
-//
-// That second return is the whole point. An ABSENT field and a NULL one both yield the zero
-// time, and only one of them means "does not expire"; collapsing them is how a shape we do not
-// understand becomes a month of free Pro.
+// parseRevenueCatDate reads one ISO 8601 instant and reports whether the field was present and
+// explicitly null. ABSENT and NULL both yield the zero time but only NULL means "does not
+// expire"; collapsing them would turn an unknown shape into a month of free Pro.
 func parseRevenueCatDate(raw json.RawMessage) (at time.Time, wasNull bool, err error) {
 	if len(raw) == 0 {
 		return time.Time{}, false, nil
@@ -409,13 +338,10 @@ func parseRevenueCatDate(raw json.RawMessage) (at time.Time, wasNull bool, err e
 	return parsed.UTC(), false, nil
 }
 
-// parseRevenueCatEvent reads the webhook envelope: `{"api_version":…, "event":{…}}`.
-//
-// It requires an id and nothing else, for the reason Stripe's parser does: the id is the only
-// field idempotency depends on, and demanding more would turn every event type RevenueCat
-// adds into a rejected delivery. The event's own claims about entitlement — `expiration_at_ms`,
-// `entitlement_ids` — are deliberately not read. A webhook says something changed; what it
-// changed to is read from the provider.
+// parseRevenueCatEvent reads the webhook envelope: `{"api_version":…, "event":{…}}`. It
+// requires only an id, the one field idempotency depends on, so a new event type is not a
+// rejected delivery. The event's own entitlement claims are deliberately not read: a webhook
+// says something changed, and the new state is read from the provider.
 func parseRevenueCatEvent(raw []byte) (Event, error) {
 	var envelope struct {
 		Event json.RawMessage `json:"event"`
@@ -436,16 +362,12 @@ func parseRevenueCatEvent(raw []byte) (Event, error) {
 		return Event{}, err
 	}
 	if fields.ID == "" {
-		// Without an id there is no idempotency key, so a redelivery would be recorded and
-		// applied a second time. Refusing makes the provider retry, which is the safe
-		// direction to fail in.
+		// No id means no idempotency key; refusing makes the provider retry, the safe direction.
 		return Event{}, errors.New("billing: event has no id")
 	}
 
-	// CustomerID and UserRef are the same string here, and both are filled on purpose. The
-	// first is what billing_events records as the subject; the second is what account()
-	// resolves. For Stripe they are two different identifiers; for RevenueCat they are one,
-	// and pretending otherwise would only hide that fact from whoever reads the table.
+	// CustomerID and UserRef are the same string here and both are filled: the first is the
+	// recorded subject, the second is what account() resolves.
 	return Event{
 		ID:         fields.ID,
 		Type:       fields.Type,

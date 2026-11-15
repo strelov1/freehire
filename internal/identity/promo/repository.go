@@ -11,12 +11,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// QueriesRepository is the production Repository over the sqlc-generated queries.
-//
-// It holds no logic. Its whole job is to turn "no rows" and a unique violation into the
-// sentinels the service branches on, so that the service reads as rules rather than as
-// driver error codes — and so that a query returning no rows for a new reason cannot
-// silently become a different outcome.
+// QueriesRepository is the production Repository over the sqlc queries. It only maps "no
+// rows" and unique violations to the sentinels the service branches on.
 type QueriesRepository struct {
 	q *db.Queries
 }
@@ -29,8 +25,8 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 // Compile-time assertion that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
-// PreviewCode reads a usable code's percentage. No rows means every reason a code can be
-// refused, collapsed on purpose — see ErrNotUsable.
+// PreviewCode reads a usable code's percentage. No rows covers every refusal reason; see
+// ErrNotUsable.
 func (r *QueriesRepository) PreviewCode(ctx context.Context, code string) (int16, error) {
 	pct, err := r.q.PreviewPromoCode(ctx, code)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -44,10 +40,8 @@ func (r *QueriesRepository) PreviewCode(ctx context.Context, code string) (int16
 
 // Redeem claims a seat and records the redemption in one statement.
 //
-// A unique violation is mapped to the same refusal as no-rows rather than surfaced: it
-// means this account redeemed a different code concurrently, which is a caller that is
-// ineligible, not a failure. The statement rolls back whole when it happens, so the seat
-// it was about to take is not lost.
+// A unique violation means this account redeemed another code concurrently: an ineligible
+// caller, not a failure. The statement rolls back whole, so no seat is lost.
 func (r *QueriesRepository) Redeem(ctx context.Context, userID int64, code string) (int16, error) {
 	pct, err := r.q.RedeemPromoCode(ctx, db.RedeemPromoCodeParams{Code: code, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) || pgerr.IsUniqueViolation(err) {
@@ -64,8 +58,8 @@ func (r *QueriesRepository) HasRedeemed(ctx context.Context, userID int64) (bool
 	return r.q.HasRedeemedPromoCode(ctx, userID)
 }
 
-// RedeemedPercent is what the code this account redeemed is worth. No redemption is zero
-// and not an error: "no discount" is an ordinary answer on the checkout path.
+// RedeemedPercent is what the account's redeemed code is worth; no redemption is zero, not
+// an error.
 func (r *QueriesRepository) RedeemedPercent(ctx context.Context, userID int64) (int16, error) {
 	pct, err := r.q.RedeemedPromoPercent(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -77,12 +71,11 @@ func (r *QueriesRepository) RedeemedPercent(ctx context.Context, userID int64) (
 	return pct, nil
 }
 
-// EnsureInviteCode stores the offered code if the account has none, and returns whichever
-// code it ends up holding.
+// EnsureInviteCode stores the offered code if the account has none and returns the code it
+// holds.
 //
-// The upsert conflicts on the ACCOUNT. A conflict on the CODE — the drawn value already
-// belongs to somebody else — is not handled there and arrives here as a unique violation,
-// which the service answers by drawing again.
+// The upsert conflicts on the account; a collision on the code arrives as a unique
+// violation, which the service answers by drawing again.
 func (r *QueriesRepository) EnsureInviteCode(ctx context.Context, userID int64, code string) (string, error) {
 	held, err := r.q.EnsureInviteCode(ctx, db.EnsureInviteCodeParams{UserID: userID, Code: code})
 	if pgerr.IsUniqueViolation(err) {
@@ -94,8 +87,7 @@ func (r *QueriesRepository) EnsureInviteCode(ctx context.Context, userID int64, 
 	return held, nil
 }
 
-// ReferrerByCode resolves an invite code to its owner. No rows means a code nobody minted,
-// which the attribution path treats as no attribution.
+// ReferrerByCode resolves an invite code to its owner; no rows means a code nobody minted.
 func (r *QueriesRepository) ReferrerByCode(ctx context.Context, code string) (int64, error) {
 	owner, err := r.q.ReferrerByInviteCode(ctx, code)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -107,11 +99,10 @@ func (r *QueriesRepository) ReferrerByCode(ctx context.Context, code string) (in
 	return owner, nil
 }
 
-// Attribute records the referral, reporting whether this call was the one that wrote it.
+// Attribute records the referral, reporting whether this call wrote it.
 //
-// The insert is ON CONFLICT DO NOTHING on the invitee, so a second attribution of one
-// account affects no rows instead of failing — an account is worth one reward for its
-// whole life, and the constraint is what says so.
+// ON CONFLICT DO NOTHING on the invitee: an account is worth one reward for life, so a
+// repeat affects no rows instead of failing.
 func (r *QueriesRepository) Attribute(ctx context.Context, referrerID, refereeID int64) (bool, error) {
 	rows, err := r.q.AttributeInvite(ctx, db.AttributeInviteParams{
 		ReferrerID: referrerID,
@@ -150,9 +141,8 @@ func (r *QueriesRepository) PendingRewards(ctx context.Context, max int32) ([]Pe
 	}
 	out := make([]PendingReward, 0, len(rows))
 	for _, row := range rows {
-		// The query already requires the binding to be present, so an invalid one here
-		// would mean the filter and the projection disagree. Skipped rather than trusted:
-		// an empty customer id would be asked about as though it named somebody.
+		// The query already filters on the binding; skip rather than ask the provider about an
+		// empty customer id.
 		if !row.StripeCustomerID.Valid {
 			continue
 		}
@@ -170,11 +160,8 @@ func (r *QueriesRepository) CountGranted(ctx context.Context, referrerID int64) 
 	return r.q.CountGrantedInviteRewards(ctx, referrerID)
 }
 
-// Grant moves one reward to earned, reporting whether this call was the one that moved it.
-//
-// No rows means either that somebody else granted it or that the referrer is at the
-// ceiling. The two are not distinguished here because the caller does the same thing with
-// both: leave the row alone and move on.
+// Grant moves one reward to earned, reporting whether this call moved it. No rows means
+// already granted or referrer at the ceiling; the caller treats both the same.
 func (r *QueriesRepository) Grant(ctx context.Context, id, amountCents, ceiling int64) (bool, error) {
 	rows, err := r.q.GrantInviteReward(ctx, db.GrantInviteRewardParams{
 		ID:          id,

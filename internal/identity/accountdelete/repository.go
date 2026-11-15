@@ -10,9 +10,8 @@ import (
 // Compile-time proof that QueriesRepository satisfies the port.
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository is the production Repository backed by sqlc-generated
-// *db.Queries. It exists to keep pgtype out of the service, which reasons about
-// plain object keys.
+// QueriesRepository is the production Repository over *db.Queries, keeping pgtype out of
+// the service.
 type QueriesRepository struct {
 	q *db.Queries
 }

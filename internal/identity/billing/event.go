@@ -6,38 +6,29 @@ import (
 	"strconv"
 )
 
-// Which provider a stored event came from is part of the idempotency key, so that two
-// providers' event identifiers — opaque strings from unrelated namespaces — cannot collide.
-// The name belongs to each provider and is read through provider.name(); it stopped being a
-// constant here the moment there were two of them.
+// The provider name is part of the idempotency key so two providers' event ids cannot
+// collide; read it through provider.name().
 
-// Event is one webhook delivery, reduced to what we store and act on. Note what is NOT
-// here: no status, no period, no price. The event says something about this customer
-// changed; what it changed to is read from the provider, not from the message.
+// Event is one webhook delivery, reduced to what we store and act on. It carries no status,
+// period or price: what changed is read from the provider, not the message.
 type Event struct {
-	// ID is the provider's own event identifier. Redeliveries reuse it, which is what makes
-	// it the idempotency key rather than a hash of the body.
+	// ID is the provider's event identifier. Redeliveries reuse it, so it is the idempotency key.
 	ID string
-	// CustomerID is the provider's customer the event concerns, empty when the event is
-	// about something else entirely.
+	// CustomerID is the provider's customer the event concerns, empty if none.
 	CustomerID string
-	// UserRef is our own account id when the event carries it — set on a checkout
-	// completion, which is the one event that arrives BEFORE any customer binding exists.
+	// UserRef is our account id when the event carries it: set on a checkout completion, the
+	// one event that arrives before any customer binding exists.
 	UserRef string
 	// Type is recorded and never branched on.
 	Type string
-	// Payload is the event object as received, whole. What we read today will change; what
-	// arrived will not.
+	// Payload is the event object as received, whole.
 	Payload []byte
 }
 
 var errNoEvent = errors.New("billing: delivery carries no event data")
 
-// parseEvent reads the webhook envelope.
-//
-// It requires an id and nothing else. That is the only field the system depends on to be
-// idempotent, and demanding more would turn every event type the provider adds — and there
-// are hundreds — into a rejected delivery.
+// parseEvent reads the webhook envelope. It requires only an id, the one field idempotency
+// depends on; demanding more would reject every new event type.
 func parseEvent(raw []byte) (Event, error) {
 	var envelope struct {
 		ID   string `json:"id"`
@@ -50,9 +41,7 @@ func parseEvent(raw []byte) (Event, error) {
 		return Event{}, err
 	}
 	if envelope.ID == "" {
-		// Without an id there is no idempotency key, so a redelivery would be recorded and
-		// applied a second time. Refusing makes the provider retry, which is the safe
-		// direction to fail in.
+		// Without an id a redelivery would be applied twice; refusing makes the provider retry.
 		return Event{}, errors.New("billing: event has no id")
 	}
 	if len(envelope.Data.Object) == 0 {
@@ -64,15 +53,10 @@ func parseEvent(raw []byte) (Event, error) {
 	return ev, nil
 }
 
-// subjectOf digs the customer and our own account reference out of the event's object.
-//
-// The provider's objects do not share one shape, but the two fields we need appear in the
-// same places across the ones that matter to a subscription's life: `customer` on
-// subscriptions, invoices and charges; `client_reference_id` on a completed checkout
-// session, which is the ONLY event that arrives before a customer binding exists.
-//
-// An object carrying neither is not an error. It is an event about something we do not
-// meter, and it is recorded and stamped rather than retried forever.
+// subjectOf extracts the customer and our account reference from the event's object:
+// `customer` on subscriptions, invoices and charges; `client_reference_id` on a completed
+// checkout session. An object with neither is not an error: it is recorded and stamped
+// rather than retried forever.
 func subjectOf(object json.RawMessage) (customerID, userRef string) {
 	var fields struct {
 		Customer          string `json:"customer"`
@@ -82,9 +66,8 @@ func subjectOf(object json.RawMessage) (customerID, userRef string) {
 		} `json:"metadata"`
 	}
 	if err := json.Unmarshal(object, &fields); err != nil {
-		// A `customer` that is an expanded object rather than an id string lands here. The
-		// caller still has the stored payload and the reconciler still has the account, so
-		// this costs a pass rather than the event.
+		// An expanded `customer` object lands here; the stored payload and the reconciler still
+		// cover it.
 		return "", ""
 	}
 
@@ -95,14 +78,9 @@ func subjectOf(object json.RawMessage) (customerID, userRef string) {
 	return fields.Customer, userRef
 }
 
-// userIDFromRef resolves our own account reference, as the provider echoed it back.
-//
-// We only ever send a users.id, so anything else was never ours: a dashboard test object,
-// or an object created outside this integration. Those are recorded and reported — not
-// dropped, and certainly not guessed at.
-//
-// Zero and negative are refused rather than accepted and left to fail on a foreign key,
-// because "0" is what a broken client sends when it means "nobody".
+// userIDFromRef resolves our account reference as the provider echoed it. We only send a
+// users.id, so anything else (dashboard test object, foreign object) is reported, not
+// guessed at. Zero and negative are refused up front rather than failing a foreign key.
 func userIDFromRef(ref string) (int64, bool) {
 	id, err := strconv.ParseInt(ref, 10, 64)
 	if err != nil || id <= 0 {

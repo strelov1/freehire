@@ -8,8 +8,8 @@ import (
 // ErrInvalidJobLanguage rejects malformed posting-language codes.
 var ErrInvalidJobLanguage = errors.New("userprofile: invalid job language")
 
-// normalizeJobLanguages accepts ISO 639-1 code shapes, matching the posting-language facet.
-// Empty means any language. Preserve first-seen order and bound the persisted set.
+// normalizeJobLanguages accepts ISO 639-1 code shapes, deduped in first-seen order. Empty
+// means any language.
 func normalizeJobLanguages(values []string) ([]string, error) {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]bool, len(values))

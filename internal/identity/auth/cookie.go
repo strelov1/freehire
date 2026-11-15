@@ -8,9 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// CookieName is the httpOnly cookie that carries the JWT. The SPA never reads
-// it (it can't — HTTPOnly); the browser attaches it automatically on same-site
-// requests, and RequireAuth reads it server-side.
+// CookieName is the httpOnly cookie that carries the JWT; only RequireAuth reads it.
 const CookieName = "hire_token"
 
 // BrowserOrigins returns the canonical frontend origin, cookie-domain HTTPS apexes
@@ -38,30 +36,20 @@ func BrowserOrigins(frontendOrigin string, cookieDomains []string, servedHosts .
 	return origins
 }
 
-// SetTokenCookie writes the auth cookie. SameSite=Lax (with a same-origin
-// deployment) sends it on the app's own requests while blocking it on
-// cross-site ones, which covers CSRF for the current endpoints. secure comes
-// from config so dev (http://localhost) and HTTPS deployments both work. domain
-// scopes the cookie: empty in dev (host-only cookie); ".freehire.me" in prod so
-// freehire.me and apply.freehire.me send the same cookie (unified SSO).
+// SetTokenCookie writes the auth cookie. SameSite=Lax blocks it on cross-site requests,
+// covering CSRF for the current endpoints. secure comes from config for dev http. domain
+// is empty in dev (host-only) and ".freehire.me" in prod for unified SSO.
 func SetTokenCookie(c *fiber.Ctx, token string, ttl time.Duration, secure bool, domain string) {
 	writeTokenCookie(c, token, time.Now().Add(ttl), secure, domain)
 }
 
-// ClearTokenCookie expires the auth cookie (logout). The browser only
-// overwrites a cookie whose attributes match, so during a cookie-domain
-// migration a `.freehire.me` clear can't remove a leftover host-only cookie
-// (minted before COOKIE_DOMAIN was set). So when a Domain is configured, also
-// emit a host-only expiry — clearing both scopes makes logout reliable
-// regardless of which cookie the browser is still holding.
+// ClearTokenCookie expires the auth cookie (logout). A `.freehire.me` clear cannot remove
+// a leftover host-only cookie, so with a Domain configured it also emits a host-only expiry.
 func ClearTokenCookie(c *fiber.Ctx, secure bool, domain string) {
 	expired := time.Now().Add(-time.Hour)
 	writeTokenCookie(c, "", expired, secure, domain)
 	if domain != "" {
-		// fasthttp dedups Set-Cookie by name, so a second `c.Cookie()` for the
-		// same name would replace the first. Emit the host-only clear as a raw
-		// header so both the `.freehire.me` cookie and any leftover host-only
-		// cookie are expired.
+		// fasthttp dedups Set-Cookie by name, so the host-only clear goes out as a raw header.
 		raw := CookieName + "=; Path=/; Expires=" + expired.UTC().Format(http.TimeFormat) + "; HttpOnly; SameSite=Lax"
 		if secure {
 			raw += "; Secure"
@@ -70,9 +58,8 @@ func ClearTokenCookie(c *fiber.Ctx, secure bool, domain string) {
 	}
 }
 
-// writeTokenCookie is the single place the cookie's attributes are set, so set
-// and clear can't drift apart (the browser only overwrites a cookie whose
-// attributes match). A blank Domain omits the attribute entirely (host-only).
+// writeTokenCookie is the one place the cookie attributes are set, so set and clear match
+// (a browser only overwrites a cookie with matching attributes). A blank Domain is host-only.
 func writeTokenCookie(c *fiber.Ctx, value string, expires time.Time, secure bool, domain string) {
 	c.Cookie(&fiber.Cookie{
 		Name:     CookieName,

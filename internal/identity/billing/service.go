@@ -16,8 +16,7 @@ import (
 )
 
 // ErrDisabled is returned by every operation when billing is not configured. Callers render
-// it as 404 rather than 500: an unconfigured optional subsystem should look absent, not
-// broken.
+// it as 404, not 500: an unconfigured optional subsystem should look absent.
 var ErrDisabled = errors.New("billing: not configured")
 
 // ErrUnknownSubscriber is returned when an event names nobody we can resolve to an account.
@@ -31,15 +30,11 @@ var ErrNoSubscription = errors.New("billing: account has no subscription")
 // engine is billing's provider-generic half: accept a delivery, record it, and derive one
 // provider's source column from that provider's current state.
 //
-// Every rule it holds is true of both providers, which is why it holds them once. A webhook
-// is a signal and never a fact, so applying one re-reads the provider. The source is derived
-// whole rather than adjusted, so a repeat is free and an out-of-order delivery is harmless.
+// A webhook is a signal, never a fact, so applying one re-reads the provider. The source is
+// derived whole rather than adjusted, so a repeat is free and out-of-order delivery is harmless.
 // Record before applying, because the acknowledgement claims durability and nothing else.
-//
-// It needs no pool and takes no transaction. Recording is one insert and applying is one read
-// followed by one update, and neither has an invariant spanning both — the recorded event IS
-// the durable state, and applying it is idempotent by construction, so a crash between the
-// two costs a reconciler pass rather than correctness.
+// No transaction is needed: the recorded event IS the durable state and applying is idempotent,
+// so a crash between the two costs a reconciler pass.
 type engine struct {
 	p provider
 	q *db.Queries
@@ -48,14 +43,12 @@ type engine struct {
 // Enabled reports whether this provider is configured.
 func (e *engine) Enabled() bool { return e.p.enabled() }
 
-// SignatureHeader is the header this provider signs its deliveries with. The handler asks
-// rather than knows: the two providers use different header names for the same scheme, and a
-// package-level constant could only ever be right for one of them.
+// SignatureHeader is the header this provider signs its deliveries with; the two providers
+// use different names for the same scheme.
 func (e *engine) SignatureHeader() string { return e.p.signatureHeader() }
 
-// Accept verifies a delivery's signature and parses it. It is deliberately separate from
-// Record so the handler cannot record something it has not authenticated: the only way to
-// obtain an Event is to have verified the bytes it came from.
+// Accept verifies a delivery's signature and parses it. It is separate from Record so the
+// handler cannot record bytes it has not authenticated.
 func (e *engine) Accept(raw []byte, signature string, now time.Time) (Event, error) {
 	if !e.Enabled() {
 		return Event{}, ErrDisabled
@@ -64,14 +57,11 @@ func (e *engine) Accept(raw []byte, signature string, now time.Time) (Event, err
 }
 
 // Record stores an accepted event, once, and reports whether this delivery was the first.
+// A false second return is a REDELIVERY, not an error: the provider retries anything without a
+// 2xx and reuses the event id, so the caller answers 200.
 //
-// A false second return is a REDELIVERY, not an error: the provider retries anything it did
-// not get a 2xx for and reuses the event id, so a duplicate is the normal case and the caller
-// answers 200 to it.
-//
-// It also BINDS the account to whatever the provider needs to be reachable by later. For
-// Stripe that is the customer id, without which a scheduled re-check cannot name anybody; for
-// RevenueCat it is nothing, because the subscriber already is our own account id.
+// It also BINDS the account to what the provider needs to reach it later: the customer id for
+// Stripe (a scheduled re-check cannot name anybody without it), nothing for RevenueCat.
 func (e *engine) Record(ctx context.Context, ev Event) (rowID int64, recorded bool, err error) {
 	if !e.Enabled() {
 		return 0, false, ErrDisabled
@@ -100,11 +90,9 @@ func (e *engine) Record(ctx context.Context, ev Event) (rowID int64, recorded bo
 	}
 
 	if hasUser {
-		// A failed binding does not fail the delivery: the event IS stored, which is all the
-		// acknowledgement claims. But it is not nothing either — the binding is how a
-		// scheduled re-check reaches this account, so losing it silently is how an account
-		// stops being reconcilable without anyone noticing. Logged, and the recorded row
-		// still carries the user, so the reconciler can work without it.
+		// A failed binding does not fail the delivery (the event IS stored), but it is logged: the
+		// binding is how a scheduled re-check reaches this account. The recorded row still carries
+		// the user, so the reconciler can work without it.
 		if err := e.p.bind(ctx, userID, ev); err != nil {
 			log.Printf("billing: %s event %s recorded but user %d not bound: %v",
 				e.p.name(), ev.ID, userID, err)
@@ -113,55 +101,40 @@ func (e *engine) Record(ctx context.Context, ev Event) (rowID int64, recorded bo
 	return rowID, true, nil
 }
 
-// Apply brings one recorded event's account up to date and marks the event processed.
-//
-// The order is load-bearing. Syncing first and stamping second means a crash in between
-// leaves the event unprocessed and the reconciler repeats a sync that changes nothing — the
-// harmless direction. Stamping first would drop the work on the floor.
+// Apply brings one recorded event's account up to date and marks the event processed. The order
+// is load-bearing: a crash between sync and stamp leaves the event unprocessed and the
+// reconciler repeats a harmless sync; stamping first would drop the work.
 func (e *engine) Apply(ctx context.Context, rowID int64, ev Event) error {
 	userID, ok := e.p.account(ctx, ev)
 	if !ok {
 		return fmt.Errorf("%w: customer %q, ref %q", ErrUnknownSubscriber, ev.CustomerID, ev.UserRef)
 	}
 
-	// REPAIR THE BINDING BEFORE SYNCING, because the sync needs it and the event has it.
-	//
-	// Without this the replay is worse than useless: the user resolves from the event, then
-	// the sync looks the customer up in a column nothing ever wrote, gets ErrNoSubscription,
-	// and the worker reads that as "nothing to apply" and stamps the row. A paid subscription
-	// marked done, forever. Binding here makes the retry self-healing — which is what a retry
-	// is for. Unlike in Record, a failure here IS fatal: the sync that follows depends on it.
+	// Repair the binding BEFORE syncing: the sync needs it and the event has it. Otherwise the
+	// sync finds no customer, gets ErrNoSubscription, and the worker stamps a paid subscription
+	// as done. Unlike in Record, a failure here is fatal.
 	if err := e.p.bind(ctx, userID, ev); err != nil {
 		return fmt.Errorf("billing: binding user %d for %s event %s: %w", userID, e.p.name(), ev.ID, err)
 	}
 
-	// e.sync, not SyncUser: the stranger check does not bind this path, and binding it would
-	// be the same mistake it made once already. The guard exists to stop a pass that reaches
-	// accounts WITHOUT evidence — a walk over users — from enrolling every one of them with the
-	// provider. Applying holds evidence: a signed delivery naming this account. That delivery
-	// IS the footprint, and refusing to act on it because the footprint has not been written
-	// yet would stamp a paid purchase processed having conferred nothing.
+	// e.sync, not SyncUser: the stranger check stops a bulk pass from enrolling accounts WITHOUT
+	// evidence, but a signed delivery naming this account is the evidence, and refusing it would
+	// stamp a paid purchase processed having conferred nothing.
 	if err := e.sync(ctx, userID); err != nil {
 		return err
 	}
 	return e.q.MarkBillingEventProcessed(ctx, rowID)
 }
 
-// MarkProcessed stamps an event without applying it. It exists for the cases nobody can ever
-// resolve — an event about something we do not meter, or an object created outside this
-// integration — where retrying forever would be the only alternative.
+// MarkProcessed stamps an event without applying it, for events nobody can ever resolve (not
+// metered, or created outside this integration) where retrying forever is the alternative.
 func (e *engine) MarkProcessed(ctx context.Context, rowID int64) error {
 	return e.q.MarkBillingEventProcessed(ctx, rowID)
 }
 
-// PendingEvents returns THIS PROVIDER'S events recorded but never applied, oldest first. It
-// is the reconciler's first pass, and the reason a failure to apply inside the webhook
-// handler costs nothing.
-//
-// The scoping is a correctness requirement, not a filter for tidiness: applying an event
-// means re-reading the subscriber and writing one source column, and the two providers
-// address accounts differently. Handed the other's row, a pass would write the wrong column
-// and stamp the row processed — a purchase marked done having conferred nothing.
+// PendingEvents returns THIS PROVIDER'S events recorded but never applied, oldest first: the
+// reconciler's first pass. The scoping is a correctness requirement: the providers address
+// accounts differently, so the other's row would write the wrong column and be stamped done.
 func (e *engine) PendingEvents(ctx context.Context, max int32) ([]db.ListUnprocessedBillingEventsRow, error) {
 	if !e.Enabled() {
 		return nil, ErrDisabled
@@ -172,9 +145,8 @@ func (e *engine) PendingEvents(ctx context.Context, max int32) ([]db.ListUnproce
 	})
 }
 
-// SubscribersNearExpiry returns the accounts whose entitlement from this provider falls
-// within window either side of now — the reconciler's second pass, which repairs a renewal
-// whose webhook was never delivered at all.
+// SubscribersNearExpiry returns accounts whose entitlement from this provider falls within
+// window either side of now: the reconciler's pass for renewals whose webhook never arrived.
 func (e *engine) SubscribersNearExpiry(ctx context.Context, window time.Duration, max int32) ([]int64, error) {
 	if !e.Enabled() {
 		return nil, ErrDisabled
@@ -184,24 +156,19 @@ func (e *engine) SubscribersNearExpiry(ctx context.Context, window time.Duration
 }
 
 // SyncUser reads the provider's current state for one account and writes THIS PROVIDER'S
-// source column from it. users.pro_until follows, derived by the schema.
+// source column from it; users.pro_until follows, derived by the schema.
 //
-// The column written is the provider's own and never the derived one. A provider reporting no
-// subscription is saying "I confer nothing", not "this account is not Pro" — the account may
-// hold a store subscription or a manual grant, and before migration 0135 this write would
-// have revoked either of them without a trace.
-//
-// This is the only place the source is derived, and it is derived WHOLE every time rather
-// than adjusted. That is what makes it idempotent, order-independent and safe to repeat:
-// applying the same truth twice changes nothing, and a refund, a cancellation or a failed
-// card needs no code of its own because it is already reflected in what we read.
+// It writes the provider's own column, never the derived one: "no subscription" means "I confer
+// nothing", not "not Pro" (the account may hold a store subscription or a manual grant). The
+// source is derived WHOLE every time, so it is idempotent and order-independent, and a refund,
+// cancellation or failed card needs no code of its own.
 func (e *engine) SyncUser(ctx context.Context, userID int64) error {
 	if !e.Enabled() {
 		return ErrDisabled
 	}
 
-	// A stranger is not asked about. This is the path the reconciler and the event replay
-	// take, and both can reach accounts in bulk — see provider.knows for what asking costs.
+	// A stranger is not asked about: the reconciler and event replay reach accounts in bulk (see
+	// provider.knows for what asking costs).
 	known, err := e.p.knows(ctx, userID)
 	if err != nil {
 		return err
@@ -212,18 +179,11 @@ func (e *engine) SyncUser(ctx context.Context, userID int64) error {
 	return e.sync(ctx, userID)
 }
 
-// SyncCaller is SyncUser for an account asking about ITSELF, and it deliberately skips the
-// stranger check.
-//
-// The check exists to stop a bulk pass enrolling every account with RevenueCat. One
-// authenticated, rate-limited caller asking about their own id is not that: they have just
-// bought something, so the provider's own device SDK created that subscriber before the app
-// ever reached us.
-//
-// Without this distinction the route built to close the lost-webhook window refused the only
-// case it was built for. A first-time buyer has no recorded event and a NULL source column —
-// that is what "first" means — so the guard turned "your webhook was lost" into "you are not
-// a subscriber", and neither reconciler pass would ever have found them either.
+// SyncCaller is SyncUser for an account asking about ITSELF; it skips the stranger check. That
+// check stops a bulk pass enrolling every account with RevenueCat, not one authenticated,
+// rate-limited caller who just bought something. A first-time buyer has no recorded event and a
+// NULL source column, so the guard would turn "your webhook was lost" into "you are not a
+// subscriber".
 func (e *engine) SyncCaller(ctx context.Context, userID int64) error {
 	if !e.Enabled() {
 		return ErrDisabled
@@ -231,12 +191,9 @@ func (e *engine) SyncCaller(ctx context.Context, userID int64) error {
 	return e.sync(ctx, userID)
 }
 
-// sync is the shared body: read the provider whole, write this provider's source columns.
-//
-// One read answering for every tier, and one write applying all of it. Splitting either by
-// tier would reintroduce exactly what "derived whole, never adjusted" exists to prevent —
-// two reads that disagree, or an instant between two writes where an upgrading subscriber
-// holds neither tier.
+// sync is the shared body: read the provider whole, write this provider's source columns. One
+// read for every tier and one write, so there are no disagreeing reads and no instant where an
+// upgrading subscriber holds neither tier.
 func (e *engine) sync(ctx context.Context, userID int64) error {
 	ent, err := e.p.reach(ctx, userID)
 	if err != nil {
@@ -249,8 +206,8 @@ func (e *engine) sync(ctx context.Context, userID int64) error {
 	return nil
 }
 
-// nullable converts a reach to the pgtype the setters take. A zero time is NULL, which is
-// this provider saying it confers nothing.
+// nullable converts a reach to the pgtype the setters take; a zero time is NULL (this provider
+// confers nothing).
 func nullable(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: !t.IsZero()}
 }
@@ -260,12 +217,9 @@ func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
-// Service is Stripe: the shared engine, plus the surface that exists only where a card is
-// entered on the web — a checkout, a management portal, prices and receipts.
-//
-// None of those has a RevenueCat counterpart, which is why they live on this type rather than
-// behind the provider seam. A store subscription is bought, changed, cancelled and refunded
-// inside the App Store or Google Play, where we have no API and no business having one.
+// Service is Stripe: the shared engine plus the web-only surface (checkout, portal, prices,
+// receipts). Those have no RevenueCat counterpart, so they live here, not behind the provider
+// seam; store subscriptions are managed entirely inside the App Store or Google Play.
 type Service struct {
 	*engine
 	cfg    Config
@@ -274,19 +228,16 @@ type Service struct {
 	prices priceCache
 }
 
-// New constructs a Service. It never fails: an unconfigured Service reports itself disabled
-// and refuses every operation with ErrDisabled.
+// New constructs a Service. It never fails: an unconfigured Service is disabled and refuses
+// every operation with ErrDisabled.
 func New(cfg Config, q *db.Queries) *Service {
 	return NewWithBase(cfg, q, apiBaseURL)
 }
 
-// NewWithBase is New pointed at a different provider base URL, for tests that stand a stub in
-// front of it.
-//
-// It dials WITHOUT the SSRF guard, because the guard would refuse the loopback address every
-// stub server listens on. That costs nothing real: the guard defends against a
-// CALLER-SUPPLIED destination, and there is none here — the production base URL is a
-// constant. New still uses the guarded client, so nothing in production takes this path.
+// NewWithBase is New pointed at a different provider base URL, for tests with a stub. It dials
+// WITHOUT the SSRF guard, which would refuse the loopback address stubs listen on; that is safe
+// because the guard defends against caller-supplied destinations and the production base URL
+// is a constant. New still uses the guarded client.
 func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 	s := &Service{cfg: cfg, q: q}
 	if cfg.Enabled() {
@@ -300,51 +251,39 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 	return s
 }
 
-// There is deliberately no Config() accessor. Config carries the secret key and the webhook
-// secret, and an exported getter for them is a way for a future surface to serialise them by
-// accident. Everything outside this package needs an answer about billing, not the
-// credentials it was derived from — Enabled() is that answer.
+// There is deliberately no Config() accessor: Config carries the secret key and webhook secret,
+// and a getter invites serialising them by accident. Enabled() is the answer outsiders need.
 
 // CheckoutURL is where this account buys, upgrades or downgrades a subscription.
 //
-// The account's id is taken from the caller's session and never from the request: it decides
-// who gets charged and who becomes Pro, and a value the browser composes is a value the
-// browser can change.
+// The account id comes from the caller's session, never the request: it decides who gets
+// charged and who becomes Pro. A customer with an entitling subscription is never sent to a
+// new Checkout Session for a different price; their subscription is changed in place (see
+// decideCheckoutTarget).
 //
-// A customer who already has an entitling subscription is never sent to a new Checkout
-// Session for a different price — that is the duplicate-subscription bug this method used to
-// have. Instead their existing subscription is changed in place; see decideCheckoutTarget.
-//
-// The returned Discount is what was actually APPLIED, never simply the one the caller
-// offered: an in-place update never applies one (see decideCheckoutTarget's Non-Goal in
-// design.md), and a caller that echoed the input regardless would tell a subscriber a
-// discount was used when their bill never reflected it.
+// The returned Discount is what was actually APPLIED: an in-place update never applies one, and
+// echoing the input would tell a subscriber a discount was used when their bill never showed it.
 func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, Discount, error) {
 	if !s.cfg.CanCheckout() {
 		return "", Discount{}, ErrNoCheckout
 	}
 
-	// A price the browser named must be one we actually sell. The parameter arrives from the
-	// client, and a caller who could name any price could name one costing nothing.
+	// A price the browser named must be one we actually sell, or a caller could name a free one.
 	if priceID == "" {
 		priceID = s.cfg.CheckoutPrice()
 	} else if !s.cfg.Sells(priceID) {
 		return "", Discount{}, fmt.Errorf("%w: price %q is not offered", ErrNoCheckout, priceID)
 	}
 
-	// Promo codes and invite discounts are a consumer offer for Pro and Ultra. The API product
-	// is sold to businesses at a flat price, so whatever discount the account holds stays with
-	// its plan purchases and never reaches an API checkout.
+	// Promo and invite discounts are a consumer offer for Pro and Ultra; the API product is
+	// sold at a flat price, so no discount reaches an API checkout.
 	if s.cfg.isAPIPrice(priceID) {
 		discount = Discount{}
 	}
 
-	// An existing customer is reused so a second purchase cannot create a second customer for
-	// one person — which would leave two subscriptions nobody sums. A failure to even read
-	// the binding is refused rather than silently treated as "no customer": a transient DB
-	// error would otherwise make a known customer look unbound and open a checkout that
-	// creates a second Stripe customer and a second subscription — the same fix this whole
-	// method exists for, applied one query earlier.
+	// An existing customer is reused so a second purchase cannot create a second customer. A
+	// failure to read the binding is refused, not treated as "no customer": a transient DB error
+	// would otherwise open a checkout creating a second customer and subscription.
 	existing, err := s.q.GetStripeCustomerID(ctx, userID)
 	if err != nil {
 		return "", Discount{}, fmt.Errorf("billing: reading the Stripe customer of user %d: %w", userID, err)
@@ -355,50 +294,40 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	}
 
 	if customerID != "" {
-		// A known customer may already have an entitling subscription. Reading it here and
-		// failing the whole call on error — rather than falling back to opening a new
-		// checkout — is the line the fix depends on: falling back would silently recreate the
-		// exact bug (a transient read failure would open a second subscription beside a live
-		// one).
+		// Fail the whole call on a read error rather than fall back to a new checkout, which
+		// would open a second subscription beside a live one.
 		current, err := s.client.subscriberState(ctx, customerID)
 		if err != nil {
 			return "", Discount{}, fmt.Errorf("billing: reading the subscriptions of user %d: %w", userID, err)
 		}
-		// Within the requested price's own product: an API purchase must never change a
-		// Pro/Ultra subscription in place, nor the reverse (see Config.checkoutFamily).
+		// Within the requested price's own product: an API purchase must never change a Pro/Ultra
+		// subscription in place, nor the reverse (see Config.checkoutFamily).
 		familyA, familyB := s.cfg.checkoutFamily(priceID)
 		target := decideCheckoutTarget(current, priceID, familyA, familyB)
 		switch {
 		case target.AlreadyOnPrice:
-			// ReturnURL, deliberately not SuccessURL: nothing was bought. Marking this a
-			// purchase would count a sale every time somebody re-opened the price they are
-			// already on.
+			// ReturnURL, not SuccessURL: nothing was bought, and SuccessURL would count a sale on
+			// every re-open of the current price.
 			return s.cfg.ReturnURL(), Discount{}, nil
 		case target.Ambiguous:
 			return "", Discount{}, fmt.Errorf(
 				"billing: user %d's subscription carries more than one item; refusing to guess which one to change", userID)
 		case target.SubscriptionID != "":
-			// A fresh key per call: this protects one call's own low-level HTTP retries from
-			// double-billing a proration, not repeated user clicks — a genuine second attempt
-			// gets a fresh key and is itself idempotent in EFFECT (setting an already-current
-			// price again changes nothing).
+			// A fresh key per call: it guards one call's own low-level HTTP retries against
+			// double-billing a proration, not repeated clicks (re-setting the price changes nothing).
 			idempotencyKey := uuid.NewString()
 			if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID, idempotencyKey); err != nil {
 				return "", Discount{}, fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
 			}
-			// SuccessURL: this IS a purchase, just one made without a checkout page — an
-			// upgrade in place. Returning the plain ReturnURL here left every Pro-to-Ultra
-			// sale looking like an abandoned one, since checkout_start had already been
-			// recorded and nothing ever answered it.
+			// SuccessURL: an in-place upgrade IS a purchase; ReturnURL left every Pro-to-Ultra sale
+			// looking abandoned.
 			return s.cfg.SuccessURL(), Discount{}, nil
 		}
-		// No entitling subscription (a free account, or a former subscriber whose last one
-		// ended): fall through to opening a checkout, exactly as before.
+		// No entitling subscription (free account or lapsed subscriber): open a checkout.
 	}
 
-	// Pre-fill the address we already hold, so a buyer does not retype what we asked them for
-	// at sign-up. Only for a NEW customer: the provider refuses an email alongside an existing
-	// one, since that customer already has theirs.
+	// Pre-fill the email we hold, only for a NEW customer: the provider refuses an email
+	// alongside an existing customer.
 	var email string
 	if customerID == "" {
 		if addr, emailErr := s.q.UserEmail(ctx, userID); emailErr == nil {
@@ -406,10 +335,8 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		}
 	}
 
-	// A coupon is minted per session rather than looked up, because it is created from a
-	// percentage this account is owed rather than from a catalogue of offers. A failure to
-	// mint one is fatal to the checkout on purpose: sending somebody to pay full price for
-	// an offer they were shown is worse than asking them to try again.
+	// A coupon is minted per session from the percentage this account is owed. A mint failure is
+	// fatal on purpose: sending someone to pay full price for an offer they were shown is worse.
 	var couponID string
 	if !discount.none() {
 		couponID, err = s.spendableCoupon(ctx, discount)
@@ -418,7 +345,7 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		}
 	}
 
-	// Success and cancel differ by one marker — see Config.SuccessURL for why they must.
+	// Success and cancel differ by one marker; see Config.SuccessURL.
 	url, err := s.client.createCheckoutSession(ctx, userID, email,
 		priceID, s.cfg.SuccessURL(), s.cfg.ReturnURL(), customerID, couponID)
 	if err != nil {
@@ -430,17 +357,12 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 // spendableCoupon is the coupon this checkout may carry.
 //
 // The provider spends a coupon's one redemption on the first checkout that TRIES to pay,
-// declined or not. A buyer whose card was refused once would otherwise be handed the same
-// spent coupon by the idempotent create, and every checkout after it would fail outright.
+// declined or not, so a spent coupon is replaced by the coupon keyed on it. The replacements
+// form one chain with at most one usable link, so two open checkouts cannot both be discounted.
 //
-// A spent coupon is replaced by the coupon keyed on it, so the replacements form one chain
-// and at most one link is usable at a time: two open checkouts carry the same replacement,
-// and its single redemption lets only one of them be discounted.
-//
-// shortcut: a spent coupon may also be one a SUCCESSFUL purchase used, and this replaces it
-// all the same. That re-offer is no wider than before: the stable key's 24-hour idempotency
-// window already re-mints a fresh coupon for a past buyer the day after. Close both together
-// by recording when an offer is consumed, if repeat discounted purchases show up.
+// shortcut: a spent coupon may be one a SUCCESSFUL purchase used and is replaced anyway; no
+// wider than the stable key's 24-hour idempotency window already allows. Close both by
+// recording when an offer is consumed if repeat discounted purchases show up.
 func (s *Service) spendableCoupon(ctx context.Context, discount Discount) (string, error) {
 	key := discount.Key
 	for range maxCouponChain {
@@ -457,20 +379,14 @@ func (s *Service) spendableCoupon(ctx context.Context, discount Discount) (strin
 	return "", fmt.Errorf("billing: %d coupons in a row were spent for key %q", maxCouponChain, discount.Key)
 }
 
-// maxCouponChain bounds how many spent replacements one checkout walks past: each link is a
-// declined payment, and a dozen of them in a day is a card being tested, not a buyer.
+// maxCouponChain bounds how many spent replacements one checkout walks past; each is a
+// declined payment, and a dozen in a day is a card being tested.
 const maxCouponChain = 12
 
 // HasCollectedAtLeast reports whether this customer has had an invoice collecting at least
-// minCents.
-//
-// Exposed for the referral reward, which must be earned by money rather than by a
-// subscription existing — and by ENOUGH money: an invitee who redeemed a large discount can
-// pay less than the reward is worth, and a referral that pays out more than it brought in
-// is a hole rather than a growth channel.
-//
-// It takes a customer id and not an account id because its caller already holds one: the
-// worker reads the binding to decide whether asking is worth an API call at all.
+// minCents. The referral reward must be earned by ENOUGH money: an invitee on a large discount
+// can pay less than the reward is worth. It takes a customer id because the worker already holds
+// the binding and uses it to decide whether an API call is worth making.
 func (s *Service) HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error) {
 	if !s.cfg.Enabled() {
 		return false, ErrDisabled
@@ -478,16 +394,10 @@ func (s *Service) HasCollectedAtLeast(ctx context.Context, customerID string, mi
 	return s.client.hasCollectedAtLeast(ctx, customerID, minCents)
 }
 
-// CreditAccount places credit on this account's provider customer, creating and binding one
-// when the account has never bought anything.
-//
-// Creating the customer is what makes a reward deliverable to somebody who is not a
-// subscriber. The binding goes through the same write-once setter a purchase uses, so this
-// can never repoint an account that already has one; if the binding loses a race, the
-// customer we just created is abandoned and the credit goes to the one that won.
-//
-// cents is a POSITIVE amount of credit. The provider's sign convention is applied once, in
-// the client.
+// CreditAccount places credit on this account's provider customer, creating and binding one if
+// the account never bought anything. The binding uses the write-once setter, so it cannot
+// repoint an account; if it loses a race, our new customer is abandoned and the credit goes to
+// the winner. cents is POSITIVE; the provider's sign convention is applied once, in the client.
 func (s *Service) CreditAccount(ctx context.Context, userID, cents int64, idempotencyKey string) error {
 	if !s.cfg.Enabled() {
 		return ErrDisabled
@@ -513,11 +423,8 @@ func (s *Service) CreditAccount(ctx context.Context, userID, cents int64, idempo
 		"freehire invite reward", idempotencyKey)
 }
 
-// newCustomerFor registers an account with the provider and binds it.
-//
-// The idempotency key is suffixed rather than reused: the same key on two different
-// endpoints would make the second call replay the first one's response, and the provider
-// would hand back a customer where a balance transaction was asked for.
+// newCustomerFor registers an account with the provider and binds it. The idempotency key is
+// suffixed, not reused: the same key on two endpoints would replay the first response.
 func (s *Service) newCustomerFor(ctx context.Context, userID int64, idempotencyKey string) (string, error) {
 	var email string
 	if addr, emailErr := s.q.UserEmail(ctx, userID); emailErr == nil {
@@ -536,18 +443,14 @@ func (s *Service) newCustomerFor(ctx context.Context, userID int64, idempotencyK
 		return "", fmt.Errorf("billing: binding user %d to a new customer: %w", userID, err)
 	}
 
-	// Re-read rather than trusting what we just wrote. The setter is write-once, so a
-	// concurrent purchase may have bound a different customer first — and crediting the one
-	// we created would put the reward on a customer nothing else will ever read.
+	// Re-read: the setter is write-once, so a concurrent purchase may have bound a different
+	// customer first, and crediting ours would strand the reward.
 	return s.stripe().customerOf(ctx, userID)
 }
 
-// CheckoutPriceCents is what a new subscriber is sold, in the smallest currency unit.
-//
-// Read from the provider through the same cache the public price list uses, rather than
-// stored: a price is the provider's fact, and a copy here could only disagree. Its one
-// caller fixes a referral reward at a fraction of it, so a wrong answer would misprice
-// credit that can never be recomputed.
+// CheckoutPriceCents is what a new subscriber is sold, in the smallest currency unit. It reads
+// the provider's price through the public price cache rather than storing a copy; a wrong
+// answer would misprice a referral reward that can never be recomputed.
 func (s *Service) CheckoutPriceCents(ctx context.Context) (int64, error) {
 	price, err := s.checkoutPrice(ctx)
 	if err != nil {
@@ -556,10 +459,8 @@ func (s *Service) CheckoutPriceCents(ctx context.Context) (int64, error) {
 	return price.AmountCents, nil
 }
 
-// checkoutCurrency is the currency the sold price is denominated in.
-//
-// A credit must be in the same currency as the invoices it is meant to reduce; a mismatch
-// is refused by the provider, which is the right failure but a late one.
+// checkoutCurrency is the currency the sold price is denominated in; a credit must match the
+// invoices it reduces.
 func (s *Service) checkoutCurrency(ctx context.Context) (string, error) {
 	price, err := s.checkoutPrice(ctx)
 	if err != nil {
@@ -568,12 +469,9 @@ func (s *Service) checkoutCurrency(ctx context.Context) (string, error) {
 	return price.Currency, nil
 }
 
-// checkoutPrice is the configured sale price as the provider reports it.
-//
-// An unreadable price is an error rather than a default. PublicPrices returns an empty list
-// when the provider cannot be reached, and treating that as a zero would misprice a reward
-// at nothing — silently, and in the direction of paying somebody nothing for a referral
-// they earned.
+// checkoutPrice is the configured sale price as the provider reports it. An unreadable price is
+// an error, not a default: PublicPrices returns an empty list when the provider is unreachable,
+// and treating that as zero would silently pay a referral reward of nothing.
 func (s *Service) checkoutPrice(ctx context.Context) (PublicPrice, error) {
 	wanted := s.cfg.CheckoutPrice()
 	for _, price := range s.PublicPrices(ctx) {
@@ -584,12 +482,9 @@ func (s *Service) checkoutPrice(ctx context.Context) (PublicPrice, error) {
 	return PublicPrice{}, fmt.Errorf("billing: cannot read price %q from the provider", wanted)
 }
 
-// ManagementURL is the provider's own page where this subscriber changes their card or
-// cancels.
-//
-// It is generated per visit and short-lived, which is why it is fetched when asked for rather
-// than stored. And it is THEIR page: a cancellation flow of our own would be one more thing
-// that can disagree with what actually happened to the money.
+// ManagementURL is the provider's own page where this subscriber changes their card or cancels.
+// It is short-lived, so it is fetched on demand, and it is the provider's page so a cancellation
+// flow of ours cannot disagree with what happened to the money.
 func (s *Service) ManagementURL(ctx context.Context, userID int64) (string, error) {
 	if !s.cfg.CanCheckout() {
 		return "", ErrNoCheckout

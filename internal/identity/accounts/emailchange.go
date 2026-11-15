@@ -8,17 +8,13 @@ import (
 	"strings"
 )
 
-// RequestEmailChange mails a code to newEmail that, once presented to ConfirmEmailChange,
-// moves the account there. Nothing about the account changes here: an address is a
-// sign-in credential, so it is switched only after its new holder proves they read it.
+// RequestEmailChange mails a code to newEmail that ConfirmEmailChange applies. Nothing
+// changes until the new holder proves they read it, since the address is a sign-in
+// credential. The caller has already proven ownership of the session (recent-auth gate);
+// this proves only the new address.
 //
-// The caller has already established that the session belongs to the account's owner
-// (the recent-auth gate on the route) — this method proves only the NEW address.
-//
-// Refuses an address another account holds with ErrEmailTaken. That tells a signed-in,
-// freshly re-authenticated caller whether an address is registered, which registration
-// already answers to anyone; the alternative — mailing a code that can never be applied —
-// would leave the member waiting on a change that is impossible.
+// An address another account holds is refused with ErrEmailTaken; mailing a code that can
+// never apply would leave the member waiting.
 func (s *Service) RequestEmailChange(ctx context.Context, userID int64, newEmail string) error {
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
@@ -48,12 +44,9 @@ func (s *Service) RequestEmailChange(ctx context.Context, userID int64, newEmail
 	return s.mailer.SendEmailChangeCode(ctx, addr, code)
 }
 
-// ConfirmEmailChange moves the account to the address the outstanding change code was
-// mailed to, and returns the account's new session generation so the caller can re-issue
-// its own cookie: the change revokes every session, like a password change.
-//
-// The address applied is the one stored with the code, never one the caller supplies, so
-// a code proves exactly the address it reached.
+// ConfirmEmailChange moves the account to the address the code was mailed to and returns
+// the new session generation (every session is revoked, so the caller re-issues its
+// cookie). The applied address is the one stored with the code, never a caller-supplied one.
 func (s *Service) ConfirmEmailChange(ctx context.Context, userID int64, code string) (int32, error) {
 	if !s.codesEnabled() {
 		return 0, ErrMailUnavailable
@@ -72,7 +65,7 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int64, code str
 	stored, consumeErr := s.consumeCodeTx(ctx, s.codes.WithTx(tx), userID, PurposeChangeEmail, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
-			// Same reasoning as ConfirmVerification: the failed guess must be kept.
+			// Commit the failed attempt, as ConfirmVerification does.
 			if err := tx.Commit(ctx); err != nil {
 				return 0, fmt.Errorf("commit the failed attempt: %w", err)
 			}
@@ -80,25 +73,22 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int64, code str
 		return 0, consumeErr
 	}
 	if stored.Target == "" {
-		// A change code is only ever issued with its address; one without is not ours to
-		// guess at.
+		// A change code is always issued with its address; one without is not ours.
 		return 0, ErrInvalidCode
 	}
 
 	version, err := s.repo.WithTx(tx).ChangeEmail(ctx, userID, stored.Target)
 	if err != nil {
-		// ErrEmailTaken here means another account claimed the address after the code was
-		// mailed. The rollback keeps the code, but it can never apply; the member asks for
-		// a code to a different address.
+		// ErrEmailTaken: another account claimed the address after the mail. The code stays
+		// but can never apply.
 		return 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
 
-	// Best-effort: the change already happened, and a mail outage must not report it as
-	// failed. Only an address that was ever proven is told — an unverified one may belong
-	// to somebody who never had this account.
+	// Best-effort: a mail outage must not report the change as failed. Only a proven old
+	// address is told; an unverified one may belong to someone who never had this account.
 	if before.EmailVerified {
 		if err := s.mailer.SendEmailChangedNotice(ctx, before.Email); err != nil {
 			log.Printf("accounts: email-changed notice for user=%d: %v", userID, err)

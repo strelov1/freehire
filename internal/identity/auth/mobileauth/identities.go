@@ -34,12 +34,9 @@ func (s *Store) ListIdentities(ctx context.Context, userID int64) (IdentityList,
 	if err := s.pool.QueryRow(ctx, `SELECT password_hash IS NOT NULL FROM users WHERE id=$1`, userID).Scan(&out.HasPassword); err != nil {
 		return out, err
 	}
-	// bool_or, not bool_and: unlinkIdentityOnce (store.go) counts a provider as active if
-	// ANY of its identity rows is active, so a provider with one active row and one
-	// revocation_pending row (e.g. mid-drain of an earlier unlink) is a usable sign-in
-	// method there. Aggregating with bool_and instead would report that provider as
-	// non-active here, undercounting active providers and showing CanUnlink=false for a
-	// last-method check the backend would actually pass.
+	// bool_or, not bool_and: unlinkIdentityOnce counts a provider active if ANY identity row
+	// is, so one active plus one revocation_pending row still counts. bool_and would show
+	// CanUnlink=false for a last-method check the backend would pass.
 	rows, err := s.pool.Query(ctx, `
 		SELECT provider,min(created_at),
 		       CASE WHEN bool_or(status='active') THEN 'active' ELSE 'revocation_pending' END
@@ -197,13 +194,10 @@ func (s *Store) ActivateAppleCompensation(ctx context.Context, jobID uuid.UUID) 
 	return err
 }
 
-// ReleaseAppleGrantsForDeletion queues Apple revocation for every grant the
-// account holds and clears the apple_grants rows, freeing the FK
-// (ON DELETE RESTRICT) that would otherwise block deleting the user. The
-// ciphertext is carried into the revocation job before the grant row is
-// dropped, so the background worker can still revoke it with Apple even
-// though the account — and the grant's own row — are already gone.
-// Idempotent: a retried account deletion finds no grants left and no-ops.
+// ReleaseAppleGrantsForDeletion queues Apple revocation for every grant the account holds
+// and clears the apple_grants rows, whose FK (ON DELETE RESTRICT) would block deleting the
+// user. The ciphertext moves into the revocation job first, so the worker can still revoke
+// after the account is gone. Idempotent.
 func (s *Store) ReleaseAppleGrantsForDeletion(ctx context.Context, userID int64) error {
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {

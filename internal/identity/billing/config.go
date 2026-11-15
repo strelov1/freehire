@@ -1,23 +1,16 @@
 // Package billing connects the Pro subscription at the payment provider to the one column
 // that decides a user's plan, users.pro_until.
 //
-// THIS IS FREEHIRE.ME'S HOSTED BILLING AND IS NOT SUPPORTED FOR SELF-HOSTING. It is in the
-// open repository under the same licence as the rest, because closing it would protect
-// nothing — secrets live in the environment either way, and the moat is the catalogue, not
-// this code — but nothing here is built to be run by anyone else. Without its environment
-// variables the package reports itself disabled, its routes answer 404, and its worker
+// This is freehire.me's hosted billing and is not supported for self-hosting. Without its
+// environment variables the package is disabled, its routes answer 404, and its worker
 // exits without opening a connection.
 //
-// The shape is deliberately small, because migration 0120 made it small: the provider owns
-// the subscription, we own one derived timestamp, and the metered request path reads a
-// column rather than an API. A provider that is slow or unreachable can therefore never
-// delay a user's next question.
+// The provider owns the subscription, we own one derived timestamp, and the metered request
+// path reads a column rather than an API, so a slow provider never delays a user.
 //
-// The one rule worth stating twice: a webhook is a SIGNAL that something about a customer
-// changed, never a fact about what it changed to. Delivery is unordered and duplicates are
-// possible — the provider says so itself — so the handler re-reads the customer's current
-// subscriptions and derives the column from that. Nothing here branches on the event type,
-// and there are hundreds of them.
+// A webhook is a signal that something changed, never a fact about what it changed to.
+// Delivery is unordered and may repeat, so the handler re-reads the customer's current
+// subscriptions and derives the column; nothing branches on the event type.
 package billing
 
 import (
@@ -35,35 +28,22 @@ type Config struct {
 	// Prices are the price identifiers that confer Pro — usually two, a monthly and an
 	// annual. A subscription for anything else must not make anyone Pro.
 	Prices []string
-	// UltraPrices are the price identifiers that confer Ultra. Which tier a subscription
-	// confers is decided here and nowhere else — no price id ships in the source, and a
-	// deployment naming none of these simply never resolves anybody to ultra while pro and
-	// free behave exactly as they did before.
-	//
-	// A list of its own rather than metadata on the price: metadata would put the tier
-	// definition in the provider's dashboard, where nothing in this repository can test it
-	// and one mis-click silently upgrades everybody.
+	// UltraPrices are the price identifiers that confer Ultra. The tier is decided here and
+	// nowhere else; none named means nobody resolves to ultra. A list rather than price
+	// metadata, since a dashboard mis-click could silently upgrade everybody.
 	UltraPrices []string
 	// APIPrices and APIDataPrices are the price identifiers of the API product's two tiers
-	// (API and Data). A separate PRODUCT from Pro/Ultra, not a third and fourth tier of it:
-	// holding API access confers no plan, and checkout never changes a subscription of one
-	// product into the other — see Config.checkoutFamily. Unset sells no API access.
+	// (API and Data). A separate product from Pro/Ultra: API access confers no plan, and
+	// checkout never converts between products (see Config.checkoutFamily). Unset sells none.
 	APIPrices     []string
 	APIDataPrices []string
-	// SiteURL is where a customer comes back to after paying or after managing their
-	// subscription. Empty disables checkout: there would be nowhere to return them to.
-	//
-	// It reads FRONTEND_ORIGIN, which the fleet already sets and which already means exactly
-	// this. A SITE_URL of its own would be a second name for one fact, and the two would
-	// disagree the first time somebody changed one.
+	// SiteURL is where a customer returns after paying or managing their subscription (read
+	// from FRONTEND_ORIGIN). Empty disables checkout.
 	SiteURL string
 }
 
-// ConfigFromEnv reads the configuration. It NEVER fails.
-//
-// Absent credentials mean billing is switched off, not that the deployment is broken. This
-// is the same degradation the rest of the fleet has for optional subsystems, and here it is
-// also what makes the package harmless to anyone running freehire themselves.
+// ConfigFromEnv reads the configuration. It never fails: absent credentials mean billing is
+// switched off.
 func ConfigFromEnv() Config {
 	return Config{
 		APIKey:        strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
@@ -76,12 +56,8 @@ func ConfigFromEnv() Config {
 	}
 }
 
-// priceList parses the comma-separated price identifiers.
-//
-// There is no default, and an unset value yields an EMPTY list rather than a guess. An
-// empty list confers Pro on nobody (see subscription.entitles), which is the right way for
-// a misconfiguration to fail: a guessed default would either match nothing — the same
-// outcome, less honestly — or, worse, match a price we did not mean.
+// priceList parses the comma-separated price identifiers. Unset yields an empty list, which
+// confers Pro on nobody (see subscription.entitles) rather than guessing a price.
 func priceList(raw string) []string {
 	var out []string
 	for _, part := range strings.Split(raw, ",") {
@@ -92,22 +68,15 @@ func priceList(raw string) []string {
 	return out
 }
 
-// Enabled reports whether billing can do its job: verify a delivery and read customer
-// state. Both credentials are needed, and one without the other is a half-configured
-// deployment that would either accept unverifiable webhooks or record events it can never
-// apply.
-//
-// The price list is required too. Without it every sync would derive "no Pro" and quietly
-// downgrade every subscriber — a failure that looks exactly like nobody having paid.
+// Enabled reports whether billing can verify a delivery and read customer state. It needs
+// both credentials and a price list; without prices every sync would derive "no Pro" and
+// quietly downgrade every subscriber.
 func (c Config) Enabled() bool {
 	return c.APIKey != "" && c.WebhookSecret != "" && len(c.Prices) > 0
 }
 
-// CanCheckout reports whether we can send anyone to buy.
-//
-// Separate from Enabled on purpose: a missing site URL must not stop the webhook from
-// recording events. Subscriptions already sold keep renewing, and refusing to record their
-// renewals because nobody can start a NEW purchase would lose money we have been paid.
+// CanCheckout reports whether we can send anyone to buy. Separate from Enabled so a missing
+// site URL never stops recording renewals of subscriptions already sold.
 func (c Config) CanCheckout() bool {
 	return c.Enabled() && c.SiteURL != ""
 }
@@ -115,9 +84,8 @@ func (c Config) CanCheckout() bool {
 // ErrNoCheckout is returned when checkout is not configured.
 var ErrNoCheckout = errors.New("billing: checkout is not configured")
 
-// CheckoutPrice is the price a new subscriber is sold. The first configured price is the
-// one offered; the rest stay recognised so that a subscriber on an older or annual price
-// keeps their plan.
+// CheckoutPrice is the price a new subscriber is sold: the first configured one. The rest
+// stay recognised so existing subscribers keep their plan.
 func (c Config) CheckoutPrice() string {
 	if len(c.Prices) == 0 {
 		return ""
@@ -129,15 +97,7 @@ func (c Config) CheckoutPrice() string {
 // visit to the management portal.
 func (c Config) ReturnURL() string { return c.SiteURL + "/my/plan" }
 
-// SuccessURL is where a FINISHED purchase lands. It is ReturnURL with a marker, and the
-// marker is the whole point: Stripe is given the same page for both outcomes, so without
-// it a browser coming back from a completed checkout is indistinguishable from one that
-// pressed cancel — or from someone who simply opened the plan page. The SPA reads the
-// marker to record the purchase, which is the only place the acquisition channel and the
-// payment meet: the payment itself is known to Postgres and the channel only to the
-// product analytics, and nothing else joins them.
-//
-// A marker, not the session id Stripe can template in: this says a purchase finished and
-// nothing more, so it neither leaks an identifier into a browser history nor invites a
-// caller to trust a value the user can edit.
+// SuccessURL is where a finished purchase lands: ReturnURL plus a marker, so the SPA can
+// tell a completed checkout from a cancel and record the purchase. It is a marker, not the
+// session id, so no identifier leaks into history and no editable value is trusted.
 func (c Config) SuccessURL() string { return c.ReturnURL() + "?checkout=success" }
