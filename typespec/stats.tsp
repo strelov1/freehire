@@ -733,7 +733,7 @@ op insightsSalaryHistory(
           company_name: "Acme",
           open_now: 1,
           open_prev_30d: 1,
-          growth_30d: 1,
+          growth_30d: 0,
         },
       ],
       meta: #{

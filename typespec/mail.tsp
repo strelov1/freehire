@@ -288,7 +288,7 @@ op syncGmail(): Data<GmailSyncStarted> | Problem;
           received_at: utcDateTime.fromISO("2026-07-24T09:12:00Z"),
           read: false,
           status_signal: "acknowledgement",
-          link_source: "thread",
+          link_source: "auto",
           linked_slug: "tech-lead-web-core-speechify-a1b2",
         },
       ],
@@ -553,7 +553,7 @@ op unlinkEmail(/** The message id. */ @path id: string): Data<InboxEmail> | Prob
         body_html: "<p>Dear candidate, thank you for applying.</p>",
         received_at: utcDateTime.fromISO("2026-06-18T09:12:00Z"),
         read: true,
-        link_source: "confirmed",
+        link_source: "manual",
         linked_slug: "tech-lead-web-core-speechify-a1b2",
       },
     },
@@ -629,7 +629,13 @@ op createApplicationFromEmail(/** The message id. */ @path id: string, @body bod
 @opExample(#{
   returnType: #{
       data: #{
-        job: null,
+        job: #{
+          public_slug: "senior-go-engineer-acme-1a2b",
+          title: "Senior Go Engineer",
+          company: "Acme",
+          company_slug: "acme",
+          location: "Berlin, Germany",
+        },
         viewed_at: null,
         saved_at: null,
         applied_at: utcDateTime.fromISO("2026-07-24T09:00:00Z"),

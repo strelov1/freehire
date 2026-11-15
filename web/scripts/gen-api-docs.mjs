@@ -280,7 +280,7 @@ function renderOperation(method, path, op, doc) {
     );
   }
   out.push('', '```bash', curlFor(method, path, op, access, doc.servers[0].url), '```');
-  const ok = Object.entries(op.responses ?? {}).find(([status]) => status.startsWith('2'));
+  const ok = Object.entries(op.responses ?? {}).find(([status, r]) => status.startsWith('2') && exampleOf(r.content));
   const response = exampleOf(ok?.[1].content);
   if (response) {
     const json = response.type === 'application/json';

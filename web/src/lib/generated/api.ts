@@ -12172,7 +12172,7 @@ export interface operations {
                      *           "company_name": "Acme",
                      *           "open_now": 1,
                      *           "open_prev_30d": 1,
-                     *           "growth_30d": 1
+                     *           "growth_30d": 0
                      *         }
                      *       ],
                      *       "meta": {
@@ -17800,7 +17800,7 @@ export interface operations {
                      *         "body_html": "<p>Dear candidate, thank you for applying.</p>",
                      *         "received_at": "2026-06-18T09:12:00Z",
                      *         "read": true,
-                     *         "link_source": "confirmed",
+                     *         "link_source": "manual",
                      *         "linked_slug": "tech-lead-web-core-speechify-a1b2"
                      *       }
                      *     }
@@ -18658,7 +18658,7 @@ export interface operations {
                      *           "received_at": "2026-07-24T09:12:00Z",
                      *           "read": false,
                      *           "status_signal": "acknowledgement",
-                     *           "link_source": "thread",
+                     *           "link_source": "auto",
                      *           "linked_slug": "tech-lead-web-core-speechify-a1b2"
                      *         }
                      *       ],
@@ -22401,7 +22401,13 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
-                     *         "job": null,
+                     *         "job": {
+                     *           "public_slug": "senior-go-engineer-acme-1a2b",
+                     *           "title": "Senior Go Engineer",
+                     *           "company": "Acme",
+                     *           "company_slug": "acme",
+                     *           "location": "Berlin, Germany"
+                     *         },
                      *         "viewed_at": null,
                      *         "saved_at": null,
                      *         "applied_at": "2026-07-24T09:00:00Z",

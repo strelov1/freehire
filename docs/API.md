@@ -3746,6 +3746,16 @@ is a 422.
 curl -X POST "https://freehire.me/api/v1/jobs/resolve" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
+```json
+{
+  "data": {
+    "public_slug": "senior-backend-engineer-acme-1a2b",
+    "status": "tracked",
+    "company_slug": "acme"
+  }
+}
+```
+
 ### `GET /me/contributions`
 
 **Auth:** Session or API key
@@ -4999,7 +5009,7 @@ curl -X POST "https://freehire.me/api/v1/me/emails/<id>/confirm" -H "Authorizati
     "body_html": "<p>Dear candidate, thank you for applying.</p>",
     "received_at": "2026-06-18T09:12:00Z",
     "read": true,
-    "link_source": "confirmed",
+    "link_source": "manual",
     "linked_slug": "tech-lead-web-core-speechify-a1b2"
   }
 }
@@ -5312,7 +5322,7 @@ curl "https://freehire.me/api/v1/me/inbox" -H "Authorization: Bearer $FREEHIRE_A
       "received_at": "2026-07-24T09:12:00Z",
       "read": false,
       "status_signal": "acknowledgement",
-      "link_source": "thread",
+      "link_source": "auto",
       "linked_slug": "tech-lead-web-core-speechify-a1b2"
     }
   ],
@@ -5447,7 +5457,13 @@ curl "https://freehire.me/api/v1/me/tracking/<slug>" -H "Authorization: Bearer $
 ```json
 {
   "data": {
-    "job": null,
+    "job": {
+      "public_slug": "senior-go-engineer-acme-1a2b",
+      "title": "Senior Go Engineer",
+      "company": "Acme",
+      "company_slug": "acme",
+      "location": "Berlin, Germany"
+    },
     "viewed_at": null,
     "saved_at": null,
     "applied_at": "2026-07-24T09:00:00Z",
@@ -5880,7 +5896,7 @@ curl "https://freehire.me/api/v1/insights/companies"
       "company_name": "Acme",
       "open_now": 1,
       "open_prev_30d": 1,
-      "growth_30d": 1
+      "growth_30d": 0
     }
   ],
   "meta": {
