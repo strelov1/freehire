@@ -5471,6 +5471,10 @@ type Querier interface {
 	// The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 	// the adapter registry rather than filtered here.
 	ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error)
+	// Which of a wave's message ids are already stored, so a sync throttled part-way resumes
+	// where the last run stopped instead of re-fetching the same head and hitting the limit
+	// again. Deleted rows count as stored: the upsert would not resurrect them anyway.
+	ListStoredGmailMessages(ctx context.Context, arg ListStoredGmailMessagesParams) ([]ListStoredGmailMessagesRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.

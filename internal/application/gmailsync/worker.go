@@ -19,6 +19,13 @@ type Connection struct {
 	SentCursor int64 // Run-start watermark of the last complete sent scan
 }
 
+// StoredRef is what the store already holds of a message the sync would otherwise fetch again.
+type StoredRef struct {
+	ThreadID   string
+	ReceivedAt time.Time
+	Incoming   bool
+}
+
 // StoredEmail is a fetched message ready to persist.
 type StoredEmail struct {
 	UserID  int64
@@ -32,6 +39,8 @@ type Store interface {
 	UpsertEmail(ctx context.Context, e StoredEmail) error
 	SetSynced(ctx context.Context, userID, cursorUnix, sentCursor int64) error
 	ListThreadIDs(ctx context.Context, userID int64) ([]string, error)
+	// StoredMessages returns which of ids are already stored for the user, keyed by id.
+	StoredMessages(ctx context.Context, userID int64, ids []string) (map[string]StoredRef, error)
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }
 
@@ -171,6 +180,22 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 	seen := make(map[string]bool)
 	seenThread := make(map[string]bool)
 	var threadIDs []string
+	// stored holds the listed and sibling messages an earlier run already persisted. They are
+	// not fetched again: a run stopped by the rate limit leaves its cursor where it was, so
+	// without this every later run re-fetches the same head of the mailbox and stops at the
+	// same limit, never getting through a large first sync.
+	stored := make(map[string]StoredRef)
+	loadStored := func(ids []string) {
+		refs, err := w.store.StoredMessages(ctx, u.UserID, ids)
+		if err != nil {
+			// Only a saving, not a gate: fetching them again is what the sync did before.
+			log.Printf("gmail-sync: user %d: stored messages: %v", u.UserID, err)
+			return
+		}
+		for id, ref := range refs {
+			stored[id] = ref
+		}
+	}
 
 	// fetch persists one message, deduping by id, tracking the watermark, and
 	// recording its thread for expansion. Both directions are retained; newest tracks incoming
@@ -186,6 +211,16 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			return
 		}
 		seen[id] = true
+		if ref, ok := stored[id]; ok {
+			if ref.ThreadID != "" && !seenThread[ref.ThreadID] {
+				seenThread[ref.ThreadID] = true
+				threadIDs = append(threadIDs, ref.ThreadID)
+			}
+			if ts := ref.ReceivedAt.Unix(); ref.Incoming && ts > newest {
+				newest = ts
+			}
+			return
+		}
 		msg, err := reader.GetMessage(ctx, id)
 		if err != nil {
 			if missingMessage(err) {
@@ -230,6 +265,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		}
 	}
 
+	loadStored(ids)
 	for _, id := range ids {
 		fetch(id)
 		if revoked || throttled {
@@ -298,6 +334,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			sawFailure = true
 			continue
 		}
+		loadStored(siblings)
 		for _, id := range siblings {
 			fetch(id)
 			if revoked || throttled {
