@@ -12,6 +12,7 @@
   import type { AiUsage, ApiPlan, BillingOverview, PlanState, UsageHistoryEntry } from '#lib/types.js';
   import { messages } from './PlanView.messages';
   import States from './States.svelte';
+  import PaymentHistory from './PaymentHistory.svelte';
 
   const s = $derived(t(messages, locale()));
 
@@ -336,7 +337,11 @@
           </div>
         </div>
       {/if}
+    {/if}
 
+    <PaymentHistory />
+
+    {#if plan}
       <div class="flex flex-col gap-3">
         <div class="flex items-baseline justify-between gap-3">
           <h2 class="text-sm font-semibold">{s.today.heading}</h2>

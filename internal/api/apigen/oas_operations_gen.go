@@ -114,6 +114,7 @@ const (
 	GetAuthMeOperation                      OperationName = "GetAuthMe"
 	GetAutoApplyListOperation               OperationName = "GetAutoApplyList"
 	GetAutofillProfileOperation             OperationName = "GetAutofillProfile"
+	GetBillingAttemptsOperation             OperationName = "GetBillingAttempts"
 	GetBillingCheckoutOperation             OperationName = "GetBillingCheckout"
 	GetBillingManageOperation               OperationName = "GetBillingManage"
 	GetBillingSubscriptionOperation         OperationName = "GetBillingSubscription"

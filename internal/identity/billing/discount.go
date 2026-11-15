@@ -65,8 +65,8 @@ func (c *client) couponValid(ctx context.Context, id string) (bool, error) {
 }
 
 // createCustomer registers an account that has not bought anything and returns the customer
-// id. Used only to give a referral reward a balance to sit on; it carries the same metadata
-// as checkout so the customer is attributable at once.
+// id. Used for checkout and referral rewards before the first payment; it carries account
+// metadata so the customer is attributable at once.
 func (c *client) createCustomer(ctx context.Context, userID int64, email, idempotencyKey string) (string, error) {
 	id := strconv.FormatInt(userID, 10)
 

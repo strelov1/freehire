@@ -5,6 +5,7 @@ import type {
   ApiPlan,
   ApiUsageDay,
   BillingOverview,
+  BillingPaymentAttempt,
   CheckoutSession,
   CreatedApiKey,
   InviteSummary,
@@ -76,6 +77,10 @@ export function accountApi({ call, request, requestData }: Http) {
    *  nothing rather than an error. */
   async function billingSubscription(): Promise<BillingOverview> {
     return requestData<BillingOverview>('/api/v1/billing/subscription');
+  }
+
+  async function billingAttempts(): Promise<BillingPaymentAttempt[]> {
+    return requestData<BillingPaymentAttempt[]>('/api/v1/billing/attempts');
   }
 
   /** What each plan allows and what Pro costs. Public: no session needed. Powers /pricing.
@@ -348,6 +353,7 @@ export function accountApi({ call, request, requestData }: Http) {
     promoRedeem,
     myInvite,
     billingSubscription,
+    billingAttempts,
     plans,
     billingManageUrl,
     myUsage,

@@ -296,6 +296,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/billing/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read your recent payment attempts.
+         * @description The caller's 20 most recent Stripe charge attempts, newest first, including failed
+         *     first purchases and retries. An account with no Stripe customer gets an empty list;
+         *     a provider read failure returns 503. Cookie session only.
+         */
+        get: operations["getBillingAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/billing/checkout": {
         parameters: {
             query?: never;
@@ -6383,6 +6405,9 @@ export interface components {
             country?: string;
             city?: string;
         };
+        BillingAttempts: {
+            data: components["schemas"]["BillingPaymentAttempt"][];
+        };
         /** @description The checkout link and which offer was applied to it. */
         BillingCheckout: {
             url: string;
@@ -6427,6 +6452,28 @@ export interface components {
             ends_at?: string;
             invoices: components["schemas"]["BillingInvoice"][];
             multiple_subscriptions?: boolean;
+        };
+        /** @description One charge attempt, including retries of the same payment. */
+        BillingPaymentAttempt: {
+            id: string;
+            /** Format: date-time */
+            date: string;
+            /**
+             * Format: int64
+             * @description Amount in the currency's smallest unit.
+             */
+            amount_cents: number;
+            /** Format: int64 */
+            amount_refunded_cents: number;
+            currency: string;
+            /** @description `succeeded`, `failed`, `pending`, `refunded`, or `partially_refunded`. */
+            status: string;
+            /** @description A safe display key; provider diagnostics and risk scores are never returned. */
+            reason?: string;
+            card_brand?: string;
+            card_last4?: string;
+            card_funding?: string;
+            wallet?: string;
         };
         BillingStoreSync: {
             /** @description `synced` or `no_subscription`. */
@@ -10773,6 +10820,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBillingAttempts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "ch_example",
+                     *           "date": "2026-11-14T13:24:38Z",
+                     *           "amount_cents": 290,
+                     *           "amount_refunded_cents": 0,
+                     *           "currency": "brl",
+                     *           "status": "failed",
+                     *           "reason": "insufficient_funds",
+                     *           "card_last4": "4242"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BillingAttempts"];
+                };
             };
             /** @description An unexpected error response. */
             default: {

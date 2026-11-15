@@ -178,6 +178,15 @@ answer 404, and its worker exits without opening a connection.
 - **Checkout reuses a known customer.** A second purchase that created a second customer for
   one person would leave two subscriptions nobody sums.
 
+- **Checkout binds a customer BEFORE opening a session.** Failed first purchases must be
+  reachable by their owner, including accounts still on Free. The existing write-once
+  setter and re-read select the winner of a concurrent bind. Payment history reads the
+  latest 20 customer-scoped **charges**, not PaymentIntents: retrying one intent creates
+  another charge. Only masked card fields and allowlisted display reasons leave the
+  service; risk scores and raw provider messages never do. A provider failure is an error,
+  not an empty history. Older attempts under customers that were never bound are not
+  recovered through matching email or caller-supplied account references.
+
 - **A tier change on a known customer reuses their existing subscription, never a second
   Checkout Session.** `CheckoutURL` reads the customer's current subscriptions
   (`decideCheckoutTarget`, in `entitlement.go`) and, if one already entitles them, calls

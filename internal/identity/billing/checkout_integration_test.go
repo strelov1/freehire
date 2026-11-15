@@ -35,8 +35,14 @@ type checkoutRouter struct {
 func (r *checkoutRouter) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		switch {
+		case req.URL.Path == "/customers":
+			_, _ = w.Write([]byte(`{"id":"cus_checkout"}`))
 		case req.URL.Path == "/subscriptions":
-			r.subscriptions(w, req)
+			if r.subscriptions == nil {
+				_, _ = w.Write([]byte(`{"data":[]}`))
+			} else {
+				r.subscriptions(w, req)
+			}
 		case req.URL.Path == "/checkout/sessions":
 			r.checkoutCalled = true
 			_ = req.ParseForm()
@@ -66,6 +72,57 @@ func (r *checkoutRouter) handler() http.HandlerFunc {
 		default:
 			_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
 		}
+	}
+}
+
+func TestCheckoutBindsCustomerBeforeFailedFirstPurchase(t *testing.T) {
+	created := 0
+	checkouts := 0
+	s, pool := newTieredService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/customers":
+			created++
+			if r.Header.Get("Idempotency-Key") == "" {
+				t.Error("customer creation must be idempotent")
+			}
+			_, _ = w.Write([]byte(`{"id":"cus_first_attempt"}`))
+		case "/subscriptions":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		case "/checkout/sessions":
+			checkouts++
+			_ = r.ParseForm()
+			if r.Form.Get("customer") != "cus_first_attempt" {
+				t.Errorf("checkout customer: %s", r.Form.Get("customer"))
+			}
+			if checkouts == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/session"}`))
+		case "/charges":
+			if r.URL.Query().Get("customer") != "cus_first_attempt" {
+				t.Errorf("history customer: %s", r.URL)
+			}
+			_, _ = w.Write([]byte(`{"data":[{"id":"ch_failed","status":"failed"}]}`))
+		}
+	})
+	ctx := context.Background()
+	id := insertUser(t, pool, "first-attempt@example.com")
+	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}); err == nil {
+		t.Fatal("expected the first checkout to fail")
+	}
+	if bound := customerOf(t, pool, id); bound == nil || *bound != "cus_first_attempt" {
+		t.Fatalf("customer was not bound before checkout: %v", bound)
+	}
+	if _, _, err := s.CheckoutURL(ctx, id, proPrice, Discount{}); err != nil {
+		t.Fatal(err)
+	}
+	if created != 1 {
+		t.Fatalf("created %d customers for one account", created)
+	}
+	attempts, err := s.PaymentAttempts(ctx, id)
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("free account history: %+v, %v", attempts, err)
 	}
 }
 

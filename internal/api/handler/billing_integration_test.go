@@ -304,6 +304,14 @@ func TestBillingCheckout(t *testing.T) {
 	// The provider mints the checkout page; we only ever hand it the account id.
 	var gotForm string
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/customers" {
+			_, _ = w.Write([]byte(`{"id":"cus_checkout"}`))
+			return
+		}
+		if r.URL.Path == "/subscriptions" {
+			_, _ = w.Write([]byte(`{"data":[]}`))
+			return
+		}
 		_ = r.ParseForm()
 		gotForm = r.Form.Encode()
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_int"}`))
@@ -420,6 +428,7 @@ func TestBillingRoutesAbsentWhenUnconfigured(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v1/billing/stripe/webhook"},
 		{http.MethodGet, "/api/v1/billing/checkout"},
+		{http.MethodGet, "/api/v1/billing/attempts"},
 	} {
 		req := httptest.NewRequestWithContext(ctx, tc.method, tc.path, strings.NewReader("{}"))
 		resp, err := app.Test(req, 15000)
