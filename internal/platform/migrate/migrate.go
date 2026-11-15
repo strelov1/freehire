@@ -1,16 +1,11 @@
 // Package migrate is the versioned migration runner for migrations/*.sql.
 //
-// Until now schema changes reached an existing database by hand: initdb applies
-// the whole migrations/ dir once on first volume init, and every later file had
-// to be run manually on prod before deploying. This package adds the missing
-// bookkeeping: a schema_migrations table (version TEXT PK = the filename, so the
-// historical number collisions like 0009×2 stay harmless), one transaction per
-// migration, and a session advisory lock so two runs cannot interleave.
+// A schema_migrations table (version TEXT PK = the filename, so duplicate number prefixes
+// like 0009x2 are harmless) records applied files; each runs in one transaction under a
+// session advisory lock.
 //
-// Bootstrap of a pre-runner database is automatic: when schema_migrations is
-// empty but the jobs table already exists (an initdb- or hand-migrated volume),
-// the run baselines — records every on-disk migration as applied without
-// executing it — instead of replaying files whose effects are already present.
+// When schema_migrations is empty but the jobs table exists (an initdb- or hand-migrated
+// volume), the run baselines: it records every on-disk migration without executing it.
 // On a truly empty database every migration is applied in order.
 package migrate
 
@@ -28,21 +23,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// noTxMarker, placed as the WHOLE content of a comment line in a migration's leading
-// comment block, opts the file out of the per-migration transaction. Needed for statements
-// Postgres forbids inside a transaction block (CREATE INDEX CONCURRENTLY, DROP INDEX
-// CONCURRENTLY).
+// noTxMarker, as the WHOLE content of a comment line in a migration's leading comment
+// block, opts the file out of the per-migration transaction (for CREATE INDEX CONCURRENTLY
+// and the like).
 //
-// The file is then executed one statement at a time (see splitStatements) — a whole file in
-// one Exec would still be one implicit transaction, which is not what the marker promises.
-// The applied-record insert runs outside any transaction too, so a failure can leave the
-// file executed but unrecorded — re-running is safe only if such files are written
-// idempotently (IF NOT EXISTS / IF EXISTS).
+// The file then runs one statement at a time (see splitStatements). The applied-record
+// insert is outside any transaction too, so a failure can leave the file executed but
+// unrecorded: such files must be idempotent (IF NOT EXISTS / IF EXISTS).
 const noTxMarker = "migrate: no-transaction"
 
-// advisoryLockKey serializes concurrent migrate runs (e.g. a deploy racing a cron-triggered
-// run). Arbitrary but stable — it only needs to not collide with the project's other
-// advisory-lock users, which is the list a fourth one should read before picking its own:
+// advisoryLockKey serializes concurrent migrate runs. It must not collide with the project's
+// other advisory-lock users; read this list before picking a new key:
 //
 //	728391      internal/platform/migrate     — this one, a blocking pg_advisory_lock
 //	0x66686c76  cmd/liveness         — "fhlv", a non-blocking pg_try_advisory_lock
@@ -74,29 +65,17 @@ const noTxMarker = "migrate: no-transaction"
 //	                                   around the CV pointer write (never the object
 //	                                   upload); a first-CV-only upload cannot interleave
 //	                                   with another upload or a delete
-//
-// The comment here used to say "the project has none", which stopped being true when those two
-// arrived and left the only place anyone would look asserting there was nothing to collide with.
 const advisoryLockKey int64 = 728391
 
-// lockTimeout bounds how long a migration may WAIT for a lock. It does not bound how long a
-// statement may hold one, so a long index build is unaffected — only the wait is.
+// lockTimeout bounds how long a migration may WAIT for a lock, not how long a statement
+// holds one.
 //
-// Without it a schema change does not merely stall itself, it stalls the table. Postgres
-// queues lock requests, so an `ALTER TABLE` waiting for ACCESS EXCLUSIVE sits ahead of every
-// reader that arrives after it, and those readers wait too. That is how one bounded migration
-// took out signed-in profile reads on 2026-07-30: a release landed inside the nightly
-// pg_dump window, the dump holds ACCESS SHARE on every table for the length of the dump, and
-// the ALTER queued behind it with live reads piling up behind the ALTER.
-//
-// Five seconds is far longer than an uncontended DDL lock takes and far shorter than anything
-// worth stalling a table for. Failing is the right outcome: release.sh aborts the release with
-// the live colour untouched, and the operator retries outside the window.
+// Postgres queues lock requests, so an `ALTER TABLE` waiting for ACCESS EXCLUSIVE (say,
+// behind the nightly pg_dump) blocks every reader that arrives after it. Failing is the
+// right outcome: release.sh aborts with the live colour untouched and the operator retries.
 const lockTimeout = "5s"
 
-// Migration is one migrations/*.sql file. Version is the filename — unique by
-// construction, so the historical duplicate number prefixes (0009_job_daily_stats
-// vs 0009_user_job_analysis) need no renumbering.
+// Migration is one migrations/*.sql file. Version is the filename, unique by construction.
 type Migration struct {
 	Version string
 	SQL     string
@@ -136,14 +115,10 @@ func Load(dir string) ([]Migration, error) {
 // hasNoTxMarker reports whether the file DECLARES the marker in its leading comment block
 // (blank lines and -- comments before the first statement).
 //
-// The marker must be the whole content of its comment line. It is an instruction, not a
-// topic: with strings.Contains, migrations/0126 — whose header says "No `migrate:
-// no-transaction` marker, so the two statements are one transaction" — was opted out by the
-// sentence explaining that it must not be. It survived only by accident, because a
-// multi-statement simple query is one implicit transaction anyway.
+// The marker must be the whole content of its comment line: with strings.Contains, a header
+// that merely mentioned the marker (migrations/0126) would opt out.
 //
-// scripts/check-migrations.mjs repeats this rule; the two must agree, or squawk lints a
-// file under a premise the runner does not share.
+// scripts/check-migrations.mjs repeats this rule; the two must agree.
 func hasNoTxMarker(sql string) bool {
 	for _, line := range strings.Split(sql, "\n") {
 		line = strings.TrimSpace(line)
@@ -165,17 +140,10 @@ func hasNoTxMarker(sql string) bool {
 // and comments are carried with the statement that follows them; a trailing fragment
 // containing no statement is dropped.
 //
-// It exists because the no-transaction marker did not mean what its files said. The runner
-// sent the whole file to one Exec, and pgx forces the simple protocol when a query carries
-// no arguments (conn.go), which Postgres executes as ONE implicit transaction — so the
-// marker cancelled only the runner's own BEGIN/COMMIT and bought nothing else.
-// migrations/0135 states a guarantee it was not getting: "Two ALTER TABLE statements,
-// deliberately NOT in one transaction: NOT VALID + VALIDATE CONSTRAINT in one transaction
-// holds ACCESS EXCLUSIVE for the whole scan."
-//
-// This is a splitter, not a parser: it needs to find statement boundaries, not to
-// understand SQL. The four quoting forms below are the only ones in which a semicolon can
-// hide.
+// pgx sends a whole file as one simple-protocol Exec, which Postgres runs as ONE implicit
+// transaction, so the no-transaction marker needs per-statement execution. This is a
+// splitter, not a parser: the four quoting forms handled are the only ones that hide a
+// semicolon.
 func splitStatements(sql string) []string {
 	var (
 		out   []string
@@ -225,8 +193,7 @@ func splitStatements(sql string) []string {
 			start = i + 1
 		}
 	}
-	// start never passes len(sql): the ';' branch is the only writer and runs at an index
-	// inside the string.
+	// start never passes len(sql): only the ';' branch writes it, at an index inside the string.
 	if tail := sql[start:]; hasStatement(tail) {
 		out = append(out, tail)
 	}
@@ -275,8 +242,6 @@ func tagByte(c byte, first bool) bool {
 }
 
 // hasStatement reports whether a fragment carries anything but whitespace and comments.
-// A file's closing commentary is not a statement to execute, and neither is a stray
-// semicolon after a comment — one rule, asked in both places splitStatements cuts.
 func hasStatement(fragment string) bool {
 	for _, line := range strings.Split(fragment, "\n") {
 		line = strings.TrimSpace(line)
@@ -345,9 +310,8 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 		}
 	}()
 
-	// Set after the advisory lock deliberately: a second concurrent run should still WAIT its
-	// turn for that (it is not a table lock and blocks nobody), while every table lock taken
-	// below is bounded. Session-level, so it covers the no-transaction files too.
+	// Set after the advisory lock on purpose: a second run should WAIT for that lock (it blocks
+	// nobody), while every table lock below is bounded. Session-level, so it covers no-tx files.
 	if _, err := conn.Exec(ctx, "SET lock_timeout = '"+lockTimeout+"'"); err != nil {
 		return nil, nil, fmt.Errorf("set lock_timeout: %w", err)
 	}
@@ -397,10 +361,9 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 		}
 		applied = append(applied, m.Version)
 		log.Printf("migrate: applied %s", m.Version)
-		// initdb runs each file in a session of its own, and the files rely on it: 0001 is a
-		// schema dump that empties search_path for the rest of its session, so a fresh
-		// database failed on the next file. DISCARD TEMP drops what a file left in pg_temp
-		// (DISCARD ALL would also release the advisory lock). RESET ALL drops lock_timeout too.
+		// initdb gives each file its own session, and files rely on it (0001 empties search_path).
+		// DISCARD TEMP drops pg_temp leftovers (DISCARD ALL would release the advisory lock);
+		// RESET ALL drops lock_timeout too, so it is set again.
 		if _, err := conn.Exec(ctx, "DISCARD TEMP; RESET ALL; SET lock_timeout = '"+lockTimeout+"'"); err != nil {
 			return baselined, applied, fmt.Errorf("reset session after %s: %w", m.Version, err)
 		}
@@ -435,17 +398,11 @@ func applyOne(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
 
 // applyNoTx executes a no-transaction migration one statement at a time and records it.
 //
-// One statement per Exec is what makes the marker mean what its files say: a whole file in
-// one Exec goes out on the simple protocol (pgx forces it when there are no arguments) and
-// Postgres runs a multi-statement simple query as ONE implicit transaction, so the marker
-// cancelled only this runner's own BEGIN/COMMIT. Each statement still gets an implicit
-// transaction of its own, which is the point — that is what a CONCURRENTLY statement needs
-// and what keeps 0135's NOT VALID and VALIDATE CONSTRAINT from sharing an ACCESS EXCLUSIVE
+// Each statement gets its own implicit transaction, which is what a CONCURRENTLY statement
+// needs and what keeps NOT VALID and VALIDATE CONSTRAINT from sharing one ACCESS EXCLUSIVE
 // lock across the whole scan.
 //
-// A failure part-way leaves the file executed-but-unrecorded, which is why these files must
-// be written idempotently (IF NOT EXISTS / IF EXISTS) — the same contract as before, now
-// with a finer failure granularity.
+// A failure part-way leaves the file executed but unrecorded, hence the idempotency rule.
 func applyNoTx(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
 	for _, stmt := range splitStatements(m.SQL) {
 		if _, err := conn.Exec(ctx, stmt); err != nil {
@@ -453,16 +410,12 @@ func applyNoTx(ctx context.Context, conn *pgxpool.Conn, m Migration) error {
 		}
 	}
 
-	// A successful CREATE INDEX CONCURRENTLY is not proof of a usable index. It waits on
-	// virtual transaction locks and old snapshots with an ordinary wait, which lockTimeout
-	// aborts with 55P03, leaving the index at indisvalid=f. The FIRST run fails loudly and
-	// records nothing. The SECOND is the trap: `IF NOT EXISTS` sees the carcass, does
-	// nothing, succeeds, and the version is recorded against an index that will never be
-	// used. migrations/0126 and 0127 record that happening on 2026-09-03.
+	// A successful CREATE INDEX CONCURRENTLY is not proof of a usable index: lockTimeout can
+	// abort its wait (55P03) and leave indisvalid=f. The first run fails loudly, but a re-run
+	// with IF NOT EXISTS sees the carcass, succeeds, and records the version.
 	//
-	// So the check cannot be before-and-after — on the re-run the carcass is present in
-	// BOTH snapshots. It asks instead whether any index THIS FILE NAMES is invalid, which
-	// is also what keeps somebody else's older carcass from failing every run forever.
+	// So check whether any index THIS FILE NAMES is invalid, not a before/after diff (the
+	// carcass is in both snapshots); that also ignores other files' older carcasses.
 	broke, err := invalidIndexesNamedIn(ctx, conn, m.SQL)
 	if err != nil {
 		return fmt.Errorf("read index validity after %s: %w", m.Version, err)
@@ -508,12 +461,9 @@ func invalidIndexesNamedIn(ctx context.Context, conn *pgxpool.Conn, sql string) 
 
 // namesIdentifier reports whether sql mentions name as a whole identifier, so a short index
 // name is not matched inside a longer one. Case-insensitive because Postgres folds an
-// unquoted identifier to lower case and a migration may spell it either way.
+// unquoted identifier to lower case.
 //
-// A compiled regexp per call, deliberately: this runs once per invalid index per
-// no-transaction migration, so a handful of times a year. The literal-scan rule that
-// applies to the dictionary hot paths does not apply here, and reaching for it would trade
-// three lines for twenty to save nothing measurable.
+// The regexp is compiled per call on purpose: this runs a handful of times a year.
 func namesIdentifier(sql, name string) bool {
 	return regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(name) + `\b`).MatchString(sql)
 }
@@ -535,9 +485,8 @@ func appliedVersions(ctx context.Context, conn *pgxpool.Conn) (map[string]bool, 
 	return set, nil
 }
 
-// hasJobsTable reports whether the core schema already exists — the legacy
-// signal that the database predates the runner and must be baselined, not
-// replayed.
+// hasJobsTable reports whether the core schema exists, the signal that the database
+// predates the runner and must be baselined, not replayed.
 func hasJobsTable(ctx context.Context, conn *pgxpool.Conn) (bool, error) {
 	var regclass *string
 	if err := conn.QueryRow(ctx, "SELECT to_regclass('public.jobs')::text").Scan(&regclass); err != nil {

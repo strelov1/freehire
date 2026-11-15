@@ -85,7 +85,7 @@ var standbyConflictPause = 30 * time.Second
 // RetryStandbyConflict runs one analytics statement and reruns it when the standby
 // cancelled it for a recovery conflict. On a read-only standby that is the only source
 // of SQLSTATE 40001 and 40P01, and hot_standby_feedback cannot prevent the lock and
-// buffer-pin kinds, so one cancel used to fail the whole multi-hour rebuild.
+// buffer-pin kinds.
 func RetryStandbyConflict[R any](ctx context.Context, name string, run func() (R, error)) (R, error) {
 	for attempt := 1; ; attempt++ {
 		result, err := run()

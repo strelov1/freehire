@@ -127,21 +127,13 @@ func NewTransportWithProxy(dialTimeout time.Duration, proxy *url.URL) *http.Tran
 	return t
 }
 
-// NewTransportWithoutKeepAlive is NewTransport with connection reuse switched off, so
-// every request dials a fresh connection.
+// NewTransportWithoutKeepAlive is NewTransport with connection reuse switched off, so every
+// request dials a fresh connection.
 //
-// It is not a tuning knob, and nothing should reach for it to be careful. It exists for a
-// server that mishandles a connection it has already answered on, which is a failure mode
-// worth naming because it does not look like one: measured against profession.hu from the
-// production host on 2026-09-06, five sequential sitemap requests over one keep-alive
-// transport answered the first two and failed the rest with a bare EOF — and the SECOND of
-// those two returned 379 bytes where the document is 76,403. A truncated body is not an
-// error to any caller; that sitemap parses as a short one, and the crawl reads it as a
-// board that has lost its postings. The same five requests over this transport answered in
-// full.
-//
-// The cost is a TLS handshake per request, which is why it is per-platform and not the
-// default.
+// Not a tuning knob. It exists for servers that mishandle a connection they already answered
+// on: profession.hu answered the first two sitemap requests over a keep-alive transport, then
+// failed with EOF or returned a truncated body, which a crawl reads as a board that lost its
+// postings. The cost is a TLS handshake per request, so it is per-platform, not the default.
 func NewTransportWithoutKeepAlive(dialTimeout time.Duration) *http.Transport {
 	t := NewTransport(dialTimeout)
 	t.DisableKeepAlives = true

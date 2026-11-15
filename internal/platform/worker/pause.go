@@ -20,10 +20,8 @@ const (
 	pauseAllKey    = pauseKeyPrefix + "all"
 )
 
-// pauseTimeout bounds the switch lookup. An unhealthy-but-reachable Redis must
-// delay a worker's start by a known amount rather than by go-redis's dial
-// default — the switch is a convenience, and a convenience may not decide how
-// long the catalogue waits.
+// pauseTimeout bounds the switch lookup, so an unhealthy Redis delays a worker's start
+// by a known amount.
 const pauseTimeout = 250 * time.Millisecond
 
 // IgnorePauseEnv names the environment variable that bypasses the pause switch.
@@ -59,9 +57,8 @@ func AnyHeld(ctx context.Context, redisURL string, keys ...string) bool {
 
 	held, err := keysHeld(ctx, redisURL, keys...)
 	if err != nil {
-		// Fail open, and say so. A facility for shedding load must never become
-		// the reason the catalogue stops updating, but a silent degrade would be
-		// indistinguishable from a switch that was genuinely clear.
+		// Fail open, and say so: the pause switch must never stop the catalogue updating,
+		// but a silent degrade would look like a clear switch.
 		log.Printf("worker: pause switch unreadable, running anyway: %v", err)
 		return false
 	}
@@ -100,8 +97,7 @@ const SearchDrainJob = "search-drain"
 // HoldPause holds another worker back for as long as the caller needs, through the same
 // switch an operator uses, until the returned release is called. The key carries a TTL
 // that is refreshed while the caller runs, so a holder that dies cannot leave the worker
-// off: the drain was once forgotten that way for hours (2026-08-06, 2026-08-15). It only
-// stops new work; a worker in flight has to look for itself (see Paused).
+// off. It only stops new work; a worker in flight has to look for itself (see Paused).
 func HoldPause(ctx context.Context, redisURL, job string, ttl time.Duration) (release func(), err error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {

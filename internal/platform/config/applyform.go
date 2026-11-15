@@ -3,9 +3,8 @@ package config
 import "time"
 
 // ApplyForm holds the tuning knobs for the application-form capture worker
-// (cmd/capture-apply-form). It needs nothing but a database and the public ATS endpoints,
-// so this is the whole configuration surface — the queue-drain knobs and the one bound
-// that matters operationally, how hard the worker is allowed to lean on a platform.
+// (cmd/capture-apply-form): the queue-drain knobs and how hard the worker may lean on a
+// platform.
 type ApplyForm struct {
 	BatchSize    int           // claim wave size
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
@@ -16,15 +15,12 @@ type ApplyForm struct {
 }
 
 // LoadApplyForm reads the worker's tuning from the environment, all optional with
-// defaults. The defaults are deliberately modest: the first production drain faces a
-// backlog of roughly 185k postings across two platforms, and a worker that empties it in
-// one afternoon is a worker that got the crawl blocked.
+// defaults. The defaults are modest: a worker that drains the backlog too fast gets the
+// crawl blocked.
 //
-// APPLY_FORM_MAX_PER_RUN is the bound that matters operationally, and it is separate from
-// concurrency on purpose: concurrency decides how fast, this decides how long. Nothing in
-// this fleet holds a lock, so a run that works for hours does not just take a while — a
-// systemd Type=oneshot unit refuses to start a second instance while it is active, and
-// every scheduled firing behind it is silently dropped. Set it to 0 for a supervised
+// APPLY_FORM_MAX_PER_RUN is separate from concurrency: concurrency decides how fast, this
+// how long. A systemd Type=oneshot unit refuses a second instance while active, so every
+// scheduled firing behind a long run is silently dropped. Set it to 0 for a supervised
 // one-off catch-up.
 func LoadApplyForm() ApplyForm {
 	a := ApplyForm{
@@ -35,18 +31,16 @@ func LoadApplyForm() ApplyForm {
 		MaxPerRun:    envInt("APPLY_FORM_MAX_PER_RUN", 5000),
 		CallTimeout:  time.Duration(envInt("APPLY_FORM_CALL_TIMEOUT_SECONDS", 20)) * time.Second,
 	}
-	// A non-positive batch size would make the claim's LIMIT 0 (silently no-op) or feed a
-	// negative LIMIT to Postgres; floor it so the worker always makes progress.
+	// A non-positive batch size makes the claim's LIMIT 0 (no-op) or negative; floor it.
 	if a.BatchSize < 1 {
 		a.BatchSize = 1
 	}
 	if a.Concurrency < 1 {
 		a.Concurrency = 1
 	}
-	// The lease must outlast a single fetch, or an in-flight capture becomes re-claimable
-	// mid-flight (double work) and a lease of 0 re-claims a just-failed entry in a tight
-	// loop, burning its whole retry budget in one run. Floor it to the per-call timeout —
-	// the longest one capture can hold the lease. Same reasoning as config.LoadEmbed.
+	// The lease must outlast a single fetch, or an in-flight capture is re-claimed (double
+	// work) and a lease of 0 re-claims a failed entry in a tight loop, burning its retries.
+	// Floor it to the per-call timeout.
 	if floor := int(a.CallTimeout.Seconds()); a.LeaseSeconds < floor {
 		a.LeaseSeconds = floor
 	}

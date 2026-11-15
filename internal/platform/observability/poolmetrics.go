@@ -13,16 +13,11 @@ type poolStatter interface {
 
 // poolCollector publishes the connection pool's occupancy.
 //
-// Nothing in this repository read pool.Stat() before the 2026-09-14 outage, which is the
-// reason that outage was invisible. A deep-offset crawl held all ten of the API's connections
-// for minutes at a time; every other request queued for one, and the signals that existed all
-// looked clean — pool.Ping answers in microseconds while every connection is held, and the
-// error fraction counts only responses the process PRODUCED, of which there were almost none
-// because nothing was finishing.
+// Pool occupancy matters because a crawl holding every connection leaves pool.Ping fast and the
+// error fraction clean (few responses are produced), so no other signal shows it.
 //
-// Implemented as a Collector rather than gauges a goroutine polls: Stat() reads counters the
-// pool already keeps in memory, so reading them at scrape time is both cheaper and fresher
-// than sampling on a timer, and there is no interval to pick or ticker to stop.
+// A Collector, not a polled gauge: Stat() reads in-memory counters, so scrape-time reads are
+// cheaper and fresher, with no interval or ticker to manage.
 type poolCollector struct {
 	pool poolStatter
 
@@ -44,28 +39,14 @@ func NewPoolCollector(pool poolStatter) prometheus.Collector {
 			"Connections open and free to be handed out.", nil, nil),
 		max: prometheus.NewDesc("freehire_db_pool_max_connections",
 			"The pool's ceiling. Saturation is acquired/max; alert on the ratio, never on the raw count — the ceiling is per-process configuration and changes.", nil, nil),
-		// How OFTEN a caller found nothing free. Useful as a trend, and deliberately NOT
-		// what to alert on — measured on production 2026-09-14 this sits around 15/s on a
-		// perfectly healthy pool (1 connection acquired, 9 idle at the same instant),
-		// because it counts an acquire that waited at all, including the microseconds pgx
-		// spends handing a connection over under ordinary concurrency. An alert on this
-		// rate fires permanently, and a permanently red alert is one nobody reads.
+		// How OFTEN a caller found nothing free. A trend only, NOT an alert signal: it counts any
+		// acquire that waited at all, so it sits around 15/s on a healthy pool.
 		emptyWait: prometheus.NewDesc("freehire_db_pool_empty_acquire_total",
 			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — alert on sustained acquired/max instead.", nil, nil),
-		// How long callers spent inside Acquire, in total. A diagnostic, and NOT the
-		// alerting signal either — the name pgx gives it is AcquireDuration and what it
-		// documents is "the total duration of all successful Acquire calls", so it counts
-		// handing over an already-idle connection just as it counts a two-minute wait.
-		// Measured on production it runs at ~1.36 seconds per second against a pool one
-		// tenth occupied, which is not 1.36 callers queued; it is Little's law over every
-		// acquire, most of them instant.
-		//
-		// It earns its place as the thing that separates ten thousand waits of a
-		// microsecond from ten waits of two minutes, which no count can: divide it by
-		// freehire_db_pool_empty_acquire_total for the mean. What carries the ALERT is
-		// sustained occupancy — avg_over_time of acquired/max — because during the
-		// 2026-09-14 outage the pool sat at 10/10 for fifty minutes, while a healthy pool
-		// samples at 0/10 most of the time and touches its ceiling only in bursts.
+		// Total time callers spent inside Acquire. A diagnostic, NOT the alerting signal: pgx
+		// counts every successful Acquire, so instant handovers inflate it. Divide by
+		// freehire_db_pool_empty_acquire_total for the mean wait. Alert on sustained occupancy
+		// (avg_over_time of acquired/max) instead; a healthy pool only touches its ceiling in bursts.
 		waited: prometheus.NewDesc("freehire_db_pool_acquire_seconds_total",
 			"Cumulative time spent inside Acquire, waiting and instant hand-offs alike. A diagnostic: divide by the empty-acquire count for a mean wait. Alert on sustained acquired/max instead.", nil, nil),
 	}

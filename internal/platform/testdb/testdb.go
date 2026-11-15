@@ -1,33 +1,24 @@
 // Package testdb is the Postgres harness for the integration tests: one
 // throwaway container per test binary, and a pristine database per test cloned
-// from a template that carries every migration.
-//
-// The obvious alternative — a container per test — cost ~4.5s each (~3s to boot
-// the container, ~1.5s to replay the 57 migrations) while the assertions
-// themselves took milliseconds. At ~226 calls per CI run that was 8 of the
-// backend job's 9.5 minutes. `CREATE DATABASE ... TEMPLATE` is a file copy of an
-// already-migrated database, ~0.2s, and buys the same isolation: every test
-// still gets its own database with its own sequences, so a test may freely
-// mutate rows, indexes, or the schema.
+// from a template that carries every migration. `CREATE DATABASE ... TEMPLATE`
+// is a file copy, far cheaper than a container per test, and each test still
+// gets its own database with its own sequences, so it may freely mutate rows,
+// indexes, or the schema.
 //
 // The container is reaped by the testcontainers ryuk sidecar when the test
-// binary exits (nothing outlives the run unless TESTCONTAINERS_RYUK_DISABLED
-// is set).
+// binary exits (unless TESTCONTAINERS_RYUK_DISABLED is set).
 //
 // TESTDB_ADMIN_URL points the harness at a Postgres that is already running
 // instead (pgvector installed, a role that may CREATE DATABASE, and `psql` on
 // PATH). It exists for the coding agents' runner, which has no Docker and must
 // not get the host's: a Docker socket there would be root on the host for any
-// code a task brings. mise sets it for a laptop (scripts/dev-env.sh), and CI sets it
-// for the integration shards, each of which starts one Postgres for all its binaries.
+// code a task brings. mise sets it for a laptop (scripts/dev-env.sh), and CI sets
+// it for the integration shards.
 //
 // On that server every test binary shares ONE template, named after a hash of the
 // migrations, built by whichever binary gets there first and reused by the rest and
-// by later runs. Migrating a template per binary cost ~2.4s each, 56 times a run,
-// and left every one of them behind: nothing dropped a binary's own template when it
-// exited. Postgres clones one template into many databases at once without
-// complaint (checked with 12 concurrent CREATE DATABASE ... TEMPLATE), so the share
-// needs a lock only around the build.
+// by later runs. Postgres clones one template into many databases at once, so the
+// share needs a lock only around the build.
 package testdb
 
 import (
@@ -80,11 +71,11 @@ const (
 	templateLockKey int64 = 0x66687470 // "fhtp"
 
 	// staleTemplateAge is how long a template of OTHER migrations is kept: another
-	// branch on the same server may still be using it, and rebuilding costs seconds.
+	// branch on the same server may still be using it.
 	staleTemplateAge = 7 * 24 * time.Hour
 
 	// externalBootTimeout bounds reaching a shared template: waiting for the build
-	// lock plus building it. A build is ~2.4s on a laptop.
+	// lock plus building it.
 	externalBootTimeout = 5 * time.Minute
 )
 
@@ -149,9 +140,8 @@ func boot() (*container, error) {
 		return nil, err
 	}
 	if admin := os.Getenv("TESTDB_ADMIN_URL"); admin != "" {
-		// Bounds the wait for another binary's build as well as this one's: a build
-		// takes seconds, and a stuck one should fail every waiter with its own error
-		// rather than at go test's timeout, as a stack dump of a lock wait.
+		// Bounds the wait for another binary's build as well as this one's, so a stuck
+		// build fails every waiter with its own error, not a go test timeout stack dump.
 		ctx, cancel := context.WithTimeout(ctx, externalBootTimeout)
 		defer cancel()
 		return bootExternal(ctx, admin, scripts)

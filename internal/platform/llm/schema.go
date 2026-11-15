@@ -15,40 +15,29 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
-// SchemaMode selects how a schema is asked for on the wire. It is a property of the
-// GATEWAY, not of any call, which is why it lives on Settings rather than on a
-// GenOption: one deployment's model either honours strict mode or it does not, and a
-// per-call answer would just be the same answer repeated at every call site.
+// SchemaMode selects how a schema is asked for on the wire. It is a property of the gateway,
+// so it lives on Settings, not on a GenOption.
 type SchemaMode string
 
 const (
-	// SchemaModeStrict sends the schema itself, as `response_format: json_schema`
-	// with strict: true. The zero value, and the right request wherever it is
-	// understood.
+	// SchemaModeStrict sends `response_format: json_schema` with strict: true. The zero value.
 	SchemaModeStrict SchemaMode = ""
 
-	// SchemaModeJSONObject sends `response_format: json_object` and no schema, for
-	// a gateway whose model answers a strict schema worse than it answers no
-	// schema at all. Measured on z.ai's glm-4.7-flash: a strict two-field object
-	// came back as a fenced array of invented job postings, while json_object with
-	// the same prompt returned the exact shape three times out of three.
-	//
-	// The shape is still asked for — the schema is appended to the system prompt
-	// (systemFor) — and still checked, by the caller's own validator. What is lost is the provider-side guarantee, which the package
-	// documentation already declines to treat as one.
+	// SchemaModeJSONObject sends `response_format: json_object` and no schema, for a gateway
+	// whose model answers strict schemas worse than none (z.ai glm-4.7-flash invented postings).
+	// The schema is appended to the system prompt (systemFor) and still checked by the
+	// caller's validator; only the provider-side guarantee is lost.
 	SchemaModeJSONObject SchemaMode = "json_object"
 )
 
-// GenOption configures a single JSON generation. Options are variadic so a call site
-// that asks for nothing keeps sending exactly what it sent before.
+// GenOption configures a single JSON generation.
 type GenOption func(*genConfig)
 
 type genConfig struct {
 	schemaName  string
 	schema      llmschema.Schema
 	schemaAsked bool
-	// reasoning is how much the model should deliberate over this call; see
-	// WithReasoning. The zero value sends nothing.
+	// reasoning: see WithReasoning.
 	reasoning ReasoningEffort
 }
 
@@ -61,12 +50,10 @@ func newGenConfig(opts []GenOption) genConfig {
 	return cfg
 }
 
-// WithSchema constrains the response to schema, sent in strict mode under name. The
-// name is the model-facing label for the shape and appears in provider logs, so it
-// should read like the contract it came from ("structured_cv", "enrichment").
+// WithSchema constrains the response to schema, sent in strict mode under name. The name is
+// the model-facing label and appears in provider logs ("structured_cv", "enrichment").
 //
-// A nil schema or an empty name is an error at call time rather than a call that
-// quietly runs unconstrained: both are the failure this package exists to prevent.
+// A nil schema or empty name is an error at call time, not a silently unconstrained call.
 func WithSchema(name string, s llmschema.Schema) GenOption {
 	return func(cfg *genConfig) {
 		cfg.schemaName = name
@@ -90,17 +77,12 @@ func (cfg genConfig) validate() error {
 	return nil
 }
 
-// modelCache holds the per-schema models behind a pointer, so Client stays copyable —
-// WithTimeout clones it, and a mutex embedded by value would be copied with it. That
-// clone shares the cache, which is right: it addresses the same endpoint with the same
-// credential and the same headers.
+// modelCache holds the per-schema models behind a pointer so Client stays copyable
+// (WithTimeout clones share it, which is right: same endpoint, credential and headers).
 //
-// **As does NOT share it, and must not.** The key below is the schema's name and its
-// rendered shape — not the credential, and not the tags. A clone that changed either
-// while sharing this cache would be served the model the FIRST caller built: one user's
-// call going out on another user's key, or a tagged call going out untagged. Both
-// succeed, both decode, and neither is visible in anything but the spend report.
-// TestAsDoesNotShareSchemaBoundModelsAcrossCredentials is the guard.
+// As must NOT share it. The key is the schema name and rendered shape, not the credential or
+// tags, so a shared cache would send one user's call on another's key, or a tagged call
+// untagged, invisibly. TestAsDoesNotShareSchemaBoundModelsAcrossCredentials guards it.
 type modelCache struct {
 	mu     sync.Mutex
 	models map[string]llms.Model
@@ -127,12 +109,9 @@ func (mc *modelCache) get(name string, build func() (llms.Model, error)) (llms.M
 	return m, nil
 }
 
-// modelFor returns the model a call should run against: the plain one when no schema
-// was asked for, otherwise one bound to that schema and reused thereafter.
-//
-// A client built by NewWithModel has no endpoint to rebuild against — that seam exists
-// so callers' tests can inject a fake — so a schema there is ignored rather than
-// fatal, and the injected model is used as-is.
+// modelFor returns the plain model when no schema was asked for, otherwise one bound to that
+// schema and cached. A NewWithModel client has no endpoint to rebuild against, so a schema
+// there is ignored and the injected model used as-is.
 func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -146,10 +125,8 @@ func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 		return nil, err
 	}
 
-	// Keyed on the name AND the rendered schema: two shapes sharing a name would
-	// otherwise silently share the first one's constraint, and a response decoded
-	// against the wrong contract is a zero-valued success no one would notice. A
-	// multi-stage caller passing one name per stage is exactly that case.
+	// Keyed on the name AND the rendered schema: two shapes sharing a name would silently share
+	// the first one's constraint.
 	key := cfg.schemaName + "\x00" + string(format)
 
 	return c.schemaModels.get(key, func() (llms.Model, error) {
@@ -157,8 +134,7 @@ func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 			openai.WithBaseURL(c.baseURL),
 			openai.WithToken(c.apiKey),
 			openai.WithModel(c.modelID),
-			// The schema rewrite sits on top of whatever this client already travels
-			// on, so a tagged client's schema-bound calls carry their tags too.
+			// On top of the client's own transport so schema-bound calls keep their tags.
 			openai.WithHTTPClient(&http.Client{
 				Transport: &schemaInjector{format: format, next: c.transport()},
 			}),
@@ -193,12 +169,9 @@ func responseFormat(cfg genConfig, mode SchemaMode) (json.RawMessage, error) {
 	return raw, nil
 }
 
-// systemFor returns the system prompt a call should send. In json_object mode the
-// schema never reaches the wire as response_format, so it rides on the system prompt
-// instead: without it the model has to guess the field names, and OpenAI-compatible
-// providers refuse json_object outright unless some message says "json" — a caller
-// whose prompt leaned on the schema (searchintent) failed every call with a 400.
-// Strict mode, or a call with no schema, sends the caller's prompt unchanged.
+// systemFor returns the system prompt a call should send. In json_object mode the schema is
+// not on the wire as response_format, so it rides on the system prompt: the model needs the
+// field names, and OpenAI-compatible providers reject json_object unless a message says "json".
 func (c *Client) systemFor(cfg genConfig, system string) (string, error) {
 	if c.schemaMode != SchemaModeJSONObject || cfg.schema == nil {
 		return system, nil
@@ -210,18 +183,11 @@ func (c *Client) systemFor(cfg genConfig, system string) (string, error) {
 	return system + "\n\nRespond with a single JSON object that matches this JSON Schema:\n" + string(raw), nil
 }
 
-// schemaInjector rewrites `response_format` in the outgoing chat request.
-//
-// langchaingo's response-format type cannot express what strict mode needs: its
-// property Type is a plain string, while an optional field must be typed
-// ["string", "null"] — and without that the model has no legal way to decline a
-// required field, so it invents a value instead (measured: 3 runs in 5 asserted a
-// visa policy for an ad that stated none). Everything else on the request is
-// langchaingo's and passes through untouched.
+// schemaInjector rewrites `response_format` in the outgoing chat request. langchaingo's type
+// cannot express strict mode: an optional field must be typed ["string", "null"], or the model
+// has no legal way to decline it and invents a value.
 type schemaInjector struct {
-	// next is langchaingo's own transport, which stamps the library's User-Agent.
-	// Replacing the whole client would otherwise make schema-bound traffic
-	// indistinguishable from any other Go program at the gateway.
+	// next is langchaingo's own transport, which stamps the User-Agent.
 	next   http.RoundTripper
 	format json.RawMessage
 }
@@ -236,8 +202,7 @@ func (t *schemaInjector) RoundTrip(req *http.Request) (*http.Response, error) {
 		return next.RoundTrip(req)
 	}
 
-	// A RoundTripper must close the request body on every path, not only the one
-	// that reaches the wire.
+	// A RoundTripper must close the request body on every path.
 	defer req.Body.Close()
 
 	body, err := io.ReadAll(req.Body)
@@ -260,18 +225,14 @@ func (t *schemaInjector) RoundTrip(req *http.Request) (*http.Response, error) {
 	return next.RoundTrip(clone)
 }
 
-// withResponseFormat replaces the response_format member of a chat request, leaving
-// every other member as langchaingo wrote it. A body that is not a JSON object is
-// returned unchanged — the transport is installed on one client, but nothing
-// guarantees only chat requests reach it.
+// withResponseFormat replaces the response_format member of a chat request, leaving the rest
+// as written. A body that is not a JSON object is returned unchanged.
 func withResponseFormat(body, format json.RawMessage) (json.RawMessage, error) {
 	fields := map[string]json.RawMessage{}
 	if err := json.Unmarshal(body, &fields); err != nil {
 		return body, nil //nolint:nilerr // not a JSON object: not ours to rewrite
 	}
-	// A literal `null` unmarshals into a map WITHOUT error and sets it to nil, so the error
-	// above does not catch it and the write below would panic. Same guard, same reason, as
-	// withReasoningEffort — see its comment for where such a panic would land.
+	// A literal `null` unmarshals without error into a nil map; the write below would panic.
 	if fields == nil {
 		return body, nil
 	}

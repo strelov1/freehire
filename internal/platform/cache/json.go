@@ -7,15 +7,12 @@ import (
 	"time"
 )
 
-// GetJSON reads key and decodes it into T. It is a free function rather than a method
-// because Go does not permit type parameters on methods.
+// GetJSON reads key and decodes it into T. It is a free function because methods cannot
+// have type parameters.
 //
-// A miss, an unreadable backend, and a payload that no longer decodes into T all report
-// found == false, because all three mean the same thing to a caller: there is no usable
-// cached value, recompute. The error is still returned for the last two, so a stale
-// incompatible payload — typically a deploy that changed T while entries written by the
-// previous build are still live — is visible in logs rather than looking like ordinary
-// cache churn.
+// A miss, an unreadable backend, and an undecodable payload all report found == false
+// (recompute). The error is still returned for the last two so a payload written by a
+// previous build shows up in logs.
 func GetJSON[T any](ctx context.Context, c Cache, key string) (T, bool, error) {
 	var zero T
 

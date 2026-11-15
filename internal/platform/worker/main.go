@@ -43,10 +43,9 @@ func runReported(run func() int, extraPauseKeys []string) int {
 // runOrPause consults the pause switch and, unless it is held, times the run and
 // publishes its outcome. It returns the process's exit status.
 //
-// The gate sits here rather than in Bootstrap because Bootstrap reports failure
-// by returning an error and every worker answers an error with a non-zero exit —
-// a pause is an operator's decision, not a failure, and must not page anyone.
-// Refusing here also means a held run costs one Redis GET: the database pool is never opened.
+// The gate sits here, not in Bootstrap, because an error from Bootstrap exits non-zero and
+// a pause is an operator's decision, not a failure, and must not page anyone. A held run
+// costs one Redis GET: the database pool is never opened.
 func runOrPause(run func() int, extraPauseKeys []string) int {
 	if Paused(context.Background(), config.Load().RedisURL, workerJob(), extraPauseKeys...) {
 		log.Printf("worker: %s is paused, skipping this run", workerJob())

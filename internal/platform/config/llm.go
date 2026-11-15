@@ -10,18 +10,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// LLM holds the provider-agnostic connection triple, an optional sampling temperature,
-// and the optional Langfuse tracing triple.
+// LLM holds the provider-agnostic connection triple, an optional sampling temperature, and the
+// optional Langfuse tracing triple, shared by the server's Settings and the workers. What differs
+// between callers is policy: the server degrades when the LLM is unconfigured, a worker that
+// spends LLM calls fails fast, expressed by whether it calls Require.
 //
-// It exists because multiple entrypoints read the same LLM env keys — the server's Settings and the
-// enrichment worker's Enrich — and two workers that are neither loaded the ENRICHMENT config
-// purely to reach them, inheriting ENRICH_* validation they have no use for. What differs between
-// those callers is POLICY, not shape: the server degrades when the LLM is unconfigured, a worker
-// that exists to spend LLM calls must fail fast. So the values are shared and the policy is the
-// caller's, expressed by whether it calls Require.
-//
-// llm.Settings is deliberately NOT folded in here: it is the env-free shape the library takes, so
-// internal/platform/llm depends on no configuration package. Settings() is the one mapping between them.
+// llm.Settings is deliberately not folded in: it is the env-free shape the library takes, so
+// internal/platform/llm depends on no config package. Settings() is the one mapping.
 type LLM struct {
 	BaseURL string
 	APIKey  string
@@ -31,25 +26,15 @@ type LLM struct {
 	// applies to every client built from this config in the process.
 	Temperature *float64
 
-	// StrictSchema says whether the model behind this gateway honours
-	// `response_format: json_schema`. Default true, because that is the stronger
-	// request and every model this ran against until now understood it.
+	// StrictSchema says whether the model behind this gateway honours `response_format: json_schema`.
+	// Default true. A deployment fact, not a vendor name: some models (e.g. glm-4.7-flash) answer a
+	// strict schema with invented objects but follow `json_object` correctly.
 	//
-	// It is a deployment fact, not a vendor name: the same reason no model is
-	// hard-coded here. Measured on 2026-08-31 against z.ai's glm-4.7-flash, which
-	// answers a strict schema with a fenced array of invented objects and answers
-	// `json_object` — the same prompt, one weaker request — with the exact shape
-	// asked for, three times out of three. Asking for less got more.
-	//
-	// Turning it off does not remove the contract: every caller here already
-	// spells its shape out in the prompt, and every caller validates what comes
-	// back. See internal/ai/enrich/langchain.go's buildSystemPrompt, which lists
-	// every field and every allowed enum value before any schema is attached.
+	// Turning it off keeps the contract: every caller spells its shape out in the prompt (see
+	// internal/ai/enrich/langchain.go buildSystemPrompt) and validates the reply.
 	StrictSchema bool
 
-	// Langfuse tracing is optional observability. All three empty simply means tracing is off
-	// and the caller runs unchanged; a partial configuration is treated as off, mirroring how a
-	// missing MEILI_MASTER_KEY disables search.
+	// Langfuse tracing is optional. All three empty, or a partial configuration, means off.
 	LangfuseBaseURL   string
 	LangfusePublicKey string
 	LangfuseSecretKey string
@@ -69,11 +54,8 @@ func LoadLLM() LLM {
 	}
 }
 
-// Require reports every missing connection setting at once, for the callers whose whole job is
-// to spend LLM calls: a worker that starts without a model enriches nothing and says nothing.
-// Naming all three in one error means one run fixes the configuration rather than three.
-//
-// Tracing is never required — it is observability, not capability.
+// Require reports every missing connection setting at once, for callers whose job is to spend
+// LLM calls. Tracing is never required.
 func (l LLM) Require() error {
 	var missing []string
 	for _, v := range []struct {
@@ -96,9 +78,7 @@ func (l LLM) Require() error {
 	return nil
 }
 
-// Settings maps onto the shape internal/platform/llm takes. It is the only place the two vocabularies
-// meet, so a field added to either is a one-line change here rather than seven copies at the
-// entrypoints.
+// Settings maps onto the shape internal/platform/llm takes; the only place the two meet.
 func (l LLM) Settings(model string) llm.Settings {
 	return llm.Settings{
 		BaseURL:           l.BaseURL,
@@ -127,10 +107,8 @@ func envOptionalFloat(key string) *float64 {
 	return &value
 }
 
-// schemaMode turns the env's yes/no into the library's vocabulary. The two are
-// deliberately different words: the deployment answers "does this gateway honour a
-// strict schema", while the library takes "how should a schema be asked for" — and
-// the second has room for an answer the first does not anticipate.
+// schemaMode turns the env's yes/no into the library's vocabulary. The words differ on purpose:
+// the library's has room for answers the deployment's does not anticipate.
 func schemaMode(strict bool) llm.SchemaMode {
 	if strict {
 		return llm.SchemaModeStrict

@@ -2,9 +2,7 @@
 // every package lives in exactly one block, and a block imports only blocks strictly below
 // its own layer.
 //
-// The check is a pure function over a graph and a table, so it is driven by fixtures in
-// its own tests and by the real `go list` output in the repo-wide guard. Nothing here
-// reads the filesystem.
+// The check is a pure function over a graph and a table; nothing here reads the filesystem.
 package layering
 
 import (
@@ -108,9 +106,8 @@ const marker = "/internal/"
 // false when the path is not under internal/ at all; the block is empty when the path is a
 // package directly under internal/, which is a violation rather than a non-answer.
 //
-// It matches any /internal/ rather than only this module's, and does not need the module
-// path to disambiguate: Go forbids importing another module's internal package, so a
-// foreign /internal/ path cannot appear in this graph in the first place.
+// It matches any /internal/: Go forbids importing another module's internal package, so a
+// foreign one cannot appear in the graph.
 func blockOf(pkg string) (string, bool) {
 	i := strings.LastIndex(pkg, marker)
 	if i < 0 {

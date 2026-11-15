@@ -1,8 +1,7 @@
 // Package browseruse is a thin HTTP client for the browser-use.com cloud API (v4):
-// create a run, poll its status, fetch its result, and manage the workspace/file-upload
-// endpoints a run's own attached files come from. It knows nothing about ATS forms,
-// resolved application plans, or any other domain — the same "transport, not domain"
-// split internal/platform/llm keeps for its own provider-agnostic wrapper.
+// create a run, poll its status, fetch its result, and manage the workspace and file-upload
+// endpoints for a run's attached files. It knows nothing about the domain (ATS forms,
+// application plans), like internal/platform/llm.
 package browseruse
 
 import (
@@ -25,9 +24,8 @@ type Client struct {
 	http    *http.Client
 }
 
-// New builds a Client. baseURL defaults to the production API when empty — tests pass an
-// httptest.Server's URL instead. httpClient defaults to a client with a generous timeout
-// when nil; the caller's own context still governs any individual call.
+// New builds a Client. baseURL defaults to the production API when empty; httpClient
+// defaults to one with a generous timeout when nil. The caller's context still governs each call.
 func New(apiKey, baseURL string, httpClient *http.Client) *Client {
 	if baseURL == "" {
 		baseURL = defaultBaseURL
@@ -42,30 +40,27 @@ func New(apiKey, baseURL string, httpClient *http.Client) *Client {
 type RunResult struct {
 	ID     string
 	Status string // "completed", "failed", or "cancelled" once terminal
-	// Result is the agent's final natural-language report — empty until the run is
-	// terminal, and still empty on a run that failed before producing one.
+	// Result is the agent's final report; empty until terminal, and empty if the run failed first.
 	Result       string
 	Error        string
 	TotalCostUSD float64
 }
 
-// terminalStatuses are the run states Wait stops polling on — every value RunStatusResponse
-// documents besides queued/dispatching/running.
+// terminalStatuses are the run states Wait stops polling on: every documented value except
+// queued/dispatching/running.
 var terminalStatuses = map[string]bool{"completed": true, "failed": true, "cancelled": true}
 
-// RunOptions carries CreateRun's optional per-run settings beyond the task text and cost
-// cap. The zero value (no workspace, no attached files) is every caller's need before
-// file-upload support existed, so it stays a valid, common argument.
+// RunOptions carries CreateRun's optional per-run settings. The zero value (no workspace,
+// no attached files) is valid.
 type RunOptions struct {
-	// WorkspaceID and AttachedFileIDs both come from CreateWorkspace/RequestFileUpload —
-	// a run can only see files already uploaded into the workspace it names here.
+	// WorkspaceID and AttachedFileIDs come from CreateWorkspace/RequestFileUpload; a run
+	// sees only files uploaded into the workspace it names.
 	WorkspaceID     string
 	AttachedFileIDs []string
 }
 
 // CreateRun starts one run with the given task instruction and returns its id.
-// maxCostUSD is the v4 API's own per-run spend cap (0 omits it, leaving the account's
-// default in effect).
+// maxCostUSD is the per-run spend cap (0 omits it, leaving the account default).
 func (c *Client) CreateRun(ctx context.Context, task string, maxCostUSD float64, opts RunOptions) (runID string, err error) {
 	body := struct {
 		Task            string   `json:"task"`
@@ -86,9 +81,8 @@ func (c *Client) CreateRun(ctx context.Context, task string, maxCostUSD float64,
 	return resp.ID, nil
 }
 
-// CreateWorkspace creates a new, empty workspace and returns its id — the container a
-// run's attached files live in. A fresh workspace per attempt keeps one candidate's résumé
-// from ever being reachable from another's run.
+// CreateWorkspace creates an empty workspace and returns its id. Use a fresh one per
+// attempt so one candidate's résumé is never reachable from another's run.
 func (c *Client) CreateWorkspace(ctx context.Context) (workspaceID string, err error) {
 	var resp struct {
 		ID string `json:"id"`
@@ -102,9 +96,8 @@ func (c *Client) CreateWorkspace(ctx context.Context) (workspaceID string, err e
 	return resp.ID, nil
 }
 
-// DeleteWorkspace permanently removes a workspace and everything uploaded into it. Callers
-// that create a workspace to attach a candidate's résumé should delete it once the run is
-// done — nothing here needs that file to outlive the one attempt it was rendered for.
+// DeleteWorkspace permanently removes a workspace and everything in it. Delete a résumé
+// workspace once the run is done.
 func (c *Client) DeleteWorkspace(ctx context.Context, workspaceID string) error {
 	return c.doJSON(ctx, http.MethodDelete, "/workspaces/"+workspaceID, nil, nil)
 }
@@ -116,9 +109,8 @@ type FileUpload struct {
 }
 
 // RequestFileUpload reserves storage for one file in workspaceID and returns a presigned
-// PUT url for it — the v4 API's own two-step upload: reserve here, then PUT the bytes
-// straight to storage (UploadFile) rather than through this API. size must be the file's
-// exact byte count; the presigned URL is pinned to it.
+// PUT url for it: reserve here, then PUT the bytes straight to storage (UploadFile). size
+// must be the file's exact byte count; the presigned URL is pinned to it.
 func (c *Client) RequestFileUpload(ctx context.Context, workspaceID, name, contentType string, size int64) (FileUpload, error) {
 	type item struct {
 		Name        string `json:"name"`
@@ -144,10 +136,9 @@ func (c *Client) RequestFileUpload(ctx context.Context, workspaceID, name, conte
 	return FileUpload{ID: resp.Files[0].ID, UploadURL: resp.Files[0].UploadURL}, nil
 }
 
-// UploadFile PUTs data to a presigned upload URL from RequestFileUpload. This bypasses
-// doJSON deliberately: a presigned URL points at object storage, not this API's own base
-// URL, needs no X-Browser-Use-API-Key (the URL itself is the credential, valid 5 minutes),
-// and answers with no JSON body to decode.
+// UploadFile PUTs data to a presigned upload URL from RequestFileUpload. It bypasses doJSON:
+// the URL points at object storage, needs no API key (the URL is the credential, valid 5
+// minutes) and returns no JSON.
 func (c *Client) UploadFile(ctx context.Context, uploadURL, contentType string, data []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(data))
 	if err != nil {
@@ -168,8 +159,8 @@ func (c *Client) UploadFile(ctx context.Context, uploadURL, contentType string, 
 	return nil
 }
 
-// PollStatus reads a run's current status — the cheap, indexed poll target the v4 API
-// documents for repeated checks; GetResult is the fuller (and pricier) fetch.
+// PollStatus reads a run's current status, the cheap target for repeated checks; GetResult
+// is the fuller, pricier fetch.
 func (c *Client) PollStatus(ctx context.Context, runID string) (status string, err error) {
 	var resp struct {
 		Status string `json:"status"`
@@ -180,8 +171,7 @@ func (c *Client) PollStatus(ctx context.Context, runID string) (status string, e
 	return resp.Status, nil
 }
 
-// GetResult fetches a run's full summary. Meaningful once the run has reached a terminal
-// status; called before that, Result/Error simply read empty.
+// GetResult fetches a run's full summary; before a terminal status, Result/Error read empty.
 func (c *Client) GetResult(ctx context.Context, runID string) (RunResult, error) {
 	var resp struct {
 		ID           string  `json:"id"`
@@ -200,9 +190,7 @@ func (c *Client) GetResult(ctx context.Context, runID string) (RunResult, error)
 	if resp.Error != nil {
 		out.Error = *resp.Error
 	}
-	// Best-effort: the API's own cost figure is informational here, not a value this
-	// client acts on — an unparseable string simply reads as 0 rather than failing the
-	// whole result.
+	// Best-effort and informational: an unparseable cost reads as 0 instead of failing.
 	if cost, err := strconv.ParseFloat(resp.TotalCostUsd, 64); err == nil {
 		out.TotalCostUSD = cost
 	}
@@ -210,8 +198,7 @@ func (c *Client) GetResult(ctx context.Context, runID string) (RunResult, error)
 }
 
 // Wait polls status every pollInterval until the run reaches a terminal state or timeout
-// elapses, then fetches and returns the full result exactly once — mirroring the v4 API's
-// own documented pattern (poll the cheap status target, fetch the full summary once).
+// elapses, then fetches and returns the full result exactly once.
 func (c *Client) Wait(ctx context.Context, runID string, pollInterval, timeout time.Duration) (RunResult, error) {
 	deadline := time.Now().Add(timeout)
 	for {

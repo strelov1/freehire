@@ -1,17 +1,13 @@
 // Package aigateway is the HTTP transport for the OpenAI-compatible gateway's non-chat
 // endpoints: one request, one JSON answer, read whole.
 //
-// It is deliberately not part of internal/platform/llm. That package is built on
-// langchaingo, which models chat completions and knows nothing about a multipart audio
-// upload or a client-secret mint; bolting either onto it would reach around the
-// abstraction it exists to provide. What every one of them DOES share is the endpoint —
-// the same base URL and the same key serve /chat/completions, /audio/transcriptions and
-// /realtime/client_secrets — so a deployment configures one credential and names one
-// model per surface.
+// It is not part of internal/platform/llm: that package is built on langchaingo, which
+// models chat completions only, not multipart audio uploads or client-secret mints. All
+// surfaces share one base URL and key (/chat/completions, /audio/transcriptions,
+// /realtime/client_secrets); each names its own model.
 //
-// It is deliberately not routed through internal/platform/safehttp either: that client
-// refuses loopback and RFC1918 targets because it fetches URLs a stranger supplied, and
-// this gateway is host-local and named by our own configuration.
+// It does not use internal/platform/safehttp: that client refuses loopback and RFC1918
+// targets, and this gateway is host-local and named by our own configuration.
 package aigateway
 
 import (
@@ -29,15 +25,11 @@ type Config struct {
 	BaseURL string
 	APIKey  string
 	Model   string
-	// Timeout bounds one request. A surface sets its own: minting a client secret is a
-	// small JSON round-trip, transcribing minutes of audio is not.
+	// Timeout bounds one request; each surface sets its own.
 	Timeout time.Duration
-	// MaxResponse bounds what is read back, for the same reason — and because a gateway
-	// answering with something enormous is misbehaving rather than verbose.
+	// MaxResponse bounds what is read back.
 	MaxResponse int64
-	// ErrUpstream is the sentinel every failure Post returns wraps. It stays the caller's
-	// own so its documented error keeps matching, and so a log line still says which
-	// surface was talking to the gateway.
+	// ErrUpstream is the caller's own sentinel, wrapped by every failure Post returns.
 	ErrUpstream error
 }
 
@@ -54,11 +46,9 @@ type Client struct {
 // New builds a client, or returns nil when the gateway is not configured — no base URL,
 // no key, or no model named.
 //
-// Nil is the "this deployment does not have this surface" answer: the handler asks
-// whether it has a client and renders 501 when it does not, which the SPA reads as a
-// feature that does not exist here rather than as a fault. Whoever wires it must put an
-// untyped nil into the handler's interface — a nil *Client inside an interface is not a
-// nil interface, and that mistake turns an absent feature into a panic on first use.
+// Nil means this deployment has no such surface; the handler renders 501. Wire it as an
+// untyped nil into the handler's interface: a nil *Client inside an interface is not a
+// nil interface and panics on first use.
 func New(cfg Config) *Client {
 	if cfg.BaseURL == "" || cfg.APIKey == "" || cfg.Model == "" {
 		return nil
@@ -94,9 +84,8 @@ func (c *Client) Post(ctx context.Context, path, contentType string, body io.Rea
 	}
 	defer resp.Body.Close()
 
-	// Read before switching on the status: the gateway explains its refusals in the
-	// body, and that sentence is the only thing that distinguishes a bad key from a
-	// rate limit in a log.
+	// Read before checking status: the body is the only thing that tells a bad key from a
+	// rate limit.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponse))
 	if err != nil {
 		return nil, fmt.Errorf("%w: read response: %w", c.errUpstream, err)

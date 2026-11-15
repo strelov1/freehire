@@ -1,7 +1,5 @@
-// This file holds the ingest-time description sanitizer. It lives here rather than in
-// internal/ingest/sources because it is HTML processing with no knowledge of boards,
-// adapters or postings — the same category as the plain-text and Markdown converters
-// alongside it — and because sibling packages outside ingest sanitize descriptions too.
+// This file holds the description sanitizer: HTML processing with no knowledge of boards or
+// postings, shared by packages outside ingest.
 package htmltext
 
 import (
@@ -14,32 +12,19 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// noBreakSpaces normalizes the no-break space characters that some ATS boards use
-// in place of regular spaces (commonly the &nbsp; entity, which bluemonday decodes
-// to the raw U+00A0 rune). Left as-is, a description whose every word is glued by
-// U+00A0 renders as one unbreakable line that overflows the page horizontally, so
-// we fold them to a regular space, restoring word-boundary wrapping. Compiled once
-// and safe for concurrent use, like descriptionPolicy.
+// noBreakSpaces folds no-break spaces (bluemonday decodes &nbsp; to U+00A0) into regular
+// ones: a description glued by them renders as one unbreakable, overflowing line.
 var noBreakSpaces = strings.NewReplacer(
 	" ", " ", // NO-BREAK SPACE
 	" ", " ", // NARROW NO-BREAK SPACE
 )
 
-// descriptionPolicy sanitizes source-provided job description HTML. It is compiled
-// once and reused: bluemonday policies are safe for concurrent use.
+// descriptionPolicy sanitizes third-party job description HTML. It is an explicit prose
+// allowlist, not UGCPolicy: no scripts, styles, forms or media (`<img>` would let a posting
+// fetch a tracking pixel from every viewer rendered with `{@html}`).
 //
-// It is an explicit prose allowlist rather than bluemonday's UGCPolicy: descriptions
-// come from third-party ATS boards, so we keep only the structural formatting we
-// render (headings, paragraphs, lists, tables, emphasis) and drop everything that
-// triggers requests or execution — scripts, styles, forms, and crucially media
-// (`<img>`), which would otherwise let a posting fetch a tracking pixel against every
-// viewer when rendered with `{@html}`.
-//
-// `a` is deliberately absent: a description is prose, not a set of exits. bluemonday
-// unwraps an element it does not allow rather than deleting its content, so an anchor
-// leaves its text — and any emphasis inside it — behind. That is what we want, because
-// aggregators weave backlinks through ordinary sentences and deleting the text with the
-// tag would punch holes in the prose.
+// `a` is deliberately absent: bluemonday unwraps a disallowed element and keeps its text,
+// so aggregator backlinks woven through sentences leave the prose whole.
 var descriptionPolicy = newDescriptionPolicy()
 
 func newDescriptionPolicy() *bluemonday.Policy {
@@ -54,15 +39,11 @@ func newDescriptionPolicy() *bluemonday.Policy {
 	return p
 }
 
-// sanitizeHTML returns s with active content, media, and links removed, leaving HTML that
-// is safe to render directly in a browser. Adapters call it on their assembled description
-// HTML before yielding a job, so the catalogue stores only sanitized markup.
+// Sanitize returns s with active content, media, and links removed, safe to render directly.
 //
-// Self-labelled anchors are dropped BEFORE the policy runs, because that is the only point
-// at which an anchor's text can still be compared against its own destination — the policy
-// unwraps the tag and the two become indistinguishable from prose. The literal-newline repair
-// runs first for the same reason: it reads the markup around each escape to decide what the
-// escape meant, and it may emit a <br> the policy must then vet like any other tag.
+// Self-labelled anchors are dropped BEFORE the policy runs: afterwards the unwrapped text can
+// no longer be compared with its destination. The literal-newline repair runs first because
+// it reads the surrounding markup and may emit a <br> the policy must vet.
 func Sanitize(s string) string {
 	// JSON-LD can decode a \u0000 escape into NUL. PostgreSQL text cannot
 	// store it; remove it before parsing so it cannot split an HTML tag either.
@@ -98,42 +79,28 @@ func restoreTextQuotes(s string) string {
 	return s
 }
 
-// literalNewlineMarker is the two-character sequence a double-escaping feed leaves behind:
-// its JSON holds "\\n", so the decoded value carries a backslash followed by an "n" instead
-// of the line break the source HTML had.
+// literalNewlineMarker is the backslash plus "n" a double-escaping feed leaves in place of a
+// line break.
 const literalNewlineMarker = `\n`
 
 var (
-	// tagAdjacentLiteralNewline matches a literal newline escape that sits against a tag on
-	// either side, whitespace allowed in between. That is the source file's own indentation,
-	// which HTML collapses — so the escape stands in for whitespace and nothing more. The two
-	// sides are one alternation rather than two passes so that an escape between two tags
-	// ("</p>\n<p>") is rewritten once instead of matching twice.
+	// tagAdjacentLiteralNewline matches an escape against a tag on either side (whitespace
+	// allowed between): source indentation, i.e. whitespace only. One alternation, so an escape
+	// between two tags ("</p>\n<p>") is rewritten once.
 	tagAdjacentLiteralNewline = regexp.MustCompile(`(>\s*)\\n|\\n(\s*<)`)
-	// looseLiteralNewline matches whatever escapes the tag-adjacent pass left: an escape with
-	// prose on both sides, where it is the posting's ONLY line break.
+	// looseLiteralNewline matches the escapes left over: prose on both sides, the only line break.
 	looseLiteralNewline = regexp.MustCompile(`\\n`)
 )
 
-// repairLiteralNewlines restores the line breaks a double-escaping feed turned into visible
-// text. Some aggregators (seen live on whatjobs markets and adzuna, which resell through the
-// same upstream network) escape their JSON twice, so a description reaches the catalogue with
-// literal "\n" sequences the reader sees mid-sentence.
+// repairLiteralNewlines restores line breaks that a double-escaping feed turned into a visible
+// literal "\n". What an escape meant depends on where it sits:
 //
-// What an escape MEANT depends on where it sits, so the repair is not one replacement:
+//   - Against a tag it is indentation between blocks: it becomes a real newline. A <br> there
+//     would add blank lines, and inside a <ul> a browser hoists it out of the list.
+//   - Between two sentences it is the posting's only break: it becomes a <br>.
 //
-//   - Against a tag it is indentation between blocks ("</p>\n<p>", "<ul>\n <li>"). It becomes a
-//     real newline, which HTML collapses exactly as the original did. Emitting a <br> here would
-//     add a blank line between every paragraph, and inside a list it would be markup a browser
-//     hoists out of the <ul> altogether.
-//   - Between two sentences it is the only break the posting has ("~ Kita-Zuschuss \n~ Weihnachtsgeld").
-//     A real newline would collapse and glue the lines together, so it becomes a <br>.
-//
-// Measured over a 20k-row sample of the live catalogue, 578 of 605 escapes were the first kind.
-//
-// A posting that deliberately shows "\n" as a code escape would be rewritten too. Nothing in the
-// sample did, and such a sample would live inside <code>/<pre> — the seam to exempt those is the
-// tree walk wrapOrphanListItems already does, if a real case ever turns up.
+// shortcut: a "\n" deliberately shown as a code escape is rewritten too; exempt <code>/<pre>
+// via the tree walk in wrapOrphanListItems if a real case appears.
 func repairLiteralNewlines(s string) string {
 	if !strings.Contains(s, literalNewlineMarker) {
 		return s
@@ -142,21 +109,10 @@ func repairLiteralNewlines(s string) string {
 	return looseLiteralNewline.ReplaceAllString(s, "<br>")
 }
 
-// wrapOrphanListItems wraps each maximal run of <li> siblings that lacks a <ul>/<ol>
-// parent in a synthetic <ul>. Some boards' source HTML drops the list wrapper partway
-// through a description (seen live: a posting whose first two bullet groups are
-// properly wrapped and a third is bare <li> siblings) — descriptionPolicy allows <li>
-// as a structural element but, being a sanitizer and not a tree validator, does not
-// require it to sit inside a list, so the malformed shape survives unchanged and
-// renders as a stray, un-announced bullet.
-//
-// Detecting "orphan" correctly needs real tree structure, not a regex — a properly
-// nested <li> inside <table>/<div> wrappers is indistinguishable from a bare one by
-// pattern alone. Returns s completely untouched, not merely equivalent, whenever
-// there is nothing to wrap (no <li> at all, or every one already sits in a list):
-// re-serializing a parsed tree can renormalize spelling bluemonday itself chose
-// (e.g. a void element written <br> comes back <br/> — equally valid HTML, but a
-// needless rewrite of the vast majority of descriptions that have no orphan at all).
+// wrapOrphanListItems wraps each maximal run of <li> siblings lacking a <ul>/<ol> parent in a
+// synthetic <ul>; the policy allows <li> anywhere, so a bare one would render as a stray bullet.
+// Finding orphans needs the parsed tree, not a regex. Returns s untouched when nothing needs
+// wrapping, since re-serializing renormalizes markup (<br> becomes <br/>).
 func wrapOrphanListItems(s string) string {
 	if !strings.Contains(s, "<li") {
 		return s
@@ -183,21 +139,14 @@ func wrapOrphanListItems(s string) string {
 	return buf.String()
 }
 
-// wrapOrphanListItemsIn recurses depth-first (so a nested orphan run inside a <div> or
-// <td> is fixed before its ancestor is considered), then splices every maximal run of
-// consecutive <li>/whitespace-text siblings under n into a new <ul> — unless n is
-// itself already a <ul>/<ol>, in which case its <li> children are already valid and
-// it is left untouched. Whitespace-only text nodes between <li> siblings (the newline
-// indentation typical of hand-written HTML) are pulled into the run too, so the
-// original spacing between items is preserved inside the new wrapper instead of being
-// severed from the list it separates. Reports whether it wrapped anything, which
-// gates whether the caller re-serializes at all.
+// wrapOrphanListItemsIn recurses depth-first, then splices each run of consecutive
+// <li>/whitespace-text siblings under n into a new <ul>, unless n is already a <ul>/<ol>.
+// Whitespace between items joins the run so spacing stays inside the wrapper. Reports whether
+// it wrapped anything, which gates re-serialization.
 func wrapOrphanListItemsIn(n *xhtml.Node) bool {
 	changed := false
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		// The recursive call only splices c's own children, never c's siblings,
-		// so c.NextSibling stays valid across the call — unlike the second loop
-		// below, which does reorder n's children and so must snapshot ahead.
+		// The call only splices c's own children, so c.NextSibling stays valid.
 		if c.Type == xhtml.ElementNode && wrapOrphanListItemsIn(c) {
 			changed = true
 		}
@@ -257,17 +206,11 @@ var (
 	emptyBlock = regexp.MustCompile(`(?is)<p>\s*</p>|<li>\s*</li>|<div>\s*</div>|<blockquote>\s*</blockquote>|<td>\s*</td>|<h[1-6]>\s*</h[1-6]>`)
 )
 
-// dropSelfLabelledAnchors removes anchors whose visible text merely repeats their own
-// destination ("<a href=x.co/1>https://x.co/1</a>"). Unwrapped, such an anchor leaves a
-// dead address sitting in the prose — it carries no information the link itself did not,
-// and unlike a worded link there is no sentence to keep whole. Every other anchor is left
-// for the policy to unwrap, text intact.
-//
-// The test is deliberately two-sided: the text must LOOK like an address and must MATCH
-// the href. Either half alone misfires — "Node.js" reads as a host, and a one-word label
-// can be a prefix of its own URL by chance.
-//
-// It reports whether anything was dropped, which is what gates the empty-block sweep.
+// dropSelfLabelledAnchors removes anchors whose text merely repeats their destination
+// ("<a href=x.co/1>https://x.co/1</a>"), which would leave a dead address in the prose.
+// The test is two-sided: the text must LOOK like an address and MATCH the href ("Node.js"
+// reads as a host; a one-word label can prefix its URL by chance). Reports whether anything
+// was dropped, which gates the empty-block sweep.
 func dropSelfLabelledAnchors(s string) (string, bool) {
 	if !strings.Contains(s, "<a") && !strings.Contains(s, "<A") {
 		return s, false
@@ -304,9 +247,7 @@ func isSelfLabelled(attrs, inner string) bool {
 	return strings.HasPrefix(label, target) || strings.HasPrefix(target, label)
 }
 
-// normalizeAddress reduces a web address to the part that carries its identity, so a label
-// and its href compare equal across the cosmetic differences between how a board writes the
-// two (scheme present or not, "www." present or not, trailing slash or not).
+// normalizeAddress strips scheme, "www." and trailing slash so a label and its href compare equal.
 func normalizeAddress(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.TrimPrefix(s, "https://")
@@ -315,10 +256,8 @@ func normalizeAddress(s string) string {
 	return strings.TrimSuffix(s, "/")
 }
 
-// dropEmptyBlocks removes block elements a dropped anchor left empty, which would otherwise
-// render as a stray gap in the description. It repeats until the body stops changing, so a
-// block whose only child was itself emptied ("<div><p></p></div>") goes too; each pass only
-// shortens the string, so the loop terminates.
+// dropEmptyBlocks removes blocks a dropped anchor left empty, repeating until stable so nested
+// ones ("<div><p></p></div>") go too.
 func dropEmptyBlocks(s string) string {
 	for {
 		next := emptyBlock.ReplaceAllString(s, "")
