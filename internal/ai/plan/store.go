@@ -35,14 +35,9 @@ func NewStore(q *db.Queries, pool *pgxpool.Pool, cfg Config) *Store {
 	return &Store{q: q, pool: pool, cfg: cfg, now: func() time.Time { return time.Now().UTC() }}
 }
 
-// Tier resolves the caller's plan. It reads one ROW and makes no network call, so a billing
-// provider being slow or unreachable can never delay a metered action.
-//
-// One row and not one query per tier: two reads could land either side of a sync, and a tier
-// resolved from two different instants is how somebody momentarily becomes neither.
-//
-// An invalid column is a zero time, which `TierOf` reads as "reaches nothing" — so a NULL
-// needs no branch of its own here.
+// Tier resolves the caller's plan from one row with no network call, so a slow billing
+// provider can never delay a metered action. An invalid column is a zero time, which TierOf
+// reads as reaching nothing.
 func (s *Store) Tier(ctx context.Context, userID int64) (Tier, error) {
 	untils, err := s.q.GetPlanUntils(ctx, userID)
 	if err != nil {
@@ -54,14 +49,9 @@ func (s *Store) Tier(ctx context.Context, userID int64) (Tier, error) {
 // Consume reserves one unit of a feature's daily allowance for this reference, atomically
 // and idempotently by (user, feature, ref).
 //
-// It returns the Decision in every case, so a refusal can be rendered with the same
-// numbers a success reports. A refusal also returns ErrRefused, so a caller that only
-// wants to know whether to continue can check the error.
-//
-// The reservation is taken BEFORE the work it pays for. That is deliberate and it is what
-// Release exists to undo: charging afterwards would let a user who disconnects mid-answer
-// receive work nobody was charged for, and charging without a way back would bill them
-// for an answer that never arrived.
+// It returns the Decision even on refusal, which also returns ErrRefused. The reservation is
+// taken BEFORE the work, so a disconnect mid-answer cannot yield unbilled work; Release undoes
+// it when nothing was delivered.
 func (s *Store) Consume(ctx context.Context, userID int64, feature Feature, ref string) (Decision, error) {
 	return s.consume(ctx, userID, feature, ref, s.cfg.decide)
 }
@@ -87,9 +77,8 @@ func (s *Store) consume(
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
-	// Seed today's counter so the lock below has a row to hold. This is what serialises
-	// two simultaneous first-ever consumptions, so an allowance cannot be oversold by a
-	// race. An existing row is left alone.
+	// Seed today's counter so the lock below has a row to hold; this serialises two simultaneous
+	// first-ever consumptions so an allowance cannot be oversold.
 	if err := q.EnsureUsageDay(ctx, db.EnsureUsageDayParams{
 		UserID: userID, Feature: string(feature), Day: pgDay(day),
 	}); err != nil {
@@ -127,18 +116,12 @@ func (s *Store) consume(
 	}
 	if !d.Allowed {
 		if d.FairUse {
-			// The guard sits far above human behaviour, so it firing means an automated
-			// caller, a runaway retry loop, or a guard set too low — and all three are
-			// operators' business. A guard nobody sees fire is a guard that gets blamed
-			// for an outage it did not cause.
+			// Firing means an automated caller, a runaway retry loop or a guard set too low; operators
+			// need to see it.
 			log.Printf("plan: fair-use guard refused user %d on %s at %d/day", userID, feature, d.Used)
 		} else if feature != FeatureSupport {
-			// A real plan-ceiling refusal, as opposed to the fair-use guard above: the
-			// one signal cmd/limit-nudge-mail's candidate query reads to find accounts
-			// worth telling that Pro removes it. Best-effort and outside the transaction
-			// just committed — a refusal must reach the caller whether or not this write
-			// lands, and retrying the whole Consume for it would charge a feature nobody
-			// asked to pay for twice.
+			// A real plan-ceiling refusal: the signal cmd/limit-nudge-mail reads. Best-effort and outside
+			// the committed transaction, so the refusal reaches the caller whether or not the write lands.
 			s.recordLimitHit(ctx, userID, feature, day)
 		}
 		return d, ErrRefused
@@ -146,10 +129,8 @@ func (s *Store) consume(
 	return d, nil
 }
 
-// recordLimitHit best-effort records that a plan ceiling (not the fair-use guard) just
-// refused this user on this feature today. A failure here must not change the refusal
-// the caller already has — it is logged and dropped, same as every other fire-and-forget
-// write in this codebase.
+// recordLimitHit best-effort records that a plan ceiling (not the fair-use guard) just refused
+// this user today. A failure is logged and dropped, never changing the refusal.
 func (s *Store) recordLimitHit(ctx context.Context, userID int64, feature Feature, day time.Time) {
 	if err := s.q.RecordPlanLimitHit(ctx, db.RecordPlanLimitHitParams{
 		UserID: userID, Feature: string(feature), Day: pgDay(day),
@@ -159,9 +140,8 @@ func (s *Store) recordLimitHit(ctx context.Context, userID int64, feature Featur
 }
 
 // PaywallJob names the vacancy a refused action concerned, by whichever identifier the route
-// carries; the zero value means none. At most one field is set. They are bound parameters of
-// the insert and resolved there, so an unknown or foreign identifier records no job rather
-// than failing, and no request text is stored.
+// carries; the zero value means none. At most one field is set. An unknown or foreign
+// identifier records no job rather than failing.
 type PaywallJob struct {
 	// Slug is a job's public slug.
 	Slug string
@@ -171,12 +151,9 @@ type PaywallJob struct {
 	SessionID uuid.UUID
 }
 
-// RecordPaywallHit records that the paid-AI gate refused this user on this feature today,
-// once per (user, feature, job, day). feature is a plan feature name for a metered route and
-// a fixed name for the ones without an allowance, so it is a string rather than a Feature.
-//
-// The caller decides what a failure means; the gate drops it, because the 402 must go out
-// whether or not this write lands.
+// RecordPaywallHit records that the paid-AI gate refused this user on this feature today, once
+// per (user, feature, job, day). feature is a string because routes without an allowance use a
+// fixed name. The gate drops a failure, since the 402 must go out regardless.
 func (s *Store) RecordPaywallHit(ctx context.Context, userID int64, feature string, job PaywallJob) error {
 	return s.q.RecordPaywallHit(ctx, db.RecordPaywallHitParams{
 		UserID:    userID,
@@ -190,19 +167,12 @@ func (s *Store) RecordPaywallHit(ctx context.Context, userID int64, feature stri
 
 func pgUUID(id uuid.UUID) pgtype.UUID { return pgtype.UUID{Bytes: id, Valid: id != uuid.Nil} }
 
-// Release gives back a reservation for work that produced nothing the user can use, so
-// the reference becomes chargeable again and a retry is charged exactly once rather than
-// twice or never.
-//
-// Releasing something that was never charged — a free recompute, a caller that did not
-// reserve, a second release of the same reservation — gives back nothing and reports no
-// error. That is what lets every failure path call it without first working out whether
-// it owes one.
+// Release gives back a reservation for work that produced nothing, so the reference is
+// chargeable again and a retry is charged exactly once. Releasing something never charged is a
+// no-op without error, so every failure path can call it blindly.
 func (s *Store) Release(ctx context.Context, userID int64, feature Feature, ref string) error {
-	// Which day the charge landed on, read before any lock. A reservation taken at 23:59
-	// and released at 00:01 must decrement yesterday's counter: crediting today's would
-	// hand back an allowance the user never spent today and leave the day they really
-	// spent still spent.
+	// Read the charge's day before any lock: a reservation taken at 23:59 and released at 00:01
+	// must decrement yesterday's counter.
 	charged, err := s.q.GetConsumptionDay(ctx, db.GetConsumptionDayParams{
 		UserID: userID, Feature: string(feature), Ref: ref,
 	})
@@ -220,8 +190,7 @@ func (s *Store) Release(ctx context.Context, userID int64, feature Feature, ref 
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
-	// usage_daily before usage_ledger, the same order Consume takes them in — a
-	// consumption and a release for one user must not be able to deadlock each other.
+	// usage_daily before usage_ledger, the same order as Consume, so the two cannot deadlock.
 	if err := q.EnsureUsageDay(ctx, db.EnsureUsageDayParams{
 		UserID: userID, Feature: string(feature), Day: charged,
 	}); err != nil {
@@ -261,12 +230,8 @@ type FeatureUsage struct {
 	Enforced  bool
 }
 
-// Standing is where one user stands on one feature today, with everything a surface needs
-// to say so: their plan, what they have used, what they are allowed, and when it resets.
-//
-// It exists separately from Usage because the two are asked in different places. A page
-// listing the plan wants every feature; a feature about to run wants only its own, and
-// making it read all of them would be a query per surface for data nobody displays.
+// Standing is where one user stands on one feature today: plan, usage, allowance and reset
+// time. Unlike Usage it reads one feature, so a feature about to run does not query them all.
 type Standing struct {
 	Tier      Tier
 	Feature   Feature
@@ -275,38 +240,24 @@ type Standing struct {
 	Unlimited bool
 	ResetsAt  time.Time
 
-	// Enforced says whether this feature's ceiling turns anybody away yet. It is part of
-	// the standing rather than something a caller looks up separately, because a caller
-	// holding one without the other is exactly how a surface comes to refuse on Exhausted
-	// alone.
+	// Enforced says whether this feature's ceiling turns anybody away yet. It travels with the
+	// standing so a surface cannot refuse on Exhausted alone.
 	Enforced bool
 }
 
 // Exhausted reports whether this feature has nothing left today. An unlimited standing is
-// never exhausted — the fair-use guard behind it refuses at the point of use rather than
-// being reported as a ceiling somebody is approaching.
-//
-// It says nothing about whether a refusal would follow: with the feature's enforcement off
-// the action still runs, and only the shadow ledger records that it would not have. A
-// caller deciding whether to REFUSE must ask Refuses instead; this one is for a surface
-// deciding what to SAY.
+// never exhausted; the fair-use guard refuses at the point of use. It ignores enforcement, so
+// it is for deciding what to say; use Refuses to decide whether to refuse.
 func (s Standing) Exhausted() bool { return !s.Unlimited && s.Used >= s.Limit }
 
-// Refuses reports whether an action would actually be turned away right now: the allowance
-// is spent AND this feature's enforcement is on.
-//
-// The distinction is the whole of shadow mode. A pre-check that refused on Exhausted alone
-// would hard-refuse while every other surface was still only counting — which is how a
-// feature ships enforcing that nobody meant to enforce.
-//
-// It is a method on the standing rather than on the store so that every holder of one can
-// ask it, including the SPA: the wire shape carries Enforced for the same reason, and the
-// two answers cannot drift because they are the same expression.
+// Refuses reports whether an action would actually be turned away now: the allowance is spent
+// AND enforcement is on. Refusing on Exhausted alone would hard-refuse features still in shadow
+// mode. It is a method on Standing so every holder of one, including the SPA, asks the same
+// expression.
 func (s Standing) Refuses() bool { return s.Exhausted() && s.Enforced }
 
-// Standing reports where the caller stands on one feature today. It makes no model call
-// and consumes nothing, so a surface may ask before offering an action — the tailoring
-// prompt says what a session costs and how many remain before the candidate commits.
+// Standing reports where the caller stands on one feature today. It consumes nothing and makes
+// no model call, so a surface may ask before offering an action.
 func (s *Store) Standing(ctx context.Context, userID int64, f Feature) (Standing, error) {
 	now := s.now()
 
@@ -332,9 +283,8 @@ func (s *Store) Standing(ctx context.Context, userID int64, f Feature) (Standing
 	}, nil
 }
 
-// Usage reports the caller's plan and where they stand on every metered feature today.
-// A feature they have not touched reports as untouched rather than being absent, so the
-// surface can list the whole plan without knowing which rows happen to exist.
+// Usage reports the caller's plan and standing on every metered feature today. Untouched
+// features report as unused rather than being absent.
 func (s *Store) Usage(ctx context.Context, userID int64) (Tier, []FeatureUsage, time.Time, error) {
 	now := s.now()
 

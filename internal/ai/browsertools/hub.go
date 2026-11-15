@@ -1,11 +1,10 @@
 // Package browsertools relays browser-tool frames between the two ends of one
-// user's channel: a harness (the "brain" — hosted Roy today, a local harness
-// later) and that user's browser extension, which executes the tools.
+// user's channel: a harness (the "brain") and that user's browser extension, which
+// executes the tools.
 //
-// The relay is deliberately dumb about the tools themselves: it forwards the raw
-// `{id,tool,args}` / `{id,result}` JSON verbatim, so a new primitive needs no
-// change here. What it does own is ownership — a channel is keyed by user id, and
-// a frame never crosses from one user's harness to another user's browser.
+// The relay forwards the raw `{id,tool,args}` / `{id,result}` JSON verbatim, so a new
+// primitive needs no change here. A channel is keyed by user id, and a frame never
+// crosses from one user's harness to another user's browser.
 package browsertools
 
 import (
@@ -54,19 +53,15 @@ func New() *Hub {
 	return &Hub{channels: make(map[int64]map[Role]Socket)}
 }
 
-// NextCallID returns a call id unique across every Caller this Hub has ever
-// hosted. Callers must draw ids from here rather than a local counter: two
-// Callers for the same user (a retry after Close, say) would otherwise both
-// mint "1" for their first call, and a late answer meant for the first —
-// closed and gone — could then be delivered to the second's pending call of
-// the same id.
+// NextCallID returns a call id unique across every Caller this Hub has hosted.
+// Callers must not use a local counter: two Callers for one user (a retry after
+// Close) would mint the same id, and a late answer could reach the wrong call.
 func (h *Hub) NextCallID() string {
 	return strconv.FormatInt(h.callSeq.Add(1), 10)
 }
 
-// Join attaches a socket as one end of a user's channel and returns the function
-// that detaches it. A second connection in the same role replaces the first (a
-// user who reopens the panel gets one live extension, not two); the displaced
+// Join attaches a socket as one end of a user's channel and returns the function that
+// detaches it. A second connection in the same role replaces the first; the displaced
 // connection's leave is then a no-op, so it cannot evict its successor.
 func (h *Hub) Join(user int64, role Role, s Socket) (leave func()) {
 	h.mu.Lock()
@@ -92,10 +87,9 @@ func (h *Hub) Join(user int64, role Role, s Socket) (leave func()) {
 	}
 }
 
-// Forward hands a frame to the other end of the sender's own channel — never to
-// another user's. When that end is absent, a harness's call is answered with an
-// error result carrying the call's id: the harness is blocked on that id, and
-// silence would hang it. A result with no harness left to receive it is dropped.
+// Forward hands a frame to the other end of the sender's own channel, never another
+// user's. When that end is absent, a harness's call is answered with an error result
+// carrying its id (silence would hang the harness); a result with no harness is dropped.
 func (h *Hub) Forward(user int64, from Role, frame []byte) {
 	h.mu.Lock()
 	ends := h.channels[user]
@@ -119,30 +113,20 @@ func counterpart(r Role) Role {
 }
 
 // ErrNotConnected is the relay's answer to a call issued while the user's browser
-// extension is not attached — by far the most common way an in-process harness's call
-// fails, and a state the user fixes by opening the panel rather than a fault.
+// extension is not attached: a state the user fixes by opening the panel, not a fault.
 //
-// It has to be a sentinel because the answer crosses the relay as a JSON frame, where a
-// Go error cannot travel: the hub writes this text (notConnected) and Caller.Call reads
-// it back into this same value, so a caller can match it with errors.Is instead of
-// comparing strings of its own.
+// The answer crosses the relay as a JSON frame: the hub writes this text
+// (notConnected) and Caller.Call reads it back into this value for errors.Is.
 var ErrNotConnected = errors.New("the browser extension is not connected")
 
-// ErrExecutorReported wraps whatever the extension said went wrong on its side: no active
-// tab, a content script the browser has already discarded, a page that refuses to be read.
-//
-// It exists for the same reason ErrNotConnected does, one step further out. Those answers
-// arrive as the executor's own sentence and this package cannot classify them — but a
-// caller must still be able to tell "the browser could not do it" from "we could not",
-// because the first is a state the user fixes and the second is ours to fix. Without a
-// sentinel the only discriminator is the string, so every stale content script reads as an
-// internal fault: an unhelpful sentence in the side panel and an error report about a tab
-// somebody closed.
+// ErrExecutorReported wraps whatever the extension said went wrong on its side (no
+// active tab, a discarded content script, an unreadable page). The text cannot be
+// classified, but callers must tell "the browser could not" (the user's to fix) from
+// "we could not" (ours), or every stale content script becomes an internal fault.
 var ErrExecutorReported = errors.New("the browser reported")
 
-// notConnected builds the error result for a call that has no executor. The id is
-// echoed from the call so the harness can correlate it; a frame we cannot parse
-// gets an empty id, which is still better than no answer at all.
+// notConnected builds the error result for a call that has no executor, echoing the
+// call's id; an unparseable frame gets an empty id, still better than no answer.
 func notConnected(frame []byte) []byte {
 	var call struct {
 		ID string `json:"id"`

@@ -8,34 +8,29 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
-// schemaName labels the shape in the provider's logs. The geo-less variant is named
-// apart so the two are distinguishable there and cached separately by the client.
+// schemaName labels the shape in the provider's logs; the geo-less variant is named apart
+// so the client caches it separately.
 const (
 	schemaName      = "job_enrichment"
 	schemaNameNoGeo = "job_enrichment_nogeo"
 )
 
-// unaskedFields are contract fields the prompt deliberately does not request, so the
-// schema must not either. Under strict mode every property is required — leaving one
-// in would order the model to produce a value that `jobview` then discards, which is
-// the token burn `enrich-prompt-trim` removed. They are served from the deterministic
-// dictionaries (`internal/job/jobderive`), not the LLM.
+// unaskedFields are contract fields the prompt does not request, so the schema must not
+// either: under strict mode every property is required. They come from the deterministic
+// dictionaries (`internal/job/jobderive`).
 var unaskedFields = []string{
 	"work_mode", "employment_type",
 	"seniority", "english_level", "education_level",
 	"category", "experience_years_min", "posting_language",
 }
 
-// geoFields are dropped when the deterministic dictionary already pinned the job's
-// geography: `geoFacet` discards the model's copy, so asking for it only costs tokens.
+// geoFields are dropped when the dictionary already pinned geography; `geoFacet` discards
+// the model's copy.
 var geoFields = []string{"regions", "countries"}
 
-// constrainedEnums are the enum fields the schema pins to their vocabulary.
-//
-// Regions and countries are deliberately ABSENT. They are the dict-then-LLM hybrid
-// discovery facets, and the prompt explicitly permits a label of the model's own when
-// no allowed value fits; an enum would foreclose exactly the novel value that mechanism
-// exists to collect (see "Unserved discovery facets are captured raw, not validated").
+// constrainedEnums are the enum fields pinned to their vocabulary. Regions and countries
+// are deliberately absent: the prompt lets the model give its own label there, and an enum
+// would block the novel values that discovery facets collect.
 func constrainedEnums() []llmschema.Override {
 	return []llmschema.Override{
 		llmschema.Enum("relocation", vocab.RelocationValues),
@@ -52,8 +47,7 @@ var (
 	schemaErr  error
 )
 
-// requestSchema returns the schema matching what buildSystemPrompt asks for. askGeo
-// mirrors the prompt's own switch, so the two cannot describe different requests.
+// requestSchema returns the schema matching buildSystemPrompt; askGeo mirrors its switch.
 func requestSchema(askGeo bool) (llmschema.Schema, string, error) {
 	schemaOnce.Do(func() {
 		schemas = map[bool]llmschema.Schema{}

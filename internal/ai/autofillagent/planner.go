@@ -8,9 +8,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// systemPrompt tells the model its one job. The instructions about inventing and
-// about comboboxes are guidance only — both are enforced downstream (groundedIn
-// here, the combo skip in the extension), because a prompt is not a guarantee.
+// systemPrompt tells the model its one job. Its rules on inventing and comboboxes are
+// guidance only; both are enforced downstream (groundedIn, the extension's combo skip).
 const systemPrompt = `You map a candidate's profile onto a job-application form.
 
 You are given the form's fields (each with its label, type, and whether it is a
@@ -32,11 +31,9 @@ Rules:
 
 Respond with JSON: {"fills":[{"label":"...","value":"..."}]}`
 
-// choosePrompt is asked once per widget, with the options the page actually
-// offered. Kept separate from the planning prompt because the question is
-// narrower — one question, a closed list — and a narrower question is answered
-// more reliably. "Answer nothing" is spelled out as the expected outcome so that
-// declining does not read as failure.
+// choosePrompt is asked once per widget with the options the page offered. It is
+// separate from the planning prompt because a narrower question is answered more
+// reliably; declining is spelled out as an expected outcome.
 const choosePrompt = `You are answering ONE question on a job-application form by
 picking from the options it offers.
 
@@ -58,8 +55,8 @@ Rules:
 
 Respond with JSON: {"choice":"..."}`
 
-// Planner backed by the LLM. Its client is nil when the LLM is unconfigured;
-// Plan then reports the feature is off rather than silently filling nothing.
+// Planner backed by the LLM. The client is nil when the LLM is unconfigured; Plan
+// then reports the feature is off rather than silently filling nothing.
 type LLMPlanner struct {
 	Client *llm.Client
 }
@@ -79,10 +76,8 @@ func (p LLMPlanner) Plan(ctx context.Context, fields []Field, profile Profile) (
 	return parsePlan(raw)
 }
 
-// Choose picks one of the widget's real options. An unreadable answer, or one
-// naming something outside the list, comes back as "" — the caller then reports
-// the question as unanswered, which leaves it for the user rather than committing
-// a guess.
+// Choose picks one of the widget's real options. An unreadable answer, or one outside
+// the list, comes back as "", leaving the question for the user rather than guessing.
 func (p LLMPlanner) Choose(ctx context.Context, question Field, options []string, profile Profile) (string, error) {
 	if p.Client == nil {
 		return "", ErrUnavailable
@@ -109,8 +104,7 @@ func (p LLMPlanner) Choose(ctx context.Context, question Field, options []string
 	return answer.Choice, nil
 }
 
-// parsePlan reads the model's answer. Entries without a label are dropped rather
-// than failing the whole run: a partly usable plan still fills most of the form.
+// parsePlan reads the model's answer. Entries without a label are dropped, not fatal.
 func parsePlan(raw string) ([]Fill, error) {
 	var answer struct {
 		Fills []Fill `json:"fills"`

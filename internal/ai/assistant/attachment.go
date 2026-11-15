@@ -7,29 +7,24 @@ import (
 	"unicode/utf8"
 )
 
-// Attachment is a document the candidate attached to one message: the file's name and
-// the text extracted from it. Only the text travels — the file itself is never stored —
-// and it lives in the user message it came with, so it is part of the transcript and
-// replayed to the model like anything else the candidate said.
+// Attachment is a document attached to one message: the file's name and its extracted
+// text. Only the text travels; the file is never stored. It lives in the user message, so
+// it is part of the transcript and replayed to the model.
 //
-// It is kept apart from the typed text on purpose. UserSaid reads only what the
-// candidate TYPED: an attached vacancy or a colleague's reference is not the
-// candidate's own assertion, and letting a quote from it pass as one would stamp it
-// stated_in_chat and make it writable into a CV.
+// It is kept apart from the typed text on purpose: UserSaid reads only what the candidate
+// TYPED. An attached vacancy or reference is not their assertion, and a quote from it must
+// not be stamped stated_in_chat and become writable into a CV.
 type Attachment struct {
 	Name string `json:"name"`
 	Text string `json:"text"`
 }
 
-// MaxAttachments bounds how many documents one message may carry: a CV and a vacancy,
-// with room for one more, and not a folder.
+// MaxAttachments bounds how many documents one message may carry.
 const MaxAttachments = 3
 
-// MaxAttachmentRunes bounds one attachment's text. An attachment is replayed into the
-// model's context on every later turn of the session, like the message it came with, so
-// its size is a recurring cost rather than a one-off. Forty thousand characters holds a
-// long CV or vacancy several times over (roughly ten thousand tokens); a document past it
-// is truncated at extraction and the client is told so.
+// MaxAttachmentRunes bounds one attachment's text. It is replayed on every later turn, so
+// its size is a recurring cost. A longer document is truncated at extraction and the
+// client is told.
 const MaxAttachmentRunes = 40000
 
 // maxAttachmentNameRunes bounds the file name shown to the model and in the chat.
@@ -57,9 +52,8 @@ func NewAttachment(name, text string) (Attachment, error) {
 	return Attachment{Name: AttachmentName(name), Text: text}, nil
 }
 
-// TruncateAttachmentText cuts extracted text to MaxAttachmentRunes and reports whether
-// it had to. Extraction calls it, so a long document still attaches — the client shows
-// that only its beginning will be read.
+// TruncateAttachmentText cuts extracted text to MaxAttachmentRunes and reports whether it
+// had to, so the client can show that only the beginning will be read.
 func TruncateAttachmentText(text string) (string, bool) {
 	text = strings.TrimSpace(text)
 	if utf8.RuneCountInString(text) <= MaxAttachmentRunes {
@@ -96,13 +90,12 @@ func AttachmentName(name string) string {
 }
 
 // attachmentClose is the delimiter that ends a document in the model's view. A document
-// that itself contains it is defused (see renderAttachment), so text inside a PDF cannot
-// close the block early and speak as the candidate.
+// containing it is defused (see renderAttachment) so its text cannot close the block and
+// speak as the candidate.
 const attachmentClose = "</attached_document>"
 
-// renderAttachment is how a document reaches the model: delimited, named, and flagged as
-// material to read rather than instructions to follow — a vacancy or an offer letter is
-// someone else's text, and the model must not take orders from it.
+// renderAttachment delimits and names a document and flags it as material to read, not
+// instructions to follow.
 func renderAttachment(a Attachment) string {
 	body := strings.ReplaceAll(a.Text, attachmentClose, "</attached-document>")
 	return `<attached_document name="` + a.Name + `">` + "\n" +
@@ -111,8 +104,8 @@ func renderAttachment(a Attachment) string {
 		body + "\n" + attachmentClose
 }
 
-// userTurnText is the whole of one user message as the model reads it: the typed text,
-// then each attached document.
+// userTurnText is one user message as the model reads it: the typed text, then each
+// attached document.
 func userTurnText(c userContent) string {
 	if len(c.Attachments) == 0 {
 		return c.Text

@@ -2,17 +2,12 @@
 // Regenerate with `make gen-contracts`.
 
 /**
- * Enrichment is the typed view of a job's enrichment JSONB payload. JSON keys
- * are snake_case to match the existing jobs JSON tags. The blob maps 1:1 to the
- * future search document.
+ * Enrichment is the typed view of a job's enrichment JSONB payload (snake_case keys).
  */
 export interface Enrichment {
   /**
-   * Summary is a short, model-written synopsis of the role (1–2 sentences): what
-   * the job involves and its core stack. Unlike every other field — which is
-   * extracted and omitted when the posting does not state it — this one is
-   * SYNTHESIZED, so the prompt asks the model to always produce it. It is served
-   * free text (no controlling dictionary), bounded by Sanitize.
+   * Summary is a 1-2 sentence synopsis. Unlike the other fields it is synthesized, so the
+   * prompt always asks for it. Free text, bounded by Sanitize.
    */
   summary?: string;
   /**
@@ -23,11 +18,9 @@ export interface Enrichment {
   relocation?: string; // enum: RelocationValues
   visa_sponsorship?: boolean; // pointer: false is meaningful
   /**
-   * Location / eligibility. Regions is a remote role's geographic reach — a flat
-   * macro-region vocabulary (global / continent-level area; country-level reach
-   * lives in Countries). It is meaningful only when WorkMode is "remote". Empty
-   * means *unknown*; "global" (open anywhere) is an explicit value, never
-   * inferred, so global ≠ unknown.
+   * Location / eligibility. Regions is a remote role's reach (country-level lives in
+   * Countries), meaningful only when WorkMode is "remote". Empty means unknown; "global"
+   * is explicit, never inferred.
    */
   regions?: string[]; // enum[]: RegionValues
   countries?: string[]; // enum[]: ISO 3166-1 alpha-2
@@ -60,23 +53,16 @@ export interface Enrichment {
   company_type?: string; // enum: CompanyTypeValues
   company_size?: string; // enum: CompanySizeValues
   /**
-   * Stated requirements (job-only, no CV). Freeform: what the posting itself asks
-   * for, with no comparison against any candidate — unlike, and unrelated to,
-   * matchanalysis.Requirement, which additionally classifies a requirement against
-   * one candidate's résumé. Priority is deliberately NOT schema-constrained (see
-   * requestSchema in schema.go): llmschema.Enum only reaches a top-level field or
-   * an array of scalars, not a nested property of an array of objects — adding an
-   * Enum("requirements", ...) override here would silently produce an inert/wrong
-   * constraint rather than erroring, so priority correctness relies on the prompt
-   * plus Sanitize's coercion below instead.
+   * Stated requirements (job-only, no CV; unrelated to matchanalysis.Requirement).
+   * Priority is not schema-constrained: llmschema.Enum cannot reach a property of an array
+   * of objects and would silently produce an inert constraint, so the prompt plus
+   * Sanitize's coercion enforce it.
    */
   requirements?: Requirement[];
 }
 /**
- * Requirement is one requirement stated in the posting — job-only, not compared
- * against any CV. (Distinct from, and unrelated to, matchanalysis.Requirement,
- * which additionally classifies a requirement against a specific candidate's
- * résumé.)
+ * Requirement is one requirement stated in the posting, job-only and not compared against
+ * any CV (unlike matchanalysis.Requirement).
  */
 export interface Requirement {
   text: string;

@@ -13,74 +13,64 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
-// Tool is one capability offered to the model. Schema is the JSON Schema of its
-// argument object, rendered into the model's tool list; Run executes it as the
-// authenticated caller — every tool receives the owner's user id rather than a
-// credential, which is what makes the in-process agent unable to act as anyone
-// else.
+// Tool is one capability offered to the model. Schema is the JSON Schema of its arguments;
+// Run executes it as the authenticated caller. Tools receive the owner's user id, not a
+// credential, so the in-process agent cannot act as anyone else.
 type Tool struct {
 	Name        string
 	Description string
 	Schema      map[string]any
 	Run         func(ctx context.Context, userID int64, args json.RawMessage) (any, error)
 
-	// Title is the human-facing name an MCP client lists the tool under. The
-	// in-app loop ignores it, as it does Effect.
+	// Title is the human-facing name an MCP client lists the tool under. The in-app loop
+	// ignores it.
 	Title string
 
-	// Effect is what the tool does to the account it runs as. The in-app loop
-	// ignores it; a surface that must declare a tool's effects to its client (the
-	// signed-in MCP server's annotations) reads it.
+	// Effect is what the tool does to the account it runs as. The in-app loop ignores it; the
+	// signed-in MCP server's annotations read it.
 	Effect Effect
 
-	// Idempotent says a repeated call with the same arguments changes nothing the
-	// first did not. The in-app loop ignores it; the signed-in MCP server announces
-	// it so a client may retry the call without asking again.
+	// Idempotent says a repeated call with the same arguments changes nothing the first did
+	// not. The in-app loop ignores it; the MCP server announces it so a client may retry.
 	Idempotent bool
 }
 
 // Effect is what a tool does to the account it runs as.
 //
-// The zero value is the most dangerous kind on purpose: a tool that declares
-// nothing is announced as one that may lose data. Overclaiming costs the person a
-// confirmation prompt; underclaiming would skip one before a write.
+// The zero value is the most dangerous kind on purpose: a tool declaring nothing is
+// announced as one that may lose data. Overclaiming costs a confirmation prompt;
+// underclaiming would skip one before a write.
 type Effect int
 
 const (
-	// EffectOverwrites may remove or replace something the account holds — a
-	// bookmark taken away, a note's previous text gone.
+	// EffectOverwrites may remove or replace something the account holds.
 	EffectOverwrites Effect = iota
-	// EffectAdds writes, but only adds to what the account holds: nothing that was
-	// there before is lost.
+	// EffectAdds writes, but only adds: nothing that was there is lost.
 	EffectAdds
 	// EffectReads changes nothing.
 	EffectReads
 )
 
-// Result is one tool's answer as the model will see it. Content is always valid
-// JSON — either the tool's payload or an error envelope — because a tool failure
-// is information the model can act on, not a reason to abandon the turn. Failed
-// says which of the two it is, so the UI can render a failed call differently.
+// Result is one tool's answer as the model will see it. Content is always valid JSON (the
+// payload or an error envelope), because a tool failure is information the model can act
+// on. Failed lets the UI render a failed call differently.
 type Result struct {
 	Content string
 	Failed  bool
 }
 
-// Registry is the set of tools a session offers, in a fixed order. A session's
-// preset builds one; the loop asks it for definitions and dispatches calls to it.
+// Registry is the set of tools a session offers, in a fixed order, built by the preset.
 type Registry struct {
 	order []string
 	tools map[string]Tool
 
-	// MaxResultBytes caps how much of a tool's payload enters the conversation.
-	// One search over full descriptions can otherwise fill the context window on
-	// its own, and everything after it — including the user's question — falls out.
-	// Zero means no cap.
+	// MaxResultBytes caps how much of a tool's payload enters the conversation, so one large
+	// result cannot push the user's question out of context. Zero means no cap.
 	MaxResultBytes int
 }
 
-// NewRegistry registers the tools in the given order. A later tool with the same
-// name replaces an earlier one, so a preset can override a default.
+// NewRegistry registers the tools in order. A later tool with the same name replaces an
+// earlier one, so a preset can override a default.
 func NewRegistry(tools ...Tool) *Registry {
 	r := &Registry{tools: make(map[string]Tool, len(tools))}
 	for _, t := range tools {
@@ -112,10 +102,9 @@ func (r *Registry) Definitions() []llms.Tool {
 	return out
 }
 
-// Call runs one tool call and renders its outcome for the model. It never returns
-// a Go error: an unknown tool, malformed arguments and a failing tool all come
-// back as a failed Result, so the model can correct itself inside the same turn.
-// Only the loop's step cap bounds how long it may keep trying.
+// Call runs one tool call and renders its outcome for the model. It never returns a Go
+// error: an unknown tool, malformed arguments and a failing tool all come back as a failed
+// Result so the model can correct itself within the turn.
 func (r *Registry) Call(ctx context.Context, userID int64, name string, args json.RawMessage) Result {
 	t, ok := r.tools[name]
 	if !ok {
@@ -132,11 +121,9 @@ func (r *Registry) Call(ctx context.Context, userID int64, name string, args jso
 	return Result{Content: r.capped(string(payload))}
 }
 
-// capped bounds one payload. An oversized result is replaced by an envelope
-// carrying its opening bytes and saying it was cut, rather than by a raw prefix:
-// a truncated JSON document is not JSON, and a model handed one either reports a
-// parse failure or invents the rest. Error envelopes never reach here — a
-// truncated correction is worse than none.
+// capped bounds one payload. An oversized result becomes an envelope with its opening bytes
+// and a note that it was cut, since a raw prefix is not valid JSON and the model would
+// report a parse failure or invent the rest. Error envelopes never reach here.
 func (r *Registry) capped(payload string) string {
 	if r.MaxResultBytes <= 0 || len(payload) <= r.MaxResultBytes {
 		return payload
@@ -157,19 +144,19 @@ func (r *Registry) capped(payload string) string {
 func failed(msg string) Result {
 	payload, err := json.Marshal(map[string]string{"error": msg})
 	if err != nil {
-		// A map[string]string always marshals; this is unreachable in practice and
-		// still must not produce invalid JSON in the conversation.
+		// A map[string]string always marshals; unreachable in practice, but must not yield invalid
+		// JSON.
 		return Result{Content: `{"error":"tool failed"}`, Failed: true}
 	}
 	return Result{Content: string(payload), Failed: true}
 }
 
-// ErrInvalidArguments marks a call the MODEL got wrong, so a surface can report it as the
-// caller's mistake rather than a server fault.
+// ErrInvalidArguments marks a call the MODEL got wrong, so a surface reports it as the
+// caller's mistake, not a server fault.
 var ErrInvalidArguments = errors.New("invalid arguments")
 
-// ArgError is an invalid call caused by one named argument. Err keeps carrying the cause
-// and its status; Field is what a surface may log: the NAME of the argument, never its value.
+// ArgError is an invalid call caused by one named argument. Field is the NAME of the
+// argument, never its value, so a surface may log it.
 type ArgError struct {
 	Field string
 	Err   error
@@ -190,9 +177,8 @@ func ArgField(err error) string {
 	return ""
 }
 
-// decodeField names the argument a decode failure is about. encoding/json types a
-// mismatch (UnmarshalTypeError.Field) but reports an unknown field only as text, so that
-// one case is read from its fixed `json: unknown field "<name>"` shape.
+// decodeField names the argument a decode failure is about. encoding/json reports an
+// unknown field only as text, so that case is read from its fixed `json: unknown field` shape.
 func decodeField(err error) string {
 	var typed *json.UnmarshalTypeError
 	if errors.As(err, &typed) {
@@ -206,11 +192,9 @@ func decodeField(err error) string {
 	return ""
 }
 
-// DecodeArgs strictly decodes a tool call's arguments into dst. Unknown fields,
-// type mismatches and trailing content are rejected, so a mis-addressed call
-// fails with a reason the model can act on instead of silently running with
-// half the arguments dropped. Empty arguments decode as an empty object, which
-// is what models send for a no-argument tool.
+// DecodeArgs strictly decodes a tool call's arguments into dst. Unknown fields, type
+// mismatches and trailing content are rejected, so a mis-addressed call fails with a reason
+// the model can act on. Empty arguments decode as an empty object.
 func DecodeArgs(args json.RawMessage, dst any) error {
 	raw := bytes.TrimSpace(args)
 	if len(raw) == 0 {
@@ -225,8 +209,8 @@ func DecodeArgs(args json.RawMessage, dst any) error {
 		}
 		return invalid
 	}
-	// A second value means the model concatenated objects; decoding only the first
-	// would run the call with arguments it did not intend.
+	// A second value means the model concatenated objects; decoding only the first would run
+	// the call with arguments it did not intend.
 	if _, err := dec.Token(); err != io.EOF {
 		return fmt.Errorf("%w: expected a single JSON object", ErrInvalidArguments)
 	}
@@ -251,10 +235,9 @@ func NoArgs(run func(ctx context.Context, userID int64) (any, error)) func(conte
 	}
 }
 
-// LoggedError is an error whose cause a surface may write to its logs: Reason is a fixed
-// sentence authored at the call site, never built from the call's arguments or data. An
-// error without one logs only its code, because the text of the others can interpolate what
-// the caller sent.
+// LoggedError is an error whose cause a surface may log: Reason is a fixed sentence authored
+// at the call site, never built from the call's arguments or data. An error without one logs
+// only its code, since other error text can interpolate what the caller sent.
 type LoggedError struct {
 	Err    error
 	Reason string

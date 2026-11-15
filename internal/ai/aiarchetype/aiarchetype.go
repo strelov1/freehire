@@ -1,41 +1,29 @@
-// Package aiarchetype derives a job's AI skill-signature archetype
-// deterministically from its already-resolved skills and category — the same
-// dict-only doctrine as internal/dict/classify, internal/dict/roletag, and
-// internal/dict/skilltag: it emits one of a curated set of archetype slugs for what
-// it can resolve and nothing for what it cannot (it never guesses, never calls
-// a model).
+// Package aiarchetype derives a job's AI skill-signature archetype from its resolved
+// skills and category. Dict-only like internal/dict/classify and skilltag: it emits
+// one of a curated set of slugs for what it can resolve, nothing otherwise, and never
+// calls a model.
 //
-// The six archetypes approximate the stable clusters a skill-signature k-means
-// analysis of the AI engineering job market found (see the field guide this
-// package's design is based on): RAG app builder, agent builder, cloud/ML
-// platform engineer, ML trainer/researcher, full-stack AI engineer, and
-// DevOps/infra engineer. Unlike that clustering, this package is a small
-// ordered rule set over internal/dict/skilltag's existing canonical vocabulary — a
-// deliberate simplification consistent with the project's dict-only doctrine,
-// which forbids a model call for a production facet.
+// The six archetypes (RAG app builder, agent builder, cloud/ML platform engineer, ML
+// trainer/researcher, full-stack AI engineer, DevOps/infra engineer) approximate
+// clusters found in AI-job skill data; here they are a small ordered rule set over
+// internal/dict/skilltag's canonical vocabulary.
 package aiarchetype
 
-// inScopeCategories are the categories aiarchetype evaluates. Every other
-// category yields no archetype, regardless of skills — the archetypes were
-// derived from AI-titled job postings and are not meaningful outside them.
+// inScopeCategories are the categories evaluated; the archetypes come from AI-titled
+// postings and mean nothing elsewhere.
 var inScopeCategories = map[string]bool{
 	"ai_engineering": true,
 	"ml_ai":          true,
 }
 
-// rule is one archetype's skill-signature test. Rules are evaluated in a fixed
-// priority order (see rules below): the first whose match reports true wins,
-// so an earlier rule's signature must be a superset-safe subset of any later,
-// broader rule it could otherwise be swallowed by.
+// rule is one archetype's skill-signature test. The first matching rule in priority
+// order wins, so an earlier signature must not be swallowed by a later, broader one.
 type rule struct {
 	archetype string
 	match     func(has func(string) bool) bool
 }
 
-// rules are evaluated in this order — most AI-distinctive signature first,
-// most generic/overlapping last — so a job matching an earlier rule is claimed
-// before a later, broader rule sees it. See design.md decision 3 for the
-// rationale behind each rule and this ordering.
+// rules run most AI-distinctive signature first, most generic last.
 var rules = []rule{
 	{
 		"rag_app_builder",
@@ -75,10 +63,7 @@ var rules = []rule{
 	},
 }
 
-// Archetypes returns every archetype slug the rule table can derive, in
-// priority order. Exposed so callers outside this package (a cross-check test,
-// a future catalog) can enumerate the vocabulary without duplicating the rule
-// table.
+// Archetypes returns every archetype slug the rule table can derive, in priority order.
 func Archetypes() []string {
 	out := make([]string, len(rules))
 	for i, r := range rules {
@@ -89,9 +74,8 @@ func Archetypes() []string {
 
 // Derive returns the single skill-signature archetype a job's skills and
 // category resolve to, or "" if category is out of scope or no rule matches.
-// It never returns more than one archetype: the archetypes are the
-// mutually-exclusive clusters the field guide's analysis found, not additive
-// facets, so the first (highest-priority) matching rule wins.
+// It never returns more than one: archetypes are mutually exclusive, so the first
+// matching rule wins.
 func Derive(skills []string, category string) string {
 	if !inScopeCategories[category] {
 		return ""

@@ -2,48 +2,32 @@ package enrich
 
 import "context"
 
-// Version is the current enrichment schema version. The enrichment command stamps
-// it on every job it writes (jobs.enrichment_version) and uses it as the target
-// version when enqueuing work; bumping it enqueues re-enrichment of every job that
-// was written under an older version.
-// v2: salary prompt guard — round fractional hourly rates to whole currency units
-// instead of decimal-stripping them (26.08 -> 2608). Re-enriches corrupted rows.
+// Version is the enrichment schema version, stamped on every job written
+// (jobs.enrichment_version). Bumping it enqueues re-enrichment of older rows.
+// v2: round fractional hourly rates instead of decimal-stripping them (26.08 -> 2608).
 const Version = 2
 
-// JobInput is the raw, source-shaped view of a job that a Provider reads to derive
-// an Enrichment. It carries exactly the fields the model extracts from — no
-// enrichment or provenance fields.
+// JobInput is the source-shaped view of a job a Provider derives an Enrichment from.
 type JobInput struct {
 	Title       string
 	Company     string
 	Location    string
 	Remote      bool
 	Description string
-	// URL is the public posting URL. Some ATS encode the location (and sometimes
-	// the role) in the URL path — e.g. SuccessFactors /job/Limburg-Maschinenfuhrer/
-	// — so it is a location signal even when the structured Location is empty.
+	// URL is the public posting URL. Some ATS encode the location in the path
+	// (SuccessFactors /job/Limburg-Maschinenfuhrer/), so it is a signal when Location is empty.
 	URL string
-	// GeoPinned is the one derived signal on this otherwise source-shaped input: the
-	// deterministic dictionary already resolved the job's country/region (see
-	// GeoPinned). When true, the prompt drops the countries/regions ask — geoFacet
-	// would discard the LLM's copy anyway — so the model spends no tokens on geography
-	// we already know.
+	// GeoPinned: the dictionary already resolved country/region (see GeoPinned), so the
+	// prompt drops the geography ask; geoFacet would discard the LLM's copy anyway.
 	GeoPinned bool
-	// CompanyTypeHint is a second derived signal: a confirmed vocab.CompanyTypeValues
-	// entry from CompanyTypeHints, keyed by the job's company_slug, when the company is
-	// hand-curated as a known case. A single job posting rarely states its employer's
-	// business model in so many words, so company_type otherwise comes back null far
-	// more often than the other enums; this feeds the prompt a verified fact instead of
-	// asking the model to infer one. Empty when the company is not in the curated set —
-	// the model then classifies from the posting alone, as before.
+	// CompanyTypeHint is a vocab.CompanyTypeValues entry from CompanyTypeHints, keyed by
+	// company_slug. A posting rarely states the employer's business model, so this feeds
+	// the prompt a verified fact. Empty when the company is not curated.
 	CompanyTypeHint string
 }
 
-// GeoPinned reports whether the deterministic dictionary resolved a concrete place for
-// a job: a country, or a region more specific than the open-anywhere "global" bucket.
-// It mirrors jobview.geoPinned (the read-side hybrid that discards the LLM's geo when
-// the dictionary pinned one); the two layers are independent, so the small predicate is
-// duplicated rather than shared. A pinned job needs no LLM geography in its prompt.
+// GeoPinned reports whether the dictionary resolved a country, or a region other than
+// "global". Mirrors jobview.geoPinned; duplicated because the two layers are independent.
 func GeoPinned(countries, regions []string) bool {
 	if len(countries) > 0 {
 		return true
@@ -56,11 +40,8 @@ func GeoPinned(countries, regions []string) bool {
 	return false
 }
 
-// Provider derives a structured Enrichment for a job by calling an LLM.
-//
-// A Provider is not trusted to be correct: the returned Enrichment is expected to
-// honor the controlled vocabularies, but the caller validates it with
-// Enrichment.Validate before persisting and rejects anything out of vocabulary.
+// Provider derives a structured Enrichment for a job by calling an LLM. Its output is
+// untrusted: the caller runs Enrichment.Validate before persisting.
 type Provider interface {
 	Enrich(ctx context.Context, job JobInput) (Enrichment, error)
 }

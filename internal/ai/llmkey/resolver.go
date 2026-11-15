@@ -20,21 +20,17 @@ type Queries interface {
 	ClearUserLLMKey(ctx context.Context, arg db.ClearUserLLMKeyParams) error
 }
 
-// Resolver hands out the credential an account is known by on the gateway, minting one
-// the first time that account asks for anything.
-//
-// It reports failure as the empty string rather than as an error, and that is the whole
-// design: a caller writes `client.As(resolver.For(ctx, userID), tag)` and gets correct
-// behaviour in every case without remembering to handle any of them. Attribution is
-// bookkeeping — losing it costs us a line in a report, while failing the call over it
-// would cost somebody the answer they asked for.
+// Resolver hands out the credential an account is known by on the gateway, minting one on
+// first use. Failure is the empty string, not an error, so `client.As(resolver.For(ctx, id),
+// tag)` is always safe: losing attribution costs a report line, failing the call costs the
+// user their answer.
 type Resolver struct {
 	q       Queries
 	gateway *Client
 }
 
-// NewResolver wires the resolver. A nil gateway is an unconfigured deployment: every
-// lookup reports "" and nothing is ever minted.
+// NewResolver wires the resolver. A nil gateway means nothing is ever minted and every
+// lookup reports "".
 func NewResolver(q Queries, gateway *Client) *Resolver {
 	return &Resolver{q: q, gateway: gateway}
 }
@@ -47,9 +43,8 @@ func (r *Resolver) For(ctx context.Context, userID int64) string {
 	}
 	stored, ok := r.read(ctx, userID)
 	if !ok {
-		// An unreadable store is NOT an account without a credential. Minting on it
-		// would issue a fresh key on every call for as long as the database is unwell,
-		// each one unstorable and each one left at the gateway.
+		// An unreadable store is not an account without a credential; minting on it would
+		// issue an unstorable key per call while the database is down.
 		return ""
 	}
 	if stored.Secret != "" {
@@ -58,20 +53,15 @@ func (r *Resolver) For(ctx context.Context, userID int64) string {
 	return r.mint(ctx, userID).Secret
 }
 
-// Stored returns the credential this account already has, or "" — and never mints one.
-//
-// It is what a read of somebody's own usage uses. Minting there would create a credential
-// for every visitor who opened a page out of curiosity, and turn "accounts with a key"
-// from a count of who has spent into a count of who has looked. Nil-safe.
+// Stored returns the credential this account already has, or ""; it never mints. Usage
+// reads use it so that merely opening a page does not create a credential. Nil-safe.
 func (r *Resolver) Stored(ctx context.Context, userID int64) Credential {
 	stored, _ := r.read(ctx, userID)
 	return stored
 }
 
-// read returns the stored credential and whether the store could be read at all. The two
-// are separate answers: "this account has none" invites minting one, while "the database
-// did not answer" must not — telling them apart is what keeps an unwell database from
-// issuing a key per request.
+// read returns the stored credential and whether the store could be read. "None yet"
+// invites minting; "database did not answer" must not.
 func (r *Resolver) read(ctx context.Context, userID int64) (Credential, bool) {
 	if r == nil || r.q == nil {
 		return Credential{}, false
@@ -87,18 +77,16 @@ func (r *Resolver) read(ctx context.Context, userID int64) (Credential, bool) {
 	return Credential{ID: stored.LlmKeyID, Secret: stored.LlmKey}, true
 }
 
-// mint issues a credential and stores it, resolving the race two concurrent first calls
-// create: both mint, the database admits one, and the loser adopts the winner's value and
-// revokes its own.
+// mint issues a credential and stores it. Two concurrent first calls both mint, the
+// database admits one, and the loser adopts the winner's value and revokes its own.
 func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 	minted, err := r.gateway.Mint(ctx, userID)
 	if err != nil {
 		log.Printf("llmkey: mint credential for user %d: %v", userID, err)
 		return Credential{}
 	}
-	// Mint already refuses a half credential; this is the second lock on the same door,
-	// because "" is the stored signal for "not minted" and writing it would strand the
-	// account in a state no later call can tell from a fresh one.
+	// Mint already refuses a half credential; "" is the stored signal for "not minted", so
+	// writing it would strand the account.
 	if minted.Secret == "" || minted.ID == "" {
 		return Credential{}
 	}
@@ -112,9 +100,7 @@ func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 	case err == nil:
 		return Credential{ID: claimed.LlmKeyID, Secret: claimed.LlmKey}
 	case errors.Is(err, pgx.ErrNoRows):
-		// Somebody else claimed first. Their credential is the account's; ours was born
-		// unreferenced and has to go, or it sits at the gateway forever spending nothing
-		// and appearing in every listing.
+		// Somebody else claimed first; ours is unreferenced and must go.
 		r.revoke(ctx, minted.ID)
 		winner, err := r.q.GetUserLLMKey(ctx, userID)
 		if err != nil {
@@ -123,8 +109,7 @@ func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 		}
 		return Credential{ID: winner.LlmKeyID, Secret: winner.LlmKey}
 	default:
-		// We hold a live credential the database will never point at again. Revoking it
-		// is the only way it does not spend under an account nothing can connect it to.
+		// A live credential the database will never point at again: revoke it.
 		log.Printf("llmkey: store credential for user %d: %v", userID, err)
 		r.revoke(ctx, minted.ID)
 		return Credential{}
@@ -134,29 +119,17 @@ func (r *Resolver) mint(ctx context.Context, userID int64) Credential {
 // Forget drops a credential the gateway refused so the next call mints a replacement.
 // Nil-safe.
 //
-// The row is cleared first: that is what makes the very next call work. The gateway side
-// BLOCKS rather than deletes, and deliberately does not distinguish why the refusal
-// happened: a credential the gateway has plainly forgotten (the ordinary case) and one
-// this same account's Revoke just BLOCKED moments ago for account deletion look
-// identical from here — both answer 401. Deleting on that ambiguity would occasionally
-// erase the very spend history Revoke blocked the key specifically to keep, if a
-// request already in flight (a second tab, a running assistant turn) gets refused in the
-// window between the block and the row's own removal by the deletion cascade. Blocking an
-// already-blocked or already-unknown key is a safe no-op either way (Client.Block), so
-// there is no case where the gentler action costs anything Delete would have bought.
+// The row is cleared first so the next call works. The gateway side blocks rather than
+// deletes: a forgotten credential and one Revoke just blocked for account deletion both
+// answer 401, and deleting would erase the spend history Revoke kept. Blocking an
+// already-blocked or unknown key is a safe no-op (Client.Block).
 func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	if r == nil || r.q == nil {
 		return
 	}
-	// Read before clearing. The block below addresses the credential by the gateway's
-	// own id, and the row about to be emptied is the only place that id is written down;
-	// clearing first would leave a live key nothing can name.
-	//
-	// An unreadable store therefore stops the whole operation rather than only the block.
-	// Clearing anyway would erase the one record of that id while the credential kept
-	// spending — permanently, since nothing could ever name it again. Leaving the row is
-	// safe: the caller's request already completed on the service credential, and the
-	// next refusal retries this.
+	// Read before clearing: the row is the only place the gateway id is written down. An
+	// unreadable store stops the whole operation, since clearing anyway would leave a live
+	// key nothing can name. The next refusal retries.
 	stored, ok := r.read(ctx, userID)
 	if !ok {
 		log.Printf("llmkey: cannot read credential for user %d; leaving it in place", userID)
@@ -170,9 +143,8 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	if err != nil {
 		log.Printf("llmkey: clear credential for user %d: %v", userID, err)
 	}
-	// Only block what the refusal was actually about. A concurrent call may already have
-	// re-minted, in which case the row now holds a different credential and blocking it
-	// would revoke a good key on the strength of a stale one's 401.
+	// Block only what the refusal was about: a concurrent call may have re-minted, and a
+	// stale 401 must not revoke the new key.
 	if stored.Secret != secret || stored.ID == "" {
 		return
 	}
@@ -181,30 +153,17 @@ func (r *Resolver) Forget(ctx context.Context, userID int64, secret string) {
 	}
 }
 
-// Revoke stops this account's credential from spending, without erasing it and without
-// touching the row.
-//
-// It BLOCKS rather than deletes, and that is the point: the gateway's record of what this
-// credential spent is the cost history, and deleting the key takes that history with it.
-// A departing member must stop being able to spend; they do not have to take last
-// quarter's numbers with them.
-//
-// What is left behind on the gateway is a blocked key labelled with an internal numeric
-// id — an identifier that maps to nobody once the account row is gone, which is what the
-// deletion itself accomplishes.
-//
-// The row is deliberately left alone: it is about to be erased by the cascade, and
-// clearing it first would only cost a write. Nil-safe.
+// Revoke stops this account's credential from spending, without touching the row. It
+// blocks rather than deletes, so the gateway keeps the cost history; the blocked key's
+// numeric id maps to nobody once the account row is gone. The row is left for the deletion
+// cascade. Nil-safe.
 func (r *Resolver) Revoke(ctx context.Context, userID int64) error {
 	if r == nil {
 		return nil
 	}
-	// An unreadable store is not an account without a credential, and the difference
-	// matters more here than anywhere else in this package: everywhere else a failed read
-	// costs attribution, while here it would let a deletion report success having revoked
-	// nothing, leaving a live credential spending for an account that no longer exists.
-	// The error goes back so the caller decides — deleting the row is what makes the id
-	// unrecoverable, so this is the last moment anyone can.
+	// An unreadable store must fail here, unlike elsewhere: treating it as "no credential"
+	// would report a deletion as successful with a live key still spending. Deleting the row
+	// makes the id unrecoverable, so this is the last chance to revoke.
 	stored, ok := r.read(ctx, userID)
 	if !ok {
 		return fmt.Errorf("%w: cannot read the credential to revoke", ErrUpstream)
@@ -215,9 +174,8 @@ func (r *Resolver) Revoke(ctx context.Context, userID int64) error {
 	return r.gateway.Block(ctx, stored.ID)
 }
 
-// revoke deletes a credential at the gateway, best-effort. Every caller has already
-// decided the value is not to be used again, so a failure here leaves a key that spends
-// nothing — worth a log line and nothing more.
+// revoke deletes a credential at the gateway, best-effort: the value is already abandoned,
+// so a failure only warrants a log line.
 func (r *Resolver) revoke(ctx context.Context, keyID string) {
 	if err := r.gateway.Delete(ctx, keyID); err != nil {
 		log.Printf("llmkey: revoke credential: %v", err)

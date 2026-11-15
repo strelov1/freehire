@@ -5,22 +5,13 @@ import (
 	"math"
 )
 
-// Tolerant JSON decoding for Enrichment. The model reliably picks the right
-// *value* but occasionally wraps it in the wrong *shape*: a scalar where the
-// contract wants an array ("eu" vs ["eu"]), an array where it wants a scalar
-// (["senior"] vs "senior"), or a float where it wants an int (17.5 vs 17). A
-// strict json.Unmarshal rejects the whole payload over one such wrapper, burning
-// an outbox attempt on data that was otherwise fine. UnmarshalJSON below coerces
-// each mis-shaped field to its canonical form so the value survives.
-//
-// The exported Enrichment field types are unchanged (string / []string / *int);
-// the tolerance lives only in this decode boundary. Sanitize/Validate then run on
-// the canonical shapes exactly as before.
+// Tolerant JSON decoding for Enrichment. The model picks the right value but sometimes
+// the wrong shape ("eu" vs ["eu"], ["senior"] vs "senior", 17.5 vs 17); a strict decode
+// would reject the payload and burn an outbox attempt. UnmarshalJSON coerces each field to
+// its canonical shape. Enrichment's exported field types are unchanged.
 
-// stringOrFirst decodes a JSON string, or an array of strings (taking the first
-// element — an empty array yields an empty string). This "first element wins" rule is
-// specific to the model's scalar-vs-array slips; flexjson has no string type, so there
-// is deliberately no shared implementation.
+// stringOrFirst decodes a JSON string, or an array of strings (first element wins; empty
+// array yields ""). flexjson has no string type, so there is no shared implementation.
 type stringOrFirst string
 
 func (f *stringOrFirst) UnmarshalJSON(b []byte) error {
@@ -39,8 +30,8 @@ func (f *stringOrFirst) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// sliceOrWrap decodes a JSON array of strings, or a single string (wrapped
-// into a one-element slice — an empty string yields an empty slice).
+// sliceOrWrap decodes a JSON array of strings, or a single string wrapped into a slice
+// (an empty string yields an empty slice).
 type sliceOrWrap []string
 
 func (f *sliceOrWrap) UnmarshalJSON(b []byte) error {
@@ -59,13 +50,9 @@ func (f *sliceOrWrap) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// requirementListOrWrap decodes a JSON array of Requirement objects, or a single
-// bare Requirement object (wrapped into a one-element slice) — the same
-// array-or-scalar tolerance sliceOrWrap gives string fields, applied to
-// Requirements. Strict JSON-schema mode has not historically prevented the model
-// from returning the right value in the wrong shape for other fields (the premise
-// of this whole file), so this field gets the same defensive treatment rather than
-// being assumed exempt.
+// requirementListOrWrap decodes an array of Requirement objects, or a single bare one
+// wrapped into a slice. Strict schema mode does not prevent shape slips, so Requirements
+// gets the same tolerance as the string fields.
 type requirementListOrWrap []Requirement
 
 func (f *requirementListOrWrap) UnmarshalJSON(b []byte) error {
@@ -82,12 +69,9 @@ func (f *requirementListOrWrap) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// roundInt decodes any JSON number, rounding to the nearest integer so a
-// fractional value (an hourly rate like 17.5, or 0.5 years) is preserved instead
-// of failing the decode. It is deliberately STRICTER than flexjson.Int: a string
-// ("100k") fails the whole decode here, so the runner treats the response as
-// unparseable and re-samples — flexjson.Int would silently coerce it to a
-// plausible-looking 100 (and garbage to 0).
+// roundInt decodes any JSON number, rounding so a fractional value (17.5/h, 0.5 years)
+// survives. Stricter than flexjson.Int: a string ("100k") fails the decode so the runner
+// re-samples, where flexjson.Int would coerce it to a plausible 100.
 type roundInt int
 
 func (f *roundInt) UnmarshalJSON(b []byte) error {
@@ -99,13 +83,10 @@ func (f *roundInt) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// enrichmentJSON mirrors Enrichment field-for-field (identical json tags) but
-// types every string/[]string/int field as its flex* counterpart, so decoding
-// tolerates the model's shape slips. It is a distinct type from Enrichment, so
+// enrichmentJSON mirrors Enrichment with flex* field types. A distinct type, so
 // Enrichment.UnmarshalJSON does not recurse.
 type enrichmentJSON struct {
-	// Summary is plain free text — no shape coercion, but it must be listed here (and
-	// copied below) or the tolerant decode silently drops it.
+	// Summary needs no coercion but must be listed here and copied below, or it is dropped.
 	Summary string `json:"summary,omitempty"`
 
 	WorkMode        stringOrFirst `json:"work_mode,omitempty"`
@@ -139,8 +120,8 @@ type enrichmentJSON struct {
 	Requirements requirementListOrWrap `json:"requirements,omitempty"`
 }
 
-// UnmarshalJSON decodes into the tolerant shadow struct, then copies into the
-// canonical Enrichment shapes. A genuinely malformed document still errors.
+// UnmarshalJSON decodes via the tolerant shadow struct; a genuinely malformed document
+// still errors.
 func (e *Enrichment) UnmarshalJSON(data []byte) error {
 	var s enrichmentJSON
 	if err := json.Unmarshal(data, &s); err != nil {

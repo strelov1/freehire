@@ -1,6 +1,6 @@
-// Package assistant is the in-app AI agent: a bounded tool-calling loop over the
-// shared LLM client, a typed tool registry, and the persisted conversations both
-// the chat surface and the CV-tailoring workspace run on.
+// Package assistant is the in-app AI agent: a bounded tool-calling loop over the shared
+// LLM client, a typed tool registry, and the persisted conversations the chat surface and
+// the CV-tailoring workspace run on.
 package assistant
 
 import (
@@ -11,23 +11,21 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
-// Roles a stored message can carry. They mirror the transcript table's CHECK
-// constraint; the system prompt is derived from the session's preset at turn time
-// and is deliberately never stored, so changing a prompt does not require
-// rewriting history.
+// Roles a stored message can carry. They mirror the transcript table's CHECK constraint.
+// The system prompt is derived from the session's preset at turn time and never stored.
 const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 	RoleTool      = "tool"
-	// RoleNote is a status note freehire hands the model — what happened to the application
-	// a conversation is held against — rather than anything the candidate said. Stored as
-	// the transcript CHECK's long-standing 'system' value; the client never renders it.
+	// RoleNote is a status note freehire hands the model (what happened to the application a
+	// conversation is held against), not anything the candidate said. Stored as the CHECK's
+	// 'system' value; the client never renders it.
 	RoleNote = "system"
 )
 
-// notePreamble opens a note as the model reads it. A note travels as a human turn, the one
-// mid-conversation role every provider accepts, so the preamble is what keeps "the
-// application was submitted" from reading as the candidate asking for it.
+// notePreamble opens a note as the model reads it. A note travels as a human turn (the one
+// mid-conversation role every provider accepts), so the preamble keeps it from reading as
+// the candidate's request.
 const notePreamble = "[Status update from freehire — not written by the candidate]\n"
 
 // noteContent is a status note's payload.
@@ -40,10 +38,8 @@ func EncodeNote(text string) (Message, error) {
 	return encode(RoleNote, noteContent{Text: text})
 }
 
-// Message is one row of a session's transcript: the role plus a role-specific
-// JSON payload. It is both what the client replays and what the model's history is
-// rebuilt from, so an assistant turn's tool calls and each tool's result are
-// first-class messages rather than prose the model has to re-parse.
+// Message is one row of a session's transcript: the role plus a role-specific JSON payload.
+// It is both what the client replays and what the model's history is rebuilt from.
 type Message struct {
 	Seq     int32           `json:"seq"`
 	Role    string          `json:"role"`
@@ -63,11 +59,8 @@ type assistantContent struct {
 	ToolCalls []toolCall `json:"tool_calls,omitempty"`
 }
 
-// toolCall is a stored tool invocation. Arguments stay a string because that is
-// what the model emitted — but they must be valid JSON for Bedrock/LiteLLM to
-// accept on replay. healToolArguments repairs trailer junk (Haiku has appended
-// XML like </invoke>) without re-encoding a parse tree when the bytes are already
-// legal.
+// toolCall is a stored tool invocation. Arguments stay a string, as emitted, but must be
+// valid JSON for Bedrock/LiteLLM on replay; healToolArguments repairs trailer junk.
 type toolCall struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -86,10 +79,9 @@ func EncodeUser(text string, docs ...Attachment) (Message, error) {
 	return encode(RoleUser, userContent{Text: text, Attachments: docs})
 }
 
-// EncodeAssistant builds the stored message for one model turn: its text and the
-// tool calls it requested. Either may be empty. Arguments are healed so a later
-// retry can replay them to Bedrock — a single Haiku turn that appended </invoke>
-// after valid JSON otherwise poisons the session forever.
+// EncodeAssistant builds the stored message for one model turn: its text and requested tool
+// calls, either of which may be empty. Arguments are healed so a replay to Bedrock cannot be
+// poisoned by one malformed turn.
 func EncodeAssistant(text string, calls []llms.ToolCall) (Message, error) {
 	c := assistantContent{Text: text}
 	for _, call := range calls {
@@ -105,8 +97,7 @@ func EncodeAssistant(text string, calls []llms.ToolCall) (Message, error) {
 	return encode(RoleAssistant, c)
 }
 
-// EncodeToolResult builds the stored message for one tool's result, keyed to the
-// call it answers so the model can match them up.
+// EncodeToolResult builds the stored message for one tool's result, keyed to its call.
 func EncodeToolResult(callID, name, result string) (Message, error) {
 	return encode(RoleTool, toolResultContent{ToolCallID: callID, Name: name, Result: result})
 }
@@ -119,10 +110,9 @@ func encode(role string, content any) (Message, error) {
 	return Message{Role: role, Content: raw}, nil
 }
 
-// Decode turns a stored message back into the model-facing form. An unknown role
-// or an undecodable payload is an error rather than a skipped message: silently
-// dropping part of a transcript would let the model answer from a conversation
-// that never happened.
+// Decode turns a stored message back into the model-facing form. An unknown role or
+// undecodable payload is an error, not a skipped message: dropping part of a transcript
+// would let the model answer from a conversation that never happened.
 func (m Message) Decode() (llms.MessageContent, error) {
 	switch m.Role {
 	case RoleUser:
@@ -170,9 +160,8 @@ func (m Message) Decode() (llms.MessageContent, error) {
 	return llms.MessageContent{}, fmt.Errorf("assistant: unknown message role %q", m.Role)
 }
 
-// Conversation rebuilds a model history from a session's stored transcript, in
-// order. The system prompt is not part of it — the caller prepends the one its
-// preset selects.
+// Conversation rebuilds a model history from a stored transcript, in order, without the
+// system prompt (the caller prepends its preset's).
 func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 	out := make([]llms.MessageContent, 0, len(msgs))
 	for _, m := range msgs {
@@ -185,36 +174,22 @@ func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 	return out, nil
 }
 
-// minQuoteWords is the shortest citation UserSaid will accept. A substring match with no
-// floor lets a common short word — "I", "the", any filler that turns up somewhere in every
-// session — count as a verbatim quote of anything containing it, which promotes an invented
-// claim to the candidate's own words for free. Three words is short enough to not bother a
-// real citation but long enough that it can't be found by accident in unrelated chatter.
+// minQuoteWords is the shortest citation UserSaid accepts. With no floor, a common short
+// word would count as a verbatim quote of anything containing it.
 const minQuoteWords = 3
 
-// negationCues are words that, appearing between a sentence boundary and the quote's
-// start, flip the sentence's meaning — "I did NOT lead the migration" is a denial, not
-// an assertion, even though "lead the migration" is a literal substring of it. Checked
-// only within the same sentence as the quote (split on '.', ';', '!', '?'), so an
-// unrelated negation elsewhere in a long message cannot suppress a genuine, unrelated
-// citation. This is deliberately a blunt, high-recall list: UserSaid gates what may be
-// stamped stated_in_chat (candidate-asserted, CV-eligible), so a false rejection just
-// falls back to agent_inferred provenance, while a false acceptance would let a denial
-// be written into the CV as a claim.
+// negationCues are words that, between a sentence boundary and the quote's start, flip the
+// sentence into a denial ("I did NOT lead the migration"). Checked within the quote's
+// sentence only. Deliberately blunt and high-recall: a false rejection just falls back to
+// agent_inferred, a false acceptance would write a denial into a CV.
 var negationCues = []string{"n't", " not ", " not,", " never ", "no longer", "without ever", "cannot "}
 
-// UserSaid reports whether quote appears in what the user actually typed in this
-// conversation, compared case-insensitively and with whitespace collapsed — and is NOT
-// negated by the sentence it appears in.
+// UserSaid reports whether quote appears in what the user typed in this conversation,
+// compared case-insensitively with whitespace collapsed, and is not negated by its sentence.
 //
-// It exists so a tool can verify a citation instead of trusting one. A model that must
-// quote the user verbatim to have its write treated as the user's assertion cannot promote
-// its own inference by simply claiming the user said it — the transcript is checked. The
-// comparison is deliberately literal: normalizing further (stemming, fuzzy matching) would
-// let a paraphrase pass, and a paraphrase is precisely the thing being guarded against.
-// A plain substring match alone would still misattribute provenance on a denial — "I have
-// NOT worked with Kubernetes" literally contains "worked with Kubernetes" — so every match
-// is additionally checked against negationCues within the same sentence.
+// It lets a tool verify a citation instead of trusting one. The comparison is literal on
+// purpose (a paraphrase is what is being guarded against), and negation is checked because
+// "I have NOT worked with Kubernetes" contains "worked with Kubernetes".
 func UserSaid(transcript []Message, quote string) bool {
 	quote = collapseSpace(quote)
 	if quote == "" || len(strings.Fields(quote)) < minQuoteWords {
@@ -244,9 +219,8 @@ func UserSaid(transcript []Message, quote string) bool {
 	return false
 }
 
-// sentenceNegatesQuoteAt reports whether the sentence containing text[at:] carries a
-// negation cue before the quote begins. text is already collapseSpace-d (lowercased,
-// single-spaced), so the cues and the '.'/';'/'!'/'?' boundaries below match plain bytes.
+// sentenceNegatesQuoteAt reports whether the sentence containing text[at:] has a negation
+// cue before the quote. text is already collapseSpace-d, so cues match plain bytes.
 func sentenceNegatesQuoteAt(text string, at int) bool {
 	start := 0
 	for _, sep := range []byte{'.', ';', '!', '?'} {
@@ -254,8 +228,7 @@ func sentenceNegatesQuoteAt(text string, at int) bool {
 			start = p + 1
 		}
 	}
-	// Pad with a leading/trailing space so a cue like " not " matches at a sentence's
-	// very first or last word too, without needing separate anchored variants.
+	// Leading space lets a cue like " not " match at the sentence's first word.
 	sentence := " " + text[start:at]
 	for _, cue := range negationCues {
 		if strings.Contains(sentence, cue) {
@@ -265,15 +238,14 @@ func sentenceNegatesQuoteAt(text string, at int) bool {
 	return false
 }
 
-// collapseSpace lowercases and reduces every whitespace run to a single space, so a quote
-// that survived a line wrap still matches what the user typed.
+// collapseSpace lowercases and reduces whitespace runs to one space, so a quote that
+// survived a line wrap still matches.
 func collapseSpace(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
-// firstJSONValue decodes the first complete JSON value in s, skipping any leading
-// non-JSON text up to the first "{" or "[", and returns it along with whatever
-// text still follows. ok is false when no valid JSON value could be decoded.
+// firstJSONValue decodes the first complete JSON value in s, skipping leading non-JSON text
+// up to the first "{" or "[", and returns it with the remaining text. ok is false if none.
 func firstJSONValue(s string) (value, rest string, ok bool) {
 	start := strings.IndexAny(s, "{[")
 	if start < 0 {
@@ -288,16 +260,12 @@ func firstJSONValue(s string) (value, rest string, ok bool) {
 	return string(raw), body[dec.InputOffset():], true
 }
 
-// healToolArguments returns args unchanged when they are already one JSON value.
-// Otherwise it carves out the first object/array (Haiku has been seen appending
-// "\n</invoke>" and similar XML trailer after a complete object) or falls back
-// to "{}" so Bedrock's converter never sees illegal tool-call arguments.
+// healToolArguments returns args unchanged when already one JSON value; otherwise it carves
+// out the first object/array (Haiku has appended "</invoke>" trailers) or falls back to "{}".
 //
-// This is a storage/replay concern only — it always keeps the first value, even when
-// what follows is itself a second, complete JSON value (the model concatenated two
-// calls) rather than trailer junk. That trade-off is fine for what gets persisted and
-// replayed to the model on a later turn, but it must never be what decides what a tool
-// actually EXECUTES with: see looksConcatenated, which runToolCalls checks first so a
+// Storage/replay only: it keeps the first value even when a second complete one follows, so
+// it must never decide what a tool EXECUTES with. See looksConcatenated, which runToolCalls
+// checks first.
 // concatenated call fails loudly via DecodeArgs instead of silently running truncated.
 func healToolArguments(args string) string {
 	s := strings.TrimSpace(args)
@@ -314,12 +282,9 @@ func healToolArguments(args string) string {
 	return value
 }
 
-// looksConcatenated reports whether args is more than one complete JSON value run
-// together with no separator — e.g. two full tool-call payloads — as opposed to a
-// single value followed by non-JSON trailer junk. The two must be told apart:
-// healToolArguments keeps only the first value either way (see above), but a genuine
-// concatenation means the model intended a SECOND call the caller must not silently
-// drop by executing just the first.
+// looksConcatenated reports whether args is more than one complete JSON value run together
+// (two tool-call payloads) rather than one value plus non-JSON trailer. A concatenation
+// means the model intended a second call that must not be silently dropped.
 func looksConcatenated(args string) bool {
 	s := strings.TrimSpace(args)
 	if s == "" || json.Valid([]byte(s)) {
