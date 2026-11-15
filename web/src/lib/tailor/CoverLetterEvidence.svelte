@@ -19,15 +19,15 @@
   const suggested = $derived(view?.available.filter((a) => suggestedIDs.includes(a.id)) ?? []);
   const other = $derived(view?.available.filter((a) => !suggestedIDs.includes(a.id)) ?? []);
 
-  async function load(id: string, keepChoices = false) {
+  async function load(id: string, mode: 'initial' | 'facts' | 'conflict' = 'initial') {
     const request = ++sequence;
     loading = true;
     error = '';
     try {
       const next = await api.getCoverLetterEvidence(id);
       if (!alive || request !== sequence || id !== cvId) return;
-      view = next;
-      if (!keepChoices) selected = [...(next.explicit ? next.atom_ids : next.suggested_ids)];
+      view = mode === 'facts' && view ? { ...next, revision: view.revision } : next;
+      if (mode === 'initial') selected = [...(next.explicit ? next.atom_ids : next.suggested_ids)];
     } catch (e) {
       if (alive && request === sequence && id === cvId)
         error = e instanceof Error ? e.message : 'Could not load your evidence.';
@@ -60,7 +60,7 @@
     } catch (e) {
       if (!alive || request !== sequence || id !== cvId) return;
       if (e instanceof Error && 'status' in e && e.status === 409) {
-        await load(id, true);
+        await load(id, 'conflict');
         if (!alive || id !== cvId) return;
         error = 'The saved selection changed in another tab. Your choices are still here. Review them and save again.';
       } else error = e instanceof Error ? e.message : 'Could not save your selection.';
@@ -153,7 +153,7 @@
         type="button"
         class="text-primary underline"
         disabled={loading || saving}
-        onclick={() => void load(cvId, true)}>Refresh facts</button
+        onclick={() => void load(cvId, 'facts')}>Refresh facts</button
       >
     </div>
     <div class="flex flex-wrap gap-2">

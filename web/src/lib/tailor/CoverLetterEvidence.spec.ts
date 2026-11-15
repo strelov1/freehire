@@ -95,3 +95,16 @@ it('shows the employment behind an achievement', async () => {
   render(CoverLetterEvidence, { cvId: 'cv', onwrite: vi.fn() });
   await screen.findByText(/Acme · Engineer/);
 });
+
+it('preserves the expected selection revision when refreshing facts', async () => {
+  get
+    .mockResolvedValueOnce(evidence())
+    .mockResolvedValueOnce({ ...evidence(), revision: 2, explicit: true, atom_ids: ['two'] });
+  render(CoverLetterEvidence, { cvId: 'cv', onwrite: vi.fn() });
+  await screen.findByRole('checkbox', { name: 'Built a Go worker' });
+  await fireEvent.click(screen.getByRole('button', { name: 'Refresh facts' }));
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save selection' })).toHaveProperty('disabled', false));
+  await fireEvent.click(screen.getByRole('button', { name: 'Save selection' }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith('cv', 0, ['one']));
+});

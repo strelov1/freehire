@@ -1,11 +1,15 @@
 package coverletter
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/strelov1/freehire/internal/candidate/experience"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 func TestSelectionResolvesOnlyConfirmedChosenFacts(t *testing.T) {
@@ -69,5 +73,31 @@ func TestAutomaticDraftBecomesChangedAfterFirstExplicitSelection(t *testing.T) {
 	stored := Stored{EvidenceFingerprint: EvidenceFingerprint([]experience.Atom{a})}
 	if !stored.EvidenceChanged(&Selection{Revision: 1, AtomIDs: []uuid.UUID{a.ID}}, []experience.Atom{a}) {
 		t.Fatal("first explicit selection did not mark automatic draft changed")
+	}
+}
+
+func TestDraftConsidersEveryAcceptedSelectionFact(t *testing.T) {
+	var bank []experience.Atom
+	var ids []uuid.UUID
+	for i := range MaxSelectedAtoms {
+		atom := manualAtom(fmt.Sprintf("CONFIRMEDFACT%03d", i))
+		bank = append(bank, atom)
+		ids = append(ids, atom.ID)
+	}
+	atoms, err := ResolveSelection(ids, bank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := longBody(400)
+	model := &scriptedModel{responses: []string{
+		`{"selected":[]}`, `{"body":"` + body + `"}`, `{"body":"` + body + `"}`,
+	}}
+	if _, err := NewAnalyzer(llm.NewWithModel(model)).Draft(context.Background(), testInput(atoms)); err != nil {
+		t.Fatal(err)
+	}
+	for _, atom := range atoms {
+		if !strings.Contains(model.sent(), atom.Claim) {
+			t.Errorf("accepted fact never reached model: %s", atom.Claim)
+		}
 	}
 }

@@ -42,3 +42,17 @@ Rebased onto main's TypeSpec CV contract. Regenerated server/client contracts an
 documentation; repeated Go unit tests, vet, integration-tag vet and focused HTTP integration
 tests successfully. Svelte check passed with zero errors and 50 existing warnings. The
 contract adaptation received an additional review with no important findings.
+
+## PR review follow-up
+
+Regression tests reproduced two review findings before the fixes: facts-only refresh adopted
+another session's revision, and the drafting chain clipped accepted selections after 30 atoms.
+Refresh now retains its expected revision until an explicit conflict is surfaced; the chain
+shares the 50-atom selection bound. Focused domain and workspace tests pass.
+
+New migrations were renumbered to 0274/0275 after main gained colliding numbers. Both existing
+0272 migrations on main remain immutable and are recorded in the duplicate-prefix baseline.
+
+Post-fix verification: full Go unit suite and vet passed, as did the database selection
+integration test, all ten cover-letter workspace tests, changed-file ESLint, migration-number
+tests, and Svelte check (zero errors; 50 existing warnings). sqlc regeneration produced no drift.
