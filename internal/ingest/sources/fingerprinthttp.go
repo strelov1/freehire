@@ -76,11 +76,16 @@ func newProxiedFingerprintHTTP(proxyURL string) (*fingerprintHTTP, error) {
 // single host, a dropped detail page reappears on the next run, and a transient list-fetch failure
 // simply fails the board for that run (no jobs are closed on a single miss).
 func (c *fingerprintHTTP) get(ctx context.Context, url string) ([]byte, error) {
+	return c.getWith(ctx, url, fpHeaders())
+}
+
+// getWith is get with the caller's header set.
+func (c *fingerprintHTTP) getWith(ctx context.Context, url string, h fhttp.Header) ([]byte, error) {
 	req, err := fhttp.NewRequestWithContext(ctx, fhttp.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("sources: build request %s: %w", url, err)
 	}
-	req.Header = fpHeaders()
+	req.Header = h
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -126,7 +131,19 @@ func (c *fingerprintHTTP) GetHTML(ctx context.Context, url string) (*html.Node, 
 
 // GetJSON fetches url over the Chrome-fingerprint client and decodes its JSON body into v.
 func (c *fingerprintHTTP) GetJSON(ctx context.Context, url string, v any) error {
-	body, err := c.get(ctx, url)
+	return c.getJSONWith(ctx, url, fpHeaders(), v)
+}
+
+// FetchJSON is GetJSON sent with the headers a page's own fetch() call carries instead of a
+// navigation's. jobleads' edge serves its detail API to the fetch shape and answers the
+// navigation shape with a Cloudflare managed challenge (403, cf-mitigated: challenge) about half
+// the time: measured 2026-11-15 on the same 24 postings, 24/24 served vs 13/24.
+func (c *fingerprintHTTP) FetchJSON(ctx context.Context, url string, v any) error {
+	return c.getJSONWith(ctx, url, fpFetchHeaders(), v)
+}
+
+func (c *fingerprintHTTP) getJSONWith(ctx context.Context, url string, h fhttp.Header, v any) error {
+	body, err := c.getWith(ctx, url, h)
 	if err != nil {
 		return err
 	}
@@ -223,4 +240,12 @@ func fpPostHeaders() fhttp.Header {
 			"sec-fetch-dest", "accept-language",
 		},
 	}
+}
+
+// fpFetchHeaders is fpPostHeaders for a body-less fetch() GET: no content-type. The keys are
+// lower-case, so the entry is deleted directly; Header.Del would canonicalize and miss it.
+func fpFetchHeaders() fhttp.Header {
+	h := fpPostHeaders()
+	delete(h, "content-type")
+	return h
 }
