@@ -55,7 +55,7 @@ func run() int {
 	cfg := config.LoadLLM()
 	if !cfg.Settings(cfg.Model).Enabled() {
 		log.Printf("llm-probe: LLM is unconfigured, nothing to probe")
-		return worker.Skip("LLM_SETTINGS")
+		return worker.Skip("LLM_BASE_URL+LLM_API_KEY+LLM_MODEL")
 	}
 
 	// Every alias the deployment routes through; cmd/server reads these through cmp.Or too.

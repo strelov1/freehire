@@ -21,7 +21,7 @@ hire
 # union of all three plus every current cmd/ target; 9 of the entries no longer have
 # a target and stay because a deploy host that built them still has that binary sitting in
 # its checkout root. Regenerate after adding a worker:
-#   { ls cmd; grep -E '^/[^/]+$' .gitignore | tr -d /; } | sort -u
+#   { ls cmd; grep -E '^/[^/]+$' .gitignore | tr -d /; } | sort -u | sed 's|^|/|'
 # The 9 retired ones are backfill-company-info, backfill-engagement, backfill-justjoin, backfill-requirements, discord-register-commands, hire-api, prune, reslug and similar-backfill.
 /add-board
 /adzuna-liveness
