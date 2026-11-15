@@ -1,7 +1,6 @@
-// Package jobview defines the single public wire shape of a job — the JSON
-// representation served by the list, detail, and search endpoints and stored in
-// the search index. Keeping one type (instead of parallel per-endpoint structs)
-// makes drift between the API surfaces impossible.
+// Package jobview defines the single public wire shape of a job, served by the list,
+// detail and search endpoints and stored in the search index. One type keeps the
+// surfaces from drifting.
 package jobview
 
 import (
@@ -20,20 +19,16 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// Job is the public wire shape of a job. It carries the public_slug and
-// deliberately omits the internal numeric id, which must never be exposed: the
-// id is enumerable and its growth leaks inventory size and fill rate.
+// Job is the public wire shape of a job. It carries public_slug and deliberately omits
+// the numeric id, which is enumerable and its growth leaks inventory size and fill rate.
 //
-// Enrichment is nested (not flattened) and typed; an unenriched job serializes
-// it as `{}`. Timestamps are RFC3339 UTC strings (or null) — the lexicographic
-// order is chronological, which the search index relies on for sorting.
+// Enrichment is nested and typed; an unenriched job serializes it as `{}`. Timestamps
+// are RFC3339 UTC strings (or null), which sort chronologically as the index relies on.
 type Job struct {
 	PublicSlug string `json:"public_slug"`
 	Source     string `json:"source"`
-	// ManuallyAdded marks a hand-curated posting added by a moderator (created_by is
-	// set), as opposed to an automated source. It is the provenance signal, decoupled
-	// from Source (which is the real origin); the authoring user id itself is internal
-	// and never exposed.
+	// ManuallyAdded marks a hand-curated posting added by a moderator (created_by set),
+	// decoupled from Source. The authoring user id is never exposed.
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
 	URL           string `json:"url"`
@@ -43,174 +38,131 @@ type Job struct {
 	Location      string `json:"location"`
 	Description   string `json:"description"`
 	// DirectApply marks an employer vacancy that takes applications on freehire instead
-	// of linking out (job.IsDirectApply); its URL is empty. Omitted for every other
-	// posting rather than served false, so the flag adds nothing to the search index
-	// for the catalogue it does not describe.
+	// of linking out (job.IsDirectApply); its URL is empty. Omitted rather than served
+	// false, to keep the search index small.
 	DirectApply bool `json:"direct_apply,omitempty"`
-	// WorkMode/Skills are served from the jobs dictionary columns ONLY — the
-	// deterministic dictionaries are the sole production source for these facets. The
-	// LLM's enrichment values for them are deliberately excluded from the served object
-	// (they remain raw in the stored enrichment JSONB), so the LLM can later run free as
-	// a discovery signal without corrupting production data.
+	// WorkMode/Skills are served from the jobs dictionary columns ONLY; the LLM's values
+	// stay raw in the stored enrichment JSONB, so the LLM can run free as a discovery
+	// signal without corrupting production data.
 	//
-	// Countries/Regions are a HYBRID facet, like Cities (see geoFacet): the dictionary
-	// columns win whenever they pinned a place, but an unpinned geography (no country,
-	// and at most the "global" bucket an explicit open-anywhere marker resolves to)
-	// falls back to the LLM's enrichment.countries/regions — catching a restriction
-	// stated only in the prose ("Remote (SPAIN only)") that the location string never
-	// carried.
+	// Countries/Regions are a hybrid facet, like Cities (see geoFacet): the dictionary
+	// columns win whenever they pinned a place; otherwise the LLM's enrichment.countries/
+	// regions fill in, catching a restriction stated only in prose ("Remote (SPAIN only)").
 	//
-	// All four are served top-level and once; the same fields are folded out of the
-	// nested Enrichment to avoid duplication.
+	// All four are served top-level and folded out of the nested Enrichment.
 	Countries []string `json:"countries"`
 	Regions   []string `json:"regions"`
 	WorkMode  string   `json:"work_mode,omitempty"`
 	Skills    []string `json:"skills"`
-	// Cities is a HYBRID facet (the one deliberate dict+LLM exception): the
-	// deterministic jobs.cities column when it resolved a beacon city, otherwise a
-	// normalized fallback to the LLM's enrichment.cities — cities are high-cardinality
-	// and the dictionary is only a beacon list, so a pure-dict facet would be too
-	// sparse. Values are canonical display names (Title case); the LLM copy is folded
-	// out of the nested Enrichment like the other geography facets.
+	// Cities is a hybrid facet (the one deliberate dict+LLM exception): the dictionary
+	// column when it resolved a beacon city, otherwise a normalized fallback to the LLM's
+	// enrichment.cities, since the dictionary is only a beacon list and would be too
+	// sparse. Values are canonical display names (Title case).
 	Cities []string `json:"cities"`
 	// Metros is dict-only: the metro areas (GHS-FUA) the location line places the posting in, "Sacramento (US)".
 	Metros []string `json:"metros"`
-	// Collections is the set of curated-collection slugs (e.g. yc, bigtech) the
-	// job's company belongs to, denormalized from the company onto the job. It is a
-	// deterministic source fact (no LLM counterpart) served straight from the jobs
-	// column; an untagged job serializes it as [].
+	// Collections is the curated-collection slugs (e.g. yc, bigtech) of the job's
+	// company, denormalized onto the job. A deterministic source fact; an untagged job
+	// serializes it as [].
 	Collections []string `json:"collections"`
-	// Perks are the benefits the description states it offers, from the closed
-	// vocabulary vocab.PerkValues and in its order (internal/dict/perks, never the LLM).
-	// Indexed as a filterable Meili facet. Always an array: [] means the description
-	// names none of them, not that the job offers none.
+	// Perks are the benefits the description states it offers, from vocab.PerkValues in
+	// its order (internal/dict/perks, never the LLM). Always an array: [] means the
+	// description names none, not that the job offers none.
 	Perks []string `json:"perks"`
-	// Engagement names the legal terms the posting states it engages its worker on,
-	// from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
-	// the LLM), each in its market's own term (ir35_outside, w2, b2b, clt, gph...), every
-	// one the posting offers. Indexed as a filterable Meili facet. Always an
-	// array: [] means the posting does not say, not that neither applies.
+	// Engagement names the legal terms the posting states it engages its worker on, from
+	// vocab.EngagementValues (internal/dict/engagement, never the LLM), each in its
+	// market's own term (ir35_outside, w2, b2b, clt, gph...). Always an array: [] means
+	// the posting does not say.
 	Engagement []string `json:"engagement"`
-	// AIInterviewReports is how many people have reported that this job's company
-	// screens candidates with an AI interviewer (internal/engage/processreport),
-	// denormalized from the company onto the job. Omitted at zero: the count is what
-	// the label must always be shown with, so "no reports" has to be the absence of
-	// the field rather than a zero a badge could render beside.
+	// AIInterviewReports is how many people reported that this job's company screens with
+	// an AI interviewer (internal/engage/processreport), denormalized from the company.
+	// Omitted at zero, so "no reports" is an absent field rather than a zero a badge
+	// could render.
 	AIInterviewReports int32 `json:"ai_interview_reports,omitempty"`
-	// IsTech is the deterministic technical/non-technical facet: "tech" or "non_tech",
-	// omitted when unknown (the tri-state jobs.is_tech NULL). Served top-level and
-	// indexed as a filterable Meili facet; an unknown value is absent so it filters as
-	// empty. Derived from title + category (jobderive), never from the LLM.
+	// IsTech is the deterministic "tech" or "non_tech" facet, derived from title +
+	// category (jobderive), never the LLM. Omitted when unknown (jobs.is_tech NULL) so it
+	// filters as empty.
 	IsTech string `json:"is_tech,omitempty"`
 	// RequiresClearance marks a posting that states a government security-clearance
-	// requirement (UK SC/DV, US Secret/TS-SCI, AU NV1). Deterministic, derived from
-	// the description (internal/dict/location), never from the LLM.
+	// requirement (UK SC/DV, US Secret/TS-SCI, AU NV1), derived from the description
+	// (internal/dict/location), never the LLM.
 	//
-	// A plain bool with omitempty rather than the tri-state IsTech renders as: the
-	// stored column only ever holds true or NULL, so the key is present exactly when
-	// a requirement was detected. There is no serialized false, because "we detected
-	// nothing" must not reach a reader as "this job needs no clearance".
+	// A plain bool with omitempty: the column only holds true or NULL, and a serialized
+	// false would read as "this job needs no clearance".
 	RequiresClearance bool `json:"requires_clearance,omitempty"`
-	// ViaRecruiter marks a posting that states it is published by an intermediary on
-	// a client's behalf — a staffing agency or recruiter ("on behalf of our client").
-	// Deterministic, from the description (internal/job/jobfacts). True-or-absent like
-	// RequiresClearance: a recruiter who never says so is not detected, so an absent
-	// key does not mean "posted by the employer".
+	// ViaRecruiter marks a posting published by an intermediary on a client's behalf
+	// ("on behalf of our client"), from the description (internal/job/jobfacts).
+	// True-or-absent like RequiresClearance: an absent key does not mean "posted by the
+	// employer".
 	ViaRecruiter bool `json:"via_recruiter,omitempty"`
-	// Equity is what the posting states about equity compensation:
-	// "salary_and_equity" (offered beside cash pay, with or without a salary figure)
-	// or "equity_only" (the posting says equity is the whole pay). Deterministic, from
-	// the title and description (internal/job/jobfacts). Absent when the posting states
-	// neither — "not stated", never "no equity".
+	// Equity is what the posting states about equity compensation: "salary_and_equity"
+	// or "equity_only", from the title and description (internal/job/jobfacts). Absent
+	// means "not stated", never "no equity".
 	Equity string `json:"equity,omitempty"`
-	// ClearanceLevels names the clearance levels the posting states, from the closed
-	// vocabulary vocab.ClearanceLevelValues — the US ladder (confidential, secret,
-	// top_secret, ts_sci, public_trust), interim, and other (a non-US scheme, or a
-	// clearance stated with no level). Present exactly when RequiresClearance is true
-	// and omitted otherwise: an empty list would read as a claim about levels the
-	// posting never made.
+	// ClearanceLevels names the clearance levels the posting states, from
+	// vocab.ClearanceLevelValues (the US ladder, interim, and other). Present exactly when
+	// RequiresClearance is true; an empty list would claim levels the posting never made.
 	ClearanceLevels []string `json:"clearance_levels,omitempty"`
-	// AutoApplyAvailable marks a posting whose ATS provider (Source) is one
-	// internal/api/atsapply can currently attempt to fill and submit for (see
-	// AutoApplyProviders) — a best-effort, provider-level eligibility signal,
-	// never a guarantee that a real attempt would succeed. True-or-absent like
-	// RequiresClearance: omitted rather than false, because "not one of the
-	// providers we can drive" must not be read as "checked and ineligible".
+	// AutoApplyAvailable marks a posting whose ATS provider (Source) internal/api/atsapply
+	// can attempt (see AutoApplyProviders): a provider-level signal, not a guarantee.
+	// True-or-absent: omitted must not be read as "checked and ineligible".
 	AutoApplyAvailable bool `json:"auto_apply_available,omitempty"`
 	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
 	ApplicationDeadline *string `json:"application_deadline,omitempty"`
-	// Team is the department or team the source ATS files the posting under (Greenhouse, Lever
-	// and Ashby state one), verbatim. Omitted when the source states none — not a taxonomy.
+	// Team is the department or team the source ATS files the posting under (Greenhouse,
+	// Lever and Ashby state one), verbatim. Omitted when the source states none.
 	Team string `json:"team,omitempty"`
-	// ApplyQuestions is how many questions the posting's application form REQUIRES
-	// beyond the standard fields every form asks for (name, contact details, CV) —
-	// counted from the form captured for it (applyform.Form.RequiredQuestions), so the
-	// job card can say "3 questions" and the `apply_questions_max` filter can find the
-	// short forms.
+	// ApplyQuestions is how many questions the application form REQUIRES beyond the
+	// standard fields (name, contact details, CV), counted from the captured form
+	// (applyform.Form.RequiredQuestions); it feeds the `apply_questions_max` filter.
 	//
-	// nil, and omitted, when no form has been captured — which is most postings: the
-	// platforms whose forms can be read at all are a minority of the catalogue. 0 is a
-	// real answer ("nothing beyond the basics") and is serialized; an absent key is
-	// "we do not know", and the two must never read alike. Not set by FromRow, which
-	// sees only the jobs row: the search-index writers and the detail endpoint attach
-	// it from apply_forms, so a list served straight from Postgres omits it.
+	// nil and omitted when no form was captured (most postings). 0 is a real answer and is
+	// serialized; the two must never read alike. Not set by FromRow, which sees only the
+	// jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
 	ApplyQuestions *int    `json:"apply_questions,omitempty"`
 	PostedAt       *string `json:"posted_at"`
 	CreatedAt      *string `json:"created_at"`
 	UpdatedAt      *string `json:"updated_at"`
-	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
-	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
-	// JobPosting.validThrough for an open job (seo.ts), since most sources carry
-	// no real listing-expiry date of their own.
+	// LastSeenAt is when a re-crawl last confirmed the posting live (see
+	// docs/agents/job-lifecycle.md). The SPA uses it to estimate a rolling
+	// JobPosting.validThrough (seo.ts) for sources with no expiry date.
 	LastSeenAt *string `json:"last_seen_at"`
-	// ClosedAt is non-null when the posting is no longer open. Lists and the
-	// search index never contain closed jobs; only the detail endpoint serves
-	// them, and the SPA renders the closed state from this field.
+	// ClosedAt is non-null when the posting is no longer open. Lists and the search index
+	// never contain closed jobs; only the detail endpoint serves them.
 	ClosedAt          *string           `json:"closed_at"`
 	Enrichment        enrich.Enrichment `json:"enrichment"`
 	EnrichedAt        *string           `json:"enriched_at"`
 	EnrichmentVersion int32             `json:"enrichment_version"`
-	// ViewCount/AppliedCount are the job's materialized engagement counters —
-	// distinct signed-in users who viewed and who marked applied — served straight
-	// from the jobs columns (no read-time counting). Displayed on the detail page.
+	// ViewCount/AppliedCount are the materialized counters of distinct signed-in users who
+	// viewed and who marked applied, served straight from the jobs columns.
 	ViewCount    int32 `json:"view_count"`
 	AppliedCount int32 `json:"applied_count"`
-	// UpvoteCount/DownvoteCount are the job's materialized public thumbs counters —
-	// distinct signed-in users whose current vote is up / down — served straight from
-	// the jobs columns on every read.
+	// UpvoteCount/DownvoteCount are the materialized public thumbs counters, served
+	// straight from the jobs columns.
 	UpvoteCount   int32 `json:"upvote_count"`
 	DownvoteCount int32 `json:"downvote_count"`
-	// MyVote is the caller's own vote (-1, 0, 1). It is caller-scoped, so it is only
-	// populated on auth-aware detail reads (GetJob with OptionalAuth); list, search,
-	// and the index-build path leave it 0 and never persist a real user's vote.
+	// MyVote is the caller's own vote (-1, 0, 1). Caller-scoped: only auth-aware detail
+	// reads populate it; list, search and index-build leave it 0.
 	MyVote int32 `json:"my_vote"`
-	// Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence),
-	// computed at index/read time and attached by ClassifyReality — never stored, as
-	// it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
+	// Reality is the job-reality signal (fresh/stale/likely-evergreen + evidence), attached
+	// by ClassifyReality, never stored. Nil when not computed.
 	Reality *Reality `json:"reality,omitempty"`
-	// Ghost is the ghost-job signal (level + the criteria that fired + the scale's
-	// denominator), computed at read time by ClassifyGhost — never stored, and never
-	// present on a closed job. Nil at level `none`, which is most of the catalogue:
-	// the field appears only when the system has something to say.
+	// Ghost is the ghost-job signal, computed at read time by ClassifyGhost, never stored
+	// and never present on a closed job. Nil at level `none`, most of the catalogue.
 	Ghost *Ghost `json:"ghost,omitempty"`
-	// ReferralAvailable is true when the job's company has at least one approved employee
-	// referrer, so the detail page can show the "ask for a referral" affordance. A
-	// read-time projection attached only by the detail handler (omitted on list rows,
-	// where FromRow leaves it false).
+	// ReferralAvailable is true when the job's company has an approved employee referrer.
+	// Attached only by the detail handler; list rows leave it false.
 	ReferralAvailable bool `json:"referral_available,omitempty"`
-	// AutoApplyStatus is the caller's own auto-apply status for this job — "queued" (a
-	// live, undecided entry) or "declined" (the candidate's own prior decision, permanent)
-	// — or nil for no attempt or an anonymous caller. Caller-scoped like MyVote: only the
-	// detail handler overlays it, keyed by (caller_id, job_id), never joined into the
-	// primary job query every anonymous reader also pays for.
-	// See openspec/changes/auto-apply-submit-trigger.
+	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
+	// "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
+	// caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
+	// (caller_id, job_id), so the shared job query stays free of it.
 	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
 }
 
-// FromRow maps a database job row to the public wire shape. It is a thin shim: it
-// hydrates the row into the Job aggregate (plus its read-only Extras) via
-// job.FromRow, then delegates to FromDomain — the projection source of truth. It
-// stays so existing read callers that hold a db.Job are untouched.
+// FromRow maps a database job row to the public wire shape. It hydrates the row into
+// the Job aggregate via job.FromRow and delegates to FromDomain, for callers that hold
+// a db.Job.
 func FromRow(j db.Job) (Job, error) {
 	domain, extras, err := job.FromRow(j)
 	if err != nil {
@@ -219,25 +171,22 @@ func FromRow(j db.Job) (Job, error) {
 	return FromDomain(domain, extras)
 }
 
-// FromDomain projects the Job aggregate (plus its read-only Extras) to the public
-// wire shape. It is the projection source of truth; FromRow is a thin shim that
-// hydrates a db row into the domain and delegates here. The facet handling mirrors
-// FromRow exactly — the dictionary columns are served, the LLM's copies are folded
-// out of the nested enrichment, and countries/regions/cities stay dict-then-LLM
-// hybrids — so the wire output is byte-equivalent to the pre-aggregate projection.
+// FromDomain projects the Job aggregate (plus its read-only Extras) to the public wire
+// shape; it is the projection source of truth. Dictionary columns are served, the
+// LLM's copies are folded out of the nested enrichment, and countries/regions/cities
+// stay dict-then-LLM hybrids.
 func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	f := j.Fields()
-	// The projection is read-time, so the clock enters here at the boundary and is
-	// threaded down as a parameter (the same pattern as ClassifyReality's now).
+	// The projection is read-time, so the clock is a parameter, like ClassifyReality's now.
 	now := time.Now()
 	// e is the raw decoded LLM enrichment; the dictionary columns are folded over it
-	// below (dict wins) and the multi-valued LLM facets are folded out.
+	// below (dict wins).
 	e := f.Enrichment
 
 	countries, regions := geoFacet(f.Countries, f.Regions, e.Countries, e.Regions)
 	workMode := f.WorkMode
-	// Seniority/category and the synthetic facets are the dictionary column value,
-	// always — kept nested under enrichment so the wire shape is unchanged.
+	// Seniority/category and the synthetic facets are always the dictionary column value,
+	// kept nested under enrichment.
 	e.Seniority = f.Seniority
 	e.Category = f.Category
 	e.PostingLanguage = f.PostingLanguage
@@ -245,28 +194,20 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.EducationLevel = f.EducationLevel
 	e.EnglishLevel = f.EnglishLevel
 	e.ExperienceYearsMin = f.ExperienceYearsMin
-	// requirements has two producers and this is where they meet on the read path.
-	// The model wins when it stated a list — it reads the postings whose requirements
-	// are prose with no list markup, which the deterministic extractor cannot reach —
-	// and the derivation fills in otherwise.
+	// requirements has two producers, met here on the read path: the model's list wins
+	// (it reads prose postings the deterministic extractor cannot), and the derivation
+	// fills in otherwise.
 	//
-	// The fold has to happen HERE and not only in SetJobEnrichment's overlay, which is
-	// where it lived first. That overlay runs only when the model runs, so a posting
-	// the model has never reached stored a derived list and served nothing, and a
-	// posting already enriched at the current version is never re-queued and so would
-	// have served it never rather than eventually. Since the coverage this feature
-	// exists for is precisely the postings the model has NOT reached, the overlay alone
-	// delivered none of it.
+	// The fold must happen here, not only in SetJobEnrichment's overlay: that runs only
+	// when the model runs, so postings the model has not reached would serve nothing.
 	if len(e.Requirements) == 0 {
 		e.Requirements = f.RequirementsDerived
 	}
-	// Salary has four producers, folded here for the same reason: SetJobEnrichment's
-	// overlay copies the ATS's and the moderator's ranges into the payload only when
-	// the model runs, so an unenriched posting served no salary although its source
-	// stated one. Manual beats source beats model, and a stated layer replaces the
-	// whole range rather than lending one bound to another layer's currency. The
-	// description's own labeled pay line is read only when none of those three
-	// stated a bound.
+	// Salary has four producers, folded here for the same reason: the overlay copies the
+	// ATS's and the moderator's ranges only when the model runs. Manual beats source beats
+	// model, and a stated layer replaces the whole range rather than lending one bound to
+	// another layer's currency. The description's labeled pay line is read only when none
+	// of those stated a bound.
 	for _, s := range []*job.Salary{f.SourceSalary, f.ManualSalary} {
 		if s != nil {
 			e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod = s.Min, s.Max, s.Currency, s.Period
@@ -343,10 +284,8 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	}, nil
 }
 
-// isTechFacet renders the tri-state is_tech signal as its served facet value:
-// "tech" for true, "non_tech" for false, and "" (omitted) for unknown (nil), so an
-// unclassified job carries no facet value and filters as empty rather than as a
-// misleading bucket.
+// isTechFacet renders the tri-state is_tech as its facet value: "tech", "non_tech", or
+// "" (omitted) for unknown, so an unclassified job filters as empty.
 func isTechFacet(isTech *bool) string {
 	if isTech == nil {
 		return ""
@@ -357,10 +296,8 @@ func isTechFacet(isTech *bool) string {
 	return "non_tech"
 }
 
-// effectivePosted is EffectivePostedAt over domain *time.Time: the source posted
-// time when present and not in the future, otherwise the ingest time. The clock
-// is a parameter (the same pattern as ClassifyReality) so the rule is testable
-// and the time dependency is explicit; the exported entry points supply it.
+// effectivePosted is EffectivePostedAt over domain *time.Time. The clock is a
+// parameter so the rule is testable.
 func effectivePosted(posted, created *time.Time, now time.Time) *time.Time {
 	if posted == nil || posted.After(now) {
 		return created
@@ -377,10 +314,8 @@ func rfc3339Ptr(t *time.Time) *string {
 	return &s
 }
 
-// normalizeSet returns the sorted, deduplicated, lowercased form of a facet
-// column. Case-folding keeps the facet in one canonical bucket; the result is
-// always non-nil so the facet serializes as a JSON array (matching the text[]
-// columns' empty-array default) rather than null.
+// normalizeSet returns the sorted, deduplicated, lowercased form of a facet column.
+// Always non-nil so it serializes as [] rather than null.
 func normalizeSet(a []string) []string {
 	set := make(map[string]struct{}, len(a))
 	for _, v := range a {
@@ -395,27 +330,21 @@ func normalizeSet(a []string) []string {
 }
 
 // nonCityFallback are LLM-emitted "city" values that are really work-mode or
-// open-anywhere markers, not places. The deterministic dictionary never produces
-// these (it emits only real beacon cities); they leak in only through the
-// enrichment.cities fallback, so they are dropped there. A bare-remote job's
-// geography is carried by regions=global instead (see location.Parse), and its
-// remoteness by the work_mode facet.
+// open-anywhere markers. The dictionary never produces them; they leak in only through
+// the enrichment.cities fallback and are dropped there. Bare-remote geography is
+// carried by regions=global (see location.Parse).
 var nonCityFallback = map[string]struct{}{
 	"remote": {}, "remote-first": {}, "fully remote": {}, "worldwide": {},
 	"anywhere": {}, "global": {}, "distributed": {}, "hybrid": {},
 	"onsite": {}, "on-site": {}, "work from home": {}, "wfh": {},
 }
 
-// geoFacet builds the served country/region facets. The deterministic dictionary
-// columns win whenever they pinned a place — a country, or a region more specific
-// than the open-anywhere "global" bucket. Only when the dictionary left geography
-// unpinned (no country, and at most the "global" region an explicit open-anywhere
-// marker resolves to) does it fall back wholesale to the LLM's
-// enrichment.countries/regions, which read a restriction
-// stated only in the prose ("Remote (SPAIN only)") that the location string never
-// carried. This mirrors cityFacet's dict-then-LLM hybrid; a pinned dictionary place
-// is never overridden, so the LLM can only fill the global/unspecified bucket — never
-// corrupt a resolved facet. Both outputs are lowercased/sorted/deduped (non-nil).
+// geoFacet builds the served country/region facets. The dictionary columns win
+// whenever they pinned a place (a country, or a region more specific than "global").
+// Only when geography is unpinned does it fall back wholesale to the LLM's
+// enrichment.countries/regions, which catch restrictions stated only in prose
+// ("Remote (SPAIN only)"). A pinned dictionary place is never overridden. Both outputs
+// are lowercased, sorted, deduped and non-nil.
 func geoFacet(dictCountries, dictRegions, llmCountries, llmRegions []string) (countries, regions []string) {
 	countries = normalizeSet(dictCountries)
 	regions = normalizeSet(dictRegions)
@@ -449,10 +378,9 @@ func geoPinned(countries, regions []string) bool {
 	return false
 }
 
-// cityFacet builds the served city facet: the deterministic dictionary cities when
-// present (canonical display names), otherwise a normalized fallback to the LLM's
-// enrichment.cities. Case is preserved (the value is its own display label); the
-// fallback trims each value, drops a ", Country" suffix, and dedupes.
+// cityFacet builds the served city facet: the dictionary cities when present,
+// otherwise a normalized fallback to the LLM's enrichment.cities (trimmed, ", Country"
+// suffix dropped, deduped). Case is preserved: the value is its own display label.
 func cityFacet(dict, llm []string) []string {
 	if len(dict) > 0 {
 		return dedupeSortedPreserveCase(dict)
@@ -474,9 +402,8 @@ func cityFacet(dict, llm []string) []string {
 	return dedupeSortedPreserveCase(cleaned)
 }
 
-// dedupeSortedPreserveCase sorts and dedupes case-insensitively while keeping the
-// first-seen spelling, returning a non-nil slice so the facet serializes as [] not
-// null. Used for cities, whose values are display names (not lowercased codes).
+// dedupeSortedPreserveCase sorts and dedupes case-insensitively, keeping the first-seen
+// spelling. Non-nil so the facet serializes as [] not null; used for display-name cities.
 func dedupeSortedPreserveCase(a []string) []string {
 	seen := make(map[string]struct{}, len(a))
 	out := make([]string, 0, len(a))
@@ -505,18 +432,14 @@ func FromRows(jobs []db.Job) ([]Job, error) {
 	return out, nil
 }
 
-// EffectivePostedAt is the timestamp a job reads as "posted" for both display and the
-// freshest-first sort: the source's posted_at when present and not in the future, otherwise
-// the ingest time (created_at). A missing posted_at (undated source) or a future one (e.g. a
-// Workday startDate set to a future go-live) would otherwise leave the job undated or sort it
-// above genuinely recent postings; falling back to created_at gives an honest, recent
-// freshness. The raw created_at stays exposed separately, so the substitution is visible.
+// EffectivePostedAt is the timestamp a job reads as "posted" for display and the
+// freshest-first sort: the source's posted_at when present and not in the future,
+// otherwise the ingest time (created_at). A missing or future posted_at (e.g. a Workday
+// startDate set to a future go-live) would otherwise leave the job undated or sort it
+// above genuinely recent postings. The raw created_at stays exposed separately.
 //
-// It is exported so the search document derives its numeric posted_ts (epoch) from the same
-// definition the display posted_at (RFC3339) uses — one fallback rule, two encodings. It
-// converts its pgtype inputs to the domain *time.Time and delegates to effectivePosted, so
-// the fallback rule lives in exactly one place. The clock is the caller's (now), like
-// ClassifyReality.
+// Exported so the search document's numeric posted_ts uses the same rule as the
+// display posted_at. The clock is the caller's (now), like ClassifyReality.
 func EffectivePostedAt(posted, created pgtype.Timestamptz, now time.Time) pgtype.Timestamptz {
 	return pgconv.Timestamptz(effectivePosted(pgconv.TimePtr(posted), pgconv.TimePtr(created), now))
 }

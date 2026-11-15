@@ -17,13 +17,11 @@ import (
 )
 
 // DETE's "Employment permits issued to companies": one workbook per calendar year,
-// listing every employer granted at least one Irish employment permit. Ireland
-// keeps no register of sponsoring employers (the Trusted Partner list was
-// discontinued), so this is the official record of who sponsors.
+// listing every employer granted at least one Irish employment permit. Ireland keeps no
+// register of sponsoring employers, so this is the official record of who sponsors.
 //
-// Discovery is two hops, because DETE renames both: the statistics index links
-// one page per year, and each year page links that year's workbook — whose file
-// name gained an "employment-" prefix in 2026.
+// Discovery is two hops, because DETE renames both: the statistics index links one page per
+// year, and each year page links that year's workbook.
 const (
 	ieStatsIndexURL = "https://enterprise.gov.ie/en/what-we-do/workplace-and-skills/employment-permits/statistics/"
 	// ieYearWindow is the current, partial year plus the two before it, so an
@@ -67,8 +65,8 @@ func pickRecentIEYearPages(index []byte, n int) ([]ieYearPage, error) {
 }
 
 // ieNonEmployerCells are the column-A values that are layout, not employers. The
-// workbooks change shape every year — a header row here, a "Grand Total" row
-// there, two banner rows in 2023 — but the employer name has stayed in column A.
+// workbooks change shape every year (header, total and banner rows), but the employer name
+// stays in column A.
 var ieNonEmployerCells = map[string]bool{
 	"employer name": true,
 	"grand total":   true,

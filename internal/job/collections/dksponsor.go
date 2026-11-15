@@ -7,26 +7,21 @@ import (
 )
 
 // dkSponsorURL is SIRI's list of companies certified for the Danish Fast-track
-// scheme, which lets them hire a foreign skilled worker without the ordinary
-// case-by-case permit route. A single stable page, like the IND register; it moved
-// under SIRI's glossary section in 2026, and the old /Applying/Work/ address 404s
-// without a redirect.
+// scheme, a single stable page like the IND register.
 //
-// The list is narrower than "employers that sponsor": a Danish company can hire
-// through the Pay Limit or Positive List schemes without certification, so the
-// credential's copy names the scheme rather than claiming the whole country.
+// The list is narrower than "employers that sponsor": companies can also hire through the Pay
+// Limit or Positive List schemes uncertified, so the credential's copy names the scheme.
 const dkSponsorURL = "https://www.nyidanmark.dk/en-GB/Words-and-concepts/SIRI/Certified-companies"
 
 // dkSponsorRow matches one row of the table: company name, then CVR number. The
-// table is a spreadsheet pasted into the CMS, so each cell wraps its text in a <p>
-// and the cell classes vary row to row — only the two-cell shape is relied on.
+// table is pasted into a CMS, so cell markup varies row to row; only the two-cell shape is
+// relied on.
 var dkSponsorRow = regexp.MustCompile(
 	`(?is)<tr[^>]*>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>\s*</tr>`)
 
 // ParseDKSponsors reads the SIRI page into one record per certified company,
-// keeping the CVR number as the identity field. The header row is a <td> row too
-// (its cells hold <h4>s), so it is skipped by its text. A page that yields no rows
-// is an error: the table failing to render means the page changed, and returning
+// keeping the CVR number as the identity field. The header row is a <td> row too, so it is
+// skipped by its text. A page that yields no rows is an error: the page changed, and returning
 // nothing would reconcile the credential off every company.
 func ParseDKSponsors(page []byte) ([]Record, error) {
 	var records []Record

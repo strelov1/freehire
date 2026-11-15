@@ -2,26 +2,22 @@
 // names in their experience bank — to the catalogue's company slugs, for the "Hiring again"
 // search filter (`former_employers=true` on /jobs/search).
 //
-// The bank stores a company as the string a CV or a chat printed, never as a slug, so this
-// is a name lookup, and a name lookup is wrong in a way nobody downstream can see: the feed
-// would show a stranger company's postings under a familiar name. That is worse than an
-// empty feed, so every rule here refuses rather than guesses. A name resolves only when:
+// The bank stores a company as the string a CV or chat printed, so this is a name lookup.
+// A wrong match shows a stranger company's postings under a familiar name, which is worse
+// than an empty feed, so every rule refuses rather than guesses. A name resolves only when:
 //
-//   - it names an employer at all — "Freelance", "Self-employed", "Confidential" and the
+//   - it names an employer at all: "Freelance", "Self-employed", "Confidential" and the
 //     freelance marketplaces a person sold work through are refused (nonEmployers);
 //   - the catalogue has settled it: the alias registry names ONE canonical slug for the
 //     name's folded key, or, with no registry entry, exactly ONE company carrying jobs folds
-//     to it. Two slugs sharing a fold (`vk` / `v-k`) is a name the catalogue has not
-//     decided, and choosing either is the guess this refuses — the same rule
-//     cmd/publish-logo-domains applies to a name two companies disagree about;
+//     to it. Two slugs sharing a fold (`vk` / `v-k`) is undecided, and picking either is the
+//     guess this refuses (cmd/publish-logo-domains applies the same rule);
 //   - a SHORT name is corroborated by place: a key of at most weakKeyRunes letters ("CARE",
 //     "NTI", "e&") is where namesakes concentrate, so the banked role's location must name a
-//     country the company is hiring in. Measured on prod 2026-10-31, every wrong match in a
-//     hand-checked sample of uncorroborated resolutions was one of these.
+//     country the company is hiring in.
 //
-// The key is normalize.CompanyKey — the fold the alias registry is keyed by and the one
-// ingest applies to a posting's company — so a bank name and a posting name that would
-// land on one company at ingest land on it here too. There is no second resolver.
+// The key is normalize.CompanyKey, the fold the alias registry is keyed by and ingest
+// applies to a posting's company, so there is no second resolver.
 package formeremployer
 
 import (
@@ -32,19 +28,15 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
-// weakKeyRunes is the longest folded key that needs a place to corroborate it. Measured on
-// prod 2026-10-31 over 6,661 resolved bank names: the wrong matches a hand check found
-// ("e&" on a Danish "E ApS", "CARE Pvt. Ltd." on the CARE charity, "Comfy", "Engen",
-// "Saga", "Over") all fold to five letters or fewer, while longer names were right. The
-// big short brands (IBM, EY, UBS, KPMG) still resolve whenever the role states a country
-// they hire in, which most banked roles that state a place do.
+// weakKeyRunes is the longest folded key that needs a place to corroborate it: the wrong
+// matches found by hand ("e&", "CARE", "Saga", "Over") all fold to five letters or fewer.
+// Short brands (IBM, EY, UBS) still resolve when the role states a country they hire in.
 const weakKeyRunes = 5
 
-// nonEmployers are the bank entries that name no employer: self-employment in the
-// languages the bank holds most, placeholders for an undisclosed one, and the freelance
-// marketplaces a person sold work THROUGH — a former Upwork freelancer is not a former
-// Upwork employee, and Upwork's own vacancies are not a return. Written as the names a CV
-// prints and folded at init, so the list cannot drift from the key it is compared with.
+// nonEmployerNames are the bank entries that name no employer: self-employment,
+// placeholders for an undisclosed one, and freelance marketplaces a person sold work
+// THROUGH (a former Upwork freelancer is not a former Upwork employee). Written as a CV
+// prints them and folded at init, so the list cannot drift from the key.
 var nonEmployerNames = []string{
 	"Freelance", "Freelancer", "Freelancing", "Self-Employed", "Self Employment",
 	"Independent", "Independent Contractor", "Independent Consultant", "Independent Projects",
@@ -107,11 +99,10 @@ func Keys(emps []Employment) []string {
 // Resolve returns the company slugs a person's employments name unambiguously, sorted and
 // distinct.
 //
-// canons maps a folded key to the canonical slugs the alias registry holds for it — more
-// than one is a registry the writer was meant to keep at one, and is refused like any other
-// contest. companies are the hiring companies that fold to one of the keys or ARE one of the
-// canons (db.ListHiringCompaniesByFoldedSlug); a company absent from it carries no
-// searchable job, which leaves its name nothing to show rather than something to guess at.
+// canons maps a folded key to the canonical slugs the alias registry holds for it; more
+// than one is refused like any other contest. companies are the hiring companies that fold
+// to one of the keys or are one of the canons (db.ListHiringCompaniesByFoldedSlug); a
+// company absent from it has no searchable job and resolves to nothing.
 func Resolve(emps []Employment, canons map[string][]string, companies []Company) []string {
 	bySlug := make(map[string]Company, len(companies))
 	byFold := make(map[string][]Company, len(companies))
@@ -141,9 +132,8 @@ func Resolve(emps []Employment, canons map[string][]string, companies []Company)
 }
 
 // settled is the one hiring company a key names, or false when the catalogue names none or
-// has not decided between several. The registry, when it speaks, is the answer: it is the
-// recorded decision about which spelling is the employer, and a not-yet-merged twin the
-// fold also finds is exactly what that decision retires.
+// has not decided between several. The registry wins when it speaks: a not-yet-merged twin
+// the fold also finds is what its decision retires.
 func settled(key string, canons map[string][]string, bySlug map[string]Company, byFold map[string][]Company) (Company, bool) {
 	if cs := canons[key]; len(cs) > 0 {
 		if len(cs) > 1 {

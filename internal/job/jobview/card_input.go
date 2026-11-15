@@ -5,13 +5,13 @@ import (
 	"time"
 )
 
-// This file is deliberately NOT in cmd/gen-contracts' tygo include list, unlike card.go: it is
-// how a Card is built, not what a Card is. Emitted, its time.Time fields reach the SPA as `any`
-// and fail the lint gate — a fair complaint about a type the browser has no business seeing.
+// This file is deliberately NOT in cmd/gen-contracts' tygo include list, unlike card.go:
+// it is how a Card is built, not what a Card is, and its time.Time fields would reach
+// the SPA as `any` and fail the lint gate.
 
-// CardInput is the row a Card is projected from. Geography arrives from both sides because the
-// wire value is a hybrid: the dictionary's reading wins where it resolved a concrete place, and
-// the model's stands in only where it did not.
+// CardInput is the row a Card is projected from. Geography arrives from both sides:
+// the dictionary's reading wins where it resolved a concrete place, the model's stands
+// in only where it did not.
 type CardInput struct {
 	ApplicationDeadline *time.Time
 	PublicSlug          string
@@ -34,8 +34,8 @@ type CardInput struct {
 	Blurb               string
 }
 
-// NewCard projects a listing row into the card wire shape, applying the same geography rule the
-// full projection applies.
+// NewCard projects a listing row into the card wire shape, applying the same
+// geography rule as the full projection.
 func NewCard(in CardInput) Card {
 	countries, regions := geoFacet(in.DictCountries, in.DictRegions, in.LLMCountries, in.LLMRegions)
 	return Card{

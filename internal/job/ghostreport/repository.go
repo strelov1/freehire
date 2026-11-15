@@ -26,10 +26,8 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 
 // Create files a claim, reviving one the same person previously retracted.
 //
-// The insert is gated in SQL — an unverified address or a closed job selects nothing —
-// so every refusal arrives here identically, as no row. Which gate refused is then asked
-// for once, on the failure path only. Guessing instead would mean either a check the
-// service could forget or three round trips on the happy path.
+// The insert is gated in SQL (an unverified address or a closed job selects nothing), so
+// every refusal arrives as no row. Which gate refused is asked only on that failure path.
 func (r *QueriesRepository) Create(ctx context.Context, userID, jobID int64, appliedOn time.Time) (Report, error) {
 	row, err := r.q.CreateGhostReport(ctx, db.CreateGhostReportParams{
 		UserID:    userID,
@@ -45,9 +43,8 @@ func (r *QueriesRepository) Create(ctx context.Context, userID, jobID int64, app
 	return toReport(row), nil
 }
 
-// refusal asks which gate rejected the insert and maps it to a sentinel. The order is
-// deliberate: an account that never proved its address should be told to confirm it,
-// not that somebody already reported the job.
+// refusal asks which gate rejected the insert and maps it to a sentinel. The order matters:
+// an unverified account is told to confirm its address, not that the job was reported.
 func (r *QueriesRepository) refusal(ctx context.Context, userID, jobID int64) error {
 	gate, err := r.q.GhostReportRefusalReason(ctx, db.GhostReportRefusalReasonParams{
 		UserID: userID,
@@ -64,9 +61,7 @@ func (r *QueriesRepository) refusal(ctx context.Context, userID, jobID int64) er
 	case gate.AlreadyReported:
 		return ErrDuplicate
 	default:
-		// Every gate reports itself satisfied yet nothing was written. Rather than
-		// invent a verdict, surface it: a silent success here would drop a person's
-		// report while telling them it landed.
+		// Every gate passed yet nothing was written; a silent success would drop the report.
 		return errors.New("ghostreport: the claim was refused for no recorded reason")
 	}
 }

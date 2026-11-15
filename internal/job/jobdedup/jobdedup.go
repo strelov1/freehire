@@ -1,16 +1,11 @@
 // Package jobdedup answers one question for every write path that persists a posting:
 // does the catalogue already hold this same vacancy under a different board identity?
 //
-// A company routinely posts one role once per city — same title, same description,
-// thirty external_ids. RoleFingerprint deliberately excludes the location, so those
-// copies share a fingerprint and the batch recompute
-// (db.RecomputeRoleDuplicatesForCompanies) collapses them to one canonical row. The batch
-// runs every few hours, though, and the live search index is written incrementally by
-// the crawl; between the two, every copy is a separate searchable job. That window is
-// what this package closes, by answering the same question synchronously at write time.
-//
-// The answer it gives is deliberately the one the batch would give, not merely a
-// defensible one — see CanonicalForRole.
+// A company routinely posts one role once per city, so the copies share a RoleFingerprint
+// (it excludes the location) and the batch recompute (db.RecomputeRoleDuplicatesForCompanies)
+// collapses them to one canonical row. The batch runs every few hours; until then every copy
+// is a separate searchable job. This package closes that window by answering the same
+// question at write time, with the batch's answer (see CanonicalForRole).
 package jobdedup
 
 import (
@@ -26,25 +21,20 @@ import (
 // CanonicalForRole reports the open canonical posting of this row's role cluster, when
 // one exists that is OLDER than the row just written (id).
 //
-// The age condition is the whole subtlety. RecomputeRoleDuplicatesForCompanies makes
-// MIN(id) among a cluster's open rows the canon, so collapsing onto a NEWER posting is
-// not just a different choice — the next reindex would undo it and invert it. Staying in
-// step with the batch is what makes the two agree instead of fighting.
+// The age condition matters: RecomputeRoleDuplicatesForCompanies makes MIN(id) among a
+// cluster's open rows the canon, so collapsing onto a NEWER posting would be inverted by
+// the next reindex.
 //
-// Callers gate which rows are worth asking about; this asks the question. Two things are
-// never worth asking about and are refused here, because getting either wrong strands a
-// row permanently:
+// Two inputs are refused here because marking either strands a row permanently:
 //   - an empty fingerprint, which clusters with nobody;
-//   - an empty company slug. The batch recompute drives off a list of company slugs and
-//     skips those rows entirely, so a row marked here would never be released when its
-//     canon closes — it would stay out of search and out of enrichment forever.
+//   - an empty company slug. The batch recompute skips those rows, so a row marked here
+//     would never be released when its canon closes.
 //
-// Run inside the write transaction, the lookup cannot have its canon deleted underneath
-// the marking. It does not stop a concurrent close (READ COMMITTED, no row lock), which
-// is benign: the next recompute releases the row.
+// Run inside the write transaction, the canon cannot be deleted under the marking. A
+// concurrent close is not blocked (READ COMMITTED, no row lock), which is benign: the next
+// recompute releases the row.
 //
-// A lookup failure is not fatal — it reports no canon, and the row is written unmarked
-// exactly as before. Dedup is an improvement, never a condition of keeping the vacancy.
+// A lookup failure is not fatal: it reports no canon and the row is written unmarked.
 func CanonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (db.CanonicalJobForRoleRow, bool) {
 	if p.CompanySlug == "" || p.RoleFingerprint.String == "" {
 		return db.CanonicalJobForRoleRow{}, false

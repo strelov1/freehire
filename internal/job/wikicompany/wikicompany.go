@@ -1,8 +1,7 @@
 // Package wikicompany resolves a company's name against Wikidata/Wikipedia's free
 // public APIs, accepting a match only when the resolved entity is confidently typed
 // as a business or organization (see buildOrganizationCheckQuery), never by
-// keyword-scanning its description. It is the client behind the
-// company-info-wikipedia-backfill worker (see openspec/changes/company-info-wikipedia-backfill).
+// keyword-scanning its description.
 package wikicompany
 
 import (

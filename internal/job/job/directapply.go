@@ -6,11 +6,9 @@ import "strings"
 // (internal/ingest/employer).
 const EmployerSource = "employer"
 
-// DirectApplyPrefix leads the external id of an employer vacancy that takes applications
-// on freehire rather than linking out. Such a vacancy has no URL to key on, so its
-// external id is minted as this prefix plus a UUID — and because the prefix is written in
-// the same statement as the row, the apply mode can never disagree with the vacancy or
-// change after it (see openspec/changes/add-in-app-apply/design.md, decision 1).
+// DirectApplyPrefix leads the external id of an employer vacancy that takes applications on
+// freehire rather than linking out. With no URL to key on, the id is this prefix plus a
+// UUID, written in the same statement as the row, so the apply mode never changes.
 const DirectApplyPrefix = "freehire:"
 
 // IsDirectApply reports whether the posting at (source, externalID) accepts applications

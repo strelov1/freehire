@@ -117,8 +117,7 @@ var (
 	// reFellowshipStaffRole excludes a "fellowship" mention that names the staff job
 	// running the program rather than the fellow's own position — e.g. "Fellowship
 	// Manager", "Fellowship Program Coordinator". Those are ordinary full-time/contract
-	// roles, so a bare \bfellowship\b would otherwise mislabel them (confirmed live: this
-	// pattern dominates real postings mentioning "fellowship", 2026-08-15). The window is
+	// roles, so a bare \bfellowship\b would otherwise mislabel them. The window is
 	// bounded to the same line/sentence so a role word elsewhere in a long description
 	// (e.g. "reports to the Program Manager") doesn't suppress a genuine fellowship.
 	reFellowshipStaffRole = regexp.MustCompile(`fellowship[^\n]{0,50}\b(manager|coordinator|director|officer|administrator)\b|\b(manager|coordinator|director|officer|administrator)\b[^\n]{0,50}fellowship`)

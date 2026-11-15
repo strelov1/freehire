@@ -1,7 +1,6 @@
-// Package silence holds the ladder of how long an application may go unanswered at each
-// stage, and the arithmetic under it. It lives apart from internal/application/userjob because the
-// ghost signal judges a POSTING by how long the applications against it have been silent,
-// and a posting is not an application — so the ladder has to sit below both.
+// Package silence holds how long an application may go unanswered at each stage, and the
+// arithmetic under it. It sits below internal/application/userjob because the ghost signal
+// judges a posting by the silence of its applications.
 package silence
 
 import (
@@ -28,34 +27,22 @@ const (
 // pins that direction). Terminal stages are absent: a settled application never
 // accrues silence.
 //
-// The values do not share a provenance, and a table of five specific numbers
-// reads as measurement whether or not it is one, so each carries its own:
+// Provenance of the values:
 //
-//	applied   21  measured — 92 observed applications, marks 16% of them
+//	applied   21  measured
 //	screening 18  interpolated between the measured anchors
 //	responded 15  interpolated between the measured anchors
-//	interview 12  measured — 6 observed applications, marks 3. Raised from 7,
-//	              which marked 5 of the 6: a badge on nearly every card is one
-//	              nobody reads.
-//	offer      5  judgement, from a job seeker's experience. No application in
-//	              the sample has reached this stage; the single message ever
-//	              classified an offer is genuine but from a job search three
-//	              years earlier and informs nothing.
-//	preparing 21  rarely read: cv-tailoring places a card here with no AppliedAt,
-//	              so TrackedJob.Silence() short-circuits; but a card moved back to
-//	              `preparing` after applying keeps AppliedAt (TrackJob never clears
-//	              it) and is judged by this value. Copies `applied`'s value as the
-//	              nearest meaningful anchor rather than inventing a new one.
+//	interview 12  measured; 7 marked nearly every card, a badge nobody reads
+//	offer      5  judgement, no observed sample reached this stage
+//	preparing 21  rarely read: cv-tailoring cards have no AppliedAt so TrackedJob.Silence()
+//	              short-circuits, but a card moved back to preparing keeps AppliedAt and is
+//	              judged by this value. Copies applied's.
 //
-// The interpolated pair steps evenly by three days between 21 and 12 rather than
-// taking distinct-looking values, so the shape of the ladder shows at a glance
-// which rungs were derived rather than observed. Revisit the middle three once
-// the sample grows.
+// The interpolated pair steps evenly by three days so the shape shows which rungs were
+// derived. Revisit the middle three once the sample grows.
 //
-// All values are calendar days, which sets a floor under the strictest: five is
-// the shortest span that always contains two working days, while three can be
-// consumed entirely by a weekend. Going below five needs business-day
-// arithmetic — its own calendar, holidays and employer time zone.
+// Values are calendar days: five is the shortest span that always contains two working
+// days (three can be a weekend). Going below five needs business-day arithmetic.
 var thresholds = map[string]int{
 	"preparing": 21,
 	"applied":   21,
@@ -67,12 +54,9 @@ var thresholds = map[string]int{
 
 // Days is whole days between last and now, floored at zero.
 //
-// Part-days do not count and a negative is impossible: clock skew, or a last-activity stamp a
-// moment in the future, must not report negative silence. It lives here beside the ladder it
-// feeds because three surfaces — the tracking board, the follow-up gate and the ghost signal —
-// each had their own copy, held together by comments naming one another. The ladder was already
-// shared; the arithmetic under it was not, and a day's disagreement between the badge and the
-// offer is exactly what the shared ladder exists to prevent.
+// Part-days do not count, and clock skew or a future last-activity stamp must not report
+// negative silence. Shared so the tracking board, follow-up gate and ghost signal never
+// disagree by a day.
 func Days(now, last time.Time) int {
 	if d := int(now.Sub(last).Hours() / 24); d > 0 {
 		return d

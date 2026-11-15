@@ -15,21 +15,18 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// The ESDC list of employers issued a positive Labour Market Impact Assessment, on
-// the Government of Canada open-data portal. One XLSX per quarter is added to a
-// single CKAN dataset, so — like the USCIS archive — the set of files is discovered
-// per run from the dataset's own metadata rather than pinned: a pinned quarter
-// would silently stop meaning "the last year" within three months.
+// The ESDC list of employers issued a positive Labour Market Impact Assessment. One XLSX per
+// quarter is added to a single CKAN dataset, so the files are discovered per run from its
+// metadata: a pinned quarter would stop meaning "the last year" within three months.
 const (
 	caLMIAPackageURL = "https://open.canada.ca/data/api/action/package_show?id=90fed587-1364-4f33-a9ee-208181dc0b97"
 	caLMIAWindow     = 4 // quarters: one year of approvals
 )
 
 // caWorkStreams are the LMIA program streams that mean an employer sponsored a
-// skilled role. The file also lists Primary Agriculture and Low Wage approvals,
-// which are most of its rows and would badge a farm or a fast-food franchise as a
-// sponsor for an engineering role — the same reason ukWorkRoutes exists. Prefix
-// matched by RequireRoute; the file's stream cells carry trailing padding.
+// skilled role. Primary Agriculture and Low Wage approvals are most of the file and would
+// badge a farm or fast-food franchise as a sponsor for an engineering role (as ukWorkRoutes).
+// Prefix matched by RequireRoute; the stream cells carry trailing padding.
 var caWorkStreams = []string{
 	"High Wage",
 	"Global Talent",
@@ -37,9 +34,8 @@ var caWorkStreams = []string{
 }
 
 // caLMIAFileName identifies a quarterly English positive-employers file by its
-// download name, e.g. ".../download/tfwp_2026q1_pos_en.xlsx". The resource title
-// is prose that ESDC rewords between releases; the file name is what has stayed
-// fixed since the series moved to XLSX.
+// download name, e.g. ".../download/tfwp_2026q1_pos_en.xlsx". The resource title is prose
+// ESDC rewords between releases; the file name is stable.
 var caLMIAFileName = regexp.MustCompile(`/tfwp_(\d{4})q([1-4])_pos_en\.xlsx$`)
 
 // lmiaFile is one quarter's positive-employers workbook.
@@ -82,14 +78,12 @@ func pickRecentLMIAFiles(payload []byte, n int) ([]lmiaFile, error) {
 
 // ParseCALMIASponsors reads one quarter's workbook into one record per approval
 // row, keeping the program stream under "route" so RequireRoute can gate on it.
-// The sheet opens with a title row and closes with numbered footnotes, so the
-// header is located by name rather than assumed to be the first row, and a row
-// with no employer is skipped.
+// The sheet opens with a title row and closes with footnotes, so the header is located by
+// name and a row with no employer is skipped.
 //
-// No identity field is kept: the file carries no registration number, and the
-// address differs per business location of ONE employer, so using it would make
-// DropAmbiguous delete every multi-site employer — the national companies most
-// likely to hire for a tech role. The geography gate is the defence instead.
+// No identity field is kept: there is no registration number, and the address differs per
+// location of ONE employer, so using it would make DropAmbiguous delete every multi-site
+// employer. The geography gate is the defence instead.
 func ParseCALMIASponsors(data []byte) ([]Record, error) {
 	f, err := excelize.OpenReader(bytes.NewReader(data))
 	if err != nil {

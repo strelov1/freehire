@@ -10,15 +10,12 @@ import (
 // into the canonical company slug our catalogue uses, stripping trailing legal
 // forms on the way.
 //
-// The strip is why this exists at all: normalize.Slug("ACME ROBOTICS LIMITED") is
-// "acme-robotics-limited", which never equals our "acme-robotics", so an exact
-// match against a register would find almost nothing without it.
+// The strip matters: normalize.Slug("ACME ROBOTICS LIMITED") is "acme-robotics-limited",
+// which never equals our "acme-robotics".
 //
-// It is normalize.CompanySlug, not a rule of its own, and that is load-bearing:
-// Collection.Members looks this value up in a map keyed by the CATALOGUE's company
-// slug, so the two must be one rule. When they disagreed, a register row whose form
-// only one side stripped matched nothing — and nothing logged the miss, so the
-// company simply never earned a credential it qualified for.
+// It is normalize.CompanySlug on purpose: Collection.Members looks this value up in a map
+// keyed by the CATALOGUE's company slug, so the two must be one rule. A disagreement silently
+// loses the match, and nothing logs it.
 func RegisterSlug(name string) string {
 	return normalize.CompanySlug(name)
 }
@@ -29,10 +26,9 @@ func RegisterSlug(name string) string {
 // it, to judge how specific a register name is.
 //
 // It deliberately does not reuse normalize.CompanySlug's word breaks, which split on
-// punctuation too: "T-Mobile Inc" must count as ONE significant token, or a
-// single-token name would look specific enough to skip its headquarters check. The
-// form test is shared (normalize.IsLegalFormBefore) even though the tokenization is not —
-// the list is what had to stop being duplicated, not the splitting.
+// punctuation too: "T-Mobile Inc" must count as ONE significant token, or a single-token name
+// would look specific enough to skip its headquarters check. Only the legal-form test
+// (normalize.IsLegalFormBefore) is shared.
 func significantFields(name string) []string {
 	fields := strings.Fields(normalize.CloseSpacedForms(name))
 	next := ""
@@ -44,11 +40,9 @@ func significantFields(name string) []string {
 }
 
 // ukWorkRoutes are the GOV.UK sponsorship routes that mean a licence useful to a
-// candidate looking for a job. The register also lists Temporary Worker routes
-// (seasonal, creative, charity, religious) and study routes, which sit alongside
-// these in the same file and would badge a farm or a film crew as a sponsor for an
-// engineering role. Matched as prefixes because the Global Business Mobility family
-// publishes one route per sub-scheme.
+// candidate looking for a job. The register also lists Temporary Worker and study routes,
+// which would badge a farm or a film crew as a sponsor for an engineering role. Matched as
+// prefixes because Global Business Mobility publishes one route per sub-scheme.
 var ukWorkRoutes = []string{
 	"Skilled Worker",
 	"Global Business Mobility",
@@ -58,14 +52,11 @@ var ukWorkRoutes = []string{
 // RequireCountry builds the geography gate: the company must be demonstrably
 // present in the register's country before it can hold that country's credential.
 //
-// The rule is stricter for a single-token name, and that asymmetry is the point. A
-// two-token name ("Acme Robotics") is specific enough that sharing it with an
-// unrelated business is unlikely, so open jobs in the country suffice. A one-token
-// name ("Apple", "Spark", "Nova") is not: the UK register holds ~120k organisations
-// across every industry, and a multinational with a local office would otherwise
-// inherit a licence from a same-named local business. For those, the company's
-// headquarters must be in the register's country — which Monzo and Revolut satisfy
-// and Apple does not.
+// The rule is stricter for a single-token name. A two-token name ("Acme Robotics") is
+// unlikely to be shared with an unrelated business, so open jobs in the country suffice. A
+// one-token name ("Apple", "Nova") is not: a multinational with a local office would inherit
+// a licence from a same-named local business, so its headquarters must be in the register's
+// country.
 //
 // An unknown headquarters is not a match. Absence of evidence is not evidence.
 func RequireCountry(code string) func(Company, Record) bool {
@@ -81,13 +72,9 @@ func RequireCountry(code string) func(Company, Record) bool {
 }
 
 // countryAliases are the spellings a country may appear under in companies.hq_country,
-// beyond its ISO code. cmd/import-yc, the column's writer, runs values through
-// location.Parse, which already emits ISO codes — but a retired one-time importer
-// wrote a small number of rows with its upstream's `country` field verbatim, and
-// those rows outlive the tool that wrote them. A bare code comparison happens to
-// work for what's left today, but the gate must not depend on a third party's
-// formatting, because the failure is silent: a company simply never earns a
-// credential it qualifies for, and nothing logs it.
+// beyond its ISO code. The current writer emits ISO codes, but rows from a retired importer
+// carry an upstream's verbatim `country`. The gate must not depend on third-party formatting:
+// a miss is silent.
 //
 // Whole-value comparison only, never a substring: "New Great Britain Holdings" is a
 // company name, not a country.
@@ -104,15 +91,12 @@ var countryAliases = map[string][]string{
 // given country removed — "google-uk" for GB gives "google" — or "" when the slug
 // does not end in one, or ends in nothing else.
 //
-// Only that ONE country, spelled as its ISO code or as a countryAliases name: a
-// register lists local entities, so "Google (UK) Limited" in the UK register is the
-// UK arm of Google, while another country's name ("Stantec Ireland" in the UK file)
-// is not that evidence. Cities are deliberately not countries here — "JJ London Ltd"
-// is some London business, not the "jj" the catalogue knows.
+// Only that ONE country, spelled as its ISO code or a countryAliases name: "Google (UK)
+// Limited" in the UK register is the UK arm of Google, while "Stantec Ireland" in the UK file
+// is not that evidence. Cities are not countries here ("JJ London Ltd" is not "jj").
 //
-// Because the country is part of the register's own name, the stripped match still
-// counts as a multi-token name in RequireCountry: the subsidiary naming the country
-// is what makes it specific. The gate still demands open jobs there.
+// The stripped match still counts as a multi-token name in RequireCountry, since the country
+// in the name is what makes it specific. The gate still demands open jobs there.
 func withoutCountrySuffix(slug, code string) string {
 	for _, name := range append([]string{strings.ToLower(code)}, countryAliases[strings.ToUpper(code)]...) {
 		suffix := "-" + strings.Join(strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '.' }), "-")
@@ -173,21 +157,18 @@ func AllOf(gates ...func(Company, Record) bool) func(Company, Record) bool {
 // DropAmbiguous removes every row whose normalized name is shared by more than one
 // organisation, so a name that identifies nobody grants nothing.
 //
-// identityKey names the Meta field that tells two organisations apart — "town" for
-// the UK register, the KvK number for the Dutch one. It is needed because a shared
-// name is not by itself a collision: the UK register lists one organisation once
-// per route it holds, and those rows must survive for the route gate to read them.
-// Rows sharing a name AND an identity are one body; rows sharing a name with
-// different identities are a collision and all of them go.
+// identityKey names the Meta field that tells two organisations apart ("town" for the UK
+// register, the KvK number for the Dutch one). A shared name alone is not a collision: the UK
+// register lists one organisation once per route, and those rows must survive for the route
+// gate. Rows sharing a name AND an identity are one body; same name with different identities
+// are a collision and all of them go.
 //
-// With an empty identityKey (or rows that omit it) every same-named row counts as
-// one organisation. That is the permissive reading on purpose: firing the guard on
-// a register that simply cannot disambiguate would delete its every duplicate,
-// and the geography rules are the real defence in that case.
+// With an empty identityKey (or rows that omit it) every same-named row counts as one
+// organisation, on purpose: otherwise a register that cannot disambiguate would lose every
+// duplicate, and the geography rules are the real defence there.
 func DropAmbiguous(records []Record, identityKey string) []Record {
-	// RegisterSlug does a non-trivial Unicode transliteration; computed once per record
-	// here and reused below instead of recomputed in the filter loop, which matters on
-	// the UK register's ~120k rows.
+	// RegisterSlug is costly (Unicode transliteration) and the registers are large, so
+	// compute it once per record.
 	slugs := make([]string, len(records))
 	identities := make(map[string]map[string]struct{}, len(records))
 	for i, r := range records {
