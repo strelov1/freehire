@@ -1,8 +1,6 @@
-// Package username derives and validates the account-level username: a single,
-// unique, user-visible name the hosted mailbox adopts instead of allocating its
-// own handle, and that a future talent-network change can expose as a public
-// profile URL. It is pure — allocation (picking the first free suffix against
-// the store) lives in internal/identity/accounts.
+// Package username derives and validates the account-level username: one unique,
+// user-visible name the hosted mailbox adopts and a public profile URL may expose. It is
+// pure; allocation against the store lives in internal/identity/accounts.
 package username
 
 import (
@@ -15,8 +13,7 @@ import (
 const (
 	minLen = 3
 	maxLen = 30
-	// fallback is used when a candidate base sanitizes to nothing, or to
-	// fewer than minLen characters.
+	// fallback is used when a base sanitizes to fewer than minLen characters.
 	fallback = "user"
 )
 
@@ -35,12 +32,8 @@ func Valid(s string) error {
 	return nil
 }
 
-// Suggest derives a default candidate base from an email's local-part
-// (everything before '@'): lowercased, keeping only [a-z0-9-], with '.'
-// converted to '-' (the one extra character the legacy mailbox handle format
-// allowed). Falls back to a fixed base when the result is empty or shorter
-// than the minimum length, so a candidate is always ready for Candidate's
-// collision search.
+// Suggest derives a candidate base from an email's local-part via Sanitize, so a base is
+// always ready for Candidate's collision search.
 func Suggest(email string) string {
 	local := email
 	if at := strings.IndexByte(local, '@'); at >= 0 {
@@ -49,11 +42,9 @@ func Suggest(email string) string {
 	return Sanitize(local)
 }
 
-// Sanitize normalizes an arbitrary string (an email local-part, or an existing
-// legacy handle) into a valid username base: lowercased, '.' mapped to '-',
-// every other disallowed character dropped, consecutive hyphens collapsed,
-// leading/trailing hyphens trimmed, truncated to the maximum length, and
-// falling back to a fixed base when the result is empty or too short.
+// Sanitize normalizes an arbitrary string into a valid username base: lowercased, '.'
+// mapped to '-' (the legacy mailbox handle allowed it), other disallowed characters
+// dropped, hyphens collapsed and trimmed, truncated, with a fixed fallback if too short.
 func Sanitize(s string) string {
 	s = strings.ToLower(s)
 
@@ -106,12 +97,9 @@ func Candidate(base string, n int) string {
 	return base + "-" + strconv.Itoa(n)
 }
 
-// reserved are usernames nobody may claim, regardless of whether the name is
-// otherwise unclaimed: RFC 2142 role addresses and CA/Browser Forum
-// constructed email addresses (ported from the mailbox feature this package
-// replaces — see internal/application/mailbox's former reservedHandles for
-// the rationale), plus product-identity terms a *public* profile name must
-// not impersonate.
+// reserved are usernames nobody may claim: RFC 2142 role addresses, CA/Browser Forum
+// constructed email addresses, and product-identity terms a public profile must not
+// impersonate.
 var reserved = map[string]struct{}{
 	// CA/Browser Forum constructed email addresses — certificate issuance.
 	"admin": {}, "administrator": {}, "webmaster": {}, "hostmaster": {}, "postmaster": {},
@@ -126,12 +114,9 @@ var reserved = map[string]struct{}{
 	"freehire": {}, "official": {}, "staff": {}, "moderator": {},
 }
 
-// IsReserved reports whether a candidate username is one nobody may claim.
-// Matching is on the exact string: a suffixed form like "postmaster-2" or
-// "freehire-fan" is not itself an operational address or an impersonation of
-// the reserved term, so nothing stops a user from holding it — Candidate's
-// collision search relies on this to keep making progress past a reserved
-// base.
+// IsReserved reports whether a candidate username is one nobody may claim. Matching is
+// exact: suffixed forms like "postmaster-2" are allowed, which Candidate's collision
+// search relies on to get past a reserved base.
 func IsReserved(s string) bool {
 	_, ok := reserved[s]
 	return ok

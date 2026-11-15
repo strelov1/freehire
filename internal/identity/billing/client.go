@@ -17,29 +17,22 @@ import (
 // apiBaseURL is the provider's REST API. Overridden only by tests.
 const apiBaseURL = "https://api.stripe.com/v1"
 
-// requestTimeout bounds one call to the provider.
-//
-// Short on purpose. The webhook handler calls out inline so that a candidate who has just
-// paid sees Pro immediately, and the provider gives that handler a limited window before it
-// disconnects and schedules a retry. Failing quickly and leaving the event for the
-// reconciler is strictly better than risking the delivery.
+// requestTimeout bounds one call to the provider. Short because the webhook handler calls out
+// inline and the provider retries a slow delivery; the reconciler picks up what fails.
 const requestTimeout = 8 * time.Second
 
 // errorBodyLimit caps how much of a failure response is read into an error message.
 const errorBodyLimit = 512
 
-// client talks to the payment provider. It is the only thing in this package that touches
-// the network.
+// client talks to the payment provider; the only network access in this package.
 type client struct {
 	http    *http.Client
 	baseURL string
 	apiKey  string
 }
 
-// newProviderClient is the production constructor: an SSRF-guarded client against the real
-// API, which refuses to follow a redirect anywhere — see refuseRedirect below. Every call
-// here carries the secret key in an Authorization header, and the reason that header must
-// not travel off the host it was addressed to is the same for both providers.
+// newProviderClient is the production constructor: an SSRF-guarded client that refuses
+// redirects (see refuseRedirect).
 func newProviderClient(apiKey string) *client {
 	httpc := safehttp.NewClient(requestTimeout)
 	httpc.CheckRedirect = refuseRedirect
@@ -47,37 +40,22 @@ func newProviderClient(apiKey string) *client {
 }
 
 // newClient builds a client against an arbitrary base URL with an arbitrary HTTP client.
-// The seam exists for tests: safehttp refuses private addresses, which is correct in
-// production and makes a loopback test server unreachable.
+// The seam exists for tests: safehttp refuses private addresses, so a loopback test server
+// is unreachable through the production client.
 func newClient(apiKey, baseURL string, httpc *http.Client) *client {
 	return &client{http: httpc, baseURL: baseURL, apiKey: apiKey}
 }
 
-// refuseRedirect stops the SECRET key travelling anywhere it was not addressed to. Every
-// bearer-carrying client in this package sets it — the reasoning is about the header, not
-// about which provider is on the other end.
-//
-// Go's default policy follows up to ten hops and carries the Authorization header to the
-// original host and its subdomains — and it permits an HTTPS request to be redirected to
-// plain HTTP. safehttp re-dials every hop through the SSRF guard, which stops an internal
-// address, but the guard says nothing about a PUBLIC host reading a header meant for the
-// billing provider. That header is `Bearer sk_…`, the key that can grant and revoke a plan.
-//
-// So no hop at all. Neither of these is a general HTTP client: each calls one documented API
-// that does not redirect, so a redirect here is a misconfiguration or an attack, and neither
-// is worth following with a credential in hand.
+// refuseRedirect keeps the secret key from travelling to any host it was not addressed to.
+// Go's default policy follows redirects with the Authorization header (even HTTPS to HTTP),
+// and the SSRF guard does not stop a public host from reading it. The APIs called here do
+// not redirect, so a redirect is a misconfiguration or an attack.
 func refuseRedirect(req *http.Request, _ []*http.Request) error {
 	return fmt.Errorf("billing: refusing a redirect to %s — the provider key travels to one host only", req.URL.Host)
 }
 
-// do performs one form-encoded call and decodes the JSON reply into out.
-//
-// The provider's API is form-encoded on the way in and JSON on the way out — an asymmetry
-// worth stating once here rather than rediscovering at each call site.
-//
-// idempotencyKey is empty for every read and for anything the provider treats as repeatable.
-// It is a named parameter rather than a general header map because there is exactly one
-// header we ever add, and a map would invite a second, unreviewed one.
+// do performs one form-encoded call and decodes the JSON reply into out (the API is
+// form-encoded in, JSON out). idempotencyKey is empty for reads and repeatable calls.
 func (c *client) do(ctx context.Context, method, path string, form url.Values, idempotencyKey string, out any) error {
 	var body io.Reader
 	if form != nil {
@@ -94,9 +72,8 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	if idempotencyKey != "" {
-		// The provider replays the first response for 24 hours against this key, which is
-		// what makes a retried credit or a double-clicked checkout cost nothing. Without it
-		// a retry after a timeout we never saw the answer to credits twice.
+		// The provider replays the first response for 24 hours per key, so a retry after a
+		// lost answer does not act twice.
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
 
@@ -120,12 +97,8 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 }
 
 // stripeSubscriptionList is the provider's reply shape for a subscription listing.
-//
-// CurrentPeriodEnd appears in TWO places and the item's is the live one. The provider moved
-// it from the subscription onto each item — a subscription can hold items on different
-// billing cycles, so the field stopped having one answer at the top. The outer field is kept
-// here because an account pinned to an older API version still sends it there, and reading
-// only one place would silently produce a subscription with no end.
+// CurrentPeriodEnd appears on both the subscription (older API versions) and each item (the
+// live one); read both or a subscription ends up with no end.
 type stripeSubscriptionList struct {
 	Data []struct {
 		ID                string `json:"id"`
@@ -147,19 +120,14 @@ type stripeSubscriptionList struct {
 
 // subscriberState reads the provider's current record for one customer.
 //
-// `status=all` on purpose: a listing of only the active ones would make "cancelled" and
-// "we asked wrongly" indistinguishable, and the entitling rule lives in one place
-// (entitlingStatuses) rather than being split between a query parameter and a map.
-//
-// A customer the provider has never seen is not reachable here at all — callers hold a
-// stored customer id or they do not call. Asking about an unknown id is an error, not an
-// empty answer, because it means our binding is wrong.
+// It lists `status=all` so the entitling rule stays in one place (entitlingStatuses). An
+// unknown customer id is an error, not an empty answer: it means our binding is wrong.
 func (c *client) subscriberState(ctx context.Context, customerID string) (subscriber, error) {
 	form := url.Values{}
 	form.Set("customer", customerID)
 	form.Set("status", "all")
 	form.Set("limit", "100")
-	// Without this the price is a bare id string and the items carry nothing to match on.
+	// Without this the price is a bare id string.
 	form.Set("expand[]", "data.items.data.price")
 
 	var raw stripeSubscriptionList
@@ -174,8 +142,7 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 			sub.CancelAt = time.Unix(s.CancelAt, 0).UTC()
 		}
 
-		// The furthest item decides how far the subscription reaches: with items on
-		// different cycles, access should last as long as the longest of them.
+		// The furthest item decides how long access lasts.
 		periodEnd := s.CurrentPeriodEnd
 		for i, item := range s.Items.Data {
 			if item.CurrentPeriodEnd > periodEnd {
@@ -185,10 +152,8 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 				sub.PriceIDs = append(sub.PriceIDs, item.Price.ID)
 			}
 			if i == 0 {
-				// Every subscription this integration creates carries exactly one item (see
-				// createCheckoutSession), and an upgrade/downgrade replaces that item's price
-				// rather than adding a second one — so reading only the first item's id matches
-				// the one invariant this integration maintains.
+				// Every subscription created here has exactly one item (see
+				// createCheckoutSession); plan changes replace its price.
 				sub.ItemID = item.ID
 			}
 		}
@@ -204,10 +169,8 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 // createCheckoutSession opens a hosted payment page for one account and returns where to
 // send the browser.
 //
-// The account's own id travels in TWO places, and both earn their keep. client_reference_id
-// comes back on the completion event, which is how a first purchase is attributed before
-// any customer binding exists. The customer's metadata survives that event, which is how
-// every later renewal is attributed once the binding does exist.
+// The account id travels in two places: client_reference_id attributes the first purchase
+// (no customer binding yet), and the customer metadata attributes later renewals.
 func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (string, error) {
 	id := strconv.FormatInt(userID, 10)
 
@@ -221,25 +184,19 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 	form.Set("subscription_data[metadata][freehire_user_id]", id)
 
 	if existingCustomer != "" {
-		// Reuse the customer we already know about, so a second purchase does not create a
-		// second customer for one person — which would leave two subscriptions nobody sums.
+		// Reuse the known customer so a second purchase does not split one person in two.
 		form.Set("customer", existingCustomer)
 	} else {
-		// No customer_creation here, and its absence is load-bearing: the provider refuses
-		// it outright in subscription mode ("can only be used in `payment` mode"), and the
-		// refusal is silent from a candidate's side — the session is never created, the
-		// handler answers 404, and the upgrade button hides itself as though billing were
-		// switched off. A subscription always creates a customer anyway.
+		// Do not set customer_creation: the provider refuses it in subscription mode, the
+		// session is never created and the upgrade button silently hides. A subscription
+		// creates a customer anyway.
 		form.Set("metadata[freehire_user_id]", id)
 		if email != "" {
 			form.Set("customer_email", email)
 		}
 	}
 
-	// Set only when there is one, so an ordinary purchase sends exactly the request it sent
-	// before discounts existed. The provider admits ONE coupon per session — which is why
-	// the caller resolves a single discount rather than handing over everything an account
-	// might be owed.
+	// The provider admits one coupon per session, so the caller resolves a single discount.
 	if couponID != "" {
 		form.Set("discounts[0][coupon]", couponID)
 	}
@@ -256,19 +213,12 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 	return out.URL, nil
 }
 
-// updateSubscriptionPrice changes an existing subscription's item to a different price, with
-// proration. It is the upgrade/downgrade path, and it never creates a second subscription —
-// that is exactly the bug it exists to stop: before this existed, changing tier always opened
-// a new Checkout Session, leaving two subscriptions billing the same customer in parallel.
+// updateSubscriptionPrice swaps an existing subscription's item to another price with
+// proration (upgrade/downgrade), never creating a second subscription.
 //
-// proration_behavior is named explicitly rather than left to the provider's default: this is
-// the one place in the package that changes what an existing subscriber is charged mid-cycle,
-// and a future default change upstream must not alter that silently.
-//
-// idempotencyKey is required, unlike most reads in this file: this call creates a proration
-// invoice item, so a low-level HTTP retry of the same request (Go's transport can replay a
-// POST whose body is seekable, which url.Values.Encode()'s is) must not bill the same change
-// twice.
+// proration_behavior is explicit so an upstream default change cannot alter mid-cycle charges.
+// idempotencyKey is required: Go's transport can replay a POST with a seekable body, which
+// would bill the proration twice.
 func (c *client) updateSubscriptionPrice(ctx context.Context, subscriptionID, itemID, priceID, idempotencyKey string) error {
 	form := url.Values{}
 	form.Set("items[0][id]", itemID)
@@ -281,9 +231,8 @@ func (c *client) updateSubscriptionPrice(ctx context.Context, subscriptionID, it
 // createPortalSession opens the provider's own subscription-management page for one
 // customer and returns where to send the browser.
 //
-// This is where a subscriber changes their card or cancels. It is the provider's page, not
-// ours, which is the whole point: a cancellation flow we wrote would be one more thing that
-// can disagree with what actually happened to the money.
+// This is where a subscriber changes their card or cancels; it is the provider's page so it
+// cannot disagree with what happened to the money.
 func (c *client) createPortalSession(ctx context.Context, customerID, returnURL string) (string, error) {
 	form := url.Values{}
 	form.Set("customer", customerID)

@@ -15,8 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// QueriesRepository is the production Repository backed by sqlc-generated
-// *db.Queries and a *pgxpool.Pool for transaction management.
+// QueriesRepository is the production Repository, backed by sqlc queries and a pool.
 type QueriesRepository struct {
 	q    *db.Queries
 	pool *pgxpool.Pool
@@ -27,7 +26,6 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 	return &QueriesRepository{q: q, pool: pool}
 }
 
-// Compile-time assertion that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
 // WithTx returns a transactional copy of QueriesRepository.
@@ -44,8 +42,8 @@ func (r *QueriesRepository) WithTx(tx pgx.Tx) Repository {
 // UserIDByIdentity returns the local user id for an external identity, or
 // ErrIdentityNotFound when no identity row matches.
 func (r *QueriesRepository) UserIDByIdentity(ctx context.Context, provider, providerUserID string) (int64, error) {
-	// Status is part of authentication, not display metadata: an Apple identity
-	// awaiting provider revocation must not sign in and silently undo unlink.
+	// Status is part of authentication: an Apple identity awaiting provider revocation
+	// must not sign in and undo the unlink.
 	row, err := r.q.GetActiveUserByIdentity(ctx, db.GetActiveUserByIdentityParams{
 		Provider:       provider,
 		ProviderUserID: providerUserID,
@@ -59,13 +57,10 @@ func (r *QueriesRepository) UserIDByIdentity(ctx context.Context, provider, prov
 	return row.ID, nil
 }
 
-// LinkOrCreateByEmail links the given identity to the account with the
-// supplied (already-lowercased) email, creating a passwordless account when
-// none exists. The operation runs in a single transaction. A concurrent-callback
-// race surfaces as one of two distinct errors: ErrEmailRace when the account was
-// created first under the same email (our CreateUser lost the email index, so our
-// identity was never inserted), or ErrIdentityConflict when our exact identity was
-// inserted first. The service recovers from each differently.
+// LinkOrCreateByEmail links the identity to the account with this lowercased email,
+// creating a passwordless account when none exists, in one transaction. A concurrent
+// race surfaces as ErrEmailRace (account created first, our identity not inserted) or
+// ErrIdentityConflict (our identity inserted first).
 func (r *QueriesRepository) LinkOrCreateByEmail(
 	ctx context.Context,
 	provider, providerUserID, email string,
@@ -85,14 +80,10 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 	switch {
 	case err == nil:
 		userID = existing.ID
-		// Account pre-hijacking defence. Reaching here means a provider has vouched for
-		// this address, but the account it matches may have been registered by someone
-		// who never proved they own it — the squatter would keep password access to
-		// everything the real owner does from now on. So an unverified, password-backed
-		// account is not joined, it is SEIZED: the password is destroyed and every
-		// session revoked, in this same transaction. A verified account is joined as
-		// before (its owner already proved the address), and a passwordless one has
-		// nothing to seize — it is only marked verified.
+		// Account pre-hijacking defence: a provider vouched for this address, but a squatter
+		// may have registered it unverified. An unverified, password-backed account is
+		// SEIZED (password destroyed, sessions revoked) in this transaction. A verified one
+		// is joined; a passwordless one is only marked verified.
 		if !existing.EmailVerified {
 			if existing.PasswordHash.Valid {
 				if _, err := q.SeizeUnverifiedAccount(ctx, userID); err != nil {
@@ -106,14 +97,13 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 		created, err := q.CreateUser(ctx, db.CreateUserParams{
 			Email:        email,
 			PasswordHash: pgtype.Text{}, // passwordless OAuth account
-			// Born verified: the caller only reaches this path with a provider-verified
-			// email (ResolveOAuthAccount's gate), so ownership is already proven.
+			// Born verified: ResolveOAuthAccount only gets here with a provider-verified email.
 			EmailVerified: true,
 		})
 		if err != nil {
 			if pgerr.IsUniqueViolation(err) {
-				// users has a single unique index (lower(email)), so this can only be
-				// a concurrent account creation for the same email — not our identity.
+				// users has one unique index (lower(email)), so this is a concurrent
+				// creation for the same email, not our identity.
 				return 0, ErrEmailRace
 			}
 			return 0, err
@@ -148,8 +138,7 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 	return userID, nil
 }
 
-// CreateUser inserts a new account and returns it. Returns ErrEmailTaken on a
-// unique-constraint violation.
+// CreateUser inserts an account. Returns ErrEmailTaken on a unique violation.
 func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error) {
 	tz := ""
 	if timezone != nil {
@@ -174,8 +163,7 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 		Language: row.Language}, nil
 }
 
-// UpdateTimezone sets the account's IANA timezone name. The caller has already
-// validated it.
+// UpdateTimezone sets the account's IANA timezone; the caller validated it.
 func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, timezone *string, onlyIfUnset bool) (User, error) {
 	tz := ""
 	if timezone != nil {
@@ -191,8 +179,7 @@ func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, ti
 		Language: row.Language}, nil
 }
 
-// UpdateLanguage sets the account's preferred interface language. The caller has
-// already validated it against supportedLanguages.
+// UpdateLanguage sets the preferred language; the caller validated it.
 func (r *QueriesRepository) UpdateLanguage(ctx context.Context, userID int64, language string) (User, error) {
 	row, err := r.q.UpdateUserLanguage(ctx, db.UpdateUserLanguageParams{ID: userID, Language: language})
 	if err != nil {
@@ -204,8 +191,7 @@ func (r *QueriesRepository) UpdateLanguage(ctx context.Context, userID int64, la
 		Language: row.Language}, nil
 }
 
-// MarkEmailVerified records that control of the account's address was proven, by an
-// emailed code or by a provider. Idempotent.
+// MarkEmailVerified records that control of the address was proven. Idempotent.
 func (r *QueriesRepository) MarkEmailVerified(ctx context.Context, userID int64) error {
 	return r.q.SetUserEmailVerified(ctx, userID)
 }
@@ -257,9 +243,7 @@ func (r *QueriesRepository) DeleteOAuthGrantsByUser(ctx context.Context, userID 
 	return r.q.DeleteOAuthGrantsByUser(ctx, userID)
 }
 
-// UserByEmail looks up the account with the given (already-normalised) email.
-// Returns ErrUserNotFound when absent. hasPassword is true when a non-null
-// password hash is stored.
+// UserByEmail looks up an account by normalised email, or ErrUserNotFound.
 func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User, string, bool, error) {
 	row, err := r.q.GetUserByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -302,10 +286,8 @@ func (r *QueriesRepository) UsernameByUser(ctx context.Context, userID int64) (s
 	return row.Username.String, pgconv.TimePtr(row.UsernameUpdatedAt), true, nil
 }
 
-// SetUsernameIfAbsent claims username for userID only if the account has none
-// yet. Maps a unique violation, and the zero-rows-affected case (the account
-// already had a username), both to ErrUsernameTaken — the caller resolves
-// either by re-reading UsernameByUser.
+// SetUsernameIfAbsent claims username only if the account has none. A unique violation
+// and zero rows affected both map to ErrUsernameTaken.
 func (r *QueriesRepository) SetUsernameIfAbsent(ctx context.Context, userID int64, username string) error {
 	n, err := r.q.SetUsernameIfAbsent(ctx, db.SetUsernameIfAbsentParams{ID: userID, Username: pgconv.Text(username)})
 	if pgerr.IsUniqueViolation(err) {

@@ -9,64 +9,52 @@ import (
 	"time"
 )
 
-// Overview is what a subscriber's own billing section shows: what they are paying, when it
-// is next taken, and what has been taken so far.
-//
-// It is READ THROUGH to the provider every time rather than mirrored into our database.
-// Money is the one thing a stale copy is least forgivable about — a receipt list that has
-// silently missed a refund is worse than no receipt list — and the provider is the only
-// party that knows what actually happened to a card.
+// Overview is what a subscriber's billing section shows: what they pay, when it is next
+// taken, and what has been taken. It is read through to the provider every time, never
+// mirrored, since a stale copy of money (a missed refund) is worse than none.
 type Overview struct {
 	// Status is the provider's own word: active, trialing, past_due, canceled…
 	Status string `json:"status"`
-	// AmountCents and Interval describe what is being charged, read from the subscription's
-	// own price rather than from our configuration — a subscriber on an older price is
-	// paying that price, not today's.
+	// AmountCents and Interval are read from the subscription's own price, not our
+	// configuration: a subscriber on an older price pays that price.
 	AmountCents int64  `json:"amount_cents"`
 	Currency    string `json:"currency"`
 	Interval    string `json:"interval"`
 	// RenewsAt is when the next charge is due. Zero when the subscription is ending.
 	RenewsAt *time.Time `json:"renews_at,omitempty"`
-	// EndsAt is set when the subscriber has cancelled: access runs to here and stops. It is
-	// shown INSTEAD of a renewal date, because "renews on the 4th" beside "you cancelled" is
-	// the kind of contradiction that generates support mail.
+	// EndsAt is set when the subscriber has cancelled: access stops here. Shown instead of a
+	// renewal date so the two never contradict.
 	EndsAt   *time.Time `json:"ends_at,omitempty"`
 	Invoices []Invoice  `json:"invoices"`
-	// MultipleSubscriptions is true when this customer has more than one active entitling
-	// subscription at once — the duplicate-subscription bug, for a customer it already
-	// happened to. The section still describes the single best-entitling one below; this is
-	// additive information rather than a second code path.
+	// MultipleSubscriptions is true when the customer has more than one active entitling
+	// subscription (a duplicate). The section still describes the single best one.
 	MultipleSubscriptions bool `json:"multiple_subscriptions,omitempty"`
 }
 
 // Invoice is one charge as a receipt list shows it.
 type Invoice struct {
-	// ID is the provider's own invoice identifier, carried for ONE reason: it is what a list
-	// in the SPA keys on. A date is not a key — two invoices can share a second (a proration
-	// beside a cycle charge on an upgrade) — and a duplicate key in a Svelte {#each} throws
-	// and takes the whole block down. That has happened in this repository before.
+	// ID is the provider's invoice identifier, carried as the SPA list key. A date is not a
+	// key: two invoices can share a second (proration beside a cycle charge), and a duplicate
+	// key in a Svelte {#each} takes the block down.
 	ID          string    `json:"id"`
 	Date        time.Time `json:"date"`
 	AmountCents int64     `json:"amount_cents"`
 	Currency    string    `json:"currency"`
-	// Status is the provider's: paid, open, void, uncollectible. A failed charge stays
-	// visible — hiding it would leave a subscriber wondering why their card was declined.
+	// Status is the provider's: paid, open, void, uncollectible. A failed charge stays visible.
 	Status string `json:"status"`
 	// ReceiptURL is the provider's hosted invoice. Absent for a draft.
 	ReceiptURL string `json:"receipt_url,omitempty"`
 }
 
-// invoiceHistory bounds how far back the receipt list goes. A year of monthly charges fits,
-// and anyone needing more has the provider's own portal, which this page links to.
+// invoiceHistory bounds the receipt list; older ones are in the provider's portal.
 const invoiceHistory = 12
 
 // SubscriptionOverview reads what this account is paying and what it has paid.
 //
-// ErrNoSubscription when the account has never transacted — the ordinary state for a free
-// account, and the caller renders nothing rather than an error.
+// It returns ErrNoSubscription for an account that never transacted (a free account); the
+// caller renders nothing.
 func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overview, error) {
-	// The configuration, not the engine: receipts and renewal dates exist only where a card
-	// was entered on the web, so this is a Stripe question end to end.
+	// Stripe only: receipts and renewal dates exist only for web card purchases.
 	if !s.cfg.Enabled() {
 		return Overview{}, ErrDisabled
 	}
@@ -77,11 +65,8 @@ func (s *Service) SubscriptionOverview(ctx context.Context, userID int64) (Overv
 	return s.overviewFor(ctx, customer)
 }
 
-// overviewFor is SubscriptionOverview once the customer is known.
-//
-// Split out so the rule that decides what this screen SAYS can be tested without a
-// database: everything below is about reading the provider and refusing to guess, and none
-// of it depends on which account asked.
+// overviewFor is SubscriptionOverview once the customer is known, split out so it can be
+// tested without a database.
 func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, error) {
 	sub, err := s.client.subscriberState(ctx, customer)
 	if err != nil {
@@ -90,24 +75,18 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 
 	out := Overview{Invoices: []Invoice{}}
 
-	// The same selection the plan derivation makes, called rather than repeated: this
-	// section must describe the subscription the plan came from, not another one — which
-	// means asking BOTH configured price lists, since an account on Ultra has no Pro price
-	// to be found under.
+	// The same selection the plan derivation makes, so this section describes the subscription
+	// the plan came from. It needs both price lists: an Ultra account has no Pro price.
 	best, tierPrices := billedSubscription(sub, s.cfg.Prices, s.cfg.UltraPrices, time.Now().UTC())
 
-	// No eligible subscription: a free account, or a former subscriber whose last one has
-	// ended. Both must read as "no section", not as a section full of zeroes — the surface
-	// renders what it is given, and a confident "$0 /" tells somebody their card is not
-	// being charged.
+	// No eligible subscription (free, or ended) must read as "no section", not zeroes.
 	if best.Status == "" {
 		return Overview{}, ErrNoSubscription
 	}
 
 	amount, currency, interval, err := s.priceOf(ctx, best, tierPrices)
 	if err != nil {
-		// We know they are subscribed but not what for. Saying nothing is the only honest
-		// answer; saying "$0" is a statement about their money that we cannot stand behind.
+		// Subscribed but price unknown: return an error rather than show "$0".
 		return Overview{}, err
 	}
 	out.Status = best.Status
@@ -125,15 +104,10 @@ func (s *Service) overviewFor(ctx context.Context, customer string) (Overview, e
 	return out, nil
 }
 
-// priceOf reads what this subscription actually charges. A subscriber on a price we no
-// longer sell is paying THAT price, and showing today's would be a lie about their bill.
-//
-// It ERRORS rather than returning zeroes when no price resolves. A zero amount is not a
-// missing value on this screen — it renders as "free", which is the one thing a paying
-// subscriber must never be told.
-// The tier list decides only the ORDER it tries them in: one subscription can carry an item
-// from each tier during an upgrade, and the amount on screen has to belong to the tier the
-// status above it names.
+// priceOf reads what this subscription actually charges, including a price we no longer
+// sell. It errors rather than returning zeroes when no price resolves, since zero renders as
+// "free". The tier list only sets the order tried: during an upgrade one subscription can
+// carry an item from each tier, and the amount must match the tier shown.
 func (s *Service) priceOf(ctx context.Context, sub subscription, tierPrices []string) (int64, string, string, error) {
 	var lastErr error
 	for _, id := range tierFirst(sub.PriceIDs, tierPrices) {
@@ -149,11 +123,8 @@ func (s *Service) priceOf(ctx context.Context, sub subscription, tierPrices []st
 	return 0, "", "", lastErr
 }
 
-// invoices lists this customer's charges, newest first.
-//
-// A failure returns an empty list rather than an error: the subscription details are the
-// answer to "what am I paying", and losing the receipt list should not take that down with
-// it.
+// invoices lists this customer's charges, newest first. A failure returns an empty list so
+// losing receipts does not take down the subscription details.
 func (c *client) invoices(ctx context.Context, customerID string) []Invoice {
 	form := url.Values{}
 	form.Set("customer", customerID)
@@ -178,8 +149,7 @@ func (c *client) invoices(ctx context.Context, customerID string) []Invoice {
 	for _, in := range raw.Data {
 		amount := in.AmountPaid
 		if amount == 0 {
-			// An unpaid or failed invoice still has an amount, and showing it as zero would
-			// make a declined charge look like a free month.
+			// An unpaid or failed invoice has no amount_paid; zero would look like a free month.
 			amount = in.AmountDue
 		}
 		out = append(out, Invoice{

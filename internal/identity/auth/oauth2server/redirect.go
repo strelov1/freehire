@@ -6,12 +6,9 @@ import (
 	"strings"
 )
 
-// RedirectURIAllowed reports whether candidate may be used for this authorize
-// request, given the client's registered redirect_uris. Matching is exact string
-// equality, with one exception: a loopback redirect (127.0.0.1, [::1], or
-// localhost) matches on scheme+host+path alone, ignoring the port — native MCP
-// clients bind an ephemeral local port per request and cannot register it in
-// advance (RFC 8252 §7.3).
+// RedirectURIAllowed reports whether candidate matches a registered redirect_uri: exact
+// equality, except a loopback redirect (127.0.0.1, [::1], localhost) ignores the port
+// because native clients bind an ephemeral one (RFC 8252 §7.3).
 func RedirectURIAllowed(registered []string, candidate string) bool {
 	for _, r := range registered {
 		if r == candidate {
@@ -40,29 +37,25 @@ func isLoopbackHost(host string) bool {
 	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 
-// maxRedirectURILength bounds one registered redirect_uri. Real callbacks are a
-// few dozen characters; the bound exists so an unauthenticated registration
-// cannot park arbitrary payloads in oauth_clients.
+// maxRedirectURILength bounds a registered redirect_uri so an unauthenticated
+// registration cannot park payloads in oauth_clients.
 const maxRedirectURILength = 2048
 
-// blockedRedirectSchemes are schemes a browser would interpret itself rather than
-// hand to an app, so a 302 carrying the code there never reaches a legitimate
-// client — it only serves somebody hoping to run script or read local files.
+// blockedRedirectSchemes are schemes a browser interprets itself, so a redirect there
+// never reaches a client and only serves script or local-file abuse.
 var blockedRedirectSchemes = map[string]bool{
 	"javascript": true, "data": true, "vbscript": true, "file": true, "blob": true, "about": true,
 }
 
-// ValidateRedirectURI decides whether a redirect_uri may be REGISTERED (RFC 7591).
-// Three shapes are admitted, the three MCP clients actually use (RFC 8252):
+// ValidateRedirectURI decides whether a redirect_uri may be registered (RFC 7591). Three
+// shapes are admitted (RFC 8252):
 //
-//   - https on any host — claude.ai, chatgpt.com and every hosted client;
-//   - http on a loopback host only — Claude Code, Claude Desktop, VS Code bind a
-//     local port, and plain http anywhere else would put the code on the wire;
-//   - a private-use app scheme (cursor://…) — the OS hands it to the installed app.
+//   - https on any host;
+//   - http on a loopback host only, since plain http elsewhere would put the code on the wire;
+//   - a private-use app scheme (cursor://…).
 //
-// It cannot judge whether the host belongs to whoever names the client; that is
-// the consent screen's job, which therefore names the host (see oauthConsentPage).
-// A fragment is refused because RFC 6749 §3.1.2 forbids one in a redirection endpoint.
+// Host ownership is the consent screen's job (see oauthConsentPage). A fragment is
+// refused (RFC 6749 §3.1.2).
 func ValidateRedirectURI(raw string) error {
 	if len(raw) > maxRedirectURILength {
 		return fmt.Errorf("redirect_uri exceeds %d characters", maxRedirectURILength)

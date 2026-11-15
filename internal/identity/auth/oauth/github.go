@@ -13,9 +13,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/safehttp"
 )
 
-// githubProvider implements GitHub sign-in. GitHub is plain OAuth2 (no OIDC
-// userinfo): the user id comes from /user and the email from /user/emails,
-// because the /user email field is null for most accounts.
+// githubProvider implements GitHub sign-in: the id comes from /user and the email from
+// /user/emails, since /user's email is null for most accounts.
 type githubProvider struct {
 	cfg     *oauth2.Config
 	apiBase string
@@ -68,9 +67,8 @@ func (p *githubProvider) FetchIdentity(ctx context.Context, code string) (Identi
 		return Identity{}, fmt.Errorf("github: emails: %w", err)
 	}
 
-	// Prefer the primary verified email; fall back to any verified one. An
-	// account with no verified email yields an identity without an email,
-	// which account resolution rejects.
+	// Prefer the primary verified email, else any verified one. With none, the identity has
+	// no email and account resolution rejects it.
 	var email string
 	for _, e := range emails {
 		if !e.Verified {

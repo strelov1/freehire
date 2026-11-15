@@ -10,17 +10,13 @@ import (
 	"strings"
 )
 
-// DefaultRewardCeiling bounds how many rewards one referrer may earn when the environment
-// says nothing — twelve, which is about half a year of a monthly subscription for free.
+// DefaultRewardCeiling bounds rewards per referrer when the environment is silent.
 //
-// The bound exists for the patient version of the abuse this design otherwise resists:
-// attribution is a cookie the visitor controls, so a determined person with real cards can
-// keep referring themselves. Each round costs them a real payment, which is not an
-// arbitrage, but a ceiling means it is not even a long game.
+// Attribution is a visitor-controlled cookie, so someone with real cards could keep
+// referring themselves; the ceiling ends that.
 const DefaultRewardCeiling = 12
 
-// PendingReward is an attributed signup whose invitee holds a provider customer, so there
-// is something to ask the provider about.
+// PendingReward is an attributed signup whose invitee holds a provider customer.
 type PendingReward struct {
 	ID              int64
 	ReferrerID      int64
@@ -34,34 +30,28 @@ type EarnedReward struct {
 	AmountCents int64
 }
 
-// Payments answers the one question that decides whether a referral earned anything: did
-// this invitee pay us at least what the reward is worth?
+// Payments answers whether an invitee paid at least what the reward is worth.
 //
-// About money COLLECTED and not about a subscription being active, because a subscription
-// can be active having collected nothing — a trial, or a total discount. And about ENOUGH
-// money rather than any: an invitee who redeemed a 90% code pays a tenth of the list price,
-// so a reward worth half of it would cost four times what the sale brought in, repeatably,
-// for as long as that code has seats.
+// It is about money collected, not an active subscription (a trial or a total discount
+// collects nothing), and about enough money: a 90% code pays a tenth of list price, so a
+// half-price reward would cost far more than the sale brought in.
 type Payments interface {
 	HasCollectedAtLeast(ctx context.Context, customerID string, minCents int64) (bool, error)
 }
 
-// Credits places a reward on a referrer's balance. The implementation creates a provider
-// customer for a referrer who has never bought anything; from here that is invisible, which
-// is the point — this package does not know what a provider is.
+// Credits places a reward on a referrer's balance. The implementation may create a
+// provider customer for a referrer who never bought; this package does not see that.
 type Credits interface {
 	CreditAccount(ctx context.Context, userID, cents int64, idempotencyKey string) error
 }
 
-// GrantEarned moves rewards from attributed to earned, and reports how many moved.
+// GrantEarned moves rewards from attributed to earned and reports how many moved.
 //
-// Called from a worker rather than from the webhook. The webhook is answered inside a
-// window the provider enforces and applying an event must not grow work that can fail;
-// this pass is guarded on the row's own status, so a crash half-way costs a repeat that
-// changes nothing.
+// It runs in a worker, not the webhook, which must answer inside the provider's window. It
+// is guarded on row status, so a crash half-way only costs a no-op repeat.
 //
-// priceCents is the list price at this moment. The amount is fixed into the row here and
-// never recomputed, so a later price change cannot revalue credit already earned.
+// priceCents is the list price now; the amount is fixed into the row, so a later price
+// change cannot revalue earned credit.
 func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, payments Payments) (int, error) {
 	rewards, err := s.repo.PendingRewards(ctx, max)
 	if err != nil {
@@ -72,10 +62,7 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 	granted := 0
 	ceiling := int64(s.ceiling())
 	for _, reward := range rewards {
-		// Read first as a CHEAP SKIP, not as the bound. A referrer already at the ceiling
-		// costs no provider call this way, which is the whole reason it is here — the bound
-		// itself is inside the UPDATE, because two passes reading the same count would each
-		// grant one more than it allows.
+		// A cheap skip that saves a provider call; the real bound is inside the UPDATE.
 		count, err := s.repo.CountGranted(ctx, reward.ReferrerID)
 		if err != nil {
 			return granted, fmt.Errorf("promo: counting rewards of user %d: %w", reward.ReferrerID, err)
@@ -84,12 +71,10 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 			continue
 		}
 
-		// The threshold is the reward itself, which is the rule stated as arithmetic: a
-		// referral never pays out more than it brought in.
+		// The threshold is the reward itself: a referral never pays out more than it brought in.
 		collected, err := payments.HasCollectedAtLeast(ctx, reward.RefereeCustomer, amount)
 		if err != nil {
-			// One unreachable customer must not end the pass: the row stays pending and the
-			// next run tries again, which is the same shape as every other retry here.
+			// One unreachable customer must not end the pass; the row stays pending.
 			log.Printf("promo: reward %d: reading the invitee's invoices: %v", reward.ID, err)
 			continue
 		}
@@ -108,20 +93,16 @@ func (s *Service) GrantEarned(ctx context.Context, max int32, priceCents int64, 
 	return granted, nil
 }
 
-// DeliverEarned places earned rewards on their referrers' balances and reports how many
-// were delivered.
+// DeliverEarned places earned rewards on referrers' balances and reports how many were
+// delivered.
 //
-// The stamp follows the credit and never precedes it. Stamping first would mean a failure
-// between the two records money that never moved, and nothing would ever look at that row
-// again. The other way round, a failure after the credit costs one repeat — which the
-// idempotency key on the provider's side absorbs.
+// The stamp follows the credit, never precedes it: stamping first would record money that
+// never moved, while a failure after the credit costs a repeat the provider's idempotency
+// key absorbs.
 //
-// One row's failure never ends the pass, the way GrantEarned's does not: the query orders
-// by id and carries no attempt counter, so a single undeliverable reward — a referrer
-// whose provider customer was deleted, a currency the balance will not take — sat at the
-// head of every later run's page and blocked every reward behind it, forever. The failures
-// are collected and returned after the loop, so a run that could not deliver everything
-// still says so and still exits non-zero.
+// One row's failure never ends the pass: the query has no attempt counter, so a single
+// undeliverable reward would sit at the head of every run and block the rest. Failures are
+// joined and returned after the loop so the run still exits non-zero.
 func (s *Service) DeliverEarned(ctx context.Context, max int32, credits Credits) (int, error) {
 	rewards, err := s.repo.UndeliveredRewards(ctx, max)
 	if err != nil {
@@ -138,9 +119,7 @@ func (s *Service) DeliverEarned(ctx context.Context, max int32, credits Credits)
 			continue
 		}
 		if _, err := s.repo.MarkDelivered(ctx, reward.ID); err != nil {
-			// The credit went through and the stamp did not, so the next run repeats
-			// this row — which the idempotency key absorbs. Carry on rather than
-			// abandoning the rows behind it for the same reason as above.
+			// The credit went through; the repeat next run is absorbed by the idempotency key.
 			failures = append(failures, fmt.Errorf("promo: stamping reward %d delivered: %w",
 				reward.ID, err))
 			continue
@@ -150,7 +129,7 @@ func (s *Service) DeliverEarned(ctx context.Context, max int32, credits Credits)
 	return delivered, errors.Join(failures...)
 }
 
-// ceiling is the configured bound, falling back when nothing sensible was configured.
+// ceiling is the configured bound, or the default when none is set.
 func (s *Service) ceiling() int {
 	if s.cfg.RewardCeiling > 0 {
 		return s.cfg.RewardCeiling
@@ -158,15 +137,12 @@ func (s *Service) ceiling() int {
 	return DefaultRewardCeiling
 }
 
-// ConfigFromEnv reads what this package cannot derive. It cannot fail.
-//
-// A ceiling that will not parse falls back and logs rather than stopping the process. The
-// pass that carries it also reconciles subscriptions, and a typo in an optional bound must
-// not be able to stop money being reconciled.
+// ConfigFromEnv reads what this package cannot derive. It cannot fail: an unparsable
+// ceiling falls back and logs, because the pass that carries it also reconciles
+// subscriptions and a typo must not stop that.
 func ConfigFromEnv() Config {
 	cfg := Config{
-		// The same variable billing reads. A SITE_URL of its own would be a second name for
-		// one fact, and the two would drift.
+		// The same variable billing reads, so the two cannot drift.
 		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN")), "/"),
 		RewardCeiling: DefaultRewardCeiling,
 	}

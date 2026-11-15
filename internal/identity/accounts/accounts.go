@@ -14,53 +14,34 @@ import (
 
 const minPasswordLen = 8
 
-// maxPasswordLen is bcrypt's input ceiling: it silently truncates beyond 72 bytes,
-// so a longer password would have its tail ignored. Reject rather than mislead.
+// maxPasswordLen is bcrypt's input ceiling; it silently truncates beyond 72 bytes.
 const maxPasswordLen = 72
 
-// dummyPasswordHash is a valid, throwaway bcrypt hash (cost = bcrypt.DefaultCost,
-// matching production hashes) used only to keep Login constant-work: an unknown or
-// passwordless account runs one bcrypt Check against it so its response time matches
-// a real account's, closing the timing side-channel that would otherwise reveal which
-// emails have password accounts (account enumeration). It never matches any password.
+// dummyPasswordHash is a throwaway bcrypt hash at production cost. Login checks it for
+// unknown or passwordless accounts so timing does not reveal which emails exist.
 const dummyPasswordHash = "$2a$10$uAK6XQv2KNKj0KXGXHcgAe3fn70C1tZiCUeG4ZCkdGGJ60p2.py7S"
 
-// User is the public representation of a local account. Role is the DB-stored
-// authorization role ('user'/'moderator'/'admin'); it rides the wire shape so a client
-// can gate moderator-only UI, while RequireRole still authorizes server-side.
-// BetaTester is a separate rollout-group membership (independent of Role); it
-// gates the in-app agent assistant and likewise rides the wire shape as a UI
-// affordance.
+// User is the public representation of a local account. Role ('user'/'moderator'/'admin')
+// and BetaTester ride the wire shape only so the client can gate UI; the server
+// authorizes on its own (RequireRole).
 type User struct {
 	ID            int64
 	Email         string
 	Role          string
 	BetaTester    bool
 	EmailVerified bool
-	// HasPassword is whether a password is set at all. False for an OAuth-only account,
-	// which must go through the reset flow to set one. The hash itself never leaves the
-	// database.
+	// HasPassword is false for an OAuth-only account, which sets one through the reset flow.
 	HasPassword bool
 	CreatedAt   *time.Time
-	// Timezone is the account's IANA name (e.g. "Europe/Moscow"), nil until set.
-	// Read by internal/application/deliverywindow (via notification_settings' joins) to
-	// interpret a digest time or quiet-hours window in the account's own local
-	// time; unset reads as UTC there.
+	// Timezone is the account's IANA name (e.g. "Europe/Moscow"), nil until set (read as UTC).
 	Timezone *string
-	// Language is the account's preferred interface language, one of
-	// supportedLanguages. Never empty — the column defaults to "en" — so unlike
-	// Timezone there is no unset state to represent. First step toward interface
-	// i18n: no UI translation ships yet, this just records the preference (see
-	// freehire#1836).
+	// Language is one of supportedLanguages; never empty (the column defaults to "en").
 	Language string
-	// OnboardingCompletedAt is when this account was walked through the onboarding
-	// wizard, nil for one that never has been. It is the whole gate: nil routes the user
-	// into the wizard, non-nil never does. Deliberately an explicit fact rather than an
-	// inference from "does this account have a CV", which was the old rule and stopped
-	// being true the moment the wizard grew questions a CV cannot answer.
+	// OnboardingCompletedAt is the whole onboarding gate: nil routes the user into the
+	// wizard, non-nil never does. Not inferred from whether a CV exists.
 	OnboardingCompletedAt *time.Time
-	// Banned is set only by the by-email lookup (Login, password reset): a moderator
-	// banned the account, so it neither signs in nor is mailed a code.
+	// Banned is set only by the by-email lookup (Login, password reset); a banned account
+	// neither signs in nor is mailed a code.
 	Banned bool
 }
 
@@ -71,30 +52,24 @@ type PasswordHasher interface {
 	Check(hash, plain string) error
 }
 
-// ErrAccountSuspended is returned when the credentials were right but a moderator banned
-// the account. It is only ever shown to someone who proved the credential.
+// ErrAccountSuspended means the credentials were right but the account is banned. Only
+// shown to someone who proved the credential.
 var ErrAccountSuspended = errors.New("accounts: account suspended")
 
 var (
-	// ErrIdentityNotFound is returned by the repository when no identity row
-	// matches the given (provider, providerUserID) pair.
+	// ErrIdentityNotFound means no identity row matches (provider, providerUserID).
 	ErrIdentityNotFound = errors.New("accounts: identity not found")
 
-	// ErrIdentityConflict is returned by the repository when a concurrent
-	// callback already inserted the same identity row (unique violation).
+	// ErrIdentityConflict means a concurrent callback already inserted the same identity.
 	ErrIdentityConflict = errors.New("accounts: identity already exists")
 
-	// ErrEmailRace is returned by the repository when link-or-create lost a race on
-	// the user email index: a concurrent callback created the account under the same
-	// verified email (but a different identity) first, so our identity was never
-	// inserted. Distinct from ErrIdentityConflict because the recovery differs — the
-	// service retries the link to attach our identity to the now-existing account,
-	// rather than looking up an identity that does not exist.
+	// ErrEmailRace means link-or-create lost a race on the email index: a concurrent
+	// callback created the account under the same email with a different identity. The
+	// service retries the link, since our identity was never inserted.
 	ErrEmailRace = errors.New("accounts: email create race")
 
-	// ErrNoVerifiedEmail is returned by the service when the caller does not
-	// supply a verified, non-empty email — a hard requirement before linking or
-	// creating an account (unverified email is an account-takeover vector).
+	// ErrNoVerifiedEmail means no verified, non-empty email was supplied; linking on an
+	// unverified email is an account-takeover vector.
 	ErrNoVerifiedEmail = errors.New("accounts: no verified email")
 
 	ErrInvalidEmail       = errors.New("accounts: invalid email")
@@ -109,7 +84,7 @@ var (
 // Implementations must be safe for concurrent use.
 type Repository interface {
 	// UserIDByIdentity returns the local user id for an external identity, or
-	// ErrIdentityNotFound when none is linked yet.
+	// ErrIdentityNotFound.
 	UserIDByIdentity(ctx context.Context, provider, providerUserID string) (int64, error)
 
 	// LinkOrCreateByEmail links the identity to the account with this email
@@ -117,12 +92,9 @@ type Repository interface {
 	// ErrIdentityConflict if the identity was inserted concurrently.
 	LinkOrCreateByEmail(ctx context.Context, provider, providerUserID, email string) (int64, error)
 
-	// CreateUser creates a new account with the given email and bcrypt password
-	// hash. emailVerified is false for a password registration and true for an account
-	// born from a provider-verified OAuth sign-in. timezone is the browser-detected
-	// IANA zone captured at signup (nil when unknown/invalid — a password
-	// registration is the only caller that ever supplies one). Returns
-	// ErrEmailTaken on a unique-constraint violation.
+	// CreateUser creates an account. emailVerified is false for a password registration,
+	// true for a provider-verified OAuth sign-in. timezone is the browser-detected zone
+	// (nil when unknown). Returns ErrEmailTaken on a unique violation.
 	CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error)
 
 	// UpdateTimezone sets (or clears, with nil) the account's IANA timezone name.
@@ -155,36 +127,27 @@ type Repository interface {
 	// the address.
 	ChangeEmail(ctx context.Context, userID int64, email string) (int32, error)
 
-	// DeleteOAuthGrantsByUser wipes every MCP OAuth grant (connected MCP client)
-	// the account holds. Called on password reset — see ResetPassword's own
-	// comment for why that moment, specifically, deletes rather than merely
-	// relying on the session-generation bump every revoked cookie already does.
+	// DeleteOAuthGrantsByUser wipes every MCP OAuth grant the account holds. Called on
+	// password reset; see ResetPassword for why.
 	DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error
 
-	// UserByEmail looks up the user with the given (already-normalised) email.
-	// Returns ErrUserNotFound when absent. hasPassword is true when the account
-	// has a non-null password hash stored.
+	// UserByEmail looks up a user by normalised email, or ErrUserNotFound.
 	UserByEmail(ctx context.Context, email string) (user User, passwordHash string, hasPassword bool, err error)
 
 	// UserByID returns the user with the given id, or ErrUserNotFound when absent.
 	UserByID(ctx context.Context, id int64) (User, error)
 
-	// UsernameByUser returns the account's username (ok=false if none set) and,
-	// when set, the time of its last EXPLICIT change via SetUsername (nil for a
-	// lazily allocated default written by SetUsernameIfAbsent that was never
-	// explicitly claimed).
+	// UsernameByUser returns the account's username (ok=false if none) and the time of its
+	// last explicit SetUsername (nil for a lazily allocated default).
 	UsernameByUser(ctx context.Context, userID int64) (name string, updatedAt *time.Time, ok bool, err error)
 
-	// SetUsernameIfAbsent claims username for userID only if the account has
-	// none yet, without touching username_updated_at. Returns ErrUsernameTaken
-	// on any collision — either username is already held by another account, or
-	// this account already has one (a concurrent caller won) — the caller
-	// resolves which by re-reading UsernameByUser.
+	// SetUsernameIfAbsent claims username only if the account has none, without touching
+	// username_updated_at. ErrUsernameTaken covers both a held name and a concurrent
+	// winner; re-read UsernameByUser to tell which.
 	SetUsernameIfAbsent(ctx context.Context, userID int64, username string) error
 
-	// SetUsername replaces the account's username unconditionally and records
-	// the change time. Returns ErrUsernameTaken if username is already held by
-	// another account.
+	// SetUsername replaces the username and records the change time. Returns
+	// ErrUsernameTaken if another account holds it.
 	SetUsername(ctx context.Context, userID int64, username string) error
 
 	// UsernameTaken reports whether any account already holds username.
@@ -194,18 +157,15 @@ type Repository interface {
 	WithTx(tx pgx.Tx) Repository
 }
 
-// Service resolves external OAuth identities and handles password auth for
-// local user accounts. codes/mailer are optional (see WithCodes): without them the
-// service still registers and authenticates, and the code-backed flows report the
-// feature unavailable.
+// Service resolves OAuth identities and handles password auth. codes/mailer are
+// optional (see WithCodes); without them the code-backed flows report unavailable.
 type Service struct {
 	repo   Repository
 	hasher PasswordHasher
 	codes  CodeStore
 	mailer CodeMailer
 
-	// now is the clock the code TTL and resend cooldown read. A field so tests can
-	// freeze time instead of sleeping.
+	// now is the clock for the code TTL and resend cooldown; tests freeze it.
 	now func() time.Time
 }
 
@@ -221,7 +181,7 @@ func (s *Service) ResolveOAuthAccount(
 	provider, providerUserID, email string,
 	emailVerified bool,
 ) (int64, error) {
-	// 1. identity-first: cheapest and safest path.
+	// Identity first.
 	id, err := s.repo.UserIDByIdentity(ctx, provider, providerUserID)
 	if err == nil {
 		return id, nil
@@ -230,26 +190,23 @@ func (s *Service) ResolveOAuthAccount(
 		return 0, err
 	}
 
-	// 2. verified-email gate (anti-takeover): never link or create without one.
+	// Never link or create without a verified email (anti-takeover).
 	if !emailVerified || strings.TrimSpace(email) == "" {
 		return 0, ErrNoVerifiedEmail
 	}
 	normalized := strings.ToLower(strings.TrimSpace(email))
 
-	// 3. link existing account by email or create a new passwordless account.
+	// Link by email, or create a passwordless account.
 	id, err = s.repo.LinkOrCreateByEmail(ctx, provider, providerUserID, normalized)
 	switch {
 	case err == nil:
 		return id, nil
 	case errors.Is(err, ErrIdentityConflict):
-		// 4a. lost a race with a concurrent callback for the SAME identity — it now
-		// exists; return whichever goroutine won.
+		// Lost a race for the same identity; it exists now.
 		return s.repo.UserIDByIdentity(ctx, provider, providerUserID)
 	case errors.Is(err, ErrEmailRace):
-		// 4b. lost a race with a concurrent callback that created the account under
-		// the same verified email but a DIFFERENT identity, so our identity was never
-		// inserted. Retry the link now that the account exists, so our identity
-		// attaches to it (a bare UserIDByIdentity retry would miss — it isn't there).
+		// Lost a race for the same email under a different identity: retry the link so ours
+		// attaches (a bare UserIDByIdentity would miss).
 		id, err = s.repo.LinkOrCreateByEmail(ctx, provider, providerUserID, normalized)
 		if errors.Is(err, ErrIdentityConflict) {
 			// A further concurrent callback inserted our identity in the meantime.
@@ -261,13 +218,8 @@ func (s *Service) ResolveOAuthAccount(
 	}
 }
 
-// Register creates a new account with the given email and password. timezone is
-// the browser-detected IANA zone (if any) — a missing or invalid value is
-// silently dropped (nil) rather than failing the signup; the account simply
-// starts without one, same as before this parameter existed.
-// Returns ErrInvalidEmail for unparseable emails, ErrPasswordTooShort when the
-// password is under minPasswordLen characters, and ErrEmailTaken when the
-// normalised email is already registered.
+// Register creates an account. A missing or invalid timezone is dropped rather than
+// failing the signup. Errors: ErrInvalidEmail, ErrPasswordTooShort, ErrEmailTaken.
 func (s *Service) Register(ctx context.Context, email, password string, timezone *string) (User, error) {
 	addr, err := normalizeEmail(email)
 	if err != nil {
@@ -283,8 +235,7 @@ func (s *Service) Register(ctx context.Context, email, password string, timezone
 	if timezone != nil && !validTimezone(*timezone) {
 		timezone = nil
 	}
-	// A password registration proves nothing about the address, so the account starts
-	// unverified — which is what stops it from being a silent OAuth merge target.
+	// Unverified: stops the account being a silent OAuth merge target.
 	user, err := s.repo.CreateUser(ctx, addr, hash, false, timezone)
 	if err != nil {
 		return User{}, err
@@ -296,10 +247,8 @@ func (s *Service) Register(ctx context.Context, email, password string, timezone
 // ErrInvalidTimezone is a timezone name Go's tzdata does not recognize (mapped to 400).
 var ErrInvalidTimezone = errors.New("accounts: invalid timezone")
 
-// validTimezone reports whether tz is a name time.LoadLocation accepts. Empty
-// is rejected explicitly: time.LoadLocation("") returns UTC, nil (a Go stdlib
-// quirk for "unset"), which would otherwise let an empty request body through
-// as if it named a real zone.
+// validTimezone reports whether tz is a name time.LoadLocation accepts. Empty is
+// rejected explicitly because LoadLocation("") returns UTC without error.
 func validTimezone(tz string) bool {
 	if tz == "" {
 		return false
@@ -308,9 +257,8 @@ func validTimezone(tz string) bool {
 	return err == nil
 }
 
-// UpdateTimezone sets the caller's IANA timezone name. Unlike Register's silent
-// drop, an explicit profile edit with a bad value is a real error the caller
-// should see and correct. onlyIfUnset protects preferences from automatic adoption.
+// UpdateTimezone sets the caller's IANA timezone. A bad value is an error here, unlike
+// Register. onlyIfUnset keeps an existing preference from automatic adoption.
 func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone string, onlyIfUnset bool) (User, error) {
 	if !validTimezone(timezone) {
 		return User{}, ErrInvalidTimezone
@@ -321,9 +269,7 @@ func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone str
 // ErrInvalidLanguage is a language code outside supportedLanguages (mapped to 400).
 var ErrInvalidLanguage = errors.New("accounts: invalid language")
 
-// supportedLanguages is the curated set a profile can select — the same list the
-// DB CHECK constraint on users.language enforces. No UI translation exists for
-// any of these yet (freehire#1836); this only records the preference for later.
+// supportedLanguages mirrors the DB CHECK constraint on users.language.
 var supportedLanguages = map[string]bool{
 	"en": true,
 	"ru": true,
@@ -345,9 +291,8 @@ func (s *Service) UpdateLanguage(ctx context.Context, userID int64, language str
 	return s.repo.UpdateLanguage(ctx, userID, language)
 }
 
-// Login verifies the email/password pair and returns the matching user.
-// Unknown email, passwordless accounts, and wrong passwords all yield
-// ErrInvalidCredentials — never reveal which factor failed.
+// Login verifies the email/password pair. Unknown email, passwordless account and wrong
+// password all yield ErrInvalidCredentials; never reveal which failed.
 func (s *Service) Login(ctx context.Context, email, password string) (User, error) {
 	addr, err := normalizeEmail(email)
 	if err != nil {
@@ -356,8 +301,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	user, hash, hasPassword, err := s.repo.UserByEmail(ctx, addr)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			// Spend one bcrypt Check on a dummy hash so an unknown account costs
-			// the same as a real one — closing the timing side-channel.
+			// Dummy check keeps an unknown account's timing equal to a real one's.
 			_ = s.hasher.Check(dummyPasswordHash, password)
 			return User{}, ErrInvalidCredentials
 		}
@@ -370,9 +314,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	if s.hasher.Check(hash, password) != nil {
 		return User{}, ErrInvalidCredentials
 	}
-	// The caller just proved a password exists, but the lookup row does not carry the
-	// flag — set it so login answers the same shape as /auth/me and a client cannot be
-	// told the account is passwordless right after it signed in with a password.
+	// The lookup row lacks the flag; set it so login matches the /auth/me shape.
 	user.HasPassword = true
 	if user.Banned {
 		return User{}, ErrAccountSuspended
@@ -380,14 +322,12 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 	return user, nil
 }
 
-// UserByID returns the user with the given id, delegating directly to the
-// repository. Returns ErrUserNotFound when absent.
+// UserByID returns the user with the given id, or ErrUserNotFound.
 func (s *Service) UserByID(ctx context.Context, id int64) (User, error) {
 	return s.repo.UserByID(ctx, id)
 }
 
-// normalizeEmail validates and lowercases an email address. It uses the same
-// logic as the HTTP layer so the Go layer is the single normalizer.
+// normalizeEmail validates and lowercases an email address.
 func normalizeEmail(raw string) (string, error) {
 	addr, err := mail.ParseAddress(strings.TrimSpace(raw))
 	if err != nil {
