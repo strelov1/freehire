@@ -548,9 +548,10 @@ func (r *QueriesRepository) ReplyRateCounts(ctx context.Context, userID int64) (
 	return you, global, nil
 }
 
-// assembledRow is the shape every write query in user_jobs.sql returns: the marks from
-// user_jobs and the process from applications. sqlc emits a distinct Row type per query
-// with identical layout, so one conversion target keeps the mapping shared.
+// assembledRow is the shape every write query in user_jobs.sql and
+// user_job_applications.sql returns: the marks from user_jobs and the process from
+// applications. sqlc emits a distinct Row type per query with identical layout, so one
+// conversion target keeps the mapping shared.
 type assembledRow struct {
 	UserID       int64
 	JobID        int64
