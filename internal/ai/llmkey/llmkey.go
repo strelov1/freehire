@@ -52,8 +52,8 @@ type Credential struct {
 }
 
 // Config is the gateway's admin endpoint, its administrator, and the policy for new keys.
-// MaxBudget, RPMLimit and BudgetWindow are omitted from the mint request when unset: an
-// explicit zero reads as "nothing is allowed".
+// A zero or negative MaxBudget or RPMLimit, or an empty BudgetWindow, is omitted from the
+// mint request, so a new key gets no limit for it.
 type Config struct {
 	BaseURL       string
 	AdminUsername string
