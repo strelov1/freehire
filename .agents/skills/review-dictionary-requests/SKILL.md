@@ -45,7 +45,8 @@ For skills, follow `internal/dict/skilltag/AGENTS.md`: alias mappings, display l
 where mechanical title casing is insufficient, and descriptions belong together.
 Use the existing thematic dictionary tables. After adding canonical skills, read
 `internal/dict/skillvec/AGENTS.md` and run `go generate ./internal/dict/skillvec/`
-to append their permanent vector positions; preserve existing indices. Read the corresponding owners for
+to append their permanent vector positions; preserve existing indices. Run
+`make gen-contracts` and commit the generated web vocabulary and descriptions too. Read the corresponding owners for
 specializations and industries instead of treating them as skills.
 
 Choose canonical spellings deliberately. Correct a submitted typo into its actual
