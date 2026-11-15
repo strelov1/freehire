@@ -13,52 +13,43 @@ import (
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
-// Presets a session can run under. The preset selects the system prompt and the
-// registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199, 0232 and 0243), so
-// a new preset is a migration and not only a constant.
+// Presets a session can run under. The preset selects the system prompt and the registered
+// tools, nothing else. The vocabulary is also a CHECK on the column, so a new preset is a
+// migration and not only a constant.
 const (
 	PresetChat   = "chat"
 	PresetTailor = "tailor"
 	// PresetProfile is the experience interviewer: the same tools as a chat session, and a
 	// prompt that goes looking for what the bank does not yet know.
 	PresetProfile = "profile"
-	// PresetBrowse is a conversation meant to be held from the browser extension's
-	// side panel. It is the only preset whose agent can EVER see the page the
-	// candidate is on — but only when the turn itself authenticated as the
-	// extension's own Bearer session JWT; reached any other way (a stale rail entry,
-	// an API key) it runs as a plain chat instead. See internal/api/handler's
+	// PresetBrowse is a conversation held from the browser extension's side panel. Its agent
+	// can see the page only when the turn authenticated as the extension's own Bearer session
+	// JWT; reached any other way it runs as a plain chat. See internal/api/handler's
 	// effectivePreset and internal/ai/assistant/AGENTS.md.
 	PresetBrowse = "browse"
-	// PresetInterview is the mock interview held against one application. Like a
-	// tailoring session it is bound to a vacancy, but to no CV: it reads the CV and
-	// the fit analysis and edits neither.
+	// PresetInterview is the mock interview held against one application. Bound to a vacancy
+	// but no CV: it reads the CV and fit analysis and edits neither.
 	PresetInterview = "interview"
 	// PresetDebrief reviews an interview that has already happened, bound to the same
-	// application a rehearsal is. It shares the rehearsal's tools and context; what
-	// differs is the prompt, and one rule inside it that inverts — a rehearsal guards
-	// against banking an improvisation, a debrief exists to bank a recollection.
+	// application as a rehearsal and sharing its tools and context. Its prompt inverts one rule:
+	// a rehearsal guards against banking an improvisation, a debrief banks a recollection.
 	PresetDebrief = "debrief"
-	// PresetApply is the conversation held against one automatic application: it narrates
-	// the attempt's progress and takes the candidate's answers and decisions in free text.
-	// Bound to a vacancy and no CV, like a rehearsal.
+	// PresetApply is the conversation held against one automatic application: it narrates the
+	// attempt's progress and takes the candidate's answers in free text. Bound to a vacancy and
+	// no CV, like a rehearsal.
 	PresetApply = "apply"
-	// PresetBase is the conversation held against one BASE CV, the general CV tailored copies
-	// start from: bound to a CV and no vacancy. It runs the tailoring workspace's CV tools (read,
-	// edit through the evidence gate, page count) under a prompt that edits the general CV rather
-	// than aiming it at an employer. It registers none of the vacancy tools — no fit analysis,
-	// job match, cover letter or run report — because there is no vacancy to read them against.
+	// PresetBase is the conversation held against one BASE CV (the general CV tailored copies
+	// start from): bound to a CV and no vacancy. It runs the tailoring workspace's CV tools
+	// under a prompt that edits the general CV, and registers none of the vacancy tools.
 	PresetBase = "base"
-	// PresetSupport is first-line support: a conversation with no CV and no vacancy that answers
-	// from a fixed FAQ, reads the caller's own plan through `my_account` and hands a question to
-	// a human through `escalate_to_human`. It is reached only through the dedicated /support
-	// routes, never created or continued through the generic session ones.
+	// PresetSupport is first-line support: no CV, no vacancy, answers from a fixed FAQ, reads
+	// the caller's plan through `my_account` and hands off via `escalate_to_human`. Reached only
+	// through the dedicated /support routes, never the generic session ones.
 	PresetSupport = "support"
 )
 
-// ErrNotFound is returned for a session the caller does not own and for one that
-// does not exist. The two are deliberately indistinguishable: telling them apart
-// would let a caller probe for other users' session ids.
+// ErrNotFound is returned for a session the caller does not own and for one that does not
+// exist. They are indistinguishable so a caller cannot probe for other users' session ids.
 var ErrNotFound = errors.New("assistant: session not found")
 
 // SearchContext keeps a fixed search and its local selection preferences outside model history.
@@ -67,11 +58,9 @@ type SearchContext struct {
 	Brief string `json:"brief"`
 }
 
-// Session is one conversation, owner-scoped. Its id is a random UUID rather than a
-// sequence: ownership already confines every read, but a countable id would still
-// publish how many conversations exist and would make one forgotten owner check
-// enumerable. CVID and JobID are set only for a tailoring session; nil pointers
-// say "unbound" without leaking pgtype into callers.
+// Session is one conversation, owner-scoped. Its id is a random UUID so ids do not publish
+// how many conversations exist. CVID and JobID are set only for a bound session; nil
+// pointers mean unbound.
 type Session struct {
 	SearchContext *SearchContext
 	ID            uuid.UUID
@@ -120,9 +109,8 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, 
 	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), nil
 }
 
-// ChatSessions lists the caller's general chats, most recently active first.
-// Tailoring conversations are excluded: each belongs to a CV and is opened from
-// the tailoring workspace, so it has no place in the chat rail.
+// ChatSessions lists the caller's general chats, most recently active first. Bound
+// conversations are excluded; they open from their own workspace.
 func (s *Store) ChatSessions(ctx context.Context, userID int64) ([]Session, error) {
 	rows, err := s.q.ListAssistantChatSessions(ctx, userID)
 	if err != nil {
@@ -148,8 +136,7 @@ func (s *Store) Session(ctx context.Context, id uuid.UUID, userID int64) (Sessio
 }
 
 // SessionForJob returns the caller's most recent session of preset bound to jobID, and
-// false when there is none — the one conversation an application holds, so reopening it
-// resumes instead of starting a second.
+// false when there is none, so reopening an application resumes instead of starting another.
 func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, jobID int64) (Session, bool, error) {
 	row, err := s.q.GetAssistantSessionForJob(ctx, db.GetAssistantSessionForJobParams{UserID: userID, Preset: preset, JobID: &jobID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -161,9 +148,8 @@ func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, 
 	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
 }
 
-// EmptySession returns the caller's newest session of preset that has received no user
-// message, and false when there is none, so a surface that offers "new conversation" can
-// hand back the blank one it already made instead of adding another.
+// EmptySession returns the caller's newest session of preset with no user message, and
+// false when there is none, so "new conversation" can reuse the blank one.
 func (s *Store) EmptySession(ctx context.Context, userID int64, preset string) (Session, bool, error) {
 	row, err := s.q.GetEmptyAssistantSession(ctx, db.GetEmptyAssistantSessionParams{UserID: userID, Preset: preset})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -187,9 +173,8 @@ func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID, userID int64) e
 	return nil
 }
 
-// Touch marks a session as the most recently active, so the rail follows real use.
-// Owner-scoped like every other session write: userID must be the caller who already
-// proved ownership of id (the Session it just read, created, or continued).
+// Touch marks a session as the most recently active. Owner-scoped: userID must be the
+// caller who already proved ownership of id.
 func (s *Store) Touch(ctx context.Context, id uuid.UUID, userID int64) error {
 	if err := s.q.TouchAssistantSession(ctx, db.TouchAssistantSessionParams{ID: id, UserID: userID}); err != nil {
 		return fmt.Errorf("assistant: touch session: %w", err)
@@ -197,9 +182,8 @@ func (s *Store) Touch(ctx context.Context, id uuid.UUID, userID int64) error {
 	return nil
 }
 
-// LabelSession names a session from its first user message. The query applies it
-// only while the label is unset, so this is safe to call on every turn. Owner-scoped
-// like Touch.
+// LabelSession names a session from its first user message. The query applies it only
+// while the label is unset, so it is safe on every turn. Owner-scoped like Touch.
 func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, userID int64, label string) error {
 	err := s.q.SetAssistantSessionLabel(ctx, db.SetAssistantSessionLabelParams{
 		ID:     id,
@@ -212,18 +196,16 @@ func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, userID int64, la
 	return nil
 }
 
-// appendAttempts bounds the retry below. A collision needs one more read of
-// max(seq) to clear; more than a couple in a row means something else is wrong.
+// appendAttempts bounds the seq-collision retry below.
 const appendAttempts = 3
 
-// Append writes one message to a session's transcript and returns it with the
-// sequence number the database assigned.
+// Append writes one message to a session's transcript and returns it with the sequence
+// number the database assigned.
 //
-// The next seq is computed inside the INSERT, so two turns racing in the same
-// session — the chat open in two tabs — can pick the same one and the primary key
-// rejects the loser. Retrying re-reads max(seq), which is what the loser needed;
-// giving up instead would drop a message out of the model's history, and a tool
-// result that vanishes leaves a call nothing answers, which providers reject.
+// The next seq is computed inside the INSERT, so two turns racing in one session (chat open
+// in two tabs) can pick the same one and the primary key rejects the loser. Retrying
+// re-reads max(seq); giving up would drop a message, and a vanished tool result leaves a
+// call nothing answers, which providers reject.
 func (s *Store) Append(ctx context.Context, sessionID uuid.UUID, m Message) (Message, error) {
 	var err error
 	for attempt := 0; attempt < appendAttempts; attempt++ {
@@ -243,9 +225,8 @@ func (s *Store) Append(ctx context.Context, sessionID uuid.UUID, m Message) (Mes
 	return Message{}, fmt.Errorf("assistant: append message: %w", err)
 }
 
-// Transcript reads a session's WHOLE messages in order. For a client replaying the
-// conversation; the model's own history is rebuilt from RecentTranscript instead, which
-// does not pay for rows that would only be trimmed away.
+// Transcript reads a session's WHOLE messages in order, for a client replaying the
+// conversation. The model's history uses RecentTranscript instead.
 func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message, error) {
 	rows, err := s.q.ListAssistantMessages(ctx, sessionID)
 	if err != nil {
@@ -258,10 +239,8 @@ func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message,
 	return out, nil
 }
 
-// RecentTranscript reads a session's most recent limit messages, oldest first — the
-// bounded counterpart of Transcript, for rebuilding the model's own history every turn
-// without fetching and JSON-decoding rows that Runner.trim() would only discard. limit
-// must be positive.
+// RecentTranscript reads a session's most recent limit messages, oldest first: the bounded
+// counterpart of Transcript for rebuilding the model's history. limit must be positive.
 func (s *Store) RecentTranscript(ctx context.Context, sessionID uuid.UUID, limit int) ([]Message, error) {
 	rows, err := s.q.ListRecentAssistantMessages(ctx, db.ListRecentAssistantMessagesParams{
 		SessionID: sessionID,
@@ -270,8 +249,7 @@ func (s *Store) RecentTranscript(ctx context.Context, sessionID uuid.UUID, limit
 	if err != nil {
 		return nil, fmt.Errorf("assistant: read recent transcript: %w", err)
 	}
-	// The query orders newest first so LIMIT keeps the tail; reverse back to ascending
-	// seq order, the shape every caller (trim, Conversation) expects.
+	// The query orders newest first so LIMIT keeps the tail; reverse to ascending seq.
 	out := make([]Message, len(rows))
 	for i, r := range rows {
 		out[len(rows)-1-i] = Message{Seq: r.Seq, Role: r.Role, Content: r.Content}
@@ -279,9 +257,8 @@ func (s *Store) RecentTranscript(ctx context.Context, sessionID uuid.UUID, limit
 	return out, nil
 }
 
-// session builds the domain shape from the columns every session query selects.
-// sqlc emits a distinct row type per query — same columns, three names — so the
-// mapping lives here once and each caller adapts its row into it.
+// session builds the domain shape from the columns every session query selects. sqlc
+// emits a distinct row type per query, so the mapping lives here once.
 func session(id uuid.UUID, userID int64, preset string, label pgtype.Text, cvID *uuid.UUID, jobID *int64, query pgtype.Text, brief string) Session {
 	result := Session{ID: id, UserID: userID, Preset: preset, Label: label.String, CVID: cvID, JobID: jobID}
 	if query.Valid {

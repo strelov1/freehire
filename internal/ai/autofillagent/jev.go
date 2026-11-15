@@ -7,20 +7,17 @@ import (
 	"github.com/strelov1/freehire/internal/platform/jev"
 )
 
-// jevDeclineKey is offered to Jev alongside the page's real options, standing in for
-// Choose's own "decline" outcome. Its wording cannot collide with a real form option —
-// no ATS renders a combobox choice phrased as a description of itself declining to answer.
+// jevDeclineKey is offered to Jev alongside the real options as Choose's "decline"
+// outcome. Its wording cannot collide with a real form option.
 const jevDeclineKey = "none of these / not stated"
 
 const (
-	// jevAnswerKey names the single question this package ever asks Jev, used both to
-	// build the request and to read the matching answer back out of the response.
+	// jevAnswerKey names the single question asked of Jev, in the request and the response.
 	jevAnswerKey = "answer"
 )
 
-// jevChooseInstructions mirrors choosePrompt's rules (see planner.go), narrowed to the
-// single question Jev is asked. The spike that validated this wording against the live
-// API is recorded in openspec/changes/autofill-choose-jev-provider/design.md.
+// jevChooseInstructions mirrors choosePrompt's rules (see planner.go), narrowed to
+// the single question Jev is asked.
 func jevChooseInstructions(label string) string {
 	return fmt.Sprintf(`You are answering ONE question on a job-application form by
 picking from the options it offers.
@@ -33,8 +30,7 @@ supports any of the options. Never infer a claim the profile does not state.`, l
 }
 
 // jevChooser answers one Choose question through the Typesafe AI Jev model's
-// /v1/systemone endpoint. One attempt, no retries: a slow or failing Jev call falls back
-// to the LLM at the JevPlanner level, so retrying here would only delay that fallback.
+// /v1/systemone endpoint. No retries: JevPlanner falls back to the LLM on failure.
 type jevChooser struct{ client *jev.Client }
 
 // newJevChooser takes jev.WithBaseURL to point at a test server instead of the live API.
@@ -43,9 +39,8 @@ func newJevChooser(apiKey string, opts ...jev.Option) *jevChooser {
 }
 
 // Choose asks Jev to pick one of options for question, grounded in profile. It returns ""
-// for both the decline answer and any sentinel it could not recognize — the caller
-// (driveWidget) already re-validates the result against the offered list and the profile,
-// so a hallucinated value outside jevDeclineKey or options is caught there, not here.
+// for the decline answer and for any sentinel it does not recognize; the caller
+// re-validates against the offered list and the profile.
 func (j *jevChooser) Choose(ctx context.Context, question Field, options []string, profile Profile) (string, error) {
 	criteria := make(map[string]string, len(options)+1)
 	for _, opt := range options {

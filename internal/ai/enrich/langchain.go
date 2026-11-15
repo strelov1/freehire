@@ -11,32 +11,27 @@ import (
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
-// maxDescriptionRunes caps the job description sent to the model. Descriptions are
-// attacker-influenced (scraped/extracted), so bounding the length keeps a single
-// oversized posting from amplifying per-call token cost.
+// maxDescriptionRunes caps the description sent to the model; scraped text is
+// attacker-influenced, so one oversized posting cannot amplify token cost.
 const maxDescriptionRunes = 24000
 
-// maxFieldRunes caps the short untrusted header fields (title, company, location, URL)
-// the same way: they come from the same scraped source as the description and deserve
-// a symmetric bound. 500 runes never fires on a real posting — even a slug-based ATS
-// URL with tracking params fits — it only stops garbage.
+// maxFieldRunes caps the short untrusted header fields (title, company, location, URL);
+// it never fires on a real posting.
 const maxFieldRunes = 500
 
-// LangChainProvider implements Provider over any OpenAI-compatible endpoint via
-// the shared llm client. The model is asked for a JSON object matching the
-// Enrichment contract.
+// LangChainProvider implements Provider over any OpenAI-compatible endpoint via the
+// shared llm client.
 type LangChainProvider struct {
 	client *llm.Client
 }
 
-// NewLangChainProvider wraps a prebuilt llm.Client (constructed once via
-// llm.NewClient, which also wires optional tracing) as an enrichment Provider.
+// NewLangChainProvider wraps a prebuilt llm.Client as an enrichment Provider.
 func NewLangChainProvider(c *llm.Client) *LangChainProvider {
 	return &LangChainProvider{client: c}
 }
 
-// Enrich asks the model for a structured Enrichment for the job and parses the JSON
-// response. It does not validate the result — the caller validates before persisting.
+// Enrich asks the model for a structured Enrichment and parses the JSON response. It does
+// not validate the result.
 func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 	askGeo := !job.GeoPinned
 
@@ -52,10 +47,8 @@ func (p *LangChainProvider) Enrich(ctx context.Context, job JobInput) (Enrichmen
 	return parseEnrichment(raw)
 }
 
-// errUnparseableResponse marks a model response that wasn't valid JSON. It is
-// deterministic for the prompt, so the runner skips its in-process retry on it
-// (the outbox attempts counter still re-tries on the next cron run, drawing a
-// fresh sample). Transport failures, by contrast, are worth an immediate retry.
+// errUnparseableResponse marks a model response that wasn't valid JSON. The runner skips
+// its in-process retry on it; the next cron run draws a fresh sample.
 var errUnparseableResponse = errors.New("enrich: unparseable model response")
 
 // parseEnrichment unmarshals a model's already-fence-stripped JSON response.
@@ -67,25 +60,18 @@ func parseEnrichment(raw string) (Enrichment, error) {
 	return e, nil
 }
 
-// buildSystemPrompt instructs the model to null out unstated fields and to draw the
-// SERVED enum values from the controlled vocabularies — the same lists Validate
-// enforces. The dictionary-covered discovery facets (work_mode, regions,
-// seniority, category, employment_type, education_level, english_level) are
-// deliberately relaxed: the prompt invites a novel label when none fits, and Validate
-// does not reject it (it is unserved discovery material), so prompt and validator
-// diverge there on purpose.
+// buildSystemPrompt asks the model to null unstated fields and to draw served enum values
+// from the vocabularies Validate enforces. Dictionary-covered discovery facets are relaxed
+// on purpose: the prompt invites a novel label and Validate does not reject it.
 //
-// askGeo is false when the deterministic dictionary already pinned the job's
-// countries/regions (see GeoPinned): geoFacet then discards the LLM's copy, so asking
-// for it only burns tokens. The geo enum, its own-label exception, its "Other keys"
-// mention, and the geographic-area paragraph are dropped in that case. It stays true
-// when the dictionary left geography unpinned and the LLM fills the bucket.
+// askGeo is false when the dictionary already pinned countries/regions (see GeoPinned);
+// the geo enum, its own-label exception, the "Other keys" mention and the geographic-area
+// paragraph are then dropped.
 func buildSystemPrompt(askGeo bool) string {
 	var b strings.Builder
 	b.WriteString("You read an IT job posting and return ONLY a JSON object.\n")
-	// summary is the one SYNTHESIZED field and must lead: stating it first, and
-	// exempting it from the null rule up front, stops a budget model from emptying it
-	// under the "null for anything not stated" directive that governs every other key.
+	// summary is the one synthesized field: stating it first and exempting it from the null
+	// rule stops a budget model from emptying it.
 	b.WriteString("ALWAYS include \"summary\" as the FIRST key: a 1-2 sentence, plain-English synopsis of ")
 	b.WriteString("the role — what the person does day to day and the core technologies. You WRITE this ")
 	b.WriteString("from the posting (the one field you synthesize, not extract); keep it under 400 ")
@@ -97,40 +83,31 @@ func buildSystemPrompt(askGeo bool) string {
 	enum := func(field string, vals []string) {
 		fmt.Fprintf(&b, "- %s: %s\n", field, strings.Join(vals, ", "))
 	}
-	// work_mode, seniority, category, employment_type, education_level, and
-	// english_level are deliberately NOT requested: jobview serves them from the
-	// deterministic dictionaries (internal/job/jobderive), so the LLM's copies were never
-	// served — asking for them only burned output tokens (see enrich-prompt-trim).
+	// work_mode, seniority, category, employment_type, education_level and english_level are
+	// not requested: jobview serves them from the dictionaries (internal/job/jobderive).
 	if askGeo {
 		enum("regions (array)", vocab.RegionValues)
 	}
 	enum("relocation", vocab.RelocationValues)
 	enum("salary_period", vocab.SalaryPeriodValues)
-	// domains is the company's INDUSTRY (what it does), not its business model. It is
-	// glossed per-value so the model picks a real vertical; multiple may apply.
+	// domains is the industry, not the business model; glossed per value.
 	b.WriteString("- domains (array) — the company's industry/vertical (what it does), multiple allowed:\n")
 	for _, d := range vocab.DomainValues {
 		fmt.Fprintf(&b, "    %s: %s\n", d, vocab.DomainGloss[d])
 	}
-	// company_type is the company's business model, glossed per-value so the model
-	// distinguishes e.g. outsource (vendor delivers the project) from outstaff (client
-	// manages the placed engineer) instead of guessing from the bare label.
+	// company_type is glossed per value so the model can tell outsource from outstaff.
 	b.WriteString("- company_type — the company's business model:\n")
 	for _, ct := range vocab.CompanyTypeValues {
 		fmt.Fprintf(&b, "    %s: %s\n", ct, vocab.CompanyTypeGloss[ct])
 	}
-	// A curated hint (see CompanyTypeHints) overrides the "never guess" default for this
-	// one field: a single posting rarely states its employer's business model, so
-	// company_type otherwise comes back null far more often than the other enums.
+	// A curated hint (CompanyTypeHints) overrides the "never guess" default for this field.
 	b.WriteString("  If the input states \"Known company type\", that is a VERIFIED fact — ")
 	b.WriteString("use it as company_type unless the posting itself explicitly contradicts it.\n")
 	enum("company_size", vocab.CompanySizeValues)
 
 	if askGeo {
-		// Discovery facets: countries/regions are served as a dict-then-LLM hybrid (the
-		// LLM fills the unpinned geographic bucket via jobview.geoFacet), so they are the
-		// sole facets we still let the model coin its own label for. The other enum fields
-		// above stay strict.
+		// countries/regions are the only facets where the model may coin its own label
+		// (dict-then-LLM hybrid via jobview.geoFacet).
 		b.WriteString("\nException for countries and regions: prefer an allowed value above, but if none ")
 		b.WriteString("accurately fits, you MAY return a concise lowercase label of your own. ")
 		b.WriteString("Still return null when the posting does not state it.\n")
@@ -151,14 +128,12 @@ func buildSystemPrompt(askGeo bool) string {
 	b.WriteString("\"preferred\"). Base this ONLY on the job posting — you have no CV to compare ")
 	b.WriteString("against. Return an empty array if the posting states no explicit requirements.\n")
 
-	// Salary guard: the model, told the field is an int, otherwise decimal-strips a
-	// fractional hourly rate ($26.08 -> 2608), inflating it 100x. A concrete
-	// counter-example is what makes a budget model round instead of strip.
+	// Salary guard: told the field is an int, the model strips the decimal of a fractional
+	// rate ($26.08 -> 2608); a concrete counter-example makes it round.
 	b.WriteString("\nsalary_min and salary_max are WHOLE units of the currency. ")
 	b.WriteString("Round a fractional rate to the nearest whole unit and NEVER strip the ")
 	b.WriteString("decimal point: an hourly \"$26.08\" is 26 (with salary_period=hour), never 2608.\n")
-	// A Polish B2B day rate is written per man-day ("1000-1300 PLN/MD"), and the model
-	// read it as a monthly salary.
+	// Polish B2B day rates ("1000-1300 PLN/MD") were read as monthly.
 	b.WriteString("A rate per man-day (\"PLN/MD\", \"zł/md\", \"/MD\", \"stawka dzienna\") is ")
 	b.WriteString("salary_period=day, never month.\n")
 
@@ -179,11 +154,9 @@ func userPrompt(job JobInput) string {
 	fmt.Fprintf(&b, "Title: %s\n", llm.TruncateRunes(job.Title, maxFieldRunes))
 	fmt.Fprintf(&b, "Company: %s\n", llm.TruncateRunes(job.Company, maxFieldRunes))
 	fmt.Fprintf(&b, "Location: %s\n", llm.TruncateRunes(job.Location, maxFieldRunes))
-	// The URL path can encode the location/role on some ATS even when the Location
-	// field is empty (e.g. SuccessFactors /job/<City>-<Title>/<id>/).
+	// Some ATS encode the location/role in the URL path (SuccessFactors /job/<City>-<Title>/<id>/).
 	fmt.Fprintf(&b, "URL: %s\n", llm.TruncateRunes(job.URL, maxFieldRunes))
-	// Source-provided remote hint (from the ATS API or the location text) — a
-	// prior for the model, not a guarantee of scope.
+	// Source-provided remote hint: a prior, not a guarantee of scope.
 	fmt.Fprintf(&b, "Remote flag: %t\n", job.Remote)
 	if job.CompanyTypeHint != "" {
 		fmt.Fprintf(&b, "Known company type: %s\n", job.CompanyTypeHint)

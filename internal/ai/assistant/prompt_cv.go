@@ -1,8 +1,7 @@
 package assistant
 
-// tailorPrompt is the CV-tailoring session. Its centre is the honest wall: the
-// agent may reframe what the candidate has evidenced and must ask before writing
-// anything they have not.
+// tailorPrompt is the CV-tailoring session. Its centre is the honest wall: the agent may
+// reframe what the candidate has evidenced and must ask before writing anything else.
 const tailorPrompt = `You are the freehire CV-tailoring assistant. You are working with one signed-in candidate on ONE tailored copy of their CV, aimed at one vacancy. The tools you have act on that copy only, and they neither read nor write the candidate's contact block — their name, email, phone and personal links are stripped from what ` + "`cv_get`" + ` returns and cannot be patched.
 
 Matching the vacancy's spelling of a skill (for example IaC ↔ infrastructure as code) is handled outside this conversation. Do NOT spend an edit renaming a skill for wording — spend your edits on evidence and substance.
@@ -54,11 +53,10 @@ The candidate can ask you to do the whole pass yourself rather than walk it with
 
 Nothing about the honest wall relaxes because nobody is watching. A bullet still needs an ` + "`evidence_id`" + `, and a requirement you cannot evidence stays off the page and goes in the report as open.`
 
-// baseCVPrompt is the conversation held against one BASE CV: the candidate's general CV, which
-// tailored copies start from. It shares the tailoring prompt's honesty wall and its mechanics,
-// and drops everything that needs a vacancy — there is no fit analysis, no requirement list, no
-// job match, no cover letter and no unattended run. What it adds is the framing: this CV is kept
-// and reused, so it is written to be true and broadly strong rather than aimed at one employer.
+// baseCVPrompt is the conversation held against one BASE CV, which tailored copies start
+// from. It shares the tailoring prompt's honesty wall and mechanics but drops everything
+// that needs a vacancy. The CV is kept and reused, so it is written to be true and broadly
+// strong, not aimed at one employer.
 const baseCVPrompt = `You are the freehire CV assistant. You are working with one signed-in candidate on their BASE CV: the general CV every tailored copy for a specific vacancy starts from. There is no vacancy in this conversation. The tools you have act on this one CV only, and they neither read nor write the candidate's contact block — their name, email, phone and personal links are stripped from what ` + "`cv_get`" + ` returns and cannot be patched.
 
 Start by calling ` + "`cv_get`" + ` to see what the CV currently says, then do what the candidate asks: tighten wording, restructure, fill a gap, add something they did, fix the order, trim to a page or two. Do not rewrite the CV unasked — make the change they asked for and say what you changed.

@@ -1,13 +1,9 @@
 // Package speech turns recorded audio into text through an OpenAI-compatible
 // gateway.
 //
-// It is deliberately not part of internal/platform/llm. That package is built on langchaingo,
-// which models chat completions and has no audio surface at all; a multipart audio
-// POST bolted onto it would be reaching around the abstraction it exists to provide.
-// What it does share is the endpoint: the same gateway and the same key serve
-// /chat/completions and /audio/transcriptions, so the two are configured together — and
-// the HTTP half of talking to it is internal/platform/aigateway, shared with the other
-// non-chat surface on the same gateway (internal/api/realtime).
+// It is not part of internal/platform/llm: langchaingo has no audio surface. The same
+// gateway and key serve /chat/completions and /audio/transcriptions; the HTTP half is
+// internal/platform/aigateway, shared with internal/api/realtime.
 package speech
 
 import (
@@ -23,15 +19,12 @@ import (
 	"github.com/strelov1/freehire/internal/platform/aigateway"
 )
 
-// ErrUpstream is what every failure on the gateway's side wraps: a refusal, a fault,
-// an answer we cannot read. Callers render it as a 502 — the caller of the API did
-// nothing wrong, and the remedy is not theirs.
+// ErrUpstream wraps every failure on the gateway's side (a refusal, a fault, an
+// unreadable answer). Callers render it as a 502.
 var ErrUpstream = errors.New("speech gateway")
 
-// requestTimeout bounds one transcription. It is generous because the audio may be
-// minutes long and the gateway transcribes it in one pass, and it is finite because
-// a client that waits forever holds a connection and a goroutine for as long as the
-// gateway is willing to be silent.
+// requestTimeout bounds one transcription: long audio is transcribed in one pass, but
+// it must be finite so a silent gateway cannot hold a connection and goroutine forever.
 const requestTimeout = 2 * time.Minute
 
 // Client transcribes audio through one gateway.
@@ -39,11 +32,8 @@ type Client struct {
 	gw *aigateway.Client
 }
 
-// New builds a client, or returns nil when the gateway is not configured.
-//
-// Nil is the "this deployment has no speech" answer, following internal/candidate/headshot:
-// the handler asks whether it has a client and renders 501 when it does not, which
-// the SPA reads as a surface that does not exist here rather than as a fault.
+// New builds a client, or returns nil when the gateway is not configured. Nil means
+// this deployment has no speech: the handler renders 501 (as with internal/candidate/headshot).
 func New(baseURL, apiKey, model string) *Client {
 	gw := aigateway.New(aigateway.Config{
 		BaseURL:     baseURL,
@@ -61,12 +51,10 @@ func New(baseURL, apiKey, model string) *Client {
 
 // Transcribe returns what was said in audio.
 //
-// The filename travels to the gateway unchanged because that is how the container is
-// identified upstream — a recording named .webm and a recording named .mp4 are read
-// by different decoders, and the browser is the only party that knows which one it
-// produced.
+// The filename goes to the gateway unchanged: its extension (.webm vs .mp4) selects the
+// decoder, and only the browser knows the container it produced.
 //
-// An empty result is a success, not a failure: it is what silence transcribes to.
+// An empty result is a success: it is what silence transcribes to.
 func (c *Client) Transcribe(ctx context.Context, audio []byte, filename string) (string, error) {
 	body, contentType, err := transcriptionBody(audio, filename, c.gw.Model())
 	if err != nil {
@@ -86,13 +74,11 @@ func (c *Client) Transcribe(ctx context.Context, audio []byte, filename string) 
 	return parsed.Text, nil
 }
 
-// maxResponse bounds what is read back. A transcription of an upload we already
-// capped cannot be large, and a gateway that answers with something enormous is
-// misbehaving rather than verbose.
+// maxResponse bounds what is read back; an enormous answer means a misbehaving gateway.
 const maxResponse = 1 << 20
 
-// transcriptionBody builds the multipart form the endpoint expects: the audio under
-// "file", and the two fields that say which model to run and how to answer.
+// transcriptionBody builds the multipart form: the audio under "file", plus the model
+// and response_format fields.
 func transcriptionBody(audio []byte, filename, model string) (io.Reader, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)

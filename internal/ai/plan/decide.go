@@ -2,13 +2,9 @@ package plan
 
 import "time"
 
-// Decision is the answer to "may this user do this now", plus everything the caller needs
-// to explain it: where the user stands, when that changes, and — when the answer is no —
-// which kind of no it is.
-//
-// Charge is what the caller must record. It is 0 for a refusal and 0 for a reference that
-// was already paid for, so a caller never has to work out whether this particular yes
-// costs anything.
+// Decision is the answer to "may this user do this now", with where the user stands, when that
+// changes, and which kind of no it is. Charge is what the caller must record: 0 for a refusal
+// and for an already-paid reference.
 type Decision struct {
 	Allowed   bool
 	Tier      Tier
@@ -19,29 +15,22 @@ type Decision struct {
 	ResetsAt  time.Time
 	Charge    int
 
-	// Shadowed marks a decision that WOULD have been a refusal if the feature's
-	// enforcement were on. It is the entire measurement the shadow run collects: how many
-	// people a ceiling would have stopped, and where in their day.
+	// Shadowed marks a decision that WOULD have been a refusal with enforcement on; it is what
+	// the shadow run counts.
 	Shadowed bool
 
-	// FairUse marks a refusal by the pro plan's guard rather than by a plan limit. The
-	// two must never be confused at the surface: a plan limit is what a subscription is
-	// sold against, and the guard is an infrastructure defence a paying user should never
-	// be shown as a ceiling on what they bought.
+	// FairUse marks a refusal by the fair-use guard rather than a plan limit. Never show it as a
+	// ceiling on what the user bought.
 	FairUse bool
 
-	// Enforced says whether this feature's ceiling actually turns anybody away yet. It
-	// travels with the decision because the clients that pre-block an action need it: a
-	// surface that hides a button on a spent allowance while enforcement is off refuses
-	// somebody the server would have let through, and biases the shadow measurement by
-	// suppressing exactly the requests it is meant to count.
+	// Enforced says whether this feature's ceiling turns anybody away yet. Clients that pre-block
+	// an action need it: hiding a button while enforcement is off refuses what the server allows.
 	Enforced bool
 }
 
-// decide is the whole rule, as a pure function of the plan, the feature, what the day
-// already holds, and whether this reference was charged before. It touches no database
-// and no clock beyond the instant it is handed, which is what lets every branch of it —
-// including the ones that are awkward to reach through a transaction — be tested directly.
+// decide is the whole rule, as a pure function of the plan, the feature, the day's usage and
+// whether this reference was charged before. It touches no database or clock, so every branch
+// is testable directly.
 func (c Config) decide(tier Tier, f Feature, used int, alreadyCharged bool, now time.Time) Decision {
 	d := Decision{
 		Tier:     tier,
@@ -53,44 +42,33 @@ func (c Config) decide(tier Tier, f Feature, used int, alreadyCharged bool, now 
 	allowance := c.Allowance(tier, f)
 	d.Limit, d.Unlimited = allowance.Limit, allowance.Unlimited
 
-	// An unpaid tier is refused before anything else is asked, including whether this
-	// reference was charged before. Free gets no metered feature — a product invariant, not
-	// an allowance that happens to be zero — so no configuration, no environment variable
-	// and no ledger row may reopen one. It outranks the already-charged branch below on
-	// purpose: a reference a subscriber paid for while subscribed is still a model call when
-	// it is recomputed, and a lapsed subscription does not keep buying them. The decision's
-	// other fields stay populated so the refusal renders with the same body as any other.
+	// An unpaid tier is refused first, even for an already-charged reference: free gets no
+	// metered feature, so no config, env var or ledger row may reopen one, and a lapsed
+	// subscription does not keep buying recomputes. Other fields stay populated so the refusal
+	// renders like any other.
 	if !tier.Paid() {
 		return d
 	}
 
-	// A reference already paid for is always allowed and never charged again. This comes
-	// first because it outranks every ceiling: a recompute, a retry and a reconnect are
-	// the same work the user has already been billed for, and refusing one would charge
-	// them for looking at their own result twice.
+	// An already-charged reference is always allowed and never charged again; this outranks every
+	// ceiling so a recompute, retry or reconnect is not billed twice.
 	if alreadyCharged {
 		d.Allowed = true
 		return d
 	}
 
-	// An unconfigured feature allows nothing. A surface somebody forgot to configure
-	// should show up refused in a shadow run rather than uncounted in a bill.
+	// An unconfigured feature allows nothing, so it shows up refused in a shadow run rather than
+	// uncounted.
 	if allowance.Limit == 0 && !allowance.Unlimited {
 		return d
 	}
 
-	// The fair-use guard belongs to whichever tier is UNLIMITED — the ones with no ceiling
-	// of their own to stop a runaway. A tier with a real daily allowance is already bounded
-	// by it, and reaching the guard there would mean the allowance was configured above it:
-	// a misconfiguration to fix, not a caller to accuse of automation.
+	// The fair-use guard belongs to any UNLIMITED tier; a tier with a real daily allowance is
+	// bounded by it, and reaching the guard there is a misconfiguration. When Unlimited, Limit IS
+	// the guard, so a new tier needs no branch here.
 	//
-	// Read off the allowance rather than from a tier comparison. When Unlimited is set,
-	// Limit IS the guard — the convention this type already carried for pro — so a third
-	// tier needed no branch here at all.
-	//
-	// It is not subject to the enforcement switch. Shadow mode protects people from
-	// ceilings nobody has verified; the guard sits far above human behaviour, so what
-	// reaches it is automation, and what it protects is the gateway rather than a price.
+	// The enforcement switch does not apply: the guard sits far above human behaviour, so what
+	// reaches it is automation, and it protects the gateway rather than a price.
 	if allowance.Unlimited && used >= allowance.Limit {
 		d.FairUse = true
 		return d
@@ -101,9 +79,8 @@ func (c Config) decide(tier Tier, f Feature, used int, alreadyCharged bool, now 
 		return d
 	}
 
-	// Over the plan's ceiling. With enforcement on this is the refusal; with it off the
-	// consumption is still recorded — a counter that skipped what it would have stopped
-	// would describe a day that did not happen — and the caller goes through.
+	// Over the plan's ceiling. With enforcement off the consumption is still recorded, so the
+	// counter describes what would have been stopped, and the caller goes through.
 	if !c.Enforced(f) {
 		d.Allowed, d.Charge, d.Used, d.Shadowed = true, 1, used+1, true
 	}
