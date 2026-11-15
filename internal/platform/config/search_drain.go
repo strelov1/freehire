@@ -19,19 +19,17 @@ type SearchDrain struct {
 // LoadSearchDrain reads the worker's tuning from the environment, all optional.
 // SEARCH_DRAIN_BATCH_SIZE: bigger collapses more per-board pushes into fewer Meili tasks (see
 // internal/search/searchdrain). MEILI_MASTER_KEY is enforced at the call site, so this never fails.
+//
+// A push costs about the same regardless of size, so batch size is throughput. A single push
+// takes 90-180s+ on a large index (whole-index re-merge): CallTimeout is a backstop against a
+// hung call, and too tight a value turns slow successes into per-item retries.
 func LoadSearchDrain() SearchDrain {
 	c := SearchDrain{
-		// A push costs about the same regardless of size (see CallTimeout), so batch size is
-		// throughput: 200 rows per push drained slower than the backlog grew, 1000 drained it.
 		BatchSize:    envInt("SEARCH_DRAIN_BATCH_SIZE", 2500),
 		LeaseSeconds: envInt("SEARCH_DRAIN_LEASE_SECONDS", 180),
 		MaxAttempts:  envInt("SEARCH_DRAIN_MAX_ATTEMPTS", 3),
-		// A single push costs 90-180s+ on a large index (Meilisearch's whole-index re-merge), almost
-		// independent of batch size. Too tight a value misclassifies slow successes as failures and
-		// cascades into per-item retries (see internal/search/searchdrain.Runner). This is a backstop
-		// against a hung call, so keep it generous.
-		CallTimeout: time.Duration(envInt("SEARCH_DRAIN_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
-		MaxPerRun:   envInt("SEARCH_DRAIN_MAX_PER_RUN", 0),
+		CallTimeout:  time.Duration(envInt("SEARCH_DRAIN_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
+		MaxPerRun:    envInt("SEARCH_DRAIN_MAX_PER_RUN", 0),
 	}
 	// A non-positive size would make the claim's LIMIT 0 or negative; floor it.
 	if c.BatchSize < 1 {

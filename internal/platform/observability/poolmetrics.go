@@ -39,14 +39,8 @@ func NewPoolCollector(pool poolStatter) prometheus.Collector {
 			"Connections open and free to be handed out.", nil, nil),
 		max: prometheus.NewDesc("freehire_db_pool_max_connections",
 			"The pool's ceiling. Saturation is acquired/max; alert on the ratio, never on the raw count — the ceiling is per-process configuration and changes.", nil, nil),
-		// How OFTEN a caller found nothing free. A trend only, NOT an alert signal: it counts any
-		// acquire that waited at all, so it sits around 15/s on a healthy pool.
 		emptyWait: prometheus.NewDesc("freehire_db_pool_empty_acquire_total",
 			"Acquisitions that found no free connection, however briefly. A trend, not an alerting signal — alert on sustained acquired/max instead.", nil, nil),
-		// Total time callers spent inside Acquire. A diagnostic, NOT the alerting signal: pgx
-		// counts every successful Acquire, so instant handovers inflate it. Divide by
-		// freehire_db_pool_empty_acquire_total for the mean wait. Alert on sustained occupancy
-		// (avg_over_time of acquired/max) instead; a healthy pool only touches its ceiling in bursts.
 		waited: prometheus.NewDesc("freehire_db_pool_acquire_seconds_total",
 			"Cumulative time spent inside Acquire, waiting and instant hand-offs alike. A diagnostic: divide by the empty-acquire count for a mean wait. Alert on sustained acquired/max instead.", nil, nil),
 	}
