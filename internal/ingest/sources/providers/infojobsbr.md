@@ -12,3 +12,11 @@
 - **A run that cannot finish all 28 boards loses only the boards it did not reach.** Each board is an independent fetch whose postings are written when it returns, and `cmd/ingest` starts the boards waited on longest first, so the next run picks up where this one stopped. The sweep stays company-scoped with the default 48 h window: a posting on a board the run never reached is not refreshed, but it is closed only if NO run reaches its board for 48 h — at a 6 h cadence that is eight consecutive runs, while rotation reaches every board within two. A company the run DID reach through another board does not change that: the close is by `last_seen_at` against the 48 h cutoff, not by this run's listing.
 - **Cadence 6 h.** A run is ~37 minutes of listing plus at most ~17 of detail and writes, so four a day keep the hydration backlog moving (~2.2k new a run) without overlapping, and leave the 48 h window eight runs deep.
 - **Onboarding** is 28 `cmd/add-board --provider=infojobsbr --board=<uf|todo-brasil> --company="InfoJobs Brasil" --apply` rows and `cmd/schedule-board --provider=infojobsbr --manage --heavy --timeout=4500s --cadence=6h --apply`.
+
+- **Transport recovery, 2026-11-15 (operator).** Direct HTTP meets Azure WAF; Scrapling HTTP + proxy
+  parsed Acre, fragments 2 and 3 (20 cards each, different first ids), and a live detail body. The
+  shared tier explicitly attaches a fresh Go cookie jar: HTTP mode forwards `Cookie`, and the live
+  bootstrap's `ab_session_id` survives the flat response header map. Browser mode does not forward
+  caller headers. Do not remove the jar or replace fragment pagination; no general multi-cookie
+  guarantee is implied. Keep the shared limiter, 80-new-per-board budget, unsharded run and
+  4500-second timeout. See [routing evidence](../../../../docs/investigations/2026-11-15-ingest-routing.md).

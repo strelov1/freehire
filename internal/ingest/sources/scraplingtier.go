@@ -3,6 +3,7 @@ package sources
 import (
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"strings"
 	"time"
@@ -33,6 +34,20 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// The fingerprint tier is refused; Scrapling HTTP direct serves both disciplines and bodies.
+	"gradcracker": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewGradcracker(pacedGradcracker(f), 0)
+	}},
+	// Azure WAF refuses direct egress. The listing's session cookie must survive into fragments.
+	"infojobsbr": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		jar, _ := cookiejar.New(nil)
+		f.httpClient.Jar = jar
+		return NewInfoJobsBR(f)
+	}},
+	// Cloudflare refuses direct egress; HTTP + proxy serves the sitemaps and posting bodies.
+	"spainjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewSpainJobs(f)
+	}},
 	// 405 to the crawl host's IP; through the proxy, a GeeTest challenge from the sixth listing
 	// page on a plain client; a browser over the same proxy passes.
 	"infojobs": {scraplingRoute{scraplingfetch.ModeBrowser, true}, func(f *Client) Source {
