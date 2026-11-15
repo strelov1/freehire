@@ -11,10 +11,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/employer"
+	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
@@ -149,5 +152,73 @@ func TestTeam_DeletingTheAccountDetachesTheMembersVacancies(t *testing.T) {
 	jobs, _, err := f.repo.ListMine(ctx, member)
 	if err != nil || len(jobs) != 0 {
 		t.Errorf("the new company's vacancies = %d, %v; want none of the old company's", len(jobs), err)
+	}
+}
+
+// A vacancy write in flight holds its author's membership and company rows, so deleting the
+// account waits for it and then detaches the vacancy it wrote — the write is not missed by
+// the trigger's snapshot.
+func TestTeam_AnInFlightVacancyWriteIsDetachedWithTheAccount(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	member := f.member(t, "dev.personal@example.test", "dev@acme.test")
+
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := db.New(tx)
+	slug, err := q.LockActingMembership(ctx, member)
+	if err != nil {
+		t.Fatalf("LockActingMembership: %v", err)
+	}
+	if _, err := q.LockCompanyAccountBySlug(ctx, slug); err != nil {
+		t.Fatalf("LockCompanyAccountBySlug: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, company, company_slug, public_slug, created_by)
+		VALUES ('employer', 'freehire:inflight', '', 'Platform Engineer', 'Acme', 'acme', 'inflight', $1)`, member); err != nil {
+		t.Fatalf("insert in flight: %v", err)
+	}
+
+	deleted := make(chan error, 1)
+	go func() {
+		_, err := f.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, f.holder)
+		deleted <- err
+	}()
+	select {
+	case err := <-deleted:
+		t.Fatalf("the account was deleted while a vacancy write held its rows (err %v)", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	select {
+	case err := <-deleted:
+		if err != nil {
+			t.Fatalf("delete claimant: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the account deletion never proceeded after the write committed")
+	}
+	var createdBy *int64
+	if err := f.pool.QueryRow(ctx, `SELECT created_by FROM jobs WHERE public_slug = 'inflight'`).Scan(&createdBy); err != nil || createdBy != nil {
+		t.Errorf("the in-flight vacancy's created_by = %v, %v; want NULL, detached with the account", createdBy, err)
+	}
+}
+
+func TestTeam_AWriteByAUserWhoActsForNoCompanyIsRefused(t *testing.T) {
+	f := newTeamFixture(t)
+	ctx := context.Background()
+	nobody := seedUser(t, f.pool, "nobody@example.test")
+	mod := moderation.New(moderation.NewQueriesRepository(db.New(f.pool), f.pool, enrich.Version))
+	_, _, err := mod.Create(ctx, nobody, moderation.CreateInput{
+		URL: "https://acme.test/jobs/9", Source: "employer", Title: "Go Engineer", Company: "Acme",
+		Description: "Build things.", ConflictOwnedBy: nobody,
+	})
+	if !errors.Is(err, moderation.ErrNoCompany) {
+		t.Errorf("err = %v, want ErrNoCompany", err)
 	}
 }

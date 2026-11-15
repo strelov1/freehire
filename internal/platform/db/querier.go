@@ -5787,6 +5787,11 @@ type Querier interface {
 	// created and how many closed, for the one-off history reconstruction. A full scan: run it
 	// on the analytics replica, never on a request path.
 	ListedJobDailyFlow(ctx context.Context) ([]ListedJobDailyFlowRow, error)
+	// Locks the user's membership row (FOR KEY SHARE) and names its company. A vacancy write
+	// takes it so that removing the member — or deleting their company account, which cascades
+	// here — waits for the write to commit, and then hands over or detaches the new vacancy
+	// too. No row: the user is no member (the claimant, or nobody).
+	LockActingMembership(ctx context.Context, userID int64) (string, error)
 	// Serializes one user's get-or-create of a blank session for the transaction, so two parallel calls cannot both find none and both insert.
 	LockAssistantSessionCreation(ctx context.Context, userID int64) error
 	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
@@ -5802,6 +5807,11 @@ type Querier interface {
 	// it started with even after waiting on a row lock, so the eligibility check has to be a
 	// LATER statement to see a leave or block that committed while this one waited.
 	LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error
+	// Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
+	// waits for an in-flight vacancy write of its team. No row: the account is gone.
+	LockCompanyAccountBySlug(ctx context.Context, companySlug string) (string, error)
+	// LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
+	LockCompanyAccountByUser(ctx context.Context, userID int64) (string, error)
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go

@@ -212,6 +212,9 @@ func (s *Service) CreateVacancy(ctx context.Context, userID int64, in VacancyInp
 	if errors.Is(err, moderation.ErrOwnedElsewhere) {
 		return job.Job{}, job.Extras{}, ErrURLTaken
 	}
+	if errors.Is(err, moderation.ErrNoCompany) {
+		return job.Job{}, job.Extras{}, ErrNotActive
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -234,6 +237,9 @@ func (s *Service) createOnSite(ctx context.Context, userID int64, acc Account, i
 		return job.Job{}, job.Extras{}, err
 	}
 	j, extras, err := s.minter.Create(ctx, userID, in.createInput(userID, acc, "", job.DirectApplyPrefix+uuid.NewString()))
+	if errors.Is(err, moderation.ErrNoCompany) {
+		return job.Job{}, job.Extras{}, ErrNotActive
+	}
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}

@@ -51,6 +51,11 @@ func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID, c
 	// stamp) lives on the aggregate (job.Fields.UpsertManualParams), shared with
 	// every other write path. The mint query also folds the manual salary into the
 	// enrichment payload so it displays at once.
+	if conflictOwnedBy != 0 {
+		if err := lockActingCompany(ctx, qtx, conflictOwnedBy); err != nil {
+			return job.Job{}, job.Extras{}, err
+		}
+	}
 	params := f.UpsertManualParams(actorID)
 	params.OwnerTeamOf = pgtype.Int8{Int64: conflictOwnedBy, Valid: conflictOwnedBy != 0}
 	id, err := qtx.UpsertManualJob(ctx, params)
@@ -144,4 +149,22 @@ func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Field
 		return job.Job{}, job.Extras{}, err
 	}
 	return job.FromRow(row)
+}
+
+// lockActingCompany holds, for the write's transaction, the rows that make userID act for a
+// company — their membership (if any) and the company account — so a concurrent removal or
+// account deletion waits for the write and then sees the posting it made. ErrNoCompany when
+// the user acts for none.
+func lockActingCompany(ctx context.Context, q *db.Queries, userID int64) error {
+	slug, err := q.LockActingMembership(ctx, userID)
+	switch {
+	case err == nil:
+		_, err = q.LockCompanyAccountBySlug(ctx, slug)
+	case errors.Is(err, pgx.ErrNoRows):
+		_, err = q.LockCompanyAccountByUser(ctx, userID)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoCompany
+	}
+	return err
 }

@@ -149,6 +149,12 @@ for the full design record.
   `jobs.created_by` is ON DELETE SET NULL and that action fires before the member row's own
   cascade. Account deletion lives in `identity`, which cannot import this block, so the rule
   lives in the database.
+- **An employer vacancy write holds its author's team rows.** With `ConflictOwnedBy` set,
+  moderation's `Create` takes the author's membership row and company-account row
+  `FOR KEY SHARE` in its transaction (`LockActingMembership`, `LockCompanyAccountBy*`). A
+  removal or account deletion running meanwhile waits for the write to commit, then hands
+  over or detaches the new vacancy too — its snapshot can no longer miss it. A user who acts
+  for no company by then is refused (`moderation.ErrNoCompany` → `ErrNotActive`).
 - **Known limit:** a CLAIMANT deleting their freehire account deletes the company account,
   and its team and invitations cascade with it; its vacancies stop taking applications, as
   before teams existed. The members' vacancies are detached first (`created_by` NULL, the

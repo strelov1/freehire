@@ -33,3 +33,19 @@ SELECT (sqlc.arg(actor_id)::bigint = sqlc.arg(other_id)::bigint OR EXISTS (
 -- concurrent statements would each check a snapshot without the other's row; taken first in
 -- the same transaction, this lock makes the second write's check see the first's commit.
 SELECT pg_advisory_xact_lock(hashtextextended('employer_actor:' || sqlc.arg(user_id)::bigint::text, 0));
+
+-- name: LockActingMembership :one
+-- Locks the user's membership row (FOR KEY SHARE) and names its company. A vacancy write
+-- takes it so that removing the member — or deleting their company account, which cascades
+-- here — waits for the write to commit, and then hands over or detaches the new vacancy
+-- too. No row: the user is no member (the claimant, or nobody).
+SELECT company_slug FROM company_account_members WHERE user_id = sqlc.arg(user_id) FOR KEY SHARE;
+
+-- name: LockCompanyAccountBySlug :one
+-- Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
+-- waits for an in-flight vacancy write of its team. No row: the account is gone.
+SELECT company_slug FROM company_accounts WHERE company_slug = sqlc.arg(company_slug) FOR KEY SHARE;
+
+-- name: LockCompanyAccountByUser :one
+-- LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
+SELECT company_slug FROM company_accounts WHERE user_id = sqlc.arg(user_id) FOR KEY SHARE;

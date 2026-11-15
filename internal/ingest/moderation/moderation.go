@@ -32,6 +32,9 @@ var (
 	// ErrOwnedElsewhere is a Create with ConflictOwnedBy set whose identity already belongs
 	// to a posting created outside that user's company team: nothing was written.
 	ErrOwnedElsewhere = errors.New("moderation: this posting belongs to another employer")
+	// ErrNoCompany is a Create with ConflictOwnedBy set by a user who, when the write ran,
+	// acted for no company (their membership or company account was just removed).
+	ErrNoCompany = errors.New("moderation: the author acts for no company")
 )
 
 // defaultSource is the origin recorded when the moderator does not name one. The URL is
@@ -79,8 +82,11 @@ type CreateInput struct {
 
 	// ConflictOwnedBy, when set, lets the write update an existing posting at the same
 	// identity only if this user's company team created it (employer_team); otherwise
-	// Create writes nothing and returns ErrOwnedElsewhere. The employer path sets it; a
-	// moderator, who may edit any manual job, leaves it zero.
+	// Create writes nothing and returns ErrOwnedElsewhere. The write also holds the user's
+	// membership and company-account rows (FOR KEY SHARE) for its transaction, so removing
+	// the member or deleting the account waits for it and then hands over or detaches the
+	// new posting too; a user who acts for no company by then gets ErrNoCompany. The
+	// employer path sets it; a moderator, who may edit any manual job, leaves it zero.
 	ConflictOwnedBy int64
 }
 

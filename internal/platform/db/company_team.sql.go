@@ -83,6 +83,46 @@ func (q *Queries) GetCompanyAccountForUser(ctx context.Context, userID int64) (G
 	return i, err
 }
 
+const lockActingMembership = `-- name: LockActingMembership :one
+SELECT company_slug FROM company_account_members WHERE user_id = $1 FOR KEY SHARE
+`
+
+// Locks the user's membership row (FOR KEY SHARE) and names its company. A vacancy write
+// takes it so that removing the member — or deleting their company account, which cascades
+// here — waits for the write to commit, and then hands over or detaches the new vacancy
+// too. No row: the user is no member (the claimant, or nobody).
+func (q *Queries) LockActingMembership(ctx context.Context, userID int64) (string, error) {
+	row := q.db.QueryRow(ctx, lockActingMembership, userID)
+	var company_slug string
+	err := row.Scan(&company_slug)
+	return company_slug, err
+}
+
+const lockCompanyAccountBySlug = `-- name: LockCompanyAccountBySlug :one
+SELECT company_slug FROM company_accounts WHERE company_slug = $1 FOR KEY SHARE
+`
+
+// Locks a company account row (FOR KEY SHARE), for the same reason: deleting the account
+// waits for an in-flight vacancy write of its team. No row: the account is gone.
+func (q *Queries) LockCompanyAccountBySlug(ctx context.Context, companySlug string) (string, error) {
+	row := q.db.QueryRow(ctx, lockCompanyAccountBySlug, companySlug)
+	var company_slug string
+	err := row.Scan(&company_slug)
+	return company_slug, err
+}
+
+const lockCompanyAccountByUser = `-- name: LockCompanyAccountByUser :one
+SELECT company_slug FROM company_accounts WHERE user_id = $1 FOR KEY SHARE
+`
+
+// LockCompanyAccountBySlug for the claimant, addressed by user. No row: no claim.
+func (q *Queries) LockCompanyAccountByUser(ctx context.Context, userID int64) (string, error) {
+	row := q.db.QueryRow(ctx, lockCompanyAccountByUser, userID)
+	var company_slug string
+	err := row.Scan(&company_slug)
+	return company_slug, err
+}
+
 const lockEmployerActor = `-- name: LockEmployerActor :exec
 SELECT pg_advisory_xact_lock(hashtextextended('employer_actor:' || $1::bigint::text, 0))
 `
