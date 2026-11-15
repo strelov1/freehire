@@ -16,6 +16,7 @@ import (
 type foxconnFake struct {
 	list       string
 	failDetail string
+	emptyBody  bool
 	mu         sync.Mutex
 	details    int
 }
@@ -42,6 +43,9 @@ func (f *foxconnFake) GetJSON(_ context.Context, u string, v any) error {
 	raw, err := os.ReadFile("testdata/foxconn/vacancy_" + id + ".json")
 	if err != nil {
 		return err
+	}
+	if f.emptyBody {
+		return json.Unmarshal([]byte(`{"id":"`+id+`","job_name":"Role without a description"}`), v)
 	}
 	return json.Unmarshal(raw, v)
 }
@@ -146,5 +150,15 @@ func TestFoxconnIsBoardlessNotFullListing(t *testing.T) {
 	}
 	if _, ok := s.(fullBoardListing); ok {
 		t.Error("a single response with no total must not claim fullBoardListing")
+	}
+}
+
+func TestFoxconnEmptyDescriptionsAreReadableNotAnOutage(t *testing.T) {
+	jobs, err := NewFoxconn(&foxconnFake{emptyBody: true}).Fetch(context.Background(), CompanyEntry{Company: "Foxconn"})
+	if err != nil {
+		t.Fatalf("valid details with empty bodies are not a transport outage: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("got %d jobs, must not bank empty descriptions", len(jobs))
 	}
 }

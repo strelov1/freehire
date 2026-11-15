@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync/atomic"
 )
 
 // foxconn adapts Hon Hai (Foxconn)'s own Taiwan recruitment portal (recruit.foxconn.com, the
@@ -118,13 +119,18 @@ func (s foxconn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 			asked++
 		}
 	}
+	var read atomic.Int64
 	jobs := fetchDetails(list, defaultDetailWorkers, func(v foxconnVacancy) (Job, bool) {
 		if seen(v.ID) {
 			return Job{ExternalID: v.ID, URL: foxconnJobURL + v.ID, Title: collapseSpace(v.Title), Company: e.Company, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, e, v)
+		job, keep, readable := s.detail(ctx, e, v)
+		if readable {
+			read.Add(1)
+		}
+		return job, keep
 	})
-	if asked > 0 && len(jobs) == len(list)-asked {
+	if asked > 0 && read.Load() == 0 {
 		return nil, fmt.Errorf("foxconn: none of %d new postings could be read", asked)
 	}
 	return jobs, nil
@@ -134,27 +140,27 @@ func (s foxconn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 // request defers the posting to the next crawl rather than storing it without them, since a
 // stored posting is never hydrated again; the endpoint answers a withdrawn id with 404, which
 // lands here too and is retried until the listing drops it.
-func (s foxconn) detail(ctx context.Context, e CompanyEntry, listed foxconnVacancy) (Job, bool) {
+func (s foxconn) detail(ctx context.Context, e CompanyEntry, listed foxconnVacancy) (job Job, keep, readable bool) {
 	var v foxconnVacancy
 	if err := s.http.GetJSON(ctx, foxconnDetailURL+listed.ID, &v); err != nil {
 		log.Printf("foxconn: vacancy %s failed; deferring: %v", listed.ID, err)
-		return Job{}, false
+		return Job{}, false, false
 	}
 	if v.ID != listed.ID {
 		log.Printf("foxconn: vacancy %s answered as %q; deferring", listed.ID, v.ID)
-		return Job{}, false
+		return Job{}, false, false
 	}
 	title := collapseSpace(firstNonEmpty(v.Title, listed.Title))
 	body := v.body()
 	if title == "" || body == "" {
-		return Job{}, false
+		return Job{}, false, true
 	}
 	place := strings.TrimSpace(firstNonEmpty(v.Place, listed.Place))
 	if place == foxconnOtherPlace {
 		place = ""
 	}
 	location, countries := twLocation(place)
-	job := Job{
+	job = Job{
 		ExternalID:  listed.ID,
 		URL:         foxconnJobURL + listed.ID,
 		Title:       title,
@@ -170,5 +176,5 @@ func (s foxconn) detail(ctx context.Context, e CompanyEntry, listed foxconnVacan
 			}
 		}
 	}
-	return job, true
+	return job, true, true
 }
