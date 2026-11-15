@@ -20,8 +20,9 @@ import (
 )
 
 // autoApplyEnqueueSources are the ATS providers auto-apply can queue an attempt against.
-// Only Greenhouse can currently SUBMIT one (fillProviders in internal/api/atsapply); the
-// others still tailor and get reviewed, then park with a named reason in cmd/auto-apply.
+// Which of them can SUBMIT depends on the deployment's executor and enforcement
+// (atsapply.SubmittableProviders); an attempt that cannot still tailors and gets reviewed,
+// then parks with a named reason in cmd/auto-apply.
 // Widening this list is a product decision: each attempt spends a daily tailoring turn.
 var autoApplyEnqueueSources = map[string]bool{
 	"greenhouse": true,

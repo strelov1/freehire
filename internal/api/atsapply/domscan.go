@@ -163,8 +163,8 @@ func scanSimple(n *html.Node, kind string, by addressing, order *[]string, group
 //
 // Under byName a control with no name is DROPPED rather than given fallbackKey's synthetic
 // key: that would mint a field that resolves, reports the plan complete, and then cannot be
-// typed into. The platform's own schema can still declare such a control required, and the
-// attempt then parks.
+// typed into. The cost: Reconcile reads only the retained controls, so a required control
+// dropped here goes unchecked, and the API's required flag cannot park the attempt on it.
 //
 // The identifier is what DOMField.ID carries for both ways of addressing; downstream code
 // never asks which attribute it came from. Lever's résumé upload and location autocomplete

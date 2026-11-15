@@ -38,8 +38,8 @@ type oauthRegistry interface {
 // authHandlers serves the auth surface: register/login/logout/me, OAuth sign-in,
 // the browser-extension connect flow, and API-key management. cookieDomains are the
 // bare registrable domains we serve (e.g. "freehire.me"): the session cookie is
-// scoped to the one the request host falls under (empty = host-only, for dev); the
-// same set gates requestOrigin (see auth.CookieDomainForHost).
+// scoped to the one the request host falls under (empty = host-only, for dev; see
+// auth.CookieDomainForHost). requestOrigin is gated by servedHosts instead.
 type authHandlers struct {
 	queries       *db.Queries
 	issuer        *auth.Issuer

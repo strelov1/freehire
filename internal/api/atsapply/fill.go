@@ -29,7 +29,8 @@ const dispatchChangeEventsJS = `(() => {
 
 // confirmationMarkers are positive acknowledgements only: matching none means
 // "unconfirmed", never "failed". Extend, never invert: a false "confirmed" records an
-// application that never went through; a false "unconfirmed" only costs a retry.
+// application that never went through; a false "unconfirmed" dead-letters an application
+// that did go through, for someone to verify by hand (never an ordinary retry).
 var confirmationMarkers = []string{
 	"thank you for applying",
 	"application submitted",
