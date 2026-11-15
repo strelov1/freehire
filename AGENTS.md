@@ -118,6 +118,12 @@ cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdif
 
 **Before you run, change or add a `cmd/<name>` worker, read its entry in [docs/agents/workers.md](docs/agents/workers.md) when it has one**: what it needs, when it runs, and the trap behind it. Not every worker has an entry yet (`ls cmd/` is the full list); without one, read the worker's own `main.go`. A new worker gets its entry there.
 
+## Knowledge navigation
+
+For cross-module ownership, catalogue flow, or deployment ownership, start at
+[docs/knowledge/index.md](docs/knowledge/index.md), the OKF knowledge bundle.
+When changing a fact summarized there, update its concept and source provenance.
+
 ## Module files
 
 Each is self-contained and can be read independently.
