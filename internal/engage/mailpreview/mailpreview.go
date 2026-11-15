@@ -25,6 +25,7 @@ package mailpreview
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/broadcast"
@@ -103,6 +104,7 @@ var renderers = []func(string) (Sample, error){
 	emailChangedSample,
 	directApplicationSample,
 	applicationStatusSample,
+	teamInviteSample,
 	digestSample,
 	digestBundleSample,
 	savedJobReminderSample,
@@ -295,6 +297,20 @@ func applicationStatusSample(baseURL string) (Sample, error) {
 				JobURL:      baseURL + "/jobs/senior-platform-engineer-acme-9f3c",
 				Stage:       "rejected",
 				Message:     "Thank you for the time you put into this. We chose someone with more on-call experience, and would be glad to hear from you again next year.",
+			})
+	})
+}
+
+// teamInviteSample is the invitation a colleague receives to join a company's team.
+func teamInviteSample(baseURL string) (Sample, error) {
+	return sample("team-invite", "Employer / Team invitation", func(c *capture) error {
+		return emailnotify.NewTeamInviteMailer(c, "hi@freehire.me", baseURL).
+			SendTeamInvitation(context.Background(), emailnotify.TeamInvitation{
+				To:          "someone@acme.example",
+				CompanyName: "Acme",
+				InvitedBy:   "hiring@acme.example",
+				Link:        baseURL + "/my/employer/join?token=sample",
+				ExpiresAt:   time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC),
 			})
 	})
 }

@@ -4487,6 +4487,96 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs/<slug>/close" -b cookies.
 curl -X POST "https://freehire.me/api/v1/employer/jobs/<slug>/reopen" -b cookies.txt
 ```
 
+### `GET /employer/team`
+
+**Auth:** Session only
+
+Everyone who acts for the caller's company, and the invitations still open.
+
+```bash
+curl "https://freehire.me/api/v1/employer/team" -b cookies.txt
+```
+
+### `POST /employer/team/invitation-preview`
+
+**Auth:** Session only
+
+Which company an invitation link invites to, at which address. 404 for a dead link.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | no |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/team/invitation-preview" -b cookies.txt
+```
+
+### `POST /employer/team/invitations`
+
+**Auth:** Session only
+
+Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `email` | string | no |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/team/invitations" -b cookies.txt
+```
+
+### `DELETE /employer/team/invitations/{id}`
+
+**Auth:** Session only
+
+Withdraws an invitation; its link stops working.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/employer/team/invitations/<id>" -b cookies.txt
+```
+
+### `POST /employer/team/join`
+
+**Auth:** Session only
+
+Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `token` | string | no |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/team/join" -b cookies.txt
+```
+
+### `DELETE /employer/team/members/{user_id}`
+
+**Auth:** Session only
+
+Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The claimant cannot be removed.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `user_id` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/employer/team/members/<user_id>" -b cookies.txt
+```
+
 ## Mentorship
 
 ### `GET /mentorship/profiles`

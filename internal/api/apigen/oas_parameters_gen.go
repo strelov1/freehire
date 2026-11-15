@@ -15450,6 +15450,71 @@ func decodeRejectSubmissionParams(args [1]string, argsEscaped bool, r *http.Requ
 	return params, nil
 }
 
+// RemoveEmployerTeamMemberParams is parameters of removeEmployerTeamMember operation.
+type RemoveEmployerTeamMemberParams struct {
+	UserID string
+}
+
+func unpackRemoveEmployerTeamMemberParams(packed middleware.Parameters) (params RemoveEmployerTeamMemberParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "user_id",
+			In:   "path",
+		}
+		params.UserID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeRemoveEmployerTeamMemberParams(args [1]string, argsEscaped bool, r *http.Request) (params RemoveEmployerTeamMemberParams, _ error) {
+	// Decode path: user_id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "user_id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.UserID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "user_id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // RemoveFromWatchlistParams is parameters of removeFromWatchlist operation.
 type RemoveFromWatchlistParams struct {
 	Slug string
@@ -19600,6 +19665,71 @@ func decodeVoteJobParams(args [1]string, argsEscaped bool, r *http.Request) (par
 	}(); err != nil {
 		return params, &ogenerrors.DecodeParamError{
 			Name: "slug",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
+// WithdrawEmployerTeamInvitationParams is parameters of withdrawEmployerTeamInvitation operation.
+type WithdrawEmployerTeamInvitationParams struct {
+	ID string
+}
+
+func unpackWithdrawEmployerTeamInvitationParams(packed middleware.Parameters) (params WithdrawEmployerTeamInvitationParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "id",
+			In:   "path",
+		}
+		params.ID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeWithdrawEmployerTeamInvitationParams(args [1]string, argsEscaped bool, r *http.Request) (params WithdrawEmployerTeamInvitationParams, _ error) {
+	// Decode path: id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.ID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "id",
 			In:   "path",
 			Err:  err,
 		}

@@ -752,6 +752,12 @@ type Handler interface {
 	//
 	// GET /employer/company
 	GetEmployerCompany(ctx context.Context) (*GetEmployerCompanyOK, error)
+	// GetEmployerTeam implements getEmployerTeam operation.
+	//
+	// Everyone who acts for the caller's company, and the invitations still open.
+	//
+	// GET /employer/team
+	GetEmployerTeam(ctx context.Context) (*GetEmployerTeamOK, error)
 	// GetInbox implements getInbox operation.
 	//
 	// `?body=1` returns each message's readable text inline and marks nothing read — that is the agent
@@ -1121,6 +1127,13 @@ type Handler interface {
 	//
 	// POST /search/interpret
 	InterpretSearch(ctx context.Context, req *SearchIntentRequest) (*InterpretSearchOK, error)
+	// InviteEmployerTeamMember implements inviteEmployerTeamMember operation.
+	//
+	// Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again
+	// replaces its link. 429 past twenty open invitations.
+	//
+	// POST /employer/team/invitations
+	InviteEmployerTeamMember(ctx context.Context, req *EmployerTeamInvite) (*InviteEmployerTeamMemberCreated, error)
 	// JobApplyForm implements jobApplyForm operation.
 	//
 	// The questions a candidate will have to answer, shaped for reading. Only captured for a minority of
@@ -1154,6 +1167,12 @@ type Handler interface {
 	//
 	// GET /stats/jobs-activity
 	JobsActivity(ctx context.Context, params JobsActivityParams) (*JobsActivity, error)
+	// JoinEmployerTeam implements joinEmployerTeam operation.
+	//
+	// Joins the team an invitation link invites to. 409 when the caller already acts for a company.
+	//
+	// POST /employer/team/join
+	JoinEmployerTeam(ctx context.Context, req *EmployerTeamToken) (*JoinEmployerTeamOK, error)
 	// LinkEmail implements linkEmail operation.
 	//
 	// Attach a message to one of your applications.
@@ -1684,6 +1703,12 @@ type Handler interface {
 	//
 	// POST /submissions/prefill
 	PrefillSubmission(ctx context.Context, req *PrefillRequest) (*PrefillSubmissionOK, error)
+	// PreviewEmployerTeamInvitation implements previewEmployerTeamInvitation operation.
+	//
+	// Which company an invitation link invites to, at which address. 404 for a dead link.
+	//
+	// POST /employer/team/invitation-preview
+	PreviewEmployerTeamInvitation(ctx context.Context, req *EmployerTeamToken) (*PreviewEmployerTeamInvitationOK, error)
 	// PreviewPromoCode implements previewPromoCode operation.
 	//
 	// What a code would take off, without using it. 404 for a code that cannot be used.
@@ -1793,6 +1818,13 @@ type Handler interface {
 	//
 	// DELETE /me/mailbox
 	ReleaseMailbox(ctx context.Context) (*ReleaseMailboxOK, error)
+	// RemoveEmployerTeamMember implements removeEmployerTeamMember operation.
+	//
+	// Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The
+	// claimant cannot be removed.
+	//
+	// DELETE /employer/team/members/{user_id}
+	RemoveEmployerTeamMember(ctx context.Context, params RemoveEmployerTeamMemberParams) (*RemoveEmployerTeamMemberOK, error)
 	// RemoveFromWatchlist implements removeFromWatchlist operation.
 	//
 	// A company that was not on the list is not an error.
@@ -2362,6 +2394,12 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/vote
 	VoteJob(ctx context.Context, req *VoteRequest, params VoteJobParams) (*VoteJobOK, error)
+	// WithdrawEmployerTeamInvitation implements withdrawEmployerTeamInvitation operation.
+	//
+	// Withdraws an invitation; its link stops working.
+	//
+	// DELETE /employer/team/invitations/{id}
+	WithdrawEmployerTeamInvitation(ctx context.Context, params WithdrawEmployerTeamInvitationParams) (*WithdrawEmployerTeamInvitationOK, error)
 	// WithdrawMentorProfile implements withdrawMentorProfile operation.
 	//
 	// DELETE /me/mentorship/profile

@@ -2221,6 +2221,300 @@
         ]
       }
     },
+    "/employer/team": {
+      "get": {
+        "operationId": "getEmployerTeam",
+        "description": "Everyone who acts for the caller's company, and the invitations still open.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerTeam"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
+    "/employer/team/invitation-preview": {
+      "post": {
+        "operationId": "previewEmployerTeamInvitation",
+        "description": "Which company an invitation link invites to, at which address. 404 for a dead link.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerTeamInvitationPreview"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerTeamToken"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/team/invitations": {
+      "post": {
+        "operationId": "inviteEmployerTeamMember",
+        "description": "Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerTeamInvitation"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerTeamInvite"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/team/invitations/{id}": {
+      "delete": {
+        "operationId": "withdrawEmployerTeamInvitation",
+        "description": "Withdraws an invitation; its link stops working.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerRemoved"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
+    "/employer/team/join": {
+      "post": {
+        "operationId": "joinEmployerTeam",
+        "description": "Joins the team an invitation link invites to. 409 when the caller already acts for a company.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerAccount"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployerTeamToken"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employer/team/members/{user_id}": {
+      "delete": {
+        "operationId": "removeEmployerTeamMember",
+        "description": "Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The claimant cannot be removed.",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerRemoved"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/jobs": {
       "post": {
         "operationId": "createJob",
@@ -12891,6 +13185,7 @@
           "work_email",
           "status",
           "email_confirmed",
+          "member",
           "created_at"
         ],
         "properties": {
@@ -12918,6 +13213,10 @@
           "email_confirmed": {
             "type": "boolean",
             "description": "Whether the claimant still owes the mailed code or is waiting on a moderator."
+          },
+          "member": {
+            "type": "boolean",
+            "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
           "created_at": {
             "type": "string",
@@ -13157,6 +13456,7 @@
           "work_email",
           "status",
           "email_confirmed",
+          "member",
           "created_at"
         ],
         "properties": {
@@ -13184,6 +13484,10 @@
           "email_confirmed": {
             "type": "boolean",
             "description": "Whether the claimant still owes the mailed code or is waiting on a moderator."
+          },
+          "member": {
+            "type": "boolean",
+            "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
           },
           "created_at": {
             "type": "string",
@@ -13352,6 +13656,127 @@
             "type": "boolean"
           }
         }
+      },
+      "EmployerRemoved": {
+        "type": "object",
+        "required": [
+          "removed"
+        ],
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EmployerTeam": {
+        "type": "object",
+        "required": [
+          "members",
+          "invitations"
+        ],
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerTeamMember"
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerTeamInvitation"
+            }
+          }
+        }
+      },
+      "EmployerTeamInvitation": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "created_at",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          }
+        },
+        "description": "An invitation whose link still works."
+      },
+      "EmployerTeamInvitationPreview": {
+        "type": "object",
+        "required": [
+          "company_name",
+          "email"
+        ],
+        "properties": {
+          "company_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "description": "What an invitation link offers before it is accepted."
+      },
+      "EmployerTeamInvite": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "EmployerTeamMember": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "work_email",
+          "joined_at",
+          "holder"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "work_email": {
+            "type": "string"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "holder": {
+            "type": "boolean"
+          }
+        },
+        "description": "Someone who acts for the company. `holder` is the claimant, who cannot be removed."
+      },
+      "EmployerTeamToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "description": "The token from the invitation link."
       },
       "EmployerVacancyCreate": {
         "type": "object",

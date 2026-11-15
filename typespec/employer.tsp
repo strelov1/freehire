@@ -29,6 +29,9 @@ model EmployerAccount {
   /** Whether the claimant still owes the mailed code or is waiting on a moderator. */
   email_confirmed: boolean;
 
+  /** True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
+  member: boolean;
+
   created_at: utcDateTime;
 }
 
@@ -388,3 +391,87 @@ op moveEmployerApplication(
   @path id: string,
   @body body: EmployerApplicationMove,
 ): Data<EmployerApplicationMoved> | Problem;
+
+// ── The company team ────────────────────────────────────────────────────────────────
+// Colleagues act for the company exactly as its claimant does: they see and move the
+// applications, and publish, edit and close vacancies, all of which belong to the team.
+// They join by a single-use link mailed to their work address.
+
+/** Someone who acts for the company. `holder` is the claimant, who cannot be removed. */
+model EmployerTeamMember {
+  user_id: int64;
+  work_email: string;
+  joined_at: utcDateTime;
+  holder: boolean;
+}
+
+/** An invitation whose link still works. */
+model EmployerTeamInvitation {
+  id: int64;
+  email: string;
+  created_at: utcDateTime;
+  expires_at: utcDateTime;
+}
+
+model EmployerTeam {
+  members: EmployerTeamMember[];
+  invitations: EmployerTeamInvitation[];
+}
+
+model EmployerTeamInvite {
+  email?: string;
+}
+
+/** The token from the invitation link. */
+model EmployerTeamToken {
+  token?: string;
+}
+
+/** What an invitation link offers before it is accepted. */
+model EmployerTeamInvitationPreview {
+  company_name: string;
+  email: string;
+}
+
+model EmployerRemoved {
+  removed: boolean;
+}
+
+/** Everyone who acts for the caller's company, and the invitations still open. */
+@tag("Employer")
+@route("/employer/team")
+@get
+op getEmployerTeam(): Data<EmployerTeam> | Problem;
+
+/** Mails a colleague a single-use link to join the team, valid seven days. Inviting an address again replaces its link. 429 past twenty open invitations. */
+@tag("Employer")
+@route("/employer/team/invitations")
+@post
+op inviteEmployerTeamMember(@body body: EmployerTeamInvite): {
+  @statusCode _: 201;
+  @body body: Data<EmployerTeamInvitation>;
+} | Problem;
+
+/** Withdraws an invitation; its link stops working. */
+@tag("Employer")
+@route("/employer/team/invitations/{id}")
+@delete
+op withdrawEmployerTeamInvitation(@path id: string): Data<EmployerRemoved> | Problem;
+
+/** Removes a member, or the caller themselves (leaving). Their vacancies stay with the team. The claimant cannot be removed. */
+@tag("Employer")
+@route("/employer/team/members/{user_id}")
+@delete
+op removeEmployerTeamMember(@path user_id: string): Data<EmployerRemoved> | Problem;
+
+/** Which company an invitation link invites to, at which address. 404 for a dead link. */
+@tag("Employer")
+@route("/employer/team/invitation-preview")
+@post
+op previewEmployerTeamInvitation(@body body: EmployerTeamToken): Data<EmployerTeamInvitationPreview> | Problem;
+
+/** Joins the team an invitation link invites to. 409 when the caller already acts for a company. */
+@tag("Employer")
+@route("/employer/team/join")
+@post
+op joinEmployerTeam(@body body: EmployerTeamToken): Data<EmployerAccount> | Problem;
