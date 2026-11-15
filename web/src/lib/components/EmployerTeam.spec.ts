@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmployerTeam as Team } from '#lib/types.js';
 import EmployerTeam from './EmployerTeam.svelte';
@@ -59,5 +59,33 @@ describe('EmployerTeam', () => {
     render(EmployerTeam, { onLeft: vi.fn() });
     await fireEvent.click(await screen.findByRole('button', { name: 'Withdraw' }));
     expect(withdrawEmployerTeamInvitation).toHaveBeenCalledWith(9);
+  });
+
+  it('removes the colleague it was asked to, after confirming', async () => {
+    removeEmployerTeamMember.mockResolvedValue(undefined);
+    const onLeft = vi.fn();
+    render(EmployerTeam, { onLeft });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    await fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+    await vi.waitFor(() => expect(removeEmployerTeamMember).toHaveBeenCalledWith(3));
+    await vi.waitFor(() => expect(getEmployerTeam).toHaveBeenCalledTimes(2));
+    expect(onLeft).not.toHaveBeenCalled();
+  });
+
+  it('leaves the team, and reports leaving only once it succeeded', async () => {
+    const onLeft = vi.fn();
+    removeEmployerTeamMember.mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(undefined);
+    render(EmployerTeam, { onLeft });
+    const leave = async () => {
+      await fireEvent.click(await screen.findByRole('button', { name: 'Leave the team' }));
+      await fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Leave the team' }));
+    };
+    await leave();
+    await vi.waitFor(() => expect(removeEmployerTeamMember).toHaveBeenCalledTimes(1));
+    expect(removeEmployerTeamMember).toHaveBeenLastCalledWith(2);
+    expect(onLeft).not.toHaveBeenCalled();
+    await leave();
+    await vi.waitFor(() => expect(onLeft).toHaveBeenCalledTimes(1));
+    expect(removeEmployerTeamMember).toHaveBeenLastCalledWith(2);
   });
 });

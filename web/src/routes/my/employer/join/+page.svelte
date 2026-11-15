@@ -19,23 +19,38 @@
   const token = $derived(page.url.searchParams.get('token') ?? '');
 
   let preview = $state<EmployerTeamInvitationPreview | null>(null);
-  let status = $state<'loading' | 'ready' | 'dead'>('loading');
+  // 'dead' is a link the server confirmed unusable (404); 'failed' is a preview that could not
+  // be read (network, 5xx), which a retry may fix.
+  let status = $state<'loading' | 'ready' | 'dead' | 'failed'>('loading');
+  let attempt = $state(0);
   let joining = $state(false);
   let error = $state<string | null>(null);
 
   $effect(() => {
+    void attempt;
+    const current = token;
+    // Each token starts from nothing, so the page never shows one company while joining another.
+    preview = null;
+    error = null;
     if (!isAuthenticated()) return;
-    if (!token) {
+    if (!current) {
       status = 'dead';
       return;
     }
+    status = 'loading';
+    let stale = false;
     void api
-      .previewEmployerTeamInvitation(token)
+      .previewEmployerTeamInvitation(current)
       .then((p) => {
+        if (stale) return;
         preview = p;
         status = 'ready';
       })
-      .catch(() => (status = 'dead'));
+      .catch((err) => {
+        if (stale) return;
+        status = err instanceof ApiError && err.status === 404 ? 'dead' : 'failed';
+      });
+    return () => (stale = true);
   });
 
   async function join() {
@@ -60,6 +75,11 @@
 <div class="flex max-w-xl flex-col gap-6">
   {#if status === 'loading'}
     <States state="loading" rows={2} />
+  {:else if status === 'failed'}
+    <div class="flex flex-col gap-3">
+      <p class="text-sm text-destructive">{s.previewFailed}</p>
+      <Button variant="outline" class="w-fit" onclick={() => attempt++}>{s.retry}</Button>
+    </div>
   {:else if status === 'dead' || !preview}
     <p class="text-sm text-muted-foreground">{token ? s.dead : s.noToken}</p>
   {:else}

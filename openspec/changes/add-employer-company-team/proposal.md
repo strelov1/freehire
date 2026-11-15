@@ -21,8 +21,11 @@ sharing a password. A hiring pipeline only one person can see is not one a compa
 - **One company per user** now holds across claimants and members.
 - The profile page gains a Team section; an invitation lands on `/my/employer/join`.
 
-Not in this change: roles or permissions, transferring the account to another claimant,
-handing vacancies over when a member deletes their freehire account (see design).
+- A member deleting their freehire account hands their vacancies to the claimant too (a
+  database trigger, since account deletion lives below this block).
+
+Not in this change: roles or permissions, transferring the account to another claimant
+when the claimant deletes their freehire account (see design).
 
 ## Capabilities
 

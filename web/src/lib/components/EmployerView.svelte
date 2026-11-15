@@ -198,7 +198,10 @@
   <EmployerDashboard
     {company}
     tab={section}
-    onProfileSaved={(updated) => (company = updated)}
+    onProfileSaved={(updated) => {
+      // A save that finishes after the member left must not bring the dashboard back.
+      if (company) company = updated;
+    }}
     onLeft={() => (company = null)}
   />
 {/if}

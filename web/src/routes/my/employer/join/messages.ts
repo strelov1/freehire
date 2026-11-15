@@ -8,6 +8,8 @@ export const messages = defineMessages(
     join: 'Join the team',
     joining: 'Joining…',
     dead: 'This invitation link is invalid or has expired. Ask your colleague to send a new one.',
+    previewFailed: 'Could not load this invitation. Check your connection and try again.',
+    retry: 'Try again',
     noToken: 'This page opens from an invitation email.',
     alreadyMember: 'You already act for a company on freehire, and an account acts for one company only.',
     error: 'Something went wrong. Please try again.',
@@ -20,6 +22,8 @@ export const messages = defineMessages(
       join: 'Вступить в команду',
       joining: 'Вступаем…',
       dead: 'Ссылка-приглашение недействительна или устарела. Попросите коллегу прислать новую.',
+      previewFailed: 'Не удалось загрузить приглашение. Проверьте подключение и попробуйте ещё раз.',
+      retry: 'Попробовать ещё раз',
       noToken: 'Эта страница открывается по ссылке из письма-приглашения.',
       alreadyMember:
         'Вы уже действуете от имени компании на freehire, а один аккаунт может представлять только одну компанию.',
