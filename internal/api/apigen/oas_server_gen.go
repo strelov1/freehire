@@ -639,6 +639,14 @@ type Handler interface {
 	//
 	// GET /me/autofill-profile
 	GetAutofillProfile(ctx context.Context) (*GetAutofillProfileOK, error)
+	// GetBillingAttempts implements getBillingAttempts operation.
+	//
+	// The caller's 20 most recent Stripe charge attempts, newest first, including failed first purchases
+	// and retries. An account with no Stripe customer gets an empty list; a provider read failure returns
+	// 503. Cookie session only.
+	//
+	// GET /billing/attempts
+	GetBillingAttempts(ctx context.Context) (*BillingAttemptsHeaders, error)
 	// GetBillingCheckout implements getBillingCheckout operation.
 	//
 	// 404 when checkout is unconfigured or the price is not offered. Cookie session only.

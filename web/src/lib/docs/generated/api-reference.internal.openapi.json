@@ -228,6 +228,61 @@
         ]
       }
     },
+    "/billing/attempts": {
+      "get": {
+        "operationId": "getBillingAttempts",
+        "summary": "Read your recent payment attempts.",
+        "description": "The caller's 20 most recent Stripe charge attempts, newest first, including failed\nfirst purchases and retries. An account with no Stripe customer gets an empty list;\na provider read failure returns 503. Cookie session only.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "headers": {
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingAttempts"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "ch_example",
+                      "date": "2026-11-14T13:24:38Z",
+                      "amount_cents": 290,
+                      "amount_refunded_cents": 0,
+                      "currency": "brl",
+                      "status": "failed",
+                      "reason": "insufficient_funds",
+                      "card_last4": "4242"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/billing/checkout": {
       "get": {
         "operationId": "getBillingCheckout",
@@ -11155,6 +11210,20 @@
           }
         }
       },
+      "BillingAttempts": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillingPaymentAttempt"
+            }
+          }
+        }
+      },
       "BillingCheckout": {
         "type": "object",
         "required": [
@@ -11259,6 +11328,60 @@
           }
         },
         "description": "What the account is paying and what has been charged, read from the provider."
+      },
+      "BillingPaymentAttempt": {
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "amount_cents",
+          "amount_refunded_cents",
+          "currency",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount in the currency's smallest unit."
+          },
+          "amount_refunded_cents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "`succeeded`, `failed`, `pending`, `refunded`, or `partially_refunded`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "A safe display key; provider diagnostics and risk scores are never returned."
+          },
+          "card_brand": {
+            "type": "string"
+          },
+          "card_last4": {
+            "type": "string"
+          },
+          "card_funding": {
+            "type": "string"
+          },
+          "wallet": {
+            "type": "string"
+          }
+        },
+        "description": "One charge attempt, including retries of the same payment."
       },
       "BillingStoreSync": {
         "type": "object",

@@ -3362,6 +3362,37 @@ curl -X POST "https://freehire.me/api/v1/me/autofill/run"
 
 ## Billing
 
+### `GET /billing/attempts`
+
+**Auth:** Session only
+
+Read your recent payment attempts.
+
+The caller's 20 most recent Stripe charge attempts, newest first, including failed
+first purchases and retries. An account with no Stripe customer gets an empty list;
+a provider read failure returns 503. Cookie session only.
+
+```bash
+curl "https://freehire.me/api/v1/billing/attempts" -b cookies.txt
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "ch_example",
+      "date": "2026-11-14T13:24:38Z",
+      "amount_cents": 290,
+      "amount_refunded_cents": 0,
+      "currency": "brl",
+      "status": "failed",
+      "reason": "insufficient_funds",
+      "card_last4": "4242"
+    }
+  ]
+}
+```
+
 ### `GET /billing/checkout`
 
 **Auth:** Session only

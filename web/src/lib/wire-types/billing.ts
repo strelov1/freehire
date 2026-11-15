@@ -65,6 +65,9 @@ export type ApiUsageDay = components['schemas']['ApiUsageDay'];
  *  cancelled" is the kind of contradiction that generates support mail. */
 export type BillingOverview = components['schemas']['BillingOverview'];
 
+/** A single Stripe charge attempt, including failed retries. */
+export type BillingPaymentAttempt = components['schemas']['BillingPaymentAttempt'];
+
 /** The caller's plan (`GET /api/v1/me/plan`); `pro_until` is when whichever paid tier they are on lapses. */
 export type PlanState = components['schemas']['PlanStanding'];
 

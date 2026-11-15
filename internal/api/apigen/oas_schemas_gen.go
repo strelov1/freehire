@@ -2343,6 +2343,47 @@ func (s *BankedAnswer) SetUpdatedAt(val time.Time) {
 	s.UpdatedAt = val
 }
 
+// Ref: #/components/schemas/BillingAttempts
+type BillingAttempts struct {
+	Data []BillingPaymentAttempt `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *BillingAttempts) GetData() []BillingPaymentAttempt {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *BillingAttempts) SetData(val []BillingPaymentAttempt) {
+	s.Data = val
+}
+
+// BillingAttemptsHeaders wraps BillingAttempts with response headers.
+type BillingAttemptsHeaders struct {
+	CacheControl string
+	Response     BillingAttempts
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *BillingAttemptsHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *BillingAttemptsHeaders) GetResponse() BillingAttempts {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *BillingAttemptsHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *BillingAttemptsHeaders) SetResponse(val BillingAttempts) {
+	s.Response = val
+}
+
 // The checkout link and which offer was applied to it.
 // Ref: #/components/schemas/BillingCheckout
 type BillingCheckout struct {
@@ -2548,6 +2589,135 @@ func (s *BillingOverview) SetInvoices(val []BillingInvoice) {
 // SetMultipleSubscriptions sets the value of MultipleSubscriptions.
 func (s *BillingOverview) SetMultipleSubscriptions(val OptBool) {
 	s.MultipleSubscriptions = val
+}
+
+// One charge attempt, including retries of the same payment.
+// Ref: #/components/schemas/BillingPaymentAttempt
+type BillingPaymentAttempt struct {
+	ID   string    `json:"id"`
+	Date time.Time `json:"date"`
+	// Amount in the currency's smallest unit.
+	AmountCents         int64  `json:"amount_cents"`
+	AmountRefundedCents int64  `json:"amount_refunded_cents"`
+	Currency            string `json:"currency"`
+	// `succeeded`, `failed`, `pending`, `refunded`, or `partially_refunded`.
+	Status string `json:"status"`
+	// A safe display key; provider diagnostics and risk scores are never returned.
+	Reason      OptString `json:"reason"`
+	CardBrand   OptString `json:"card_brand"`
+	CardLast4   OptString `json:"card_last4"`
+	CardFunding OptString `json:"card_funding"`
+	Wallet      OptString `json:"wallet"`
+}
+
+// GetID returns the value of ID.
+func (s *BillingPaymentAttempt) GetID() string {
+	return s.ID
+}
+
+// GetDate returns the value of Date.
+func (s *BillingPaymentAttempt) GetDate() time.Time {
+	return s.Date
+}
+
+// GetAmountCents returns the value of AmountCents.
+func (s *BillingPaymentAttempt) GetAmountCents() int64 {
+	return s.AmountCents
+}
+
+// GetAmountRefundedCents returns the value of AmountRefundedCents.
+func (s *BillingPaymentAttempt) GetAmountRefundedCents() int64 {
+	return s.AmountRefundedCents
+}
+
+// GetCurrency returns the value of Currency.
+func (s *BillingPaymentAttempt) GetCurrency() string {
+	return s.Currency
+}
+
+// GetStatus returns the value of Status.
+func (s *BillingPaymentAttempt) GetStatus() string {
+	return s.Status
+}
+
+// GetReason returns the value of Reason.
+func (s *BillingPaymentAttempt) GetReason() OptString {
+	return s.Reason
+}
+
+// GetCardBrand returns the value of CardBrand.
+func (s *BillingPaymentAttempt) GetCardBrand() OptString {
+	return s.CardBrand
+}
+
+// GetCardLast4 returns the value of CardLast4.
+func (s *BillingPaymentAttempt) GetCardLast4() OptString {
+	return s.CardLast4
+}
+
+// GetCardFunding returns the value of CardFunding.
+func (s *BillingPaymentAttempt) GetCardFunding() OptString {
+	return s.CardFunding
+}
+
+// GetWallet returns the value of Wallet.
+func (s *BillingPaymentAttempt) GetWallet() OptString {
+	return s.Wallet
+}
+
+// SetID sets the value of ID.
+func (s *BillingPaymentAttempt) SetID(val string) {
+	s.ID = val
+}
+
+// SetDate sets the value of Date.
+func (s *BillingPaymentAttempt) SetDate(val time.Time) {
+	s.Date = val
+}
+
+// SetAmountCents sets the value of AmountCents.
+func (s *BillingPaymentAttempt) SetAmountCents(val int64) {
+	s.AmountCents = val
+}
+
+// SetAmountRefundedCents sets the value of AmountRefundedCents.
+func (s *BillingPaymentAttempt) SetAmountRefundedCents(val int64) {
+	s.AmountRefundedCents = val
+}
+
+// SetCurrency sets the value of Currency.
+func (s *BillingPaymentAttempt) SetCurrency(val string) {
+	s.Currency = val
+}
+
+// SetStatus sets the value of Status.
+func (s *BillingPaymentAttempt) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetReason sets the value of Reason.
+func (s *BillingPaymentAttempt) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// SetCardBrand sets the value of CardBrand.
+func (s *BillingPaymentAttempt) SetCardBrand(val OptString) {
+	s.CardBrand = val
+}
+
+// SetCardLast4 sets the value of CardLast4.
+func (s *BillingPaymentAttempt) SetCardLast4(val OptString) {
+	s.CardLast4 = val
+}
+
+// SetCardFunding sets the value of CardFunding.
+func (s *BillingPaymentAttempt) SetCardFunding(val OptString) {
+	s.CardFunding = val
+}
+
+// SetWallet sets the value of Wallet.
+func (s *BillingPaymentAttempt) SetWallet(val OptString) {
+	s.Wallet = val
 }
 
 // Ref: #/components/schemas/BillingStoreSync

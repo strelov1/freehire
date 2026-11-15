@@ -79,6 +79,33 @@ func (h *billingHandlers) register(api fiber.Router, mw middleware, contract fib
 	// it is its own route rather than a field on /me/plan — that surface must keep answering
 	// when the provider does not.
 	api.Get("/billing/subscription", mw.cookie, contract)
+	api.Get("/billing/attempts", mw.cookie, contract)
+}
+
+// GetBillingAttempts reads only the session account's history, including failed first purchases.
+func (h *billingHandlers) GetBillingAttempts(ctx context.Context) (*apigen.BillingAttemptsHeaders, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, applyTimeout)
+	defer cancel()
+	attempts, err := h.billing.PaymentAttempts(ctx, userID)
+	if err != nil {
+		log.Printf("billing: could not read payment attempts of user %d: %v", userID, err)
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "payment history is temporarily unavailable")
+	}
+	data := make([]apigen.BillingPaymentAttempt, len(attempts))
+	for i, attempt := range attempts {
+		data[i] = apigen.BillingPaymentAttempt{
+			ID: attempt.ID, Date: attempt.Date,
+			AmountCents: attempt.AmountCents, AmountRefundedCents: attempt.AmountRefundedCents,
+			Currency: attempt.Currency, Status: attempt.Status, Reason: optString(attempt.Reason),
+			CardBrand: optString(attempt.CardBrand), CardLast4: optString(attempt.CardLast4),
+			CardFunding: optString(attempt.CardFunding), Wallet: optString(attempt.Wallet),
+		}
+	}
+	return &apigen.BillingAttemptsHeaders{CacheControl: "no-store", Response: apigen.BillingAttempts{Data: data}}, nil
 }
 
 // applyTimeout bounds the inline attempt to bring the user's plan up to date.

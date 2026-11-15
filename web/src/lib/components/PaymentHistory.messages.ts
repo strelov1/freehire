@@ -1,0 +1,50 @@
+import { defineMessages } from '#lib/i18n/t.js';
+
+export const messages = defineMessages(
+  {
+    heading: 'Payment history',
+    description: 'Your 20 most recent payment attempts, newest first. Times are shown in your local time.',
+    refresh: 'Refresh',
+    loading: 'Loading payment history…',
+    loadError: "Couldn't load payment history. Try refreshing in a moment.",
+    empty: 'No payment attempts yet.',
+    card: 'Card',
+    refundedAmount: 'Refunded: {amount}',
+    status: {
+      succeeded: 'Paid',
+      failed: 'Payment failed',
+      pending: 'Processing',
+      refunded: 'Refunded',
+      partially_refunded: 'Partially refunded',
+      unknown: 'Status unavailable',
+    },
+    funding: { credit: 'Credit', debit: 'Debit', prepaid: 'Prepaid' },
+    wallet: { apple_pay: 'Apple Pay', google_pay: 'Google Pay' },
+    reasons: {
+      insufficient_funds: 'The bank reported insufficient funds or available credit.',
+      security_check: 'The payment was declined by a security check.',
+      expired_card: 'The card has expired.',
+      incorrect_cvc: 'The card security code was incorrect.',
+      incorrect_number: 'The card number was incorrect.',
+      processing_error: 'The payment could not be processed.',
+      authentication_required: 'The bank requires payment verification.',
+      card_not_supported: 'The card does not support this type of purchase.',
+      currency_not_supported: 'The card does not support this currency.',
+      declined: 'The payment was declined.',
+    },
+    help: {
+      insufficient_funds:
+        'Check your available credit limit as well as your account balance. If you recently added funds, check that the bank has made them available. Otherwise, contact your bank or use another card.',
+      security_check: 'Try another payment method or contact support if the problem continues.',
+      expired_card: 'Use a card with a valid expiry date.',
+      incorrect_cvc: 'Check the security code when entering your card details.',
+      incorrect_number: 'Check the card number when entering your card details.',
+      processing_error: 'Try again later. If the problem continues, contact your bank.',
+      authentication_required: 'Complete the verification requested by your bank during checkout.',
+      card_not_supported: 'Contact your bank or use another payment method.',
+      currency_not_supported: 'Contact your bank or use a card that supports this currency.',
+      declined: 'Ask your bank about this attempt or use another payment method.',
+    },
+  },
+  {},
+);

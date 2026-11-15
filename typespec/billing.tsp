@@ -19,6 +19,61 @@ model BillingUrl {
   url: string;
 }
 
+/** One charge attempt, including retries of the same payment. */
+model BillingPaymentAttempt {
+  id: string;
+  date: utcDateTime;
+  /** Amount in the currency's smallest unit. */
+  amount_cents: int64;
+  amount_refunded_cents: int64;
+  currency: string;
+  /** `succeeded`, `failed`, `pending`, `refunded`, or `partially_refunded`. */
+  status: string;
+  /** A safe display key; provider diagnostics and risk scores are never returned. */
+  reason?: string;
+  card_brand?: string;
+  card_last4?: string;
+  card_funding?: string;
+  wallet?: string;
+}
+
+model BillingAttempts {
+  data: BillingPaymentAttempt[];
+}
+
+model BillingAttemptsHeaders {
+  @header("Cache-Control") cacheControl: string;
+  @body response: BillingAttempts;
+}
+
+/**
+ * The caller's 20 most recent Stripe charge attempts, newest first, including failed
+ * first purchases and retries. An account with no Stripe customer gets an empty list;
+ * a provider read failure returns 503. Cookie session only.
+ */
+@summary("Read your recent payment attempts.")
+@opExample(#{
+  returnType: #{
+    cacheControl: "no-store",
+    response: #{
+      data: #[#{
+        id: "ch_example",
+        date: utcDateTime.fromISO("2026-11-14T13:24:38Z"),
+        amount_cents: 290,
+        amount_refunded_cents: 0,
+        currency: "brl",
+        status: "failed",
+        reason: "insufficient_funds",
+        card_last4: "4242",
+      }],
+    },
+  },
+})
+@tag("Billing")
+@route("/billing/attempts")
+@get
+op getBillingAttempts(): BillingAttemptsHeaders | Problem;
+
 model BillingInvoice {
   id: string;
   date: utcDateTime;

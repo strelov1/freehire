@@ -292,48 +292,45 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	if existing.Valid {
 		customerID = existing.String
 	}
-
-	if customerID != "" {
-		// Fail the whole call on a read error rather than fall back to a new checkout, which
-		// would open a second subscription beside a live one.
-		current, err := s.client.subscriberState(ctx, customerID)
-		if err != nil {
-			return "", Discount{}, fmt.Errorf("billing: reading the subscriptions of user %d: %w", userID, err)
-		}
-		// Within the requested price's own product: an API purchase must never change a Pro/Ultra
-		// subscription in place, nor the reverse (see Config.checkoutFamily).
-		familyA, familyB := s.cfg.checkoutFamily(priceID)
-		target := decideCheckoutTarget(current, priceID, familyA, familyB)
-		switch {
-		case target.AlreadyOnPrice:
-			// ReturnURL, not SuccessURL: nothing was bought, and SuccessURL would count a sale on
-			// every re-open of the current price.
-			return s.cfg.ReturnURL(), Discount{}, nil
-		case target.Ambiguous:
-			return "", Discount{}, fmt.Errorf(
-				"billing: user %d's subscription carries more than one item; refusing to guess which one to change", userID)
-		case target.SubscriptionID != "":
-			// A fresh key per call: it guards one call's own low-level HTTP retries against
-			// double-billing a proration, not repeated clicks (re-setting the price changes nothing).
-			idempotencyKey := uuid.NewString()
-			if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID, idempotencyKey); err != nil {
-				return "", Discount{}, fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
-			}
-			// SuccessURL: an in-place upgrade IS a purchase; ReturnURL left every Pro-to-Ultra sale
-			// looking abandoned.
-			return s.cfg.SuccessURL(), Discount{}, nil
-		}
-		// No entitling subscription (free account or lapsed subscriber): open a checkout.
-	}
-
-	// Pre-fill the email we hold, only for a NEW customer: the provider refuses an email
-	// alongside an existing customer.
-	var email string
 	if customerID == "" {
-		if addr, emailErr := s.q.UserEmail(ctx, userID); emailErr == nil {
-			email = addr
+		// Bind before checkout so a failed first payment is still reachable by its owner.
+		// newCustomerFor re-reads the write-once binding if another checkout wins the race.
+		customerID, err = s.newCustomerFor(ctx, userID, fmt.Sprintf("checkout_user_%d", userID))
+		if err != nil {
+			return "", Discount{}, err
 		}
 	}
+
+	// Fail the whole call on a read error rather than fall back to a new checkout, which
+	// would open a second subscription beside a live one.
+	current, err := s.client.subscriberState(ctx, customerID)
+	if err != nil {
+		return "", Discount{}, fmt.Errorf("billing: reading the subscriptions of user %d: %w", userID, err)
+	}
+	// Within the requested price's own product: an API purchase must never change a Pro/Ultra
+	// subscription in place, nor the reverse (see Config.checkoutFamily).
+	familyA, familyB := s.cfg.checkoutFamily(priceID)
+	target := decideCheckoutTarget(current, priceID, familyA, familyB)
+	switch {
+	case target.AlreadyOnPrice:
+		// ReturnURL, not SuccessURL: nothing was bought, and SuccessURL would count a sale on
+		// every re-open of the current price.
+		return s.cfg.ReturnURL(), Discount{}, nil
+	case target.Ambiguous:
+		return "", Discount{}, fmt.Errorf(
+			"billing: user %d's subscription carries more than one item; refusing to guess which one to change", userID)
+	case target.SubscriptionID != "":
+		// A fresh key per call: it guards one call's own low-level HTTP retries against
+		// double-billing a proration, not repeated clicks (re-setting the price changes nothing).
+		idempotencyKey := uuid.NewString()
+		if err := s.client.updateSubscriptionPrice(ctx, target.SubscriptionID, target.ItemID, priceID, idempotencyKey); err != nil {
+			return "", Discount{}, fmt.Errorf("billing: upgrading user %d to price %q: %w", userID, priceID, err)
+		}
+		// SuccessURL: an in-place upgrade IS a purchase; ReturnURL left every Pro-to-Ultra sale
+		// looking abandoned.
+		return s.cfg.SuccessURL(), Discount{}, nil
+	}
+	// No entitling subscription (free account or lapsed subscriber): open a checkout.
 
 	// A coupon is minted per session from the percentage this account is owed. A mint failure is
 	// fatal on purpose: sending someone to pay full price for an offer they were shown is worse.
@@ -346,7 +343,7 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	}
 
 	// Success and cancel differ by one marker; see Config.SuccessURL.
-	url, err := s.client.createCheckoutSession(ctx, userID, email,
+	url, err := s.client.createCheckoutSession(ctx, userID, "",
 		priceID, s.cfg.SuccessURL(), s.cfg.ReturnURL(), customerID, couponID)
 	if err != nil {
 		return "", Discount{}, err
