@@ -134,36 +134,6 @@ func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs
 	return companies, nil
 }
 
-// fakeCoverage answers NonAggregatorCompanies from a canned covered set, and records every
-// batch of company slugs it was asked about — so a test can prove how often (per board vs
-// per distinct company) the pipeline calls it.
-type fakeCoverage struct {
-	mu             sync.Mutex
-	covered        map[string]bool // exact company_slug -> covered
-	calls          [][]string      // each call's companySlugs argument, in order
-	aggregatorArgs [][]string      // each call's aggregators argument, in order
-	countryArgs    [][]string      // each call's countries argument, in order
-	err            error
-}
-
-func (f *fakeCoverage) NonAggregatorCompanies(_ context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error) {
-	f.mu.Lock()
-	f.calls = append(f.calls, append([]string(nil), companySlugs...))
-	f.aggregatorArgs = append(f.aggregatorArgs, append([]string(nil), aggregators...))
-	f.countryArgs = append(f.countryArgs, countries)
-	f.mu.Unlock()
-	if f.err != nil {
-		return nil, f.err
-	}
-	out := make(map[string]bool)
-	for _, slug := range companySlugs {
-		if f.covered[slug] {
-			out[slug] = true
-		}
-	}
-	return out, nil
-}
-
 // fakeSource returns canned jobs or an error, keyed by provider.
 type fakeSource struct {
 	provider string

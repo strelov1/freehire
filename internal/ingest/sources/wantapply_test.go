@@ -135,7 +135,7 @@ func TestWantapplyAPIRegistryAndCompleteCatalogueCapabilities(t *testing.T) {
 		if !ok {
 			t.Fatalf("missing %s", provider)
 		}
-		if !IsAggregator(reg, provider) || !HasOriginalPostings(reg, provider) {
+		if !IsAggregator(reg, provider) {
 			t.Fatalf("%s must retain original multi-employer postings", provider)
 		}
 		if _, ok := src.(boardless); !ok {

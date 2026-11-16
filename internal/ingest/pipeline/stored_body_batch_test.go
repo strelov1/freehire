@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/job/job"
 )
 
 type batchBodyStore struct {
@@ -37,14 +38,18 @@ func TestBufferedBodiesKeepStoredEvidenceAndProvenance(t *testing.T) {
 	raw := []sources.Job{{ExternalID: "1", Title: "Engineering Manager", Company: "Acme", URL: "https://example.com/1"}, {ExternalID: "2", Title: "Software Engineer", Company: "Covered", URL: "https://example.com/2"}}
 	s := &batchBodyStore{bodies: map[string]string{":1": "Build Python services on PostgreSQL."}}
 	r := Runner{Store: s}
-	got := r.writeBoard(context.Background(), e, raw, nil, func(slug string) bool { return slug == "covered" }, nil)
-	if got.st.Ingested != 1 || got.st.ATSCovered != 1 || got.st.Skipped != 0 {
+	got := r.writeBoard(context.Background(), e, raw, nil, nil)
+	if got.st.Ingested != 2 || got.st.Skipped != 0 {
 		t.Fatalf("stats=%+v", got.st)
 	}
 	if s.singles != 0 || !slices.Equal(s.batches, []int{2}) {
 		t.Fatalf("singles=%d batches=%v", s.singles, s.batches)
 	}
-	f := s.saved[0].Fields()
+	i := slices.IndexFunc(s.saved, func(j job.Job) bool { return j.Fields().ExternalID == ":1" })
+	if i < 0 {
+		t.Fatal("posting with stored body was not saved")
+	}
+	f := s.saved[i].Fields()
 	if !f.UpsertParams().BodyFromCatalogue || !slices.Contains(f.Skills, "python") {
 		t.Fatalf("stored evidence/provenance lost: %+v", f)
 	}
@@ -60,8 +65,8 @@ func TestBufferedBodiesBoundQueriesAndFallBackOnFailure(t *testing.T) {
 			if fail {
 				s.batchErr = errors.New("batch unavailable")
 			}
-			got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, func(string) bool { return true }, nil)
-			if got.st.ATSCovered != 1001 || got.st.Skipped != 0 {
+			got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, nil)
+			if got.st.Ingested != 1001 || got.st.Skipped != 0 {
 				t.Fatalf("stats=%+v", got.st)
 			}
 			if !slices.Equal(s.batches, []int{500, 500, 1}) {
@@ -84,7 +89,7 @@ func TestBufferedDuplicateIdentitiesReadTheCurrentBody(t *testing.T) {
 		{ExternalID: "repeat", Title: "Software Engineer", Company: "Acme", Description: "Build Python services.", URL: "https://example.com/job"},
 		{ExternalID: "repeat", Title: "Software Engineer", Company: "Acme", URL: "https://example.com/job"},
 	}
-	got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, nil, nil)
+	got := (Runner{Store: s}).writeBoard(context.Background(), sources.CompanyEntry{Provider: "spainjobs"}, raw, nil, nil)
 	if got.st.Ingested != 2 || s.singles != 1 || len(s.batches) != 0 {
 		t.Fatalf("stats=%+v singles=%d batches=%v", got.st, s.singles, s.batches)
 	}

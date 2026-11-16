@@ -34,24 +34,15 @@ func (f *fakeAliases) CanonicalCompanySlugs(_ context.Context, foldedKeys []stri
 	return out, nil
 }
 
-// TestRunStoresTheCanonicalCompanySlugAndGatesOnIt is the structural guarantee behind duplicate
-// class 1b, and behind the coverage gate not leaking a second time.
-//
-// "DollarTree" derives to `dollartree`, which a merge registered as an alias of `dollar-tree`.
-// The posting must be STORED under the canonical slug, and the coverage lookup must be asked
-// about that same canonical slug — because what it is really being asked is "does this employer
-// already have ATS coverage", and `dollartree` is not the key the catalogue holds that under.
-//
-// The two agreeing is not a coincidence to be maintained by hand: both read one resolved map.
-func TestRunStoresTheCanonicalCompanySlugAndGatesOnIt(t *testing.T) {
+// Company aliases are still resolved once per board before postings are stored.
+func TestRunStoresTheCanonicalCompanySlug(t *testing.T) {
 	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
 		{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", URL: "u"},
 		{ExternalID: "2", Title: "Data Engineer", Company: "DollarTree", URL: "u"},
 	}}
 	store := &fakeStore{}
-	coverage := &fakeCoverage{covered: map[string]bool{}}
 	aliases := &fakeAliases{canon: map[string]string{"dollartree": "dollar-tree"}}
-	r := Runner{Registry: registry(src), Store: store, Coverage: coverage, Aliases: aliases}
+	r := Runner{Registry: registry(src), Store: store, Aliases: aliases}
 
 	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
 		{Company: "Himalayas", Provider: "himalayas"},
@@ -67,13 +58,6 @@ func TestRunStoresTheCanonicalCompanySlugAndGatesOnIt(t *testing.T) {
 			t.Errorf("stored CompanySlug = %q, want %q (the canonical slug, not the derived one)",
 				got, "dollar-tree")
 		}
-	}
-	if len(coverage.calls) != 1 {
-		t.Fatalf("coverage was called %d times, want 1 (one batch per board)", len(coverage.calls))
-	}
-	if got := coverage.calls[0]; len(got) != 1 || got[0] != "dollar-tree" {
-		t.Errorf("coverage asked about %v, want [dollar-tree] — the gate must ask about the "+
-			"slug the upsert will write, or it silently stops matching", got)
 	}
 	if len(aliases.calls) != 1 {
 		t.Errorf("alias lookup ran %d times, want 1 per board run", len(aliases.calls))
@@ -99,71 +83,5 @@ func TestRunWithoutAliasesKeepsTheDerivedSlug(t *testing.T) {
 	}
 	if got := store.saved[0].Fields().CompanySlug; got != "dollartree" {
 		t.Errorf("CompanySlug = %q, want %q", got, "dollartree")
-	}
-}
-
-// TestRunGatesOnTheCanonicalSlugAtDecisionTime is the other half of the invariant. The batch
-// asks the lookup about the canonical slug; this proves the SKIP decision reads it too.
-//
-// `dollar-tree` has ATS coverage; the aggregator posting arrives spelled `DollarTree`. Before
-// the registry resolved it, the gate compared `dollartree` against a catalogue holding
-// `dollar-tree`, found nothing, and saved the duplicate it exists to suppress — the leak in
-// its most literal form.
-func TestRunGatesOnTheCanonicalSlugAtDecisionTime(t *testing.T) {
-	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
-		{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", URL: "u"},
-	}}
-	store := &fakeStore{}
-	coverage := &fakeCoverage{covered: map[string]bool{"dollar-tree": true}}
-	aliases := &fakeAliases{canon: map[string]string{"dollartree": "dollar-tree"}}
-	r := Runner{Registry: registry(src), Store: store, Coverage: coverage, Aliases: aliases}
-
-	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
-		{Company: "Himalayas", Provider: "himalayas"},
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if len(store.saved) != 0 {
-		t.Errorf("saved %d postings, want 0 — the employer already has ATS coverage under its "+
-			"canonical slug, and the gate must recognise that through the spelling",
-			len(store.saved))
-	}
-	if got := stats.Total().ATSCovered; got != 1 {
-		t.Errorf("ATSCovered = %d, want 1", got)
-	}
-}
-
-// TestRunGatesOnTheStrippedSlugWithNoRegistry catches the leak in its plainest form, with no
-// alias registry involved at all.
-//
-// The gate's question set and its decision must be the same derivation. When the batch was
-// built with normalize.Slug while the posting keyed on normalize.CompanySlug, every company
-// carrying a corporate form asked about "acme-inc" and then decided on "acme" — so the lookup
-// answered about a company nobody would consult, and the gate skipped nothing. Silently:
-// a gate that matches nothing looks exactly like a board with nothing to suppress.
-func TestRunGatesOnTheStrippedSlugWithNoRegistry(t *testing.T) {
-	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
-		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme Inc", URL: "u"},
-	}}
-	store := &fakeStore{}
-	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
-	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
-
-	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
-		{Company: "Himalayas", Provider: "himalayas"},
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := coverage.calls[0]; len(got) != 1 || got[0] != "acme" {
-		t.Errorf("coverage asked about %v, want [acme] — the corporate form is not part of the "+
-			"company key, so it must not be part of the question", got)
-	}
-	if len(store.saved) != 0 {
-		t.Errorf("saved %d postings, want 0 (the employer has ATS coverage)", len(store.saved))
-	}
-	if got := stats.Total().ATSCovered; got != 1 {
-		t.Errorf("ATSCovered = %d, want 1", got)
 	}
 }

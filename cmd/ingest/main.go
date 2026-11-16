@@ -225,9 +225,6 @@ func run() int {
 		Store:       store,
 		Outbound:    newNativeDiscovery(pool, registry, store),
 		BoardHealth: newBoardHealth(pool),
-		// The coverage gate reads the same pool: last_seen_at decides the answer and no index
-		// can hold it (see coverage.go).
-		Coverage: newCoverage(pool),
 		// Same object as Store: its pool already serves the alias registry.
 		Aliases:      store,
 		RecentWindow: recentWindow,
