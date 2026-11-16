@@ -35,9 +35,17 @@ a sitemap-only run does not establish readable-body coverage or prove an employe
 has no vacancies. Do not use such a run to justify retiring its former PageUp board.
 
 With Scrapling configured, the registry keeps sitemaps on the direct client and
-routes the 38 verified migrated hosts' details through HTTP + proxy beneath the same provider-wide limiter
+routes the 38 verified migrated hosts' and Waymo's details through HTTP + proxy beneath the same provider-wide limiter
 (1500 ms, burst one). Thirty migrated targets needed this lane in the bounded
 2026-11-15 sample; later cold direct successes do not establish sustained access.
 Service errors and upstream refusals retain standard client handling and the
 existing adapter fallback/latch. There are no extra outer retries or new budgets.
 See [completion evidence](../../../../docs/investigations/2026-11-15-ingest-completion.md).
+
+On 2026-11-16, a bounded Waymo repair read 13 of 373 listed bodies and marked 360
+unreadable, withholding its stale-job close. One exact public Software Engineer detail
+returned HTTP 202 with `x-amzn-waf-action: challenge` through Scrapling HTTP direct,
+and HTTP 200 with a real 3,045-character description through HTTP + proxy. Waymo now
+joins the trusted-host proxy allowlist; its sitemap stays direct. The same shared
+1500 ms pace and challenge latch apply. This comparison proves that detail's access,
+not complete Waymo hydration; deploy and measure a later ordinary admitted run.

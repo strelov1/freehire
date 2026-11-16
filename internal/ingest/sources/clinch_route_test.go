@@ -78,17 +78,31 @@ func TestPageupCustomTransportLeavesCanonicalDirect(t *testing.T) {
 	}
 }
 
+func TestClinchWaymoUsesVerifiedProxyRoute(t *testing.T) {
+	url := "https://careers.withwaymo.com/jobs/" +
+		"software-engineer-mountain-view-california-united-states-050e0262-1397-4e90-a506-f0087e68b30b"
+	plain := &routedDetail{routes: map[string]string{}}
+	proxy := &routedDetail{routes: map[string]string{url: clinchDetailHTML("Build autonomous driving systems.")}}
+	getter := clinchDetailHTTP{plain: plain, migrated: proxy}
+	if _, err := getter.GetHTML(context.Background(), url); err != nil {
+		t.Fatal(err)
+	}
+	if len(proxy.calls) != 1 || len(plain.calls) != 0 {
+		t.Fatalf("proxy calls=%d, direct calls=%d", len(proxy.calls), len(plain.calls))
+	}
+}
+
 func TestClinchOtherHostsKeepDirectDetails(t *testing.T) {
 	plain := &routedDetail{routes: map[string]string{"/jobs/test": clinchDetailHTML("Direct body")}}
 	migrated := &routedDetail{routes: map[string]string{}}
 	getter := clinchDetailHTTP{plain: plain, migrated: migrated}
-	if _, err := getter.GetHTML(context.Background(), "https://careers.withwaymo.com/jobs/test"); err != nil {
+	if _, err := getter.GetHTML(context.Background(), "https://careers.example.org/jobs/test"); err != nil {
 		t.Fatal(err)
 	}
 	if len(plain.calls) != 1 || len(migrated.calls) != 0 {
 		t.Fatal("non-migrated site changed egress")
 	}
-	if len(clinchMigratedHosts) != 38 {
+	if len(clinchMigratedHosts) != 39 {
 		t.Fatalf("hosts=%d", len(clinchMigratedHosts))
 	}
 }
