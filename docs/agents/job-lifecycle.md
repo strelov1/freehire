@@ -24,7 +24,9 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 
 Observation state (`last_seen_at`, `hydrated_at`, `liveness_strikes`) is read from
 `job_activity`, keyed by `jobs.id`. `jobs_read` combines it with posting content for
-the existing `db.Job` shape. An insert trigger creates activity even for raw SQL
+the existing `db.Job` shape. A migration that adds a `jobs` column and replaces
+`jobs_read` must first `LOCK TABLE public.jobs_read IN ACCESS EXCLUSIVE MODE`, or it
+deadlocks live readers of the view (guarded by `internal/platform/migrate`). An insert trigger creates activity even for raw SQL
 inserts. Ordinary unchanged refreshes, open touches and covered refreshes update
 only activity. Full posting writes use `job.Upsert`: write content first, then
 observe activity with a second command in the same transaction. This preserves
