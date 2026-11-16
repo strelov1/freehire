@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { Layers, Map as MapIcon } from '@lucide/svelte';
   import { browser } from '$app/env';
-  import { afterNavigate, goto, replaceState } from '$app/navigation';
+  import { goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '#lib/api.js';
@@ -20,8 +19,6 @@
   import { pageCount, pageOffset, resumePage } from '#lib/pagination.js';
   import Pagination from './Pagination.svelte';
   import JobsEmptyState from './JobsEmptyState.svelte';
-  import MatchNeedsSkillsNotice from './MatchNeedsSkillsNotice.svelte';
-  import MatchSortHint from './MatchSortHint.svelte';
   import {
     FilterStore,
     filtersToParams,
@@ -30,25 +27,24 @@
     activeFilterCount,
     displayQuery,
   } from '#lib/filters.js';
-  import { loadJobFilters } from '#lib/filterStorage.js';
   import JobListControls from './JobListControls.svelte';
+  import JobsMapButtons from './JobsMapButtons.svelte';
+  import JobsSidebar from './JobsSidebar.svelte';
+  import JobsFeedNotices from './JobsFeedNotices.svelte';
+  import JobsFeedList from './JobsFeedList.svelte';
+  import { restoreFiltersOnNavigate } from './jobsFilterRestore';
   import { GeoScopeGuess } from '#lib/geoScopeGuess.svelte.js';
   import { jobsSearchTarget } from '#lib/jobsSearchTarget.js';
   import { narrowestFacet } from '#lib/onboarding.js';
   import { OnboardingNudge } from '#lib/onboardingNudge.svelte.js';
-  import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
-  import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import { setListSearchTarget } from '#lib/listSearch.svelte.js';
   import { track } from '#lib/analytics.js';
   import type { Job, FacetCounts } from '#lib/types.js';
-  import FilterSummary from './filters/FilterSummary.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
   import JobSearchError from './JobSearchError.svelte';
-  import JobRow from './JobRow.svelte';
-  import { Button } from '#lib/ui/index.js';
   import JobRowSkeleton from './JobRowSkeleton.svelte';
   import HiddenToast from './HiddenToast.svelte';
 
@@ -499,86 +495,21 @@
     });
   });
 
-  // Re-seed the filters from the URL on every real navigation (initial load, the
-  // "Jobs" nav link, back/forward). On the standalone list a navigation that lands
-  // on a bare /jobs (empty URL) instead restores the last persisted filters, so an
-  // ordinary navigation never drops them ("Clear all" persisted an empty set, so it
-  // stays cleared).
-  //
-  // afterNavigate (not a URL-tracking $effect) because it runs only after the router
-  // is initialized: apply()'s replaceState is safe on a client-side navigation (a
-  // hydration-time $effect would throw "before router is initialized"), its `applied`
-  // change lands after the reload effect's first pass, and our own shallow replaceState
-  // writes don't re-fire it — so there's no restore loop. Restore is skipped on the
-  // initial `enter` navigation (a hard load / refresh): the router isn't ready for
-  // replaceState yet, and the SSR already rendered that exact URL, so we just re-seed
-  // from it. Every restore-worthy case — the "Jobs" nav link, cross-route entry,
-  // back/forward — is a client-side navigation, where it works. location.search is the
-  // address-bar truth (page.url can lag after shallow routing). The company-embedded
-  // list (persist off) keeps the plain re-seed — unchanged.
-  if (untrack(() => standalone)) {
-    afterNavigate((nav) => {
-      // SvelteKit 3 fires this for shallow routing too, i.e. for our own URL writes.
-      if (nav.shallow) return;
-      const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
-      if (stored) {
-        filters.apply(stored);
-        // A restored set outranks the guess, so nothing is going to be asked for and
-        // the facet measurement must not keep waiting on an answer that is not coming.
-        geo.pending = false;
-      } else {
-        filters.syncFromUrl();
-        // Last in the precedence chain, and the only branch that runs on a cold
-        // load: URL params were just applied, or there was nothing to restore.
-        //
-        // Released on EVERY outcome — scope applied, no region, guard failed on the
-        // re-read, storage refused the marker — because the facet measurement is held
-        // behind this and a path that forgot to release would leave the filter panel
-        // permanently countless.
-        void geo.offer().finally(() => (geo.pending = false));
-      }
-    });
-  } else {
-    syncOnNavigation(filters);
-  }
+  // Re-seed the filters on every real navigation (see restoreFiltersOnNavigate).
+  if (untrack(() => standalone)) restoreFiltersOnNavigate(filters, geo);
+  else syncOnNavigation(filters);
 </script>
 
 <!-- Opens the current search on a world map, over the list rather than instead of it. -->
 {#snippet mapButton()}
-  <Button
-    variant="outline"
-    size="sm"
-    disabled={filters.value.formerEmployers || filters.value.watchlist}
-    title={filters.value.formerEmployers
-      ? 'Turn off Hiring again to explore the map'
-      : filters.value.watchlist
-        ? 'Turn off Your watchlist to explore the map'
-        : undefined}
-    aria-label="Map"
-    onclick={() => {
+  <JobsMapButtons
+    blockedBy={filters.value.formerEmployers ? 'formerEmployers' : filters.value.watchlist ? 'watchlist' : null}
+    onMap={() => {
       mapLoaded = true;
       mapOpen = true;
     }}
-  >
-    <MapIcon class="size-4" />
-    <span class="hidden sm:inline">Map</span>
-  </Button>
-  <!-- Desktop swipe-mode entry, beside Map in the toolbar: as a tab pinned to the viewport
-       edge it sat half outside the content column, aligned with nothing. Phones keep
-       their own entry in the inline toolbar. -->
-  {#if standalone}
-    <Button
-      variant="outline"
-      size="sm"
-      onclick={openSwipe}
-      aria-label="Swipe mode"
-      title="Swipe mode"
-      class="hidden md:inline-flex"
-    >
-      <Layers class="size-4" />
-      <span class="hidden lg:inline">Swipe</span>
-    </Button>
-  {/if}
+    onSwipe={standalone ? openSwipe : undefined}
+  />
 {/snippet}
 
 {#snippet listControls()}
@@ -586,26 +517,14 @@
 {/snippet}
 
 <div class="flex gap-6">
-  <aside class="hidden w-72 shrink-0 md:block">
-    <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the rail
-         pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
-         first 32px — here, the "Filters" heading — for the whole scroll. The max-height
-         is then what is left of the viewport, less the same 24px at the bottom. -->
-    <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-4 overflow-y-auto">
-      {@render sidebarTop?.()}
-      <!-- Card chrome only once there are filters to list: around one "All filters" button it
-           was a framed box holding nothing. -->
-      <div class={filters.active > 0 ? 'rounded-xl border border-border bg-card p-4' : 'px-1'}>
-        <FilterSummary
-          store={filters}
-          exclude={excludeFacets}
-          onOpen={() => (modalOpen = true)}
-          canSave={standalone}
-          matchAvailable={matchFilterAvailable}
-        />
-      </div>
-    </div>
-  </aside>
+  <JobsSidebar
+    top={sidebarTop}
+    {filters}
+    exclude={excludeFacets}
+    onOpen={() => (modalOpen = true)}
+    canSave={standalone}
+    matchAvailable={matchFilterAvailable}
+  />
 
   <div class="min-w-0 flex-1">
     <ListToolbar
@@ -619,35 +538,13 @@
       leading={standalone ? mapButton : undefined}
     />
 
-    <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;
-         each shows once (until dismissed or completed), then retires. Never blocks
-         the feed below. -->
-    {#if nudge.show || nudge.alert}
-      <div class="mt-3">
-        {#if nudge.show}
-          <OnboardingBanner onOpen={nudge.open} onDismiss={nudge.dismiss} />
-        {/if}
-        {#if nudge.alert}
-          <OnboardingAlertBanner
-            query={nudge.alert.query}
-            autostart={nudge.alert.autostart}
-            onDismiss={() => (nudge.alert = null)}
-          />
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Match was chosen and there is nothing to rank against. Sits with the nudges
-         above and, like them, never replaces the feed: the server degrades this request
-         to newest rather than refusing it, so there ARE jobs below — taking them away
-         would punish someone for pressing a button we offered them. What was missing
-         was only the explanation. -->
-    {#if matchSortHint}
-      <MatchSortHint {minMatch} onSort={() => filters.setSort('match')} />
-    {/if}
-    {#if matchNeedsSkills}
-      <MatchNeedsSkillsNotice />
-    {/if}
+    <JobsFeedNotices
+      {nudge}
+      {matchSortHint}
+      {minMatch}
+      onSortByMatch={() => filters.setSort('match')}
+      {matchNeedsSkills}
+    />
 
     <JobSearchError error={jobs.status === 'error' ? null : facetsError} onlyRateLimit onRetry={retrySearch} />
 
@@ -665,32 +562,14 @@
         onRelax={standalone && relaxTarget ? relaxFeed : undefined}
       />
     {:else}
-      {#if visibleJobs.length === 0}
-        <!-- The search DID match on this page — the client-side post-filters removed
-             every row. Saying "no matching jobs" here would blame the search for the
-             reader's own settings, and the two causes are worth telling apart because
-             one of them is a slider they can move. The paginator below still renders,
-             so this is somewhere to leave rather than a dead end. -->
-        <States
-          state="empty"
-          message={minMatch === null || serverMatch
-            ? 'Every job on this page is one you hid.'
-            : 'Every job on this page is hidden or below your match threshold.'}
-        />
-      {:else}
-        <!-- Busy while held-over rows stand in for a reload underneath them (see
-             `holdover`): the rows are real but about to be replaced. -->
-        <!-- One list surface with hairline dividers rather than a stack of separately framed
-             cards: twenty bordered boxes read as a wall. -->
-        <div
-          class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card"
-          aria-busy={holdingOver}
-        >
-          {#each visibleJobs as job (job.public_slug)}
-            <JobRow {job} {onHide} hideCompany={!!scope.company_slug} flat />
-          {/each}
-        </div>
-      {/if}
+      <JobsFeedList
+        jobs={visibleJobs}
+        {minMatch}
+        {serverMatch}
+        {holdingOver}
+        {onHide}
+        hideCompany={!!scope.company_slug}
+      />
 
       <!-- Page links, and the only way through the results: a scroll-to-bottom
            auto-load used to sit here, which grew the page every time the reader

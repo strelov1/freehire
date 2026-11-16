@@ -19,7 +19,17 @@
   import { TypedSuggestions } from '#lib/typedSuggestions.svelte.js';
   import { commit, edit, emptyDraft, reconcile, type SearchDraft } from '#lib/searchDraft.js';
   import { starterSuggestions } from '#lib/suggestions.js';
-  import { OperatorLookup } from '#lib/operatorLookup.js';
+  import { OperatorPanel } from './operatorPanel.svelte';
+  import HeaderStatusPanel from './HeaderStatusPanel.svelte';
+  import { focusFieldFromBox, searchBoxClass } from './headerSearchBox';
+  import {
+    SUGGEST_DEBOUNCE_MS,
+    SUGGEST_MIN_CHARS,
+    companiesFetch,
+    companiesLimit,
+    completionsLimit,
+    jobsLimit,
+  } from './headerSearchLimits';
   import {
     activeOperator,
     hasOperators,
@@ -69,28 +79,7 @@
   // The typed placeholder: see typedPlaceholder.svelte.ts.
   const typedHint = typedPlaceholder(() => placeholder);
 
-  // How long the draft must sit still before the suggestions are refetched.
-  //
-  // A settled draft costs THREE requests (completions, postings, companies), so the
-  // window is not sized against one cheap pass — it is sized against the gap between
-  // keystrokes. At 120ms it sat inside that gap: a fast typist's 18 characters fired
-  // six rounds, eighteen requests, for one query they had not finished writing. 300ms
-  // is past the gap and is the window the filter store already debounces its reload by
-  // (see urlSynced.svelte.ts) — one answer to "how long is a pause" across the app.
-  const SUGGEST_DEBOUNCE_MS = 300;
-
-  // Below this, the box asks nothing. A single character matches a large fraction of
-  // the catalogue, so the round trip buys a list nobody can act on — and it is the one
-  // round that fires with certainty, since every query passes through its first letter.
-  const SUGGEST_MIN_CHARS = 2;
-
-  // Section caps. The dropdown is a shortcut, not a results page: past a handful each
-  // section stops being scannable and the whole thing stops fitting on a phone.
-  const jobsLimit = 5;
-  const completionsLimit = 5;
-  const companiesLimit = 3;
-  // Asked for, before the relevance filter takes its cut.
-  const companiesFetch = 12;
+  // How long a pause is, and what the dropdown asks for: see headerSearchLimits.ts.
 
   /** The Location popover's own state, held here so the two panels can take turns:
    *  the effect below puts this box's dropdown away when the popover opens, and every
@@ -274,71 +263,13 @@
   // ── Field operators ───────────────────────────────────────────────────────
   //
   // `title:`, `company:` and `source:` are a typing shortcut for filters the feed
-  // already has (see #lib/searchOperators). Inside an operator's value the panel offers
-  // only that kind; on Enter the operators become those filters.
-
-  const OPERATOR_LIMIT = 8;
-
-  // The operator the caret is in, read live so the panel switches mode on the keystroke
-  // rather than after the debounce. The options themselves follow the settled draft.
-  const liveOperator = $derived(suggest ? activeOperator(draft.text, caret) : null);
-  // The last answer, with the token it answers — so an EMPTY answer can be told apart
-  // from one that has not arrived yet.
-  // `options` is null when nothing was asked (a title too short to complete) or the
-  // lookup failed — neither is "nothing matches", and saying so would be a lie.
-  let operatorAnswer = $state.raw<{
-    key: string;
-    value: string;
-    options: OperatorOption[] | null;
-  } | null>(null);
-  const operatorOptions = $derived(operatorAnswer?.options ?? []);
-  // Inside a value that names nothing, say so. An empty panel would vanish, and after an
-  // Enter that stopped on this token that reads as the box ignoring the key.
-  const operatorMiss = $derived(
-    liveOperator !== null &&
-      liveOperator.value !== '' &&
-      operatorAnswer?.key === liveOperator.key &&
-      operatorAnswer.value === liveOperator.value &&
-      operatorAnswer.options?.length === 0,
+  // already has (see #lib/searchOperators and OperatorPanel).
+  const ops = new OperatorPanel(
+    () => ({ text: draft.text, caret }),
+    () => settled,
+    () => !!suggest,
+    { companiesFetch, minChars: SUGGEST_MIN_CHARS },
   );
-  // The rows for the operator the caret is in — null outside one. Only the answer for
-  // the KIND the caret is in: until the next pause settles, the last answer may be about
-  // a different operator.
-  const liveOptions = $derived.by(() => {
-    if (!liveOperator) return null;
-    return operatorAnswer?.key === liveOperator.key ? operatorOptions : [];
-  });
-
-  // The operator lookups and the company names they have resolved: see operatorLookup.ts.
-  const lookup = new OperatorLookup({ companiesFetch, optionLimit: OPERATOR_LIMIT, minChars: SUGGEST_MIN_CHARS });
-
-  // The settled token as a string, so moving the caret WITHIN an unchanged value — an
-  // arrow key inside `company:goo` — does not abort and resend the same lookup.
-  const settledOperator = $derived.by(() => {
-    const op = suggest ? activeOperator(settled.text, settled.caret) : null;
-    return op ? `${op.key}:${op.start}:${op.value}` : '';
-  });
-
-  $effect(() => {
-    if (!settledOperator) {
-      operatorAnswer = null;
-      return;
-    }
-    const op = untrack(() => activeOperator(settled.text, settled.caret));
-    if (!op) {
-      operatorAnswer = null;
-      return;
-    }
-    // Same abandonment rule as the ordinary fetch above: a newer pause aborts this one.
-    const ac = new AbortController();
-    void lookup
-      .optionsFor(op, ac.signal)
-      .catch(() => null)
-      .then((opts) => {
-        if (!ac.signal.aborted) operatorAnswer = { key: op.key, value: op.value, options: opts };
-      });
-    return () => ac.abort();
-  });
 
   /** Put the caret at `at` once the box has rendered the text it points into. */
   async function placeCaret(at: number) {
@@ -356,7 +287,7 @@
     // The row may belong to the token the caret just LEFT (its answer is a debounce
     // behind); writing a company over a `source:` token is a wrong filter, not a pick.
     if (!op || op.key !== option.key) return;
-    if (option.key === 'company') lookup.rememberCompany(option.value, option.id);
+    if (option.key === 'company') ops.lookup.rememberCompany(option.value, option.id);
     const next = replaceToken(draft.text, op, option.value);
     draft = edit(draft, next.text);
     activeIndex = -1;
@@ -368,7 +299,7 @@
    *  feed filtered by half of what was typed is not what was typed. */
   async function runOperatorSearch(apply: (plan: ApplyPlan) => void) {
     const text = draft.text;
-    const resolvers = await lookup.resolversFor(text);
+    const resolvers = await ops.lookup.resolversFor(text);
     // Typing went on while the lookups were out; this answer is about older text.
     if (draft.text !== text) return;
     const bad = unresolvedToken(text, resolvers);
@@ -419,7 +350,7 @@
       companies: typed.companies,
       text: draft.text,
       link,
-      operator: liveOptions,
+      operator: ops.options,
     }),
   );
   const suggestOpen = $derived(rows.length > 0 && !dismissed);
@@ -556,19 +487,6 @@
     }
   }
 
-  /** The panel a recognised link drops.
-   *
-   *  It does NOT take the phone's screen the way the suggestions list does. That panel
-   *  goes full-bleed because it is a dozen rows that truncate at the box's width; this
-   *  one is a sentence, and a sentence stretched from the header to the bottom of the
-   *  screen reads as a page that has gone wrong. */
-  const linkPanelClass = $derived(
-    cn(
-      'absolute inset-x-0 top-full z-50 mt-2 border border-border bg-background px-3 py-2.5 text-sm shadow-lg',
-      hero ? 'rounded-2xl' : 'rounded-md',
-    ),
-  );
-
   function onWindowClick(e: MouseEvent) {
     if (suggestOpen && wrapEl && !wrapEl.contains(e.target as Node)) close();
   }
@@ -602,35 +520,7 @@
   onpointerdowncapture={() => (autoFocused = false)}
   onfocusout={() => (autoFocused = false)}
 >
-  <div
-    class={cn(
-      'flex items-center border border-border bg-background',
-      !autoFocused && 'focus-within:ring-2 focus-within:ring-ring',
-      hero
-        ? // Taller, rounder and lifted off the page: at the centre of an otherwise
-          // empty screen this is the only interactive thing, so it carries the weight
-          // the header version borrows from the bar around it.
-          'h-14 gap-3 rounded-2xl px-4 text-base shadow-lg shadow-foreground/5 sm:h-16 sm:px-5'
-        : // 48px inside the bar's own 56px. The header height is `h-14` in eight other
-          // places (`top-14`, `top-20`, `PINNED_HEADER_TOP`, the full-bleed
-          // `calc(100dvh-3.5rem)`), so it is the field that grows into the bar rather
-          // than the bar that grows.
-          'h-12 gap-2 rounded-md px-3 text-sm',
-    )}
-    onpointerdown={(e) => {
-      // The whole box takes the caret, not just the field inside it. Probed at 390px: the
-      // field is 175px of a 278px box, and the other 103 — the rule, the magnifier, the
-      // `/` hint, the padding — landed on nothing at all. That reads as a search box that
-      // ignored the first tap and answered the second, better-aimed one.
-      //
-      // Only what is NOT itself a control: the scope prefix, the clear button and the
-      // All-filters trigger keep their own taps. `preventDefault` because the default for
-      // a press on a non-focusable box is to take focus AWAY from the field.
-      if ((e.target as HTMLElement | null)?.closest('button, input, a')) return;
-      e.preventDefault();
-      inputEl?.focus();
-    }}
-  >
+  <div class={searchBoxClass(hero, autoFocused)} onpointerdown={(e) => focusFieldFromBox(e, inputEl)}>
     <!-- List pages expose a filter scope: surface the Location quick-filter as a
          scope-prefix, divided from the search icon. `variant` picks the popover body
          (jobs work-format+location vs the company region/remote-hiring pills). -->
@@ -738,20 +628,20 @@
        do and no list to walk, and the states it passes through carry a link of their own
        (sign in, view the company), which cannot live inside an option's button. -->
   {#if link && !dismissed}
-    <div class={linkPanelClass} role="status" aria-live="polite">
+    <HeaderStatusPanel {hero}>
       <LinkIntakeRow
         url={link.url}
         busy={intake.busy}
         step={intake.step}
         onActivate={() => link && intake.activate(link)}
       />
-    </div>
-  {:else if operatorMiss && liveOperator && !dismissed}
-    <div class={linkPanelClass} role="status" aria-live="polite">
+    </HeaderStatusPanel>
+  {:else if ops.miss && ops.live && !dismissed}
+    <HeaderStatusPanel {hero}>
       <span class="text-muted-foreground">
-        No {liveOperator.key} matches “{liveOperator.value}”
+        No {ops.live.key} matches “{ops.live.value}”
       </span>
-    </div>
+    </HeaderStatusPanel>
   {:else if suggestOpen}
     <HeaderSuggestionList
       {rows}
