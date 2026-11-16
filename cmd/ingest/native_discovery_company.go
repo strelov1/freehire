@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
@@ -107,9 +108,9 @@ func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string,
 		return err
 	}
 	if disabled {
-		log.Printf("ingest: native provider %s is disabled; discovered board remains pending", source)
+		log.Printf("ingest: native provider %s is disabled; discovered board remains pending", strconv.Quote(source))
 		return nil
 	}
-	log.Printf("ingest: native board %s/%s discovered from LinkedIn employer %s; queued for ordinary scheduled ingestion", source, board, slug)
+	log.Printf("ingest: native board %s/%s discovered from LinkedIn employer %s; queued for ordinary scheduled ingestion", strconv.Quote(source), strconv.Quote(board), strconv.Quote(slug))
 	return nil
 }

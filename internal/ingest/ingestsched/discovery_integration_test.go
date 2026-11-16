@@ -4,6 +4,7 @@ package ingestsched
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -36,7 +37,7 @@ func TestDiscoveredProviderIsScheduledWithoutChangingOperatorOverrides(t *testin
 	if err := repo.AdoptDiscoveredProvider(ctx, "lever"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.New(pool).GetIngestSchedule(ctx, "lever"); err != pgx.ErrNoRows {
+	if _, err := db.New(pool).GetIngestSchedule(ctx, "lever"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("discovery took over an existing static provider: %v", err)
 	}
 }
