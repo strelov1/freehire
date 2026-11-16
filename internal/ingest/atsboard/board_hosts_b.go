@@ -1,6 +1,7 @@
 package atsboard
 
 var atsBoardsB = []struct{ host, source, mode string }{
+	{"hrdepartment.com", "hrsmart", modeHost},
 	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
 	{"huntflow.io", "huntflow", modeSubdomainChain},
 

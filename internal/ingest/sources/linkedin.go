@@ -78,6 +78,12 @@ func LinkedInPosting(root *html.Node, finalURL, id string) (Job, error) {
 		return strings.Join(strings.Fields(textContent(n)), " ")
 	}
 	j := Job{ExternalID: id, URL: "https://www.linkedin.com/jobs/view/" + id + "/", Title: text("top-card-layout__title"), Company: text("topcard__org-name-link")}
+	if org := firstByClass(card, "topcard__org-name-link"); org != nil {
+		if u, err := url.Parse(Attr(org, "href")); err == nil && u.Scheme == "https" && linkedInHost(u.Hostname()) && strings.HasPrefix(u.Path, "/company/") && u.User == nil && u.Port() == "" {
+			u.RawQuery, u.Fragment = "", ""
+			j.CompanyProfileURL = u.String()
+		}
+	}
 	walk(card, func(n *html.Node) bool {
 		if j.Location == "" && HasClass(n, "topcard__flavor") && HasClass(n, "topcard__flavor--bullet") {
 			j.Location = strings.Join(strings.Fields(textContent(n)), " ")
@@ -91,13 +97,8 @@ func LinkedInPosting(root *html.Node, finalURL, id string) (Job, error) {
 		return Job{}, fmt.Errorf("linkedin: incomplete posting")
 	}
 	closed := text("closed-job__flavor--closed")
-	apply := false
-	walk(card, func(n *html.Node) bool {
-		if Attr(n, "data-modal") == "job-details-topcard-apply-modal" {
-			apply = true
-		}
-		return true
-	})
+	method, target, apply := linkedInApplication(card)
+	j.ApplyMethod, j.ExternalApplyURL = method, target
 	if strings.EqualFold(closed, "No longer accepting applications") && !apply {
 		j.Removed = true
 		return j, nil
@@ -116,10 +117,6 @@ func (s linkedIn) get(ctx context.Context, raw string) (*html.Node, string, erro
 }
 
 func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	return s.FetchNew(ctx, e, func(string) bool { return false })
-}
-
-func (s linkedIn) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
@@ -179,20 +176,10 @@ func (s linkedIn) FetchNew(ctx context.Context, e CompanyEntry, seen func(string
 		}
 		for _, card := range cards {
 			listed++
-			if seen(card.ExternalID) {
-				card.SeenRefresh = true
-				jobs = append(jobs, card)
-				read++
-				continue
-			}
-			root, final, err := s.get(ctx, "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/"+card.ExternalID)
+			j, err := s.Posting(ctx, card.URL)
 			var status *StatusError
 			if errors.As(err, &status) && (status.Code == 403 || status.Code == 429 || status.Code == 999) {
 				return stop(fmt.Errorf("linkedin: detail refused: %w", err))
-			}
-			var j Job
-			if err == nil {
-				j, err = LinkedInPosting(root, final, card.ExternalID)
 			}
 			if err != nil {
 				card.Unreadable = true
