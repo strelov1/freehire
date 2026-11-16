@@ -79,3 +79,12 @@ func TestHRsmartIsARegisteredNativeATS(t *testing.T) {
 		t.Fatal("HRsmart is the employer ATS, not a discovery aggregator")
 	}
 }
+
+func TestHRsmartFailsWhenEveryListedDetailIsGone(t *testing.T) {
+	for _, code := range []int{404, 410} {
+		fake := (&routedHTTP{}).route("/JobSearch/viewAll", hrsmartTestList("3735", "", "1")).routeErr("/Posting/view/3735", &StatusError{Method: "GET", Code: code})
+		if _, err := NewHRsmart(fake).Fetch(context.Background(), CompanyEntry{Board: hrsmartTestHost}); err == nil {
+			t.Errorf("all listed details returned %d, but crawl reported healthy empty", code)
+		}
+	}
+}
