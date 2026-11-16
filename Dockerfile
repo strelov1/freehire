@@ -28,9 +28,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
 # to match the version verified against the ATS extraction test (local == prod output). ---
 FROM alpine:3.24 AS typst
 ARG TYPST_VERSION=0.15.0
+ARG TYPST_SHA256=59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabea
 # hadolint ignore=DL3018
 RUN apk add --no-cache curl xz \
  && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz \
+ && echo "${TYPST_SHA256}  /tmp/typst.tar.xz" | sha256sum --check --strict \
  && tar -xJf /tmp/typst.tar.xz -C /tmp \
  && install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
  && /usr/local/bin/typst --version
