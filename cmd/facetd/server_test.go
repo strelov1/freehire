@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func doc(id int, source string) string {
@@ -284,5 +286,30 @@ func TestMetricsCarryMemoryAndBatchSize(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("/metrics lacks %q", want)
 		}
+	}
+}
+
+// A repeated /facets request is answered from the cache, and a write (a new generation)
+// is never answered with the previous generation's counts.
+func TestFacetsAnswerCacheFollowsGeneration(t *testing.T) {
+	s, h := loaded(t, "", doc(1, "a"), doc(2, "b"))
+	if n := total(t, h, `null`); n != 2 {
+		t.Fatalf("total = %v, want 2", n)
+	}
+	if n := total(t, h, `null`); n != 2 {
+		t.Fatalf("cached total = %v, want 2", n)
+	}
+	if c, _ := call(t, h, "POST", "/write", `{"upserts":[`+doc(3, "b")+`]}`); c != 200 {
+		t.Fatalf("write = %d", c)
+	}
+	if n := total(t, h, `null`); n != 3 {
+		t.Errorf("total after write = %v, want 3 (stale cache)", n)
+	}
+	hits, misses := s.m.answerCache.WithLabelValues("hit"), s.m.answerCache.WithLabelValues("miss")
+	if got := testutil.ToFloat64(hits); got != 1 {
+		t.Errorf("hits = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(misses); got != 2 {
+		t.Errorf("misses = %v, want 2", got)
 	}
 }
