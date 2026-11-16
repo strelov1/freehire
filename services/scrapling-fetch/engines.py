@@ -124,7 +124,7 @@ def http_fetcher(proxies: ProxyConfig, send=_scrapling_send):
             headers=forwardable_headers(req.headers),
             proxy=proxies.rotating if req.proxy else None,
             timeout=HTTP_TIMEOUT_SECONDS,
-            follow_redirects=True,
+            follow_redirects=False,
             retries=1,
         )
         if req.body and req.method in ("POST", "PUT"):
