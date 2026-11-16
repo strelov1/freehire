@@ -11,24 +11,22 @@ import (
 	"golang.org/x/net/html"
 )
 
-// wantapply adapts the Wantapply job aggregator. The wantapply.com host sits behind a WAF that
-// 403s non-browser clients, and the .cy mirror (same backend, no WAF) lists only a fraction of
-// the vacancies .com does and answers most others with an empty shell (no JobPosting). Crawling
-// the mirror therefore drops most of the catalogue, so production reads both sitemap and pages
-// from .com through the Scrapling tier's browser (NewWantapplyOnCom, scraplingtier.go).
+// wantapply reads two independent WantApply catalogues: global vacancies on wantapply.com
+// and Cyprus vacancies on wantapply.cy. They share a backend, but a page on one domain is not
+// interchangeable with the same path on the other. Each source reads its own sitemap and
+// detail URLs; production reaches .com through Scrapling and .cy through the proxy.
 //
-// Wantapply is a directApply aggregator (many employers, no per-tenant board), so the adapter is
-// boardless and stays in the source facet, taking each posting's company from the JSON-LD. Its
-// sitemap enumerates every vacancy as a single-segment slug page and each page server-renders a
-// schema.org JobPosting ld+json (the dataart/successfactors shape). It hydrates detail only for
-// vacancies the catalogue does not already have (HydratingSource), and is NOT self-closing: it
-// re-lists all current vacancies each run, so the pipeline's unseen-sweep is the close signal.
+// Both publish original vacancies from many employers. Company-wide ATS coverage must not
+// discard them: one other vacancy cannot establish that this posting is a duplicate. The
+// posting-level dedup pass still applies. Detail hydration and the unseen sweep work as for
+// other sitemap-based boards.
 type wantapply struct {
 	http wantapplyHTTP
 	// sitemapURL is the enumeration to read, and host the hostname its entries must carry; the
 	// pages are fetched from the entries' own URLs, on that same host.
 	sitemapURL string
 	host       string
+	provider   string
 }
 
 // wantapplyHTTP is the transport wantapply needs: the XML sitemap plus HTML detail pages.
@@ -45,10 +43,7 @@ const (
 	// wantapplyComSitemapURL / wantapplyComHostname are the fuller .com enumeration and its host.
 	wantapplyComSitemapURL = "https://wantapply.com/sitemap.xml"
 	wantapplyComHostname   = "wantapply.com"
-	// wantapplyDetailWorkers bounds the detail-fetch fan-out below the shared default (8): a burst
-	// at 8 is throttled hard. Prod egresses through a proxy whose IP the .cy edge rate-caps per
-	// window, so one run lands only part of the catalogue; the HydratingSource re-crawl accretes
-	// the rest across runs.
+	// Four workers avoid the throttling observed with eight concurrent detail requests.
 	wantapplyDetailWorkers = 4
 )
 
@@ -57,25 +52,27 @@ const (
 var wantapplyReserved = map[string]struct{}{
 	"create": {}, "sign-in": {}, "sign-up": {},
 	"privacy-policy": {}, "terms-of-service": {},
+	"faq": {}, "about": {}, "advertisement": {},
 }
 
-// NewWantapply builds the Wantapply adapter over the given HTTP client: sitemap and pages both
-// from the .cy mirror.
+// NewWantapply reads the global catalogue, including when no Scrapling tier is configured.
+// A transport failure must not silently switch to the smaller Cyprus catalogue.
 func NewWantapply(c wantapplyHTTP) Source {
-	return wantapply{http: c, sitemapURL: wantapplySitemapURL, host: wantapplyHostname}
+	return wantapply{http: c, sitemapURL: wantapplyComSitemapURL, host: wantapplyComHostname, provider: "wantapply"}
 }
 
-// NewWantapplyOnCom builds the adapter over a client .com's WAF serves (the Scrapling tier's
-// browser): sitemap and pages both from .com. See the type doc for why not .cy's pages.
-func NewWantapplyOnCom(c wantapplyHTTP) Source {
-	return wantapply{http: c, sitemapURL: wantapplyComSitemapURL, host: wantapplyComHostname}
+// NewWantapplyCy reads the Cyprus catalogue under its own source identity.
+func NewWantapplyCy(c wantapplyHTTP) Source {
+	return wantapply{http: c, sitemapURL: wantapplySitemapURL, host: wantapplyHostname, provider: "wantapply-cy"}
 }
 
-func (wantapply) Provider() string { return "wantapply" }
+func (s wantapply) Provider() string { return s.provider }
 
 func (wantapply) boardless() {}
 
 func (wantapply) aggregator() {}
+
+func (wantapply) originalPostings() {}
 
 // wantapplyVacancy is one candidate vacancy discovered from the sitemap: its slug (the
 // ExternalID) and canonical URL.
@@ -103,9 +100,11 @@ func (s wantapply) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 // fetchCounting is the shared body, returning how many vacancies were DROPPED alongside the
 // jobs. Both entry points discard the count after it is logged; the tests read it.
 //
-// A dropped vacancy never reaches the pipeline (Stats counts saveOne failures, not candidates an
-// adapter discarded), so a crawl that enumerated thousands and read almost none is otherwise
-// indistinguishable from a small source; hence the count.
+// The count exists because a dropped vacancy never reaches the pipeline — Stats counts saveOne
+// failures, not candidates an adapter discarded — so a crawl that enumerated thousands and read
+// almost none is indistinguishable from a small source. That is not hypothetical here: when the
+// enumeration moved to the .com sitemap the list went from ~605 vacancies to 2 755 and the
+// catalogue did not move, with nothing anywhere saying where the rest went.
 func (s wantapply) fetchCounting(ctx context.Context, seen func(string) bool) ([]Job, int64, error) {
 	vacancies, err := s.crawl(ctx)
 	if err != nil {
@@ -151,9 +150,8 @@ func (s wantapply) crawl(ctx context.Context) ([]wantapplyVacancy, error) {
 		if slug == "" {
 			continue
 		}
-		// The PATH is taken from the sitemap's own loc rather than rebuilt from the slug — the
-		// slug is url.Parse-decoded, so reconstruction could diverge from the real page. Only
-		// the host is swapped, and only when the enumeration came from the other mirror.
+		// Keep the sitemap's exact URL: the slug is decoded by url.Parse, so rebuilding it
+		// could diverge from the published path. Regional hosts are never substituted.
 		out = append(out, wantapplyVacancy{slug: slug, url: entry.Loc})
 	}
 	return out, nil
@@ -227,15 +225,14 @@ func wantapplyDescription(root *html.Node) string {
 	return sanitizeHTML(body)
 }
 
-// wantapplyVacancySlug returns the vacancy slug for a sitemap loc on the default (.cy) host.
+// wantapplyVacancySlug returns the vacancy slug for a Cyprus sitemap location.
 func wantapplyVacancySlug(loc string) string {
 	return wantapplyVacancySlugOn(loc, wantapplyHostname)
 }
 
 // wantapplyVacancySlugOn returns the vacancy slug for a sitemap loc that is a single-segment,
 // non-reserved page on host, or "" for the root, a reserved static page, a multi-segment path
-// (/company/*, /jobs/*), or an unparseable/foreign URL. The host is a parameter because the
-// enumeration may come from the .com mirror while the pages are read from .cy.
+// (/company/*, /jobs/*), or an unparseable/foreign URL. Each regional catalogue is confined to its own host.
 func wantapplyVacancySlugOn(loc, host string) string {
 	u, err := url.Parse(strings.TrimSpace(loc))
 	if err != nil || u.Hostname() != host {

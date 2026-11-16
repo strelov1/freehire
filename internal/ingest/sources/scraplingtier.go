@@ -80,10 +80,10 @@ var scraplingProviders = map[string]scraplingProvider{
 	"gulftalent": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewGulfTalent(f)
 	}},
-	// .com's WAF refuses every plain request and the .cy mirror answers most of the catalogue
-	// with an empty shell (see the type doc), so sitemap and pages alike come from .com.
+	// The global catalogue's sitemap and pages must both come from .com. The Cyprus
+	// catalogue is a separate provider, never a fallback for a refused global page.
 	"wantapply": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
-		return NewWantapplyOnCom(f)
+		return NewWantapply(f)
 	}},
 	// 403 to a plain request; the impersonating fetcher through the proxy is served. Its role
 	// slices are crawled concurrently, so the in-flight cap the hosted tier needed is kept.

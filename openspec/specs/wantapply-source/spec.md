@@ -1,35 +1,46 @@
 # wantapply-source Specification
 
 ## Purpose
-TBD - created by archiving change add-wantapply-source. Update Purpose after archive.
+Collect original WantApply vacancies from the global and Cyprus catalogues without treating regional domains or employer-level coverage as interchangeable inventory.
 ## Requirements
 ### Requirement: Wantapply sitemap crawl
 
-The system SHALL provide a `wantapply` source adapter that crawls the Wantapply site over its
-WAF-free mirror host `https://wantapply.cy`. The adapter is boardless and an aggregator (it stays
+The system SHALL provide a global `wantapply` source on `https://wantapply.com` and an independent
+`wantapply-cy` source on `https://wantapply.cy`. Each source SHALL read its own sitemap and detail
+URLs. A transport failure SHALL NOT change the source's regional catalogue. The adapter is boardless and an aggregator (it stays
 in the source facet and takes each posting's company from the posting). It SHALL discover vacancies
-from `https://wantapply.cy/sitemap.xml`, treating a `<loc>` as a vacancy candidate only when its
+from its own host's `/sitemap.xml`, treating a `<loc>` as a vacancy candidate only when its
 path has exactly one segment and that segment is not a reserved page. Reserved (non-vacancy) paths
-are the static set (`/`, `/create`, `/sign-in`, `/sign-up`, `/privacy-policy`, `/terms-of-service`)
+are the static set (`/`, `/create`, `/sign-in`, `/sign-up`, `/privacy-policy`, `/terms-of-service`, `/faq`, `/about`, `/advertisement`)
 and any multi-segment path (notably `/company/*` and `/jobs/*`). The vacancy slug SHALL be the
-posting's `ExternalID` and the stored URL SHALL be `https://wantapply.cy/<slug>`.
+posting's `ExternalID` and the stored URL SHALL retain that source's host and published path.
 
 #### Scenario: Vacancy slug becomes a candidate
 
-- **WHEN** the sitemap contains `<loc>https://wantapply.cy/android-team-lead-at-tradingview-3</loc>`
-- **THEN** the adapter treats it as a vacancy candidate with `ExternalID` `android-team-lead-at-tradingview-3` and URL `https://wantapply.cy/android-team-lead-at-tradingview-3`
+- **WHEN** the sitemap contains `<loc>https://wantapply.com/android-team-lead-at-tradingview-3</loc>`
+- **THEN** the adapter treats it as a vacancy candidate with `ExternalID` `android-team-lead-at-tradingview-3` and URL `https://wantapply.com/android-team-lead-at-tradingview-3`
 
 #### Scenario: Non-vacancy paths are filtered out
 
 - **WHEN** the sitemap contains `/company/tradingview`, `/jobs/data-analyst`, `/sign-in`, and the root `/`
 - **THEN** the adapter yields none of them as vacancy candidates
 
+### Requirement: Original postings survive company coverage
+
+Both sources SHALL retain original postings even when another source has an open vacancy at
+the same employer. Posting-level deduplication SHALL still apply.
+
+#### Scenario: Another vacancy does not establish duplication
+
+- **WHEN** WantApply publishes a Backend Engineer vacancy and another source covers the employer
+- **THEN** the pipeline saves the vacancy rather than discarding it by company coverage
+
 ### Requirement: Wantapply hydrates only unseen vacancies
 
 The adapter SHALL implement the hydrating crawl: it receives a `seen(externalID)` predicate and
 fetches a vacancy's detail page only for a slug the catalogue does not already have, so a
 steady-state crawl issues detail requests only for new vacancies. For an unseen slug it SHALL GET
-`https://wantapply.cy/<slug>`, extract the page's `JobPosting` JSON-LD, and map it into a `Job`:
+that source's published detail URL, extract the page's `JobPosting` JSON-LD, and map it into a `Job`:
 title from `title`; company from `hiringOrganization.name`; description from the sanitized
 `description` HTML; posted-at from `datePosted`; location from the `jobLocation[].address`
 components; work mode `remote` (and the `Remote` flag) when `jobLocationType` is `TELECOMMUTE`;

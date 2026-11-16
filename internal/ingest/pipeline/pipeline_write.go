@@ -321,7 +321,7 @@ func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators, countries [
 		return nil, nil, false
 	}
 	taxonomy := sources.Taxonomy()
-	if !sources.IsAggregator(taxonomy, e.Provider) {
+	if !sources.IsAggregator(taxonomy, e.Provider) || sources.HasOriginalPostings(taxonomy, e.Provider) {
 		return nil, nil, false
 	}
 	return sources.TaxonomyAggregatorProviders(), sources.MarketCountries(taxonomy, e), true

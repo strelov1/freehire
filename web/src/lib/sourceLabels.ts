@@ -8,6 +8,7 @@ import { titleCase } from './labels';
 // needs one. Used by sourceLabel for the dynamic (distribution-driven) source
 // select, so a source with a real job count renders with its proper name.
 export const SOURCE_LABELS: Record<string, string> = {
+  'wantapply-cy': 'WantApply Cyprus',
   telegram: 'Telegram',
   greenhouse: 'Greenhouse',
   smartrecruiters: 'SmartRecruiters',

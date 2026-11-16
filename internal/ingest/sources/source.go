@@ -313,6 +313,11 @@ type boardless interface{ boardless() }
 // filter and excluded, but filtering by an aggregator is not.
 type aggregator interface{ aggregator() }
 
+// originalPostings marks a multi-employer board that publishes its own vacancies. Another
+// posting at the same company does not prove these vacancies are covered, so the ingest-time
+// company coverage gate must not discard them. Posting-level duplicate matching still applies.
+type originalPostings interface{ originalPostings() }
+
 // social marks an adapter that reads postings out of a community channel (a forum thread,
 // a chat) rather than a job board. It wins over aggregator in ProviderKind: such a source
 // may still carry the aggregator marker for the dedup and coverage passes, which treat its

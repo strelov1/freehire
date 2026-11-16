@@ -41,6 +41,9 @@ func TestWantapplyVacancySlug(t *testing.T) {
 		"https://wantapply.cy/jobs/data-analyst":                    "", // taxonomy, multi-segment
 		"https://wantapply.cy":                                      "", // root
 		"https://wantapply.cy/":                                     "", // root with slash
+		"https://wantapply.cy/about":                                "",
+		"https://wantapply.cy/faq":                                  "",
+		"https://wantapply.cy/advertisement":                        "",
 		"https://wantapply.cy/create":                               "", // reserved static
 		"https://wantapply.cy/sign-in":                              "", // reserved static
 		"https://wantapply.cy/sign-up":                              "", // reserved static
@@ -130,7 +133,7 @@ func TestWantapplyFetchSitemapThenDetailAndMaps(t *testing.T) {
 		)).
 		route("/android-team-lead-at-tradingview-3", detail)
 
-	jobs, err := NewWantapply(fake).Fetch(context.Background(), CompanyEntry{
+	jobs, err := NewWantapplyCy(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Wantapply", Provider: "wantapply",
 	})
 	if err != nil {
@@ -271,7 +274,7 @@ func TestWantapplyFetchNewSeenSkipsDetail(t *testing.T) {
 		route("/new-role-at-acme", newDetail)
 
 	seen := func(externalID string) bool { return externalID == "seen-role-at-acme" }
-	jobs, err := NewWantapply(fake).(HydratingSource).FetchNew(context.Background(),
+	jobs, err := NewWantapplyCy(fake).(HydratingSource).FetchNew(context.Background(),
 		CompanyEntry{Company: "Wantapply", Provider: "wantapply"}, seen)
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
@@ -317,10 +320,10 @@ func TestWantapplyProviderBoardlessAggregatorNotSelfClosing(t *testing.T) {
 	}
 }
 
-func TestWantapplyIsProxied(t *testing.T) {
-	// The .cy edge IP-blocks the prod datacenter IP, so wantapply must egress through the proxy.
-	if _, ok := proxiedProviders["wantapply"]; !ok {
-		t.Error("wantapply must be in proxiedProviders (its edge blocks the prod datacenter IP)")
+func TestWantapplyCyIsProxied(t *testing.T) {
+	// The Cyprus edge IP-blocks the crawl host, so its source uses the proxy.
+	if _, ok := proxiedProviders["wantapply-cy"]; !ok {
+		t.Error("wantapply-cy must be in proxiedProviders (its edge blocks the crawl host)")
 	}
 }
 
@@ -331,16 +334,29 @@ func TestWantapplyRegisteredInAll(t *testing.T) {
 	}
 }
 
-// The .com and .cy hosts are mirrors of one backend — verified 2026-09-07: five vacancies the
-// .cy sitemap does not list all return 200 on .cy. What differs is only what each SITEMAP
-// enumerates: .cy lists ~605 vacancies, .com lists 2 755.
-//
-// So the enumeration may come from .com while the pages are still read from .cy, which is the
-// whole point: the sitemap is one metered request, the 2 755 pages are free.
-// Through the Scrapling tier both the enumeration and the pages come from .com. The .cy mirror
-// lists a fraction of the catalogue and, measured 2026-10-20, answers most of the vacancies it
-// does not list with an empty shell (5 of 6 sampled) that .com serves in full — so a page on
-// .cy is never requested here; the fake serves none.
+func TestWantapplyRegionalCataloguesStayIndependent(t *testing.T) {
+	reg := All(nil)
+	for provider, host := range map[string]string{"wantapply": "wantapply.com", "wantapply-cy": "wantapply.cy"} {
+		t.Run(provider, func(t *testing.T) {
+			src, ok := reg[provider].(wantapply)
+			if !ok {
+				t.Fatalf("regional source %s is missing", provider)
+			}
+			if src.host != host || src.sitemapURL != "https://"+host+"/sitemap.xml" || src.Provider() != provider {
+				t.Fatalf("source=%+v provider=%s, want %s on %s", src, src.Provider(), provider, host)
+			}
+			foreign := "https://wantapply.com/backend-at-acme"
+			if host == "wantapply.com" {
+				foreign = "https://wantapply.cy/backend-at-acme"
+			}
+			if got := wantapplyVacancySlugOn(foreign, host); got != "" {
+				t.Fatalf("accepted a vacancy from another regional catalogue: %s", foreign)
+			}
+		})
+	}
+}
+
+// The global catalogue stays on .com regardless of the transport used.
 func TestWantapplyOnComReadsSitemapAndPagesFromCom(t *testing.T) {
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -356,7 +372,7 @@ func TestWantapplyOnComReadsSitemapAndPagesFromCom(t *testing.T) {
 		xml:  map[string]string{"https://wantapply.com/sitemap.xml": sitemap},
 		html: map[string]string{"https://wantapply.com/senior-ios-engineer-at-opal": page},
 	}
-	jobs, err := NewWantapplyOnCom(http).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewWantapply(http).Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -368,8 +384,8 @@ func TestWantapplyOnComReadsSitemapAndPagesFromCom(t *testing.T) {
 	}
 }
 
-// The default construction is unchanged: both the sitemap and the pages come from .cy.
-func TestWantapplyDefaultStaysOnTheFreeHost(t *testing.T) {
+// The Cyprus source reads only its regional catalogue.
+func TestWantapplyCyReadsRegionalCatalogue(t *testing.T) {
 	sitemap := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <url><loc>https://wantapply.cy/dev-at-acme</loc></url>
@@ -381,7 +397,7 @@ func TestWantapplyDefaultStaysOnTheFreeHost(t *testing.T) {
 		html: map[string]string{"https://wantapply.cy/dev-at-acme": page},
 	}
 
-	jobs, err := NewWantapply(http).Fetch(context.Background(), CompanyEntry{})
+	jobs, err := NewWantapplyCy(http).Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -408,7 +424,7 @@ func TestWantapplyCountsWhatItDropped(t *testing.T) {
 		html: map[string]string{"https://wantapply.cy/good-at-acme": page},
 	}
 
-	jobs, dropped, err := NewWantapply(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return false })
+	jobs, dropped, err := NewWantapplyCy(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return false })
 	if err != nil {
 		t.Fatalf("fetchCounting: %v", err)
 	}
@@ -428,7 +444,7 @@ func TestWantapplySeenVacanciesAreNotCountedAsDropped(t *testing.T) {
 </urlset>`
 	http := &wantapplyFake{xml: map[string]string{"https://wantapply.cy/sitemap.xml": sitemap}}
 
-	jobs, dropped, err := NewWantapply(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return true })
+	jobs, dropped, err := NewWantapplyCy(http).(wantapply).fetchCounting(context.Background(), func(string) bool { return true })
 	if err != nil {
 		t.Fatalf("fetchCounting: %v", err)
 	}

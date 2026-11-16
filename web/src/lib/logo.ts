@@ -49,6 +49,7 @@ export function sourceLogoUrl(displayName: string, domain?: string): string | nu
  *  Add an entry when a source's card shows the wrong mark or none; verify it resolves before
  *  committing, the same way these were. */
 export const SOURCE_LOGO_DOMAINS: Record<string, string> = {
+  'wantapply-cy': 'wantapply.cy',
   successfactors: 'successfactors.com',
   zohorecruit: 'zoho.com',
   jazzhr: 'jazzhr.com',

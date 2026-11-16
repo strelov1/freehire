@@ -549,3 +549,22 @@ func TestRunStreamingCoverageSkipsBlankCompany(t *testing.T) {
 		t.Errorf("coverage.calls = %v, want none (blank company slug is never looked up)", coverage.calls)
 	}
 }
+
+func TestRunKeepsWantapplyPostingForATSCoveredCompany(t *testing.T) {
+	for _, provider := range []string{"wantapply", "wantapply-cy"} {
+		t.Run(provider, func(t *testing.T) {
+			src := fakeSource{provider: provider, jobs: []sources.Job{
+				{ExternalID: "backend-at-acme", Title: "Backend Engineer", Company: "Acme"},
+			}}
+			store := &fakeStore{}
+			r := Runner{Registry: registry(src), Store: store, Coverage: &fakeCoverage{covered: map[string]bool{"acme": true}}}
+			stats, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "Wantapply", Provider: provider}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(store.saved) != 1 || stats.Total().ATSCovered != 0 {
+				t.Fatalf("saved=%d ATSCovered=%d: another Acme vacancy cannot prove this original posting is a duplicate", len(store.saved), stats.Total().ATSCovered)
+			}
+		})
+	}
+}
