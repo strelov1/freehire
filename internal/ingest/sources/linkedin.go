@@ -195,5 +195,6 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if listed > 0 && read == 0 {
 		return jobs, fmt.Errorf("linkedin: none of %d listed postings could be read", listed)
 	}
+	jobs = append(jobs, s.related(ctx, jobs, ids)...)
 	return jobs, nil
 }

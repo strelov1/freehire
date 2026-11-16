@@ -46,6 +46,12 @@ func newNativeDiscovery(pool *pgxpool.Pool, registry map[string]sources.Source, 
 
 func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntry, discovered sources.Job) error {
 	origin, err := d.q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: "linkedin", ExternalID: externalid.Namespace(entry.Board, discovered.ExternalID)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		origin, err = d.q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: "linkedin", ExternalID: discovered.ExternalID})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		origin, err = d.q.FindLinkedInJobByURL(ctx, discovered.URL)
+	}
 	var previous *db.Job
 	if err == nil {
 		if origin.IsPrivate {
