@@ -72,6 +72,7 @@ export const messages = defineMessages(
         dictation: 'Dictation',
         'cover-letter': 'Cover letters',
         'auto-apply': 'Automatic applications',
+        'mail-reply': 'Reply drafts',
       },
     },
     usage: {
@@ -144,6 +145,7 @@ export const messages = defineMessages(
           dictation: 'Диктовка',
           'cover-letter': 'Сопроводительные письма',
           'auto-apply': 'Автоматические отклики',
+          'mail-reply': 'Черновики ответов',
         },
       },
       usage: {

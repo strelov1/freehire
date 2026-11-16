@@ -1,5 +1,5 @@
 import type { Http } from '../api-core';
-import type { FollowUpDraft, MailRecallResult, TrackedApplication } from '../types';
+import type { FollowUpDraft, MailRecallResult, MailReplyDraft, TrackedApplication } from '../types';
 import type { EmailBody, GmailStatus, InboxMessage, InboxSource, MailboxStatus, Page, Slice } from '../api-types';
 import { jsonBody, toSlice } from '../api-core';
 
@@ -130,6 +130,12 @@ export function mailApi({ call, request, requestData }: Http) {
     return requestData<FollowUpDraft>(`/api/v1/me/tracking/${encodeURIComponent(slug)}/followup`);
   }
 
+  /** Draft a reply to one received message. Paid: 402 without a plan or with today's
+   *  allowance spent. Nothing is sent or stored; each call is a new, charged draft. */
+  async function draftEmailReply(id: number): Promise<MailReplyDraft> {
+    return requestData<MailReplyDraft>(`/api/v1/me/emails/${id}/reply-draft`, { method: 'POST' });
+  }
+
   /** Record that the caller chased this application. Sends nothing — it stamps
    *  followed_up_at, which stays outside the silence derivation. 204, no body. */
   async function recordFollowUp(slug: string): Promise<void> {
@@ -172,6 +178,7 @@ export function mailApi({ call, request, requestData }: Http) {
     recallApplicationMail,
     linkRecalledMail,
     getFollowUpDraft,
+    draftEmailReply,
     recordFollowUp,
     confirmEmailLink,
     rejectEmailLink,

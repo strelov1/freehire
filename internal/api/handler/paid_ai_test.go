@@ -105,6 +105,7 @@ var gatedRoutes = []gatedRoute{
 	{fiber.MethodPost, "/api/v1/speech/transcriptions", plan.FeatureDictation},
 	{fiber.MethodPost, "/api/v1/me/profile/ats-report", unmeteredAI},
 	{fiber.MethodPost, "/api/v1/me/tracking/some-job/mail-recall", unmeteredAI},
+	{fiber.MethodPost, "/api/v1/me/emails/4821/reply-draft", plan.FeatureMailReply},
 	{fiber.MethodPost, "/api/v1/me/autofill/run", unmeteredAI},
 }
 

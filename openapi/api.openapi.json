@@ -13028,6 +13028,84 @@
         ]
       }
     },
+    "/me/emails/{id}/reply-draft": {
+      "post": {
+        "operationId": "draftEmailReply",
+        "summary": "Draft a reply to a received message.",
+        "description": "One model call on the caller's daily `mail-reply` allowance; every request is a new\ndraft and is charged again. Nothing is sent or stored: the candidate edits the text and\nsends it themselves. Facts only the candidate knows (availability, salary) come back as\nbracketed placeholders. 409 for a message the caller sent; 402 without a paid plan or\nwhen the allowance is spent; 502 when the model fails (the charge is returned).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The message id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailReplyDraft"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "recipient": "anna@acme.io",
+                    "recipient_name": "Anna Lee",
+                    "subject": "Re: Interview next week",
+                    "body": "Hi Anna,\n\nThank you for the invitation. I would be glad to talk; [times that suit you] work for me.\n\nBest regards,\n[Your name]"
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Client error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CvPlanRefusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mail"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
     "/me/emails/{id}/restore": {
       "post": {
         "operationId": "restoreEmail",
@@ -30979,6 +31057,31 @@
           }
         },
         "description": "The message the caller picked out of a sweep. Required, 400 when empty."
+      },
+      "MailReplyDraft": {
+        "type": "object",
+        "required": [
+          "recipient",
+          "recipient_name",
+          "subject",
+          "body"
+        ],
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "description": "The address the received message came from."
+          },
+          "recipient_name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "description": "A reply for the candidate to review and send from their own mail client."
       },
       "MailboxStatus": {
         "type": "object",

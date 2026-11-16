@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/application/apptimeline"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
@@ -53,6 +54,8 @@ type inboxHandlers struct {
 	// mailboxes mints the caller's searchable mailbox for a recall run. Nil, or no grant,
 	// means the sweep reads stored mail. An interface so tests need no Google credential.
 	mailboxes mailboxes
+	// plans meters reply drafts. Nil in a deployment with no meter: drafts run uncharged.
+	plans *plan.Store
 	// accounts resolves the caller's username, which a hosted-mailbox claim adopts as its
 	// address. Never nil: it never touches a password, so a plain authHasher backs it.
 	accounts *accounts.Service
@@ -135,6 +138,7 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware, contract fiber
 	// Import-and-link for a proposal the sweep found in the mailbox and did not store. Not
 	// paid-AI gated: a person pressing Link, not a model call.
 	api.Post("/me/tracking/:slug/mail-recall/link", mw.key, contract)
+	api.Post("/me/emails/:id/reply-draft", mw.key, mw.paidAI(plan.FeatureMailReply), contract)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, so optionalCookie, not cookie:

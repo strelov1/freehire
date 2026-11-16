@@ -5179,6 +5179,39 @@ curl -X POST "https://freehire.me/api/v1/me/emails/<id>/reject" -H "Authorizatio
 }
 ```
 
+### `POST /me/emails/{id}/reply-draft`
+
+**Auth:** Session or API key
+
+Draft a reply to a received message.
+
+One model call on the caller's daily `mail-reply` allowance; every request is a new
+draft and is charged again. Nothing is sent or stored: the candidate edits the text and
+sends it themselves. Facts only the candidate knows (availability, salary) come back as
+bracketed placeholders. 409 for a message the caller sent; 402 without a paid plan or
+when the allowance is spent; 502 when the model fails (the charge is returned).
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes | The message id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/emails/<id>/reply-draft" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": {
+    "recipient": "anna@acme.io",
+    "recipient_name": "Anna Lee",
+    "subject": "Re: Interview next week",
+    "body": "Hi Anna,\n\nThank you for the invitation. I would be glad to talk; [times that suit you] work for me.\n\nBest regards,\n[Your name]"
+  }
+}
+```
+
 ### `POST /me/emails/{id}/restore`
 
 **Auth:** Session or API key

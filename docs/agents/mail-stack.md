@@ -1,6 +1,6 @@
 # Mail stack
 
-Eight packages and three workers turn inbound recruiter mail into linked, stage-advancing
+Nine packages and three workers turn inbound recruiter mail into linked, stage-advancing
 applications. Each package has a package doc explaining *what* it does; this file explains
 how they compose and where the traps are.
 
@@ -40,6 +40,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 | `internal/application/mailmatch` | Deterministic match: thread continuity, company name in sender/subject |
 | `internal/application/mailclassify` | Status vocabulary, sanitizer, LLM adapter |
 | `internal/application/mailrecall` | Pull direction: one Gmail search scoped to an employer, proposals only — never stored, never linked |
+| `internal/application/mailreply` | Drafts the candidate's reply to one received message (`POST /me/emails/:id/reply-draft`, paid, `mail-reply` allowance). Text only: never sent, never stored |
 
 ## Always true
 

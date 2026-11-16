@@ -229,6 +229,7 @@ func Register(app *fiber.App, cfg Config) {
 			llmBinding{client: cfg.LLM, keys: llmKeys},
 			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
 	}
+	inboxH.plans = plans
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is, and neither may stop a member from
 	// leaving. The gateway credential is the third external system; attached below.

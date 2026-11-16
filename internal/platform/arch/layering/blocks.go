@@ -145,7 +145,7 @@ var blocks = map[string][]string{
 	"application": {
 		"agentview", "appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
 		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking",
-		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl",
+		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailreply", "mailtpl",
 		"userjob", "viewlog",
 	},
 	"search": {
