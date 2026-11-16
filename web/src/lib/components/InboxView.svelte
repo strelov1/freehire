@@ -6,7 +6,6 @@
   import { api } from '#lib/api.js';
   import type { GmailStatus, MailboxStatus, InboxSource, InboxMessage, EmailBody } from '#lib/api.js';
   import type { EmailLinking } from '#lib/types.js';
-  import { statusLabel, statusLabels } from '#lib/emailStatus.js';
   import StatusChip from '#lib/components/StatusChip.svelte';
   import { inboxLinkState, type LastUnlinked } from '#lib/inboxLink.js';
   import { Paginator } from '#lib/paginated.svelte.js';
@@ -14,7 +13,7 @@
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import ReplyDraft from './ReplyDraft.svelte';
-  import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2, Inbox, Settings, X } from '@lucide/svelte';
+  import { Mail, ChevronLeft, Trash2, Inbox, Settings, X } from '@lucide/svelte';
   import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { ActionError } from '#lib/actionError.svelte.js';
   import States from './States.svelte';
@@ -23,6 +22,8 @@
   import { timeAgo, errorMessage, must } from '#lib/utils.js';
   import { avatarInitials, avatarColor } from '#lib/avatar.js';
   import { messages } from './InboxView.messages';
+  import InboxToolbar from './InboxToolbar.svelte';
+  import InboxMessageRow from './InboxMessageRow.svelte';
   import { format, plural, t } from '#lib/i18n/t.js';
 
   const PAGE_SIZE = 7;
@@ -51,8 +52,6 @@
   // a misclassification nobody can find.
   let includeOther = $state(false);
   let hidden = $state(0);
-  // The dropdown offers only signals with a human label (drops 'other' → blank).
-  const LABEL_OPTIONS = $derived(Object.entries(statusLabels(locale())).filter(([, l]) => l !== ''));
   const filterActive = $derived(unread || label !== '' || search !== '');
 
   // The mail list pages over the inbox endpoint with the shared Paginator; the
@@ -465,89 +464,22 @@
           >.
         </p>
       {:else}
-        <!-- Toolbar: account switcher + label filter + search on the left; a compact
-             icon cluster (unread filter, mark-all-read, refresh) on the right. -->
-        <div class="flex flex-wrap items-center gap-2">
-          {#if presentSources.length > 1}
-            <div class="flex gap-1 rounded-lg border border-border p-1 text-sm">
-              {#each sourceOptions as opt (opt.value)}
-                <button
-                  type="button"
-                  onclick={() => setSource(opt.value as InboxSource)}
-                  class="rounded px-3 py-1 transition-colors {source === opt.value
-                    ? 'bg-secondary font-medium text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'}"
-                >
-                  {opt.label}
-                </button>
-              {/each}
-            </div>
-          {/if}
-
-          <select
-            bind:value={label}
-            onchange={reloadList}
-            aria-label={s.filterByLabelAria}
-            class="rounded-lg border border-border bg-background py-2 pl-3 pr-8 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-ring {label
-              ? 'font-medium text-foreground'
-              : 'text-muted-foreground'}"
-          >
-            <option value="">{s.allLabels}</option>
-            {#each LABEL_OPTIONS as [value, text] (value)}
-              <option {value}>{text}</option>
-            {/each}
-          </select>
-
-          <div class="relative min-w-[11rem] flex-1">
-            <Search
-              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            />
-            <input
-              type="search"
-              placeholder={s.searchPlaceholder}
-              aria-label={s.searchAria}
-              bind:value={search}
-              oninput={onSearchInput}
-              class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <!-- Compact icon actions, grouped: unread toggle · mark all read · refresh. -->
-          <div class="flex items-center gap-1">
-            <button
-              type="button"
-              onclick={toggleUnread}
-              aria-pressed={unread}
-              title={s.unreadOnly}
-              aria-label={s.unreadOnly}
-              class="rounded-lg border p-2 transition-colors {unread
-                ? 'border-brand-ring bg-brand-muted/60 text-foreground'
-                : 'border-border text-muted-foreground hover:text-foreground'}"
-            >
-              <Mail class="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onclick={markAllRead}
-              disabled={markingAll}
-              title={s.markAllRead}
-              aria-label={s.markAllRead}
-              class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              <CheckCheck class="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onclick={refreshInbox}
-              disabled={refreshing}
-              title={s.refresh}
-              aria-label={s.refresh}
-              class="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              <RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" />
-            </button>
-          </div>
-        </div>
+        <InboxToolbar
+          {sourceOptions}
+          showSources={presentSources.length > 1}
+          {source}
+          onSetSource={setSource}
+          bind:label
+          onLabelChange={reloadList}
+          bind:search
+          {onSearchInput}
+          {unread}
+          onToggleUnread={toggleUnread}
+          onMarkAllRead={markAllRead}
+          {markingAll}
+          onRefresh={refreshInbox}
+          {refreshing}
+        />
 
         {#if lastDeleted}
           <div
@@ -606,58 +538,7 @@
               <ul class="flex flex-col gap-1">
                 {#each pager.items as m, i (m.id)}
                   <li class="row-in" style="animation-delay: {Math.min(i, 14) * 15}ms">
-                    <button
-                      type="button"
-                      onclick={() => openMessage(m.id)}
-                      aria-current={selectedId === m.id}
-                      class="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors {selectedId ===
-                      m.id
-                        ? 'border-brand-ring bg-brand-muted/60'
-                        : 'border-transparent hover:border-border hover:bg-accent'}"
-                    >
-                      <div
-                        class="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-xs font-semibold text-white"
-                        style="background-color: {avatarColor(m.from_addr || m.from_name)}"
-                      >
-                        {avatarInitials(m.from_name, m.from_addr)}
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <div class="flex items-baseline gap-2">
-                          {#if !m.read}
-                            <span class="sr-only">{s.unreadDotAria}</span>
-                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
-                          {/if}
-                          <span
-                            class="min-w-0 flex-1 truncate text-sm {m.read
-                              ? 'font-medium text-foreground/90'
-                              : 'font-semibold text-foreground'}"
-                          >
-                            {m.direction === 'outgoing'
-                              ? `${s.sent} · ${m.to_addrs || m.from_addr}`
-                              : m.from_name || m.from_addr}
-                          </span>
-                          <span class="shrink-0 text-[11px] text-muted-foreground"
-                            >{timeAgo(m.received_at, locale())}</span
-                          >
-                        </div>
-                        <div class="mt-0.5 truncate text-sm {m.read ? 'text-muted-foreground' : 'text-foreground'}">
-                          {m.subject || s.noSubject}
-                        </div>
-                        {#if m.snippet}
-                          <div class="mt-0.5 truncate text-xs text-muted-foreground">{m.snippet}</div>
-                        {/if}
-                        {#if statusLabel(m.status_signal, locale()) || m.linked_slug}
-                          <div class="mt-1 flex items-center gap-1">
-                            <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
-                            {#if m.linked_slug}
-                              <span class="truncate text-[10px] text-muted-foreground">· {m.linked_company}</span>
-                            {:else if m.suggested_slug}
-                              <span class="text-[10px] text-brand-strong">· {s.suggestedTag}</span>
-                            {/if}
-                          </div>
-                        {/if}
-                      </div>
-                    </button>
+                    <InboxMessageRow {m} selected={selectedId === m.id} onOpen={() => openMessage(m.id)} />
                   </li>
                 {/each}
               </ul>
