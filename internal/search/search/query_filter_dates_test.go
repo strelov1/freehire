@@ -116,3 +116,22 @@ func TestFilterFromValues_AbsurdDayCountsImposeNoBound(t *testing.T) {
 		}
 	}
 }
+
+// The cut-offs round now down to the hour, so requests within one hour build the same
+// filter (facetd caches answers by filter).
+func TestFilterFromValues_DayCutoffsRoundToTheHour(t *testing.T) {
+	early := time.Date(2026, 6, 19, 14, 0, 1, 0, time.UTC)
+	late := time.Date(2026, 6, 19, 14, 59, 59, 0, time.UTC)
+	for _, q := range []string{"posted_within_days=1", "open_within_days=7"} {
+		a := normalizeGroups(t, filterFromValues(vals(q), early))
+		b := normalizeGroups(t, filterFromValues(vals(q), late))
+		if !reflect.DeepEqual(a, b) {
+			t.Errorf("%s: %v at 14:00:01 and %v at 14:59:59, want one filter", q, a, b)
+		}
+	}
+	got := normalizeGroups(t, filterFromValues(vals("posted_within_days=1"), late))
+	want := [][]string{{fmt.Sprintf("posted_ts >= %d", time.Date(2026, 6, 18, 14, 0, 0, 0, time.UTC).Unix())}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("posted_within_days=1 at 14:59:59: got %v, want %v", got, want)
+	}
+}

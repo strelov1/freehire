@@ -391,8 +391,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// posted_within_days=N keeps jobs whose posted_ts is within the last N days; an
 	// out-of-range or non-numeric value imposes no restriction.
 	if n, ok := atoiOK(v.Get("posted_within_days")); ok && withinDays(n) {
-		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
-		groups = append(groups, []string{Gte("posted_ts", int(cutoff))})
+		groups = append(groups, []string{Gte("posted_ts", dayCutoff(now, n))})
 	}
 
 	// open_within_days=N keeps jobs whose created_ts (when ingest first wrote the row) is
@@ -401,11 +400,18 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// restate it every crawl, so a months-old posting passes a posted bound. created_ts is the
 	// system's own observation.
 	if n, ok := atoiOK(v.Get("open_within_days")); ok && withinDays(n) {
-		cutoff := now.Add(-time.Duration(n) * 24 * time.Hour).Unix()
-		groups = append(groups, []string{Gte("created_ts", int(cutoff))})
+		groups = append(groups, []string{Gte("created_ts", dayCutoff(now, n))})
 	}
 
 	return Filter(groups...)
+}
+
+// dayCutoff is the unix second n days before now, with now rounded down to the hour. A
+// cut-off to the second made every such request a different filter, so facetd's
+// per-generation answer cache never served one twice; rounding widens "the last n days"
+// by under an hour.
+func dayCutoff(now time.Time, n int) int {
+	return int(now.Truncate(time.Hour).Add(-time.Duration(n) * 24 * time.Hour).Unix())
 }
 
 // remoteAnywhereActive reports whether the remote-anywhere modifier is actually
