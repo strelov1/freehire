@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/html"
 )
@@ -70,6 +71,10 @@ type adpMyJobsResp struct {
 }
 
 func (a adpMyJobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return a.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+func (a adpMyJobs) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	board := strings.TrimSpace(e.Board)
 	if board == "" {
 		return nil, fmt.Errorf("adpmyjobs: board is empty")
@@ -110,31 +115,48 @@ func (a adpMyJobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if company == "" {
 		company = adpMyJobsCompany(site)
 	}
-	return fetchDetails(reqs, defaultDetailWorkers, func(r adpMyJobsReq) (Job, bool) {
-		return a.detail(ctx, board, company, headers, r)
-	}), nil
+	var attempted, readable atomic.Int64
+	jobs := fetchDetails(reqs, defaultDetailWorkers, func(r adpMyJobsReq) (Job, bool) {
+		if r.ReqID != "" && seen(r.ReqID) {
+			return Job{ExternalID: r.ReqID, Title: r.JobTitle, URL: fmt.Sprintf("https://myjobs.adp.com/%s/cx/job/%s", board, r.ReqID), Company: company, SeenRefresh: true}, true
+		}
+		attempted.Add(1)
+		job, ok := a.detail(ctx, board, company, headers, r)
+		if ok && !job.Unreadable {
+			readable.Add(1)
+		}
+		return job, ok
+	})
+	if attempted.Load() > 0 && readable.Load() == 0 {
+		return nil, fmt.Errorf("adpmyjobs: none of %d new postings could be read", attempted.Load())
+	}
+	return jobs, nil
 }
 
 // detail fetches one requisition's full record (the list omits the description) and maps it to
-// a Job, returning ok=false when the id is empty or the fetch fails.
+// a Job; failed reads preserve identity, while missing ids and confirmed removals drop.
 func (a adpMyJobs) detail(ctx context.Context, board, company string, headers map[string]string, r adpMyJobsReq) (Job, bool) {
 	if r.ReqID == "" {
 		return Job{}, false
 	}
+	jobURL := fmt.Sprintf("https://myjobs.adp.com/%s/cx/job/%s", board, r.ReqID)
 	var resp adpMyJobsResp
 	if err := a.http.GetJSONWithHeaders(ctx, adpMyJobsListURL+"/"+r.ReqID, headers, &resp); err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(r.ReqID, jobURL, company), true
+		}
 		return Job{}, false
 	}
 	// The detail answers in the same envelope as the list, one requisition long.
 	if len(resp.JobRequisitions) == 0 {
-		return Job{}, false
+		return unreadableDetail(r.ReqID, jobURL, company), true
 	}
 	d := resp.JobRequisitions[0]
 
 	location := adpMyJobsLocation(d)
 	return Job{
 		ExternalID:  r.ReqID,
-		URL:         fmt.Sprintf("https://myjobs.adp.com/%s/cx/job/%s", board, r.ReqID),
+		URL:         jobURL,
 		Title:       d.JobTitle,
 		Company:     company,
 		Location:    location,

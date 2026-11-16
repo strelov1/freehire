@@ -356,7 +356,7 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 		return Job{}, false, err
 	}
 	var ld optiusLD
-	hasLD := ldJobPosting(root, &ld)
+	hasLD := optiusJobPosting(root, &ld)
 	section := firstByClass(root, "job-detail-col") // the page's main column
 	if section == nil && !hasLD {
 		if firstByClass(root, "result-count") != nil {

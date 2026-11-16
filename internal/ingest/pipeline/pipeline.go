@@ -139,18 +139,22 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 	fetchCtx, cancelFetch := r.fetchContext(ctx)
 	defer cancelFetch()
 
+admit:
 	for _, e := range entries {
+		// Admit in catalog order so oldest-first scheduling survives a truncated run.
+		select {
+		case sem <- struct{}{}:
+		case <-fetchCtx.Done():
+			break admit
+		}
+		if fetchCtx.Err() != nil {
+			<-sem
+			break
+		}
 		wg.Add(1)
 		go func(e sources.CompanyEntry) {
 			defer wg.Done()
 
-			// Acquire a slot, but abandon the board if the run is cancelled — both
-			// before starting and while parked waiting for a slot.
-			select {
-			case sem <- struct{}{}:
-			case <-fetchCtx.Done():
-				return
-			}
 			defer func() { <-sem }()
 			if fetchCtx.Err() != nil {
 				return

@@ -212,3 +212,18 @@ func TestPeopleSoftIsFullBoardListing(t *testing.T) {
 		t.Fatal("peoplesoft must hydrate only new postings")
 	}
 }
+
+func TestPeopleSoftRepostedOpeningUsesSecondSequence(t *testing.T) {
+	b, err := parsePeopleSoftBoard(psBoard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := psPosting("33966")
+	second := strings.TrimSuffix(first, "PostingSeq=1") + "PostingSeq=2"
+	detail := `<span id="HRS_SCH_WRK2_HRS_JOB_OPENING_ID">33966</span><span id="HRS_SCH_WRK2_POSTING_TITLE">Engineer</span><div id="HRS_SCH_PSTDSC_DESCRLONG$0"><p>Build systems</p></div>`
+	f := &psFake{pages: map[string]string{first: psFixture(t, "dc_search.html"), second: detail}}
+	jobs, err := (peoplesoft{http: f}).hydrate(context.Background(), b, CompanyEntry{Company: "DC"}, []peoplesoftRow{{ID: "33966", Title: "Engineer"}}, func(string) bool { return false })
+	if err != nil || len(jobs) != 1 || jobs[0].URL != second || !strings.Contains(jobs[0].Description, "Build systems") {
+		t.Fatalf("%+v %v", jobs, err)
+	}
+}

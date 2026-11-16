@@ -29,6 +29,7 @@ components:
       - src/lib/components/HomeLandingView.svelte
       - src/lib/components/JobBoard.svelte
       - src/lib/components/JobDrawer.svelte
+      - src/lib/components/JobDrawerAutoApply.svelte
       - src/lib/components/JobsView.svelte
       - src/lib/components/SupportPanel.svelte
       - src/lib/components/SwipeDeck.svelte

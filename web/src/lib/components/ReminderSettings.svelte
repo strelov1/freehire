@@ -35,7 +35,8 @@
   let digestFrequency = $state('daily');
   let digestTime = $state('09:00');
   let inboxDigestEnabled = $state(false);
-  let inboxDigestPaid = $state(false);
+  let applicationDigestEnabled = $state(false);
+  let digestPaid = $state(false);
   let digestIntervalHours = $state(1);
   // 1-23: a full day is the Daily option, which also picks the hour.
   const intervalHourOptions = Array.from({ length: 23 }, (_, i) => i + 1);
@@ -87,10 +88,11 @@
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
-      inboxDigestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
+      digestPaid = plan?.plan === 'pro' || plan?.plan === 'ultra';
       digestFrequency = settings.digest_frequency || 'daily';
       digestTime = settings.digest_time ?? '09:00';
       inboxDigestEnabled = settings.inbox_digest_enabled ?? false;
+      applicationDigestEnabled = settings.application_digest_enabled ?? false;
       digestIntervalHours = settings.digest_interval_hours || 1;
       quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);
       quietHoursStart = settings.quiet_hours_start ?? '22:00';
@@ -123,8 +125,9 @@
         enabled,
         channels,
         digest_frequency: digestFrequency,
-        digest_time: digestFrequency === 'daily' || inboxDigestEnabled ? digestTime : null,
+        digest_time: digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled ? digestTime : null,
         inbox_digest_enabled: inboxDigestEnabled,
+        application_digest_enabled: applicationDigestEnabled,
         digest_interval_hours: digestIntervalHours,
         quiet_hours_start: quietHoursOn ? quietHoursStart : null,
         quiet_hours_end: quietHoursOn ? quietHoursEnd : null,
@@ -323,10 +326,10 @@
       <ToggleSwitch
         on={inboxDigestEnabled}
         label="Daily inbox summary"
-        disabled={!inboxDigestEnabled && inboxDigestPaid && (!enabled || !channels.includes('email'))}
+        disabled={!inboxDigestEnabled && digestPaid && (!enabled || !channels.includes('email'))}
         onToggle={() => {
           // Free accounts see the switch, and turning it on sends them to the plans.
-          if (!inboxDigestEnabled && !inboxDigestPaid) {
+          if (!inboxDigestEnabled && !digestPaid) {
             void goto(resolve('/pricing'));
             return;
           }
@@ -335,7 +338,7 @@
         }}
       />
     </div>
-    {#if !inboxDigestPaid}
+    {#if !digestPaid}
       <p class="mt-2 text-xs text-muted-foreground">
         Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
           href={resolve('/pricing')}
@@ -349,6 +352,51 @@
     {#if !enabled || !channels.includes('email')}
       <p class="mt-2 text-xs text-muted-foreground">
         Enable notifications and select Email above to receive the inbox summary.
+      </p>
+    {/if}
+  </section>
+  <section class="mt-4 rounded-xl border border-border bg-card p-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h2 class="flex items-center gap-2 text-sm font-semibold">
+          Weekly application summary
+          <a href={resolve('/pricing')} aria-label="Weekly application summary Pro feature, view plans"
+            ><Badge variant="brand">Pro</Badge></a
+          >
+        </h2>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Your applications grouped by status, with overdue follow-ups to help you decide what to do next.
+        </p>
+      </div>
+      <ToggleSwitch
+        on={applicationDigestEnabled}
+        label="Weekly application summary"
+        disabled={!applicationDigestEnabled && digestPaid && (!enabled || !channels.includes('email'))}
+        onToggle={() => {
+          if (!applicationDigestEnabled && !digestPaid) {
+            void goto(resolve('/pricing'));
+            return;
+          }
+          applicationDigestEnabled = !applicationDigestEnabled;
+          persist();
+        }}
+      />
+    </div>
+    {#if !digestPaid}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Available with Pro and Ultra. Delivery pauses when your subscription ends. <a
+          href={resolve('/pricing')}
+          class="font-medium text-brand-strong hover:underline">View plans</a
+        >
+      </p>
+    {/if}
+    <p class="mt-2 text-xs text-muted-foreground">
+      Every Monday at the digest time below in your account timezone. This weekly email is separate from the daily inbox
+      summary.
+    </p>
+    {#if !enabled || !channels.includes('email')}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Enable notifications and select Email above to receive the application summary.
       </p>
     {/if}
   </section>
@@ -395,7 +443,7 @@
           {#if digestFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
           Daily digest
         </button>
-        {#if digestFrequency === 'daily' || inboxDigestEnabled}
+        {#if digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled}
           <input
             type="time"
             bind:value={digestTime}
@@ -407,10 +455,10 @@
       </div>
       <p class="text-xs text-muted-foreground">
         Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that
-        often. Frequency applies only to saved-search alerts. The inbox summary always uses the daily time; reminders
-        and application nudges above deliver as they happen.
+        often. Frequency applies only to saved-search alerts. The inbox and weekly application summaries share the
+        chosen time; reminders and application nudges above deliver as they happen.
       </p>
-      {#if digestFrequency === 'daily' && !hasTimezone}
+      {#if (digestFrequency === 'daily' || inboxDigestEnabled || applicationDigestEnabled) && !hasTimezone}
         <p class="text-xs text-muted-foreground">
           <!-- eslint-disable svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
           Set your

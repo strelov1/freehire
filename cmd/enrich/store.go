@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -74,6 +75,9 @@ func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
 }
 
 func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload json.RawMessage) error {
+	if entry.TargetVersion < math.MinInt32 || entry.TargetVersion > math.MaxInt32 {
+		return fmt.Errorf("enrichment target version is outside the database integer range")
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err

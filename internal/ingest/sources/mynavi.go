@@ -339,7 +339,7 @@ func (s mynavi) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	}
 	var p mynaviPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false, errors.New("page carries no JobPosting")
+		return mynaviVisibleDetail(root, base)
 	}
 	if p.URL != "" && !strings.Contains(p.URL, "/jobinfo-"+base.ExternalID+"/") {
 		return Job{}, false, fmt.Errorf("page answered posting %s", p.URL)

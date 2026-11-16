@@ -5,13 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"golang.org/x/net/html"
 )
 
 func TestFeedAuditOptionsRejectWritesAndUnboundedRuns(t *testing.T) {
@@ -123,5 +126,57 @@ func TestFeedAuditHonorsConfiguredTimeout(t *testing.T) {
 	}
 	if report.Status != "feed_failed" || report.Comparison != nil {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+type auditPartialClient struct{ feedFixtureClient }
+
+func (c auditPartialClient) GetXML(ctx context.Context, u string, v any) error {
+	if strings.Contains(u, "offset=500") {
+		return &sources.StatusError{Code: 404}
+	}
+	return c.feedFixtureClient.GetXML(ctx, u, v)
+}
+func (c auditPartialClient) GetHTML(context.Context, string) (*html.Node, error) {
+	return nil, errors.New("adapter unavailable")
+}
+func TestFeedAuditFailuresExitNonzero(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		rows   int
+		status string
+	}{
+		{"later page missing", 500, "feed_failed"}, {"adapter failed", 1, "baseline_failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var items strings.Builder
+			for id := 1; id <= tc.rows; id++ {
+				fmt.Fprintf(&items, `<item><title>Engineer</title><link>https://jobs.acme.com/jobs/%d-engineer</link></item>`, id)
+			}
+			c := auditPartialClient{feedFixtureClient{pages: map[string]string{"https://jobs.acme.com/jobs.rss?offset=0&per_page=500": "<rss><channel>" + items.String() + "</channel></rss>"}}}
+			var buf bytes.Buffer
+			err := (feedAuditor{client: c, timeout: time.Minute}).write(context.Background(), []sources.CompanyEntry{{Provider: "teamtailor", Board: "jobs.acme.com"}}, &buf)
+			if err == nil {
+				t.Fatal("failed audit returned success")
+			}
+			var report feedAuditReport
+			if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
+				t.Fatal(err)
+			}
+			if report.Status != tc.status || report.Comparison != nil {
+				t.Fatalf("report = %+v", report)
+			}
+		})
+	}
+}
+func TestFeedAuditSeedCompanyWinsInEitherOrder(t *testing.T) {
+	for _, entries := range [][]sources.CompanyEntry{
+		{{Board: "tibber.teamtailor.com"}, {Board: "tibber", Company: "Tibber"}},
+		{{Board: "tibber", Company: "Tibber"}, {Board: "tibber.teamtailor.com"}},
+	} {
+		selected, total, err := selectAuditBoards("teamtailor", entries, 20)
+		if err != nil || total != 1 || len(selected) != 1 || selected[0].Company != "Tibber" {
+			t.Fatalf("selected=%+v total=%d err=%v", selected, total, err)
+		}
 	}
 }

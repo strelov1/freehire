@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"log"
+	"slices"
 	"strings"
 	"sync"
 
@@ -12,6 +13,8 @@ import (
 
 // boardTally is one writer's share of a board's outcome; writeBoard merges them.
 type boardTally struct {
+	// bodies is a successful batch lookup; nil retains the per-posting fallback.
+	bodies   map[string]string
 	st       Stats
 	rej      rejections
 	firstErr error
@@ -25,37 +28,70 @@ type boardTally struct {
 // boardTally, and merges them. Everything a write touches is safe to share: the Store already
 // serves boards concurrently, and canon and covered are read-only lookups built up front.
 func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical) boardTally {
-	tallies := make([]boardTally, min(saveConcurrency, max(len(raw), 1)))
-	jobs := make(chan sources.Job)
-	var wg sync.WaitGroup
-	for i := range tallies {
-		wg.Add(1)
-		go func(t *boardTally) {
-			defer wg.Done()
-			for j := range jobs {
-				r.ingestOne(ctx, e, j, seen, covered, canon, t)
-			}
-		}(&tallies[i])
-	}
-	for _, j := range raw {
-		jobs <- j
-	}
-	close(jobs)
-	wg.Wait()
-
 	var merged boardTally
-	for _, t := range tallies {
-		merged.st.Ingested += t.st.Ingested
-		merged.st.Skipped += t.st.Skipped
-		merged.st.ATSCovered += t.st.ATSCovered
-		merged.st.Discovered += t.st.Discovered
-		merged.st.Unreadable += t.st.Unreadable
-		merged.rej.merge(t.rej)
-		if merged.firstErr == nil {
-			merged.firstErr = t.firstErr
+	// Repeated identities must see any body written by an earlier entry, not a cached miss.
+	counts := make(map[string]int, len(raw))
+	for _, j := range raw {
+		counts[j.ExternalID]++
+	}
+	// Bound both query parameters and retained body memory; filtering still uses stored bodies.
+	for batch := range slices.Chunk(raw, 500) {
+		var bodies map[string]string
+		if lookup, ok := r.Store.(StoredBodyBatchLookup); ok {
+			var ids []string
+			for _, j := range batch {
+				needsBody := j.Description == "" && !j.SeenRefresh && !j.Unreadable
+				if needsBody && counts[j.ExternalID] == 1 {
+					_, id := jobIdentity(e, j)
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) > 0 {
+				var err error
+				bodies, err = lookup.StoredDescriptions(ctx, e.Provider, ids)
+				if err != nil {
+					bodies = nil
+				} else {
+					cached := make(map[string]string, len(ids))
+					for _, id := range ids {
+						cached[id] = bodies[id]
+					}
+					bodies = cached
+				}
+			}
 		}
-		merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
-		merged.coveredIDs = append(merged.coveredIDs, t.coveredIDs...)
+		tallies := make([]boardTally, min(saveConcurrency, max(len(batch), 1)))
+		jobs := make(chan sources.Job)
+		var wg sync.WaitGroup
+		for i := range tallies {
+			tallies[i].bodies = bodies
+			wg.Add(1)
+			go func(t *boardTally) {
+				defer wg.Done()
+				for j := range jobs {
+					r.ingestOne(ctx, e, j, seen, covered, canon, t)
+				}
+			}(&tallies[i])
+		}
+		for _, j := range batch {
+			jobs <- j
+		}
+		close(jobs)
+		wg.Wait()
+
+		for _, t := range tallies {
+			merged.st.Ingested += t.st.Ingested
+			merged.st.Skipped += t.st.Skipped
+			merged.st.ATSCovered += t.st.ATSCovered
+			merged.st.Discovered += t.st.Discovered
+			merged.st.Unreadable += t.st.Unreadable
+			merged.rej.merge(t.rej)
+			if merged.firstErr == nil {
+				merged.firstErr = t.firstErr
+			}
+			merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
+			merged.coveredIDs = append(merged.coveredIDs, t.coveredIDs...)
+		}
 	}
 	return merged
 }
@@ -151,7 +187,11 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 	if j.Description == "" {
 		if l, ok := r.Store.(StoredBodyLookup); ok {
 			source, externalID := jobIdentity(e, j)
-			body, err := l.StoredDescription(ctx, source, externalID)
+			body, cached := t.bodies[externalID]
+			var err error
+			if !cached {
+				body, err = l.StoredDescription(ctx, source, externalID)
+			}
 			if err != nil {
 				// Saving anyway would derive from no body over a stored one; the next crawl
 				// retries. The posting was listed, so its liveness is refreshed through the
@@ -164,7 +204,8 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 				return
 			}
 			j.Description = body
-			fromCatalogue = body != ""
+			// A cached absence is also an observation: fence a body inserted since prefetch.
+			fromCatalogue = cached || body != ""
 		}
 	}
 	dj, err := normalizeJob(e, j, canon, fromCatalogue)

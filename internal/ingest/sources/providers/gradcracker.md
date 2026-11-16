@@ -6,3 +6,9 @@
 - **The listing carries a honeypot card**: a visually hidden `<article wire:key="hp">` linking a "featured graduate employer" (`/hub/9000001/.../graduate-job/1/...`). Only an article whose `wire:key` is the posting id in its link is a posting.
 - **No JSON-LD anywhere.** The card is everything but the body (title, employer as the logo's `alt`, Location/Salary/Deadline/Degree/Duration/Starting, accepted disciplines); the body is the posting page's `.body-content`, which embeds video/insight panels (`not-body-content`), a feedback-pledge badge and a content hash that are stripped. The card's facts are prepended to the body as a list, since the start date, duration and degree appear nowhere else. The sitemap (one 2 MB request) names every live posting but no discipline, so it cannot discover anything and the adapter does not read it.
 - **Grades come from the title dictionary.** The opportunity type in the URL sets only `EmploymentType=internship` for `work-placement-internship`; seniority is `internal/dict/classify`'s, which learned the UK vocabulary for this source ("Graduate" → junior, "Industrial Placement"/"Year in Industry"/"Summer Placement"/"Vacation Scheme" → intern). The rest of the unresolved titles are mostly not jobs at all (webinars, insight evenings, open days) and the catalogue filter decides those.
+
+- **Transport recovery, 2026-11-15 (operator).** The former fingerprint lane now returns 403.
+  Scrapling HTTP direct parsed both discipline listings (80 cards each; totals 1,113/1,042) and one
+  posting body (5,743 bytes). The shared tier rebuilds with `pacedGradcracker` and the default
+  200-new budget; retain ten-second pacing even though these three probes passed. See [routing
+  evidence](../../../../docs/investigations/2026-11-15-ingest-routing.md).

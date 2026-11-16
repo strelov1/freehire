@@ -31,9 +31,10 @@ func tenstreetFixture(t *testing.T, name string) string {
 
 // tenstreetFake serves fixed bodies by URL; an unknown URL is a 404.
 type tenstreetFake struct {
-	mu    sync.Mutex
-	pages map[string]string
-	gets  []string
+	finals map[string]string
+	mu     sync.Mutex
+	pages  map[string]string
+	gets   []string
 }
 
 func (f *tenstreetFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
@@ -225,5 +226,35 @@ func TestTenstreetPostingWithoutBodyIsYielded(t *testing.T) {
 	j, ok := parseTenstreetPosting(root, "63879")
 	if !ok || j.Title != "EDI Integration Analyst" || j.Description != "" || j.Location != "LA, US" {
 		t.Errorf("job = %+v, ok = %v", j, ok)
+	}
+}
+
+func TestTenstreetLocationOnlyArrayUsesRenderedPosting(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<td id="job_title">CDL A Company Driver</td><table><tr><td id="job_title">CDL A Company Driver</td><td id="job_description"><p>Great pay</p></td><td id="job_requirements">License required</td></tr></table><script>var active_job_array = [{"location_type":"select_states","value":"AL"}];</script>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, ok := parseTenstreetPosting(root, "6343")
+	if !ok || j.Title != "CDL A Company Driver" || !strings.Contains(j.Description, "Great pay") || j.Location != "AL, US" {
+		t.Fatalf("%+v ok=%v", j, ok)
+	}
+}
+
+func (f *tenstreetFake) GetHTMLResolved(ctx context.Context, u string) (*html.Node, string, error) {
+	root, err := f.GetHTML(ctx, u)
+	if final, ok := f.finals[u]; ok {
+		return root, final, err
+	}
+	return root, u, err
+}
+func TestTenstreetRedirectCannotReplacePostingIdentity(t *testing.T) {
+	listing := "https://pulse.tenstreet.com/share_app_index.php?company_id=10"
+	target := tenstreetPostingURL("10", "6343")
+	fake := &tenstreetFake{pages: map[string]string{
+		listing: `<span id="carrier_detail_company_name">Carrier</span><div onclick="window.location='` + target + `'"></div>`,
+		target:  `<table><tr><td id="job_title">Wrong posting</td><td id="job_description">Wrong body</td></tr></table><script>var active_job_array = [{"location_type":"select_states","value":"AL"}];</script>`,
+	}, finals: map[string]string{target: tenstreetPostingURL("10", "999")}}
+	if _, err := NewTenstreet(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "10"}, func(string) bool { return false }); err == nil {
+		t.Fatal("different final posting identity accepted")
 	}
 }

@@ -84,9 +84,11 @@ func (s *Service) SendDueReminders(ctx context.Context, maxPerRun int32) (Remind
 				logDeliveryFailure("reminder", booking, err)
 				// Give the claim back so the next run retries. A failed release leaves the reminder
 				// claimed and unsent, so it is logged loudly.
-				if err := s.repo.ReleaseReminderClaim(ctx, booking.ID, offset); err != nil {
+				releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+				if err := s.repo.ReleaseReminderClaim(releaseCtx, booking.ID, offset); err != nil {
 					logDeliveryFailure("reminder claim release", booking, err)
 				}
+				cancel()
 				continue
 			}
 			stats.Sent++

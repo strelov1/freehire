@@ -17,7 +17,7 @@ pre-commit:
     # the pre-existing backlog. Same policy as CI (see .golangci.yml).
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run --new-from-rev=HEAD --allow-parallel-runners ./...
+      run: make lint
     # Blocking: `govulncheck ./...` is clean on main under the pinned toolchain, so a
     # failure now comes from a dependency advisory or from the commit itself.
     # A missing binary skips on purpose, unlike gitleaks; the CI job is the gate.
@@ -245,6 +245,12 @@ pre-commit:
     # the config genuinely decides the outcome. The web and extension CI jobs run that
     # same whole-package lint on every push, which is what covers a rule switched off
     # here.
+    web-check:
+      glob: "{web/*.{svelte,ts},web/**/*.{svelte,ts},web/tsconfig.json}"
+      run: pnpm --dir web run check
+    extension-check:
+      glob: "{extension/*.{svelte,ts},extension/**/*.{svelte,ts},extension/tsconfig.json}"
+      run: pnpm --dir extension run check
     web-lint:
       root: "web/"
       glob:

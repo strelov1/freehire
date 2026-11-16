@@ -283,3 +283,17 @@ func TestInboxDigestEnableRequiresPaidTier(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+func TestApplicationDigestConsentSurvivesLegacySettingsUpdate(t *testing.T) {
+	hour := 9 * time.Hour
+	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}, ApplicationDigestEnabled: true, DigestFrequency: "interval", DigestTime: &hour})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/api/v1/me/notification-settings", token, `{"enabled":true,"channels":["email"],"digest_frequency":"interval"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	if !repo.settings.ApplicationDigestEnabled || repo.settings.DigestTime == nil || *repo.settings.DigestTime != hour {
+		t.Fatalf("legacy update lost consent/time: %+v", repo.settings)
+	}
+}

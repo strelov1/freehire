@@ -8,15 +8,46 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ci_changes import Scope, classify, read_changes
+from ci_changes import classify, read_changes
 
 
-class ClassificationTests(unittest.TestCase):
+def backend_and_web(backend, web):
+    return (backend, web)
+
+
+class ScopeAssertions(unittest.TestCase):
+    def assertEqual(self, first, second, *args):
+        if hasattr(first, "backend"):
+            first = (first.backend, first.web)
+        super().assertEqual(first, second, *args)
+
+
+class ClassificationTests(ScopeAssertions):
+    def test_web_sources_select_design_system_guards(self):
+        self.assertTrue(classify(["web/src/lib/Example.svelte"]).design_system)
+        self.assertFalse(classify(["web/static/logo.svg"]).design_system)
+
+    def test_specific_job_selection(self):
+        for path, field in (
+            ("services/scrapling-fetch/app.py", "scrapling_fetch"),
+            ("extension/lib/a.ts", "extension"),
+            ("docs/a.md", "docs"),
+            ("migrations/999.sql", "migrations"),
+            ("typespec/main.tsp", "contracts"),
+        ):
+            scope = classify([path])
+            self.assertTrue(getattr(scope, field))
+            self.assertIn("unit", scope.backend_tasks)
+        self.assertTrue(classify(["migrations/999.sql"]).sqlc)
+        self.assertFalse(classify(["extension/lib/a.ts"]).contracts)
+        self.assertFalse(classify(["docs/a.md"]).scrapling_fetch)
+        self.assertTrue(all(vars(classify(["unknown/input"])).values()))
+
     def test_frontend_changes_keep_backend_unit_guards(self):
         for path in ("web/src/lib/api.ts", "design-system/src/Button.svelte"):
             with self.subTest(path=path):
                 scope = classify([path])
-                self.assertEqual(scope, Scope(backend=False, web=True))
+                self.assertEqual(scope, backend_and_web(backend=False, web=True))
                 self.assertEqual(scope.backend_tasks, ("unit",))
 
     def test_backend_changes_do_not_run_independent_web_checks(self):
@@ -30,16 +61,18 @@ class ClassificationTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 scope = classify([path])
-                self.assertEqual(scope, Scope(backend=True, web=False))
+                self.assertEqual(scope, backend_and_web(backend=True, web=False))
                 self.assertIn("integration-rest", scope.backend_tasks)
                 self.assertIn("unit", scope.backend_tasks)
 
     def test_plan_contract_requires_both_sides(self):
-        self.assertEqual(classify(["internal/ai/plan/plan.go"]), Scope(True, True))
+        self.assertEqual(
+            classify(["internal/ai/plan/plan.go"]), backend_and_web(True, True)
+        )
 
     def test_generated_api_docs_are_checked_by_web(self):
         for path in ("docs/API.md", "docs/API.internal.md"):
-            self.assertEqual(classify([path]), Scope(False, True))
+            self.assertEqual(classify([path]), backend_and_web(False, True))
 
     def test_prose_and_extension_changes_keep_unit_guards(self):
         for path in (
@@ -51,12 +84,12 @@ class ClassificationTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 scope = classify([path])
-                self.assertEqual(scope, Scope(False, False))
+                self.assertEqual(scope, backend_and_web(False, False))
                 self.assertEqual(scope.backend_tasks, ("unit",))
 
     def test_go_files_outside_backend_directories_still_run_backend(self):
         self.assertEqual(
-            classify(["web/example_integration_test.go"]), Scope(True, True)
+            classify(["web/example_integration_test.go"]), backend_and_web(True, True)
         )
         self.assertTrue(classify(["docs/example.go"]).backend)
 
@@ -72,21 +105,50 @@ class ClassificationTests(unittest.TestCase):
             "new-area/example.txt",
         ):
             with self.subTest(path=path):
-                self.assertEqual(classify([path]), Scope(True, True))
-        self.assertEqual(classify([]), Scope(True, True))
-        self.assertEqual(classify(None), Scope(True, True))
+                self.assertEqual(classify([path]), backend_and_web(True, True))
+        self.assertEqual(classify([]), backend_and_web(True, True))
+        self.assertEqual(classify(None), backend_and_web(True, True))
 
     def test_mixed_changes_union_the_required_checks(self):
         self.assertEqual(
             classify(["web/src/lib/api.ts", "internal/job/jobview/view.go"]),
-            Scope(True, True),
+            backend_and_web(True, True),
         )
         self.assertEqual(
-            classify(["internal/job/jobview/view.go", "README.md"]), Scope(True, False)
+            classify(["internal/job/jobview/view.go", "README.md"]),
+            backend_and_web(True, False),
         )
 
 
-class GitChangesTests(unittest.TestCase):
+class WorkflowSelectionTests(unittest.TestCase):
+    def test_job_gates_consume_declared_outputs(self):
+        workflows = Path(__file__).resolve().parents[1] / "workflows"
+        for filename, jobs in {
+            "ci.yml": {
+                "scrapling-fetch": "scrapling_fetch",
+                "design-system": "design_system",
+            },
+            "codegen.yml": {
+                "migrations": "migrations",
+                "sqlc": "sqlc",
+                "contracts": "contracts",
+                "api-contract": "contracts",
+            },
+            "extension.yml": {"build": "extension"},
+        }.items():
+            workflow = (workflows / filename).read_text()
+            for job, flag in jobs.items():
+                with self.subTest(job=job):
+                    self.assertIn(
+                        f"  {job}:\n    needs: changes\n    if: needs.changes.outputs.{flag} == 'true'",
+                        workflow,
+                    )
+                    self.assertIn(
+                        f"{flag}: ${{{{ steps.scope.outputs.{flag} }}}}", workflow
+                    )
+
+
+class GitChangesTests(ScopeAssertions):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="freehire-ci-changes-")
         self.addCleanup(self.temp.cleanup)
@@ -120,7 +182,7 @@ class GitChangesTests(unittest.TestCase):
         head = self.commit()
         paths = read_changes(base, head, self.repo)
         self.assertEqual(set(paths), {"web/old.ts", "docs/new.md"})
-        self.assertEqual(classify(paths), Scope(False, True))
+        self.assertEqual(classify(paths), backend_and_web(False, True))
 
     def test_deleted_backend_file_is_not_lost(self):
         self.write("internal/example/file.go", "package example\n")
@@ -128,7 +190,7 @@ class GitChangesTests(unittest.TestCase):
         (self.repo / "internal/example/file.go").unlink()
         head = self.commit()
         self.assertEqual(
-            classify(read_changes(base, head, self.repo)), Scope(True, False)
+            classify(read_changes(base, head, self.repo)), backend_and_web(True, False)
         )
 
     def test_paths_with_spaces_and_newlines_are_not_split(self):
@@ -145,7 +207,8 @@ class GitChangesTests(unittest.TestCase):
         for base in ("0" * 40, "f" * 40, "", "--cached"):
             with self.subTest(base=base), contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(
-                    classify(read_changes(base, head, self.repo)), Scope(True, True)
+                    classify(read_changes(base, head, self.repo)),
+                    backend_and_web(True, True),
                 )
 
     def test_diff_timeout_falls_back_to_full(self):
@@ -156,7 +219,7 @@ class GitChangesTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(
                     classify(read_changes("a" * 40, "b" * 40, self.repo)),
-                    Scope(True, True),
+                    backend_and_web(True, True),
                 )
 
     def test_cli_only_emits_static_github_output_fields(self):
@@ -181,7 +244,8 @@ class GitChangesTests(unittest.TestCase):
         )
         outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
         self.assertEqual(
-            outputs, {"backend_tasks": json.dumps(["unit"]), "web": "false"}
+            {key: outputs[key] for key in ("backend_tasks", "web")},
+            {"backend_tasks": json.dumps(["unit"]), "web": "false"},
         )
 
 

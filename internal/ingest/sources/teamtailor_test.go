@@ -206,18 +206,7 @@ func TestTeamtailorPaginatesUntilEmpty(t *testing.T) {
 	}
 }
 
-// A page that repeats an earlier page's link is NOT a genuinely empty page, and must not
-// terminate the walk: the raw per-page link count, not the count of newly-added links, is
-// what proves the board's end (see the fullBoardListing interface, source.go). A board that
-// truly repeats its last link forever for any ?page=N has no other structural end to find and
-// must exhaust ttMaxPages and fail loudly, exactly like a board that never stops yielding
-// genuinely new links — the two are indistinguishable from the walk's point of view, and
-// that indistinguishability is the point: silently trusting "no new links" as proof was the
-// gap the mechanical batch fix (openspec/changes/fullboardlisting-hand-rolled-batch) found and
-// closed for its five adapters, and this is the same fix for teamtailor. Live-verified
-// 2026-09-08 against both currently-crawled boards (migen, tantor): neither actually repeats a
-// page — both answer a genuinely empty page past their real end — so this reflects real
-// platform behavior, not a hypothetical regression.
+// Repeated non-empty listing pages fail early; they never prove completeness.
 func TestTeamtailorFetchFailsWhenAPageRepeatsAnEarlierLink(t *testing.T) {
 	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Oslo", "NO", "")
 	fake := (&routedHTTP{}).
@@ -227,6 +216,9 @@ func TestTeamtailorFetchFailsWhenAPageRepeatsAnEarlierLink(t *testing.T) {
 	_, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
 	if err == nil {
 		t.Fatal("Fetch succeeded despite every page repeating the same link — a repeated non-empty page must not be treated as the board's natural end")
+	}
+	if fake.calls != 3 {
+		t.Fatalf("listing requests = %d, want 3", fake.calls)
 	}
 }
 

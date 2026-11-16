@@ -13,3 +13,10 @@ changed page counts, empty/repeated pages in a multi-page listing, and declarati
 above the 100-page bound now fail the board through the existing error path.
 A declared single empty page still succeeds. This adapter declares neither full
 board coverage nor verified-empty evidence; this fix does not broaden sweep scope.
+
+Verified 2026-11-15: SC Johnson's live job 102078701904 has no JobPosting
+JSON-LD. Its identified `section[data-selector-name=jobdetails]` holds
+`data-job-id`, an h1, `.ats-description` and `.ajd_header__location`. The adapter
+falls back to those fields only when the section's ID matches the listed posting
+and both title and body are present. Dates are left absent when HTML does not
+state them. A missing structured-data block does not establish removal.

@@ -199,3 +199,28 @@ func TestTalentbrewIncompleteListingFailsBeforeHydration(t *testing.T) {
 		})
 	}
 }
+
+func TestTalentbrewRenderedPostingWithoutJSONLD(t *testing.T) {
+	for _, id := range []string{"102078701904", "other"} {
+		page := `<section data-selector-name="jobdetails" data-job-id="` + id + `"><h1>Marketing Manager</h1><p class="ajd_header__location">Racine, Wisconsin</p><div class="ats-description"><p>Lead marketing</p><script>alert(1)</script></div></section>`
+		fake := (&routedHTTP{}).route("/job/manager", page)
+		j, ok := (talentbrew{http: fake}).detail(context.Background(), CompanyEntry{Company: "SC Johnson"}, tbPosting{id: "102078701904", url: "https://jobs.scjohnson.com/en/job/manager"})
+		if id == "other" {
+			if !ok || !j.Unreadable {
+				t.Fatal("mismatched identity admitted", j)
+			}
+			continue
+		}
+		if !ok || j.Unreadable || j.Title != "Marketing Manager" || j.Location != "Racine, Wisconsin" || strings.Contains(j.Description, "<script") || !strings.Contains(j.Description, "Lead marketing") {
+			t.Fatalf("%+v ok=%v", j, ok)
+		}
+	}
+}
+
+func TestTalentbrewHTMLPostingRejectsBlankBody(t *testing.T) {
+	fake := (&routedHTTP{}).route("/job/manager", `<section data-selector-name="jobdetails" data-job-id="123"><h1>Manager</h1><div class="ats-description">`+"\n"+`</div></section>`)
+	j, ok := (talentbrew{http: fake}).detail(context.Background(), CompanyEntry{}, tbPosting{id: "123", url: "https://jobs.scjohnson.com/en/job/manager"})
+	if !ok || !j.Unreadable {
+		t.Fatal("whitespace-only body accepted", j, ok)
+	}
+}

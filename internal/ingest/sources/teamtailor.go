@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -115,6 +117,7 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 	listPath := "jobs"
 	var urls []string
 	seen := make(map[string]bool)
+	pageVisits := make(map[string]int)
 	listed := false // page 1 carried the job-list element; see the scope below
 	for page := 1; page <= ttMaxPages; page++ {
 		listURL := fmt.Sprintf("https://%s/%s?page=%d", e.Board, listPath, page)
@@ -154,6 +157,16 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 			links = ttJobLinks(base, list)
 		} // listed, and this page has no list: past the end, zero links
 
+		// Tolerate one overlapping page, but repeated non-empty pages prove no end.
+		if len(links) > 0 {
+			signatureLinks := append([]string(nil), links...)
+			sort.Strings(signatureLinks)
+			signature := strings.Join(signatureLinks, "\n")
+			pageVisits[signature]++
+			if pageVisits[signature] >= 3 {
+				return nil, fmt.Errorf("teamtailor: listing %s page %d: repeated non-empty listing page", e.Board, page)
+			}
+		}
 		for _, link := range links {
 			if !seen[link] {
 				seen[link] = true

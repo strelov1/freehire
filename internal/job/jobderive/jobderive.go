@@ -348,7 +348,7 @@ func Derive(in Input) Derived {
 		Equity:             jobfacts.Equity(in.Title, in.Description),
 		ClearanceLevels:    clearanceLevels,
 		Perks:              perks.FromDescription(in.Description),
-		Engagement:         DeriveEngagement(in.Engagement, title, in.Description),
+		Engagement:         deriveEngagement(in.Engagement, title, in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,
@@ -368,11 +368,10 @@ func RetainEmploymentType(stored, title, description string) string {
 	return stored
 }
 
-// DeriveEngagement is the engagement column for a posting: the structured signal unioned
+// deriveEngagement is the engagement column for a posting: the structured signal unioned
 // with what the title and description state, in vocab order, anything outside the
-// vocabulary dropped; nil when neither names a term. Exported for cmd/backfill-engagement,
-// which rewrites this one column without the rest of Derive.
-func DeriveEngagement(signal []string, title, description string) []string {
+// vocabulary dropped; nil when neither names a term.
+func deriveEngagement(signal []string, title, description string) []string {
 	text := engagement.FromText(normalize.CleanTitle(title), description)
 	var out []string
 	for _, v := range vocab.EngagementValues {

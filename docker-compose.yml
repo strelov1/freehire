@@ -5,7 +5,7 @@ services:
     # not Alpine — pgvector has no Alpine variant — but pins the same Postgres major
     # (18) as the stock image it replaces, so the version-subdirectory volume
     # behaviour noted below is unaffected.
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:0.8.1-pg18
     # Every integration-test binary of every checkout meets on this one server
     # (TESTDB_ADMIN_URL, internal/platform/testdb), so it needs more than the default 100.
     command: ["postgres", "-c", "max_connections=500"]
@@ -45,7 +45,7 @@ services:
   # an optional one like Meili — no volume, since rate-limit counters are
   # ephemeral/TTL'd and losing them on restart is a fail-open no-op, not data loss.
   redis:
-    image: redis:8-alpine
+    image: redis:8.2.1-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -91,7 +91,7 @@ services:
       - s3
     entrypoint: >
       /bin/sh -c "
-      until curl -sfI -o /dev/null http://s3:9090/hire-resumes || curl -sf -o /dev/null -X PUT http://s3:9090/hire-resumes; do sleep 1; done;
+      attempt=0; until curl --max-time 10 -sfI -o /dev/null http://s3:9090/hire-resumes || curl --max-time 10 -sf -o /dev/null -X PUT http://s3:9090/hire-resumes; do attempt=$$((attempt + 1)); [ "$$attempt" -lt 30 ] || exit 1; sleep 1; done;
       exit 0;
       "
 

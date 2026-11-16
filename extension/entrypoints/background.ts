@@ -11,7 +11,7 @@ import {
   type RevealRequest,
 } from '../lib/protocol';
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
-import { fillsForFrame } from '../lib/form';
+import { fillsForFrame } from '../lib/fillPlan';
 import { getToken } from '../lib/auth';
 import { getTailoredCVForJob, getCVPdfBytes } from '../lib/freehire';
 import {

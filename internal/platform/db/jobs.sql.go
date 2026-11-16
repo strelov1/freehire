@@ -1724,6 +1724,42 @@ func (q *Queries) StoredJobDescription(ctx context.Context, arg StoredJobDescrip
 	return description, err
 }
 
+const storedJobDescriptions = `-- name: StoredJobDescriptions :many
+SELECT external_id, description FROM jobs
+WHERE source = $1 AND external_id = ANY($2::text[])
+  AND NOT is_private
+`
+
+type StoredJobDescriptionsParams struct {
+	Source      string   `json:"source"`
+	ExternalIds []string `json:"external_ids"`
+}
+
+type StoredJobDescriptionsRow struct {
+	ExternalID  string `json:"external_id"`
+	Description string `json:"description"`
+}
+
+func (q *Queries) StoredJobDescriptions(ctx context.Context, arg StoredJobDescriptionsParams) ([]StoredJobDescriptionsRow, error) {
+	rows, err := q.db.Query(ctx, storedJobDescriptions, arg.Source, arg.ExternalIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StoredJobDescriptionsRow{}
+	for rows.Next() {
+		var i StoredJobDescriptionsRow
+		if err := rows.Scan(&i.ExternalID, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateJobDescription = `-- name: UpdateJobDescription :execrows
 UPDATE jobs
 SET description  = $1,

@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage, type FramedField, type FramedUpload } from '../../lib/protocol';
+  import { type RuntimeMessage } from '../../lib/protocol';
   import { TOP_FRAME } from '../../lib/tools/attachCv';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
@@ -14,18 +13,10 @@
   import { pageIdentity, readStablePageKey } from '../../lib/assistant/pageIdentity';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { markApplied, type FreehireJob, type JobMatch } from '../../lib/freehire';
+  import { type FreehireJob, type JobMatch } from '../../lib/freehire';
   import { contributePageUrl, matchPage } from '../../lib/pageMatch';
-  import { scopeToApplication } from '../../lib/form';
   import { normalizeLabel } from '../../lib/fieldKeys';
-  import {
-    buildPlan,
-    leftAnApplication,
-    markAnswered,
-    showsApplicationForm,
-    type ApplyPlan,
-    type PlanItem,
-  } from '../../lib/applyPlan';
+  import { leftAnApplication, type PlanItem } from '../../lib/applyPlan';
   import type { WalkHooks } from '../../lib/formWalk';
   import { agentAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { ToolChannel } from '../../lib/tools/client';
@@ -33,6 +24,7 @@
   import MatchStatusView from './MatchStatusView.svelte';
   import AutofillFooter from './AutofillFooter.svelte';
   import FormPlanView from './FormPlanView.svelte';
+  import { FormPlan } from './formPlan.svelte';
   import AppliedPrompt from './AppliedPrompt.svelte';
   import PlanRefusalAlert from './PlanRefusalAlert.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
@@ -193,8 +185,8 @@
     const auth = authGeneration;
     const key = await currentPageKey();
     if (requestId !== pageRequestId || auth !== authGeneration || !user) return;
-    formFilled = false;
-    autofilled.clear();
+    form.formFilled = false;
+    form.autofilled.clear();
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
       chatPageKey = key;
@@ -481,84 +473,25 @@
 
   let autofilling = $state(false);
 
-  // ── The application-form plan ──────────────────────────────────────────────
-  //
-  // The panel's standing account of the form in front of the user: what it asks,
-  // what is answered, how far the required questions are along. It exists before
-  // any fill and outlives every one, which is the difference from the notices —
-  // those describe one action and are gone by the next.
+  // The application-form plan (see FormPlan). Every read is followed by
+  // noteApplication, which tracks the started application across reads.
+  const form = new FormPlan(() => noteApplication());
 
-  let plan = $state<ApplyPlan | null>(null);
-  /** The question a walk is filling right now, by label. */
-  let fillingLabel = $state<string | null>(null);
-  // Reads of the form are serialised rather than raced. A request id (the
-  // `matchRequestId` pattern) was the first attempt and it deadlocked on a real
-  // ATS page: the page announces changes continuously, so every read found its id
-  // already superseded by the next one and returned before assigning anything —
-  // the checklist never appeared at all. One read at a time, with a re-read queued
-  // if anything arrived meanwhile, cannot starve and cannot land stale.
-  let planReading = false;
-  let planStale = false;
-  /** How many labelled questions the last read found, whether or not they added
-   *  up to an application. It is what the panel says when it shows no checklist,
-   *  so "nothing appeared" can be told from "nothing was found". */
-  let questionsSeen = $state(0);
-  /** Why the last read produced nothing, when it failed outright. */
-  let planError = $state('');
-  /** True once a walk has written into this page's form. It outranks every guess
-   *  about whether the page is showing an application: it accepted values. Reset
-   *  by a page change, with the plan. */
-  let formFilled = $state(false);
-  /** The questions on this page whose answers freehire already holds, by normalised
-   *  label: the ones this panel wrote (from the profile or the bank) and the ones just
-   *  saved. Neither is offered for saving again. Reset by a page change, with
-   *  `formFilled`. */
-  const autofilled = new SvelteSet<string>();
-  /** The last read's questions, scoped as the plan is — with their values, which the
-   *  plan does not carry. What the "save my answers" offer is computed from. */
-  let formFields = $state<FramedField[]>([]);
   let savingAnswers = $state(false);
   /** The catalog job whose application form is in front of the user, started. */
   let startedJob: FreehireJob | null = null;
   /** The catalog job whose started application gave way to a page with no form — the one
    *  the "did you submit?" prompt names. Kept until answered. */
   let appliedCandidate = $state<FreehireJob | null>(null);
-  let markingApplied = $state(false);
   /** Asked only once the page in front of the user shows no form: the next step of a
    *  multi-step application is still the application, not its end. */
-  let asksApplied = $derived(appliedCandidate !== null && !plan && !autofilling);
-  let answerOffers = $derived(autofilling ? [] : answersToOffer(formFields, autofilled));
-  /** The upload fields the last read found, across every frame — MatchCard's "Attach
-   *  tailored CV" action is gated on at least one being in the TOP frame specifically
-   *  (see `pickAttachableUpload`), not merely on this list being non-empty: an upload
-   *  that exists only inside an embedded iframe is one this action can never reach. */
-  let uploads = $state<FramedUpload[]>([]);
+  let asksApplied = $derived(appliedCandidate !== null && !form.plan && !autofilling);
+  let answerOffers = $derived(autofilling ? [] : answersToOffer(form.formFields, form.autofilled));
 
-  /** Reads the page's form and rebuilds the plan, or clears it for a page that
-   *  is not showing an application. */
+  /** Reads the page's form and rebuilds the plan (signed in only). */
   async function refreshPlan() {
     if (!user) return;
-    if (planReading) {
-      planStale = true;
-      return;
-    }
-    planReading = true;
-    try {
-      do {
-        planStale = false;
-        const reply = (await browser.runtime.sendMessage({
-          kind: 'GET_FRAMED_FORM',
-        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-        applyRead(reply);
-        noteApplication();
-      } while (planStale);
-    } catch (err) {
-      // A read that could not happen is not a page without a form: say so rather
-      // than clearing a checklist the user is looking at.
-      planError = err instanceof Error ? err.message : 'could not read the form';
-    } finally {
-      planReading = false;
-    }
+    await form.refresh();
   }
 
   /**
@@ -568,39 +501,14 @@
    * cannot see the second, and race the page's own change notice on the first.
    */
   function noteApplication() {
-    if (leftAnApplication(plan)) {
+    if (leftAnApplication(form.plan)) {
       if (matchJob?.public_slug) startedJob = matchJob;
       return;
     }
-    if (!plan && startedJob) {
+    if (!form.plan && startedJob) {
       appliedCandidate = startedJob;
       startedJob = null;
     }
-  }
-
-  /** Turns one form read into the plan, or into the reason there is none. */
-  function applyRead(reply: RuntimeMessage | undefined) {
-    planError = '';
-    if (reply?.kind !== 'FRAMED_FORM') {
-      questionsSeen = 0;
-      plan = null;
-      uploads = [];
-      formFields = [];
-      return;
-    }
-    uploads = reply.uploads;
-    questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
-    if (!showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })) {
-      plan = null;
-      formFields = [];
-      return;
-    }
-    // Scoped to the one form the upload identifies, where there is one: an
-    // application and a job-alert signup each have their own "Email". With no
-    // upload to scope by — every step of an ATS form after the first — the page's
-    // questions ARE the form.
-    formFields = reply.uploads.length > 0 ? scopeToApplication(reply.fields, reply.uploads) : reply.fields;
-    plan = buildPlan(formFields);
   }
 
   /** Sends the user to one question: the page scrolls there and takes the cursor. */
@@ -619,10 +527,10 @@
 
   // What the walks in lib/formWalk report back to this panel.
   const walkHooks: WalkHooks = {
-    filling: (label) => (fillingLabel = label),
+    filling: (label) => (form.fillingLabel = label),
     stopped: () => walkStop,
-    wrote: () => (formFilled = true),
-    answered: (label, frame, form) => tickOff(label, frame, form),
+    wrote: () => (form.formFilled = true),
+    answered: (label, frame, formIndex) => form.tickOff(label, frame, formIndex),
   };
   // What the fallback filler in lib/formFill reports back to this panel.
   const fillPanel: FillPanel = {
@@ -630,21 +538,9 @@
     offerOverride: (run) => (overrideFill = run),
     walk: walkHooks,
     refreshPlan: () => refreshPlan(),
-    known: (label) => autofilled.add(normalizeLabel(label)),
+    known: (label) => form.autofilled.add(normalizeLabel(label)),
     refused: (err) => (autofillRefusal = err),
   };
-
-  /** Ticks one question off the plan, narrowed by whatever address the caller
-   *  has: a fill knows its frame and form, the agent's report knows the label
-   *  alone. An address that matches nothing leaves the plan as it was. */
-  function tickOff(label: string, frame?: number, form?: number) {
-    autofilled.add(normalizeLabel(label));
-    if (!plan) return;
-    const item = plan.items.find(
-      (i) => i.label === label && (frame === undefined || i.frame === frame) && (form === undefined || i.form === form),
-    );
-    if (item) plan = markAnswered(plan, item.key);
-  }
 
   async function autofill() {
     const token = await getToken();
@@ -673,27 +569,10 @@
     try {
       await saveChosenAnswers(chosen, token, {
         notice: (text) => notices.push(text),
-        saved: (question) => autofilled.add(normalizeLabel(question)),
+        saved: (question) => form.autofilled.add(normalizeLabel(question)),
       });
     } finally {
       savingAnswers = false;
-    }
-  }
-
-  async function confirmApplied() {
-    const job = appliedCandidate;
-    const token = await getToken();
-    if (!job || !token || markingApplied) return;
-    markingApplied = true;
-    try {
-      await markApplied(job.public_slug, token);
-      track('mark_applied', { source: 'left_form' });
-      notices.push(`✓ Marked as applied — ${job.title} is in your Applied list.`);
-      appliedCandidate = null;
-    } catch (err) {
-      notices.push(`Could not mark as applied: ${err instanceof Error ? err.message : 'error'}`);
-    } finally {
-      markingApplied = false;
     }
   }
 
@@ -739,16 +618,15 @@
             {#if asksApplied && appliedCandidate}
               <AppliedPrompt
                 job={appliedCandidate}
-                marking={markingApplied}
-                onConfirm={confirmApplied}
-                onDismiss={() => (appliedCandidate = null)}
+                onNotice={(text) => notices.push(text)}
+                onDone={() => (appliedCandidate = null)}
               />
             {/if}
             <MatchStatusView
               status={matchStatus}
               job={matchJob}
               {match}
-              hasUploadField={uploads.some((u) => u.frame === TOP_FRAME)}
+              hasUploadField={form.uploads.some((u) => u.frame === TOP_FRAME)}
               error={matchError}
               onRetry={loadMatch}
               {canAddJob}
@@ -757,10 +635,10 @@
             />
 
             <FormPlanView
-              {plan}
-              {planError}
-              {questionsSeen}
-              {fillingLabel}
+              plan={form.plan}
+              planError={form.planError}
+              questionsSeen={form.questionsSeen}
+              fillingLabel={form.fillingLabel}
               {autofilling}
               onReveal={revealItem}
               onCancel={() => (walkStop = true)}

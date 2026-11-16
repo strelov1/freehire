@@ -45,6 +45,9 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 			continue
 		}
 		// Keep the observed vendor URL, including any data-residency host.
+		if s, b, c, found := atsboard.Recognize(final); found {
+			return s, b, c, true
+		}
 		for _, raw := range atsdetect.AbsURLRe.FindAllString(body, -1) {
 			if s, b, c, found := atsboard.Recognize(raw); found {
 				return s, b, c, true
