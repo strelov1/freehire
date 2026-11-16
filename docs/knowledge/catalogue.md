@@ -4,12 +4,13 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T22:25:45+00:00
+  at: 2026-11-16T23:13:27+00:00
 sources:
   - resource: ../../internal/ingest/sources/wantapply.go
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
+  - resource: ../../cmd/ingest/native_ownership.go
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/ingest/sources/linkedin_related.go
   - resource: ../../internal/ingest/sources/scraplingtier.go
@@ -79,3 +80,6 @@ first-level recommendations from one verified public posting page. Each candidat
 through the normal detail and application-ownership checks, with the same request limiter.
 LinkedIn uses the existing Scrapling HTTP proxy route when configured. The provider
 reference records the bounded access probes and their limits.
+
+Ownership reconciliation accepts both numeric LinkedIn posting keys and legacy
+keyword-scoped keys, so a later external-application transition can reach its native ATS.
