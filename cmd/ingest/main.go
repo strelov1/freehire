@@ -257,8 +257,8 @@ func run() int {
 	}
 
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d recent_unsupported=%d truncated=%t",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, total.RecentUnsupported, truncated)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d recent_unsupported=%d truncated=%t outbound_discoveries=%d",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, total.RecentUnsupported, truncated, total.Discovered)
 
 	// A provider at 0% never took the cheap write: a hashed field churns between crawls,
 	// costing a full row rewrite and an index push every pass.
