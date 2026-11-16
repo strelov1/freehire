@@ -232,6 +232,13 @@
         <div class="border-t border-border pt-4">
           {#await import('./filters/LocationPane.svelte') then { default: LocationPane }}
             <LocationPane store={must(store, 'store')} {counts} />
+          {:catch}
+            <p role="alert" class="text-sm text-destructive">Location filters could not load.</p>
+            <button
+              type="button"
+              class="mt-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              onclick={() => (open = false)}>Close</button
+            >
           {/await}
         </div>
       {:else if variant === 'companies'}

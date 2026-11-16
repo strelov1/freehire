@@ -497,8 +497,12 @@
             {:then { default: MatchAnalysisFull }}
               <MatchAnalysisFull job={posting} />
             {:catch}
-              <p role="alert">{s.analysisLoadError}</p>
-              <button type="button" onclick={() => (tab = 'description')}>{s.returnToDescription}</button>
+              <p role="alert" class="text-sm text-destructive">{s.analysisLoadError}</p>
+              <button
+                type="button"
+                class="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                onclick={() => (tab = 'description')}>{s.returnToDescription}</button
+              >
             {/await}
           {:else if item.job}
             <p class="text-sm text-muted-foreground">{s.loading}</p>

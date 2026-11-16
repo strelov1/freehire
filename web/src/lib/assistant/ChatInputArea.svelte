@@ -78,8 +78,12 @@
         {#await import('./VoiceCall.svelte') then { default: VoiceCall }}
           <VoiceCall {sessionId} {onClose} {onUnavailable} />
         {:catch}
-          <p role="alert">Voice call could not load.</p>
-          <button type="button" onclick={() => (voiceCallOpen = false)}>Return to text</button>
+          <p role="alert" class="text-sm text-destructive">{s.voiceCallLoadFailed}</p>
+          <button
+            type="button"
+            class="text-sm text-muted-foreground underline-offset-2 hover:underline"
+            onclick={() => (voiceCallOpen = false)}>{s.returnToText}</button
+          >
         {/await}
       </div>
     </div>
