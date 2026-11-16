@@ -27,12 +27,12 @@ class RecoveryTest(unittest.TestCase):
                 hub=False,
                 tenants={},
             )
-            for board, name in [("893", "Mader Group"), ("784", "Armaguard Group")]
+            for board, name in recovery.EXPECTED_COMPANIES.items()
         ]
 
     def test_additions_preserve_company_and_repeat_is_empty(self):
         commands = recovery.additions(self.rows)
-        self.assertEqual(len(commands), 2)
+        self.assertEqual(len(commands), 38)
         self.assertIn("--company=Mader Group", commands[0])
         for row in list(self.rows):
             self.rows.append(
@@ -40,12 +40,36 @@ class RecoveryTest(unittest.TestCase):
             )
         self.assertEqual(recovery.additions(self.rows), [])
 
+    def test_mixed_existing_targets_and_dynamic_query(self):
+        for row in list(self.rows)[::2]:
+            self.rows.append(
+                dict(
+                    row,
+                    provider="clinch",
+                    board=recovery.DESTINATIONS[row["board"]].upper(),
+                )
+            )
+        self.assertEqual(len(recovery.additions(self.rows)), 19)
+        query = recovery.preflight_query()
+        for board, host in recovery.DESTINATIONS.items():
+            self.assertIn(recovery.sql_literal(board), query)
+            self.assertIn(recovery.sql_literal(host), query)
+        self.assertEqual(recovery.sql_literal("O'Brien"), "'O''Brien'")
+        self.assertTrue(
+            set(recovery.DESTINATIONS).isdisjoint({"899", "1023", "1034", "1245"})
+        )
+
+    def test_changed_origin_company_aborts(self):
+        self.rows[-1]["company"] = "Different employer"
+        with self.assertRaises(ValueError):
+            recovery.additions(self.rows)
+
     def test_conflicting_destination_aborts_entire_plan(self):
         self.rows.append(
             dict(
-                self.rows[0],
+                self.rows[-1],
                 provider="clinch",
-                board=recovery.DESTINATIONS["893"],
+                board=recovery.DESTINATIONS[self.rows[-1]["board"]],
                 company="Other",
             )
         )

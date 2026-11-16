@@ -34,6 +34,15 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// Migrated PageUp sites expose sitemaps directly; real detail bodies require HTTP + proxy.
+	"clinch": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		plain := NewClient()
+		return NewClinch(plain, pacedHTMLGetter(clinchDetailHTTP{plain: plain, migrated: f}, clinchRequestInterval, clinchRequestBurst))
+	}},
+	// Only North Memorial's custom PageUp host needs this lane; canonical tenants stay direct.
+	"pageup": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewPageUp(pageupCustomHTTP{plain: NewClient(), custom: f})
+	}},
 	// Direct HTTP returned 498; browser listing pages and vacancy details passed.
 	"rwb": {scraplingRoute{mode: scraplingfetch.ModeBrowser, proxy: false}, func(f *Client) Source {
 		return NewRWB(f)

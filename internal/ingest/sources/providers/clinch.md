@@ -19,3 +19,11 @@ fallback metadata and empty bodies. Ordinary detail errors do not latch or drop
 postings. This adapter does not declare `fullBoardListing` or `emptyBoardListing`;
 a sitemap-only run does not establish readable-body coverage or prove an employer
 has no vacancies. Do not use such a run to justify retiring its former PageUp board.
+
+With Scrapling configured, the registry keeps sitemaps on the direct client and
+routes the 38 verified migrated hosts' details through HTTP + proxy beneath the same provider-wide limiter
+(1500 ms, burst one). Thirty migrated targets needed this lane in the bounded
+2026-11-15 sample; later cold direct successes do not establish sustained access.
+Service errors and upstream refusals retain standard client handling and the
+existing adapter fallback/latch. There are no extra outer retries or new budgets.
+See [completion evidence](../../../../docs/investigations/2026-11-15-ingest-completion.md).
