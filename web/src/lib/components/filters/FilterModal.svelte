@@ -5,7 +5,8 @@
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import { companySearch, EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, visibleEngagementGroups } from '#lib/facets.js';
+  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, visibleEngagementGroups } from '#lib/facets.js';
+  import { companySearch } from '#lib/companySearch.js';
   import { searchCities } from '#lib/facetOptions.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';

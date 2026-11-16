@@ -5,7 +5,8 @@
   // list to reconcile against, so toggling one is a plain add/remove (see
   // profileExclusions.ts) rather than the mutual-exclusion dance withAvoidedSkill does.
   import type { FacetOption } from '#lib/facets.js';
-  import { companySearch, dynamicLabel } from '#lib/facets.js';
+  import { dynamicLabel } from '#lib/facets.js';
+  import { companySearch } from '#lib/companySearch.js';
   import { loadSkillDistribution, searchSkillOptions } from '#lib/skillDictionary.js';
   import { loadSourceDistribution } from '#lib/sourceDictionary.js';
   import { profileStore } from '#lib/profile.svelte.js';

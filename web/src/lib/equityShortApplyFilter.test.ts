@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { activeFilterCount, canonicalQuery, emptyFilters, filtersFromParams, filtersToParams } from './facetModel';
+import { activeFilterCount, emptyFilters, filtersFromParams, filtersToParams } from './facetModel';
+import { canonicalQuery } from './savedSearchQuery';
 import { FACETS } from './facets';
 import { EQUITY_VALUES } from './generated/contracts';
 import { SHORT_APPLICATION_MAX } from './jobFacts';

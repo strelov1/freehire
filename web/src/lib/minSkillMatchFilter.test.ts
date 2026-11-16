@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  activeFilterCount,
-  canonicalQuery,
-  emptyFilters,
-  filtersFromParams,
-  filtersToParams,
-  queryNarrows,
-  savedSearchQuery,
-} from './facetModel.js';
+import { activeFilterCount, emptyFilters, filtersFromParams, filtersToParams } from './facetModel.js';
+import { canonicalQuery, queryNarrows, savedSearchQuery } from './savedSearchQuery.js';
 
 // "Minimum skill match" rides in the filters so a saved search restores it (freehire#4095).
 describe('min_skill_match', () => {

@@ -22,6 +22,7 @@ import { type Sign, facetSetSign, facetCycle, facetPick, facetToggleSign, facetA
 export * from './facetModel';
 export * from './facetSign';
 export * from './jobSort';
+export * from './savedSearchQuery';
 export * from './profileFilters';
 
 /** Reactive job filters mirrored into the URL. A thin wrapper over the shared

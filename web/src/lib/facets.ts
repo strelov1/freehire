@@ -58,8 +58,8 @@ import {
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
 import { backerBadges } from './backers';
-import { api } from './api';
 import { sourceLabel } from './sourceLabels';
+import { companySearch } from './companySearch';
 
 export interface FacetOption {
   value: string;
@@ -223,16 +223,6 @@ function languageLabel(code: string): string {
 // slug→name lookup would need a per-company fetch, which this facet forgoes.
 function companyLabel(slug: string): string {
   return titleCase(slug.replace(/-/g, '_'));
-}
-
-// Option source for the Company facet's 'remote' control: the count-ordered
-// companies endpoint (real names + open-job counts), not the Meili facet
-// distribution (which Meili caps at 300 values and returns alphabetically — so
-// popular employers never surface). An empty query returns the most active
-// companies (the endpoint's first page).
-export async function companySearch(query: string): Promise<FacetOption[]> {
-  const { items } = await api.listCompanies(query, 20, 0);
-  return items.map((c) => ({ value: c.slug, label: c.name, count: c.job_count }));
 }
 
 // Skill facet values are canonical slugs (postgresql, ci-cd, nodejs); the live
