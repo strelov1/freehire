@@ -37,6 +37,9 @@ func TestCompanyDiscoveryFollowsObservedCareersLinksToNativeATS(t *testing.T) {
 type redirectedCompanyPages struct{ companyPages }
 
 func (p redirectedCompanyPages) GetTextResolved(ctx context.Context, raw string) (string, string, error) {
+	if raw == "https://old.example/ats" {
+		return "", "https://jobs.eu.lever.co/acme", nil
+	}
 	if raw == "https://old.example/start" {
 		return `<a href="careers">Careers</a>`, "https://new.example/team/", nil
 	}
@@ -55,5 +58,13 @@ func TestCompanyDiscoveryRecognizesProtocolRelativeATSWithoutFetchingIt(t *testi
 	source, board, _, ok := r.ResolveCompany(context.Background(), "https://www.gistworld.com/")
 	if !ok || source != "hrsmart" || board != "gistworld.mua.hrdepartment.com" {
 		t.Fatalf("protocol-relative ATS discovery: %s/%s/%v", source, board, ok)
+	}
+}
+
+func TestCompanyDiscoveryRecognizesFinalATSWithoutBodyLinks(t *testing.T) {
+	r := &Resolver{http: redirectedCompanyPages{}}
+	source, board, canonical, ok := r.ResolveCompany(context.Background(), "https://old.example/ats")
+	if !ok || source != "lever" || board != "acme" || canonical != "https://jobs.eu.lever.co/acme" {
+		t.Fatalf("redirected ATS = %s/%s/%s/%v", source, board, canonical, ok)
 	}
 }
