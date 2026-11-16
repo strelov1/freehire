@@ -102,6 +102,51 @@ func TestUmantisFetchPaginatesAndMaps(t *testing.T) {
 	}
 }
 
+// umLabelledRowHTML renders one row of the newer list layout, where each cell pairs a visually
+// hidden label with its value and the element ids mean different columns on different sites.
+func umLabelledRowHTML(id, title string, cells ...[2]string) string {
+	var b strings.Builder
+	b.WriteString(`<tr class="table-as-list__contentrow1"><td><ul><li><h3 class="tableaslist_element_1152488">` +
+		`<a href="/Vacancies/` + id + `/Description/1">` + title + `</a></h3></li>`)
+	for i, c := range cells {
+		n := fmt.Sprint(1184117 + i)
+		b.WriteString(`<li class="tableaslist_element_` + n + `"><span class="visually-hidden" id="column_label_` + n + `">` +
+			c[0] + `</span><span class="column-value" id="column_value_` + n + `">` + c[1] + `</span></li>`)
+	}
+	b.WriteString(`</ul></td></tr>`)
+	return b.String()
+}
+
+func TestUmantisReadsLabelledPlaceAndHostCountry(t *testing.T) {
+	cases := []struct {
+		host, location string
+		cells          [][2]string
+		want           []string
+	}{
+		// RUAG's layout: the place is the cell labelled Anstellungsort, not a fixed element id.
+		{"recruiting.ruag.ch", "Bern", [][2]string{{"Art", "Vollzeit"}, {"Anstellungsort", "Bern"}}, []string{"ch"}},
+		// The labelled place wins over a fixed element id (1184124) holding another column.
+		{"recruiting.ruag.ch", "Thun", [][2]string{{"Anstellungsort", "Thun"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"Art", "Vollzeit"}}, []string{"ch"}},
+		// Stadt Leverkusen shows no place at all: the German data centre still places it.
+		{"recruitingapp-5165.de.umantis.com", "", [][2]string{{"Art", "Vollzeit"}, {"Unternehmensbereich", "Sport"}}, []string{"de"}},
+		{"recruitingapp-2702.umantis.com", "", [][2]string{{"Type", "CDI"}}, []string{"ch"}},
+		{"jobs.bobst.com", "", nil, nil},
+	}
+	for _, c := range cases {
+		f := &umFake{pages: map[string]string{
+			"https://" + c.host + "/Jobs/All":                      umListing("", umLabelledRowHTML("17700", "Architect", c.cells...)),
+			"https://" + c.host + "/Vacancies/17700/Description/1": umDetail,
+		}}
+		jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: c.host, Company: "X"})
+		if err != nil || len(jobs) != 1 {
+			t.Fatalf("%s: Fetch = %+v, %v", c.host, jobs, err)
+		}
+		if jobs[0].Location != c.location || fmt.Sprint(jobs[0].FallbackCountries) != fmt.Sprint(c.want) {
+			t.Errorf("%s: location %q fallback %v, want %q %v", c.host, jobs[0].Location, jobs[0].FallbackCountries, c.location, c.want)
+		}
+	}
+}
+
 func TestUmantisMarksUnreadableDetail(t *testing.T) {
 	const host = "recruitingapp-1.umantis.com"
 	f := &umFake{pages: map[string]string{
