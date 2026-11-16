@@ -52,7 +52,7 @@
   "web/src/lib/components/JobMatchBar.svelte": 1,
   "web/src/lib/components/JobRow.svelte": 1,
   "web/src/lib/components/JobRowSkills.svelte": 1,
-  "web/src/lib/components/JobsView.svelte": 1,
+  "web/src/lib/components/JobsSidebar.svelte": 1,
   "web/src/lib/components/JobView.svelte": 2,
   "web/src/lib/components/MatchAnalysisFull.svelte": 3,
   "web/src/lib/components/MentorProfileEditor.svelte": 1,

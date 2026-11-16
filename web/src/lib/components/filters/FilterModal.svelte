@@ -5,7 +5,7 @@
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, visibleEngagementGroups } from '#lib/facets.js';
+  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '#lib/facets.js';
   import { companySearch } from '#lib/companySearch.js';
   import { searchCities } from '#lib/facetOptions.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
@@ -13,25 +13,18 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import {
-    emptyFilters,
-    appliesWorkModeRemoteAnywhere,
-    queryNarrows,
-    savedSearchQuery,
-    workModeRemoteLabel,
-    type FilterStore,
-    type JobFilters,
-  } from '#lib/filters.js';
+  import { emptyFilters, queryNarrows, savedSearchQuery, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
   import type { FacetCounts } from '#lib/types.js';
-  import { FRESHNESS_PRESETS, freshnessLabel } from '#lib/filterControls.js';
   import FacetSection from '../facets/FacetSection.svelte';
   import ChipFacet from './ChipFacet.svelte';
   import CategoryPane from './CategoryPane.svelte';
   import ExperiencePane from './ExperiencePane.svelte';
   import SalaryPane from './SalaryPane.svelte';
+  import WorkPane from './WorkPane.svelte';
+  import PostedPane from './PostedPane.svelte';
   import RelocationPane from './RelocationPane.svelte';
   import LocationPane from './LocationPane.svelte';
   import FilterModalShell from './FilterModalShell.svelte';
@@ -435,19 +428,6 @@
   // a live store to write into, and it makes no sense in `plain` reuse (the profile
   // editor), where a facet value is a plain choice rather than a search.
   const showAiEntry = $derived(Boolean(store) && !plain);
-
-  // A non-preset value (hand-edited URL) has no exact stop, so it reads as "Any"
-  // (the rightmost stop) rather than snapping to "Today".
-  const freshnessIndex = $derived.by(() => {
-    const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.postedWithinDays);
-    return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
-  });
-
-  // The first-seen bound rides the same stops and the same snap-to-Any rule.
-  const openIndex = $derived.by(() => {
-    const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.openWithinDays);
-    return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
-  });
 </script>
 
 <FilterModalShell
@@ -673,44 +653,7 @@
   {:else if entry.kind === 'experience'}
     <ExperiencePane store={staged} counts={c} {exclude} />
   {:else if entry.kind === 'work'}
-    <ChipFacet store={staged} param="work_mode" label="Work format" counts={c} />
-    {#if appliesWorkModeRemoteAnywhere(staged.value)}
-      <!-- Only shown when it changes the answer (remote + a physical format + a
-           location facet): a toggle that does nothing reads as broken. -->
-      <label class="mt-3 flex cursor-pointer items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          class="size-4 rounded border-border"
-          checked={staged.value.workModeRemoteAnywhere}
-          onchange={(e) => staged.setWorkModeRemoteAnywhere(e.currentTarget.checked)}
-        />
-        <span>{workModeRemoteLabel(staged.value)}</span>
-      </label>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Hybrid and on-site stay within the locations above; remote work is not bound by them.
-      </p>
-    {/if}
-    <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>
-    <!-- The legal terms a posting states (internal/dict/engagement), one block per market
-         whose term it is, and only the markets the current scope reaches. -->
-    {@const engagementSel = staged.facet('engagement')}
-    {@const engagementGroups = visibleEngagementGroups(c?.facets?.engagement, [
-      ...engagementSel.include,
-      ...engagementSel.exclude,
-    ])}
-    {#if engagementGroups.length > 0}
-      <div class="mt-6">
-        <h3 class="text-sm font-medium">Contract terms</h3>
-        <p class="mt-1 text-xs text-muted-foreground">
-          Employee or own business, in each market's own terms — as the posting states it.
-        </p>
-        {#each engagementGroups as g (g.market)}
-          <div class="mt-4">
-            <ChipFacet store={staged} param="engagement" label={g.market} options={g.options} counts={c} />
-          </div>
-        {/each}
-      </div>
-    {/if}
+    <WorkPane store={staged} counts={c} />
   {:else if entry.kind === 'industry'}
     <ChipFacet store={staged} param="domains" label="Industry" counts={c} />
     <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" counts={c} /></div>
@@ -725,69 +668,6 @@
   {:else if entry.kind === 'relocation'}
     <RelocationPane store={staged} counts={c} clearancePicked={selCount(staged.value, 'clearance_levels')} />
   {:else if entry.kind === 'posted'}
-    {#if showHideSeen}
-      <div class="mb-6">
-        <label class="flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            class="size-4 rounded border-border"
-            checked={staged.value.hideSeen}
-            onchange={(e) => staged.setHideSeen(e.currentTarget.checked)}
-          />
-          <span>Hide viewed</span>
-        </label>
-        <p class="mt-1 text-xs text-muted-foreground">Skip jobs you have already opened.</p>
-      </div>
-    {/if}
-    <!-- Two bounds over one set of stops, each labelled for WHOSE date it reads. They
-         agree on most postings, which is exactly why the labels matter: where they
-         disagree is where a board has restated its posting date, and that is the case
-         the second bound was added for. `Open within` leads because it is the one no
-         source can rewrite. -->
-    {#if openWithinAvailable}
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="text-sm font-semibold tracking-tight">Open within</h3>
-        <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.openWithinDays)}</span>
-      </div>
-      <input
-        type="range"
-        min="0"
-        max={FRESHNESS_PRESETS.length - 1}
-        step="1"
-        value={openIndex}
-        oninput={(e) => staged.setOpenWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
-        aria-label="Open within"
-        aria-valuetext={freshnessLabel(staged.value.openWithinDays)}
-        class="h-6 w-full accent-primary"
-      />
-      <p class="mt-2 text-xs text-muted-foreground">How long the posting has been here.</p>
-    {/if}
-    <div class="mb-2 flex items-center justify-between" class:mt-6={openWithinAvailable}>
-      <h3 class="text-sm font-semibold tracking-tight">Posted within</h3>
-      <span class="text-xs font-medium text-muted-foreground">{freshnessLabel(staged.value.postedWithinDays)}</span>
-    </div>
-    <input
-      type="range"
-      min="0"
-      max={FRESHNESS_PRESETS.length - 1}
-      step="1"
-      value={freshnessIndex}
-      oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
-      aria-label="Posted within"
-      aria-valuetext={freshnessLabel(staged.value.postedWithinDays)}
-      class="h-6 w-full accent-primary"
-    />
-    {#if openWithinAvailable}
-      <p class="mt-2 text-xs text-muted-foreground">
-        The date the board states. Some boards restate it on every crawl.
-      </p>
-    {/if}
-    <!-- Under the age bound, not in a pane of its own: the reality classes answer the
-         same question the slider does, and the age is most of what makes a posting read
-         as evergreen. -->
-    <div class="mt-6"><ChipFacet store={staged} param="reality" label="Posting reality" counts={c} /></div>
-    <p class="mt-2 text-xs text-muted-foreground">
-      Evergreen postings sit open permanently rather than for one opening.
-    </p>
+    <PostedPane store={staged} counts={c} {showHideSeen} {openWithinAvailable} />
   {/if}
 {/snippet}
