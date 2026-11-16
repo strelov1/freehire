@@ -67,27 +67,27 @@ Read [Indian grade forms](AGENT-REFERENCE.md#indian-grade-forms) before work inv
 
 ## Spanish heads and fields
 
-Read [Spanish heads and fields](AGENT-REFERENCE.md#spanish-heads-and-fields) before work involving this topic.
+Read [Spanish heads and fields](AGENT-REFERENCE-LANGUAGES.md#spanish-heads-and-fields) before work involving this topic.
 
 ## Portuguese heads and fields
 
-Read [Portuguese heads and fields](AGENT-REFERENCE.md#portuguese-heads-and-fields) before work involving this topic.
+Read [Portuguese heads and fields](AGENT-REFERENCE-LANGUAGES.md#portuguese-heads-and-fields) before work involving this topic.
 
 ## French heads and fields
 
-Read [French heads and fields](AGENT-REFERENCE.md#french-heads-and-fields) before work involving this topic.
+Read [French heads and fields](AGENT-REFERENCE-LANGUAGES.md#french-heads-and-fields) before work involving this topic.
 
 ## Polish stems
 
-Read [Polish stems](AGENT-REFERENCE.md#polish-stems) before work involving this topic.
+Read [Polish stems](AGENT-REFERENCE-LANGUAGES.md#polish-stems) before work involving this topic.
 
 ## Croatian and Serbian heads and fields
 
-Read [Croatian and Serbian heads and fields](AGENT-REFERENCE.md#croatian-and-serbian-heads-and-fields) before work involving this topic.
+Read [Croatian and Serbian heads and fields](AGENT-REFERENCE-LANGUAGES.md#croatian-and-serbian-heads-and-fields) before work involving this topic.
 
 ## Slovenian grades and fields
 
-Read [Slovenian grades and fields](AGENT-REFERENCE.md#slovenian-grades-and-fields) before work involving this topic.
+Read [Slovenian grades and fields](AGENT-REFERENCE-LANGUAGES.md#slovenian-grades-and-fields) before work involving this topic.
 
 ## Serving: dict-only
 
