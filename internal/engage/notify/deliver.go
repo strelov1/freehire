@@ -520,7 +520,9 @@ func (r *Runner) recordWebhookFailure(ctx context.Context, subID, userID int64, 
 // release drops the lease on a subscription's claimed matches so they are retried
 // promptly on a later pass.
 func (r *Runner) release(ctx context.Context, subID int64, jobIDs []int64) {
-	if err := r.store.ReleaseMatchClaim(ctx, db.ReleaseMatchClaimParams{
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := r.store.ReleaseMatchClaim(releaseCtx, db.ReleaseMatchClaimParams{
 		SubscriptionID: subID,
 		JobIds:         jobIDs,
 	}); err != nil {

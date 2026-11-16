@@ -415,3 +415,16 @@ func TestRunBatch_ClosureCanSkipAWaveWithZeroStatsAndNilError(t *testing.T) {
 		t.Errorf("claim calls = %d, want >=2 (the loop must keep going after a skipped wave, not stop)", claimer.calls)
 	}
 }
+
+func TestRunBatchNilFallbackContinuesAfterFailure(t *testing.T) {
+	claimer := &fakeClaimer{waves: [][]int{{1, 2}, {3}}}
+	stats, err := RunBatch(context.Background(), claimer, RunOptions{BatchSize: 2}, func(_ context.Context, items []int) (Stats, error) {
+		if items[0] == 1 {
+			return Stats{Succeeded: 99}, errors.New("batch failed")
+		}
+		return Stats{Succeeded: len(items)}, nil
+	}, nil)
+	if err != nil || stats.Failed != 2 || stats.Succeeded != 1 {
+		t.Fatalf("stats=%+v err=%v", stats, err)
+	}
+}
