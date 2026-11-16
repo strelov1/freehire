@@ -179,14 +179,16 @@ func umRows(base *url.URL, root *html.Node) []umRow {
 		row := umEnclosingRow(n)
 		r := umRow{id: id, url: abs.String(), title: strings.TrimSpace(textContent(n))}
 		if row != nil {
+			// A cell labelled as the place wins: in the labelled layout an element id can be
+			// any column, so the fixed ids are only the fallback.
+			r.location = umLabelledPlace(row)
 			for _, class := range umLocationElements {
-				if loc := umCell(row, class); loc != "" {
-					r.location = umLabelPattern.ReplaceAllString(loc, "")
+				if r.location != "" {
 					break
 				}
-			}
-			if r.location == "" {
-				r.location = umLabelledPlace(row)
+				if loc := umCell(row, class); loc != "" {
+					r.location = umLabelPattern.ReplaceAllString(loc, "")
+				}
 			}
 			if m := umDatePattern.FindStringSubmatch(umCell(row, umDateElement)); m != nil {
 				r.postedAt = parseDate(m[3] + "-" + m[2] + "-" + m[1])

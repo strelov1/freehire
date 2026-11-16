@@ -125,6 +125,8 @@ func TestUmantisReadsLabelledPlaceAndHostCountry(t *testing.T) {
 	}{
 		// RUAG's layout: the place is the cell labelled Anstellungsort, not a fixed element id.
 		{"recruiting.ruag.ch", "Bern", [][2]string{{"Art", "Vollzeit"}, {"Anstellungsort", "Bern"}}, []string{"ch"}},
+		// The labelled place wins over a fixed element id (1184124) holding another column.
+		{"recruiting.ruag.ch", "Thun", [][2]string{{"Anstellungsort", "Thun"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"x", "x"}, {"Art", "Vollzeit"}}, []string{"ch"}},
 		// Stadt Leverkusen shows no place at all: the German data centre still places it.
 		{"recruitingapp-5165.de.umantis.com", "", [][2]string{{"Art", "Vollzeit"}, {"Unternehmensbereich", "Sport"}}, []string{"de"}},
 		{"recruitingapp-2702.umantis.com", "", [][2]string{{"Type", "CDI"}}, []string{"ch"}},
