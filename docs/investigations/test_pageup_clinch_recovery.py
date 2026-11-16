@@ -100,6 +100,60 @@ class RecoveryTest(unittest.TestCase):
         self.assertIn("BEGIN READ ONLY", run.call_args.args[0][-1])
         self.assertNotIn("--apply", output.getvalue())
 
+    def test_apply_runs_only_the_preflighted_writers(self):
+        response = subprocess.CompletedProcess([], 0, json.dumps(self.rows))
+        with (
+            patch.dict(os.environ, DATABASE_URL="postgresql:///hire"),
+            patch.object(sys, "argv", ["recovery", "--apply"]),
+            patch.object(recovery.subprocess, "run", return_value=response) as run,
+            redirect_stdout(io.StringIO()),
+        ):
+            recovery.main()
+        self.assertEqual(run.call_count, 39)
+        for call, command in zip(
+            run.call_args_list[1:], recovery.additions(self.rows), strict=True
+        ):
+            self.assertEqual(call.args[0], command + ["--apply"])
+            self.assertTrue(call.kwargs["check"])
+
+    def test_apply_conflict_prevents_every_write(self):
+        self.rows.append(
+            dict(
+                self.rows[-1],
+                provider="clinch",
+                board=recovery.DESTINATIONS[self.rows[-1]["board"]],
+                company="Other",
+            )
+        )
+        response = subprocess.CompletedProcess([], 0, json.dumps(self.rows))
+        with (
+            patch.dict(os.environ, DATABASE_URL="postgresql:///hire"),
+            patch.object(sys, "argv", ["recovery", "--apply"]),
+            patch.object(recovery.subprocess, "run", return_value=response) as run,
+            self.assertRaises(ValueError),
+        ):
+            recovery.main()
+        self.assertEqual(run.call_count, 1)
+
+    def test_apply_writer_failure_stops_remaining_writes(self):
+        response = subprocess.CompletedProcess([], 0, json.dumps(self.rows))
+        with (
+            patch.dict(os.environ, DATABASE_URL="postgresql:///hire"),
+            patch.object(sys, "argv", ["recovery", "--apply"]),
+            patch.object(
+                recovery.subprocess,
+                "run",
+                side_effect=[
+                    response,
+                    subprocess.CalledProcessError(1, ["go"]),
+                ],
+            ) as run,
+            redirect_stdout(io.StringIO()),
+            self.assertRaises(subprocess.CalledProcessError),
+        ):
+            recovery.main()
+        self.assertEqual(run.call_count, 2)
+
     def test_database_error_does_not_print_connection_credentials(self):
         response = subprocess.CompletedProcess([], 2, "", "connection failed")
         with (

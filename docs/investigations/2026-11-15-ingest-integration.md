@@ -1,5 +1,22 @@
 # Ingest integration, 2026-11-15
 
+## Current rollout scope, 2026-11-16
+
+The recovery command now preflights and adds **all 38 verified Clinch destinations**,
+not only the initial Mader/Armaguard pair. `--apply` authorizes those 38 additions;
+it preserves every existing PageUp board and all job/application history. The
+[completion report](2026-11-15-ingest-completion.md) and
+[42-board ledger](2026-11-15-ingest-pageup.md) define the complete current set.
+Two-board measurements below describe the earlier prototype, not the current write set.
+The user explicitly authorized production rollout of the combined fixes and activation.
+
+The body-refresh configuration is published and merged in
+[freehire-ops PR 286](https://github.com/strelov1/freehire-ops/pull/286), commit
+`978127e5fabfe75c91ae011a7c91c7767ca181d2`. The checked wrapper was installed on
+operator on 2026-11-16: UKG uses 30-day age / 30 slices, ADP MyJobs 30-day age /
+90 slices; explicit overrides remain. The application release and real-run checks
+are still pending. Earlier disabled/uninstalled descriptions are historical findings.
+
 ## Integration boundary
 
 Branch `t3/repair-ingest-integrations` starts at `081f81e53ad37141101a34293ee8c87f138d6f2a`.
@@ -150,7 +167,7 @@ old postings and removes their health; it never deletes job history. This closur
 its own coverage evidence and approval, so is not automated here. Keep the old boards
 until that evidence exists, accepting visible errors during the transition.
 
-## Release checks and limits
+## Initial release checks and limits (before the 2026-11-16 configuration)
 
 Parent must integrate the separately delegated RWB/HigherMe and ops preparation, then
 rerun whole-module checks before release.
@@ -181,14 +198,14 @@ validation after the routing and fleet commits is recorded below):
 - Targeted regressions for all ten changed providers: passed.
 - `GOMAXPROCS=2 gofmt -l .`: no paths; existing Go changes needed no formatting edits.
 - Python recovery tests: five passed. Ruff check and format check passed.
-- Recovery script's actual default preflight on core: exit 0, two exact add commands,
+- Recovery script's actual default preflight on core: exit 0, two exact add commands in the initial prototype,
   read-only catalog access only. The initial connection attempt revealed that psql treats
   a URI in `PGDATABASE` as a literal name; fixed by using its intended `--dbname` API,
   capturing failures and reporting a generic error to avoid exposing connection secrets.
 - `pnpm check:size`, `git diff --check`, staged diff check, and Gitleaks over the three
   integrated commits and own follow-up diff: passed.
 - Simplify pass: retained the existing provider APIs; the recovery script only checks
-  the two explicit identities and invokes the established writer. No extra abstraction,
+  the initial two explicit identities and invokes the established writer. No extra abstraction,
   dependency, full crawler or speculative transport was added.
 
 CodeRabbit round 1 completed successfully over the original three commits and then-current
@@ -292,3 +309,33 @@ passed. The small route registration was manually inspected; no further combined
 CodeRabbit round was started after the existing two completed rounds. The
 PageUp/Clinch follow-up remains separate and must be integrated and checked before
 claiming the complete recovery branch ready.
+
+## Rollout review corrections, 2026-11-16
+
+The PR review exposed partial ADP detail failures losing listing identities,
+Optius repair consuming a following JSON property with punctuation in its name,
+and city-only Clinch metadata discarding the richer same-city URL geography.
+Each was reproduced with a failing adapter regression and corrected. Confirmed
+404/410 details still drop; ADP all-unreadable batches still fail. Recorded HTML
+fixtures remain verbatim, including an upstream HTTP link reported by a scanner.
+
+Health-summary integration fixtures now seed active catalogue identities, matching
+the intentional query scope. Recovery-script tests exercise the real apply branch
+with mocked writers, preflight conflicts and a failed writer stopping later writes.
+
+The full local unit gate repeatedly failed an unrelated observability test that
+timed 300 stack captures against a 500 ms limit on the busy laptop. The test now
+fills the log queue with cheap records and requires one real CaptureError to return
+within the same 500 ms; the production logger and shutdown limit are unchanged.
+A synchronous-processor overlay is used to verify the gate still rejects blocking.
+Local Postgres became unavailable when OrbStack stopped; restarting it failed with
+a VM RPC EOF. The final cmd/ingest integration fixtures must therefore pass in CI,
+while earlier DB/handler integration results and isolated feed rechecks are retained.
+
+The blocking-processor negative check failed at the intended capture assertion;
+the unmodified asynchronous logger passes repeated bounded-collector checks.
+The final working-tree ordinary vet and complete unit suite pass, including the
+Halyk collision fix and review corrections. Targeted ADP/Clinch/Optius tests,
+scoped changed-code lint (zero findings), ten Python recovery tests, formatting,
+spelling and Markdown checks pass. Full integration-tag compilation is rerun before
+push; final CI remains the gate for the Postgres-backed cmd/ingest fixtures.

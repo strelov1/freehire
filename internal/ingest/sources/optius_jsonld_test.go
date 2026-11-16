@@ -62,3 +62,14 @@ func TestOptiusQuoteRepairPreservesEscapesAndRejectsOtherBrokenFields(t *testing
 		})
 	}
 }
+
+func TestOptiusQuoteRepairStopsAtEveryJSONProperty(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<script type="application/ld+json">{"@type":"JobPosting","description":"Say "hello".","x-meta_2":"keep","datePosted":"2026-11-15"}</script>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var posting optiusLD
+	if !optiusJobPosting(root, &posting) || posting.Description != `Say "hello".` {
+		t.Fatalf("property content leaked into description: %q", posting.Description)
+	}
+}

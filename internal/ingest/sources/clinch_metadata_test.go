@@ -30,7 +30,7 @@ func TestClinchRealDetailMetadata(t *testing.T) {
 			slug:     "campus-services-officer-charleston-south-carolina-united-states",
 			company:  "The Citadel",
 			title:    "Campus Services Officer",
-			location: "Charleston",
+			location: "Charleston, South Carolina, United States",
 		},
 		{
 			name:     "586",

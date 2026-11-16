@@ -13,7 +13,7 @@ import (
 // Optius inserts employer text into these JSON string fields without escaping quotation
 // marks. Bound the repair to those fields, delimited by the following property, and require
 // the entire JobPosting to decode before trusting any of it.
-var optiusBodyField = regexp.MustCompile(`(?s)("(?:description|responsibilities|jobBenefits)"\s*:\s*")(.*?)("\s*(?:,\s*"[A-Za-z@]+"\s*:|}))`)
+var optiusBodyField = regexp.MustCompile(`(?s)("(?:description|responsibilities|jobBenefits)"\s*:\s*")(.*?)("\s*(?:,\s*"(?:[^"\\]|\\.)*"\s*:|}))`)
 
 func optiusJobPosting(root *html.Node, posting *optiusLD) bool {
 	if ldJobPosting(root, posting) {

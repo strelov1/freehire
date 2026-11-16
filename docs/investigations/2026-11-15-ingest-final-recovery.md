@@ -2,6 +2,17 @@
 
 Independent implementation scope: RWB, HigherMe admission, and the periodic body-refresh release prerequisite. Read both `a6ecaa687` and `c8a243647` versions of the fleet follow-up. No production configuration, cooldown, service, deployment or database mutation; no full crawl. Production reads and bounded public API requests ran from operator. The shared Scrapling routing file remains owned by the integration agent and was not edited here.
 
+## Production configuration follow-up, 2026-11-16
+
+The measured configuration is now published in
+[freehire-ops PR 286](https://github.com/strelov1/freehire-ops/pull/286), merged as
+`978127e5fabfe75c91ae011a7c91c7767ca181d2`. It was installed atomically on operator,
+with backup, checksum, shell syntax, permissions and provider-scope assertions checked.
+UKG uses `BODY_REFRESH_DAYS=30`, `BODY_REFRESH_SLICE=30`; ADP MyJobs uses days 30,
+slices 90. Explicit overrides are preserved. The older local patch below proposed
+30 slices for both and is superseded by that shared commit. Application deployment
+and actual successful refreshes remain to be verified.
+
 ## RWB: browser route needs the pagination fix
 
 Four direct-egress browser requests through the existing Scrapling service:

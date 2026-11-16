@@ -66,7 +66,9 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 				if detail.Title != "" {
 					title = detail.Title
 				}
-				if detail.Location != "" {
+				slugHasMoreGeography := !strings.Contains(detail.Location, ",") &&
+					strings.HasPrefix(strings.ToLower(loc), strings.ToLower(detail.Location)+",")
+				if detail.Location != "" && !slugHasMoreGeography {
 					loc = detail.Location
 				}
 			}

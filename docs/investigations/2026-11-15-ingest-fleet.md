@@ -68,7 +68,7 @@ Counts below are observations at different instants, not a frozen snapshot.
    before assuming all 3823 unreadables share one cause.
 3. Verify ADP MyJobs completion and request reduction on one normal shard before
    altering its eight-shard schedule. Known-posting requests should cost listing
-   calls only, with the existing periodic body refresh still active.
+   calls only, with periodic body refresh configured and budgeted before deployment (see the fleet follow-up and integration report).
 4. For RWB, spike only one listing through the existing challenge-capable service;
    accept a transport change only after receiving real vacancy JSON. For HigherMe,
    measure a paced bounded run below the refusal rate from its provider note.
