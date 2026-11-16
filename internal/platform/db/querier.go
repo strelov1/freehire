@@ -8124,6 +8124,7 @@ type Querier interface {
 	// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
 	// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
 	StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error)
+	StoredJobDescriptions(ctx context.Context, arg StoredJobDescriptionsParams) ([]StoredJobDescriptionsRow, error)
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//

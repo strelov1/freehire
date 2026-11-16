@@ -333,3 +333,8 @@ LEFT JOIN jobs j ON j.id = d.job_id
 WHERE d.job_id = ANY(sqlc.arg(job_ids)::bigint[])
   AND (j.id IS NULL OR j.closed_at IS NOT NULL);
 
+
+-- name: StoredJobDescriptions :many
+SELECT external_id, description FROM jobs
+WHERE source = sqlc.arg(source) AND external_id = ANY(sqlc.arg(external_ids)::text[])
+  AND NOT is_private;
