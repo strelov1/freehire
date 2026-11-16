@@ -173,6 +173,10 @@ func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.Comp
 // the id followed by a readable slug — SmartRecruiters' "<id>-<title-slug>", where the id is
 // never a segment of its own.
 func segmentNamesID(seg, id string) bool {
+	// Complete paths identify one posting exactly; a hyphen suffix may name a sibling.
+	if strings.HasPrefix(seg, "/") {
+		return sameRef(seg, id)
+	}
 	return id != "" && (sameRef(seg, id) || strings.HasPrefix(seg, id+"-"))
 }
 
