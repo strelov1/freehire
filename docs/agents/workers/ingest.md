@@ -14,10 +14,12 @@ Part of the [worker index](../workers.md): what each `cmd/<name>` worker does, w
 ## LinkedIn ownership reconciliation
 
 `ingest linkedin --reconcile-linkedin [--reconcile-after=<last-id>]` rechecks up to
-300 existing public, open LinkedIn rows directly, independently of the bounded search
+300 existing public LinkedIn rows that are open or awaiting source verification, independently of the bounded search
 listing. Only confirmed on-site applications remain LinkedIn-native. External destinations
 use the registered native ATS adapter; hidden destinations use public employer website
 metadata and observed careers links to onboard a board for ordinary scheduled ingestion.
+Unverified discoveries are withdrawn with `native_source_pending`, retaining identity and
+history until an on-site control or ATS transfer is verified. Genuine closures are not reopened.
 The report distinguishes native, transferred, retired and pending rows; pending work or
 another batch exits nonzero. Do not label it complete while pending rows remain. This mode
 does not sweep LinkedIn, invent native ids or assume its closure means an ATS posting closed.

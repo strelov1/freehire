@@ -15,6 +15,10 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
+// NativeSourcePendingReason withdraws an unverified discovery from the live catalogue.
+// It preserves its identity so a verified ATS transfer can reopen the same posting.
+const NativeSourcePendingReason = "native_source_pending"
+
 type NativeDestination struct {
 	Entry           sources.CompanyEntry
 	Job             sources.Job

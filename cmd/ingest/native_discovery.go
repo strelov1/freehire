@@ -51,13 +51,18 @@ func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntr
 		if origin.IsPrivate {
 			return fmt.Errorf("native discovery refuses a private origin")
 		}
-		if !origin.ClosedAt.Valid && !origin.DuplicateOf.Valid {
+		if (!origin.ClosedAt.Valid || origin.ClosedReason == linkimport.NativeSourcePendingReason) && !origin.DuplicateOf.Valid {
 			previous = &origin
 		}
 	} else if errors.Is(err, pgx.ErrNoRows) {
 		origin = db.Job{Source: "linkedin", Title: discovered.Title, Company: discovered.Company, URL: discovered.URL}
 	} else {
 		return err
+	}
+	if previous != nil && discovered.ApplyMethod != sources.ApplyOnSite {
+		if _, err := d.q.WithholdLinkedInDiscovery(ctx, previous.ID); err != nil {
+			return err
+		}
 	}
 	raw := discovered.ExternalApplyURL
 	if raw == "" {
@@ -79,8 +84,7 @@ func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntr
 			if _, err := d.importer.WriteNative(ctx, nil, native); err != nil {
 				return err
 			}
-			_, err = d.store.CloseCovered(ctx, "linkedin", []string{previous.ExternalID})
-			return err
+			return d.retireCoveredDiscovery(ctx, *previous)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err

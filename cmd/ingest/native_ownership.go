@@ -33,16 +33,25 @@ func reconcileLinkedInOwnership(ctx context.Context, q *db.Queries, source sourc
 		report.LastID = row.ID
 		posting, err := reader.Posting(ctx, row.URL)
 		if err != nil {
+			if _, withdrawErr := q.WithholdLinkedInDiscovery(ctx, row.ID); withdrawErr != nil {
+				return report, withdrawErr
+			}
 			report.Pending++
-			log.Printf("ingest: ownership recheck unavailable for %s; preserving existing state: %v", row.PublicSlug, err)
+			log.Printf("ingest: ownership recheck unavailable for %s; source verification pending: %v", row.PublicSlug, err)
 			continue
 		}
 		if posting.ApplyMethod == sources.ApplyOnSite {
+			if _, err := q.RestoreConfirmedLinkedInApplication(ctx, row.ID); err != nil {
+				return report, err
+			}
 			report.Native++
 			continue
 		}
 		board := strings.TrimSuffix(row.ExternalID, ":"+posting.ExternalID)
 		if board == row.ExternalID {
+			if _, err := q.WithholdLinkedInDiscovery(ctx, row.ID); err != nil {
+				return report, err
+			}
 			report.Pending++
 			continue
 		}

@@ -6,7 +6,8 @@ The open/closed state of a job row, the seven mechanisms that write `closed_at`,
 
 ## Always true
 
-- A job is open while `closed_at IS NULL`. Closing is a soft state; nothing hard-deletes jobs. (`cmd/prune`, which removed non-IT postings into `pruned_jobs`, was retired once the catalogue grew broader than IT: `closed_at` means only "the employer took this down".)
+- A job is open while `closed_at IS NULL`. Closing is a soft state; nothing hard-deletes jobs. Catalogue withdrawals also use this state, with a distinct reason so they are not counted as employer closures.
+- LinkedIn discoveries without a verified on-site application control are withdrawn with `native_source_pending` while native ATS ownership is resolved. Reconciliation can restore only this pending state after confirming on-site application, or transfer the same identity to its verified ATS. Genuine source closures are never reopened by this repair.
 - A closed row keeps its `public_slug`, enrichment and `user_jobs` references; reopening is free.
 - List, search and company surfaces filter `closed_at IS NULL`. Detail still serves a closed job (with `closed_at`) so links and history don't break.
 - Catalogue sweeps exclude private postings, even when their source and age match a sweep.

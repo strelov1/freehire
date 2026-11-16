@@ -47,8 +47,7 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 			return err
 		}
 		if covered[previous.CompanySlug] {
-			_, err := d.store.CloseCovered(ctx, "linkedin", []string{previous.ExternalID})
-			return err
+			return d.retireCoveredDiscovery(ctx, *previous)
 		}
 	}
 	return nil

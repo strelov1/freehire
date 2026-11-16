@@ -5095,7 +5095,7 @@ type Querier interface {
 	// is "neither until reaches past now", and a NULL until reads the same as a past one.
 	ListLimitHitUsersMissingNudgeEmail(ctx context.Context, arg ListLimitHitUsersMissingNudgeEmailParams) ([]ListLimitHitUsersMissingNudgeEmailRow, error)
 	// Operator reconciliation reads the existing public discoveries, independently
-	// of LinkedIn's bounded recent listing. Closed or private history is untouched.
+	// of LinkedIn's bounded recent listing. Only source-pending withdrawals are revisited; genuine closed/private history is untouched.
 	ListLinkedInOwnershipCandidates(ctx context.Context, arg ListLinkedInOwnershipCandidatesParams) ([]Job, error)
 	// Id-only projection of ListLiveJobsByIDAfter, for the same corruption-degrade path
 	// ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
@@ -7438,11 +7438,15 @@ type Querier interface {
 	// such company, which is what a typo in a request looks like. A company with no open job
 	// still resolves — it is the one a watchlist is for.
 	ResolveWatchableCompany(ctx context.Context, slug string) (ResolveWatchableCompanyRow, error)
+	// Called only after reading the primary on-site application control. Genuine
+	// source closures and duplicate/private history are never reopened by this repair.
+	RestoreConfirmedLinkedInApplication(ctx context.Context, jobID int64) (int64, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// Retire a live (pending or active) board without deleting its row.
 	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
+	RetirePendingLinkedInDiscovery(ctx context.Context, id int64) error
 	// Withdraw the caller's own live report. Guarded on retracted_at IS NULL so a second
 	// withdrawal returns no row (404) rather than silently restamping the timestamp, and
 	// so the row is never deleted.
@@ -8954,6 +8958,9 @@ type Querier interface {
 	// independent decisions, and writing both here is what made a withdrawn profile show up
 	// labelled "paused".
 	WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error)
+	// This is a catalogue withdrawal, not an employer-death signal. Preserve the
+	// posting/history while a native application method or ATS owner is unverified.
+	WithholdLinkedInDiscovery(ctx context.Context, jobID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

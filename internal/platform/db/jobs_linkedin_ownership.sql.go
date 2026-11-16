@@ -11,7 +11,7 @@ import (
 
 const listLinkedInOwnershipCandidates = `-- name: ListLinkedInOwnershipCandidates :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes, team, application_url FROM jobs_read
-WHERE source = 'linkedin' AND closed_at IS NULL
+WHERE source = 'linkedin' AND (closed_at IS NULL OR closed_reason = 'native_source_pending')
   AND NOT is_private AND duplicate_of IS NULL
   AND id > $1::bigint
 ORDER BY id
@@ -24,7 +24,7 @@ type ListLinkedInOwnershipCandidatesParams struct {
 }
 
 // Operator reconciliation reads the existing public discoveries, independently
-// of LinkedIn's bounded recent listing. Closed or private history is untouched.
+// of LinkedIn's bounded recent listing. Only source-pending withdrawals are revisited; genuine closed/private history is untouched.
 func (q *Queries) ListLinkedInOwnershipCandidates(ctx context.Context, arg ListLinkedInOwnershipCandidatesParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listLinkedInOwnershipCandidates, arg.AfterID, arg.RowLimit)
 	if err != nil {
