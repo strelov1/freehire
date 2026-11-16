@@ -56,9 +56,10 @@ var (
 // govern only notify's saved-search digests; QuietHoursStart/End defer delivery
 // across all three engines (internal/application/deliverywindow).
 type Settings struct {
-	Enabled            bool
-	InboxDigestEnabled bool
-	Channels           []string
+	Enabled                  bool
+	InboxDigestEnabled       bool
+	ApplicationDigestEnabled bool
+	Channels                 []string
 	// DigestFrequency is one of notify.Frequency*; empty reads as notify.FrequencyInterval.
 	DigestFrequency string
 	DigestTime      *time.Duration
@@ -147,7 +148,7 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	default:
 		return Settings{}, ErrInvalidFrequency
 	}
-	if (in.DigestFrequency == notify.FrequencyDaily || in.InboxDigestEnabled) && in.DigestTime == nil {
+	if (in.DigestFrequency == notify.FrequencyDaily || in.InboxDigestEnabled || in.ApplicationDigestEnabled) && in.DigestTime == nil {
 		return Settings{}, ErrMissingDigestTime
 	}
 	hours, err := s.resolveIntervalHours(ctx, userID, in)
@@ -161,13 +162,13 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	if err := s.checkPushDevice(ctx, userID, in.Channels); err != nil {
 		return Settings{}, err
 	}
-	if in.InboxDigestEnabled {
+	if in.InboxDigestEnabled || in.ApplicationDigestEnabled {
 		current, err := s.repo.GetSettings(ctx, userID)
 		if err != nil {
 			return Settings{}, err
 		}
 		// Keep an existing preference editable after expiry; delivery checks the live plan.
-		if !current.InboxDigestEnabled {
+		if (in.InboxDigestEnabled && !current.InboxDigestEnabled) || (in.ApplicationDigestEnabled && !current.ApplicationDigestEnabled) {
 			paid, err := s.repo.HasPaidPlan(ctx, userID)
 			if err != nil {
 				return Settings{}, fmt.Errorf("%w: %w", ErrPlanUnavailable, err)

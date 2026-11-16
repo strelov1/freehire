@@ -60303,6 +60303,10 @@ func (s *NotificationSettings) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("application_digest_enabled")
+		e.Bool(s.ApplicationDigestEnabled)
+	}
+	{
 		e.FieldStart("inbox_digest_enabled")
 		e.Bool(s.InboxDigestEnabled)
 	}
@@ -60340,15 +60344,16 @@ func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfNotificationSettings = [8]string{
-	0: "inbox_digest_enabled",
-	1: "enabled",
-	2: "channels",
-	3: "digest_frequency",
-	4: "digest_time",
-	5: "digest_interval_hours",
-	6: "quiet_hours_start",
-	7: "quiet_hours_end",
+var jsonFieldsNameOfNotificationSettings = [9]string{
+	0: "application_digest_enabled",
+	1: "inbox_digest_enabled",
+	2: "enabled",
+	3: "channels",
+	4: "digest_frequency",
+	5: "digest_time",
+	6: "digest_interval_hours",
+	7: "quiet_hours_start",
+	8: "quiet_hours_end",
 }
 
 // Decode decodes NotificationSettings from json.
@@ -60356,12 +60361,24 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode NotificationSettings to nil")
 	}
-	var requiredBitSet [1]uint8
+	var requiredBitSet [2]uint8
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "inbox_digest_enabled":
+		case "application_digest_enabled":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Bool()
+				s.ApplicationDigestEnabled = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"application_digest_enabled\"")
+			}
+		case "inbox_digest_enabled":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Bool()
 				s.InboxDigestEnabled = bool(v)
@@ -60373,7 +60390,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"inbox_digest_enabled\"")
 			}
 		case "enabled":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Bool()
 				s.Enabled = bool(v)
@@ -60385,7 +60402,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"enabled\"")
 			}
 		case "channels":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				s.Channels = make([]string, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
@@ -60405,7 +60422,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"channels\"")
 			}
 		case "digest_frequency":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := d.Str()
 				s.DigestFrequency = string(v)
@@ -60417,7 +60434,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_frequency\"")
 			}
 		case "digest_time":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				if err := s.DigestTime.Decode(d); err != nil {
 					return err
@@ -60427,7 +60444,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_time\"")
 			}
 		case "digest_interval_hours":
-			requiredBitSet[0] |= 1 << 5
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				v, err := d.Int64()
 				s.DigestIntervalHours = int64(v)
@@ -60439,7 +60456,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_interval_hours\"")
 			}
 		case "quiet_hours_start":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				if err := s.QuietHoursStart.Decode(d); err != nil {
 					return err
@@ -60449,7 +60466,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"quiet_hours_start\"")
 			}
 		case "quiet_hours_end":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				if err := s.QuietHoursEnd.Decode(d); err != nil {
 					return err
@@ -60467,8 +60484,9 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 	}
 	// Validate required fields.
 	var failures []validate.FieldError
-	for i, mask := range [1]uint8{
+	for i, mask := range [2]uint8{
 		0b11111111,
+		0b00000001,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -60524,6 +60542,12 @@ func (s *NotificationSettingsUpdate) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *NotificationSettingsUpdate) encodeFields(e *jx.Encoder) {
 	{
+		if s.ApplicationDigestEnabled.Set {
+			e.FieldStart("application_digest_enabled")
+			s.ApplicationDigestEnabled.Encode(e)
+		}
+	}
+	{
 		if s.InboxDigestEnabled.Set {
 			e.FieldStart("inbox_digest_enabled")
 			s.InboxDigestEnabled.Encode(e)
@@ -60573,15 +60597,16 @@ func (s *NotificationSettingsUpdate) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfNotificationSettingsUpdate = [8]string{
-	0: "inbox_digest_enabled",
-	1: "enabled",
-	2: "channels",
-	3: "digest_frequency",
-	4: "digest_time",
-	5: "digest_interval_hours",
-	6: "quiet_hours_start",
-	7: "quiet_hours_end",
+var jsonFieldsNameOfNotificationSettingsUpdate = [9]string{
+	0: "application_digest_enabled",
+	1: "inbox_digest_enabled",
+	2: "enabled",
+	3: "channels",
+	4: "digest_frequency",
+	5: "digest_time",
+	6: "digest_interval_hours",
+	7: "quiet_hours_start",
+	8: "quiet_hours_end",
 }
 
 // Decode decodes NotificationSettingsUpdate from json.
@@ -60592,6 +60617,16 @@ func (s *NotificationSettingsUpdate) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "application_digest_enabled":
+			if err := func() error {
+				s.ApplicationDigestEnabled.Reset()
+				if err := s.ApplicationDigestEnabled.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"application_digest_enabled\"")
+			}
 		case "inbox_digest_enabled":
 			if err := func() error {
 				s.InboxDigestEnabled.Reset()

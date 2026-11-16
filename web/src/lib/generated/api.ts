@@ -8922,6 +8922,8 @@ export interface components {
             meta: components["schemas"]["NotificationListMeta"];
         };
         NotificationSettings: {
+            /** @description Opt-in Monday summary of application activity. Uses digest_time and account timezone. */
+            application_digest_enabled: boolean;
             /** @description Opt-in daily summary of classified hiring mail. Uses digest_time. */
             inbox_digest_enabled: boolean;
             enabled: boolean;
@@ -8936,6 +8938,8 @@ export interface components {
         };
         /** @description Every field is read as its zero value when left out. Times are `HH:MM`. */
         NotificationSettingsUpdate: {
+            /** @description Omitted or null preserves the current weekly application digest choice. */
+            application_digest_enabled?: boolean | null;
             /** @description Omitted or null preserves the current inbox digest choice. */
             inbox_digest_enabled?: boolean | null;
             /** @description Turn notifications on or off. */
@@ -21001,6 +21005,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
+                     *         "application_digest_enabled": false,
                      *         "inbox_digest_enabled": true,
                      *         "enabled": true,
                      *         "channels": [
@@ -21052,6 +21057,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
+                     *         "application_digest_enabled": false,
                      *         "inbox_digest_enabled": true,
                      *         "enabled": true,
                      *         "channels": [

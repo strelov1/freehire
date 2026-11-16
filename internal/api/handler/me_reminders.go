@@ -27,14 +27,15 @@ func notificationSettingsOut(s reminder.Settings) apigen.NotificationSettings {
 		freq = notify.FrequencyDaily
 	}
 	return apigen.NotificationSettings{
-		Enabled:             s.Enabled,
-		InboxDigestEnabled:  s.InboxDigestEnabled,
-		Channels:            ch,
-		DigestFrequency:     freq,
-		DigestTime:          nilString(formatHHMM(s.DigestTime)),
-		DigestIntervalHours: int64(s.DigestIntervalHours),
-		QuietHoursStart:     nilString(formatHHMM(s.QuietHoursStart)),
-		QuietHoursEnd:       nilString(formatHHMM(s.QuietHoursEnd)),
+		Enabled:                  s.Enabled,
+		InboxDigestEnabled:       s.InboxDigestEnabled,
+		ApplicationDigestEnabled: s.ApplicationDigestEnabled,
+		Channels:                 ch,
+		DigestFrequency:          freq,
+		DigestTime:               nilString(formatHHMM(s.DigestTime)),
+		DigestIntervalHours:      int64(s.DigestIntervalHours),
+		QuietHoursStart:          nilString(formatHHMM(s.QuietHoursStart)),
+		QuietHoursEnd:            nilString(formatHHMM(s.QuietHoursEnd)),
 	}
 }
 
@@ -125,26 +126,33 @@ func (h *trackingHandlers) UpdateNotificationSettings(ctx context.Context, req *
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "quiet_hours_end must be HH:MM")
 	}
-	inboxEnabled, explicit := req.InboxDigestEnabled.Get()
-	if !explicit {
+	applicationEnabled, applicationExplicit := req.ApplicationDigestEnabled.Get()
+	inboxEnabled, inboxExplicit := req.InboxDigestEnabled.Get()
+	if !applicationExplicit || !inboxExplicit {
 		current, err := h.reminder.GetSettings(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
-		inboxEnabled = current.InboxDigestEnabled
-		if inboxEnabled && digestTime == nil {
+		if !applicationExplicit {
+			applicationEnabled = current.ApplicationDigestEnabled
+		}
+		if !inboxExplicit {
+			inboxEnabled = current.InboxDigestEnabled
+		}
+		if digestTime == nil && ((!applicationExplicit && applicationEnabled) || (!inboxExplicit && inboxEnabled)) {
 			digestTime = current.DigestTime
 		}
 	}
 	s, err := h.reminder.UpdateSettings(ctx, userID, reminder.Settings{
-		Enabled:             req.Enabled.Value,
-		InboxDigestEnabled:  inboxEnabled,
-		Channels:            req.Channels.Value,
-		DigestFrequency:     req.DigestFrequency.Value,
-		DigestTime:          digestTime,
-		DigestIntervalHours: int(req.DigestIntervalHours.Value),
-		QuietHoursStart:     quietStart,
-		QuietHoursEnd:       quietEnd,
+		Enabled:                  req.Enabled.Value,
+		InboxDigestEnabled:       inboxEnabled,
+		ApplicationDigestEnabled: applicationEnabled,
+		Channels:                 req.Channels.Value,
+		DigestFrequency:          req.DigestFrequency.Value,
+		DigestTime:               digestTime,
+		DigestIntervalHours:      int(req.DigestIntervalHours.Value),
+		QuietHoursStart:          quietStart,
+		QuietHoursEnd:            quietEnd,
 	})
 	if err != nil {
 		return nil, reminderError(err)
