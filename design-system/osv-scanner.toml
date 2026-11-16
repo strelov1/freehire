@@ -1,0 +1,6 @@
+# Build configuration only; reviewed caller paths and checked-in token inputs.
+# Remove or re-evaluate before expiry: https://github.com/strelov1/freehire/issues/4714
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+reason = "No patched deepmerge release. Svelte merges local build options; Style Dictionary merges repository token configuration and hooks. No request input. Tracked in freehire#4714."
+effectiveUntil = 2026-11-29
