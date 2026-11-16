@@ -32,7 +32,8 @@ ARG TYPST_SHA256=59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabe
 # hadolint ignore=DL3018
 RUN apk add --no-cache curl xz \
  && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz \
- && echo "${TYPST_SHA256}  /tmp/typst.tar.xz" | sha256sum -c - \
+ && printf '%s  /tmp/typst.tar.xz\n' "${TYPST_SHA256}" > /tmp/typst.sha256 \
+ && sha256sum -c /tmp/typst.sha256 \
  && tar -xJf /tmp/typst.tar.xz -C /tmp \
  && install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst \
  && /usr/local/bin/typst --version
