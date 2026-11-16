@@ -60,7 +60,7 @@ type Toucher interface {
 }
 
 // CoveredRefresher refreshes the liveness of OPEN stored rows a board listed but did
-// not write, either because of the aggregator-coverage gate or an unreadable detail.
+// not write because its detail was unreadable.
 // Missing and closed rows are no-ops: only successfully hydrated content may reopen
 // an unreadable posting. It reports refreshed rows without counting another posting;
 // failures withhold the board's close scopes through Stats.RefreshFailed. Return one
@@ -68,15 +68,6 @@ type Toucher interface {
 // employers too, even when an unreadable marker names the configured board owner.
 type CoveredRefresher interface {
 	RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error)
-}
-
-// CoveredCloser closes the OPEN stored rows an aggregator board listed for an employer the
-// coverage gate found already crawled first-hand, so the aggregator copy stops showing beside
-// the employer's own postings. A lapsed coverage lets the next crawl write the posting again,
-// which reopens it. A Store lacking it refreshes those rows instead (CoveredRefresher). Return
-// one stored company slug per closed row.
-type CoveredCloser interface {
-	CloseCovered(ctx context.Context, source string, externalIDs []string) ([]string, error)
 }
 
 // SeenLookup is the optional Store capability a HydratingSource needs: the external_ids already
@@ -195,48 +186,6 @@ type BoardHealth interface {
 	// reachable again.
 	ClearCooldowns(ctx context.Context, provider string) (int, error)
 }
-
-// CoverageLookup is the optional Store-adjacent port the ingest-time aggregator coverage gate
-// needs: for a batch of company slugs, which are already covered by an OPEN posting from a
-// non-aggregator source. Optional: nil disables the gate entirely (ATS board files, test
-// fakes) — the same shape as BoardHealth.
-//
-// companySlugs are company_slug values as normalize.CompanySlug produced them AND the alias
-// registry resolved them — the same value the upsert will store. The returned map's keys are
-// expected back in exactly that form — a lookup may consult other SPELLINGS of
-// a slug internally, but that is its own business and never leaks into the answer.
-//
-// COVERAGE MEANS CURRENT COVERAGE. An implementation MUST only count a posting the catalogue
-// has seen recently, and owns how recent that is. The gate's yes is unrecoverable — the
-// aggregator's posting is never written, so it is never in the database, in /find, or in
-// search, and it leaves no trace anyone can query afterwards. A no merely costs a duplicate
-// row, which aggregator-ats-dedup's periodic pass already marks on its own schedule. So a
-// coverage claim has to be about the present tense ("we still crawl this employer"), not the
-// past: without a freshness bound one forgotten row holds its slug forever, which is how a
-// 2013 posting from a board that had left sources/ suppressed every live posting for a
-// different employer of the same name (issue #2315).
-//
-// That bound is also why the port is Postgres-backed rather than search-backed. last_seen_at
-// cannot reach the search index: the incremental drain pushes a document only when its
-// content_hash moves, and the write that stamps the column on the common path
-// (RefreshUnchangedJob) deliberately writes nothing else and enqueues nothing — so an indexed
-// copy would be most wrong for exactly the actively-crawled rows the gate must credit.
-//
-// countries, when non-empty, narrows coverage to postings in one of those countries or in none
-// stated: a national-market aggregator's postings (sources.MarketCountries) are covered only by
-// an employer board that hires there, not by a foreign employer of the same name (issue #4412).
-type CoverageLookup interface {
-	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error)
-}
-
-// aggregatorCoverage answers whether a company (keyed by the company_slug normalize.Slug
-// produced, whatever spelling the lookup matched) is already covered by a non-aggregator source, for the
-// board currently being ingested. nil means the gate does not apply — saveOne treats a nil
-// resolver as "never covered". Two callers build one: the buffered path (ingestFetched)
-// resolves the whole board's companies in one batched CoverageLookup call up front; the
-// streaming path (ingestStream) has no such batch, so it resolves — and memoizes — one
-// company at a time as postings are emitted.
-type aggregatorCoverage func(companySlug string) bool
 
 // BoardPauses is a board's two pauses; a zero time means that pause is not set. Cooldown
 // backs off a FAILING board (CooldownFor), Quiet a board whose listing keeps coming back

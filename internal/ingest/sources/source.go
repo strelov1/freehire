@@ -262,13 +262,12 @@ type RecentSource interface {
 // EVERY run and throws the body away every time. That is minor on most aggregators and the
 // whole board on one that lists many already-covered postings (remote.com).
 //
-// The pipeline passes a DetailGate only when the coverage gate actually applies to this board,
-// so an adapter that gets here can trust both of its answers.
+// The production pipeline supplies only catalogue rejection decisions. Its Covered callback
+// always returns no companies: another vacancy at an employer is not duplicate evidence.
 //
 // The contract is about COST, not about the result: a posting either answer condemns is still
 // yielded, just without a body. Dropping it instead would be the adapter quietly making the
-// pipeline's decision, which is the pipeline's to make and to count (Stats.ATSCovered,
-// Stats.Rejected).
+// pipeline's decision, which is the pipeline's to make and to count (Stats.Rejected).
 type CoverageGated interface {
 	HydratingSource
 	FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error)
@@ -312,11 +311,6 @@ type boardless interface{ boardless() }
 // the source facet: a single-company boardless platform is redundant with the company
 // filter and excluded, but filtering by an aggregator is not.
 type aggregator interface{ aggregator() }
-
-// originalPostings marks a multi-employer board that publishes its own vacancies. Another
-// posting at the same company does not prove these vacancies are covered, so the ingest-time
-// company coverage gate must not discard them. Posting-level duplicate matching still applies.
-type originalPostings interface{ originalPostings() }
 
 // social marks an adapter that reads postings out of a community channel (a forum thread,
 // a chat) rather than a job board. It wins over aggregator in ProviderKind: such a source

@@ -20,14 +20,12 @@ type boardTally struct {
 	firstErr error
 	// refreshIDs holds listed identities needing an open-only liveness refresh.
 	refreshIDs []string
-	// coveredIDs holds listed identities the coverage gate kept out of the write path.
-	coveredIDs []string
 }
 
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
 // boardTally, and merges them. Everything a write touches is safe to share: the Store already
-// serves boards concurrently, and canon and covered are read-only lookups built up front.
-func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical) boardTally {
+// serves boards concurrently, and canon is a read-only lookup built up front.
+func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, canon companyCanonical) boardTally {
 	var merged boardTally
 	// Repeated identities must see any body written by an earlier entry, not a cached miss.
 	counts := make(map[string]int, len(raw))
@@ -69,7 +67,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 			go func(t *boardTally) {
 				defer wg.Done()
 				for j := range jobs {
-					r.ingestOne(ctx, e, j, seen, covered, canon, t)
+					r.ingestOne(ctx, e, j, seen, canon, t)
 				}
 			}(&tallies[i])
 		}
@@ -82,7 +80,6 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 		for _, t := range tallies {
 			merged.st.Ingested += t.st.Ingested
 			merged.st.Skipped += t.st.Skipped
-			merged.st.ATSCovered += t.st.ATSCovered
 			merged.st.Discovered += t.st.Discovered
 			merged.st.Unreadable += t.st.Unreadable
 			merged.rej.merge(t.rej)
@@ -90,7 +87,6 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 				merged.firstErr = t.firstErr
 			}
 			merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
-			merged.coveredIDs = append(merged.coveredIDs, t.coveredIDs...)
 		}
 	}
 	return merged
@@ -98,7 +94,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 
 // ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
 // and saves the rest, tallying the outcome into t.
-func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
+func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, canon companyCanonical, t *boardTally) {
 	// A posting the listing named but whose detail could not be read. There is nothing to
 	// write, but a stored row must retain the listing's liveness evidence. Count it
 	// as unreadable even after refreshing: the sweep still has incomplete evidence. Handled ahead of the filter so it never enters the rejection denominator,
@@ -151,13 +147,6 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			t.rej.reject(j.Title)
 			return
 		}
-		// A covered employer's re-listed copy is closed like a written one would be. A listing
-		// naming no company (a sitemap refresh) cannot be judged here and keeps its touch.
-		if covered != nil && j.Company != "" && covered(companySlugOf(canon, j.Company)) {
-			t.st.ATSCovered++
-			t.coveredIDs = append(t.coveredIDs, externalID)
-			return
-		}
 		slug, err := r.touch(ctx, e, j)
 		if err != nil {
 			t.st.Skipped++
@@ -173,7 +162,7 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
 		return
 	}
-	r.saveOne(ctx, e, j, covered, canon, t)
+	r.saveOne(ctx, e, j, canon, t)
 }
 
 // saveOne normalizes one posting, puts it through the catalogue filter, and saves what
@@ -182,7 +171,7 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 // save loops share it so the normalize→filter→save→count step behaves identically; the
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
 // filter's candidate denominator.
-func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, canon companyCanonical, t *boardTally) {
 	fromCatalogue := false
 	if j.Description == "" {
 		if l, ok := r.Store.(StoredBodyLookup); ok {
@@ -219,11 +208,6 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 	t.rej.candidate()
 	if outOfCatalogue(dj) {
 		t.rej.reject(dj.Fields().Title)
-		return
-	}
-	if covered != nil && covered(dj.Fields().CompanySlug) {
-		t.st.ATSCovered++
-		t.coveredIDs = append(t.coveredIDs, dj.Fields().ExternalID)
 		return
 	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
@@ -283,46 +267,4 @@ func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, exte
 		return 0, len(externalIDs), nil
 	}
 	return len(companies), 0, companies
-}
-
-// closeCovered closes the stored open rows behind the postings the coverage gate kept out of the
-// write path (see CoveredCloser), falling back to refreshing them for a Store without it. A
-// closed row counts in Stats.Refreshed: the listing named it and the run accounted for it, which
-// is what lets a provider whose every posting was covered still sweep. A failure counts in
-// Stats.RefreshFailed, which withholds the close scopes as a failed refresh does.
-func (r Runner) closeCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (closed, failed int, companies []string) {
-	cc, ok := r.Store.(CoveredCloser)
-	if !ok {
-		return r.refreshCovered(ctx, e, externalIDs)
-	}
-	if len(externalIDs) == 0 {
-		return 0, 0, nil
-	}
-	companies, err := cc.CloseCovered(ctx, e.Provider, externalIDs)
-	if err != nil {
-		log.Printf("ingest: %s board %q (%s): close %d covered postings: %v",
-			e.Provider, e.Board, e.Company, len(externalIDs), err)
-		return 0, len(externalIDs), nil
-	}
-	return len(companies), 0, companies
-}
-
-// aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
-// Coverage port must be wired AND the provider must be an aggregator (an ATS or
-// single-company board is never gated, regardless of what Coverage would report — see
-// TestRunIgnoresCoverageForATSProvider). When it applies, it also returns the aggregator
-// provider list and the board's market countries (sources.MarketCountries; nil when the
-// aggregator is not national) both callers need to pass to CoverageLookup. The
-// classification MUST come from sources.Taxonomy(), not r.Registry: a keyed adapter's
-// credential lives only on the crawl host, so a keyless host's classification would wrongly
-// read it as non-aggregator (see the aggregator-ats-coverage-skip design doc).
-func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators, countries []string, applies bool) {
-	if r.Coverage == nil {
-		return nil, nil, false
-	}
-	taxonomy := sources.Taxonomy()
-	if !sources.IsAggregator(taxonomy, e.Provider) || sources.HasOriginalPostings(taxonomy, e.Provider) {
-		return nil, nil, false
-	}
-	return sources.TaxonomyAggregatorProviders(), sources.MarketCountries(taxonomy, e), true
 }

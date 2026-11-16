@@ -131,8 +131,7 @@ getter, the retries and the body cap are the same code every other provider uses
 the Scrapling browser in production. `wantapply-cy` reads `.cy/api/jobs` with the `CYP` location
 filter, through the proxy. The endpoint caps pages at 50 and carries complete descriptions.
 Every pass refreshes bodies, verifies unique count against `total`, and follows `hasNextPage`;
-any incomplete or inconsistent page fails before the full-catalogue sweep can run. Neither substitutes the other domain. Both publish original
-vacancies, so company-wide ATS coverage does not suppress their postings; posting-level dedup
+any incomplete or inconsistent page fails before the full-catalogue sweep can run. Neither substitutes the other domain. Company-wide coverage suppression has been removed for every source; posting-level dedup
 still applies. On 2026-11-16 the company gate discarded 1,514 of 2,113 readable global postings.
 
 **Some providers send only PART of a crawl through it.** `startupjobs` sends only its Cloudflare-challenged site pages; its sitemap CDN and Algolia index

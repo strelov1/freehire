@@ -29,7 +29,6 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	// postings arrive. cache is read/written only from within emit, which already serializes
 	// access via mu, so it needs no locking of its own.
 	canon := r.streamCompanyCanonical(ctx, e)
-	covered := r.streamAggregatorCoverage(ctx, e)
 	emit := func(j sources.Job) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -56,22 +55,16 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		r.saveOne(ctx, e, j, covered, canon, &t)
+		r.saveOne(ctx, e, j, canon, &t)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
 	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
-	closed, closeFailed, _ := r.closeCovered(ctx, e, t.coveredIDs)
-	st.Refreshed, st.RefreshFailed = st.Refreshed+closed, st.RefreshFailed+closeFailed
 	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, t.firstErr)
-	}
-	if st.ATSCovered > 0 {
-		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
-			e.Provider, e.Board, e.Company, st.ATSCovered, total)
 	}
 	st.Rejected = t.rej.rejected
 	markInterrupted(ctx, &st)

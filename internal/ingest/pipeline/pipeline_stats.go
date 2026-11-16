@@ -19,16 +19,15 @@ type Stats struct {
 	// kept apart from Cooled, which means a FAILING board.
 	Quiet      int
 	Rejected   int
-	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
 	Discovered int // non-native LinkedIn postings handed to ATS discovery, never stored as LinkedIn
-	// Refreshed counts the stored open rows among covered or unreadable postings whose liveness the
+	// Refreshed counts the stored open rows among unreadable postings whose liveness the
 	// run refreshed (CoveredRefresher). Not Ingested — no content was written — but evidence the
-	// crawl worked all the same, so cmd/ingest sweeps a provider whose every posting was covered.
+	// crawl worked all the same, so the normal stale-job sweep can account for listed identities.
 	Refreshed int
-	// RefreshFailed counts covered or unreadable postings whose refresh failed. The listing named them,
+	// RefreshFailed counts unreadable postings whose refresh failed. The listing named them,
 	// but their stored rows keep the last_seen_at they had, so the board's close scopes are
 	// withheld (boardQualifies, cmd/ingest's sweepBySource): reading that age as absence would
-	// close a posting still listed, and a covered row is never written again to reopen it.
+	// close a posting still listed.
 	RefreshFailed int
 	// Unreadable counts postings the board's listing NAMED but whose detail this crawl could
 	// not read (sources.Job.Unreadable). It is deliberately not Failed: the board answered, so
@@ -90,7 +89,6 @@ func (s *Stats) add(o Stats) {
 	s.Cooled += o.Cooled
 	s.Quiet += o.Quiet
 	s.Rejected += o.Rejected
-	s.ATSCovered += o.ATSCovered
 	s.Discovered += o.Discovered
 	s.Refreshed += o.Refreshed
 	s.RefreshFailed += o.RefreshFailed

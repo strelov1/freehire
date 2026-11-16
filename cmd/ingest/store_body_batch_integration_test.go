@@ -56,16 +56,6 @@ func (s *profileStore) CanonicalCompanySlugs(ctx context.Context, keys []string)
 	return s.dbStore.CanonicalCompanySlugs(ctx, keys)
 }
 
-type profileCoverage struct {
-	inner pipeline.CoverageLookup
-	s     *profileStore
-}
-
-func (c profileCoverage) NonAggregatorCompanies(ctx context.Context, a, b, d []string) (map[string]bool, error) {
-	defer c.s.record("coverage", time.Now())
-	return c.inner.NonAggregatorCompanies(ctx, a, b, d)
-}
-
 type profileSource struct{ jobs []sources.Job }
 
 func (profileSource) Provider() string { return "spainjobs" }
@@ -103,26 +93,26 @@ func TestBufferedWriteBatchesBodies(t *testing.T) {
 	for i := 0; i < 16; i++ {
 		raw = append(raw, sources.Job{ExternalID: fmt.Sprintf("profile-new-%d", i), Title: "Software Engineer", Company: "Profile New", URL: "https://example.com/new", Description: "Build services in Python."})
 	}
-	r := pipeline.Runner{Registry: map[string]sources.Source{"spainjobs": profileSource{raw}}, Store: s, Aliases: s, Coverage: profileCoverage{newCoverage(pool), s}}
+	r := pipeline.Runner{Registry: map[string]sources.Source{"spainjobs": profileSource{raw}}, Store: s, Aliases: s}
 	start := time.Now()
 	stats, err := r.Run(ctx, []sources.CompanyEntry{{Provider: "spainjobs", Company: "SpainJobs"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.Total().Ingested != 144 || stats.Total().Skipped != 0 || stats.Total().ATSCovered != 512 {
+	if stats.Total().Ingested != 656 || stats.Total().Skipped != 0 {
 		t.Fatalf("stats=%+v", stats.Total())
 	}
-	for name, want := range map[string]int{"body": 0, "body-batch": 2, "touch": 128, "save": 16, "close": 1, "aliases": 1, "coverage": 1} {
+	for name, want := range map[string]int{"body": 0, "body-batch": 2, "touch": 128, "save": 528, "close": 0, "aliases": 1, "coverage": 0} {
 		if s.counts[name] != want {
 			t.Errorf("%s calls=%d want %d", name, s.counts[name], want)
 		}
 	}
-	var closed, queued bool
-	if err := pool.QueryRow(ctx, `SELECT closed_at IS NOT NULL, EXISTS(SELECT 1 FROM search_delete_outbox o WHERE o.job_id=j.id) FROM jobs j WHERE source='spainjobs' AND external_id=':profile-missing-0'`).Scan(&closed, &queued); err != nil {
+	var closed bool
+	if err := pool.QueryRow(ctx, `SELECT closed_at IS NOT NULL FROM jobs WHERE source='spainjobs' AND external_id=':profile-missing-0'`).Scan(&closed); err != nil {
 		t.Fatal(err)
 	}
-	if !closed || !queued {
-		t.Fatalf("covered stored row: closed=%t delete queued=%t", closed, queued)
+	if closed {
+		t.Fatal("another ATS vacancy must not close the stored posting")
 	}
 	t.Logf("elapsed=%s stats=%+v counts=%v times=%v", time.Since(start), stats.Total(), s.counts, s.times)
 }

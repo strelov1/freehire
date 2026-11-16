@@ -57,12 +57,8 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		// partial progress is a success signal, not a board failure. A rejected posting is
 		// progress: the crawl reached it and the filter turned it away. Without that, a
 		// mid-crawl error on an all-rejected board — the normal case on the non-tech-heavy
-		// national feeds — would count as a failure and cool a healthy board for hours. An
-		// ATSCovered posting is progress for the same reason: the crawl reached it and
-		// correctly judged its company already covered elsewhere — and omitting it here
-		// would make a heavily-covered aggregator board MORE likely to be misclassified as
-		// failed as the coverage gate does its job better, not less.
-		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
+		// national feeds — would count as a failure and cool a healthy board for hours.
+		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 {
 			r.recordFailure(ctx, e, errors.New("streaming board failed with no progress"))
 		} else {
 			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), r.completeListingFingerprint(ctx, src, listed, st))
@@ -147,27 +143,19 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetched fetchedBoard) Stats {
 	raw, seen := fetched.jobs, fetched.seen
 	canon := r.resolveCompanyAliases(ctx, e, raw)
-	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
-	t := r.writeBoard(ctx, e, raw, seen, covered, canon)
+	t := r.writeBoard(ctx, e, raw, seen, canon)
 	st, rej, firstErr := t.st, t.rej, t.firstErr
 	if fetched.cut {
 		st.Interrupted = 1 // before the fingerprint below, which a cut board must not record
 	}
 	var refreshedCompanies []string
 	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
-	closed, closeFailed, closedCompanies := r.closeCovered(ctx, e, t.coveredIDs)
-	st.Refreshed, st.RefreshFailed = st.Refreshed+closed, st.RefreshFailed+closeFailed
-	refreshedCompanies = append(refreshedCompanies, closedCompanies...)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
-	}
-	if st.ATSCovered > 0 {
-		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
-			e.Provider, e.Board, e.Company, st.ATSCovered, len(raw))
 	}
 	rej.log(e)
 	st.Rejected = rej.rejected

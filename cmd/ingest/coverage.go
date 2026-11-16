@@ -30,7 +30,7 @@ const coverageFreshness = 14 * 24 * time.Hour
 // index search per company, so this keeps a statement's work predictable.
 const coverageBatchSize = 500
 
-// coverage answers pipeline.CoverageLookup from Postgres: which of these companies still have
+// coverage answers the LinkedIn native-board discovery lookup from Postgres: which of these companies still have
 // an OPEN, RECENTLY SEEN posting from a source that is not an aggregator.
 //
 // Postgres and not the search index: the drain pushes a document only when content_hash
@@ -57,7 +57,7 @@ func newCoverage(pool *pgxpool.Pool) *coverage {
 	}
 }
 
-// NonAggregatorCompanies implements pipeline.CoverageLookup. companySlugs are the
+// NonAggregatorCompanies implements the LinkedIn native-board discovery lookup. companySlugs are the
 // alias-resolved slugs the upsert would store, and the answer is keyed by those same values.
 func (c *coverage) NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators, countries []string) (map[string]bool, error) {
 	covered := make(map[string]bool)

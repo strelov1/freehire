@@ -27,8 +27,6 @@ type Runner struct {
 	Outbound OutboundResolver
 	// BoardHealth is optional (nil disables per-board cooldown/health recording).
 	BoardHealth BoardHealth
-	// Coverage is optional (nil disables the aggregator ingest-time coverage gate).
-	Coverage CoverageLookup
 	// Aliases is optional (nil keeps every posting on its derived company slug).
 	Aliases AliasLookup
 	// RecentWindow, when positive, makes this a recent-only run: each board is read through its
@@ -67,20 +65,12 @@ type AliasLookup interface {
 	CanonicalCompanySlugs(ctx context.Context, foldedKeys []string) (map[string]string, error)
 }
 
-// companyCanonical maps a derived company slug to the canonical one a merge elected for that
-// employer. nil means no registry is wired, and is read as the identity — mirroring how a nil
-// aggregatorCoverage reads as "never covered".
-//
-// Two callers build one, for the same reason the coverage gate has two: the buffered path
-// resolves the whole board in one batched call up front, and the streaming path has no such
-// batch, so it resolves one company at a time and memoizes.
+// companyCanonical maps a derived slug to its canonical employer. Nil keeps the derived slug.
+// Buffered boards resolve one batch; streaming boards memoize each company as it arrives.
 type companyCanonical func(derivedSlug string) string
 
-// resolveAll maps a batch of derived slugs through the registry and re-dedupes, since two
-// spellings can resolve onto one canon. Both coverage paths ask through it, so neither can
-// hand the lookup a slug the upsert would not write.
-//
-// It rewrites derived in place; both callers hand it a slice distinctSlugs just built.
+// resolveAll canonicalizes and deduplicates the company scope a stale sweep must withhold.
+// It rewrites the caller-owned derived slice in place.
 func resolveAll(c companyCanonical, derived []string) []string {
 	for i, s := range derived {
 		derived[i] = canonicalOf(c, s)
@@ -88,14 +78,7 @@ func resolveAll(c companyCanonical, derived []string) []string {
 	return slices.Compact(slices.Sorted(slices.Values(derived)))
 }
 
-// canonicalOf is the ONE place a company slug becomes final. Both consumers read through it:
-// the aggregator-coverage gate, so it asks about the slug the catalogue actually holds, and
-// the upsert, so it stores that same value.
-//
-// Their agreement has to be structural rather than remembered. It used to rest on both sides
-// calling the same pure function on the same input; once the slug depends on registry state,
-// an independently derived value can disagree — and a coverage gate that has silently stopped
-// matching is indistinguishable from one with nothing to skip.
+// canonicalOf returns the canonical slug, retaining the derived one when aliases are unwired.
 func canonicalOf(c companyCanonical, derived string) string {
 	if c == nil {
 		return derived

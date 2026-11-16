@@ -3,13 +3,13 @@ package pipeline
 import "github.com/strelov1/freehire/internal/ingest/sources"
 
 // boardReachedPostings reports whether a board's crawl reached at least one posting,
-// whether or not it was ultimately saved: Ingested, Rejected, and ATSCovered all mean the
+// whether or not it was ultimately saved: Ingested and Rejected all mean the
 // crawl listed the posting and something downstream then decided what to do with it.
 // Skipped is deliberately excluded — it means the posting was listed and then FAILED TO
 // PERSIST, so counting it would let a board whose every save is failing prove itself on the
 // strength of its own persistence failures.
 func boardReachedPostings(st Stats) bool {
-	return st.Ingested+st.Rejected+st.ATSCovered > 0
+	return st.Ingested+st.Rejected > 0
 }
 
 // boardListedAnyPosting reports whether the board's LISTING named at least one posting, whatever
@@ -33,7 +33,7 @@ func boardReachedPostings(st Stats) bool {
 // feed is not empty, our reading of it is broken, and that is a different diagnosis with a
 // different remedy.
 func boardListedAnyPosting(st Stats) bool {
-	return st.Ingested+st.Rejected+st.ATSCovered+st.Discovered+st.Skipped+st.Unreadable > 0
+	return st.Ingested+st.Rejected+st.Discovered+st.Skipped+st.Unreadable > 0
 }
 
 // maxUnreadablePercent is the share of a board's listed postings that may be unreadable before
@@ -77,13 +77,13 @@ const maxUnreadablePercent = 5
 // as removal.
 //
 // The denominator is every posting the board yielded, which the counters partition exactly:
-// Ingested, Rejected, ATSCovered and Skipped between them account for every posting the crawl
+// Ingested, Rejected and Skipped between them account for every posting the crawl
 // read, and Unreadable for every one it did not. Postings the platform answered 404/410 for are
 // deliberately NOT in it — the adapter never yields those, because a posting the platform says
 // is gone is evidence rather than a hole, and a board whose listing has gone entirely stale
 // should still be allowed to retire it.
 func boardReadWhatItListed(st Stats) bool {
-	listed := st.Ingested + st.Rejected + st.ATSCovered + st.Discovered + st.Skipped + st.Unreadable
+	listed := st.Ingested + st.Rejected + st.Discovered + st.Skipped + st.Unreadable
 	return st.Unreadable*100 <= listed*maxUnreadablePercent
 }
 

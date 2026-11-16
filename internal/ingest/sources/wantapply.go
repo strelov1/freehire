@@ -36,7 +36,6 @@ func NewWantapplyCy(c JSONGetter) Source {
 func (s wantapply) Provider() string { return s.provider }
 func (wantapply) boardless()         {}
 func (wantapply) aggregator()        {}
-func (wantapply) originalPostings()  {}
 
 // Every page must be read, and the unique count must match the API's total, before Fetch
 // succeeds. A partial listing never licenses the source-wide unseen sweep.

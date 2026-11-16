@@ -41,8 +41,8 @@ func TestShouldSweep(t *testing.T) {
 		{"qualifying-board evidence is board scope only", pipeline.Stats{QualifyingBoards: refs("read-completely")}, false},
 		// Every posting went to an employer crawled first-hand, and the stored ones among them
 		// were refreshed: the crawl worked, so the companies those rows put in scope must sweep.
-		{"covered only, stored rows refreshed", pipeline.Stats{ATSCovered: 40, Refreshed: 12}, true},
-		{"covered only, nothing stored", pipeline.Stats{ATSCovered: 40}, false},
+		{"unreadable, stored rows refreshed", pipeline.Stats{Unreadable: 40, Refreshed: 12}, true},
+		{"unreadable, nothing stored", pipeline.Stats{Unreadable: 40}, false},
 	}
 	for _, tc := range cases {
 		if got := ShouldSweep(tc.stats); got != tc.want {
