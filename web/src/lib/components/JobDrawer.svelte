@@ -550,8 +550,6 @@
           error={emailsError}
           onretry={() => loadEmails(true)}
         />
-      {:else if tab === 'auto_apply'}
-
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
           {#if posting}
@@ -621,7 +619,7 @@
             <JobDrawerEmailList {emails} />
           {/if}
         </div>
-      {:else}
+      {:else if tab === 'description'}
         <div class="flex flex-col gap-5">
           {#if !item.job}
             <!-- The posting was removed from the catalogue. What it said is genuinely
