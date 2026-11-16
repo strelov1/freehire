@@ -87,6 +87,7 @@ type RecordInput struct {
 	URL         string
 	Source      string
 	Board       string
+	Region      string
 	Surface     string
 	Company     string
 }
@@ -150,6 +151,7 @@ type SubmitResult struct {
 type Intake struct {
 	Source     string
 	Board      string
+	Region     string
 	Canonical  string
 	Recognized bool
 	Tracked    bool
@@ -166,11 +168,21 @@ func (s *Service) Inspect(ctx context.Context, rawURL string) (Intake, error) {
 	if !ok {
 		return Intake{}, nil
 	}
-	tracked, err := s.repo.BoardTracked(ctx, source, board)
+	return s.InspectResolved(ctx, Intake{Source: source, Board: board, Region: atsboard.Region(canonical), Canonical: canonical})
+}
+
+// InspectResolved checks coverage for a board already verified by a caller. It
+// preserves native board metadata when its job URL uses an unrecognized vanity host.
+func (s *Service) InspectResolved(ctx context.Context, it Intake) (Intake, error) {
+	if it.Source == "" || it.Board == "" {
+		return Intake{}, nil
+	}
+	tracked, err := s.repo.BoardTracked(ctx, it.Source, it.Board)
 	if err != nil {
 		return Intake{}, err
 	}
-	return Intake{Source: source, Board: board, Canonical: canonical, Recognized: true, Tracked: tracked}, nil
+	it.Recognized, it.Tracked = true, tracked
+	return it, nil
 }
 
 // RecordIntake persists a link already inspected, so the board is resolved once even when
@@ -194,6 +206,7 @@ func (s *Service) RecordIntake(ctx context.Context, in SubmitInput, it Intake) (
 		URL:         it.Canonical,
 		Source:      it.Source,
 		Board:       it.Board,
+		Region:      it.Region,
 		Surface:     surface,
 		Company:     it.Company,
 	})

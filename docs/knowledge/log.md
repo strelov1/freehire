@@ -29,3 +29,8 @@ numeric posting identity with legacy-row preservation, and bounded first-level r
 job discovery. Configured API fetch routing changes only LinkedIn; arbitrary ATS URL
 resolvers keep their guarded transport. This describes the checkout implementation, not a
 production rollout.
+
+Verified native intake preserves regional board identity and contributor attribution on
+vanity posting hosts. A recorded board adopts its provider even when the exact posting
+read fails, while operator pauses remain intact. Evidence is the focused handler
+integration suite; production verification is separate.

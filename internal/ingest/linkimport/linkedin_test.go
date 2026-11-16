@@ -79,14 +79,25 @@ func TestPrepareLinkedInQueuesHiddenDestinationBoardWithoutInventingPosting(t *t
 }
 
 func TestPrepareLinkedInRefusesUnreadableRemovedAndMismatchedPostings(t *testing.T) {
-	for _, source := range []linkedInTestSource{
-		{err: errors.New("refused")},
-		{posting: sources.Job{ExternalID: "123", Removed: true}},
-		{posting: sources.Job{ExternalID: "456", ApplyMethod: sources.ApplyOnSite}},
+	valid := sources.Job{ExternalID: "123", Title: "Java Engineer", Company: "Acme", Description: "Build Java services.", ApplyMethod: sources.ApplyOnSite}
+	removed, mismatched, unreadable := valid, valid, valid
+	removed.Removed = true
+	mismatched.ExternalID = "456"
+	unreadable.Unreadable = true
+	for _, tc := range []struct {
+		name   string
+		source linkedInTestSource
+	}{
+		{"fetch refused", linkedInTestSource{err: errors.New("refused")}},
+		{"removed", linkedInTestSource{posting: removed}},
+		{"identity mismatch", linkedInTestSource{posting: mismatched}},
+		{"unreadable", linkedInTestSource{posting: unreadable}},
 	} {
-		im := &Importer{ingest: map[string]sources.Source{"linkedin": source}}
-		if _, ok, err := im.Resolve(context.Background(), "https://www.linkedin.com/jobs/view/123/", Board{}); err == nil || ok {
-			t.Fatalf("unsafe posting imported: ok=%v err=%v", ok, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			im := &Importer{ingest: map[string]sources.Source{"linkedin": tc.source}}
+			if _, ok, err := im.Resolve(context.Background(), "https://www.linkedin.com/jobs/view/123/", Board{}); err == nil || ok {
+				t.Fatalf("unsafe posting imported: ok=%v err=%v", ok, err)
+			}
+		})
 	}
 }

@@ -57,11 +57,26 @@ func TestIntakeSourcesRoutesOnlyLinkedInThroughConfiguredScrapling(t *testing.T)
 func TestIntakeSourcesKeepsInvalidLinkedInFetchConfigurationUnavailable(t *testing.T) {
 	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:1")
 	t.Setenv("SCRAPLING_FETCH_TOKEN", "")
-	registry := intakeSources(sources.All(sources.NewClient()))
+	plainCalled := false
+	registry := intakeSources(map[string]sources.Source{"linkedin": successfulLinkedInReader{called: &plainCalled}})
 	reader := registry["linkedin"].(interface {
 		Posting(context.Context, string) (sources.Job, error)
 	})
 	if _, err := reader.Posting(context.Background(), "https://www.linkedin.com/jobs/view/123/"); err == nil {
 		t.Fatal("invalid configured tier silently fell back to plain LinkedIn")
 	}
+	if plainCalled {
+		t.Fatal("invalid configured tier attempted plain LinkedIn fetching")
+	}
+}
+
+type successfulLinkedInReader struct{ called *bool }
+
+func (successfulLinkedInReader) Provider() string { return "linkedin" }
+func (successfulLinkedInReader) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	return nil, nil
+}
+func (s successfulLinkedInReader) Posting(context.Context, string) (sources.Job, error) {
+	*s.called = true
+	return sources.Job{ExternalID: "123", Title: "Java Engineer", Company: "Acme", Description: "Build Java services.", ApplyMethod: sources.ApplyOnSite}, nil
 }

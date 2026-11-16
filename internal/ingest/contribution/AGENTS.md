@@ -127,4 +127,8 @@ An observed employer board may be contributed even when its exact posting cannot
 Inspect and record that board before the native write: recording now creates the board,
 so reversing this order loses contributor attribution. Verified employer names can travel
 through `Intake.Company`; ordinary URL-only submissions still use the placeholder name.
+`InspectResolved` retains a verified native board and its region even when the posting
+uses a vanity host. Region travels through recording into the board catalogue. Recorded
+boards adopt their provider schedule even after a posting read fails; existing operator
+pauses remain unchanged.
 Unknown, closed and unreadable postings are queued without publication.

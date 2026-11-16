@@ -136,20 +136,23 @@ func (im *Importer) WriteLinkedIn(ctx context.Context, prepared LinkedInResoluti
 		return res, err == nil, err
 	}
 	if prepared.Posting.ApplyMethod != sources.ApplyOnSite {
-		// Intake may have recorded an observed employer board even though its exact
-		// posting is unavailable. Schedule only a board that is actually in the catalogue.
-		if prepared.Board.known() && im.catalog != nil {
-			_, found, err := im.catalog.Entry(ctx, prepared.Board.Source, prepared.Board.Board)
-			if err != nil {
-				return Result{}, false, err
-			}
-			if found {
-				if err := ingestsched.NewQueriesRepository(im.q).AdoptDiscoveredProvider(ctx, prepared.Board.Source); err != nil {
-					return Result{}, false, err
-				}
-			}
+		if err := im.AdoptLinkedInBoard(ctx, prepared.Board); err != nil {
+			return Result{}, false, err
 		}
 		return Result{}, false, nil
 	}
 	return im.Write(ctx, linksource.Resolved{Source: "linkedin", Job: prepared.Posting})
+}
+
+// AdoptLinkedInBoard schedules a recorded destination independently of whether
+// its exact posting could be read. Existing operator pauses remain unchanged.
+func (im *Importer) AdoptLinkedInBoard(ctx context.Context, board Board) error {
+	if !board.known() || im.catalog == nil {
+		return nil
+	}
+	_, found, err := im.catalog.Entry(ctx, board.Source, board.Board)
+	if err != nil || !found {
+		return err
+	}
+	return ingestsched.NewQueriesRepository(im.q).AdoptDiscoveredProvider(ctx, board.Source)
 }

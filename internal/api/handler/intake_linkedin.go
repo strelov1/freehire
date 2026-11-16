@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 )
@@ -13,17 +14,16 @@ func (s *intakeService) resolveLinkedIn(ctx context.Context, userID int64, raw, 
 	if readErr != nil {
 		log.Printf("intake: LinkedIn discovery %s: %v", raw, readErr)
 	}
-	inspectionURL := prepared.BoardURL
+	candidate := contribution.Intake{Source: prepared.Board.Source, Board: prepared.Board.Board,
+		Canonical: prepared.BoardURL, Region: atsboard.Region(prepared.BoardURL)}
 	if prepared.Native != nil {
-		inspectionURL = prepared.Native.Job.URL
+		entry := prepared.Native.Entry
+		candidate = contribution.Intake{Source: entry.Provider, Board: entry.Board,
+			Region: entry.Region, Canonical: prepared.Native.Job.URL}
 	}
-	var intake contribution.Intake
-	if inspectionURL != "" {
-		var err error
-		intake, err = s.contribution.Inspect(ctx, inspectionURL)
-		if err != nil {
-			return intakeOutcome{}, err
-		}
+	intake, err := s.contribution.InspectResolved(ctx, candidate)
+	if err != nil {
+		return intakeOutcome{}, err
 	}
 	if readErr == nil {
 		intake.Company = prepared.Posting.Company
@@ -33,6 +33,11 @@ func (s *intakeService) resolveLinkedIn(ctx context.Context, userID int64, raw, 
 	companySlug, novel, err := s.record(ctx, userID, raw, surface, intake)
 	if err != nil {
 		return intakeOutcome{}, err
+	}
+	if readErr != nil {
+		if err := s.imports.AdoptLinkedInBoard(ctx, prepared.Board); err != nil {
+			return intakeOutcome{}, err
+		}
 	}
 	var res linkimport.Result
 	var imported bool

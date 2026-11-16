@@ -97,6 +97,7 @@ func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contrib
 	b, err := boardcatalog.NewInserter(r.boards, sources.Taxonomy()).Insert(ctx, boardcatalog.InsertInput{
 		Provider:    in.Source,
 		Board:       in.Board,
+		Region:      in.Region,
 		Company:     company,
 		URL:         in.URL,
 		SubmittedBy: &submittedBy,
