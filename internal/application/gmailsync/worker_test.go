@@ -24,6 +24,7 @@ func testCipher(t *testing.T) *tokencrypt.Cipher {
 }
 
 type fakeStore struct {
+	cooldown       time.Time
 	conns          []Connection
 	encToken       string
 	upserted       []StoredEmail
@@ -371,7 +372,6 @@ func TestRunOnceDoesNotDisconnectOverATransientFailure(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"rate limit", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}},
 		{"provider fault", &APIError{Op: "gmail: list", StatusCode: 503, Status: "503 Service Unavailable"}},
 		{"connection reset", errors.New("read tcp: connection reset by peer")},
 		{"run cancelled", context.Canceled},
@@ -565,13 +565,18 @@ func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if stats, _ := w.RunOnce(context.Background()); stats.Failed != 1 {
-		t.Fatalf("first run stats = %+v, want the throttled connection counted as failed", stats)
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 {
+		t.Fatalf("first run stats = %+v, want the connection counted as throttled", stats)
 	}
 	if store.syncedCursor != 0 {
 		t.Fatalf("cursor after the throttled run = %d, want 0", store.syncedCursor)
 	}
 
+	reader.gets = nil
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 || len(reader.gets) != 0 {
+		t.Fatalf("cooldown made API calls: %+v %v", stats, reader.gets)
+	}
+	store.cooldown = time.Time{}
 	delete(reader.getErrIDs, "m2")
 	reader.gets = nil
 	stats, err := w.RunOnce(context.Background())
@@ -616,4 +621,10 @@ func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
 	if last := store.upserted[len(store.upserted)-1].Message; last.Direction != DirectionOutgoing {
 		t.Errorf("re-stored m1 direction = %q, want outgoing", last.Direction)
 	}
+}
+
+func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) { return f.cooldown, nil }
+func (f *fakeStore) SetCooldown(context.Context, int64) error {
+	f.cooldown = time.Now().Add(time.Hour)
+	return nil
 }

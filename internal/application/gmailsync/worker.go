@@ -34,6 +34,8 @@ type StoredEmail struct {
 
 // Store is the persistence the worker needs (subset of db.Queries).
 type Store interface {
+	CooldownUntil(ctx context.Context, userID int64) (time.Time, error)
+	SetCooldown(ctx context.Context, userID int64) error
 	ListConnected(ctx context.Context) ([]Connection, error)
 	RefreshToken(ctx context.Context, userID int64) (encToken string, err error)
 	UpsertEmail(ctx context.Context, e StoredEmail) error
@@ -78,6 +80,7 @@ func (w *Worker) WithLearnedDomains(src DomainSource) *Worker {
 type Stats struct {
 	Connections int
 	Synced      int
+	Throttled   int
 	// Failed counts connections whose sync did not complete (token, provider or store error).
 	// The next run retries them.
 	Failed int
@@ -93,6 +96,7 @@ const (
 	outcomeSynced outcome = iota
 	outcomeFailed
 	outcomeReconsent
+	outcomeThrottled
 )
 
 // RunOnce syncs all connected users once.
@@ -104,6 +108,8 @@ func (w *Worker) RunOnce(ctx context.Context) (Stats, error) {
 	stats := Stats{Connections: len(users)}
 	for _, u := range users {
 		switch w.syncUser(ctx, u) {
+		case outcomeThrottled:
+			stats.Throttled++
 		case outcomeSynced:
 			stats.Synced++
 		case outcomeReconsent:
@@ -139,6 +145,14 @@ func (w *Worker) SyncUser(ctx context.Context, u Connection) { _ = w.syncUser(ct
 const firstSentScanThreads = 50
 
 func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
+	until, err := w.store.CooldownUntil(ctx, u.UserID)
+	if err != nil {
+		log.Printf("gmail-sync: user %d: read cooldown: %v", u.UserID, err)
+		return outcomeFailed
+	}
+	if time.Now().Before(until) {
+		return outcomeThrottled
+	}
 	started := time.Now().Unix()
 	encToken, err := w.store.RefreshToken(ctx, u.UserID)
 	if err != nil {
@@ -161,6 +175,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 
 	ids, err := reader.ListATSMessageIDs(ctx, u.Email, u.Cursor)
 	if err != nil {
+		if LimitHit(err) {
+			return w.markThrottled(ctx, u.UserID)
+		}
 		if !RevokedGrant(err) {
 			// A rate limit, a 500, a reset connection, or this process being stopped says nothing
 			// about the grant, and the flag is shared with the calendar and cleared only by a
@@ -191,6 +208,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		if err != nil {
 			// Only a saving, not a gate: fetching them again is what the sync did before.
 			log.Printf("gmail-sync: user %d: stored messages: %v", u.UserID, err)
+			sawFailure = true
 			return
 		}
 		for id, ref := range refs {
@@ -234,7 +252,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			}
 			log.Printf("gmail-sync: user %d: get %s: %v", u.UserID, id, err)
 			throttled = throttled || LimitHit(err)
-			sawFailure = true
+			sawFailure = sawFailure || !LimitHit(err)
 			return
 		}
 		if msg.SystemNotification {
@@ -299,7 +317,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			}
 			log.Printf("gmail-sync: user %d: sent messages: %v", u.UserID, err)
 			throttled = throttled || LimitHit(err)
-			sawFailure = true
+			sawFailure = sawFailure || !LimitHit(err)
 		} else {
 			for _, ref := range refs {
 				if known[ref.ThreadID] || seenThread[ref.ThreadID] {
@@ -332,7 +350,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			}
 			log.Printf("gmail-sync: user %d: thread %s: %v", u.UserID, tid, err)
 			throttled = throttled || LimitHit(err)
-			sawFailure = true
+			sawFailure = sawFailure || !LimitHit(err)
 			continue
 		}
 		loadStored(siblings)
@@ -348,6 +366,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 		return w.markRevoked(ctx, u.UserID)
 	}
 
+	if throttled {
+		result := w.markThrottled(ctx, u.UserID)
+		if sawFailure {
+			return outcomeFailed
+		}
+		return result
+	}
 	if sawFailure {
 		newest = u.Cursor
 		started = u.SentCursor
@@ -366,4 +391,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 func missingMessage(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
+}
+
+func (w *Worker) markThrottled(ctx context.Context, userID int64) outcome {
+	if err := w.store.SetCooldown(ctx, userID); err != nil {
+		log.Printf("gmail-sync: user %d: save cooldown: %v", userID, err)
+		return outcomeFailed
+	}
+	log.Printf("gmail-sync: user %d: throttled; cooling down for one hour", userID)
+	return outcomeThrottled
 }

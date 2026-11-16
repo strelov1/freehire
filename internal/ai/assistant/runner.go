@@ -507,6 +507,15 @@ func closeDanglingToolCalls(msgs []Message) []Message {
 	out := make([]Message, 0, len(msgs)+4)
 	for i := 0; i < len(msgs); i++ {
 		msg := msgs[i]
+		if msg.Role == RoleTool {
+			continue
+		}
+		if msg.Role == RoleAssistant {
+			var content assistantContent
+			if json.Unmarshal(msg.Content, &content) == nil && content.Text == "" && len(content.ToolCalls) == 0 {
+				continue
+			}
+		}
 		out = append(out, msg)
 		if msg.Role != RoleAssistant {
 			continue
@@ -518,8 +527,16 @@ func closeDanglingToolCalls(msgs []Message) []Message {
 		answered := make(map[string]struct{}, len(calls))
 		j := i + 1
 		for j < len(msgs) && msgs[j].Role == RoleTool {
-			answered[toolResultCallID(msgs[j])] = struct{}{}
-			out = append(out, msgs[j])
+			id := toolResultCallID(msgs[j])
+			for _, call := range calls {
+				if call.ID == id && id != "" {
+					if _, duplicate := answered[id]; !duplicate {
+						answered[id] = struct{}{}
+						out = append(out, msgs[j])
+					}
+					break
+				}
+			}
 			j++
 		}
 		for _, call := range calls {
