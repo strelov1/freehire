@@ -4,6 +4,7 @@
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { track } from '#lib/analytics.js';
+  import { claimCheckoutPurchase } from '#lib/purchaseTracking.js';
   import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -63,32 +64,35 @@
       .catch(() => (usage = null));
   });
 
-  // A finished purchase lands here carrying ?checkout=success (billing.Config.SuccessURL),
-  // because the provider is given the same page for success and cancel. This is the only
-  // place a payment meets the channel that produced it: the money is known to Postgres and
-  // the acquisition source only to the product analytics, and nothing else joins them.
-  //
-  // The TIER comes from the loaded plan rather than from what was clicked — the server's
-  // answer, so a purchase recorded here is one the account actually holds. Recorded once:
-  // the marker is stripped from the address afterwards, or a reload would count a second
-  // sale that never happened.
-  // Plain `let`, deliberately not $state: nothing renders from it, and a reactive flag
-  // read at the top of the effect that sets it would make the effect re-run itself once
-  // for nothing.
-  let purchaseRecorded = false;
+  // A return marker is intent to verify, never proof that money moved.
   $effect(() => {
-    if (purchaseRecorded || page.url.searchParams.get('checkout') !== 'success') return;
-    const tier = plan?.plan;
-    if (tier !== 'pro' && tier !== 'ultra') return;
-
-    purchaseRecorded = true;
-    track('subscribe', { plan: tier });
-
-    // SvelteKit's replaceState, not the browser's: every other view here uses it, and a
-    // raw history call leaves the framework's own `page.url` and history index pointing
-    // at an address that no longer exists.
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
-    replaceState(page.url.pathname, page.state);
+    const userId = currentUser()?.id;
+    if (!userId || page.url.searchParams.get('checkout') !== 'success') return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function confirm(accountId: number, remaining: number) {
+      try {
+        const attempts = await api.billingAttempts();
+        if (!live) return;
+        const purchase = claimCheckoutPurchase(accountId, attempts, sessionStorage);
+        if (purchase) {
+          track('subscribe', purchase);
+          const url = new URL(page.url.href);
+          url.searchParams.delete('checkout');
+          // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow cleanup preserves other query parameters
+          replaceState(url.pathname + url.search + url.hash, page.state);
+          return;
+        }
+      } catch {
+        // The provider may not have exposed the completed charge yet.
+      }
+      if (live && remaining > 0) timer = setTimeout(() => void confirm(accountId, remaining - 1), 2000);
+    }
+    void confirm(userId, 4);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
   });
 
   // Where a subscriber changes their card or cancels — the provider's own page. Null when
