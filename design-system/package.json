@@ -37,7 +37,7 @@
     "@storybook/svelte": "10.6.5",
     "@storybook/svelte-vite": "10.6.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
-    "@tailwindcss/vite": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.5",
     "@testing-library/svelte": "^5.4.2",
     "eslint": "^10.14.0",
     "eslint-plugin-oxlint": "^1.90.0",
