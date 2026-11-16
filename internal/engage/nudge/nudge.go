@@ -603,7 +603,9 @@ func jobsSnapshot(ms []Message) json.RawMessage {
 
 // release drops the lease on a nudge so it is retried promptly on a later pass.
 func (r *Runner) release(ctx context.Context, id int64) {
-	if err := r.store.ReleaseNudgeClaim(ctx, id); err != nil {
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := r.store.ReleaseNudgeClaim(releaseCtx, id); err != nil {
 		log.Printf("nudge: release claim %d: %v", id, err)
 	}
 }

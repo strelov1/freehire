@@ -138,7 +138,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 			log.Printf("embed: progress indexed=%d unchanged=%d removed=%d failed=%d dead=%d",
 				rn.stats.Indexed, rn.stats.Unchanged, rn.stats.Removed, rn.stats.Failed, rn.stats.DeadLettered)
 		},
-	}, rn.processWave, rn.unreachableFallback)
+	}, rn.processWave, nil)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim: %w", err)
 	}
@@ -199,12 +199,6 @@ func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, 
 		Failed:       rn.stats.Failed - before.Failed,
 		DeadLettered: rn.stats.DeadLettered - before.DeadLettered,
 	}, nil
-}
-
-// unreachableFallback satisfies outbox.RunBatch's Processor parameter; processWave
-// never errors, so it panics rather than return a fabricated outcome.
-func (rn *run) unreachableFallback(context.Context, Claimed) outbox.Outcome {
-	panic("embed: outer per-item fallback invoked, but processWave never returns an error")
 }
 
 // processOpenBatch embeds a whole wave of open jobs in one batch and completes them in
