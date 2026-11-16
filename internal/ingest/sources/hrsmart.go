@@ -38,9 +38,17 @@ func (s hrsmart) FetchNew(ctx context.Context, e CompanyEntry, seen func(string)
 	if err != nil {
 		return nil, err
 	}
+	hydrate := make(map[string]bool, len(listed))
+	unseen := 0
+	for _, j := range listed {
+		hydrate[j.ExternalID] = !seen(j.ExternalID)
+		if hydrate[j.ExternalID] {
+			unseen++
+		}
+	}
 	jobs := fetchDetails(listed, 2, func(j Job) (Job, bool) {
 		j.Company = e.Company
-		if seen(j.ExternalID) {
+		if !hydrate[j.ExternalID] {
 			j.SeenRefresh = true
 			return j, true
 		}
@@ -77,12 +85,12 @@ func (s hrsmart) FetchNew(ctx context.Context, e CompanyEntry, seen func(string)
 		return j, true
 	})
 	for _, j := range jobs {
-		if !j.Unreadable {
+		if !j.Unreadable && !j.SeenRefresh {
 			return jobs, nil
 		}
 	}
-	if len(listed) > 0 {
-		return jobs, fmt.Errorf("hrsmart: none of %d listed postings could be read", len(listed))
+	if unseen > 0 {
+		return jobs, fmt.Errorf("hrsmart: none of %d new postings could be read", unseen)
 	}
 	return jobs, nil
 }

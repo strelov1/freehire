@@ -88,3 +88,19 @@ func TestHRsmartFailsWhenEveryListedDetailIsGone(t *testing.T) {
 		}
 	}
 }
+
+func TestHRsmartFailsUnreadableUnseenDetailsEvenWithSeenRefreshes(t *testing.T) {
+	listing := strings.Replace(hrsmartTestList("3735", "", "2"), "</table>", `<tr><td><a href="/hrsmart/ats/Posting/view/2">Engineer</a></td></tr></table>`, 1)
+	fake := (&routedHTTP{}).route("/JobSearch/viewAll", listing).route("/Posting/view/3735", "<h1>Sign in</h1>")
+	s := NewHRsmart(fake).(HydratingSource)
+	if _, err := s.FetchNew(context.Background(), CompanyEntry{Board: hrsmartTestHost}, func(id string) bool { return id == "2" }); err == nil {
+		t.Fatal("seen refresh hid wholly failed hydration of new postings")
+	}
+}
+func TestHRsmartAllSeenCrawlNeedsNoDetails(t *testing.T) {
+	fake := (&routedHTTP{}).route("/JobSearch/viewAll", hrsmartTestList("3735", "", "1"))
+	jobs, err := NewHRsmart(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: hrsmartTestHost}, func(string) bool { return true })
+	if err != nil || len(jobs) != 1 || !jobs[0].SeenRefresh || fake.calls != 1 {
+		t.Fatalf("all-seen crawl = %+v, %v", jobs, err)
+	}
+}

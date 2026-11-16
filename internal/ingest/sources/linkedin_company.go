@@ -38,15 +38,18 @@ func LinkedInCompanyWebsite(root *html.Node) string {
 				return
 			}
 			var value string
-			if json.Unmarshal(raw, &value) != nil {
-				var values []string
-				if json.Unmarshal(raw, &values) == nil && len(values) > 0 {
-					value = values[0]
-				}
+			var values []string
+			if json.Unmarshal(raw, &value) == nil {
+				values = []string{value}
+			} else if json.Unmarshal(raw, &values) != nil {
+				return
 			}
-			u, err := url.Parse(value)
-			if err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != "" && u.User == nil && !linkedInHost(u.Hostname()) {
-				website = u.String()
+			for _, value := range values {
+				u, err := url.Parse(value)
+				if err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != "" && u.User == nil && !linkedInHost(u.Hostname()) {
+					website = u.String()
+					return
+				}
 			}
 		}
 		read(doc.Type, doc.SameAs)
