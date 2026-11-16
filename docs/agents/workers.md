@@ -8,7 +8,7 @@ What each `cmd/<name>` worker does, when it runs, what it needs, and the trap be
 
 Each worker's entry lives in one of these files, grouped by what it works on. A new worker gets its entry in the file that fits and its name in the list here.
 
-- [Ingest and the job lifecycle](workers/ingest.md): `ingest`, `close-chronic-boards`, `capture-apply-form`, `auto-apply`, `liveness`, `adzuna-liveness`, `hydrate-adzuna-description`
+- [Ingest and the job lifecycle](workers/ingest.md): `ingest`, `harvest-linkedin`, `close-chronic-boards`, `capture-apply-form`, `auto-apply`, `liveness`, `adzuna-liveness`, `hydrate-adzuna-description`
 - [Enrichment and search](workers/search.md): `enrich`, `search-drain`, `reindex`, `facetd`, `build-suggestions`, `search-settings-drift`, `serve-probe`, `search-ping`
 - [Backfills and company data](workers/companies.md): `backfill-derive`, `backfill-company-type-hint`, `backfill-telegram-prefilter`, `backfill-company-info-wikipedia`, `backfill-catalog-history`, `publish-logo-domains`, `report-company-website-twins`, `merge-companies`
 - [Operations and quality](workers/ops.md): `catalogue-export`, `migrate`, `set-job-application-url`, `promote-job-source`, `llm-probe`, `queue-metrics`, `quality-audit`, `catalog-coverage`, `report-cv-letters`, `report-skill-gaps`, `report-classify-drift`

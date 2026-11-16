@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"gopkg.in/yaml.v3"
@@ -19,6 +20,8 @@ const (
 	// defaultPages is deliberately one: pages multiply the request count, so wider coverage is a
 	// per-query decision.
 	defaultPages = 1
+	maxPages     = 100
+	maxJobAge    = 30
 	// pageSize is the listing's fixed page size, which drives the `start` offset.
 	pageSize = 10
 )
@@ -34,6 +37,44 @@ type query struct {
 	Pages    int    `yaml:"pages"`
 }
 
+// UnmarshalYAML checks scalar types before decoding: yaml.v3 otherwise truncates
+// floats into integers, turning a fractional age into the wider default window.
+func (q *query) UnmarshalYAML(node *yaml.Node) error {
+	var raw struct {
+		Keywords string    `yaml:"keywords"`
+		Location string    `yaml:"location"`
+		JobAge   yaml.Node `yaml:"jobage"`
+		Pages    yaml.Node `yaml:"pages"`
+	}
+	if err := node.Decode(&raw); err != nil {
+		return err
+	}
+	pages, err := queryLimit(&raw.Pages, "pages")
+	if err != nil {
+		return err
+	}
+	jobAge, err := queryLimit(&raw.JobAge, "jobage")
+	if err != nil {
+		return err
+	}
+	*q = query{Keywords: raw.Keywords, Location: raw.Location, Pages: pages, JobAge: jobAge}
+	return nil
+}
+
+func queryLimit(node *yaml.Node, field string) (int, error) {
+	if node.Kind == 0 {
+		return 0, nil // Omitted limits keep the legacy defaults.
+	}
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!int" {
+		return 0, fmt.Errorf("query %s must be an integer scalar", field)
+	}
+	var value int
+	if err := node.Decode(&value); err != nil {
+		return 0, fmt.Errorf("query %s: %w", field, err)
+	}
+	return value, nil
+}
+
 // loadQueries reads the worklist, applying the bounded defaults. A query naming no market is a usage
 // error: an unbounded market turns a bounded harvest into an unbounded crawl.
 func loadQueries(path string) ([]query, error) {
@@ -47,22 +88,43 @@ func loadQueries(path string) ([]query, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse worklist %s: %w", path, err)
 	}
-	if len(doc.Queries) == 0 {
-		return nil, fmt.Errorf("worklist %s names no queries", path)
+	queries, err := normalizeQueries(doc.Queries)
+	if err != nil {
+		return nil, fmt.Errorf("worklist %s: %w", path, err)
 	}
-	for i := range doc.Queries {
-		q := &doc.Queries[i]
-		if q.Location == "" {
-			return nil, fmt.Errorf("worklist %s: query %q names no location", path, q.Keywords)
+	return queries, nil
+}
+
+// normalizeQueries keeps the first spelling and budget of each keyword/market
+// slice. Explicit bad limits fail the whole plan before any search is registered.
+func normalizeQueries(queries []query) ([]query, error) {
+	if len(queries) == 0 {
+		return nil, fmt.Errorf("worklist names no queries")
+	}
+	unique := make([]query, 0, len(queries))
+	seen := make(map[string]bool)
+	for _, q := range queries {
+		q.Keywords = strings.Join(strings.Fields(q.Keywords), " ")
+		q.Location = strings.Join(strings.Fields(q.Location), " ")
+		if q.Keywords == "" || q.Location == "" {
+			return nil, fmt.Errorf("query requires keywords and location")
 		}
-		if q.JobAge <= 0 {
-			q.JobAge = defaultJobAge
+		if q.Pages < 0 || q.Pages > maxPages || q.JobAge < 0 || q.JobAge > maxJobAge {
+			return nil, fmt.Errorf("query %q/%q requires pages=1..%d and jobage=1..%d", q.Keywords, q.Location, maxPages, maxJobAge)
 		}
-		if q.Pages <= 0 {
+		if q.Pages == 0 {
 			q.Pages = defaultPages
 		}
+		if q.JobAge == 0 {
+			q.JobAge = defaultJobAge
+		}
+		key := strings.ToLower(q.Keywords) + "\x00" + strings.ToLower(q.Location)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, q)
+		}
 	}
-	return doc.Queries, nil
+	return unique, nil
 }
 
 // searchURL builds the listing URL for one page (1-indexed) of a query.

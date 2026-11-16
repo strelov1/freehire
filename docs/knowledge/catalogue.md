@@ -4,8 +4,11 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T23:13:27+00:00
+  at: 2026-11-16T23:25:00+00:00
 sources:
+  - resource: ../../cmd/harvest-linkedin/register.go
+  - resource: ../../harvest/linkedin-queries.yml
+  - resource: ../../internal/ingest/sources/linkedin_search_options.go
   - resource: ../../internal/ingest/sources/wantapply.go
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
@@ -83,3 +86,12 @@ reference records the bounded access probes and their limits.
 
 Ownership reconciliation accepts both numeric LinkedIn posting keys and legacy
 keyword-scoped keys, so a later external-application transition can reach its native ATS.
+
+## Recurring LinkedIn harvest
+
+`harvest-linkedin --register-searches harvest/linkedin-queries.yml` previews the existing
+keyword/market worklist; `--apply` registers pending search boards. The regular ingest
+scheduler then owns those searches, using the existing oldest-run-first admission when a
+run cannot reach every board. Worklist page/depth and age settings travel with each board; registration can explicitly
+override these budgets for new searches using `--pages` and `--jobage`. Repeated registration preserves existing live operator settings. See the
+[worker reference](../agents/workers/ingest.md).

@@ -10,6 +10,15 @@
 //	go run ./cmd/harvest-ats resolve candidates.json          # -> <provider>.seed.json
 //	go run ./cmd/harvest-boards <provider> <provider>.seed.json
 //
+// Register the same worklist as pending searches for ordinary LinkedIn ingestion:
+//
+//	go run ./cmd/harvest-linkedin --register-searches harvest/linkedin-queries.yml
+//	go run ./cmd/harvest-linkedin --register-searches --apply harvest/linkedin-queries.yml
+//	go run ./cmd/harvest-linkedin --register-searches --pages=10 --jobage=30 --apply harvest/linkedin-queries.yml
+//
+// Registration preserves existing live search configuration. It writes no jobs;
+// the normal LinkedIn adapter verifies descriptions and application ownership.
+//
 // LinkedIn data never reaches the repository: it is a transient worklist; what gets committed is
 // boards harvest-boards validated against each platform's own API. Requests go out under this
 // project's User-Agent, rate-limited; run-once host tool, not a cron job.
@@ -18,6 +27,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -25,18 +35,55 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/worker"
 	"golang.org/x/time/rate"
 )
 
 // defaultPace is the aggregate request rate, deliberately gentle for a discovery pass.
 const defaultPace = 1.0
 
-func main() { os.Exit(run()) }
+func main() { worker.Main(run) }
 
 func run() int {
-	pace := flag.Float64("pace", defaultPace, "cap the request rate at this many requests per second")
-	flag.Parse()
-	args := flag.Args()
+	return runArgs(os.Args[1:])
+}
+
+func runArgs(args []string) int {
+	flags := flag.NewFlagSet("harvest-linkedin", flag.ContinueOnError)
+	pace := flags.Float64("pace", defaultPace, "cap the request rate at this many requests per second")
+	register := flags.Bool("register-searches", false, "register worklist searches for ordinary LinkedIn ingestion (preview without --apply)")
+	apply := flags.Bool("apply", false, "write search registrations; requires --register-searches")
+	pages := flags.Int("pages", 0, "page budget for newly registered searches, 1..100 (0 keeps worklist values); requires --register-searches")
+	jobAge := flags.Int("jobage", 0, "age window in days for newly registered searches, 1..30 (0 keeps worklist values); requires --register-searches")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	args = flags.Args()
+	budgetSpecified := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "pages" || f.Name == "jobage" {
+			budgetSpecified = true
+		}
+	})
+	if budgetSpecified && !*register {
+		log.Print("harvest-linkedin: --pages and --jobage require --register-searches")
+		return 2
+	}
+	if *pages < 0 || *pages > maxPages || *jobAge < 0 || *jobAge > maxJobAge {
+		log.Printf("harvest-linkedin: --pages must be 1..%d and --jobage must be 1..%d, or 0 to keep worklist values", maxPages, maxJobAge)
+		return 2
+	}
+	if *apply && !*register {
+		log.Print("harvest-linkedin: --apply requires --register-searches")
+		return 2
+	}
+	if *register && len(args) != 1 {
+		log.Print("usage: harvest-linkedin --register-searches [--apply] <queries.yml>")
+		return 2
+	}
 	if len(args) != 1 && len(args) != 2 {
 		log.Printf("usage: harvest-linkedin [-pace N] <queries.yml> [company-slugs.txt]")
 		return 2
@@ -50,6 +97,17 @@ func run() int {
 	if err != nil {
 		log.Printf("harvest-linkedin: %v", err)
 		return 1
+	}
+	if *register {
+		for i := range queries {
+			if *pages > 0 {
+				queries[i].Pages = *pages
+			}
+			if *jobAge > 0 {
+				queries[i].JobAge = *jobAge
+			}
+		}
+		return runRegisterSearches(queries, *apply)
 	}
 	existing := map[string]bool{}
 	if len(args) == 2 {

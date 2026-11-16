@@ -28,3 +28,9 @@ Recorded numeric posting identity with legacy id/history preservation, the close
 URL lookup index, and bounded first-level related-job discovery. Configured Scrapling
 routing retains the source's request budget. This describes the checkout implementation;
 production rollout is verified separately.
+
+## Recurring LinkedIn harvest — 2026-11-16
+
+Added provenance for registering the existing hiring-market worklist into the normal
+board catalogue and for bounded per-search page/date options. Runtime yield is measured
+separately; the worklist is not evidence of complete LinkedIn coverage.
