@@ -73,7 +73,7 @@ go build ./...  &&  go vet ./...
 go test ./...                             # unit tests (no external deps)
 go vet -tags=integration ./...            # compiles the tagged tests — run before EVERY push
 go test -tags=integration ./internal/platform/db/  # queue integration tests (needs Docker; testcontainers)
-golangci-lint run                         # .golangci.yml; CI only fails on issues new-from-main (ratchet)
+make lint                                # pinned linter, merge-base ratchet
 ```
 
 **Toolchain and worktrees: [mise](https://mise.jdx.dev).** `mise install` puts every tool

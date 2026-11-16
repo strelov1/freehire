@@ -183,4 +183,6 @@ jobs:
       - name: Check migration numbers
         run: |
           node --test scripts/check-migration-numbers.test.mjs
+          node scripts/check-gitignore.mjs --self-test
+          node scripts/check-gitignore.mjs
           pnpm check:migration-numbers
