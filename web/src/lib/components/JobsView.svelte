@@ -576,7 +576,6 @@
         hideCompany={!!scope.company_slug}
       />
 
-
       <!-- Page links, and the only way through the results: a scroll-to-bottom
            auto-load used to sit here, which grew the page every time the reader
            neared the end of it and put the footer permanently out of reach.
