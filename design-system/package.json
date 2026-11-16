@@ -41,7 +41,7 @@
     "@testing-library/svelte": "^5.4.2",
     "eslint": "^10.14.0",
     "eslint-plugin-oxlint": "^1.90.0",
-    "eslint-plugin-svelte": "^3.23.1",
+    "eslint-plugin-svelte": "^3.24.1",
     "flag-icons": "^7.6.0",
     "globals": "^17.14.0",
     "jsdom": "^30.1.3",
