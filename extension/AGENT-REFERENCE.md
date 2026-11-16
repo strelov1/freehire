@@ -200,7 +200,7 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 
 (cd design-system && pnpm install)   # once, and after pulling design-system changes
 cd extension
-npm install                         # runs `wxt prepare` (generates .wxt/)
+pnpm install --frozen-lockfile       # runs `wxt prepare` (generates .wxt/)
 pnpm run dev                         # dev build with HMR
 pnpm run build                       # production build -> .output/chrome-mv3
                                      # targets freehire.me

@@ -24,6 +24,13 @@ BACKEND_TASKS = (
 class Scope:
     backend: bool
     web: bool
+    scrapling_fetch: bool = False
+    extension: bool = False
+    docs: bool = False
+    migrations: bool = False
+    contracts: bool = False
+    sqlc: bool = False
+    design_system: bool = False
 
     @property
     def backend_tasks(self):
@@ -31,36 +38,48 @@ class Scope:
 
 
 def classify(paths):
+    flags = dict.fromkeys(Scope.__dataclass_fields__, False)
     if not paths:
-        return Scope(backend=True, web=True)
-
-    backend = False
-    web = False
+        return Scope(**dict.fromkeys(flags, True))
     for path in paths:
-        # Go files must not escape tagged compilation by being added elsewhere.
-        backend = backend or path.endswith(".go")
-        if path.startswith(("web/", "design-system/")):
-            web = True
+        flags["backend"] |= path.endswith(".go")
+        flags["docs"] |= path.endswith(".md")
+        if path.startswith("services/scrapling-fetch/"):
+            flags["scrapling_fetch"] = True
+        elif path.startswith("extension/"):
+            flags["extension"] = True
+        elif path.startswith(("typespec/", "openapi/", "internal/api/apigen/")):
+            flags.update(backend=True, web=True, contracts=True)
+        elif path.startswith(("web/", "design-system/")):
+            flags["web"] = True
+            flags["contracts"] |= (
+                path.startswith(
+                    ("web/src/lib/generated/", "web/src/lib/docs/generated/")
+                )
+                or path == "web/static/openapi.yaml"
+            )
+            if path.startswith("design-system/"):
+                flags.update(design_system=True, extension=True)
         elif path.startswith(("internal/", "cmd/", "migrations/")) or path in (
             "go.mod",
             "go.sum",
             ".golangci.yml",
         ):
-            backend = True
-            # PlanView.test.ts reads the Go feature vocabulary directly.
-            web = web or path.startswith("internal/ai/plan/")
+            flags["backend"] = True
+            flags["contracts"] = True
+            flags["migrations"] |= path.startswith("migrations/")
+            flags["sqlc"] |= path.startswith(("migrations/", "internal/platform/db/"))
+            flags["web"] |= path.startswith("internal/ai/plan/")
         elif path in ("docs/API.md", "docs/API.internal.md"):
-            # These are generated and verified by the web job.
-            web = True
-        elif path.startswith(("docs/", "openspec/", "extension/")):
-            # Go unit guards still inspect promo documents and extension fixtures.
-            continue
-        elif "/" not in path and path.endswith(".md"):
-            continue
+            flags.update(web=True, contracts=True)
+        elif path.startswith(("docs/", "openspec/")) or (
+            "/" not in path and path.endswith(".md")
+        ):
+            flags["docs"] = True
         else:
-            # CI, shared scripts/configuration and unfamiliar inputs run everything.
-            return Scope(backend=True, web=True)
-    return Scope(backend=backend, web=web)
+            # Shared configuration and unfamiliar inputs select every check.
+            return Scope(**dict.fromkeys(flags, True))
+    return Scope(**flags)
 
 
 def read_changes(base, head, repo=Path(".")):
@@ -94,7 +113,8 @@ def main():
     args = parser.parse_args()
     scope = classify(read_changes(args.base, args.head))
     print(f"backend_tasks={json.dumps(scope.backend_tasks)}")
-    print(f"web={str(scope.web).lower()}")
+    for name in Scope.__dataclass_fields__:
+        print(f"{name}={str(getattr(scope, name)).lower()}")
 
 
 if __name__ == "__main__":

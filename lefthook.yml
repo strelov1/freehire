@@ -246,10 +246,10 @@ pre-commit:
     # same whole-package lint on every push, which is what covers a rule switched off
     # here.
     web-check:
-      glob: "web/**/*.{svelte,ts}"
+      glob: "{web/*.{svelte,ts},web/**/*.{svelte,ts},web/tsconfig.json}"
       run: pnpm --dir web run check
     extension-check:
-      glob: "extension/**/*.{svelte,ts}"
+      glob: "{extension/*.{svelte,ts},extension/**/*.{svelte,ts},extension/tsconfig.json}"
       run: pnpm --dir extension run check
     web-lint:
       root: "web/"

@@ -17,6 +17,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
+      web: ${{ steps.scope.outputs.web }}
+      backend: ${{ steps.scope.outputs.backend }}
+      scrapling_fetch: ${{ steps.scope.outputs.scrapling_fetch }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      migrations: ${{ steps.scope.outputs.migrations }}
+      contracts: ${{ steps.scope.outputs.contracts }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
+      design_system: ${{ steps.scope.outputs.design_system }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - name: Select required checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
   # internal/platform/db is generated and committed. Nothing compared the two until now,
   # so a query edited without `make sqlc` shipped the old Go and every job stayed green —
   # the same class of gap the design-system `check:dist` step exists for.
@@ -26,6 +57,8 @@ jobs:
   # answers to the same question, and the drift between them would look exactly like
   # stale generated code.
   sqlc:
+    needs: changes
+    if: needs.changes.outputs.sqlc == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -63,6 +96,8 @@ jobs:
   # `go run ./cmd/gen-contracts` needs no toolchain of its own — tygo is a library here,
   # not a binary — so unlike sqlc there is no version to pin in two places.
   contracts:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -96,6 +131,8 @@ jobs:
   # committed, so a .tsp edit without `make api-contract` would ship the old Go and stay
   # green; this regenerates both and fails on any difference.
   api-contract:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -147,6 +184,8 @@ jobs:
   #
   # Read .squawk.toml for why the invocation is split in two passes.
   migrations:
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
