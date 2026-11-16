@@ -3,6 +3,7 @@ package gmailsync
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"testing"
 	"time"
@@ -62,6 +63,22 @@ func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
 	return f.knownThreads, nil
 }
 
+// StoredMessages answers from what this fake has upserted, leaving out rows with no recipients
+// (legacy rows a fetch repairs), as the real store does.
+func (f *fakeStore) StoredMessages(_ context.Context, _ int64, ids []string) (map[string]StoredRef, error) {
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	out := make(map[string]StoredRef)
+	for _, e := range f.upserted {
+		if want[e.Message.ID] && e.Message.ToAddrs != "" {
+			out[e.Message.ID] = StoredRef{ThreadID: e.Message.ThreadID, ReceivedAt: e.Message.ReceivedAt, Incoming: e.Message.Direction != DirectionOutgoing}
+		}
+	}
+	return out, nil
+}
+
 type fakeReader struct {
 	sent         []MessageRef
 	sentErr      error
@@ -70,6 +87,7 @@ type fakeReader struct {
 	threads      map[string][]string // threadID -> message ids
 	listErr      error
 	getErrIDs    map[string]error // message ids on which GetMessage fails
+	gets         []string         // message ids GetMessage was asked for, in order
 	threadErrIDs map[string]error // thread ids on which ListThreadMessageIDs fails
 }
 
@@ -87,6 +105,7 @@ func (f *fakeReader) ListThreadMessageIDs(_ context.Context, threadID string) ([
 	return f.threads[threadID], nil
 }
 func (f *fakeReader) GetMessage(_ context.Context, id string) (Message, error) {
+	f.gets = append(f.gets, id)
 	if err := f.getErrIDs[id]; err != nil {
 		return Message{}, err
 	}
@@ -524,4 +543,77 @@ func runWithListError(t *testing.T, listErr error) (*fakeStore, Stats) {
 		t.Fatalf("connections = %d, want 1", stats.Connections)
 	}
 	return store, stats
+}
+
+// A first sync too big for one run's rate limit must still finish: the run that hits the
+// limit keeps its cursor, so the next run lists the same messages and must skip the ones
+// already stored rather than re-fetch them and stop at the same limit again.
+func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{conns: []Connection{{UserID: 7, Email: "u@gmail.com"}}, encToken: enc}
+	t1, t2, t3 := time.Unix(1_700_000_100, 0), time.Unix(1_700_000_200, 0), time.Unix(1_700_000_300, 0)
+	throttle := &APIError{StatusCode: http.StatusForbidden, Reason: "rateLimitExceeded"}
+	reader := &fakeReader{
+		ids: []string{"m3", "m2", "m1"},
+		byID: map[string]Message{
+			"m1": {ID: "m1", ThreadID: "t1", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t1},
+			"m2": {ID: "m2", ThreadID: "t2", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t2},
+			"m3": {ID: "m3", ThreadID: "t3", ToAddrs: "u@gmail.com", Subject: "Thanks for applying", ReceivedAt: t3},
+		},
+		getErrIDs: map[string]error{"m2": throttle},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	if stats, _ := w.RunOnce(context.Background()); stats.Failed != 1 {
+		t.Fatalf("first run stats = %+v, want the throttled connection counted as failed", stats)
+	}
+	if store.syncedCursor != 0 {
+		t.Fatalf("cursor after the throttled run = %d, want 0", store.syncedCursor)
+	}
+
+	delete(reader.getErrIDs, "m2")
+	reader.gets = nil
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if stats.Synced != 1 {
+		t.Fatalf("second run stats = %+v, want synced", stats)
+	}
+	for _, id := range reader.gets {
+		if id == "m3" {
+			t.Errorf("second run fetched m3 again (gets = %v); it was stored by the first run", reader.gets)
+		}
+	}
+	if store.syncedCursor != t3.Unix() {
+		t.Errorf("cursor = %d, want %d: a skipped stored message still counts toward the watermark", store.syncedCursor, t3.Unix())
+	}
+}
+
+// A row stored before recipients were recorded may be a sent reply saved as incoming; the
+// fetch is what repairs it, so a legacy row is fetched again rather than skipped.
+func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	legacy := Message{ID: "m1", ThreadID: "t1", FromAddr: "u@gmail.com", ReceivedAt: time.Unix(1_700_000_100, 0)}
+	store := &fakeStore{
+		conns:    []Connection{{UserID: 7, Email: "u@gmail.com"}},
+		encToken: enc,
+		upserted: []StoredEmail{{UserID: 7, Message: legacy}},
+	}
+	repaired := legacy
+	repaired.ToAddrs, repaired.Direction = "hr@acme.test", DirectionOutgoing
+	reader := &fakeReader{ids: []string{"m1"}, byID: map[string]Message{"m1": repaired}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	if _, err := w.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(reader.gets) != 1 || reader.gets[0] != "m1" {
+		t.Fatalf("gets = %v, want the legacy m1 fetched again", reader.gets)
+	}
+	if last := store.upserted[len(store.upserted)-1].Message; last.Direction != DirectionOutgoing {
+		t.Errorf("re-stored m1 direction = %q, want outgoing", last.Direction)
+	}
 }

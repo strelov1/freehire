@@ -120,6 +120,16 @@ WHERE user_id = $1 AND source = 'gmail' AND thread_id <> '' AND deleted_at IS NU
 GROUP BY thread_id
 ORDER BY max(received_at) DESC;
 
+-- name: ListStoredGmailMessages :many
+-- Which of a wave's message ids are already stored, so a sync throttled part-way resumes
+-- where the last run stopped instead of re-fetching the same head and hitting the limit
+-- again. Deleted rows count as stored: the upsert would not resurrect them anyway. Rows
+-- with no recipients predate 0267_gmail_outgoing and are left out: re-fetching them is
+-- what repairs a legacy sent reply stored as incoming.
+SELECT external_id, thread_id, received_at, direction FROM emails
+WHERE user_id = $1 AND source = 'gmail' AND external_id = ANY(sqlc.arg(external_ids)::text[])
+  AND to_addrs <> '';
+
 -- name: UpsertEmail :exec
 -- Gmail is idempotent; sent messages are already read and never enter employer triage.
 WITH stored AS (

@@ -675,6 +675,54 @@ func (q *Queries) ListMentorBusySyncConnections(ctx context.Context, calendarSco
 	return items, nil
 }
 
+const listStoredGmailMessages = `-- name: ListStoredGmailMessages :many
+SELECT external_id, thread_id, received_at, direction FROM emails
+WHERE user_id = $1 AND source = 'gmail' AND external_id = ANY($2::text[])
+  AND to_addrs <> ''
+`
+
+type ListStoredGmailMessagesParams struct {
+	UserID      int64    `json:"user_id"`
+	ExternalIds []string `json:"external_ids"`
+}
+
+type ListStoredGmailMessagesRow struct {
+	ExternalID string             `json:"external_id"`
+	ThreadID   string             `json:"thread_id"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	Direction  string             `json:"direction"`
+}
+
+// Which of a wave's message ids are already stored, so a sync throttled part-way resumes
+// where the last run stopped instead of re-fetching the same head and hitting the limit
+// again. Deleted rows count as stored: the upsert would not resurrect them anyway. Rows
+// with no recipients predate 0267_gmail_outgoing and are left out: re-fetching them is
+// what repairs a legacy sent reply stored as incoming.
+func (q *Queries) ListStoredGmailMessages(ctx context.Context, arg ListStoredGmailMessagesParams) ([]ListStoredGmailMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listStoredGmailMessages, arg.UserID, arg.ExternalIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStoredGmailMessagesRow{}
+	for rows.Next() {
+		var i ListStoredGmailMessagesRow
+		if err := rows.Scan(
+			&i.ExternalID,
+			&i.ThreadID,
+			&i.ReceivedAt,
+			&i.Direction,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAllEmailsRead = `-- name: MarkAllEmailsRead :execrows
 UPDATE emails SET read_at = now()
 WHERE user_id = $1

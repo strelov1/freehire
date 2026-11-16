@@ -85,3 +85,18 @@ func (s *DBStore) Promoted(ctx context.Context) ([]string, error) {
 func (s *DBStore) ListThreadIDs(ctx context.Context, userID int64) ([]string, error) {
 	return s.q.ListGmailThreadIDs(ctx, userID)
 }
+
+func (s *DBStore) StoredMessages(ctx context.Context, userID int64, ids []string) (map[string]StoredRef, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.q.ListStoredGmailMessages(ctx, db.ListStoredGmailMessagesParams{UserID: userID, ExternalIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]StoredRef, len(rows))
+	for _, r := range rows {
+		out[r.ExternalID] = StoredRef{ThreadID: r.ThreadID, ReceivedAt: r.ReceivedAt.Time, Incoming: r.Direction != DirectionOutgoing}
+	}
+	return out, nil
+}
