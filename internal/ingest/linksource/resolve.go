@@ -14,6 +14,10 @@ import (
 type Resolved struct {
 	Source string
 	Job    sources.Job
+	// Board is an independently verified destination that must be onboarded
+	// when this posting is written, including through Resolve followed by Write.
+	Board           *sources.CompanyEntry
+	EmployerWebsite string
 }
 
 // ResolveLinks runs each url through the registry and returns the vacancies from every

@@ -96,6 +96,11 @@ var platformLabelsByApex = map[string][]string{
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —
 // either a label no multi-tenant ATS gives a tenant, or one this platform in particular keeps.
 func platformHost(host, apex string) bool {
+	// Teamtailor career pages embed this shared image CDN in their CSS. It is
+	// not a tenant; reserve the exact host so media.teamtailor.com stays valid.
+	if apex == "teamtailor" && host == "media.cdn.teamtailor.com" {
+		return true
+	}
 	label, _, ok := strings.Cut(host, ".")
 	if !ok {
 		return false

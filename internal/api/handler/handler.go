@@ -161,7 +161,7 @@ func Register(app *fiber.App, cfg Config) {
 	plans := plan.NewStore(queries, cfg.Pool, cfg.Plan)
 	// Imports fetch a user-supplied page, so they dial through ingestClient. A nil cfg.Search
 	// only skips the index push.
-	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
+	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, intakeSources(sources.All(ingestClient)), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, queries, importer, postingURLs)
 	// Prefill reuses the SAME importer (its non-writing Resolve half); see submissionHandlers.PrefillSubmission.
 	submissionsH := newSubmissionHandlers(queries, cfg.Pool, moderationSvc, importer, postingURLs)

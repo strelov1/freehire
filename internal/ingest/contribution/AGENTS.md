@@ -117,3 +117,14 @@ the two themselves.
   background ingest worker; the `status` column keeps that option open.
 - Coverage is the ~37 multi-tenant ATS in the `atsBoards` table — path-, subdomain-, host-,
   and hostpath-based. The long tail is a follow-up (one `atsBoards`-style rule + test each).
+
+## LinkedIn job links
+
+The same intake accepts LinkedIn posting URLs. `linkimport.PrepareLinkedIn` checks the
+primary application method before any generic import can run. Confirmed internal Apply
+may be stored as LinkedIn; an external posting must resolve to a verified native ATS.
+An observed employer board may be contributed even when its exact posting cannot be read.
+Inspect and record that board before the native write: recording now creates the board,
+so reversing this order loses contributor attribution. Verified employer names can travel
+through `Intake.Company`; ordinary URL-only submissions still use the placeholder name.
+Unknown, closed and unreadable postings are queued without publication.

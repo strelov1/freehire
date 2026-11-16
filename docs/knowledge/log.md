@@ -21,3 +21,11 @@ no production deployment is asserted.
 Created the OKF v0.2 navigation bundle from repository instructions and package
 references. Concepts include pinned source provenance and agent authorship;
 production state and human verification have not been asserted.
+
+## LinkedIn intake and related discovery — 2026-11-16
+
+Updated catalogue provenance for shared LinkedIn link intake, contributor attribution,
+numeric posting identity with legacy-row preservation, and bounded first-level related
+job discovery. Configured API fetch routing changes only LinkedIn; arbitrary ATS URL
+resolvers keep their guarded transport. This describes the checkout implementation, not a
+production rollout.

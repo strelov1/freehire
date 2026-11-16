@@ -30,6 +30,14 @@ func (im *Importer) WriteNative(ctx context.Context, previous *db.Job, native Na
 	}
 	defer tx.Rollback(ctx)
 	qtx := im.q.WithTx(tx)
+	existing, err := qtx.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: native.Entry.Provider, ExternalID: native.Job.ExternalID})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, err
+	}
+	if err == nil && existing.IsPrivate {
+		return Result{}, fmt.Errorf("native ATS identity belongs to a private job")
+	}
+	alreadyCarried := err == nil && !existing.ClosedAt.Valid && !existing.DuplicateOf.Valid
 	b, err := boardcatalog.NewInserter(boardcatalog.NewQueriesRepository(qtx), im.ingest).Insert(ctx, boardcatalog.InsertInput{
 		Provider: native.Entry.Provider, Board: native.Entry.Board, Company: native.Entry.Company, Region: native.Entry.Region, URL: native.EmployerWebsite,
 	}, boardcatalog.StatusActive)
@@ -39,10 +47,8 @@ func (im *Importer) WriteNative(ctx context.Context, previous *db.Job, native Na
 	if err == nil && b.Status == boardcatalog.StatusRejected {
 		return Result{}, fmt.Errorf("native board failed catalogue validation")
 	}
-	if err == nil {
-		if err := ingestsched.NewQueriesRepository(qtx).AdoptDiscoveredProvider(ctx, native.Entry.Provider); err != nil {
-			return Result{}, err
-		}
+	if err := ingestsched.NewQueriesRepository(qtx).AdoptDiscoveredProvider(ctx, native.Entry.Provider); err != nil {
+		return Result{}, err
 	}
 	schedule, err := qtx.GetIngestSchedule(ctx, native.Entry.Provider)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -83,5 +89,10 @@ func (im *Importer) WriteNative(ctx context.Context, previous *db.Job, native Na
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, err
 	}
-	return Result{Source: saved.Source, ExternalID: saved.ExternalID, PublicSlug: saved.PublicSlug, CompanySlug: saved.CompanySlug}, nil
+	return Result{
+		Source: saved.Source, ExternalID: saved.ExternalID, PublicSlug: saved.PublicSlug, CompanySlug: saved.CompanySlug,
+		// A genuine reopening is newly available again, rather than an already-open
+		// match. ResetStrikes observes the pre-write closed state under its lock.
+		Deduped: alreadyCarried && !res.ResetStrikes && !saved.ClosedAt.Valid && !saved.IsPrivate && !saved.DuplicateOf.Valid,
+	}, nil
 }

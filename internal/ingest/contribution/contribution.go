@@ -88,6 +88,7 @@ type RecordInput struct {
 	Source      string
 	Board       string
 	Surface     string
+	Company     string
 }
 
 // Repository is the persistence contract, expressed in package domain types. Record inserts
@@ -152,6 +153,8 @@ type Intake struct {
 	Canonical  string
 	Recognized bool
 	Tracked    bool
+	// Company is supplied only by an intake that verified the employer's posting.
+	Company string
 }
 
 // Inspect resolves a link to its board and reports whether the catalogue already crawls it,
@@ -192,6 +195,7 @@ func (s *Service) RecordIntake(ctx context.Context, in SubmitInput, it Intake) (
 		Source:      it.Source,
 		Board:       it.Board,
 		Surface:     surface,
+		Company:     it.Company,
 	})
 	return SubmitResult{Contribution: rec, Source: it.Source, Board: it.Board, Rewardable: err == nil}, err
 }

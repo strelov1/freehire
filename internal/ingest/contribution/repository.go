@@ -90,10 +90,14 @@ func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board s
 // ever rewarded. The reward itself is granted by the caller, keyed by the returned id.
 func (r *QueriesRepository) Record(ctx context.Context, in RecordInput) (Contribution, error) {
 	submittedBy := in.SubmittedBy
+	company := in.Company
+	if company == "" {
+		company = boardcatalog.PlaceholderCompany(in.Board)
+	}
 	b, err := boardcatalog.NewInserter(r.boards, sources.Taxonomy()).Insert(ctx, boardcatalog.InsertInput{
 		Provider:    in.Source,
 		Board:       in.Board,
-		Company:     boardcatalog.PlaceholderCompany(in.Board),
+		Company:     company,
 		URL:         in.URL,
 		SubmittedBy: &submittedBy,
 		Surface:     NormalizeSurface(in.Surface),

@@ -121,6 +121,9 @@ var applyFormSuffixApex = map[string]string{
 // which never carry an apply suffix. This is a property of the query, not of the
 // data.
 func CanonicalPostingURL(raw string) string {
+	if id := LinkedInPostingID(strings.TrimSpace(raw)); id != "" {
+		return "https://www.linkedin.com/jobs/view/" + id + "/"
+	}
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" {
 		return raw

@@ -122,6 +122,10 @@ const maxFencedAttempts = 3
 // Edited, closed and absent postings take the full write. A fenced match must be retried in a
 // fresh transaction before either path can run again.
 func persist(ctx context.Context, tx pgx.Tx, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
+	p, err := job.ResolveUpsertIdentity(ctx, qtx, p)
+	if err != nil {
+		return written{}, err
+	}
 	cheap, err := qtx.RefreshUnchangedJob(ctx, db.RefreshUnchangedJobParams{
 		Source:               p.Source,
 		ExternalID:           p.ExternalID,
@@ -470,6 +474,13 @@ const refreshCoveredChunk = 5000
 // two chunks, one refreshed and one not, must not enter the sweep's scope, or the sweep would
 // close its listed-but-unrefreshed rows.
 func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error) {
+	if source == "linkedin" {
+		var err error
+		externalIDs, err = linkedInStoredIdentities(ctx, s.q, externalIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var refreshed []string
 	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
 		// The bulk statement skips rows another writer holds, commits what it could write and
@@ -531,6 +542,13 @@ func (s *dbStore) refreshCoveredOne(ctx context.Context, source, externalID stri
 // coverage gate found already crawled first-hand, and records each closed row's company as
 // crawled, as RefreshCovered does. Implements pipeline.CoveredCloser.
 func (s *dbStore) CloseCovered(ctx context.Context, source string, externalIDs []string) ([]string, error) {
+	if source == "linkedin" {
+		var err error
+		externalIDs, err = linkedInStoredIdentities(ctx, s.q, externalIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var closed []string
 	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
 		slugs, err := s.q.CloseCoveredJobs(ctx, db.CloseCoveredJobsParams{

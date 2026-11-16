@@ -4,12 +4,17 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T14:57:01-03:00
+  at: 2026-11-16T21:57:37+00:00
 sources:
   - resource: ../../internal/ingest/sources/wantapply.go
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
+  - resource: ../../internal/ingest/linkimport/linkedin.go
+  - resource: ../../internal/api/handler/intake_linkedin.go
+  - resource: ../../internal/api/handler/intake_sources.go
+  - resource: ../../internal/job/job/upsert.go
+  - resource: ../../internal/ingest/sources/linkedin_related.go
   - resource: ../../cmd/ingest/native_discovery_company.go
   - resource: ../../cmd/reindex/summary.go
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
@@ -53,6 +58,16 @@ public slug. Employer website discovery onboards native boards for the existing 
 so the ATS adapter owns subsequent updates and closure. See the
 [LinkedIn provider reference](../../internal/ingest/sources/providers/linkedin.md) and
 [ownership curator](../agents/workers/ops.md#promote-job-source).
+
+The shared link intake accepts LinkedIn job URLs. Configured Scrapling transport is applied
+only to its LinkedIn adapter; other URL resolvers keep their guarded client. It verifies
+the application method before importing, attributes a discovered native board to the signed-in contributor,
+and queues unreadable or unverified destinations without publishing them. New LinkedIn
+identities use the numeric posting id across search slices and intake; writes reuse a
+legacy keyword-scoped row's id and public slug when its exact native URL already exists.
+A completed search may add at most twenty first-level recommendations from one verified
+full posting page; these pass the same detail, application and ATS ownership checks.
+
 
 ## WantApply regional inventory
 

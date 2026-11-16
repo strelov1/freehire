@@ -2,7 +2,10 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -18,7 +21,12 @@ import (
 // The transaction is a pgx.Tx by type: both commands must commit together, and the jobs row is
 // locked before the activity row (the one global lock order).
 func Upsert(ctx context.Context, tx pgx.Tx, p db.UpsertJobParams) (db.UpsertJobRow, error) {
-	row, err := db.New(tx).UpsertJob(ctx, p)
+	q := db.New(tx)
+	p, err := ResolveUpsertIdentity(ctx, q, p)
+	if err != nil {
+		return db.UpsertJobRow{}, err
+	}
+	row, err := q.UpsertJob(ctx, p)
 	if err != nil {
 		return db.UpsertJobRow{}, err
 	}
@@ -47,4 +55,46 @@ func Observe(ctx context.Context, tx pgx.Tx, jobID int64, bodyRead, resetStrikes
 		return fmt.Errorf("observe job %d: %d activity rows, want exactly 1", jobID, n)
 	}
 	return nil
+}
+
+// ResolveUpsertIdentity preserves pre-existing LinkedIn keyword-scoped rows while
+// new writes use the globally unique posting ID. Other sources keep their identity.
+// The URL lookup includes closed public history, leaving reopening and expiry to
+// the ordinary upsert. A caller with a cheap refresh resolves identity before that
+// refresh too, so a legacy row does not force a full rewrite on every crawl.
+func ResolveUpsertIdentity(ctx context.Context, q *db.Queries, p db.UpsertJobParams) (db.UpsertJobParams, error) {
+	if p.Source != "linkedin" {
+		return p, nil
+	}
+	u, err := url.Parse(p.URL)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" ||
+		(u.Hostname() != "linkedin.com" && !strings.HasSuffix(u.Hostname(), ".linkedin.com")) {
+		return p, fmt.Errorf("linkedin: invalid native posting URL")
+	}
+	id, hasPath := strings.CutPrefix(strings.TrimSuffix(u.Path, "/"), "/jobs/view/")
+	if !hasPath || id == "" || strings.IndexFunc(id, func(c rune) bool { return c < '0' || c > '9' }) >= 0 {
+		return p, fmt.Errorf("linkedin: invalid native posting ID")
+	}
+	key := p.ExternalID[strings.LastIndex(p.ExternalID, ":")+1:]
+	if key != id {
+		return p, fmt.Errorf("linkedin: posting ID does not match its URL")
+	}
+	p.URL, p.ExternalID = "https://www.linkedin.com/jobs/view/"+id+"/", id
+	existing, err := q.FindLinkedInJobByURL(ctx, p.URL)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return p, err
+	}
+	if err == nil {
+		p.ExternalID = existing.ExternalID
+	}
+	// Public URL matching never selects a private row. Also refuse an exact-key
+	// collision, instead of letting ON CONFLICT rewrite another caller's private job.
+	exact, err := q.GetJobBySourceExternalID(ctx, db.GetJobBySourceExternalIDParams{Source: p.Source, ExternalID: p.ExternalID})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return p, err
+	}
+	if err == nil && exact.IsPrivate {
+		return p, fmt.Errorf("linkedin: native posting identity belongs to a private job")
+	}
+	return p, nil
 }

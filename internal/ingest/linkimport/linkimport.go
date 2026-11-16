@@ -12,6 +12,7 @@ package linkimport
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -67,8 +68,9 @@ type Importer struct {
 	catalog linksource.BoardCatalog
 	// ingest is the provider-keyed crawl registry, kept alongside reg because the
 	// vanity-domain fallback reaches a board directly rather than through an adapter's Match.
-	ingest map[string]sources.Source
-	boards BoardResolver
+	ingest   map[string]sources.Source
+	boards   BoardResolver
+	linkedin sources.Source
 }
 
 // New builds an Importer over the given database and HTTP transport. ingest is the
@@ -87,13 +89,14 @@ var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(
 func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source, boards BoardResolver) *Importer {
 	catalog := boardcatalog.NewQueriesRepository(q)
 	return &Importer{
-		pool:    pool,
-		q:       q,
-		idx:     idx,
-		reg:     linksource.ImportRegistry(c, ingest, catalog),
-		catalog: catalog,
-		ingest:  ingest,
-		boards:  boards,
+		pool:     pool,
+		q:        q,
+		idx:      idx,
+		reg:      linksource.ImportRegistry(c, ingest, catalog),
+		catalog:  catalog,
+		ingest:   ingest,
+		boards:   boards,
+		linkedin: sources.NewLinkedIn(c),
 	}
 }
 
@@ -112,6 +115,13 @@ func (b Board) known() bool { return b.Source != "" && b.Board != "" }
 // for the resolution sequence and Write for the persistence. A non-nil error is a transient
 // fetch/parse failure or a write failure.
 func (im *Importer) Import(ctx context.Context, raw string, known Board) (Result, bool, error) {
+	if linkedInURL(raw) {
+		prepared, err := im.PrepareLinkedIn(ctx, raw)
+		if err != nil {
+			return Result{}, false, err
+		}
+		return im.WriteLinkedIn(ctx, prepared)
+	}
 	resolved, ok, err := im.Resolve(ctx, raw, known)
 	if err != nil || !ok {
 		return Result{}, ok, err
@@ -138,9 +148,27 @@ func (im *Importer) Import(ctx context.Context, raw string, known Board) (Result
 // posting we crawl under (greenhouse, <board>:<id>) when a board IS known. Preferring the
 // board there is what keeps a storefront link from duplicating the posting it points at.
 func (im *Importer) Resolve(ctx context.Context, raw string, known Board) (linksource.Resolved, bool, error) {
+	if linkedInURL(raw) {
+		prepared, err := im.PrepareLinkedIn(ctx, raw)
+		if err != nil {
+			return linksource.Resolved{}, false, err
+		}
+		if prepared.Native != nil {
+			return linksource.Resolved{Source: prepared.Native.Entry.Provider, Job: prepared.Native.Job, Board: &prepared.Native.Entry, EmployerWebsite: prepared.Native.EmployerWebsite}, true, nil
+		}
+		if prepared.Posting.ApplyMethod == sources.ApplyOnSite {
+			return linksource.Resolved{Source: "linkedin", Job: prepared.Posting}, true, nil
+		}
+		return linksource.Resolved{}, false, nil
+	}
 	resolved, err := linksource.ResolveLinks(ctx, im.reg, []string{raw})
 	if err != nil {
 		return linksource.Resolved{}, false, err
+	}
+	if len(resolved) > 0 && resolved[0].Source == linksource.GenericSource && linkedInURL(resolved[0].Job.URL) {
+		// A shortener may land on LinkedIn after the input-host gate. Its JSON-LD
+		// says nothing about application ownership; retain the link for triage.
+		return linksource.Resolved{}, false, fmt.Errorf("LinkedIn redirect requires verified application ownership")
 	}
 	if len(resolved) == 0 || resolved[0].Source == linksource.GenericSource {
 		if r, ok := im.resolveOnKnownBoard(ctx, raw, known); ok {
@@ -244,6 +272,16 @@ func draftFrom(r linksource.Resolved) job.Draft {
 // ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
 // Exported so a caller that resolved via Resolve can write on its own terms (see Resolve).
 func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
+	if r.Source == linksource.GenericSource && linkedInURL(r.Job.URL) {
+		return Result{}, false, fmt.Errorf("LinkedIn posting cannot be published through generic JSON-LD")
+	}
+	if r.Board != nil {
+		if r.Source != r.Board.Provider {
+			return Result{}, false, fmt.Errorf("native destination source does not match its verified board")
+		}
+		res, err := im.WriteNative(ctx, nil, NativeDestination{Entry: *r.Board, Job: r.Job, EmployerWebsite: r.EmployerWebsite})
+		return res, err == nil, err
+	}
 	j, err := job.New(draftFrom(r))
 	if err != nil {
 		return Result{}, false, err

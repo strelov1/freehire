@@ -42,3 +42,38 @@
   Unresolved rows are reported as pending and exit nonzero. A verified curator destination
   can be transferred with `cmd/promote-job-source --slug=... --url=... --apply`; merely setting
   `application_url` does not change ownership. LinkedIn disappearance never closes the ATS.
+
+- Public full posting pages can expose `section.similar-jobs` although the guest detail
+  fragment has none. Sample `4490679811` on 2026-11-16 contained 27 cards, including the
+  entries initially hidden behind "Show more jobs like this"; 15 predated the search's
+  seven-day window. After a complete normal listing, fetch one full companion page for
+  the first readable live posting and verify its primary status, final identity and
+  canonical metadata before reading recommendations. Admit only numeric posting URNs
+  with a matching LinkedIn job link inside this section, deduplicating against every
+  primary listing page. Hydrate at most 20 additional identities through the ordinary
+  guest reader, preserving application-method classification and native ATS handoff.
+  Depth is one: recommendation pages never seed another full-page read. All requests
+  share the adapter's existing limiter. A companion failure preserves the primary crawl;
+  a recommendation refusal stops that branch and preserves earlier readable jobs.
+
+- New catalogue identities use the numeric LinkedIn posting id, independent of keyword,
+  country or link intake. The shared job upsert reuses any existing public keyword-scoped
+  row with the exact normalized native URL, preserving its id, public slug and history.
+  Cheap refresh and ATS-coverage retirement map numeric discoveries to those legacy keys.
+- The shared contribute/resolve intake uses the same application classification and native
+  ATS proof. Hidden destinations may contribute an observed employer board without
+  publishing a guessed vacancy. It never imports an unverified LinkedIn JSON-LD page as
+  a generic `weblink` posting.
+
+- On 2026-11-16, the crawl host's existing Scrapling HTTP fetcher with its proxy and
+  Chrome fingerprint read full public postings `4472812273` and `4490679811` with correct
+  canonical identities and 27 related cards each. LinkedIn therefore uses this existing
+  HTTP+proxy route when the Scrapling service is configured; `NewLinkedIn` retains its
+  one shared request limiter across search, details, profiles and recommendations.
+  The bounded probe establishes access, not sustained crawl coverage. External ATS
+  destinations remained hidden; changing User-Agent to Mobile Safari added no ATS link
+  and requires no new service option. Application-method and native-employer proof
+  remain mandatory. Without Scrapling configuration the prior transport is retained.
+  Shared API intake applies the configured tier only to its LinkedIn adapter; arbitrary
+  ATS URL resolution keeps its SSRF-guarded client. Invalid configured LinkedIn fetch
+  credentials leave that reader unavailable and its submissions queued for triage.
