@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
+	xhtml "golang.org/x/net/html"
 )
 
 // card is one posting as the public search listing presents it. The listing names the employer and
@@ -80,34 +83,12 @@ func postingExternalID(html string) string {
 
 // profileWebsite returns the employer's website (the Organization node's sameAs), or "" when the
 // profile publishes none and resolve has nothing to follow.
-func profileWebsite(html string) string {
-	for _, block := range ldJSONRe.FindAllStringSubmatch(html, -1) {
-		var doc struct {
-			Type   string          `json:"@type"`
-			SameAs json.RawMessage `json:"sameAs"`
-			Graph  []struct {
-				Type   string          `json:"@type"`
-				SameAs json.RawMessage `json:"sameAs"`
-			} `json:"@graph"`
-		}
-		if err := json.Unmarshal([]byte(block[1]), &doc); err != nil {
-			continue
-		}
-		if doc.Type == "Organization" {
-			if s := scalarString(doc.SameAs); s != "" {
-				return s
-			}
-		}
-		for _, node := range doc.Graph {
-			if node.Type != "Organization" {
-				continue
-			}
-			if s := scalarString(node.SameAs); s != "" {
-				return s
-			}
-		}
+func profileWebsite(body string) string {
+	root, err := xhtml.Parse(strings.NewReader(body))
+	if err != nil {
+		return ""
 	}
-	return ""
+	return sources.LinkedInCompanyWebsite(root)
 }
 
 // scalarString reads a JSON string, taking the first entry when the field is an array (sameAs may be

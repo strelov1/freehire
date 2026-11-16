@@ -68,7 +68,10 @@ func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, c
 	if err != nil {
 		return "", "", "", false
 	}
+	return resolveContent(html, rawURL)
+}
 
+func resolveContent(html, rawURL string) (source, board, canonical string, ok bool) {
 	// 1. Greenhouse embed (and atsdetect's own gh/lever/ashby URL scan). Trusted set only.
 	if provider, slug, ok := atsdetect.Detect(html); ok && trusted[provider] && slug != "" {
 		return provider, slug, stripTails(rawURL), true
