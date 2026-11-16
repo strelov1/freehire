@@ -38,8 +38,8 @@ func run() int {
 	defer cleanup()
 	q := db.New(pool)
 	row, err := q.GetJobBySlug(ctx, *slug)
-	if err != nil || row.IsPrivate || row.ClosedAt.Valid || row.DuplicateOf.Valid {
-		log.Printf("promote-job-source: posting must be open, public and canonical: %v", err)
+	if err != nil || row.IsPrivate || (row.ClosedAt.Valid && row.ClosedReason != linkimport.NativeSourcePendingReason) || row.DuplicateOf.Valid {
+		log.Printf("promote-job-source: posting must be public, canonical and open or awaiting native source verification: %v", err)
 		return 1
 	}
 	*raw = destinationURL(row, *raw)

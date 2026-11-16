@@ -2,16 +2,16 @@ package sources
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"golang.org/x/time/rate"
 )
 
-// joinPageSize is the list-API page size. Join's public API caps pageSize at 5; any larger
-// value is rejected with HTTP 422. Pagination is driven by pagination.pageCount.
+// joinPageSize retains the public careers UI page size. pageInfo drives pagination.
 const (
 	joinPageSize = 5
 )
@@ -20,17 +20,18 @@ const (
 // company id. The list endpoint carries no description, so each posting's body comes from its
 // own detail request (bounded-concurrency), like the SmartRecruiters and Gem adapters.
 type join struct {
-	http JSONGetter
+	http JSONPoster
 }
 
 // NewJoin builds the Join.com adapter over the given HTTP client.
-func NewJoin(c JSONGetter) Source { return join{http: c} }
+func NewJoin(c JSONPoster) Source {
+	return join{http: rateLimitedJSONPoster{inner: c, limiter: rate.NewLimiter(rate.Every(joinRequestInterval), joinRequestBurst)}}
+}
 
 func (join) Provider() string { return "join" }
 
 // Listing pages are validated through the declared end before detail reads begin.
-func (join) fullBoardListing()  {}
-func (join) emptyBoardListing() {}
+func (join) fullBoardListing() {}
 
 // joinJob is one item of the list response. The description is absent here (detail only).
 type joinJob struct {
@@ -51,28 +52,33 @@ type joinListResp struct {
 	Pagination struct {
 		PageCount *int `json:"pageCount"`
 		RowCount  *int `json:"rowCount"`
-	} `json:"pagination"`
+	} `json:"pageInfo"`
 }
 
-// joinDetail is the per-job endpoint: the Markdown body and the company slug (for the URL).
+// joinDetail holds the public posting's HTML body and company slug for its URL.
 type joinDetail struct {
-	Description string `json:"description"`
+	Description string `json:"descriptionHtml"`
 	Company     struct {
 		Domain string `json:"domain"`
 	} `json:"company"`
 }
 
 func (j join) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	companyID, err := strconv.ParseInt(e.Board, 10, 64)
+	if err != nil || companyID <= 0 {
+		return nil, fmt.Errorf("join: invalid company id %q", e.Board)
+	}
 	var items []joinJob
 	total, pages := -1, -1
 	seen := make(map[int64]bool)
 	for page := 1; ; page++ {
-		var resp joinListResp
-		url := fmt.Sprintf("https://join.com/api/public/companies/%s/jobs?page=%d&pageSize=%d",
-			e.Board, page, joinPageSize)
-		if err := j.http.GetJSON(ctx, url, &resp); err != nil {
+		var data struct {
+			PublicJobs joinListResp `json:"publicJobs"`
+		}
+		if err := j.query(ctx, joinListQuery, map[string]any{"companyId": companyID, "paginationPage": map[string]int{"page": page, "pageSize": joinPageSize}}, &data); err != nil {
 			return nil, fmt.Errorf("join: list company %s page %d: %w", e.Board, page, err)
 		}
+		resp := data.PublicJobs
 		if resp.Items == nil || resp.Pagination.PageCount == nil || resp.Pagination.RowCount == nil {
 			return nil, errListingAbsent("join", e.Board, "items/pagination")
 		}
@@ -108,18 +114,17 @@ func (j join) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one job's body and maps it to a Job, returning ok=false when the detail
-// request proves it gone. Other failures preserve the listed identity as unreadable.
+// detail fetches one job's HTML body. Failed or missing details preserve the listed
+// identity as unreadable; GraphQL null does not establish removal.
 func (j join) detail(ctx context.Context, e CompanyEntry, it joinJob) (Job, bool) {
-	var d joinDetail
-	url := fmt.Sprintf("https://join.com/api/public/jobs/%d", it.ID)
-	if err := j.http.GetJSON(ctx, url, &d); err != nil {
-		var status *StatusError
-		if errors.As(err, &status) && (status.Code == 404 || status.Code == 410) {
-			return Job{}, false
-		}
+	var data struct {
+		PublicJob *joinDetail `json:"publicJob"`
+	}
+	url := fmt.Sprintf("https://join.com/companies/%s", it.IDParam)
+	if err := j.query(ctx, joinDetailQuery, map[string]any{"id": it.ID}, &data); err != nil || data.PublicJob == nil {
 		return unreadableDetail(strconv.FormatInt(it.ID, 10), url, e.Company), true
 	}
+	d := data.PublicJob
 	if strings.TrimSpace(d.Description) == "" || d.Company.Domain == "" {
 		return unreadableDetail(strconv.FormatInt(it.ID, 10), url, e.Company), true
 	}
@@ -136,7 +141,7 @@ func (j join) detail(ctx context.Context, e CompanyEntry, it joinJob) (Job, bool
 		Title:       it.Title,
 		Company:     e.Company,
 		Location:    location,
-		Description: sanitizeHTML(markdownToHTML(d.Description)),
+		Description: sanitizeHTML(d.Description),
 		// workplaceType is the authoritative remote signal; isRemote(location) is only a
 		// fallback (never the title, which false-positives on "Remote …" role names).
 		Remote:   it.WorkplaceType == "REMOTE" || isRemote(location),
@@ -144,7 +149,7 @@ func (j join) detail(ctx context.Context, e CompanyEntry, it joinJob) (Job, bool
 	}, true
 }
 
-// markdownToHTML renders a Markdown body to HTML. Join.com job descriptions are Markdown;
+// markdownToHTML renders a Markdown body to HTML for providers publishing Markdown;
 // the rendered HTML is then sanitized so the stored description matches the "descriptions
 // are sanitized HTML" convention. A render error (or empty input) yields "".
 func markdownToHTML(md string) string {
@@ -156,4 +161,35 @@ func markdownToHTML(md string) string {
 		return ""
 	}
 	return b.String()
+}
+
+const joinGraphQLURL = "https://join.com/candidate-api/graphql"
+const joinListQuery = `query PublicJobsList($input: PublicJobsQueryInput!) {
+ publicJobs(input: $input) {
+ items { id idParam title createdAt workplaceType city { cityName countryName } }
+ pageInfo { pageCount rowCount }
+ }
+}`
+const joinDetailQuery = `query PublicJob($input: PublicJobInput!) {
+ publicJob(input: $input) { descriptionHtml company { domain } }
+}`
+
+func (j join) query(ctx context.Context, query string, input any, result any) error {
+	var response struct {
+		Data   json.RawMessage `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	err := j.http.PostJSON(ctx, joinGraphQLURL, map[string]any{"query": query, "variables": map[string]any{"input": input}}, &response)
+	if err != nil {
+		return err
+	}
+	if len(response.Errors) != 0 {
+		return fmt.Errorf("join: GraphQL: %s", response.Errors[0].Message)
+	}
+	if len(response.Data) == 0 || string(response.Data) == "null" {
+		return fmt.Errorf("join: GraphQL response has no data")
+	}
+	return json.Unmarshal(response.Data, result)
 }

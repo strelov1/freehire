@@ -6,3 +6,11 @@
 - **The posting page is a plain GET by opening id** (`Page=HRS_APP_JBPST_FL&JobOpeningId=<id>&PostingSeq=1`). The first request answers a 302 to itself that sets the session cookie, so the URL works as a public link. An opening the page does not serve lands on the SEARCH page under HTTP 200, so the page counts only when its own `HRS_SCH_WRK2_HRS_JOB_OPENING_ID` matches. Case Western lists one opening (14685) that no `PostingSeq` from 1 to 3 serves. It is deferred on every run and costs one request each time.
 - **The body is the `HRS_SCH_PSTDSC_DESCRLONG$<n>` sections** (with headings in `HRS_SCH_WRK_DESCR100$<n>lbl`), joined in order. The list's "Posted" date is M/D/YYYY on every tenant that shows one. Western University shows none.
 - **No `robots.txt` on any tenant** (each answers 404). No metering was seen at 4-way posting-page fan-out. The first crawl of Missouri's 514 postings took 9 minutes. After that a crawl is the list walk (~12 postbacks, up to 2.5 MB each) plus the new postings only.
+
+**Reposted openings, 2026-11-15:** DC opening 33966 and Winnipeg opening 125461
+are served at `PostingSeq=2`; sequence 1 and a URL with no sequence return the
+search page, while control openings still work at sequence 1. If the first detail
+response is a recognized search page, the adapter tries sequence 2 and accepts it
+only with a matching opening ID, preserving that working public URL. It does not
+retry transport failures or accept unrelated detail pages. This supports the
+measured second-sequence template; higher sequences remain unproven.

@@ -29,6 +29,9 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO boards (provider,board,company,status) VALUES ('greenhouse','acme','Acme','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// Never seen → eligible.
@@ -181,6 +184,13 @@ func TestBoardHealth_RegionDisambiguates(t *testing.T) {
 func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+INSERT INTO boards (provider,board,company,status) VALUES
+ ('greenhouse','b1','b1','active'), ('greenhouse','b2','b2','active'),
+ ('greenhouse','b3','b3','active'), ('greenhouse','b4','b4','active'),
+ ('greenhouse','b5','b5','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// Five unhealthy boards, descending failure counts so the ordering is unambiguous.
@@ -223,6 +233,12 @@ func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
 func TestBoardHealth_ChronicIsDistinctFromMerelyCooling(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+INSERT INTO boards (provider,board,company,status) VALUES
+ ('paylocity','recently-broken','Recent','active'),
+ ('paylocity','long-dead','Chronic','active')`); err != nil {
+		t.Fatal(err)
+	}
 	h := newBoardHealth(pool)
 
 	// A board that started failing recently — real API, so its last_success_at/first_seen_at

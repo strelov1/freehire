@@ -67,7 +67,7 @@ func (r DeletionRunner) run(ctx context.Context, opt RunOptions, oneWave bool) (
 					rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)
 			}
 		},
-	}, rn.processWave, rn.unreachableFallback)
+	}, rn.processWave, nil)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim deletions: %w", err)
 	}
@@ -98,11 +98,6 @@ func (rn *deletionRun) processWave(ctx context.Context, batch []Claimed) (outbox
 	}
 	delta.Deferred = len(batch) - delta.Succeeded - delta.Failed - delta.DeadLettered
 	return delta, nil
-}
-
-// unreachableFallback satisfies outbox.RunBatch; processWave never errors, so it is never called.
-func (rn *deletionRun) unreachableFallback(context.Context, Claimed) outbox.Outcome {
-	panic("search-drain: outer per-item fallback invoked, but processWave never returns an error")
 }
 
 // processBatch removes a wave as one index task, falling back to per-item removal if that fails.

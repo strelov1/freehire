@@ -18,7 +18,9 @@ WITH locked AS MATERIALIZED (
       AND j.external_id = $3
       AND j.url = $4
       AND j.application_url = $5
-      AND j.closed_at IS NULL AND NOT j.is_private AND j.duplicate_of IS NULL
+      AND (j.closed_at IS NULL OR j.closed_reason = 'native_source_pending')
+      AND NOT j.is_private AND j.duplicate_of IS NULL
+      AND j.duplicate_of_role IS NULL AND j.duplicate_of_fuzzy IS NULL AND j.duplicate_of_aggregator IS NULL
     FOR NO KEY UPDATE OF j, a
 ), moved AS (
     UPDATE jobs j

@@ -175,6 +175,8 @@ model TrackingPipeline {
 }
 
 model NotificationSettings {
+  /** Opt-in Monday summary of application activity. Uses digest_time and account timezone. */
+  application_digest_enabled: boolean;
   /** Opt-in daily summary of classified hiring mail. Uses digest_time. */
   inbox_digest_enabled: boolean;
   enabled: boolean;
@@ -191,6 +193,8 @@ model NotificationSettings {
 
 /** Every field is read as its zero value when left out. Times are `HH:MM`. */
 model NotificationSettingsUpdate {
+  /** Omitted or null preserves the current weekly application digest choice. */
+  application_digest_enabled?: boolean | null;
   /** Omitted or null preserves the current inbox digest choice. */
   inbox_digest_enabled?: boolean | null;
   /** Turn notifications on or off. */
@@ -662,6 +666,7 @@ op trackingPipeline(): Data<TrackingPipeline> | Problem;
 @opExample(#{
   returnType: #{
       data: #{
+        application_digest_enabled: false,
         inbox_digest_enabled: true,
         enabled: true,
         channels: #[
@@ -685,6 +690,7 @@ op getNotificationSettings(): Data<NotificationSettings> | Problem;
 @opExample(#{
   returnType: #{
       data: #{
+        application_digest_enabled: false,
         inbox_digest_enabled: true,
         enabled: true,
         channels: #[

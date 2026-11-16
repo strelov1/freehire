@@ -11,6 +11,16 @@ run:
 linters:
   default: standard
   enable:
+    - gosec
+    - errorlint
+    - nilerr
+    - rowserrcheck
+    - durationcheck
+    - copyloopvar
+    - usestdlibvars
+    - wastedassign
+    - testifylint
+    - thelper
     - bodyclose
     - sqlclosecheck
     - noctx

@@ -42,14 +42,15 @@ func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Sett
 		return Settings{}, err
 	}
 	return Settings{
-		Enabled:             row.Enabled,
-		InboxDigestEnabled:  row.InboxDigestEnabled,
-		Channels:            row.Channels,
-		DigestFrequency:     row.DigestFrequency,
-		DigestTime:          pgconv.DurationPtr(row.DigestTime),
-		DigestIntervalHours: int(row.DigestIntervalHours),
-		QuietHoursStart:     pgconv.DurationPtr(row.QuietHoursStart),
-		QuietHoursEnd:       pgconv.DurationPtr(row.QuietHoursEnd),
+		Enabled:                  row.Enabled,
+		InboxDigestEnabled:       row.InboxDigestEnabled,
+		ApplicationDigestEnabled: row.ApplicationDigestEnabled,
+		Channels:                 row.Channels,
+		DigestFrequency:          row.DigestFrequency,
+		DigestTime:               pgconv.DurationPtr(row.DigestTime),
+		DigestIntervalHours:      int(row.DigestIntervalHours),
+		QuietHoursStart:          pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:            pgconv.DurationPtr(row.QuietHoursEnd),
 	}, nil
 }
 
@@ -71,7 +72,7 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 			digestTime = &t
 		}
 	}
-	if s.InboxDigestEnabled && digestTime == nil {
+	if (s.InboxDigestEnabled || s.ApplicationDigestEnabled) && digestTime == nil {
 		t := notify.DefaultDigestTime
 		digestTime = &t
 	}
@@ -80,28 +81,30 @@ func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s 
 		hours = notify.DefaultIntervalHours
 	}
 	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
-		UserID:              userID,
-		Enabled:             s.Enabled,
-		InboxDigestEnabled:  s.InboxDigestEnabled,
-		Channels:            s.Channels,
-		DigestFrequency:     freq,
-		DigestTime:          pgconv.Duration(digestTime),
-		DigestIntervalHours: int16(hours),
-		QuietHoursStart:     pgconv.Duration(s.QuietHoursStart),
-		QuietHoursEnd:       pgconv.Duration(s.QuietHoursEnd),
+		UserID:                   userID,
+		Enabled:                  s.Enabled,
+		InboxDigestEnabled:       s.InboxDigestEnabled,
+		ApplicationDigestEnabled: s.ApplicationDigestEnabled,
+		Channels:                 s.Channels,
+		DigestFrequency:          freq,
+		DigestTime:               pgconv.Duration(digestTime),
+		DigestIntervalHours:      int16(hours),
+		QuietHoursStart:          pgconv.Duration(s.QuietHoursStart),
+		QuietHoursEnd:            pgconv.Duration(s.QuietHoursEnd),
 	})
 	if err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Enabled:             row.Enabled,
-		InboxDigestEnabled:  row.InboxDigestEnabled,
-		Channels:            row.Channels,
-		DigestFrequency:     row.DigestFrequency,
-		DigestTime:          pgconv.DurationPtr(row.DigestTime),
-		DigestIntervalHours: int(row.DigestIntervalHours),
-		QuietHoursStart:     pgconv.DurationPtr(row.QuietHoursStart),
-		QuietHoursEnd:       pgconv.DurationPtr(row.QuietHoursEnd),
+		Enabled:                  row.Enabled,
+		InboxDigestEnabled:       row.InboxDigestEnabled,
+		ApplicationDigestEnabled: row.ApplicationDigestEnabled,
+		Channels:                 row.Channels,
+		DigestFrequency:          row.DigestFrequency,
+		DigestTime:               pgconv.DurationPtr(row.DigestTime),
+		DigestIntervalHours:      int(row.DigestIntervalHours),
+		QuietHoursStart:          pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:            pgconv.DurationPtr(row.QuietHoursEnd),
 	}, nil
 }
 

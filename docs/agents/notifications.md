@@ -48,6 +48,26 @@ Needs migration 0269 (`release.sh` applies it). Roll out the Gmail reader guard 
 restart the existing mail-ingest daemon before enabling the new notify behavior. Preview: the `inbox-digest` sample
 in `design-system/static/email-previews/`; settings: `/my/notifications/settings`.
 
+## Weekly application summary
+
+`internal/engage/applicationdigest` runs in `cmd/notify` independently of search,
+using the same SES sender and activity unsubscribe. `application_digest_enabled`
+is a separate, explicit opt-in, defaulting false, with the same paid entitlement
+policy as the inbox summary. Missing update fields preserve existing consent.
+
+Delivery is due Monday at the existing daily `digest_time` in the account timezone.
+The summary reports seven-day application events and current application stages.
+It offers up to five follow-ups using the tracking board's silence rules, shows
+previous chase dates, and never sends mail to an employer. Unconfirmed mail
+suggestions cannot turn into a claim that the employer has not responded.
+
+Empty summaries do not claim a week. A unique user/local-week claim rechecks live
+recipient eligibility and consent before dispatch. Uncertain dispatch retains the
+claim; a definite sending pause releases it. Both inbound mail readers recognize
+the `application-digest` generated notification marker to prevent summary loops.
+Apply migration 0279 before the new readers, and deploy the Gmail guard and restart
+mail-ingest before enabling delivery, as with the inbox summary.
+
 ## Always true
 
 - **Every subscription with something pending gets served in a pass — the claim is capped

@@ -172,7 +172,7 @@ func parseMessage(raw []byte) (Message, error) {
 			m.Draft = true
 		}
 	}
-	m.SystemNotification = headerValue(gm.Payload.Headers, mailmeta.NotificationHeader) == mailmeta.InboxDigest && headerValue(gm.Payload.Headers, "Auto-Submitted") == "auto-generated"
+	m.SystemNotification = mailmeta.IsDigest(headerValue(gm.Payload.Headers, mailmeta.NotificationHeader), headerValue(gm.Payload.Headers, "Auto-Submitted"))
 	m.ToAddrs = headerValue(gm.Payload.Headers, "To")
 	m.CcAddrs = headerValue(gm.Payload.Headers, "Cc")
 

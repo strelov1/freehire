@@ -439,6 +439,8 @@ type Querier interface {
 	// The claim returns the job's external_id and url because the fetcher needs the posting
 	// id and the exact stored URL to hit the same page the ingest write recorded.
 	ClaimAdzunaDescriptionBatch(ctx context.Context, arg ClaimAdzunaDescriptionBatchParams) ([]ClaimAdzunaDescriptionBatchRow, error)
+	// Recheck live consent and recipient eligibility immediately before reserving the week.
+	ClaimApplicationDigest(ctx context.Context, arg ClaimApplicationDigestParams) (int64, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimSemanticBatch: FOR UPDATE OF o locks only outbox rows (a bare
 	// FOR UPDATE would also lock jobs, making concurrent claim waves contend), SKIP LOCKED
@@ -2741,6 +2743,8 @@ type Querier interface {
 	// MCP server reads it so an agent can only subscribe on a channel that will deliver,
 	// instead of creating a subscription whose matches are soft-skipped forever.
 	GetAlertChannelState(ctx context.Context, id int64) (GetAlertChannelStateRow, error)
+	// Live, unretracted ledger facts; the current board is deliberately a separate view.
+	GetApplicationDigestSnapshot(ctx context.Context, arg GetApplicationDigestSnapshotParams) (GetApplicationDigestSnapshotRow, error)
 	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
 	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
 	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
@@ -4022,6 +4026,10 @@ type Querier interface {
 	// posting that has since been recognised as a recruiter's, and report how many it
 	// declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
+	// Keyset pagination lets the worker skip empty snapshots without starving later accounts.
+	ListApplicationDigestCandidates(ctx context.Context, arg ListApplicationDigestCandidatesParams) ([]ListApplicationDigestCandidatesRow, error)
+	// Mirror the board's activity clock: a candidate's chase or stage edit is not a reply.
+	ListApplicationDigestSilentCandidates(ctx context.Context, arg ListApplicationDigestSilentCandidatesParams) ([]ListApplicationDigestSilentCandidatesRow, error)
 	// One application's live events, newest first — what the application panel renders as its
 	// history, where ListApplicationEventsInRange paints a month for the calendar.
 	//
@@ -4371,6 +4379,7 @@ type Querier interface {
 	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
 	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
 	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	// Only scheduled (active/pending) catalog identities participate; history stays in health.
 	//
 	// No differently-cased-twin guard here any more: board_health's identity is
 	// case-insensitive as of migration 0171 (board_health_identity_key), so two rows for the
@@ -5666,7 +5675,7 @@ type Querier interface {
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
 	// boards are broken without a second round trip and without naming them all. Ask this table
-	// directly for the rest.
+	// directly for the rest. Only scheduled (active/pending) catalog identities participate.
 	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
 	// The reconciler's first pass: events recorded but never applied, oldest first, served by
 	// the partial index on (received_at) WHERE processed_at IS NULL.
@@ -5947,6 +5956,7 @@ type Querier interface {
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
 	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
+	MarkApplicationDigestSent(ctx context.Context, arg MarkApplicationDigestSentParams) (int64, error)
 	// Park an attempt the sidecar could not fully resolve: record which fields stopped it and
 	// why, and leave the lease in place. Unlike RecordAutoApplyFailure this is not a retry
 	// countdown — a parked attempt needs new data, not another try — so attempts is left
@@ -6444,7 +6454,7 @@ type Querier interface {
 	// yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
 	// outlive the boards they describe, so a provider whose boards were all retired or rejected
 	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
-	// nobody runs any more.
+	// nobody runs any more. Each health identity must match an active catalog identity.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of
@@ -7229,6 +7239,8 @@ type Querier interface {
 	// usable destination on any configured channel) is retried promptly on a later
 	// pass instead of waiting out the lease.
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
+	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
+	ReleasePausedApplicationDigest(ctx context.Context, arg ReleasePausedApplicationDigestParams) error
 	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
 	ReleasePausedInboxDigest(ctx context.Context, arg ReleasePausedInboxDigestParams) error
 	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no
@@ -8127,6 +8139,7 @@ type Querier interface {
 	// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
 	// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
 	StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error)
+	StoredJobDescriptions(ctx context.Context, arg StoredJobDescriptionsParams) ([]StoredJobDescriptionsRow, error)
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//

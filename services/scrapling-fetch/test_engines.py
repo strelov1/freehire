@@ -341,3 +341,27 @@ def test_a_transport_error_on_every_attempt_is_a_fetch_error():
     )
     with pytest.raises(FetchError):
         asyncio.run(fetch(FetchRequest(url="https://ex.com", proxy=True)))
+
+
+def test_http_redirect_to_metadata_is_never_followed():
+    class Redirect:
+        status = 302
+        url = "https://public.example/jobs"
+        headers = {"Location": "http://169.254.169.254/latest/meta-data/"}
+        body = b""
+
+    calls = []
+
+    def send(method):
+        async def request(url, **kwargs):
+            calls.append(url)
+            assert kwargs["follow_redirects"] is False
+            return Redirect()
+
+        return request
+
+    fetch = http_fetcher(ProxyConfig(None, []), send=send)
+    result = asyncio.run(fetch(FetchRequest(url=Redirect.url)))
+    assert result.status == 302
+    assert result.headers["Location"] == Redirect.headers["Location"]
+    assert calls == [Redirect.url]

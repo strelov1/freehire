@@ -20,7 +20,14 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { getTrackedApplication } = vi.hoisted(() => ({ getTrackedApplication: vi.fn() }));
+const { getTrackedApplication, openApplyChat } = vi.hoisted(() => ({
+  getTrackedApplication: vi.fn(),
+  openApplyChat: vi.fn(),
+}));
+vi.mock('#lib/assistant/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/assistant/api.js')>()),
+  openApplyChat,
+}));
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication }, isPlanRefusal: () => false }));
 
 const job = {
@@ -63,6 +70,7 @@ const props = (over: Partial<MyJob> = {}) => ({
 });
 
 beforeEach(() => {
+  openApplyChat.mockReset().mockRejectedValue(new Error('chat unavailable'));
   getTrackedApplication.mockReset().mockResolvedValue({
     job,
     emails: [],
@@ -195,4 +203,68 @@ it('opens Application for a removed posting even when the deep link requests Pro
   expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true');
   expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
   expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('opens the application chat directly in Progress and retries a failed opening without a form', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  expect(await screen.findByText('chat unavailable')).toBeTruthy();
+  expect(openApplyChat).toHaveBeenCalledWith(job.public_slug);
+  expect(screen.queryByRole('textbox')).toBeNull();
+  await fireEvent.click(screen.getByRole('button', { name: 'Попробовать снова' }));
+  await waitFor(() => expect(openApplyChat).toHaveBeenCalledTimes(2));
+});
+
+it('keeps the application conversation mounted across drawer tabs', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  const chatError = await screen.findByText('chat unavailable');
+  await fireEvent.click(screen.getByRole('tab', { name: 'Описание' }));
+  expect(chatError.isConnected).toBe(true);
+  await fireEvent.click(screen.getByRole('tab', { name: 'Прогресс' }));
+  expect(await screen.findByText('chat unavailable')).toBe(chatError);
+  expect(openApplyChat).toHaveBeenCalledTimes(1);
+});
+
+it('reconciles the board after retrying an unsuccessful application reload', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  const onautoapplyreview = vi.fn();
+  render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'approved', queue_id: 1 },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => expect(onautoapplyreview).toHaveBeenCalledWith('approved'));
+});
+
+it('ignores a late application response after the drawer is closed', async () => {
+  let finish = () => {};
+  getTrackedApplication.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({ job, emails: [], events: [], auto_apply: { status: 'approved', queue_id: 1 } });
+      }),
+  );
+  const onautoapplyreview = vi.fn();
+  const drawer = render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  await waitFor(() => expect(getTrackedApplication).toHaveBeenCalledTimes(1));
+  drawer.unmount();
+  finish();
+  await Promise.resolve();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
 });

@@ -47,6 +47,9 @@ func TestCountingClientSeparatesRefusalsFromOtherFailures(t *testing.T) {
 
 	dead := newCountingClient(erroringClient{err: errors.New("dial tcp: i/o timeout")})
 	_ = dead.GetJSON(context.Background(), "u", nil)
+	if got := dead.answered(); got != 0 {
+		t.Errorf("dead host answered = %d, want 0", got)
+	}
 	if got := dead.refused(); got != 0 {
 		t.Errorf("a timeout is not a refusal, refused = %d, want 0", got)
 	}

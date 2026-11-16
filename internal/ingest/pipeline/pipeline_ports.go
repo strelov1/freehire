@@ -256,3 +256,10 @@ type CooledBoard struct {
 	Board  string
 	Region string
 }
+
+// StoredBodyBatchLookup reads a bounded buffered batch before normalization. On failure the
+// pipeline falls back to StoredBodyLookup, preserving per-posting retry and refresh behavior.
+type StoredBodyBatchLookup interface {
+	StoredBodyLookup
+	StoredDescriptions(ctx context.Context, source string, externalIDs []string) (map[string]string, error)
+}

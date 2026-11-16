@@ -234,3 +234,49 @@ func TestPageupFetchDetailFailureLeavesDescriptionEmptyRatherThanDroppingTheJob(
 		t.Errorf("Description = %q, want empty", jobs[0].Description)
 	}
 }
+
+func TestPageupNorthMemorialCustomRoute(t *testing.T) {
+	const path = "/nmh/en-us/job/514883/environmental-services-aide"
+	fixture := `<a class="job-link" href="` + path + `">Environmental Services Aide</a><span class="location">Robbinsdale</span><p class="summary">Teaser</p>`
+	fake := &fakePageup{search: fmt.Sprintf(`{"count":1,"results":%q}`, fixture+fixture), detail: map[string]string{
+		"https://jobs.northmemorial.com" + path: `{"results":"<div id=\"job-details\"><p>Real hospital posting.</p></div>"}`,
+	}}
+	jobs, err := NewPageUp(fake).Fetch(context.Background(), CompanyEntry{Board: "1023", Company: "1023"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs=%+v err=%v", jobs, err)
+	}
+	if jobs[0].ExternalID != "514883" || jobs[0].Company != "1023" || jobs[0].Description != "<p>Real hospital posting.</p>" {
+		t.Fatalf("job=%+v", jobs[0])
+	}
+	if len(fake.calls) != 2 || fake.calls[0] != "https://jobs.northmemorial.com/nmh/en-us/search/?page-items=1000" {
+		t.Fatalf("calls=%v", fake.calls)
+	}
+}
+
+func TestPageupIncompleteListingFails(t *testing.T) {
+	for _, fragment := range []string{"<p>Changed markup</p>", pageupListFixture} {
+		fake := &fakePageup{search: fmt.Sprintf(`{"count":2,"results":%q}`, fragment)}
+		jobs, err := NewPageUp(fake).Fetch(context.Background(), CompanyEntry{Board: "391"})
+		if err == nil || len(jobs) != 0 || len(fake.calls) != 1 {
+			t.Fatalf("jobs=%v err=%v calls=%v", jobs, err, fake.calls)
+		}
+	}
+}
+
+func TestPageupNorthMemorialMissingCountFails(t *testing.T) {
+	fake := &fakePageup{search: `{"results":""}`}
+	if _, err := NewPageUp(fake).Fetch(context.Background(), CompanyEntry{Board: "1023"}); err == nil {
+		t.Fatal("missing envelope count succeeded")
+	}
+}
+
+func TestPageupAdjacentResponsiveLinksKeepMetadata(t *testing.T) {
+	link := `<a class="job-link" href="/nmh/en-us/job/514883/environmental-services-aide">Environmental Services Aide</a>`
+	jobs, err := pageupParseListing(link+link+`<span class="location">Maple Grove, MN</span><p class="summary">Hospital posting</p>`, "1023")
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs=%v err=%v", jobs, err)
+	}
+	if jobs[0].Location != "Maple Grove, MN" || jobs[0].Description != "Hospital posting" {
+		t.Fatalf("metadata lost: %+v", jobs[0])
+	}
+}

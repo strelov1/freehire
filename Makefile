@@ -109,3 +109,9 @@ cover-integration: ## Integration-tagged tests with coverage (needs Docker for t
 	go test -tags=integration ./... -coverprofile=$(COVER_INTEGRATION) -covermode=atomic
 	@go tool cover -func=$(COVER_INTEGRATION) | tail -1
 	@echo "profile: $(COVER_INTEGRATION)"
+
+# CI uses this same entry point; go run builds with the module toolchain.
+LINT_VERSION ?= 2.15.0
+.PHONY: lint
+lint: ## Run the pinned linter against origin/main
+	GOTOOLCHAIN=$$(awk '/^toolchain / {print $$2}' go.mod) go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(LINT_VERSION) run --new-from-merge-base=origin/main --allow-parallel-runners ./...

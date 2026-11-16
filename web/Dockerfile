@@ -13,7 +13,7 @@
 # --- design-system build stage ---
 # Must build before web — web's file:../design-system dependency links here.
 FROM node:24-alpine AS ds-build
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 WORKDIR /design-system
 COPY design-system/package.json design-system/pnpm-lock.yaml design-system/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -22,7 +22,7 @@ RUN pnpm build
 
 # --- web build stage ---
 FROM node:24-alpine AS build
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 WORKDIR /src
 # The file:../design-system dependency resolves to /design-system from WORKDIR /src.
 COPY --from=ds-build /design-system /design-system

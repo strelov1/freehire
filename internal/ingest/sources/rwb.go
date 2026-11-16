@@ -19,7 +19,7 @@ const (
 	rwbListURL    = "https://career.rwb.ru/crm-api/api/v1/pub/vacancies?limit=%d&offset=%d"
 	rwbDetailURL  = "https://career.rwb.ru/crm-api/api/v1/pub/vacancies/%d"
 	rwbVacancyURL = "https://career.rwb.ru/vacancies/%d"
-	rwbPageSize   = 200
+	rwbPageSize   = 50 // The API returns at most 50 even when range.limit echoes a larger request.
 )
 
 // NewRWB builds the Wildberries adapter over the given HTTP client.

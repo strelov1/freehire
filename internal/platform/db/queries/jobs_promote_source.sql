@@ -11,7 +11,9 @@ WITH locked AS MATERIALIZED (
       AND j.external_id = sqlc.arg(expected_external_id)
       AND j.url = sqlc.arg(expected_url)
       AND j.application_url = sqlc.arg(expected_application_url)
-      AND j.closed_at IS NULL AND NOT j.is_private AND j.duplicate_of IS NULL
+      AND (j.closed_at IS NULL OR j.closed_reason = 'native_source_pending')
+      AND NOT j.is_private AND j.duplicate_of IS NULL
+      AND j.duplicate_of_role IS NULL AND j.duplicate_of_fuzzy IS NULL AND j.duplicate_of_aggregator IS NULL
     FOR NO KEY UPDATE OF j, a
 ), moved AS (
     UPDATE jobs j

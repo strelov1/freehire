@@ -14,7 +14,7 @@ export type ReauthReturnPath = '/my/integrations/api-keys' | '/my/api/keys' | '/
 //
 // Reading is also not safe in a browser: Safari with site data blocked THROWS on access
 // rather than answering null, which is why `typeof` alone is not the guard. Same shape as
-// autoApplyPauseStorage.ts and cvRefreshOffer.ts.
+// cvRefreshOffer.ts.
 //
 // Every read degrades to "nothing carried, no proof held" — the correct reading on a
 // server and in a locked-down browser alike. Writes deliberately do NOT degrade: see
