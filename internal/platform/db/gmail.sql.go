@@ -388,6 +388,17 @@ func (q *Queries) GetInterviewInvitation(ctx context.Context, arg GetInterviewIn
 	return i, err
 }
 
+const gmailCooldownUntil = `-- name: GmailCooldownUntil :one
+SELECT gmail_retry_after FROM gmail_connections WHERE user_id = $1
+`
+
+func (q *Queries) GmailCooldownUntil(ctx context.Context, userID int64) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, gmailCooldownUntil, userID)
+	var gmail_retry_after pgtype.Timestamptz
+	err := row.Scan(&gmail_retry_after)
+	return gmail_retry_after, err
+}
+
 const listConnectedGmailUsers = `-- name: ListConnectedGmailUsers :many
 SELECT user_id, email, sync_cursor, sent_sync_cursor
 FROM gmail_connections
@@ -824,6 +835,15 @@ func (q *Queries) RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setGmailCooldown = `-- name: SetGmailCooldown :exec
+UPDATE gmail_connections SET gmail_retry_after = now() + interval '1 hour' WHERE user_id = $1
+`
+
+func (q *Queries) SetGmailCooldown(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, setGmailCooldown, userID)
+	return err
 }
 
 const setGmailStatus = `-- name: SetGmailStatus :exec

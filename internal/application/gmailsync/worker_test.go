@@ -24,16 +24,21 @@ func testCipher(t *testing.T) *tokencrypt.Cipher {
 }
 
 type fakeStore struct {
-	conns          []Connection
-	encToken       string
-	upserted       []StoredEmail
-	upsertErrIDs   map[string]bool // message ids on which UpsertEmail fails
-	syncedSent     int64
-	knownThreads   []string
-	syncedCursor   int64
-	syncedCalled   bool
-	reconsentUsers []int64
-	reconsentErr   error
+	cooldown          time.Time
+	cooldownReadErr   error
+	cooldownWriteErr  error
+	conns             []Connection
+	encToken          string
+	upserted          []StoredEmail
+	upsertErrIDs      map[string]bool // message ids on which UpsertEmail fails
+	syncedSent        int64
+	knownThreads      []string
+	knownThreadsErr   error
+	knownThreadsCalls int
+	syncedCursor      int64
+	syncedCalled      bool
+	reconsentUsers    []int64
+	reconsentErr      error
 }
 
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
@@ -60,7 +65,8 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 }
 
 func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
-	return f.knownThreads, nil
+	f.knownThreadsCalls++
+	return f.knownThreads, f.knownThreadsErr
 }
 
 // StoredMessages answers from what this fake has upserted, leaving out rows with no recipients
@@ -371,7 +377,6 @@ func TestRunOnceDoesNotDisconnectOverATransientFailure(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"rate limit", &APIError{Op: "gmail: list", StatusCode: 429, Status: "429 Too Many Requests"}},
 		{"provider fault", &APIError{Op: "gmail: list", StatusCode: 503, Status: "503 Service Unavailable"}},
 		{"connection reset", errors.New("read tcp: connection reset by peer")},
 		{"run cancelled", context.Canceled},
@@ -565,13 +570,18 @@ func TestRunOnceResumesAThrottledSyncWithoutRefetchingStoredMessages(t *testing.
 	}
 	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
 
-	if stats, _ := w.RunOnce(context.Background()); stats.Failed != 1 {
-		t.Fatalf("first run stats = %+v, want the throttled connection counted as failed", stats)
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 {
+		t.Fatalf("first run stats = %+v, want the connection counted as throttled", stats)
 	}
 	if store.syncedCursor != 0 {
 		t.Fatalf("cursor after the throttled run = %d, want 0", store.syncedCursor)
 	}
 
+	reader.gets = nil
+	if stats, _ := w.RunOnce(context.Background()); stats.Throttled != 1 || len(reader.gets) != 0 {
+		t.Fatalf("cooldown made API calls: %+v %v", stats, reader.gets)
+	}
+	store.cooldown = time.Time{}
 	delete(reader.getErrIDs, "m2")
 	reader.gets = nil
 	stats, err := w.RunOnce(context.Background())
@@ -615,5 +625,60 @@ func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
 	}
 	if last := store.upserted[len(store.upserted)-1].Message; last.Direction != DirectionOutgoing {
 		t.Errorf("re-stored m1 direction = %q, want outgoing", last.Direction)
+	}
+}
+
+func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) {
+	return f.cooldown, f.cooldownReadErr
+}
+func (f *fakeStore) SetCooldown(context.Context, int64) error {
+	if f.cooldownWriteErr != nil {
+		return f.cooldownWriteErr
+	}
+	f.cooldown = time.Now().Add(time.Hour)
+	return nil
+}
+
+func TestThrottlePersistsCooldownBeforeThreadDiscovery(t *testing.T) {
+	c := testCipher(t)
+	enc, err := c.Encrypt("refresh-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc, knownThreadsErr: errors.New("thread storage unavailable")}
+	reader := &fakeReader{ids: []string{"limited"}, getErrIDs: map[string]error{"limited": &APIError{StatusCode: http.StatusForbidden, Reason: "rateLimitExceeded"}}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Throttled != 1 || store.cooldown.IsZero() || store.knownThreadsCalls != 0 || store.syncedCalled {
+		t.Fatalf("stats=%+v cooldown=%v threadCalls=%d synced=%v", stats, store.cooldown, store.knownThreadsCalls, store.syncedCalled)
+	}
+}
+
+func TestCooldownFailuresRemainVisible(t *testing.T) {
+	for _, stage := range []string{"read", "write"} {
+		t.Run(stage, func(t *testing.T) {
+			c := testCipher(t)
+			enc, _ := c.Encrypt("refresh")
+			store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc}
+			failure := errors.New("cooldown storage unavailable")
+			if stage == "read" {
+				store.cooldownReadErr = failure
+			} else {
+				store.cooldownWriteErr = failure
+			}
+			reader := &fakeReader{listErr: &APIError{StatusCode: 429}}
+			calls := 0
+			w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { calls++; return reader })
+			stats, err := w.RunOnce(context.Background())
+			if err != nil || stats.Failed != 1 || stats.Throttled != 0 || store.syncedCalled {
+				t.Fatalf("stats=%+v err=%v", stats, err)
+			}
+			if stage == "read" && calls != 0 {
+				t.Fatal("queried Gmail despite unreadable cooldown")
+			}
+		})
 	}
 }

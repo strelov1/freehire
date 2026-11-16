@@ -2,6 +2,7 @@ package gmailsync
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -99,4 +100,15 @@ func (s *DBStore) StoredMessages(ctx context.Context, userID int64, ids []string
 		out[r.ExternalID] = StoredRef{ThreadID: r.ThreadID, ReceivedAt: r.ReceivedAt.Time, Incoming: r.Direction != DirectionOutgoing}
 	}
 	return out, nil
+}
+
+func (s *DBStore) CooldownUntil(ctx context.Context, userID int64) (time.Time, error) {
+	v, err := s.q.GmailCooldownUntil(ctx, userID)
+	if v.InfinityModifier != 0 {
+		return time.Time{}, err
+	}
+	return v.Time, err
+}
+func (s *DBStore) SetCooldown(ctx context.Context, userID int64) error {
+	return s.q.SetGmailCooldown(ctx, userID)
 }

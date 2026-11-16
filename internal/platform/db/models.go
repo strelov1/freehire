@@ -907,6 +907,7 @@ type GmailConnection struct {
 	Scopes                []string           `json:"scopes"`
 	MentorBusySyncOptedIn bool               `json:"mentor_busy_sync_opted_in"`
 	SentSyncCursor        int64              `json:"sent_sync_cursor"`
+	GmailRetryAfter       pgtype.Timestamptz `json:"gmail_retry_after"`
 }
 
 type InboxDigestDelivery struct {

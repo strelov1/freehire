@@ -3545,6 +3545,7 @@ type Querier interface {
 	// unverified account should be told to confirm its address rather than that somebody
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
+	GmailCooldownUntil(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	// Move one reward to granted at the amount it is worth today, if the referrer is below the
 	// ceiling.
 	//
@@ -7850,6 +7851,7 @@ type Querier interface {
 	// So the insert writes the never-configured default explicitly. A row created by
 	// this statement leaves the account receiving precisely what it received before.
 	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
+	SetGmailCooldown(ctx context.Context, userID int64) error
 	// A move to 'needs_reconsent' also clears mentor_busy_sync_opted_in — every caller
 	// (gmail-sync, cal-sync, mentor-calendar-write, mentor-busy-sync) marks that status only
 	// when this account's ONE shared refresh token has failed, and the flag exists solely to

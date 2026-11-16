@@ -416,3 +416,9 @@ SELECT coalesce(status_signal, '')::text AS label,
 FROM emails
 WHERE user_id = $1 AND deleted_at IS NULL
 GROUP BY 1;
+
+-- name: GmailCooldownUntil :one
+SELECT gmail_retry_after FROM gmail_connections WHERE user_id = $1;
+
+-- name: SetGmailCooldown :exec
+UPDATE gmail_connections SET gmail_retry_after = now() + interval '1 hour' WHERE user_id = $1;

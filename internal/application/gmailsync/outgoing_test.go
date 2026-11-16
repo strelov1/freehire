@@ -163,7 +163,7 @@ func TestRateLimitStopsTheWaveWithoutDisconnecting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(store.reconsentUsers) != 0 || len(store.upserted) != 0 || store.syncedCursor != 100 || stats.Synced != 0 {
+	if len(store.reconsentUsers) != 0 || len(store.upserted) != 0 || store.syncedCalled || stats.Throttled != 1 || stats.Failed != 0 {
 		t.Fatalf("rate limit disconnected or kept reading: reconsent=%v stored=%d cursor=%d stats=%+v", store.reconsentUsers, len(store.upserted), store.syncedCursor, stats)
 	}
 }
