@@ -28,11 +28,15 @@
   import CvHtmlPreview from '#lib/tailor/CvHtmlPreview.svelte';
   import ExperiencePanel from './ExperiencePanel.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
-  import { ConfirmDialog } from '#lib/ui/index.js';
-  import { fitToWidthZoom } from '#lib/cvGeometry.js';
+  import { isLeftView, leftTabs, mobileTabsFor, type LeftTab, type MobileView } from './workspaceTabs';
+  import { PreviewZoom } from './previewZoom.svelte';
+  import GapsDownloadDialog from './GapsDownloadDialog.svelte';
+  import ResetCvDialog from './ResetCvDialog.svelte';
+  import { revealGap } from './revealGap';
+  import { Headshot } from './headshot.svelte';
+  import { readAtsDelta, readCvFonts, readJobMatch } from './workspaceReads';
   import { CvRevisions } from './cvRevisions.svelte';
   import LeftPanelBar from './LeftPanelBar.svelte';
-  import { revealSelection } from './revealSelection';
   import { workspaceOpenError } from './workspaceOpenError';
   import PanelSplitter from './PanelSplitter.svelte';
   import PreviewToolbar from './PreviewToolbar.svelte';
@@ -118,16 +122,7 @@
 
   // Left panel: which tab is shown, and its resizable width. The chat stays mounted across tab
   // switches (hidden, not unmounted) so its live session is never dropped.
-  // The left panel holds what CHANGES the document — its text, its template, its typography —
-  // and the chat that does all three by asking. Measuring the document is the right panel's job.
-  type LeftTab = 'chat' | 'editor' | 'experience' | 'design';
   let leftTab = $state<LeftTab>('chat');
-  const leftTabs: [LeftTab, string][] = [
-    ['chat', 'Chat'],
-    ['editor', 'Editor'],
-    ['experience', 'Experience'],
-    ['design', 'Design'],
-  ];
   let leftWidth = $state(350);
   // Folded to a rail so the centre CV preview can take the width. Desktop-only: below lg the
   // columns already show one at a time, and collapsing there would hide a view with no way back.
@@ -141,41 +136,8 @@
     baseCvId !== undefined ? 'history' : 'jobmatch',
   );
 
-  // Mobile-only navigation: below lg the three columns collapse to one, so a single flat tab bar
-  // picks which view fills the screen. At lg it's hidden and every column shows at once as before.
-  // mobileView is the sole source of truth for per-region visibility on mobile; picking a tab also
-  // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
-  // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
-  // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView =
-    | 'chat'
-    | 'editor'
-    | 'experience'
-    | 'design'
-    | 'preview'
-    | 'jd'
-    | 'jobmatch'
-    | 'score'
-    | 'letter'
-    | 'history';
-  const allMobileTabs: [MobileView, string][] = [
-    ['chat', 'Chat'],
-    ['editor', 'Editor'],
-    ['experience', 'Experience'],
-    ['design', 'Design'],
-    ['preview', 'Preview'],
-    ['jobmatch', 'Job Match'],
-    ['score', 'ATS'],
-    ['letter', 'Letter'],
-    ['history', 'History'],
-    ['jd', 'Job'],
-  ];
-  // The vacancy panes do not exist in base mode: only the history remains of the right panel.
-  const mobileTabs = $derived(
-    baseMode
-      ? allMobileTabs.filter(([id]) => id !== 'jobmatch' && id !== 'score' && id !== 'letter' && id !== 'jd')
-      : allMobileTabs,
-  );
+  // Mobile-only navigation: one flat tab bar below lg (see mobileTabs.ts).
+  const mobileTabs = $derived(mobileTabsFor(baseMode));
   // Defaults to the same tab the desktop right panel opens on (artifactTab above), so a
   // cold start's match-analysis animation is the first thing a mobile visitor sees too,
   // not hidden behind Chat.
@@ -186,28 +148,12 @@
   let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
-    if (v === 'chat' || v === 'editor' || v === 'experience' || v === 'design') leftTab = v;
+    if (isLeftView(v)) leftTab = v;
     else if (v !== 'preview') artifactTab = v;
   }
 
-  // Centre preview zoom. It opens fitted to the column's width, so the whole sheet is readable
-  // whatever the window or the side panels leave; the + and − buttons then step in 10% from
-  // there (50–150%), and the percentage puts it back to fit. A fixed 80% start used to promise
-  // this and overflowed the column at 1440px with both panels open.
-  const SCROLLER_PADDING = 48; // the scroller's p-6, both sides
-  let previewWidth = $state(0);
-  let fitMode = $state(true);
-  let manualZoom = $state(0.8);
-  const fitZoom = $derived(fitToWidthZoom(previewWidth - SCROLLER_PADDING));
-  const zoom = $derived(fitMode ? fitZoom : manualZoom);
-  const zoomPct = $derived(Math.round(zoom * 100));
-  const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
-  const setZoom = (z: number) => {
-    manualZoom = clampZoom(z);
-    fitMode = false;
-  };
-  const zoomOut = () => setZoom(zoom - 0.1);
-  const zoomIn = () => setZoom(zoom + 0.1);
+  // Centre preview zoom (see PreviewZoom).
+  const preview = new PreviewZoom();
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
   // Readiness of the PDF, the one thing here the seeker actually sends. The page count comes
@@ -215,7 +161,6 @@
   // would print verbatim, so the download stops to say so rather than letting it go out.
   let pageCount = $state<number | null>(null);
   const placeholders = $derived(findPlaceholders(doc));
-  const placeholderTokens = $derived([...new Set(placeholders.map((p) => p.token))]);
   let placeholdersShown = $state(false);
   const showingPlaceholders = $derived(placeholdersShown && placeholders.length > 0);
   let confirmDownloadOpen = $state(false);
@@ -237,25 +182,7 @@
     leftCollapsed = false;
     pickMobile('editor');
     await tick();
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const behavior = reduce ? 'auto' : 'smooth';
-    // The hidden measurement layer renders the same marks, so skip anything inside it.
-    const mark = Array.from(previewScroller?.querySelectorAll('.cv-lit') ?? []).find(
-      (el) => !el.closest('[aria-hidden="true"]'),
-    );
-    mark?.scrollIntoView({ block: 'center', behavior });
-    const field = leftPanelEl?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `[data-path="${CSS.escape(gap.path)}"]`,
-    );
-    announce(`Gap ${gapCursor} of ${placeholders.length}: ${gap.token}`);
-    // A run locks the form (a disabled field takes no focus); the underline still shows where.
-    if (!field || field.disabled) return;
-    field.scrollIntoView({ block: 'center', behavior });
-    field.focus({ preventScroll: true });
-    const at = field.value.indexOf(gap.token);
-    if (at < 0) return;
-    field.setSelectionRange(at, at + gap.token.length);
-    revealSelection(field, at);
+    revealGap(gap, previewScroller, leftPanelEl, `Gap ${gapCursor} of ${placeholders.length}: ${gap.token}`);
   }
 
   function guardDownload(e: MouseEvent) {
@@ -264,26 +191,8 @@
     confirmDownloadOpen = true;
   }
 
-  // The member's headshot, for the templates that print one. Read once here rather than inside
-  // the preview: the photo belongs to the profile, not to the CV being edited, and the same URL
-  // feeds every template switch. Null while unknown, absent, or unconfigured — the preview then
-  // draws the placeholder, exactly as the PDF does.
-  let photoSrc = $state<string | null>(null);
-  $effect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const meta = await api.getPhoto();
-        if (cancelled || !meta.present) return;
-        photoSrc = `/api/v1/me/photo/image?v=${encodeURIComponent(meta.uploaded_at ?? '')}`;
-      } catch {
-        // Best-effort: without it the preview shows the placeholder.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  });
+  // The member's headshot, for the templates that print one (see Headshot).
+  const headshot = new Headshot();
 
   // Offered whenever the conversation is empty — the chat renders them only then. A CV opened
   // by id can carry a conversation nobody has spoken to, and that case looked like lost history.
@@ -303,27 +212,15 @@
   }
   const loadCv = async () => hydrate(await api.getCv(cvId));
 
-  // Read the ATS delta for the current CV. Never throws: the workspace must load and edit
-  // whether or not the comparison is available, and a failed read is the same absence as an
-  // unavailable one.
+  // The two scores, re-read after every change that moves them (see workspaceReads.ts).
   async function refreshAtsDelta() {
     if (baseMode) return; // a base has no baseline to be compared against
-    try {
-      atsDelta = await api.getCvAtsDelta(cvId);
-    } catch {
-      atsDelta = null;
-    }
+    atsDelta = await readAtsDelta(cvId);
   }
 
-  // Read the job-match score for the current CV. Never throws, for the same reason the delta
-  // does not: the workspace must load and edit whether or not the score is available.
   async function refreshJobMatch() {
     if (baseMode) return; // no vacancy to match against
-    try {
-      jobMatch = await api.getCvJobMatch(cvId);
-    } catch {
-      jobMatch = null;
-    }
+    jobMatch = await readJobMatch(cvId);
   }
 
   // Shared tail of every path that reaches a usable workspace (resume or bootstrap): flips to
@@ -335,12 +232,7 @@
     void refreshAtsDelta();
     void refreshJobMatch();
     void history.load();
-    // Not awaited either: an empty list only means the font picker has nothing to offer yet,
-    // and the preview falls back to the template's own face meanwhile.
-    void api
-      .listCvFonts()
-      .then((f) => (fonts = f))
-      .catch(() => {});
+    void readCvFonts().then((f) => (fonts = f));
   }
 
   // Applies a tailoring bootstrap's result (fresh or retried) to the page state and settles
@@ -623,9 +515,7 @@
         bind:this={leftPanelEl}
         class={[
           'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none',
-          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'experience' || mobileView === 'design'
-            ? 'flex'
-            : 'hidden',
+          isLeftView(mobileView) ? 'flex' : 'hidden',
           leftCollapsed ? 'lg:hidden' : 'lg:flex',
         ]}
         style="--lw: {leftWidth}px"
@@ -684,23 +574,23 @@
         class={['min-w-0 min-h-0 flex-1 flex-col bg-muted/30 lg:flex', mobileView === 'preview' ? 'flex' : 'hidden']}
       >
         <PreviewToolbar
-          {zoomPct}
-          bind:fitMode
+          zoomPct={preview.zoomPct}
+          bind:fitMode={preview.fitMode}
           {pageCount}
           {placeholders}
           {pdfUrl}
-          onzoomin={zoomIn}
-          onzoomout={zoomOut}
+          onzoomin={() => preview.zoomIn()}
+          onzoomout={() => preview.zoomOut()}
           ongap={() => goToGap()}
           ondownload={guardDownload}
         />
-        <div bind:this={previewScroller} bind:clientWidth={previewWidth} class="min-h-0 flex-1 overflow-auto p-6">
+        <div bind:this={previewScroller} bind:clientWidth={preview.width} class="min-h-0 flex-1 overflow-auto p-6">
           <CvHtmlPreview
             {doc}
             {templateId}
-            {zoom}
+            zoom={preview.zoom}
             {fonts}
-            {photoSrc}
+            photoSrc={headshot.src}
             highlightPaths={showingPlaceholders ? placeholders.map((p) => p.path) : (history.pinned?.paths ?? [])}
             onPageCount={(n) => (pageCount = n)}
           />
@@ -745,41 +635,14 @@
   {/if}
 </div>
 
-<ConfirmDialog
-  bind:open={confirmResetOpen}
-  title={baseMode
-    ? 'Replace this CV’s content with your current CV?'
-    : 'Rebuild this tailored CV from your current seed?'}
-  description={baseMode
-    ? 'Anything you or the assistant edited in this CV is replaced. Your template and typography stay; the edits can be undone from History.'
-    : 'Your template and typography stay; content edits can be undone from History.'}
-  confirmLabel={baseMode ? 'Replace content' : 'Reset'}
-  onConfirm={applyReseed}
-/>
+<ResetCvDialog bind:open={confirmResetOpen} {baseMode} onConfirm={applyReseed} />
 
-<ConfirmDialog
+<GapsDownloadDialog
   bind:open={confirmDownloadOpen}
-  title="Your CV still has gaps to fill"
-  description="These bracketed slots will print in the PDF exactly as written."
-  confirmLabel="Download anyway"
-  cancelLabel="Keep editing"
-  onConfirm={() => {
-    window.open(pdfUrl, '_blank', 'noopener');
+  {placeholders}
+  {pdfUrl}
+  onFix={() => {
+    confirmDownloadOpen = false;
+    void goToGap(0);
   }}
->
-  <ul class="flex flex-wrap gap-1.5">
-    {#each placeholderTokens as token (token)}
-      <li><code class="rounded bg-muted px-1.5 py-0.5 text-xs">{token}</code></li>
-    {/each}
-  </ul>
-  <button
-    type="button"
-    class="mt-3 text-sm font-medium text-brand-strong underline-offset-4 hover:underline"
-    onclick={() => {
-      confirmDownloadOpen = false;
-      void goToGap(0);
-    }}
-  >
-    Fix them in the editor
-  </button>
-</ConfirmDialog>
+/>
