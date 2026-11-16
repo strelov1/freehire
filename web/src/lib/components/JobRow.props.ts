@@ -1,3 +1,4 @@
+import type { computeClientMatch } from '#lib/jobMatch.js';
 import type { Snippet } from 'svelte';
 import type { Job, JobCard } from '#lib/types.js';
 
@@ -38,6 +39,7 @@ export interface JobRowProps {
   // whole description, and the two facet fields a full Job keeps inside `enrichment` arrive
   // flat. Everything the card omits is optional here already.
   job: Job | JobCard;
+  clientMatch?: ReturnType<typeof computeClientMatch>;
   dimViewed?: boolean;
   newTab?: boolean;
   compact?: boolean;

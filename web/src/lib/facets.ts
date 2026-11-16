@@ -1,4 +1,6 @@
 import { SPECIALIZATION_ALIASES } from './specializationAliases';
+import { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
+export { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
 // The job-search facets, as a data-driven registry. Each entry declares its
 // query param (matching the backend search API), section label, the control to
 // render, its options (for pills/select), and whether it supports an "exclude"
@@ -16,7 +18,6 @@ import { SPECIALIZATION_ALIASES } from './specializationAliases';
 
 import { metroLabel } from './metro';
 import {
-  WORK_MODE_VALUES,
   SENIORITY_VALUES,
   CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES,
@@ -39,10 +40,8 @@ import {
   ENGAGEMENT_MARKETS,
 } from './generated/contracts';
 import {
-  REGION_LABELS,
   SENIORITY_LABELS,
   EMPLOYMENT_LABELS,
-  WORK_MODE_LABELS,
   CATEGORY_LABELS,
   DOMAIN_LABELS,
   COMPANY_TYPE_LABELS,
@@ -164,25 +163,6 @@ export interface FacetDef {
   entityLogos?: boolean;
 }
 
-// Resolve an ISO 3166-1 alpha-2 code to an English country name via platform Intl
-// data (no hand-maintained table); fall back to the upper-cased code.
-const regionNames = (() => {
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'region' });
-  } catch {
-    return null;
-  }
-})();
-
-export function countryLabel(code: string): string {
-  const up = code.toUpperCase();
-  try {
-    return regionNames?.of(up) ?? up;
-  } catch {
-    return up;
-  }
-}
-
 // Resolve an ISO 639-1 code (en, pt, ru, …) to an English language name via
 // platform Intl data (no hand-maintained table); fall back to the upper-cased
 // code. Mirrors countryLabel — the posting-language facet is dynamic, so any
@@ -283,7 +263,7 @@ export function options(values: readonly string[], labels: Record<string, string
 // Country-level filtering lives in the Countries facet, so the US sits under
 // `north_america` and Russia under `cis`. Built from the shared REGION_LABELS
 // whose insertion order is the curated display order.
-const REGION: FacetOption[] = options(Object.keys(REGION_LABELS), REGION_LABELS);
+const REGION = REGION_OPTIONS;
 
 // Reserved `regions` value selecting jobs with no resolved geography (an empty
 // regions array) — the "region not specified" bucket — rather than a real region
@@ -297,7 +277,7 @@ export const REGION_UNSPECIFIED = 'none';
 // appended last so it reads after the real regions.
 const JOB_REGION: FacetOption[] = [...REGION, { value: REGION_UNSPECIFIED, label: 'Not specified' }];
 
-const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
+const WORK_MODE = WORK_MODE_OPTIONS;
 const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
 export const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
 const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
@@ -345,8 +325,6 @@ const EQUITY: FacetOption[] = [
 
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
-export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
-export const REGION_OPTIONS: FacetOption[] = REGION;
 
 // Seniority and employment-type options, exported for the submit form so a submitter's
 // choice aligns with the filter panel's vocabulary/order instead of duplicating it.

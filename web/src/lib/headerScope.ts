@@ -5,7 +5,7 @@
 // (regions + remote_regions, no work format) share one summarizer.
 
 import type { FacetStore } from './facets';
-import { countryLabel } from './facets';
+import { countryLabel } from './locationOptions';
 import { WORK_MODE_VALUES, type WorkMode } from './generated/contracts';
 import { metroLabel } from './metro';
 import { REGION_LABELS, WORK_MODE_LABELS } from './labels';

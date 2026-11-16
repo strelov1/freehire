@@ -56,6 +56,7 @@
     footer,
     onHide,
     unsave = api.unsaveJob,
+    clientMatch,
   }: JobRowProps = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
@@ -191,7 +192,7 @@
   // used to tint each skill chip (a skill you have vs one you're missing). Null in the
   // locked states, where the teaser below decides the tint instead.
   const haveSet = $derived(matchState === 'ready' ? new Set(profileSkills.map((s) => s.toLowerCase())) : null);
-  const match = $derived(matchState === 'ready' ? computeClientMatch(skills, profileSkills) : null);
+  const match = $derived(matchState === 'ready' ? (clientMatch ?? computeClientMatch(skills, profileSkills)) : null);
 
   // A viewer with no match to show — signed out, or signed in with no skills. It used to
   // drive a blurred strip and tinted chips on every card; a feed of blurred grey read as a

@@ -1,6 +1,10 @@
 package sources
 
-import "slices"
+import (
+	"maps"
+	"slices"
+	"sync"
+)
 
 // Taxonomy assembles the registry for classification rather than crawling: every adapter this
 // binary knows about, with its markers, whatever credentials the environment holds. Callers
@@ -8,7 +12,18 @@ import "slices"
 // kind, the cross-source dedup pass's aggregator set — use this, so their answers do not vary
 // by host. It carries no transport, so nothing reached through it may Fetch; crawlers call All
 // with a real client and get the credential-gated registry instead.
-func Taxonomy() map[string]Source { return All(nil) }
+var taxonomy = sync.OnceValue(func() map[string]Source { return All(nil) })
+
+// Taxonomy returns a private map copy; callers may change entries without poisoning later reads.
+// Adapter values are shared classification-only objects and must not be mutated.
+func Taxonomy() map[string]Source { return maps.Clone(taxonomy()) }
+
+var taxonomyAggregators = sync.OnceValue(func() []string {
+	return AggregatorProviders(taxonomy())
+})
+
+// TaxonomyAggregatorProviders returns the cached classification with a caller-owned slice.
+func TaxonomyAggregatorProviders() []string { return slices.Clone(taxonomyAggregators()) }
 
 // All assembles the registered adapters into a provider-keyed registry, sharing one
 // HTTP client across them. Adding a platform is a new adapter plus one line here.

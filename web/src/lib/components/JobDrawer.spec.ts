@@ -7,6 +7,9 @@ import JobDrawer from './JobDrawer.svelte';
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/my/tracking'), state: {} },
 }));
+vi.mock('./MatchAnalysisFull.svelte', () => {
+  throw new Error('chunk unavailable');
+});
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), pushState: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => ({ id: 'u1' }) }));
@@ -267,4 +270,14 @@ it('ignores a late application response after the drawer is closed', async () =>
   finish();
   await Promise.resolve();
   expect(onautoapplyreview).not.toHaveBeenCalled();
+});
+
+it('keeps the drawer usable when the analysis chunk fails', async () => {
+  render(JobDrawer, props());
+  const fitTab = screen.getAllByRole('tab').find((el) => el.id === 'jobdrawer-tab-fit');
+  if (!fitTab) throw new Error('Missing fit tab');
+  await fireEvent.click(fitTab);
+  expect((await screen.findByRole('alert')).textContent).toContain('Не удалось загрузить анализ.');
+  await fireEvent.click(screen.getByRole('button', { name: 'Вернуться к описанию вакансии' }));
+  expect(document.getElementById('jobdrawer-tab-description')?.getAttribute('aria-selected')).toBe('true');
 });
