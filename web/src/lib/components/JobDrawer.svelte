@@ -211,6 +211,11 @@
   // svelte-ignore state_referenced_locally
   let tab = $state<Tab>(initialTab === 'auto_apply' && !item.job ? 'application' : initialTab);
 
+  let applyChatStarted = $state(false);
+  $effect(() => {
+    if (tab === 'auto_apply' && emails !== null && !emailsError) applyChatStarted = true;
+  });
+
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
   const canRecall = $derived(hasPosting && !!item.applied_at);
@@ -224,6 +229,9 @@
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
       autoApply = app.auto_apply ?? null;
+      if (autoApply?.status === 'approved' || autoApply?.status === 'declined') {
+        onautoapplyreview(autoApply.status);
+      }
       posting = app.job;
       events = app.events ?? [];
       if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
@@ -451,6 +459,11 @@
       tabindex="0"
       class="mx-auto w-full max-w-2xl px-5 py-5 sm:px-6"
     >
+      {#if applyChatStarted}
+        <div hidden={tab !== 'auto_apply' || !!emailsError}>
+          <JobDrawerAutoApply slug={item.job?.public_slug ?? null} onTurnComplete={() => void loadEmails(true)} />
+        </div>
+      {/if}
       {#if tab === 'application'}
         <div class="flex flex-col gap-4">
           {#if pendingOutcome}
@@ -529,15 +542,7 @@
           onretry={() => loadEmails(true)}
         />
       {:else if tab === 'auto_apply'}
-        <JobDrawerAutoApply
-          slug={item.job?.public_slug ?? null}
-          onTurnComplete={async () => {
-            await loadEmails(true);
-            if (autoApply?.status === 'approved' || autoApply?.status === 'declined') {
-              onautoapplyreview(autoApply.status);
-            }
-          }}
-        />
+
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
           {#if posting}

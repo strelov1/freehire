@@ -44,7 +44,7 @@
   });
 </script>
 
-<section class="flex h-[min(65dvh,44rem)] min-h-80 flex-col" aria-label={s.applyChat.title}>
+<section class="flex min-h-80 flex-col" style="height: min(65dvh, 44rem)" aria-label={s.applyChat.title}>
   {#if session}
     <AssistantChat {session} showSessionRail={false} syncApplication {onTurnComplete} />
   {:else if error}

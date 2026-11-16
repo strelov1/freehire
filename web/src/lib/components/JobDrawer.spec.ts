@@ -219,3 +219,35 @@ it('opens the application chat directly in Progress and retries a failed opening
   await fireEvent.click(screen.getByRole('button', { name: 'Попробовать снова' }));
   await waitFor(() => expect(openApplyChat).toHaveBeenCalledTimes(2));
 });
+
+it('keeps the application conversation mounted across drawer tabs', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  const chatError = await screen.findByText('chat unavailable');
+  await fireEvent.click(screen.getByRole('tab', { name: 'Описание' }));
+  expect(chatError.isConnected).toBe(true);
+  await fireEvent.click(screen.getByRole('tab', { name: 'Прогресс' }));
+  expect(await screen.findByText('chat unavailable')).toBe(chatError);
+  expect(openApplyChat).toHaveBeenCalledTimes(1);
+});
+
+it('reconciles the board after retrying an unsuccessful application reload', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  const onautoapplyreview = vi.fn();
+  render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'approved', queue_id: 1 },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  await waitFor(() => expect(onautoapplyreview).toHaveBeenCalledWith('approved'));
+});
