@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { SPECIALIZATION_ALIASES } from '#lib/specializationAliases.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { messages } from './FacetSection.messages';
@@ -103,7 +102,7 @@
       excludable={def.excludable}
       {placeholder}
       cap={def.cap}
-      searchAliases={def.param === 'category' ? SPECIALIZATION_ALIASES : def.searchAliases}
+      searchAliases={def.searchAliases}
       techIcons={def.techIcons}
       entityLogos={def.entityLogos}
       {onToggle}
