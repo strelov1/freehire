@@ -165,16 +165,6 @@ const (
 	joinRequestBurst    = 2
 )
 
-// pacedJoinGetter wraps a getter with a fresh limiter shared across one registry build. Listing
-// and detail paths are both wrapped because both hit the same metered host (unlike seek, whose
-// listing was never refused).
-func pacedJoinGetter(c JSONGetter) JSONGetter {
-	return rateLimitedJSONGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(joinRequestInterval), joinRequestBurst),
-	}
-}
-
 // rateLimitedJSONPoster is the JSON-POST counterpart of rateLimitedHTMLGetter, for detail
 // endpoints that are not GETs (SEEK's is a GraphQL POST).
 type rateLimitedJSONPoster struct {
@@ -528,7 +518,8 @@ func pacedHomerunGetter(c homerunGetter) homerunGetter {
 // api.higherme.com sits behind an AWS load-balancer WAF with a rate-based rule that 403s the whole
 // IP once tripped (after roughly 70 requests in six minutes), lifting a few minutes after going
 // quiet: a per-window budget of unmeasured size. A board is one request (two when empty), so a
-// gentle pace costs little, and the shared client's retries spend the headroom below the trip.
+// three-second admission is not a measured safe rate. Every wire attempt, including retries,
+// must draw a token; see highermeAttemptGetter and providers/higherme.md.
 const (
 	highermeRequestInterval = 3 * time.Second
 	highermeRequestBurst    = 1
@@ -537,10 +528,11 @@ const (
 // pacedHigherMeGetter wraps a getter with a fresh limiter shared across one registry build, so
 // every board's listing pages and brand lookups in a run compete for the same token bucket.
 func pacedHigherMeGetter(c JSONGetter) JSONGetter {
-	return rateLimitedJSONGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(highermeRequestInterval), highermeRequestBurst),
+	limiter := rate.NewLimiter(rate.Every(highermeRequestInterval), highermeRequestBurst)
+	if client, ok := c.(*Client); ok && client != nil {
+		return highermeAttemptGetter(client, limiter)
 	}
+	return rateLimitedJSONGetter{inner: c, limiter: limiter}
 }
 
 // apponeRequestInterval paces every AppOne request of a run. The portal listings (jobs.appone.com)

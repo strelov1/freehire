@@ -4373,6 +4373,7 @@ type Querier interface {
 	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
 	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
 	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	// Only scheduled (active/pending) catalog identities participate; history stays in health.
 	//
 	// No differently-cased-twin guard here any more: board_health's identity is
 	// case-insensitive as of migration 0171 (board_health_identity_key), so two rows for the
@@ -5668,7 +5669,7 @@ type Querier interface {
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
 	// boards are broken without a second round trip and without naming them all. Ask this table
-	// directly for the rest.
+	// directly for the rest. Only scheduled (active/pending) catalog identities participate.
 	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
 	// The reconciler's first pass: events recorded but never applied, oldest first, served by
 	// the partial index on (received_at) WHERE processed_at IS NULL.
@@ -6438,7 +6439,7 @@ type Querier interface {
 	// yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
 	// outlive the boards they describe, so a provider whose boards were all retired or rejected
 	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
-	// nobody runs any more.
+	// nobody runs any more. Each health identity must match an active catalog identity.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of

@@ -125,9 +125,11 @@ func TestHalykFetchRejectsASharedIdentity(t *testing.T) {
 		<a href="/about/career/vacancies-inner/2"><div class="flex-x">Алматы</div><div class="text-lg font-bold">A</div></a>
 	</body></html>`
 	client := &routedHTTP{}
+	client.route("vacancies-inner/1", `<div class="vacanices-inner-cie-item">Same duties</div>`)
+	client.route("vacancies-inner/2", `<div class="vacanices-inner-cie-item"><p> same   duties </p></div>`)
 	client.route("https://halykbank.kz/about/career/vacancies", page)
 	_, err := NewHalyk(client).Fetch(context.Background(), CompanyEntry{Company: "Halyk Bank"})
-	if err == nil || !strings.Contains(err.Error(), "share title") {
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
 		t.Fatalf("err %v", err)
 	}
 }

@@ -189,6 +189,19 @@ func (s peoplesoft) hydrate(ctx context.Context, b peoplesoftBoard, e CompanyEnt
 			return Job{}, false
 		}
 		job, ok := parsePeopleSoftPosting(root, r)
+		// Reposted openings can retain the same opening ID under sequence 2.
+		// Retry only the recognizable search-page response, never a transport failure.
+		if !ok && peoplesoftIndex(root)["HRS_SCH_WRK2_HRS_JOB_OPENING_ID"] == nil {
+			if _, searchErr := parsePeopleSoftPage(root); searchErr == nil {
+				second := strings.TrimSuffix(link, "PostingSeq=1") + "PostingSeq=2"
+				if secondRoot, err := s.http.GetHTML(ctx, second); err == nil {
+					job, ok = parsePeopleSoftPosting(secondRoot, r)
+					if ok {
+						link = second
+					}
+				}
+			}
+		}
 		if !ok {
 			log.Printf("peoplesoft: %s posting %s answered no posting; deferring", b.host, r.ID)
 			return Job{}, false

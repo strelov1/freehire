@@ -137,7 +137,7 @@ func healthBlock(row db.ProviderHealthRollupRow, now time.Time) apigen.SourceHea
 		Status: apigen.HealthStatus(deriveStatus(providerRollup{
 			total:       row.TotalBoards,
 			healthy:     row.HealthyBoards,
-			lastSuccess: tsTime(row.LastSuccessAt),
+			freshnessAt: tsTime(row.FreshnessAt),
 		}, now)),
 		TotalBoards:   row.TotalBoards,
 		HealthyBoards: row.HealthyBoards,

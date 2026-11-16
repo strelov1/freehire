@@ -31,8 +31,12 @@ func TestQuietBoardsCountAsFresh(t *testing.T) {
 	if err != nil || len(rollup) != 1 {
 		t.Fatalf("ProviderHealthRollup = (%v, %v), want one row", rollup, err)
 	}
-	if age := time.Since(rollup[0].LastSuccessAt.Time); age > time.Minute {
+	if age := time.Since(rollup[0].FreshnessAt.Time); age > time.Minute {
 		t.Errorf("/status rollup: quiet board's freshness is %v old, want ~now", age)
+	}
+
+	if age := time.Since(rollup[0].LastSuccessAt.Time); age < 59*time.Hour {
+		t.Errorf("actual success age = %v, want ~60h even during the pause", age)
 	}
 
 	health, err := q.ProviderIngestHealth(ctx)
@@ -51,7 +55,7 @@ func TestQuietBoardsCountAsFresh(t *testing.T) {
 	if err != nil || len(rollup) != 1 {
 		t.Fatalf("ProviderHealthRollup = (%v, %v), want one row", rollup, err)
 	}
-	if age := time.Since(rollup[0].LastSuccessAt.Time); age < 59*time.Hour {
+	if age := time.Since(rollup[0].FreshnessAt.Time); age < 59*time.Hour {
 		t.Errorf("after the pause ended the freshness is %v old, want the real ~60h", age)
 	}
 }

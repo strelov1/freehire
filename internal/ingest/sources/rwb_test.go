@@ -51,13 +51,13 @@ func TestRWBIsBoardless(t *testing.T) {
 }
 
 func TestRWBOffsetPaginatesAndMapsDetail(t *testing.T) {
-	// count=300 with limit 200: page 1 (offset 0) carries one item, page 2 (offset 200)
-	// carries the second; after page 2, offset+200=400 >= 300, so the loop stops.
+	// count=75 with limit 50: page 1 (offset 0) carries one item, page 2 (offset 50)
+	// carries the second; after page 2, offset+50=100 >= 75, so the loop stops.
 	fake := (&routedHTTP{}).
-		route("offset=0", rwbListPage(300, 200, 0,
+		route("offset=0", rwbListPage(75, 50, 0,
 			rwbListItem(111, "Backend Engineer", "Москва", "Удаленно"),
 		)).
-		route("offset=200", rwbListPage(300, 200, 200,
+		route("offset=50", rwbListPage(75, 50, 50,
 			rwbListItem(222, "Driver", "Подольск", "Офис"),
 		)).
 		route("/vacancies/111", rwbDetail("<p>About WB.</p>",
@@ -137,5 +137,22 @@ func TestRWBEmptyListYieldsNoJobsNoError(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("got %d jobs, want 0", len(jobs))
+	}
+}
+
+func TestRWBListingUsesFiftyItemPages(t *testing.T) {
+	items := make([]string, 50)
+	for i := range items {
+		items[i] = rwbListItem(i+1, "Engineer", "Moscow")
+	}
+	fake := (&routedHTTP{}).
+		route("limit=50&offset=0", rwbListPage(51, 50, 0, items...)).
+		route("limit=50&offset=50", rwbListPage(51, 50, 50, rwbListItem(51, "Engineer", "Moscow")))
+	itemsRead, err := (rwb{http: fake}).list(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(itemsRead) != 51 || itemsRead[50].ID != 51 {
+		t.Fatalf("listing = %d items, want all 51", len(itemsRead))
 	}
 }

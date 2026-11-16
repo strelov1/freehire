@@ -218,3 +218,28 @@ func TestMynaviSinglePlacePosting(t *testing.T) {
 		t.Errorf("salary = %v %v", j.SalaryMin, j.SalaryMax)
 	}
 }
+
+func TestMynaviDetailWithoutJobPostingUsesVisibleAdvert(t *testing.T) {
+	body, err := os.ReadFile("testdata/mynavi/detail_without_jsonld.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := Job{ExternalID: "328792-2-29-1", URL: mynaviBase + "/jobinfo-328792-2-29-1/", Title: "Internal SE", Company: "Nara", Countries: []string{"jp"}}
+	f := &mynaviFake{t: t, pages: map[string]string{base.URL: string(body)}}
+	j, ok, err := (mynavi{http: f}).withDetail(context.Background(), base)
+	if err != nil || !ok {
+		t.Fatalf("detail: ok=%v err=%v", ok, err)
+	}
+	for _, want := range []string{"Webシステム開発", "必須", "勤務地", "福利厚生"} {
+		if !strings.Contains(j.Description, want) {
+			t.Errorf("description missing %q", want)
+		}
+	}
+	if j.Title != base.Title || j.Company != base.Company || j.Countries[0] != "jp" {
+		t.Errorf("lost listing facts: %+v", j)
+	}
+	f.pages[base.URL] = strings.Replace(string(body), base.URL, mynaviBase+"/jobinfo-999-1-1-1/", 1)
+	if _, _, err := (mynavi{http: f}).withDetail(context.Background(), base); err == nil {
+		t.Fatal("accepted a different posting's visible advert")
+	}
+}

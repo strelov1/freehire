@@ -209,6 +209,9 @@ func (s talentbrew) detail(ctx context.Context, e CompanyEntry, p tbPosting) (Jo
 	}
 	var ld tbLD
 	if !ldJobPosting(root, &ld) || strings.TrimSpace(ld.Title) == "" {
+		if j, ok := tbHTMLPosting(root, p, e.Company); ok {
+			return j, true
+		}
 		return unreadableDetail(p.id, p.url, e.Company), true
 	}
 	j := Job{
@@ -223,4 +226,40 @@ func (s talentbrew) detail(ctx context.Context, e CompanyEntry, p tbPosting) (Jo
 	j.Remote = isRemote(j.Location)
 	j.WorkMode = workModeFromRemote(j.Remote)
 	return j, true
+}
+
+// Some TalentBrew themes publish no JSON-LD. Read only their identified job section.
+func tbHTMLPosting(root *html.Node, p tbPosting, company string) (Job, bool) {
+	var section *html.Node
+	walk(root, func(n *html.Node) bool {
+		if Attr(n, "data-selector-name") == "jobdetails" && Attr(n, "data-job-id") == p.id {
+			section = n
+			return false
+		}
+		return true
+	})
+	if section == nil {
+		return Job{}, false
+	}
+	var title, description, location string
+	walk(section, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return true
+		}
+		if n.Data == "h1" {
+			title = strings.TrimSpace(textContent(n))
+		}
+		if HasClass(n, "ats-description") {
+			description = sanitizeHTML(innerHTML(n))
+			return false
+		}
+		if HasClass(n, "ajd_header__location") {
+			location = strings.TrimSpace(textContent(n))
+		}
+		return true
+	})
+	if title == "" || strings.TrimSpace(description) == "" {
+		return Job{}, false
+	}
+	return Job{ExternalID: p.id, URL: p.url, Company: company, Title: title, Description: description, Location: location, Remote: isRemote(location)}, true
 }

@@ -31,7 +31,7 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 func truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE search_delete_outbox, jobs, companies, board_health RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE search_delete_outbox, jobs, companies, board_health, boards RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -61,6 +61,11 @@ func seedChronicBoard(t *testing.T, pool *pgxpool.Pool, provider, board string, 
 // tests: Adzuna-shaped providers register the same board name once per country.
 func seedBoardHealthRegion(t *testing.T, pool *pgxpool.Pool, provider, board, region string, daysSinceSuccess int) {
 	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO boards (provider, board, region, company, status)
+		 VALUES ($1, $2, $3, 'Acme', 'active')`, provider, board, region); err != nil {
+		t.Fatalf("seed catalog board %s/%s/%s: %v", provider, board, region, err)
+	}
 	lastSuccess := time.Now().Add(-time.Duration(daysSinceSuccess) * 24 * time.Hour)
 	_, err := pool.Exec(context.Background(),
 		`INSERT INTO board_health (provider, board, region, consecutive_failures, first_seen_at, last_success_at)

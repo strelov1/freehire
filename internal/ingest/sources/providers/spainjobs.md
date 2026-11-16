@@ -6,3 +6,9 @@
 - **The page's schema.org JobPosting is the posting on ~90% of pages**: English `title`, HTML `description` (the full rewritten advert), `datePosted`, `hiringOrganization.name`, `jobLocation` (Place with `addressCountry`), `jobLocationType: TELECOMMUTE` on remote ones, `employmentType` as a string OR an array, `experienceRequirements.monthsOfExperience`, and `baseSalary` as a range OR a single `value` (EUR a YEAR; hourly rates are left in the body). **~10% of pages — mostly staffing agencies' adverts — carry no JobPosting**; those are read from the page itself: the `h1`, the employer from `<title>` ("<role> at <employer> (<city>) | SpainJobs.io"), the body from `#job-advert`. Without that fallback they would be re-bought every run.
 - **`Job.URL` is the employer's apply link** (the external `<a>` whose text is "Apply"), as wttj does; the SpainJobs page is the fallback.
 - **A page is ~450 KB.** One limiter paces every request at one a second with two workers; a run reads at most `spainjobsMaxNewPerRun` (1,500) unseen pages, stopping 5 minutes before its deadline.
+
+- **Transport recovery, 2026-11-15 (operator).** Direct egress now meets Cloudflare 403. Scrapling
+  HTTP + proxy decoded the index, `jobs-new.xml` (2,450 URLs), and a real detail description (2,539
+  bytes). The shared tier rebuilds the ordinary adapter, retaining its one-second pacing, 1,500-new
+  budget and deadline margin. These bounded probes do not establish full-crawl capacity. See
+  [routing evidence](../../../../docs/investigations/2026-11-15-ingest-routing.md).

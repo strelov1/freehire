@@ -146,6 +146,9 @@ func (s intervieweb) detail(ctx context.Context, e CompanyEntry, l ivLink) (Job,
 	}
 	var p ivPosting
 	if !ldJobPosting(root, &p) || strings.TrimSpace(p.Title) == "" {
+		if j, ok := ivHTMLPosting(root, e, l); ok {
+			return j, true
+		}
 		return unreadableDetail(l.id, l.url, e.Company), true
 	}
 	j := Job{
@@ -253,4 +256,29 @@ func ivPagerConfig(root *html.Node) (endpoint, section string) {
 		return true
 	})
 	return endpoint, section
+}
+
+func ivHTMLPosting(root *html.Node, e CompanyEntry, l ivLink) (Job, bool) {
+	var title, description, location string
+	identity := false
+	walk(root, func(n *html.Node) bool {
+		if u := Attr(n, "data-a2a-url"); u != "" && ivJobID(u) == l.id {
+			identity = true
+		}
+		switch Attr(n, "id") {
+		case "description__vacancy-title":
+			title = strings.TrimSpace(textContent(n))
+		case "description__body":
+			description = sanitizeHTML(innerHTML(n))
+			return false
+		}
+		if n.Data == "span" && Attr(n, "title") == "Location" {
+			location = strings.TrimSpace(textContent(n))
+		}
+		return true
+	})
+	if !identity || title == "" || strings.TrimSpace(description) == "" {
+		return Job{}, false
+	}
+	return Job{ExternalID: l.id, URL: l.url, Company: e.Company, Title: title, Description: description, Location: location}, true
 }
