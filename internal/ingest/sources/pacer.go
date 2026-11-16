@@ -87,6 +87,17 @@ const (
 	workstreamRequestBurst    = 1
 )
 
+// Abacus Umantis tenants (recruitingapp-<n>[.de].umantis.com) are separate hosts on one origin
+// that rate-limits per client IP across all of them. Unpaced, the scheduler's parallel boards
+// (8 detail fetches each) drew 429s until whole boards read no detail at all (from 2026-11-16:
+// 7-9 failed boards a run, Stadt Leverkusen among them); a 48-way burst from the crawl host got
+// 57 of 60 answered 429, while one board's 8-way fetch of 25 pages was served in full. The run
+// is ~850 requests, so 2 req/s finishes it in ~7 minutes. Tune from the run's unreadable count.
+const (
+	umantisRequestInterval = 500 * time.Millisecond // 2 req/s across every Umantis board
+	umantisRequestBurst    = 2
+)
+
 // ClinchTalent fronts detail pages with a rate-based AWS-WAF Challenge: a cold IP gets a handful of
 // clean pages before the WAF flips to a 202 challenge with a long per-IP penalty. clinch fetches
 // one detail page per new posting, so the aggregate rate, not the pool, must stay under that
