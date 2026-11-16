@@ -43,7 +43,8 @@ type Server struct {
 	walPath      string // "" = no write-ahead log; see wal.go
 	m            *metrics
 
-	store atomic.Pointer[facetidx.Store] // nil until a snapshot loaded or a rebuild committed
+	store   atomic.Pointer[facetidx.Store] // nil until a snapshot loaded or a rebuild committed
+	answers answerCache                    // encoded /facets answers of the current generation
 
 	mu         sync.Mutex // guards the rebuild state below and serialises /write with commit's swap
 	rebuilding bool       // begin..commit/abort; /write batches are recorded
@@ -337,12 +338,23 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 		s.notReady(w)
 		return
 	}
+	ix := st.Current()
+	// The facet list is JSON-encoded so null, [] and [""] stay distinct keys; raw JSON
+	// cannot hold a NUL, so the separator is unambiguous.
+	facetsKey, _ := json.Marshal(req.Facets)
+	key := string(req.Filter) + "\x00" + string(facetsKey)
+	if b, ok := s.answers.get(st, ix.Generation(), key); ok {
+		s.m.answerCache.WithLabelValues("hit").Inc()
+		replyJSON(w, b)
+		return
+	}
+	s.m.answerCache.WithLabelValues("miss").Inc()
 	f, err := parseFilter(req.Filter)
 	if err != nil {
 		s.queryErr(w, err)
 		return
 	}
-	ans, err := st.Current().Facets(f, req.Facets)
+	ans, err := ix.Facets(f, req.Facets)
 	if err != nil {
 		s.queryErr(w, err)
 		return
@@ -351,7 +363,21 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 	for k, v := range ans.Stats {
 		stats[k] = map[string]float64{"min": v.Min, "max": v.Max}
 	}
-	reply(w, http.StatusOK, map[string]any{"total": ans.Total, "distribution": ans.Distribution, "stats": stats})
+	b, err := json.Marshal(map[string]any{"total": ans.Total, "distribution": ans.Distribution, "stats": stats})
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "encode: %v", err)
+		return
+	}
+	s.answers.put(st, ix.Generation(), key, b)
+	replyJSON(w, b)
+}
+
+// replyJSON writes an already encoded 200 answer, newline-terminated like reply's encoder.
+func replyJSON(w http.ResponseWriter, b []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(b)
+	_, _ = w.Write([]byte{'\n'})
 }
 
 func (s *Server) distinct(w http.ResponseWriter, r *http.Request) {
@@ -554,6 +580,7 @@ type metrics struct {
 	walReplayed         prometheus.Counter
 	walErrors           prometheus.Counter
 	writeBatch          prometheus.Histogram
+	answerCache         *prometheus.CounterVec
 }
 
 func newMetrics(s *Server) *metrics {
@@ -573,6 +600,7 @@ func newMetrics(s *Server) *metrics {
 		walErrors:           prometheus.NewCounter(prometheus.CounterOpts{Name: "facetd_wal_errors_total", Help: "Write-ahead log failures: append, rollback, rotation, replay, corruption."}),
 		writeBatch: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "facetd_write_batch_jobs", Help: "Jobs per applied /write batch: upserts, closes, duplicates and deletes.",
 			Buckets: []float64{1, 10, 50, 100, 500, 1000, 5000, 15000}}),
+		answerCache: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "facetd_answer_cache_total", Help: "/facets lookups in the per-generation answer cache, by result: hit, miss."}, []string{"result"}),
 	}
 	cur := func(f func(ix *facetidx.Index) float64) func() float64 {
 		return func() float64 {
@@ -582,7 +610,7 @@ func newMetrics(s *Server) *metrics {
 			return 0
 		}
 	}
-	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors, m.writeBatch,
+	m.reg.MustRegister(m.requests, m.latency, m.refused, m.snapshotSeconds, m.snapshotBytes, m.snapshotLastSuccess, m.snapshotErrors, m.walBytes, m.walRecords, m.walReplayed, m.walErrors, m.writeBatch, m.answerCache,
 		// go_* and process_*: heap, RSS and GC pauses (MemoryHigh also counts page cache).
 		collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "facetd_documents", Help: "Documents in the index, closed and duplicate included."},
