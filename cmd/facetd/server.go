@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -340,8 +339,11 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ix := st.Current()
-	key := string(req.Filter) + "\x00" + strings.Join(req.Facets, "\x00")
-	if b, ok := s.answers.get(ix, key); ok {
+	// The facet list is JSON-encoded so null, [] and [""] stay distinct keys; raw JSON
+	// cannot hold a NUL, so the separator is unambiguous.
+	facetsKey, _ := json.Marshal(req.Facets)
+	key := string(req.Filter) + "\x00" + string(facetsKey)
+	if b, ok := s.answers.get(st, ix.Generation(), key); ok {
 		s.m.answerCache.WithLabelValues("hit").Inc()
 		replyJSON(w, b)
 		return
@@ -366,7 +368,7 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "encode: %v", err)
 		return
 	}
-	s.answers.put(ix, key, b)
+	s.answers.put(st, ix.Generation(), key, b)
 	replyJSON(w, b)
 }
 
