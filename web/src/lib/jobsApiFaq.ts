@@ -18,7 +18,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'What is the difference between the API and Data plans?',
     answer:
-      'Both carry the same fields, filters, company data and commercial-use licence. Bulk catalogue files are planned for the Data plan and are not available yet.',
+      'Both carry the same fields, filters, company data and commercial-use licence. The Data plan adds a daily bulk file of the whole open catalogue (gzip JSON Lines), listed at GET /api/v1/catalogue/snapshots.',
   },
   {
     question: 'Which plan fits research or skills analytics?',
