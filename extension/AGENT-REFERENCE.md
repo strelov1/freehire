@@ -201,13 +201,13 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 (cd design-system && pnpm install)   # once, and after pulling design-system changes
 cd extension
 npm install                         # runs `wxt prepare` (generates .wxt/)
-npm run dev                         # dev build with HMR
-npm run build                       # production build -> .output/chrome-mv3
+pnpm run dev                         # dev build with HMR
+pnpm run build                       # production build -> .output/chrome-mv3
                                      # targets freehire.me
                                      # (extension/.env.production); dev keeps
                                      # the localhost default
 cd extension && npm test             # vitest: lib/**/*.test.ts
-cd extension && npm run check        # svelte-check
+cd extension && pnpm run check        # svelte-check
 ```
 
 Load unpacked in Chrome: `chrome://extensions` → Developer mode → **Load
@@ -216,8 +216,8 @@ panel.
 
 ### Firefox
 
-`npm run dev:firefox` / `npm run build:firefox` (-> `.output/firefox-mv2`) /
-`npm run zip:firefox` (the add-on plus the sources ZIP addons.mozilla.org reviews;
+`pnpm run dev:firefox` / `pnpm run build:firefox` (-> `.output/firefox-mv2`) /
+`pnpm run zip:firefox` (the add-on plus the sources ZIP addons.mozilla.org reviews;
 publishing is in [docs/firefox-addons.md](docs/firefox-addons.md)). Load it at
 `about:debugging` → This Firefox → **Load Temporary Add-on** → the build's
 `manifest.json`. The `sidepanel` entrypoint becomes Firefox's `sidebar_action`,

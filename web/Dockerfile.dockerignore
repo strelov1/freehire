@@ -1,0 +1,13 @@
+**
+!web/
+!web/**
+!design-system/
+!design-system/**
+**/node_modules
+**/.env
+**/.env.local
+**/.env.*.local
+web/build
+web/.svelte-kit
+web/coverage
+design-system/storybook-static

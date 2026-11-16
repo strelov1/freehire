@@ -8,7 +8,7 @@ when one changes, change the other.
 
 1. **Bump the version** in `extension/package.json` (`version`). The store
    rejects a re-upload of a version it already has.
-2. **Get the package** — either `cd extension && npm run zip`
+2. **Get the package** — either `cd extension && pnpm run zip`
    (`.output/freehire-extension-<version>-chrome.zip`) or download the
    `extension` artifact from the `build` workflow.
 3. **Upload** to the [Developer Dashboard](https://chrome.google.com/webstore/devconsole)

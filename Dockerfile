@@ -41,7 +41,7 @@ RUN apk add --no-cache curl xz \
 # binaries stay CGO_ENABLED=0 static, so they run here unchanged. ca-certificates backs
 # outbound TLS (LLM/S3/Meili/OAuth); a non-root user (uid 65532, matching the previous
 # distroless nonroot) keeps volume ownership stable.
-FROM debian:stable-slim
+FROM debian:trixie-slim
 WORKDIR /app
 # hadolint ignore=DL3008
 RUN apt-get update \
