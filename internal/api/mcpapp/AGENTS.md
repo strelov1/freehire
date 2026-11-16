@@ -51,7 +51,7 @@ Read [Prompts](AGENT-REFERENCE.md#prompts) before work involving this topic.
 
 ## The widget
 
-Read [The widget](AGENT-REFERENCE.md#the-widget) before work involving this topic.
+Read [The widget](AGENT-REFERENCE-WIDGET.md#the-widget) before work involving this topic.
 
 ## Descriptions say what a tool returns, never which tool to call
 
@@ -59,7 +59,7 @@ Read [Descriptions say what a tool returns, never which tool to call](AGENT-REFE
 
 ## Annotations are load-bearing
 
-Read [Annotations are load-bearing](AGENT-REFERENCE.md#annotations-are-load-bearing) before work involving this topic.
+Read [Annotations are load-bearing](AGENT-REFERENCE-WIDGET.md#annotations-are-load-bearing) before work involving this topic.
 
 ## Testing
 

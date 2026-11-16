@@ -31,7 +31,7 @@ Read [Mail Inbox + Harness Surface (`gmail.go`, `inbox.go`, `inbox_linking.go`, 
 
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
-Read [Assistant (`assistant.go`, `assistant_*_tools.go`)](AGENT-REFERENCE.md#assistant-assistantgo-assistant__toolsgo) before work involving this topic.
+Read [Assistant (`assistant.go`, `assistant_*_tools.go`)](AGENT-REFERENCE-ASSISTANT.md#assistant-assistantgo-assistant__toolsgo) before work involving this topic.
 
 ## Talent Network catalogue (`talent_catalog.go`)
 
