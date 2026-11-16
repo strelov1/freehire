@@ -31,9 +31,11 @@ built from the same services the HTTP handlers use.
   ceiling is `RunnerConfig.MaxSteps` (default 8) unless the turn names its own through
   `TurnConfig`; interactive tailor uses 16 and autopilot 30. That value is always
   chosen server-side, because a ceiling a client can raise is not a ceiling. The
-  max-steps wrap-up call offers no tools; if a provider still emits tool calls
-  (Haiku on Bedrock has), they are executed before the turn stops so the transcript
-  never ends on a dangling `tool_use`.
+  max-steps wrap-up call keeps the tools in the request and forbids calling them
+  (`llm.WithoutToolCalls`, tool_choice `none`): withholding them would change the
+  prompt prefix and recompute the whole turn uncached. If a provider still emits tool
+  calls (Haiku on Bedrock has), they are executed before the turn stops so the
+  transcript never ends on a dangling `tool_use`.
 - **A turn outlives its reader, and stops only when asked.** A failed SSE write means
   this reader is not listening — a phone freezing a backgrounded tab, a slept laptop
   — and nothing more; the turn runs to its own end and its transcript is stored
@@ -84,7 +86,7 @@ POST /api/v1/assistant/sessions/:id/messages
                                           └─► tool calls? → Registry.Call each,
                                               emit tool_use/tool_result,
                                               persist, append to history
-            └─ cap reached → one final Chat with NO tools → result(max_steps)
+            └─ cap reached → one final text-only Chat → result(max_steps)
 
 POST /api/v1/assistant/sessions/:id/retry
   └─ Runner.Continue — same loop, NO new user message (a failed turn already

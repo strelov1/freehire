@@ -55,9 +55,12 @@ type Event struct {
 	Result  string          `json:"result,omitempty"`
 	IsError bool            `json:"is_error,omitempty"`
 
-	// Token counts, when the provider reported them (usage).
-	InputTokens  int `json:"input_tokens,omitempty"`
-	OutputTokens int `json:"output_tokens,omitempty"`
+	// Token counts, when the provider reported them (usage). CachedInputTokens is the part of
+	// InputTokens the provider served from its prompt cache; zero is also what a provider that
+	// reports no cache sends (see llm.UsageFrom).
+	InputTokens       int `json:"input_tokens,omitempty"`
+	CachedInputTokens int `json:"cached_input_tokens,omitempty"`
+	OutputTokens      int `json:"output_tokens,omitempty"`
 
 	// StopReason is set on the terminal result event.
 	StopReason string `json:"stop_reason,omitempty"`
@@ -71,7 +74,7 @@ type Model interface {
 // RunnerConfig bounds a turn.
 type RunnerConfig struct {
 	// MaxSteps is how many tool-calling rounds a turn may take before the model is asked for
-	// a final answer with no tools offered.
+	// a final answer with tool calls forbidden.
 	MaxSteps int
 	// HistoryLimit is how many of a session's most recent messages are replayed into the model.
 	HistoryLimit int
@@ -273,9 +276,11 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		}
 	}
 
-	// Cap reached: ask once more with no tools offered. Some providers (Haiku on Bedrock)
-	// still emit tool calls then; run them so no tool_use is left dangling, then stop.
-	choice, err := r.model.Chat(ctx, history, nil, stream(emit))
+	// Cap reached: ask once more for text only. The tools stay in the request so the provider's
+	// cached prefix (tools, system, history) still matches; llm.WithoutToolCalls forbids calling
+	// them. A provider may emit tool calls anyway (Haiku on Bedrock did with no tools at all);
+	// run them so no tool_use is left dangling, then stop.
+	choice, err := r.model.Chat(llm.WithoutToolCalls(ctx), history, reg.Definitions(), stream(emit))
 	if err != nil {
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
@@ -579,7 +584,7 @@ func emitUsage(emit func(Event), choice *llms.ContentChoice) {
 	if usage == nil {
 		return
 	}
-	emit(Event{Kind: EventUsage, InputTokens: usage.Input, OutputTokens: usage.Output})
+	emit(Event{Kind: EventUsage, InputTokens: usage.Input, CachedInputTokens: usage.CachedInput, OutputTokens: usage.Output})
 }
 
 // validJSON renders tool arguments for the UI, falling back to a JSON string when the model

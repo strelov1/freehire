@@ -19,15 +19,17 @@ type scriptedModel struct {
 	replies []*llms.ContentChoice
 	err     error
 
-	calls     int
-	gotTools  [][]llms.Tool
-	gotHist   [][]llms.MessageContent
-	onEachRun func()
+	calls       int
+	gotTools    [][]llms.Tool
+	gotTextOnly []bool
+	gotHist     [][]llms.MessageContent
+	onEachRun   func()
 }
 
-func (m *scriptedModel) Chat(_ context.Context, msgs []llms.MessageContent, tools []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
+func (m *scriptedModel) Chat(ctx context.Context, msgs []llms.MessageContent, tools []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
 	m.calls++
 	m.gotTools = append(m.gotTools, tools)
+	m.gotTextOnly = append(m.gotTextOnly, llm.ToolCallsForbidden(ctx))
 	m.gotHist = append(m.gotHist, msgs)
 	if m.onEachRun != nil {
 		m.onEachRun()
@@ -236,8 +238,15 @@ func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 	if m.calls != 4 {
 		t.Fatalf("model called %d times, want 3 capped rounds plus one final answer", m.calls)
 	}
-	if tools := m.gotTools[3]; len(tools) != 0 {
-		t.Errorf("final call offered %d tools, want none — that is what forces an answer", len(tools))
+	// The tools stay in the request (the cached prefix must still match) and calling them is
+	// forbidden — that is what forces an answer.
+	if got, want := len(m.gotTools[3]), len(m.gotTools[0]); got != want || got == 0 {
+		t.Errorf("final call offered %d tools, want the same %d as every round", got, want)
+	}
+	for i, textOnly := range m.gotTextOnly {
+		if want := i == 3; textOnly != want {
+			t.Errorf("call %d text-only = %v, want %v", i, textOnly, want)
+		}
 	}
 	if res := lastResult(t, events); res.StopReason != StopMaxSteps {
 		t.Errorf("stop reason = %q, want %q", res.StopReason, StopMaxSteps)
@@ -245,7 +254,7 @@ func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 }
 
 func TestMaxStepsWrapUpRunsToolCallsProvidersStillEmit(t *testing.T) {
-	// Haiku on Bedrock has returned tool calls on the no-tools wrap-up call. Persisting
+	// Haiku on Bedrock has returned tool calls on a wrap-up call offering no tools. Persisting
 	// them without running left a dangling tool_use the UI showed as a hung turn.
 	m := &scriptedModel{replies: []*llms.ContentChoice{
 		callReply("echo", `{"text":"1"}`),

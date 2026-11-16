@@ -18,6 +18,23 @@ type ChatStream struct {
 	OnThinking func(string)
 }
 
+type noToolCallsKey struct{}
+
+// WithoutToolCalls marks the Chat calls made under ctx as text-only: the tools still travel in
+// the request, and tool_choice "none" asks the model not to call them. Withholding the tools
+// would force an answer too, but the tool definitions are part of the prompt prefix a provider
+// caches, so dropping them on the last round of a long turn recomputes the whole conversation
+// at full input price. On `flagship` it would also lift the reasoning workaround below.
+func WithoutToolCalls(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noToolCallsKey{}, true)
+}
+
+// ToolCallsForbidden reports whether ctx was marked by WithoutToolCalls.
+func ToolCallsForbidden(ctx context.Context) bool {
+	forbidden, _ := ctx.Value(noToolCallsKey{}).(bool)
+	return forbidden
+}
+
 // Chat sends a whole conversation with a set of tools and returns the chosen completion
 // (text, tool calls, or both). Deltas go through stream as they arrive; the full text is also
 // on the returned choice.
@@ -68,6 +85,9 @@ func (c *Client) Chat(ctx context.Context, msgs []llms.MessageContent, tools []l
 			ctx = withReasoning(ctx, ReasoningNone)
 		}
 		opts = append(opts, llms.WithTools(tools))
+		if ToolCallsForbidden(ctx) {
+			opts = append(opts, llms.WithToolChoice("none"))
+		}
 	}
 
 	resp, err := c.model.GenerateContent(ctx, msgs, opts...)
