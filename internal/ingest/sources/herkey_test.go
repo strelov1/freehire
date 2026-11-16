@@ -216,15 +216,16 @@ func TestHerKeySeenPostingsCostNoDetail(t *testing.T) {
 func TestHerKeyGatedPostingsCostNoDetail(t *testing.T) {
 	f := herkeyFixtures(t)
 	gate := DetailGate{
-		Covered:  func(names []string) map[string]bool { return map[string]bool{"Aristocrat": true} },
-		Rejected: func(j Job) bool { return j.Title == "Field Officer" },
+		Covered: func(names []string) map[string]bool {
+			return map[string]bool{"Aristocrat": true, "Cadila Pharma": true}
+		},
 	}
 	jobs, err := herkey{http: f}.FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
 	if err != nil {
 		t.Fatalf("FetchNewGated: %v", err)
 	}
 	if calls := f.detailCalls(); !slices.Equal(calls, []string{"179885", "194271", "194415"}) {
-		t.Errorf("detail calls = %v, want none for the covered and rejected postings", calls)
+		t.Errorf("detail calls = %v, want none for the covered postings", calls)
 	}
 	got := herkeyByID(jobs)
 	for _, id := range []string{"193866", "194409"} {

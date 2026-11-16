@@ -196,8 +196,7 @@ func TestBuiltInGatedCrawlBuysOnlyTheBodiesItKeeps(t *testing.T) {
 	site := builtinSite(t)
 	s := builtin{http: site, maxNewPerRun: 10}
 	gate := DetailGate{
-		Covered:  func(names []string) map[string]bool { return map[string]bool{"PwC": true} },
-		Rejected: func(j Job) bool { return strings.Contains(j.Title, "Marketing") },
+		Covered: func(names []string) map[string]bool { return map[string]bool{"PwC": true, "Xero": true} },
 	}
 	seen := func(id string) bool { return id == "11691412" }
 	jobs, err := s.FetchNewGated(context.Background(), CompanyEntry{}, seen, gate)
@@ -214,7 +213,7 @@ func TestBuiltInGatedCrawlBuysOnlyTheBodiesItKeeps(t *testing.T) {
 	if !byID["11691412"].SeenRefresh {
 		t.Error("a seen posting is not a liveness refresh")
 	}
-	for _, id := range []string{"11691513", "11691620"} { // covered employer, rejected title
+	for _, id := range []string{"11691513", "11691620"} { // covered employers
 		if j := byID[id]; j.Description != "" || j.SeenRefresh || j.Company == "" {
 			t.Errorf("%s should be yielded body-less for the pipeline to discard: %+v", id, j)
 		}
@@ -251,8 +250,7 @@ func TestBuiltInRefusedPostingPagesFailTheRun(t *testing.T) {
 	site.errs = map[string]error{builtinWasabi: &StatusError{Method: "GET", Code: 429, URL: builtinWasabi}}
 	s := builtin{http: site, maxNewPerRun: 10}
 	gate := DetailGate{
-		Covered:  func([]string) map[string]bool { return nil },
-		Rejected: func(j Job) bool { return j.ExternalID != "11687409" },
+		Covered: func([]string) map[string]bool { return nil },
 	}
 	if _, err := s.FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate); err == nil {
 		t.Error("a run that needed one posting page and was refused it reported success")

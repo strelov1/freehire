@@ -3,7 +3,6 @@ package classify
 import (
 	"strings"
 
-	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
 )
 
@@ -176,53 +175,6 @@ var nonTechTitleTerms = []string{
 	"environmental services", "community liaison",
 	// The Spanish/Portuguese and Russian tails of the same wave
 	"auxiliar administrativo", "охране труда", "охрана труда",
-}
-
-// ConfirmedNonTech reports whether a title states a non-technical role AND nothing
-// places it in the catalogue. It exists because IsNonTech alone is not a safe basis for
-// turning a posting away: the dictionary matches its terms anywhere in a title, and it
-// was written on the contract stated above — consulted only after the tech check. The
-// ingest filter, which refuses on this signal, goes through here so the precedence
-// cannot be forgotten.
-//
-// Any resolved category vetoes the refusal, technical or not. The catalogue is broader
-// than IT: a posting the title dictionary files under a facet — `healthcare`, `retail`,
-// `industrial_engineering`, any of them — belongs in it and is searchable under that
-// facet; only `is_tech=false` follows from the placement. So a "Registered Nurse" is
-// kept (healthcare), while a title that names a non-technical role the dictionary
-// cannot FILE is still refused, because a posting no facet reaches is one search
-// excludes anyway (search.CategoryUnresolved). Growing the catalogue is therefore a
-// dictionary change: give the role a category and the next crawl admits it.
-//
-// The role_type facet is the other placement, and it vetoes for the same reason: a
-// "General Manager" names no craft, but roletype marks it a people manager, search
-// keeps it on that facet, and refusing it here would turn away a posting search would
-// have shown. The two gates must agree — a posting is kept iff some facet reaches it.
-func ConfirmedNonTech(title string, hasTechEvidence bool) bool {
-	if hasTechEvidence || Parse(title).Category != "" || roletype.Derive(title) != "" || NamesManager(title) {
-		return false
-	}
-	return IsNonTech(title)
-}
-
-// managerWords are the bare "manager" nouns NamesManager looks for, in the languages the
-// catalogue carries them.
-var managerWords = []string{"manager", "managerin", "менеджер"}
-
-// NamesManager reports whether a title names a manager of SOME kind, whatever it manages.
-// It is deliberately not a category and not the people_manager marker: many bare
-// "manager" titles manage a thing, not people, and the rest name no craft — "Case
-// Manager", "Property Manager", "Service Manager", a bare "Менеджер". Such postings
-// stay reachable by keyword search, so both catalogue gates (here and
-// search.CategoryUnresolved) admit a title this names.
-func NamesManager(title string) bool {
-	lower := strings.ToLower(title)
-	for _, w := range managerWords {
-		if wordmatch.Contains(lower, w, wordmatch.UnicodeBoundary) {
-			return true
-		}
-	}
-	return false
 }
 
 // NonTechTerms returns the curated non-tech title terms. Exposed so the catalogue

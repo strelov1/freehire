@@ -61,12 +61,10 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
 	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
-	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, t.firstErr)
 	}
-	st.Rejected = t.rej.rejected
 	markInterrupted(ctx, &st)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",

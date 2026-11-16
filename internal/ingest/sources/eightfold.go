@@ -134,9 +134,8 @@ func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 // the listing alone, and hydrate up to maxNew of the rest. The unseen positions past maxNew
 // are not yielded, so the pipeline reads the board as having pending work rather than as quiet.
 //
-// The budget goes to a random sample rather than the listing's first positions: a position the
-// catalogue filter rejects is never stored, so it stays unseen, and a fixed prefix of those would
-// take the budget on every run and starve the positions behind it.
+// The budget goes to a random sample rather than the listing's first positions: a position that
+// is never stored stays unseen, and a fixed prefix of those would take the budget on every run and starve the positions behind it.
 //
 // Not yielding is safe because an unseen position is almost always a new one. The exceptions are
 // the stored rows the seen set withholds (INGEST_REFETCH_ALL, the hydration-retry window,

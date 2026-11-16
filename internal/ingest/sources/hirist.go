@@ -249,7 +249,7 @@ func (s hirist) hydrate(ctx context.Context, rows []hiristListing, tech bool, se
 			continue
 		}
 		// A posting the pipeline will discard is yielded body-less, for it to count.
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}

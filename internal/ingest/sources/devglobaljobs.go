@@ -131,7 +131,7 @@ func (s devglobaljobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen f
 		}
 
 		base := p.toJob(p.DescriptionExcerpt)
-		if covered[p.Organization] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.Organization] {
 			// Covered by first-party ATS or rejected by filter: yield without detail call.
 			out = append(out, base)
 			continue

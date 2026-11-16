@@ -302,14 +302,12 @@ func TestHiristWalksUntilHasMoreEnds(t *testing.T) {
 	}
 }
 
-// A posting whose employer is already covered, or whose title the catalogue filter rejects, is
-// yielded body-less without a detail request, so the budget goes to postings that will be kept.
+// A posting whose employer is already covered is yielded body-less without a detail request, so the budget goes to postings that will be kept.
 func TestHiristGateSkipsTheDetailOfADiscardedPosting(t *testing.T) {
 	fake := &hiristFake{pages: map[int]string{0: hiristCategoryFixture(t)}}
 	src := NewHirist(fake).(CoverageGated)
 	gate := DetailGate{
-		Covered:  func(cs []string) map[string]bool { return map[string]bool{"The Hartford": true} },
-		Rejected: func(j Job) bool { return j.ExternalID == "1678906" },
+		Covered: func(cs []string) map[string]bool { return map[string]bool{"The Hartford": true, "PTC": true} },
 	}
 	jobs, err := src.FetchNewGated(context.Background(), CompanyEntry{Board: "16"}, func(string) bool { return false }, gate)
 	if err != nil {

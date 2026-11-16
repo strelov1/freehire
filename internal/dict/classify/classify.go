@@ -29,7 +29,7 @@ func Parse(title string) Classification {
 
 // matchCategory resolves the role category of an already-lowercased title: the ordered table walk plus one translation, categoryNone (the sentinel a blind alias carries) is served as "".
 //
-// The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere, which the ingest filter refuses.
+// The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
 	c := matchOrdered(cutBackEndShifts(lower), categoryTable)

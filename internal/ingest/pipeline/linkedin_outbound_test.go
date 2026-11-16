@@ -37,16 +37,6 @@ func TestLinkedInPublishesOnlyConfirmedOnsiteApplications(t *testing.T) {
 	}
 }
 
-func TestLinkedInDiscoveryKeepsTheCatalogueFilter(t *testing.T) {
-	src := fakeSource{provider: "linkedin", jobs: []sources.Job{{ExternalID: "4", Title: refusedTitle, Company: "Acme", URL: "https://www.linkedin.com/jobs/view/4/", ApplyMethod: sources.ApplyExternal}}}
-	store, outbound := &fakeStore{}, &outboundRecorder{}
-	runner := Runner{Registry: registry(src), Store: store, Outbound: outbound}
-	stats, err := runner.Run(context.Background(), []sources.CompanyEntry{{Provider: "linkedin", Board: "Go"}})
-	if err != nil || len(outbound.jobs) != 0 || len(store.saved) != 0 || stats.Total().Rejected != 1 {
-		t.Fatalf("non-catalogue discovery escaped filter: outbound=%d stats=%+v, %v", len(outbound.jobs), stats.Total(), err)
-	}
-}
-
 func TestDiscoveryDoesNotClaimThatTheSourceListingWasEmpty(t *testing.T) {
 	if !boardListedAnyPosting(Stats{Discovered: 1}) {
 		t.Fatal("a discovery-only listing is not an empty source feed")

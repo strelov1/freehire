@@ -410,7 +410,7 @@ func TestGustoFetchNewSkipsDetailForASeenPosting(t *testing.T) {
 	if j.Description != "" {
 		t.Errorf("a refresh must carry no body, got %q", j.Description)
 	}
-	// The title travels with the refresh: the pipeline re-applies the catalogue filter to it.
+	// The title travels with the refresh.
 	if j.Title != "Senior Go Engineer" || j.ExternalID != gustoTestID {
 		t.Errorf("refresh identity = %q/%q", j.Title, j.ExternalID)
 	}

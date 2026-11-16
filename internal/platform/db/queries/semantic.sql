@@ -5,9 +5,8 @@
 --      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 --      differs from the job's current content_hash — AND confirmed technical
 --      (is_tech IS TRUE), the same gate EnqueueJobEnrichment/EnqueuePendingJobs use
---      (jobs.sql, enrichment.sql) so embed spend is not wasted on postings that will
---      never surface via keyword/category search either (see search.CategoryUnresolved,
---      internal/search/document.go). Before this the gate was category-based
+--      (jobs.sql, enrichment.sql) so embed spend is not wasted on the undifferentiated
+--      bulk of broad crawls (which search indexes only under category "other"). Before this the gate was category-based
 --      (category <> ALL(NonTechCategories)), a deliberate "category-gated, not
 --      tech-only" design — measured 2026-07-22 at only 35% of the (now-removed)
 --      jobs_semantic Meili index's ~2.05M docs carrying an is_tech tag, i.e. the same

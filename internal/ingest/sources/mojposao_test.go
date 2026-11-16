@@ -207,17 +207,6 @@ func TestMojPosaoRejectsAnUnknownBoard(t *testing.T) {
 	}
 }
 
-func TestMojPosaoDoesNotJudgeTheCatalogueFilterOnTheCard(t *testing.T) {
-	f := &mojposaoFake{}
-	gate := DetailGate{Rejected: func(Job) bool { return true }}
-	if _, err := newTestMojPosao(f).FetchNewGated(context.Background(), mojposaoHR, func(string) bool { return false }, gate); err != nil {
-		t.Fatal(err)
-	}
-	if len(f.details) != 4 {
-		t.Errorf("posting requests = %v, want all four named postings bought: the card lacks the IT position", f.details)
-	}
-}
-
 func TestMojPosaoGateSkipsCoveredEmployers(t *testing.T) {
 	f := &mojposaoFake{}
 	gate := DetailGate{Covered: func(cs []string) map[string]bool {

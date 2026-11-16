@@ -8,8 +8,8 @@
 // attempt ceiling as the only bound, an entry at the head of the queue spent all three
 // attempts within about fifteen minutes and was dead-lettered. 172,875 postings were
 // buried that way. A dead-lettered entry is excluded from the claim query forever, its
-// job never receives a category, and search.CategoryUnresolved keeps a job without a
-// category out of the index — so the posting stayed in the catalogue, listed by
+// job never receives a category, and search then kept a job without a category out of
+// the index (until #4412) — so the posting stayed in the catalogue, listed by
 // GET /api/v1/jobs, and unreachable by search.
 // Run with: go test -tags=integration ./internal/platform/db/
 package db

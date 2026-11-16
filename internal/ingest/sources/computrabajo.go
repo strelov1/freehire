@@ -135,7 +135,7 @@ func (s computrabajo) FetchNewGated(ctx context.Context, e CompanyEntry, seen fu
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.company] {
 			jobs = append(jobs, base)
 			continue
 		}

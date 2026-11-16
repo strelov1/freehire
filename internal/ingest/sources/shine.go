@@ -119,7 +119,7 @@ func (s shine) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 
 // FetchNewGated lists every posting the sitemaps name, refreshes the ones already stored, and
 // reads up to maxNewPerRun of the rest, newest id first. A posting the pipeline will discard
-// anyway — its employer already covered by a non-aggregator source, or its title rejected — is
+// anyway — its employer already covered by a non-aggregator source — is
 // judged on what its URL spells and yielded body-less without a request: a discarded posting is
 // never stored, so without the gate every run would buy it again. A posting whose page cannot be
 // read is not yielded; a later run tries again.
@@ -146,7 +146,7 @@ func (s shine) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(exte
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[p.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[p.company] {
 			jobs = append(jobs, base)
 			continue
 		}

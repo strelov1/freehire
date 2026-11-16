@@ -81,8 +81,6 @@ func (s hireclick) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 	}
 	return fetchDetails(postings, defaultDetailWorkers, func(p hireclickPosting) (Job, bool) {
 		if seen(p.id) {
-			// The title travels because a refresh faces the catalogue filter, which is how a
-			// stored row ages out when the non-technical dictionary later covers its title.
 			return Job{
 				ExternalID:  p.id,
 				URL:         p.url,

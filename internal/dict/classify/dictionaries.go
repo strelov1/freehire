@@ -52,7 +52,7 @@ var earlyCareersDeskPatterns = []*regexp.Regexp{
 //
 // A table entry rather than a pre-match mask on purpose: cutting the span would expose whatever alias sits further down ("Software Design Engineer - Sales Tools" would resolve to `sales`), and cutting is boundary-blind where every matcher here is boundary-aware. As an entry it wins the first-match walk and matchCategory translates it to "".
 //
-// Only phrases with no better category belong here; otherwise route the title ("cloud design engineer" → devops, "design engineer in test" → qa). Keep phrases narrow: a broad "systems design engineer" would blank the category of every "HVAC/Mechanical Systems Design Engineer" and the placement that vetoes deletion in ConfirmedNonTech.
+// Only phrases with no better category belong here; otherwise route the title ("cloud design engineer" → devops, "design engineer in test" → qa). Keep phrases narrow: a broad "systems design engineer" would blank the category of every "HVAC/Mechanical Systems Design Engineer".
 const categoryNone = "-"
 
 // seniorityTable lists seniority aliases in precedence order (most specific /

@@ -272,25 +272,6 @@ func TestHZZBudgetAndDeadlineDefer(t *testing.T) {
 	}
 }
 
-func TestHZZRejectedTitleCostsNoPage(t *testing.T) {
-	f := &hzzFake{}
-	gate := DetailGate{Rejected: func(Job) bool { return true }}
-	jobs, err := newTestHZZ(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// 167016223's feed title is rejected: yielded body-less, no page. The two title-less
-	// vacancies cannot be judged before their page and are read.
-	if len(f.pages) != 2 || len(jobs) != 2 {
-		t.Errorf("pages %v, jobs %d: a rejected vacancy is yielded body-less without a page", f.pages, len(jobs))
-	}
-	for _, p := range f.pages {
-		if p == hzzPostingURL(167016223) {
-			t.Error("the rejected vacancy's page was bought")
-		}
-	}
-}
-
 func TestHZZCompanyName(t *testing.T) {
 	for in, want := range map[string]string{
 		"EUROTIM d.o.o. za proizvodnju i trgovinu":                                                              "EUROTIM d.o.o.",

@@ -107,29 +107,6 @@ func TestRunReportsNoBoardForABoardlessEntry(t *testing.T) {
 	}
 }
 
-// TestRunReportsQualifyingBoardWhenEveryPostingWasRejected: the crawl reached these postings
-// and the catalogue filter turned them away — that is still proof the board was listed, and
-// refusing it would spare exactly the non-tech-heavy boards where stale rows accumulate.
-func TestRunReportsQualifyingBoardWhenEveryPostingWasRejected(t *testing.T) {
-	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{
-		{ExternalID: "1", Title: refusedTitle2, Company: "Acme"},
-	}}
-	r := Runner{Registry: registry(src), Store: &fakeStore{}}
-
-	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
-		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := stats["greenhouse"]; got.Rejected != 1 {
-		t.Fatalf("stats = %+v, want Rejected=1 (fixture assumption)", got)
-	}
-	if got := boardNames(stats["greenhouse"].QualifyingBoards); !slices.Contains(got, "acme") {
-		t.Errorf("QualifyingBoards = %v, want it to contain %q despite every posting being rejected", got, "acme")
-	}
-}
-
 // TestRunReportsOnlyBoardsItActuallyCrawled: a run that only entered a subset of a
 // provider's boards (a targeted run, a shard) reports only those as qualifying — a board
 // simply absent from the run's entries can never appear, by construction of RunStats being

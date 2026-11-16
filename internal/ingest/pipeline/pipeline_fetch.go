@@ -31,11 +31,6 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // id the same way the write path does, so it matches the stored external_id. A seen-set lookup
 // error fails OPEN (empty set → every posting treated as new), so a health hiccup never skips the
 // board.
-//
-// It returns the seen-set alongside the postings: it maps each stored external_id to that row's
-// tech evidence, which the caller needs to judge a liveness refresh against the same rule as a
-// write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
-// every lookup — harmless, because such a board yields no refreshes.
 func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) (fetchedBoard, error) {
 	if r.recent() {
 		rs, ok := src.(sources.RecentSource)
@@ -87,12 +82,12 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		return false
 	}
 	if cg, ok := src.(sources.CoverageGated); ok {
-		gate := sources.DetailGate{Covered: func([]string) map[string]bool { return nil }, Rejected: listingRejected(e)}
+		gate := sources.DetailGate{Covered: func([]string) map[string]bool { return nil }}
 		jobs, err := cg.FetchNewGated(ctx, e, seen, gate)
-		return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+		return fetchedBoard{jobs: jobs, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
-	return fetchedBoard{jobs: jobs, seen: set, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
+	return fetchedBoard{jobs: jobs, deferred: deferredAny(jobs), seenUnknown: seenUnknown}, err
 }
 
 // fetchedBoard is what fetchBoard read from one board. deferred reports that a hydrating adapter
@@ -101,7 +96,6 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 // posting read as new (see Stats.SeenUnknown).
 type fetchedBoard struct {
 	jobs        []sources.Job
-	seen        map[string]bool
 	deferred    bool
 	seenUnknown bool
 	// cut reports that the fetch's context ended under it (Runner.WriteReserve).

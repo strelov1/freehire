@@ -190,53 +190,6 @@ func (q *Queries) ListCompanyIndustriesPage(ctx context.Context, arg ListCompany
 	return items, nil
 }
 
-const listUncategorizedOpenJobTitles = `-- name: ListUncategorizedOpenJobTitles :many
-SELECT j.id, j.title
-FROM jobs j
-WHERE j.id > $1
-  AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
-  AND j.company_slug <> '' AND j.description <> ''
-  AND j.category = '' AND COALESCE(j.enrichment->>'category', '') IN ('', 'other')
-  AND j.is_tech IS NOT TRUE
-ORDER BY j.id
-LIMIT $2
-`
-
-type ListUncategorizedOpenJobTitlesParams struct {
-	AfterID   int64 `json:"after_id"`
-	BatchSize int32 `json:"batch_size"`
-}
-
-type ListUncategorizedOpenJobTitlesRow struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-}
-
-// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
-// category predicate would drop: no column category, no enrichment answer, not confirmed
-// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
-// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
-// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
-func (q *Queries) ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error) {
-	rows, err := q.db.Query(ctx, listUncategorizedOpenJobTitles, arg.AfterID, arg.BatchSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUncategorizedOpenJobTitlesRow{}
-	for rows.Next() {
-		var i ListUncategorizedOpenJobTitlesRow
-		if err := rows.Scan(&i.ID, &i.Title); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const markCompanyDescriptionChecked = `-- name: MarkCompanyDescriptionChecked :exec
 INSERT INTO companies (slug, name, is_reference, company_description_checked_at)
 VALUES ($1, $2, false, now())

@@ -28,7 +28,7 @@ var coreCategoryTable6 = []aliasEntry{
 	// `engineer` one ("Python Developer" and "Python Engineer" are the same job).
 	// An omission is not just a missing facet: a title this dictionary cannot read gets no category AND no is_tech;
 	// EnqueuePendingJobs gates enrichment on `is_tech IS TRUE`, so the LLM never supplies the missing category, and
-	// search.CategoryUnresolved then hides the posting FOREVER.
+	// search files the posting under "other" FOREVER.
 	// TestBothSpellingsOfACraftResolveTheSame derives the pairs from this table, so a technology added under one noun
 	// fails the build.
 	{"python engineer", "software_engineering"},

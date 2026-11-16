@@ -249,7 +249,7 @@ func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, se
 			return base, true
 		}
 		// A posting the pipeline will discard is yielded body-less, for it to count.
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			return base, true
 		}
 		if s.refused() || !s.claimDetail(&board) {

@@ -123,7 +123,7 @@ func (s herkey) FetchNew(ctx context.Context, _ CompanyEntry, seen func(external
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, seen, nil, nil)
+	return s.hydrate(ctx, rows, seen, nil)
 }
 
 // FetchNewGated is FetchNew told which postings the pipeline will discard anyway: a covered
@@ -142,7 +142,7 @@ func (s herkey) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		}
 		covered = gate.Covered(names)
 	}
-	return s.hydrate(ctx, rows, seen, covered, gate.Rejected)
+	return s.hydrate(ctx, rows, seen, covered)
 }
 
 // list mints the anonymous session the site's own frontend uses and walks the index to its
@@ -200,12 +200,11 @@ func (s herkey) list(ctx context.Context) ([]herkeyListing, error) {
 }
 
 // hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request; a
-// posting the pipeline will discard — its employer covered, or its title rejected as
-// non-technical — is yielded body-less for the pipeline to count; every other posting costs one
+// posting the pipeline will discard — its employer covered — is yielded body-less for the pipeline to count; every other posting costs one
 // detail request, up to the run's budget. A detail that could not be read defers its posting to
 // a later run rather than storing it body-less, which would never be hydrated again.
 func (s herkey) hydrate(ctx context.Context, rows []herkeyListing, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) ([]Job, error) {
+	covered map[string]bool) ([]Job, error) {
 	links := map[string]int{}
 	for _, r := range rows {
 		if l := r.applyLink(); l != "" {
@@ -222,7 +221,7 @@ func (s herkey) hydrate(ctx context.Context, rows []herkeyListing, seen func(str
 			base.SeenRefresh = true
 			return base, true
 		}
-		if covered[base.Company] || (rejected != nil && rejected(base)) {
+		if covered[base.Company] {
 			return base, true
 		}
 		if budget.Add(1) > herkeyDetailBudget {

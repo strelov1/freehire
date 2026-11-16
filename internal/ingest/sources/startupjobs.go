@@ -258,7 +258,7 @@ func (s startupjobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ext
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, c, nil, func(Job) bool { return false })
+	return s.hydrate(ctx, c, nil)
 }
 
 // FetchNewGated is FetchNew told what the pipeline is going to discard, and it matters more
@@ -278,7 +278,7 @@ func (s startupjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fun
 			names = append(names, h.CompanyName)
 		}
 	}
-	return s.hydrate(ctx, c, gate.Covered(names), gate.Rejected)
+	return s.hydrate(ctx, c, gate.Covered(names))
 }
 
 // crawl reads the run's view of the catalogue: the sitemap for every live posting, the Algolia
@@ -370,7 +370,7 @@ func (s startupjobs) crawl(ctx context.Context, seen func(string) bool) (startup
 // Once the edge refuses one request (403/429) the rest of the run's hydration is deferred too:
 // the refusal is about the IP, and every further request would be refused alike and only
 // prolong the penalty.
-func (s startupjobs) hydrate(ctx context.Context, c startupjobsCrawl, covered map[string]bool, rejected func(Job) bool) ([]Job, error) {
+func (s startupjobs) hydrate(ctx context.Context, c startupjobsCrawl, covered map[string]bool) ([]Job, error) {
 	out := c.refreshes
 	var toHydrate []Job
 	deferred := 0
@@ -380,7 +380,7 @@ func (s startupjobs) hydrate(ctx context.Context, c startupjobsCrawl, covered ma
 			continue
 		}
 		switch {
-		case covered[base.Company] || rejected(base):
+		case covered[base.Company]:
 			out = append(out, base) // the pipeline discards it either way; a body would be pure loss
 		case len(toHydrate) < s.maxNewPerRun:
 			toHydrate = append(toHydrate, base)

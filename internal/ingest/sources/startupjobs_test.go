@@ -476,7 +476,7 @@ func startupjobsCatalogue(t *testing.T) (startupjobsFakeFeed, *startupjobsFakeIn
 	records := []map[string]any{
 		startupjobsRecord(t, 100, old, "Backend Engineer", "Acme"),     // stored
 		startupjobsRecord(t, 101, old, "Data Engineer", "Acme"),        // backlog, technical
-		startupjobsRecord(t, 102, old, "Registered Nurse", "Acme"),     // backlog, rejected
+		startupjobsRecord(t, 102, old, "Registered Nurse", "Acme"),     // backlog
 		startupjobsRecord(t, 200, recent, "Platform Engineer", "Acme"), // window, stored
 		startupjobsRecord(t, 201, recent, "Frontend Engineer", "Acme"), // window, new
 		startupjobsRecord(t, 202, recent, "SRE", "Covered Co"),         // window, covered employer
@@ -503,7 +503,6 @@ func TestStartupJobsFetchNewGatedBuysOnlyBodiesThePipelineKeeps(t *testing.T) {
 			askedAbout = names
 			return map[string]bool{"Covered Co": true}
 		},
-		Rejected: func(j Job) bool { return j.Title == "Registered Nurse" },
 	}
 	seen := func(id string) bool { return id == "100" || id == "200" }
 	jobs, err := s.FetchNewGated(context.Background(), CompanyEntry{Provider: "startupjobs"}, seen, gate)
@@ -513,7 +512,7 @@ func TestStartupJobsFetchNewGatedBuysOnlyBodiesThePipelineKeeps(t *testing.T) {
 	if len(askedAbout) != 4 {
 		t.Errorf("coverage asked about %v, want the four candidates' employers", askedAbout)
 	}
-	want := []string{"https://startup.jobs/posting-101", "https://startup.jobs/posting-201"}
+	want := []string{"https://startup.jobs/posting-101", "https://startup.jobs/posting-102", "https://startup.jobs/posting-201"}
 	if got := site.postingsAsked(); !slices.Equal(got, want) {
 		t.Errorf("posting pages fetched = %v, want only %v", got, want)
 	}
@@ -531,12 +530,12 @@ func TestStartupJobsFetchNewGatedBuysOnlyBodiesThePipelineKeeps(t *testing.T) {
 	if j := byID["200"]; !j.SeenRefresh || j.Title != "Platform Engineer" {
 		t.Errorf("stored window posting = %+v, want a refresh carrying its title", j)
 	}
-	for _, id := range []string{"101", "201"} {
+	for _, id := range []string{"101", "102", "201"} {
 		if j := byID[id]; !strings.Contains(j.Description, "Fonzi Match Day") {
 			t.Errorf("new posting %s description = %q, want the posting page's JobPosting body", id, j.Description)
 		}
 	}
-	for _, id := range []string{"102", "202"} {
+	for _, id := range []string{"202"} {
 		if j := byID[id]; j.Description != "" || j.SeenRefresh {
 			t.Errorf("posting %s: description %q seenRefresh %v, want body-less and new", id, j.Description, j.SeenRefresh)
 		}

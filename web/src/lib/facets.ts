@@ -42,7 +42,7 @@ import {
 import {
   SENIORITY_LABELS,
   EMPLOYMENT_LABELS,
-  CATEGORY_LABELS,
+  JOB_CATEGORY_LABELS,
   DOMAIN_LABELS,
   COMPANY_TYPE_LABELS,
   ENGLISH_LEVEL_LABELS,
@@ -283,7 +283,7 @@ export const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_
 const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
 const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, RELOCATION_LABELS);
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
-const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
+const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, JOB_CATEGORY_LABELS);
 
 // IANA timezone REGIONS — the part before the slash. What a recruiter asking "can we
 // overlap for a call" means is a continent, not a city's zone; there are dozens of zones

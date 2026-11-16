@@ -117,7 +117,7 @@ func (v vagas) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(exte
 	deferred := 0
 	for _, c := range fresh {
 		switch j := c.job(); {
-		case covered[c.company] || (gate.Rejected != nil && gate.Rejected(j)):
+		case covered[c.company]:
 			jobs = append(jobs, j) // the pipeline discards it; its body would buy nothing
 		case len(toHydrate) < budget:
 			toHydrate = append(toHydrate, c.url)

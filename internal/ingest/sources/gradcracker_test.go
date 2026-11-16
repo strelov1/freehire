@@ -142,16 +142,17 @@ func TestGradcrackerFetchNewGated(t *testing.T) {
 		gcCT1:    gradcrackerListing(t),
 		gcEE1:    gradcrackerListing(t), // the same postings under a second discipline are kept once
 		gcEYTech: gradcrackerFixture(t, "detail.html"),
+		gcEYFin:  gradcrackerFixture(t, "detail.html"),
 	}}
-	// 86360 is stored; 86371 is a title the catalogue filter turns away.
+	// 86360 is stored; 86371 and 86373 are new.
 	seen := func(id string) bool { return id == "86360" }
-	gate := DetailGate{Rejected: func(j Job) bool { return strings.HasPrefix(j.Title, "Financial") }}
+	gate := DetailGate{}
 	jobs, err := NewGradcracker(f, 0).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{}, seen, gate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Each discipline to the page past its last (a 404), then the one posting page worth buying.
-	if want := []string{gcCT1, gcCT2, gcEE1, gcEE2, gcEYTech}; !slices.Equal(f.calls, want) {
+	// Each discipline to the page past its last (a 404), then the new postings' pages.
+	if want := []string{gcCT1, gcCT2, gcEE1, gcEE2, gcEYTech, gcEYFin}; !slices.Equal(f.calls, want) {
 		t.Fatalf("calls = %v\nwant    %v", f.calls, want)
 	}
 	byID := map[string]Job{}
@@ -164,8 +165,8 @@ func TestGradcrackerFetchNewGated(t *testing.T) {
 	if j := byID["86360"]; !j.SeenRefresh || j.Description != "" || j.URL != gcNPL || j.Title != "Graduate Engineer – IT Platforms and Cyber" {
 		t.Errorf("stored posting = %+v, want a titled, body-less SeenRefresh", j)
 	}
-	if j := byID["86371"]; j.SeenRefresh || j.Description != "" || j.URL != gcEYFin {
-		t.Errorf("rejected posting = %+v, want it yielded body-less for the pipeline to discard", j)
+	if j := byID["86371"]; j.SeenRefresh || j.Description == "" || j.URL != gcEYFin {
+		t.Errorf("new posting = %+v, want it hydrated", j)
 	}
 	j := byID["86373"]
 	if j.SeenRefresh || j.EmploymentType != "internship" || j.Location != "London" || j.Company != "EY" {

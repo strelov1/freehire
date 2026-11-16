@@ -117,9 +117,8 @@ func TestShineGateJudgesThePostingByItsURL(t *testing.T) {
 	gate := DetailGate{
 		Covered: func(cs []string) map[string]bool {
 			asked = cs
-			return map[string]bool{"md shakeel ahamed": true}
+			return map[string]bool{"md shakeel ahamed": true, "eklavya placements": true}
 		},
-		Rejected: func(j Job) bool { return j.Title == "insurance sales manager" },
 	}
 	jobs, err := newTestShine(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
 	if err != nil {

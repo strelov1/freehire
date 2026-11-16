@@ -2389,9 +2389,8 @@ type Querier interface {
 	//      i.e. semantic_embedded_model differs from the target OR semantic_embedded_hash
 	//      differs from the job's current content_hash — AND confirmed technical
 	//      (is_tech IS TRUE), the same gate EnqueueJobEnrichment/EnqueuePendingJobs use
-	//      (jobs.sql, enrichment.sql) so embed spend is not wasted on postings that will
-	//      never surface via keyword/category search either (see search.CategoryUnresolved,
-	//      internal/search/document.go). Before this the gate was category-based
+	//      (jobs.sql, enrichment.sql) so embed spend is not wasted on the undifferentiated
+	//      bulk of broad crawls (which search indexes only under category "other"). Before this the gate was category-based
 	//      (category <> ALL(NonTechCategories)), a deliberate "category-gated, not
 	//      tech-only" design — measured 2026-07-22 at only 35% of the (now-removed)
 	//      jobs_semantic Meili index's ~2.05M docs carrying an is_tech tag, i.e. the same
@@ -5058,16 +5057,15 @@ type Querier interface {
 	ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourceAfterParams) ([]Job, error)
 	// The newest eligible postings of ONE tier this engine has not been told about yet, for
 	// cmd/search-ping. The gate is what the search index admits (cmd/reindex's splitJobs):
-	// open, canonical, public, carrying a body (search.DescriptionMissing), and with a
-	// resolved category (search.CategoryUnresolved — the column answers, or enrichment does
-	// with something other than "other", or is_tech is confidently true). A URL worth
+	// open, canonical, public, and carrying a body (search.DescriptionMissing); an uncategorized
+	// posting is indexed under "other" (#4412), so category does not gate. A URL worth
 	// announcing is a URL the site itself claims, and the sitemap claims exactly what the
 	// index holds. The body test is the raw column, not the stripped text the index tests;
 	// a body that is only empty markup is the same small residual company_facets.sql names.
 	//
 	// `technical` picks the tier, and the two tiers partition the gate: true is the
-	// is_tech postings, false is every other posting with a resolved category — the
-	// catalogue beyond IT. The split is not an eligibility rule, it is a PRIORITY one: an
+	// is_tech postings, false is every other posting — the catalogue beyond IT, uncategorized
+	// included. The split is not an eligibility rule, it is a PRIORITY one: an
 	// engine with a scarce daily budget (Google, 200/day) asks for the technical tier
 	// first and offers the rest only what that left, while an unbounded engine takes a
 	// batch of each (see passes in internal/job/searchping). Two calls of one query rather
@@ -5673,12 +5671,6 @@ type Querier interface {
 	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
 	// nullable UUID, and the handler would carry two spellings of one id.
 	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
-	// Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
-	// category predicate would drop: no column category, no enrichment answer, not confirmed
-	// technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
-	// hands the ids it keeps back as kept_ids, so the count follows search on the one branch
-	// this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
-	ListUncategorizedOpenJobTitles(ctx context.Context, arg ListUncategorizedOpenJobTitlesParams) ([]ListUncategorizedOpenJobTitlesRow, error)
 	// The worst $1 boards currently failing or cooled down, worst first — the source of the
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
@@ -7040,7 +7032,7 @@ type Querier interface {
 	// the wider table scope did all three: 294,021 company URLs in the sitemap of which
 	// most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
 	// through could not find, and Stripe listed at 570 on /companies against 444 on its
-	// own page. The four predicates below (private, body, category, unseen) are the ones
+	// own page. The three predicates below (private, body, unseen) are the ones
 	// cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
 	//
 	// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER

@@ -11,7 +11,7 @@ import { SPECIALIZATION_ALIASES } from './specializationAliases';
 
 import { CATEGORY_VALUES, type Category } from './generated/contracts';
 import { optionMatches } from './facetOptions';
-import { categoryLabel } from './labels';
+import { JOB_CATEGORY_LABELS, categoryLabel } from './labels';
 
 // `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)
 // company modal rail. Both ride the same shell as the job sections below.
@@ -123,7 +123,7 @@ export const CATEGORY_GROUPS: CategorySection[] = CATEGORY_GROUP_ORDER.map((name
   name,
   options: CATEGORY_VALUES.filter((v) => CATEGORY_GROUP[v] === name).map((value) => ({
     value,
-    label: categoryLabel(value),
+    label: JOB_CATEGORY_LABELS[value] ?? categoryLabel(value),
   })),
 })).filter((s) => s.options.length > 0);
 

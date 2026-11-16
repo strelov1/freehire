@@ -105,15 +105,14 @@ func TestCheck_UnreadableDerivedRequirementsAreNotStored(t *testing.T) {
 	}
 }
 
-// Most absent documents are search's own rules at work (measured 2026-10-31: 797 of
-// 798, mostly no category). Only a row no rule withholds is Missing, so that one count
+// Most absent documents are search's own rules at work. Only a row no rule withholds is Missing, so that one count
 // is a real indexing loss instead of a share hidden among the deliberate ones.
 func TestCheck_NamesWhyARowHasNoDocument(t *testing.T) {
 	rows := []db.Job{row(5), row(6), row(7)}
-	reasons := map[int64]search.WithholdReason{5: search.WithheldNoCategory, 6: search.WithheldUnseen}
+	reasons := map[int64]search.WithholdReason{5: search.WithheldNoDescription, 6: search.WithheldUnseen}
 	rep := serveprobe.Check(rows, map[int64]jobview.Job{}, func(j db.Job) search.WithholdReason { return reasons[j.ID] })
 
-	want := map[string]int{string(search.WithheldNoCategory): 1, string(search.WithheldUnseen): 1, serveprobe.Missing: 1}
+	want := map[string]int{string(search.WithheldNoDescription): 1, string(search.WithheldUnseen): 1, serveprobe.Missing: 1}
 	for _, k := range serveprobe.UnindexedReasons {
 		if rep.Unindexed[k] != want[k] {
 			t.Errorf("unindexed[%s] = %d, want %d", k, rep.Unindexed[k], want[k])

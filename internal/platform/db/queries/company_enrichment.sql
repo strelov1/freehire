@@ -191,19 +191,3 @@ WHERE slug = sqlc.arg(slug);
 UPDATE companies
 SET company_info_wikipedia_checked_at = now()
 WHERE slug = sqlc.arg(slug);
-
--- name: ListUncategorizedOpenJobTitles :many
--- Keyset page (by id) of the open, canonical, public, bodied postings RefreshCompanyFacets'
--- category predicate would drop: no column category, no enrichment answer, not confirmed
--- technical. cmd/recount-companies runs search.TitleKeepsUncategorized over their titles and
--- hands the ids it keeps back as kept_ids, so the count follows search on the one branch
--- this SQL cannot derive (#4503). Paged so a run never holds the whole set at once.
-SELECT j.id, j.title
-FROM jobs j
-WHERE j.id > sqlc.arg(after_id)
-  AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
-  AND j.company_slug <> '' AND j.description <> ''
-  AND j.category = '' AND COALESCE(j.enrichment->>'category', '') IN ('', 'other')
-  AND j.is_tech IS NOT TRUE
-ORDER BY j.id
-LIMIT sqlc.arg(batch_size);
