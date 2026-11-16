@@ -19,7 +19,7 @@ Read [Work-arrangement prose (description)](AGENT-REFERENCE.md#work-arrangement-
 
 ### Per-country location lines
 
-Read [Per-country location lines](AGENT-REFERENCE.md#per-country-location-lines) before work involving this topic.
+Read [Per-country location lines](AGENT-REFERENCE-COUNTRIES.md#per-country-location-lines) before work involving this topic.
 
 ## How it works
 
