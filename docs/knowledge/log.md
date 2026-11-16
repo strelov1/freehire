@@ -41,3 +41,7 @@ Verified native intake preserves regional board identity and contributor attribu
 vanity posting hosts. A recorded board adopts its provider even when the exact posting
 read fails, while operator pauses remain intact. Evidence is the focused handler
 integration suite; production verification is separate.
+
+Preserved independently verified native employer metadata across a later posting-read
+failure. The regression covers pending-board naming and a successful native retry with
+an adapter that labels jobs from its board entry; no unverified posting is published.

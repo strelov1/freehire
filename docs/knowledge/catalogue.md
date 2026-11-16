@@ -10,6 +10,7 @@ sources:
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
+  - resource: ../../internal/ingest/linkimport/native_resolve.go
   - resource: ../../internal/ingest/linkimport/linkedin.go
   - resource: ../../internal/api/handler/intake_linkedin.go
   - resource: ../../internal/api/handler/intake_sources.go

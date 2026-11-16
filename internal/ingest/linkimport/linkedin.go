@@ -21,10 +21,11 @@ import (
 // LinkedInResolution separates reading a discovery from writing it. Intake inspects
 // the destination board before the write, preserving contribution novelty checks.
 type LinkedInResolution struct {
-	Posting  sources.Job
-	Native   *NativeDestination
-	Board    Board
-	BoardURL string
+	Posting       sources.Job
+	Native        *NativeDestination
+	VerifiedBoard *sources.CompanyEntry
+	Board         Board
+	BoardURL      string
 }
 
 func linkedInURL(raw string) bool {
@@ -71,6 +72,13 @@ func (im *Importer) PrepareLinkedIn(ctx context.Context, raw string) (LinkedInRe
 			out.Board, out.BoardURL = Board{Source: source, Board: board}, canonical
 		}
 		native, err := im.ResolveNative(ctx, db.Job{Source: "linkedin", Title: j.Title, Company: j.Company, URL: j.URL}, j.ExternalApplyURL, j.CompanyWebsite)
+		if native.Entry.Provider != "" {
+			out.VerifiedBoard = &native.Entry
+			out.Board = Board{Source: native.Entry.Provider, Board: native.Entry.Board}
+			if out.BoardURL == "" {
+				out.BoardURL = j.ExternalApplyURL
+			}
+		}
 		if err != nil {
 			return out, err
 		}

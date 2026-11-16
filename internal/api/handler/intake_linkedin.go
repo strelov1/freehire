@@ -16,16 +16,19 @@ func (s *intakeService) resolveLinkedIn(ctx context.Context, userID int64, raw, 
 	}
 	candidate := contribution.Intake{Source: prepared.Board.Source, Board: prepared.Board.Board,
 		Canonical: prepared.BoardURL, Region: atsboard.Region(prepared.BoardURL)}
-	if prepared.Native != nil {
-		entry := prepared.Native.Entry
+	if prepared.VerifiedBoard != nil {
+		entry := *prepared.VerifiedBoard
 		candidate = contribution.Intake{Source: entry.Provider, Board: entry.Board,
-			Region: entry.Region, Canonical: prepared.Native.Job.URL}
+			Region: entry.Region, Canonical: prepared.BoardURL, Company: entry.Company}
+	}
+	if prepared.Native != nil {
+		candidate.Canonical = prepared.Native.Job.URL
 	}
 	intake, err := s.contribution.InspectResolved(ctx, candidate)
 	if err != nil {
 		return intakeOutcome{}, err
 	}
-	if readErr == nil {
+	if readErr == nil && intake.Company == "" {
 		intake.Company = prepared.Posting.Company
 	}
 	// Recording now creates the native board. Do it before WriteNative so its

@@ -26,8 +26,8 @@ func (s intakeLinkedInSource) Posting(context.Context, string) (sources.Job, err
 type intakeNativeSource struct{}
 
 func (intakeNativeSource) Provider() string { return "hrsmart" }
-func (intakeNativeSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
-	return []sources.Job{{ExternalID: "3735", URL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735", Title: "Java Engineer", Company: "Gist Limited", Description: "Build Java services."}}, nil
+func (intakeNativeSource) Fetch(_ context.Context, entry sources.CompanyEntry) ([]sources.Job, error) {
+	return []sources.Job{{ExternalID: "3735", URL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735", Title: "Java Engineer", Company: entry.Company, Description: "Build Java services."}}, nil
 }
 
 type intakeEmployerProof struct{}
@@ -284,6 +284,24 @@ func TestLinkedInIntakeSchedulesRecognizedBoardAfterNativeReadFailure(t *testing
 			var jobs int
 			if err := pool.QueryRow(ctx, "SELECT count(*) FROM jobs").Scan(&jobs); err != nil || jobs != 0 {
 				t.Fatalf("unreadable native published jobs=%d error=%v", jobs, err)
+			}
+			if !paused {
+				var company string
+				if err := pool.QueryRow(ctx, "SELECT company FROM boards WHERE provider='hrsmart'").Scan(&company); err != nil || company != "Gist Limited" {
+					t.Fatalf("verified employer was lost after fetch failure: company=%q error=%v", company, err)
+				}
+				// HRsmart labels jobs from the board entry. A placeholder recorded
+				// during the outage would poison both the later crawl and this retry.
+				registry["hrsmart"] = intakeNativeSource{}
+				intake.imports = linkimport.New(pool, q, nil, nil, registry, intakeEmployerProof{})
+				again, err := intake.Resolve(ctx, userID, "https://www.linkedin.com/jobs/view/123/", contribution.SurfaceWeb)
+				if err != nil || again.Status != outcomeImported {
+					t.Fatalf("recovered native outcome=%+v error=%v", again, err)
+				}
+				saved, err := q.GetJobBySlug(ctx, again.PublicSlug)
+				if err != nil || saved.Source != "hrsmart" || saved.Company != "Gist Limited" {
+					t.Fatalf("recovered native employer=%q source=%q error=%v", saved.Company, saved.Source, err)
+				}
 			}
 		})
 	}

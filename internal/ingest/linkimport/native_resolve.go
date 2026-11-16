@@ -40,6 +40,8 @@ func (c destinationCatalog) Entry(ctx context.Context, source, board string) (so
 	return c.fallback, true, nil
 }
 
+// ResolveNative retains verified board metadata on a later posting-read failure.
+// A Job is available only when the returned error is nil.
 func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employerWebsite string) (NativeDestination, error) {
 	registry, catalog := im.ingest, im.catalog
 	source, board, canonical, ok := atsboard.Recognize(raw)
@@ -78,15 +80,17 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 	if err != nil {
 		return NativeDestination{}, err
 	}
+	verified := NativeDestination{Entry: e, EmployerWebsite: employerWebsite}
 	j, found, err := linksource.ResolveOnBoard(ctx, registry, c, source, board, raw)
 	if err != nil {
-		return NativeDestination{}, err
+		return verified, err
 	}
 	if !found || j.Unreadable || j.Removed || strings.TrimSpace(j.Description) == "" {
-		return NativeDestination{}, fmt.Errorf("native ATS did not return a readable live posting for the destination")
+		return verified, fmt.Errorf("native ATS did not return a readable live posting for the destination")
 	}
 	if normalize.CompanySlug(j.Company) != normalize.CompanySlug(row.Company) || !strings.EqualFold(strings.Join(strings.Fields(j.Title), " "), strings.Join(strings.Fields(row.Title), " ")) {
-		return NativeDestination{}, fmt.Errorf("native posting's employer or title differs; refusing automatic identity transfer")
+		return verified, fmt.Errorf("native posting's employer or title differs; refusing automatic identity transfer")
 	}
-	return NativeDestination{Entry: e, Job: j, EmployerWebsite: employerWebsite}, nil
+	verified.Job = j
+	return verified, nil
 }

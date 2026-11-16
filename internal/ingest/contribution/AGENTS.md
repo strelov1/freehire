@@ -125,7 +125,9 @@ primary application method before any generic import can run. Confirmed internal
 may be stored as LinkedIn; an external posting must resolve to a verified native ATS.
 An observed employer board may be contributed even when its exact posting cannot be read.
 Inspect and record that board before the native write: recording now creates the board,
-so reversing this order loses contributor attribution. Verified employer names can travel
+so reversing this order loses contributor attribution. Verified native board metadata survives a later posting read failure, so an ATS that
+labels jobs from its board entry keeps the real employer when polling resumes.
+Verified employer names can travel
 through `Intake.Company`; ordinary URL-only submissions still use the placeholder name.
 `InspectResolved` retains a verified native board and its region even when the posting
 uses a vanity host. Region travels through recording into the board catalogue. Recorded
