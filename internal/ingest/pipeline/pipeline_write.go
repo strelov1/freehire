@@ -324,5 +324,5 @@ func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators, countries [
 	if !sources.IsAggregator(taxonomy, e.Provider) {
 		return nil, nil, false
 	}
-	return sources.AggregatorProviders(taxonomy), sources.MarketCountries(taxonomy, e), true
+	return sources.TaxonomyAggregatorProviders(), sources.MarketCountries(taxonomy, e), true
 }
