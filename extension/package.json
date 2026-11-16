@@ -23,7 +23,7 @@
     "@lucide/svelte": "^1.66.0",
     "@opentelemetry/api": "^1.10.0",
     "@opentelemetry/exporter-logs-otlp-proto": "^0.300.0",
-    "@opentelemetry/resources": "^3.0.0",
+    "@opentelemetry/resources": "^3.1.1",
     "@opentelemetry/sdk-logs": "^3.0.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "file:../design-system",
