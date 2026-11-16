@@ -52,7 +52,6 @@ jobs:
 
   docs:
     needs: changes
-    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -231,6 +230,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install pinned ShellCheck
+        run: bash .github/scripts/install-shellcheck.sh
 
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12

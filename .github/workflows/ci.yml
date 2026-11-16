@@ -290,6 +290,9 @@ jobs:
       #
       # The list comes from git rather than being written out here: a script added next year
       # is covered the day it is committed, not the day someone remembers this job exists.
+      - name: Install pinned ShellCheck
+        run: bash .github/scripts/install-shellcheck.sh
+
       - name: Check shell scripts
         run: |
           mapfile -t scripts < <(git ls-files '*.sh')

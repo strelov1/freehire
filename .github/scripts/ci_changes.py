@@ -52,6 +52,7 @@ def classify(paths):
             flags.update(backend=True, web=True, contracts=True)
         elif path.startswith(("web/", "design-system/")):
             flags["web"] = True
+            flags["design_system"] |= path.startswith("web/src/")
             flags["contracts"] |= (
                 path.startswith(
                     ("web/src/lib/generated/", "web/src/lib/docs/generated/")

@@ -23,6 +23,10 @@ class ScopeAssertions(unittest.TestCase):
 
 
 class ClassificationTests(ScopeAssertions):
+    def test_web_sources_select_design_system_guards(self):
+        self.assertTrue(classify(["web/src/lib/Example.svelte"]).design_system)
+        self.assertFalse(classify(["web/static/logo.svg"]).design_system)
+
     def test_specific_job_selection(self):
         for path, field in (
             ("services/scrapling-fetch/app.py", "scrapling_fetch"),
@@ -131,7 +135,6 @@ class WorkflowSelectionTests(unittest.TestCase):
                 "api-contract": "contracts",
             },
             "extension.yml": {"build": "extension"},
-            "lint.yml": {"docs": "docs"},
         }.items():
             workflow = (workflows / filename).read_text()
             for job, flag in jobs.items():
