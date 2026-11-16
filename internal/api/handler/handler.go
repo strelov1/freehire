@@ -48,7 +48,6 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/boardresolve"
 	"github.com/strelov1/freehire/internal/ingest/contribution"
 	"github.com/strelov1/freehire/internal/ingest/directapply"
-	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
@@ -394,25 +393,10 @@ func Register(app *fiber.App, cfg Config) {
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")
 	}
-	// employer.Service reuses authH.accounts as its codeIssuer (the pointer WithCodes
-	// configured above). employerMailer must be a NIL INTERFACE when employerClaimMailer is
-	// nil: Service.Claim tests the interface, so a typed nil would pass its check.
 	if mailClient != nil && cfg.SupportReplyTo != "" {
 		assistantH.support.mail = supportMail{sender: mailClient, from: emailnotify.From("freehire", cfg.NotifyEmailFrom), to: cfg.SupportReplyTo}
 	}
-	var employerMailer employer.ClaimMailer
-	if employerClaimMailer != nil {
-		employerMailer = employerClaimMailer
-	}
-	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
-	employerSvc := employer.New(employerRepo, authH.accounts, employerMailer, employerRepo, moderationSvc)
-	// A properly nil InviteMailer without mail, for the typed-nil reason given above.
-	var teamInvites employer.InviteMailer
-	if mailClient != nil {
-		teamInvites = teamInviteMailer{emailnotify.NewTeamInviteMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)}
-	}
-	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
-	employerH := newEmployerHandlers(queries, employerSvc)
+	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, employerClaimMailer, mailClient, moderationSvc)
 	// Applying on freehire needs a CV renderer and a mail transport; without either the
 	// routes answer 501 rather than record an application that is never delivered.
 	directApplyH := &directApplyHandlers{}

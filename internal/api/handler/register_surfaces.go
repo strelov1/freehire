@@ -16,6 +16,8 @@ import (
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/identity/auth/recentauth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
+	"github.com/strelov1/freehire/internal/ingest/employer"
+	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -93,4 +95,25 @@ func newMentorshipSurfaces(cfg Config, queries *db.Queries, mailClient *emailnot
 		resumeStore, profileSvc, accounts.NewQueriesRepository(queries, cfg.Pool), bank, queries,
 	)
 	return mentorshipH, mentorSuggestionsH
+}
+
+// newEmployerSurfaces builds the employer service, with claim and team-invite mail when a
+// transport exists, and the employer surface over it.
+func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.Service, employerClaimMailer *emailnotify.AuthMailer, mailClient *emailnotify.Client, moderationSvc *moderation.Service) (*employer.Service, *employerHandlers) {
+	// employer.Service reuses the auth surface's accounts service as its codeIssuer (the
+	// pointer WithCodes configured in Register). employerMailer must be a NIL INTERFACE when employerClaimMailer is
+	// nil: Service.Claim tests the interface, so a typed nil would pass its check.
+	var employerMailer employer.ClaimMailer
+	if employerClaimMailer != nil {
+		employerMailer = employerClaimMailer
+	}
+	employerRepo := employer.NewQueriesRepository(queries, cfg.Pool)
+	employerSvc := employer.New(employerRepo, accountsSvc, employerMailer, employerRepo, moderationSvc)
+	// A properly nil InviteMailer without mail, for the typed-nil reason given above.
+	var teamInvites employer.InviteMailer
+	if mailClient != nil {
+		teamInvites = teamInviteMailer{emailnotify.NewTeamInviteMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)}
+	}
+	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
+	return employerSvc, newEmployerHandlers(queries, employerSvc)
 }
