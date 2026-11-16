@@ -17,17 +17,18 @@
     type Turn,
     type TurnStart,
   } from '#lib/assistant/client.js';
-  import { chatFromTranscript, initChat, reduceTurnEvent, type ChatState } from '#lib/assistant/chat.js';
-  import { bulletCapUserMessage } from '#lib/assistant/bulletCapAlert.js';
-  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { chatFromTranscript, initChat, reduceTurnEvent, turnBegins, type ChatState } from '#lib/assistant/chat.js';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ChatInputArea from './ChatInputArea.svelte';
   import ChatGone from './ChatGone.svelte';
   import ChatDeleteConfirm from './ChatDeleteConfirm.svelte';
+  import ChatSwitchConfirm from './ChatSwitchConfirm.svelte';
   import ChatTranscript from './ChatTranscript.svelte';
   import { PaneFollow } from './paneFollow.svelte';
   import { ApplicationSync } from './applicationSync';
   import { MessageQueue } from './messageQueue.svelte';
+  import { addressStep, autostartTurn, type Arrival } from './chatRouting';
+  import { ChatAlerts } from './chatAlerts.svelte';
   import AssistantAlerts from './AssistantAlerts.svelte';
   import type { AssistantChatProps } from './AssistantChat.props';
   import ChatSessionBar from './ChatSessionBar.svelte';
@@ -41,7 +42,7 @@
     type SessionItem,
   } from '#lib/assistant/sessions.js';
   import type { TurnEvent } from '#lib/assistant/wire.js';
-  import { opensInRail, type ChatPreset, type OpeningAction } from '#lib/assistant/presets.js';
+  import { opensInRail, type OpeningAction } from '#lib/assistant/presets.js';
   import { messages } from './AssistantChat.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
@@ -77,36 +78,8 @@
   let phase = $state<Phase>('loading');
   // Startup requests may finish after the host has replaced this conversation.
   let disposed = false;
-  // planLimitReached distinguishes a spent daily allowance (which offers a link to the
-  // plan) from every other failure this component reports through the same banner — one
-  // object so the two facts can never fall out of step with each other the way two
-  // separately-reset variables did (a stale flag surviving past the error it described).
-  let error = $state<{ message: string; planLimitReached: boolean; cutOff?: boolean } | null>(null);
-  /** Every ordinary failure goes through here; `planLimitReached` starts false and only the
-   *  plan-refusal branch in dispatch()'s catch sets it directly. */
-  function setError(message: string) {
-    error = { message, planLimitReached: false };
-  }
-  // A support answer cut short by a dropped stream. Unlike other errors it is not cleared
-  // when the next turn starts: a message queued behind the dropped turn starts that turn the
-  // moment this one ends, before the visitor could read it. Only the visitor's own next
-  // action (sending, or starting or switching conversations) removes it.
-  function setCutOff() {
-    error = { message: s.supportInterrupted, planLimitReached: false, cutOff: true };
-  }
-  // A ceiling refusal is not a dead end: the session can be continued by spending another
-  // of the day's tailoring sessions. Held apart from `error` because it needs an action
-  // beside it, and because a plain error message would tell the candidate to give up on
-  // work they can carry on with right now.
-  let refusal = $state<TurnRefused | null>(null);
-  // Distinct from `error`: the URL names a conversation that is not the caller's to
-  // open — deleted, someone else's, or a tailoring chat that belongs to a CV. It is
-  // a dead link, not a failure, so it gets an explanation and a way out.
-  let notFound = $state(false);
-  // When cv_edit refuses an insert that would silently truncate a full role, show a
-  // dismissible banner — the tool chip alone is easy to miss, and the candidate needs
-  // to know their existing bullets were kept.
-  let bulletCapAlert = $state<string | null>(null);
+  // What the banners over the transcript say (see ChatAlerts).
+  const alerts = new ChatAlerts();
 
   // Sidebar: the caller's conversations, newest activity first. `switching`
   // disables the composer and list while a session load is in flight.
@@ -152,17 +125,8 @@
 
   const NEW_CHAT_LABEL = $derived(s.newChat);
 
-  /**
-   * What the URL this component mounted on asked for: which conversation to mint, and the
-   * opening message to send into it. Read once, and each half spent once.
-   *
-   * Both are properties of the ARRIVAL, not of the surface. The address is rewritten to
-   * the session's own URL moments later — reading them reactively would race that rewrite
-   * — and this component outlives the rewrite now that one route node serves every chat.
-   * Left standing, they would mint a second interview on the next `boot()` and put the
-   * same words in the caller's mouth again.
-   */
-  const arrival: { preset: ChatPreset; kickoff?: string } = { preset, kickoff };
+  // What the URL this component mounted on asked for (see Arrival).
+  const arrival: Arrival = { preset, kickoff };
   const isSupport = untrack(() => preset) === 'support';
 
   // Whether the turn in flight is an unattended run rather than a reply to something typed.
@@ -170,6 +134,9 @@
 
   /** Whether a turn may be started right now: the pane is settled and nothing is running. */
   const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !creating && (!!activeId || deferredNew);
+  function startTurn(start: TurnStart) {
+    if (canStartTurn()) void dispatch(start);
+  }
 
   /**
    * Start an unattended run from outside the chat — the workspace's "Run again" beside the
@@ -177,14 +144,12 @@
    * a boolean the host toggles would re-run the moment anything else re-rendered.
    */
   export function startRun() {
-    if (!canStartTurn()) return;
-    void dispatch({ kind: 'autopilot' });
+    startTurn({ kind: 'autopilot' });
   }
 
   /** Run an opening action — the first turn of a conversation nobody has typed into yet. */
   function runOpening(action: OpeningAction) {
-    if (!canStartTurn()) return;
-    void dispatch(action.kind === 'message' ? { kind: 'message', text: action.text } : { kind: 'autopilot' });
+    startTurn(action.kind === 'message' ? { kind: 'message', text: action.text } : { kind: 'autopilot' });
   }
 
   /** The conversation the host is currently being navigated to, or null. Held until the
@@ -195,7 +160,7 @@
 
   async function boot() {
     phase = 'loading';
-    error = null;
+    alerts.error = null;
     try {
       if (isSupport) {
         await createAndOpen();
@@ -212,7 +177,7 @@
       try {
         summaries = await listSessions();
       } catch {
-        setError(s.loadChatsFailed);
+        alerts.fail(s.loadChatsFailed);
       }
       if (disposed) return;
       sessions = summaries.map((summary) => fromSummary(summary, NEW_CHAT_LABEL));
@@ -244,28 +209,15 @@
       if (disposed) return;
       phase = 'ready';
 
-      // Autostart: the host can pass a kickoff prompt so the agent begins immediately
-      // instead of waiting for the user to type. Only on an empty session, and only once
-      // — boot() runs again whenever the caller returns to the bare address, and putting
-      // the same words in their mouth a second time is not what they asked for.
-      if (arrival.kickoff && chat.messages.length === 0) {
-        const opening = arrival.kickoff;
-        arrival.kickoff = undefined;
-        void dispatch({ kind: 'message', text: opening });
-      } else if (activePreset === 'interview' && chat.messages.length === 0) {
-        // A rehearsal speaks first. There is no kickoff text to carry because the brief
-        // is the server's — the candidate came here from an application, and the agent
-        // opens by reading its context. The empty-transcript guard is the client half of
-        // the backend's: a reload replays the conversation rather than restarting it.
-        void dispatch({ kind: 'opening' });
-      } else if (autoRun && chat.messages.length === 0) {
-        // Cold start: the tailoring workspace runs the unattended pass itself instead of
-        // offering the two-action menu. Same empty-transcript guard as the branches above —
-        // boot() re-runs on every return to the bare address, and a session that already has
-        // a message (the run already started, or the candidate answered its closing question)
-        // must not be run again.
-        void dispatch({ kind: 'autopilot' });
-      }
+      // Autostart, once, on an empty conversation (see autostartTurn).
+      const auto = autostartTurn({
+        kickoff: arrival.kickoff,
+        empty: chat.messages.length === 0,
+        preset: activePreset,
+        autoRun,
+      });
+      if (auto?.kind === 'message') arrival.kickoff = undefined;
+      if (auto) void dispatch(auto);
     } catch (err) {
       report(err, s.assistantUnreachable);
       phase = 'ready';
@@ -284,44 +236,45 @@
     untrack(() => followAddress(requested));
   });
 
-  /** Reconcile the pane with the address the host is showing. */
+  /** Reconcile the pane with the address the host is showing (see addressStep). */
   function followAddress(requested: string | undefined) {
     if (isSupport) return;
-    // A switch WE started asked the host to navigate, and that navigation is async: for
-    // the moment between setting activeId and the URL catching up, `session` disagrees
-    // with activeId and following it would go straight back to the chat just left. That
-    // is what evicted a newly created chat. Clear the guard the moment the host lands —
-    // BEFORE any early return, or the guard outlives its navigation and the pane stops
-    // following the URL at all, which is Back and Forward silently doing nothing.
-    if (navigatingTo && requested === navigatingTo) navigatingTo = null;
-    if (navigatingTo) return;
-
-    // The bare address. Since one route node serves both it and a chat's own URL, getting
-    // here is a prop change rather than a fresh mount: nothing re-runs on its own, so a
-    // dead link's "Open your chats" and the nav rail's own entry would both leave the
-    // caller staring at whatever was already on screen. Boot again, which is what a
-    // remount used to do for us — open the newest chat and re-address to it.
-    if (!requested) {
-      // A blank chat lives at the bare address (it has no id to put there): booting again
-      // would land right back on it and wake this effect forever.
-      if (deferredNew && !activeId) return;
-      notFound = false;
+    const step = addressStep(requested, { navigatingTo, deferredNew, activeId });
+    if (step.clearGuard) navigatingTo = null;
+    if (step.action === 'boot') {
+      alerts.notFound = false;
       void boot();
-      return;
+    } else if (step.action === 'open' && requested) {
+      openSession(requested, true).catch((err: unknown) => report(err, s.openChatFailed));
     }
-
-    if (requested === activeId) return;
-    openSession(requested, true).catch((err: unknown) => report(err, s.openChatFailed));
   }
 
   /** Surface a failure. A conversation the caller cannot open is a dead link, not
    *  a broken assistant, so it gets the explanation panel rather than an error. */
   function report(err: unknown, fallback: string) {
     if (err instanceof SessionNotFound) {
-      notFound = true;
+      alerts.notFound = true;
       return;
     }
-    setError(err instanceof Error ? err.message : fallback);
+    alerts.fail(err instanceof Error ? err.message : fallback);
+  }
+
+  // The discard dialog a switch waits on while messages are queued (see ChatSwitchConfirm).
+  let confirmSwitchOpen = $state(false);
+  let switchConfirm: ReturnType<typeof ChatSwitchConfirm> | undefined = $state();
+
+  // A switch that came from the address — Back, Forward, a link — has already moved the URL
+  // to the declined chat, so put it back on the one still on screen; otherwise the address
+  // and the pane disagree.
+  function declineSwitch(declined: { fromAddress: boolean }) {
+    // The guard is raised only when a navigation will follow, or it outlives it (see
+    // followAddress).
+    if (declined.fromAddress && activeId && onSessionChange) {
+      navigatingTo = activeId;
+      onSessionChange(activeId);
+    }
+    // A turn may have finished while the dialog held the queue; send what waited.
+    drainQueue();
   }
 
   // Open a session and repaint its stored transcript (see chatFromTranscript).
@@ -330,38 +283,6 @@
   // asking the host to change it. That distinction is the guard's whole life: raising it
   // when no navigation will follow leaves it raised forever, and the pane then ignores
   // every later address change, which is Forward appearing to do nothing.
-  // The switch openSession deferred to the discard dialog, replayed when it is confirmed.
-  let pendingSwitch = $state<{ id: string; fromAddress: boolean } | null>(null);
-  let confirmSwitchOpen = $state(false);
-
-  async function confirmSwitch() {
-    const target = pendingSwitch;
-    pendingSwitch = null;
-    if (!target) return;
-    await openSession(target.id, target.fromAddress, true).catch((err: unknown) => report(err, s.openChatFailed));
-  }
-
-  // The dialog closed without confirming (confirmSwitch clears `pendingSwitch` before it
-  // resolves, so a target still set here was declined). A switch that came from the
-  // address — Back, Forward, a link — has already moved the URL to the declined chat, so
-  // put it back on the one still on screen; otherwise the address and the pane disagree.
-  $effect(() => {
-    if (confirmSwitchOpen) return;
-    untrack(() => {
-      const declined = pendingSwitch;
-      if (!declined) return;
-      pendingSwitch = null;
-      // The guard is raised only when a navigation will follow, or it outlives it (see
-      // followAddress).
-      if (declined.fromAddress && activeId && onSessionChange) {
-        navigatingTo = activeId;
-        onSessionChange(activeId);
-      }
-      // A turn may have finished while the dialog held the queue; send what waited.
-      drainQueue();
-    });
-  });
-
   async function openSession(id: string, fromAddress = false, discardQueued = false) {
     if (activeId === id && chat.messages.length > 0) return;
     // A message typed while the current turn was streaming sits in `queue`, waiting
@@ -370,8 +291,7 @@
     // whatever the user just typed with no trace and no way back. The switch waits on
     // the dialog: this call returns as a refusal would, and confirming re-enters it.
     if (queue.length > 0 && !discardQueued) {
-      pendingSwitch = { id, fromAddress };
-      confirmSwitchOpen = true;
+      switchConfirm?.ask(id, fromAddress);
       return;
     }
     switching = true;
@@ -383,7 +303,7 @@
     try {
       chat = initChat();
       queue.clear();
-      bulletCapAlert = null;
+      alerts.bulletCap = null;
       activeId = id;
       activePreset = null;
       // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
@@ -397,7 +317,7 @@
       // and the user cannot get back to. The unbound presets — chat and the experience
       // interviewer — are both at home here.
       if (showSessionRail && !opensInRail(meta.preset)) {
-        notFound = true;
+        alerts.notFound = true;
         return;
       }
       activePreset = meta.preset;
@@ -426,8 +346,8 @@
       // Sequential on purpose: we want the FIRST one that opens, and opening them in
       // parallel would race several transcripts into the same pane.
       await openSession(candidate.id);
-      if (!notFound) return true;
-      notFound = false;
+      if (!alerts.notFound) return true;
+      alerts.notFound = false;
     }
     return false;
   }
@@ -460,11 +380,11 @@
   async function newChat() {
     if (creating || switching || phase !== 'ready') return;
     creating = true;
-    error = null;
+    alerts.error = null;
     try {
       await createAndOpen();
     } catch (err) {
-      setError(err instanceof Error ? err.message : s.newChatFailed);
+      alerts.fail(err instanceof Error ? err.message : s.newChatFailed);
     } finally {
       creating = false;
     }
@@ -472,7 +392,7 @@
 
   async function selectSession(id: string) {
     if (switching || id === activeId) return;
-    error = null;
+    alerts.error = null;
     try {
       await openSession(id);
     } catch (err) {
@@ -489,12 +409,12 @@
 
   async function removeChat(id: string) {
     if (switching) return;
-    error = null;
+    alerts.error = null;
     const wasActive = id === activeId;
     try {
       await deleteSession(id);
     } catch {
-      setError(s.deleteChatFailed);
+      alerts.fail(s.deleteChatFailed);
       return;
     }
     const remaining = removeSession(sessions, id);
@@ -510,7 +430,7 @@
         if (next) await openSession(next);
         else await createAndOpen();
       } catch (err) {
-        setError(err instanceof Error ? err.message : s.openAChatFailed);
+        alerts.fail(err instanceof Error ? err.message : s.openAChatFailed);
       }
     }
   }
@@ -555,12 +475,8 @@
     if (event.type === 'user_prompt') {
       // A message that is only a document is labelled by its name, as the server does.
       sessions = setLabel(sessions, sessionId, labelFromMessage(event.text || event.attachments?.[0] || ''));
-      bulletCapAlert = null;
     }
-    if (event.type === 'tool_result' && event.is_error) {
-      const alert = bulletCapUserMessage(event.result);
-      if (alert) bulletCapAlert = alert;
-    }
+    alerts.noteEvent(event);
     if (event.type === 'tool_result' && event.name === 'cv_edit' && !event.is_error) {
       onDocumentEdited?.();
     }
@@ -577,7 +493,7 @@
     const text = raw.trim();
     if ((!text && docs.length === 0) || phase !== 'ready' || switching || creating || (!activeId && !deferredNew))
       return;
-    if (error?.cutOff) error = null;
+    if (alerts.error?.cutOff) alerts.error = null;
     // Counted once per message the user sends, queued or dispatched — never the text
     // itself. This measures usage only; what a turn costs is recorded server-side.
     track('assistant_message');
@@ -601,15 +517,15 @@
         created = await createSession('chat');
       } catch (err) {
         switching = false;
-        if (start.kind === 'message') giveBack(start);
-        setError(err instanceof Error ? err.message : s.newChatFailed);
+        giveBack(start);
+        alerts.fail(err instanceof Error ? err.message : s.newChatFailed);
         return;
       }
       sessions = upsertSession(sessions, fromSummary(created, NEW_CHAT_LABEL));
       // The caller opened another chat while this one was being created. Leave them there,
       // and hand the message back rather than send it somewhere it was not written for.
       if (disposed || activeId !== null) {
-        if (start.kind === 'message') giveBack(start);
+        giveBack(start);
         return;
       }
       deferredNew = false;
@@ -617,18 +533,18 @@
         await openSession(created.id);
       } catch (err) {
         // The session exists and is active, so a resend goes to it; only this send is lost.
-        if (start.kind === 'message') giveBack(start);
+        giveBack(start);
         report(err, s.openChatFailed);
         return;
       }
       if (activeId !== created.id) {
-        if (start.kind === 'message') giveBack(start);
+        giveBack(start);
         return;
       }
     }
     const id = activeId;
     if (!id || disposed) return;
-    if (!error?.cutOff) error = null;
+    if (!alerts.error?.cutOff) alerts.error = null;
     turnActive = true;
     onTurnStateChange?.(true);
     // Before anything reaches the server: the host may be holding an edit on a timer, and
@@ -647,14 +563,7 @@
     // A retry never emits user_prompt (that is the point), so "began" is not meaningful for it.
     let began = start.kind === 'retry';
     const watch = (event: TurnEvent) => {
-      if (
-        event.type === 'user_prompt' ||
-        event.type === 'assistant_text' ||
-        event.type === 'assistant_thought' ||
-        event.type === 'tool_use'
-      ) {
-        began = true;
-      }
+      if (turnBegins(event)) began = true;
       onEvent(id, event);
     };
 
@@ -671,7 +580,7 @@
         // The turn never ran, so the message was never recorded. Give it back rather than
         // losing it, and say why — the composer is empty and nothing else would explain it.
         giveBack(start);
-        setError(s.messageNotSent);
+        alerts.fail(s.messageNotSent);
       }
     } catch (err) {
       if (err instanceof StreamInterrupted) {
@@ -684,7 +593,7 @@
         // fail), so it stops showing as streaming.
         if (isSupport && id === activeId) {
           chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'end_turn' });
-          setCutOff();
+          alerts.cutOff(s.supportInterrupted);
         } else await reloadTranscript(id);
         endTurn();
         return;
@@ -693,21 +602,21 @@
         // Neither remedy below ever started the turn, so the message was never recorded —
         // give it back to the composer rather than losing it while the candidate decides
         // what to do next.
-        if (start.kind === 'message') giveBack(start);
+        giveBack(start);
         if (err.canExtend) {
           // The session can be continued right now by spending another of the day's
           // tailoring sessions.
-          refusal = err;
+          alerts.refusal = err;
         } else {
           // A spent daily allowance: Retry would only repeat the same refusal, and there is
           // no assistant frame to mark errored (the turn never started), so this skips the
           // generic error result entirely rather than fabricating a dead-end Retry button.
-          error = { message: err.message, planLimitReached: true };
+          alerts.limit(err.message);
         }
         endTurn();
         return;
       }
-      setError(err instanceof Error ? err.message : s.sendFailed);
+      alerts.fail(err instanceof Error ? err.message : s.sendFailed);
       chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       endTurn();
     }
@@ -715,14 +624,10 @@
 
   /** Return an unsent message to the composer — its text when the draft is empty, and its
    *  documents when none have been attached since. */
-  function giveBack(start: { text: string; attachments?: Attachment[] }) {
+  function giveBack(start: TurnStart) {
+    if (start.kind !== 'message') return;
     if (draft.trim() === '') draft = start.text;
     if (attachments.length === 0) attachments = start.attachments ?? [];
-  }
-
-  function retryFailedTurn() {
-    if (!canStartTurn()) return;
-    void dispatch({ kind: 'retry' });
   }
 
   // An apply conversation catches up on its application while it is shown.
@@ -782,16 +687,9 @@
 <!-- Single flex-1 root so a host can compose the chat beside another pane (e.g. the tailor
      artifact panel); the host supplies the outer height + flex row. -->
 <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-  <AssistantAlerts
-    {error}
-    bind:refusal
-    onLimitReached={(message) => (error = { message, planLimitReached: true })}
-    onContinueFailed={setError}
-    {bulletCapAlert}
-    onDismissBulletCap={() => (bulletCapAlert = null)}
-  />
+  <AssistantAlerts {alerts} />
 
-  {#if notFound}
+  {#if alerts.notFound}
     <ChatGone />
   {:else}
     <div class="flex min-h-0 flex-1">
@@ -839,7 +737,7 @@
           onsubmit={submitText}
           onrunopening={runOpening}
           {isSupport}
-          onretry={retryFailedTurn}
+          onretry={() => startTurn({ kind: 'retry' })}
         />
 
         <ChatInputArea
@@ -862,12 +760,12 @@
   {/if}
 </div>
 
-<ConfirmDialog
+<ChatSwitchConfirm
+  bind:this={switchConfirm}
   bind:open={confirmSwitchOpen}
-  title={s.unsentMessageConfirm}
-  confirmLabel={s.switchAndDiscard}
-  variant="destructive"
-  onConfirm={confirmSwitch}
+  onConfirm={(target) =>
+    openSession(target.id, target.fromAddress, true).catch((err: unknown) => report(err, s.openChatFailed))}
+  onDecline={declineSwitch}
 />
 
 <ChatDeleteConfirm bind:this={deleteConfirm} {sessions} newChatLabel={NEW_CHAT_LABEL} onRemove={removeChat} />

@@ -28,6 +28,16 @@ export interface ChatState {
   queued: boolean;
 }
 
+/** Whether a frame shows the turn actually ran, rather than waiting behind another one. */
+export function turnBegins(event: TurnEvent): boolean {
+  return (
+    event.type === 'user_prompt' ||
+    event.type === 'assistant_text' ||
+    event.type === 'assistant_thought' ||
+    event.type === 'tool_use'
+  );
+}
+
 export function initChat(): ChatState {
   return { messages: [], queued: false };
 }
