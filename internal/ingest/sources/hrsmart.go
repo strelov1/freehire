@@ -81,8 +81,8 @@ func (s hrsmart) FetchNew(ctx context.Context, e CompanyEntry, seen func(string)
 			return jobs, nil
 		}
 	}
-	if len(jobs) > 0 {
-		return jobs, fmt.Errorf("hrsmart: none of %d listed postings could be read", len(jobs))
+	if len(listed) > 0 {
+		return jobs, fmt.Errorf("hrsmart: none of %d listed postings could be read", len(listed))
 	}
 	return jobs, nil
 }
