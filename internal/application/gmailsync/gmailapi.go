@@ -148,7 +148,7 @@ func (r *apiReader) get(ctx context.Context, u, op string) (*http.Response, erro
 			return resp, nil
 		}
 		apiErr := NewAPIError(op, resp)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if !LimitHit(apiErr) || strings.Contains(strings.ToLower(apiErr.Reason), "daily") ||
 			r.waited+wait > limitWaitBudget {
 			return nil, apiErr
