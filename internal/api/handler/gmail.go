@@ -66,10 +66,10 @@ type mailboxes interface {
 	For(ctx context.Context, userID int64) mailrecall.Mailbox
 }
 
-// withRecall wires the mail-recall action after construction, so the six test harnesses
-// that make no model call do not pay for two more constructor parameters.
-func (h *inboxHandlers) withRecall(recall *mailrecall.Service, binding llmBinding, boxes mailboxes) *inboxHandlers {
-	h.recall, h.llm, h.mailboxes = recall, binding, boxes
+// withRecall wires the model-calling actions (mail recall, reply drafts) after construction,
+// so the test harnesses that make no model call do not pay for more constructor parameters.
+func (h *inboxHandlers) withRecall(recall *mailrecall.Service, binding llmBinding, boxes mailboxes, plans *plan.Store) *inboxHandlers {
+	h.recall, h.llm, h.mailboxes, h.plans = recall, binding, boxes, plans
 	return h
 }
 
@@ -82,7 +82,7 @@ func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, s
 	return err
 }
 
-func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string, plans *plan.Store) *inboxHandlers {
+func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
 	// WithReminders, like every other construction of this service, so jobtracking's
 	// saved-job reminder cancellation also runs on the mail path.
 	tracking := jobtracking.New(
@@ -100,7 +100,6 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 		cookieSecure:   cookieSecure,
 		mailDomain:     mailDomain,
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		plans:          plans,
 	}
 }
 

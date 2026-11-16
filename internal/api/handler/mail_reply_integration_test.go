@@ -36,8 +36,8 @@ func postReplyDraft(t *testing.T, fx recallFixture, model *recallModel, userID, 
 	makePro(t, fx.pool, fx.userID)
 	plans := plan.NewStore(queries, fx.pool, plan.DefaultConfig().WithProCeiling(plan.FeatureMailReply, 1).Enforcing())
 	client := llm.NewWithModel(model)
-	h := newInboxHandlers(queries, fx.pool, nil, nil, "", false, "inbox.freehire.test", plans).
-		withRecall(nil, llmBinding{client: client}, nil)
+	h := newInboxHandlers(queries, fx.pool, nil, nil, "", false, "inbox.freehire.test").
+		withRecall(nil, llmBinding{client: client}, nil, plans)
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -47,7 +47,7 @@ func postReplyDraft(t *testing.T, fx recallFixture, model *recallModel, userID, 
 
 	cookie, _ := iss.Issue(userID, testTokenVersion)
 	r := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/emails/"+strconv.FormatInt(emailID, 10)+"/reply-draft", nil)
-	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	resp, err := app.Test(r, -1)
 	if err != nil {
 		t.Fatalf("post: %v", err)

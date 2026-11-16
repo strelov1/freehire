@@ -19,7 +19,7 @@ func TestSaveGmailGrantRecordsScopesWithTheToken(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('grant@example.test') RETURNING id`).Scan(&uid); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "", nil)
+	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "")
 
 	read := func() (string, []string) {
 		t.Helper()

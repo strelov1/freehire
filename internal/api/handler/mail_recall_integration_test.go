@@ -129,7 +129,7 @@ func seedRecallFixture(t *testing.T, pool *pgxpool.Pool) recallFixture {
 func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, *auth.Issuer) {
 	t.Helper()
 	queries := db.New(pool)
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test", nil)
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test")
 	if model != nil {
 		client := llm.NewWithModel(model)
 		// A real binding, not a zero one: it drives the whole userLLM path — resolve the
@@ -138,7 +138,7 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 		// No mailbox factory: these tests cover the STORED path, which is the fallback and
 		// the one a caller with no Gmail grant still gets. The search path has its own.
 		h = h.withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
-			llmBinding{client: client}, nil)
+			llmBinding{client: client}, nil, nil)
 	}
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
@@ -390,9 +390,9 @@ func recallSearchApp(t *testing.T, pool *pgxpool.Pool, model llms.Model, box *fa
 	t.Helper()
 	queries := db.New(pool)
 	client := llm.NewWithModel(model)
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test", nil).
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test").
 		withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
-			llmBinding{client: client}, &fakeMailboxes{box: box})
+			llmBinding{client: client}, &fakeMailboxes{box: box}, nil)
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
