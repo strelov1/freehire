@@ -33,7 +33,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cadremploi", "cleverstaff", "echojobs", "epreselec", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kontur", "neogov", "occ", "pracuj", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cadremploi", "cleverstaff", "echojobs", "epreselec", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kontur", "neogov", "occ", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -84,6 +84,7 @@ func TestApplyScraplingEgressRewiresOnlyRegisteredProviders(t *testing.T) {
 // down a path that is refused (gulftalent's sitemap to http+proxy got a challenge).
 func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 	want := map[string]scraplingRoute{
+		"rwb":         {scraplingfetch.ModeBrowser, false},
 		"senior":      {scraplingfetch.ModeHTTP, true},
 		"gradcracker": {scraplingfetch.ModeHTTP, false},
 		"infojobsbr":  {scraplingfetch.ModeHTTP, true},

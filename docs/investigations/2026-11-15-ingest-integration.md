@@ -77,7 +77,7 @@ No retirement follows from an error group alone.
 
 Bounded sample: replayed the exact XHR listing request for **all seven** 404 identities,
 plus WAF samples 695 and 724 and valid control 889, on operator direct and Scrapling HTTP
-+ proxy. No detail crawl or scan of all 26 challenged boards was performed.
+with proxy. No detail crawl or scan of all 26 challenged boards was performed.
 
 - **1245, 1192, 1138, 1155, 1034, 1199, 1197:** both lanes return 404, same 891-byte
   HTML response, no migration redirect. These are unavailable canonical routes, not
@@ -254,3 +254,41 @@ link/size checks, whitespace checks and the final follow-up Gitleaks scan passed
 All six supplied commits retain matching stable patch IDs. Production recovery remains
 unclaimed; the separately delegated ops/RWB/HigherMe work and the catalog blockers above
 remain release follow-ups.
+
+## Parent integration: RWB and HigherMe
+
+Integrated recovery commit `9c11d750090ae6213716cdd799ec4053e033cf85` as
+`efe9b132f`, then applied its measured RWB browser/direct route to the shared
+Scrapling registry. The existing route regression was first run with the expected
+RWB entry but no implementation and failed; the routing, RWB and HigherMe tests
+pass after registration. HigherMe retains its original interval: admission of
+retries is corrected, but sustained production acceptance is not established.
+
+A bounded read-only production query completed for stored catalog sizes and
+hash-slice upper bounds (no job_activity join):
+
+| Provider | Stored rows | Largest 30-way slice | Largest 90-way slice |
+| --- | --- | --- | --- |
+| UKG | 567246 | 19162 | 6520 |
+| ADP MyJobs | 483912 | 16344 | 5575 |
+
+These include closed and recently hydrated rows, so they are conservative counts
+of potentially eligible identities, not measured detail requests. At UKG's
+existing approximately five requests/second, 19162 detail reads alone take at
+least 3832 seconds, without listing calls, latency or retries. Thus thirty slices
+is not a demonstrated safe activation for a constrained run. Ninety slices lowers
+the bound but does not establish run headroom or refresh latency suitability.
+A separate current-slice query joining activity timestamps hit its 20-second
+statement timeout; no stale/open count was obtained. Do not interpret that timeout
+as zero eligible records. Periodic refresh remains disabled in production; the
+prepared ops patch is uninstalled and its proposed slice count requires budgeting.
+No production mutations or full crawl were performed.
+
+Parent verification after integrating RWB/HigherMe and the RWB route: full tests
+passed (267 package results), `go vet -p 2 ./...` and
+`go vet -p 2 -tags=integration ./...` passed with GOMAXPROCS=2. The final targeted
+Scrapling/RWB/HigherMe run passed after formatting. Size and whitespace checks
+passed. The small route registration was manually inspected; no further combined
+CodeRabbit round was started after the existing two completed rounds. The
+PageUp/Clinch follow-up remains separate and must be integrated and checked before
+claiming the complete recovery branch ready.

@@ -34,6 +34,10 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// Direct HTTP returned 498; browser listing pages and vacancy details passed.
+	"rwb": {scraplingRoute{mode: scraplingfetch.ModeBrowser, proxy: false}, func(f *Client) Source {
+		return NewRWB(f)
+	}},
 	// The anonymous POST API refuses plain proxy and direct fingerprints; HTTP + proxy passes.
 	"senior": {scraplingRoute{mode: scraplingfetch.ModeHTTP, proxy: true}, func(f *Client) Source {
 		return NewSenior(f)
