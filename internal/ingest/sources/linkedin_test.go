@@ -160,6 +160,11 @@ func TestLinkedInBoundsAndScopesItsSearch(t *testing.T) {
 			root, err := html.Parse(strings.NewReader(strings.ReplaceAll(linkedInOpenPage, "/123/", "/"+id+"/")))
 			return root, raw, err
 		}
+		if strings.HasPrefix(u.Path, "/jobs/view/") {
+			id := strings.TrimSuffix(strings.TrimPrefix(u.Path, "/jobs/view/"), "/")
+			root, err := html.Parse(strings.NewReader(strings.ReplaceAll(linkedInOpenPage, "/123/", "/"+id+"/")))
+			return root, raw, err
+		}
 		q := u.Query()
 		if q.Get("keywords") != "Go & API" || q.Get("location") != "United Kingdom" || q.Get("f_TPR") != "r604800" || q.Get("start") != strconv.Itoa(pages) {
 			t.Fatalf("unscoped or incorrect search: %s", raw)
@@ -173,7 +178,7 @@ func TestLinkedInBoundsAndScopesItsSearch(t *testing.T) {
 	gate := &recordingWaiter{}
 	s.pace = gate
 	jobs, err := s.Fetch(context.Background(), CompanyEntry{Board: "Go & API", Region: "United Kingdom"})
-	if err != nil || len(jobs) != 10 || pages != 10 || gate.calls != 20 {
+	if err != nil || len(jobs) != 10 || pages != 10 || gate.calls != 21 {
 		t.Fatalf("unbounded crawl or ungated request: jobs=%d pages=%d pace=%d err=%v", len(jobs), pages, gate.calls, err)
 	}
 }

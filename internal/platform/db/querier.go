@@ -2675,6 +2675,11 @@ type Querier interface {
 	// There is no unique constraint behind this on purpose (a second stint at the same employer
 	// in the same role is a real career shape), so the oldest match wins and stays stable.
 	FindExperienceEmployment(ctx context.Context, arg FindExperienceEmploymentParams) (FindExperienceEmploymentRow, error)
+	// LinkedIn posting IDs are global, while legacy rows were keyed by search keyword.
+	// Reuse a public row's existing key and stable identity across any discovery slice.
+	// Closed rows remain eligible so ordinary upsert rediscovery policy can reopen them.
+	// The LinkedIn-specific normalized URL index also covers closed public history.
+	FindLinkedInJobByURL(ctx context.Context, url string) (Job, error)
 	// Match the verified destination before rewriting an application form's path to a
 	// description page. Vacancy parameters remain identity; only known tracking is noise.
 	FindOpenJobByApplicationURL(ctx context.Context, url string) (string, error)

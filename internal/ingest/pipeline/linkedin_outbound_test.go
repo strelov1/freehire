@@ -22,14 +22,14 @@ func (r *outboundRecorder) Resolve(_ context.Context, _ sources.CompanyEntry, j 
 
 func TestLinkedInPublishesOnlyConfirmedOnsiteApplications(t *testing.T) {
 	src := fakeSource{provider: "linkedin", jobs: []sources.Job{
-		{ExternalID: "native", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/1/", ApplyMethod: sources.ApplyOnSite},
-		{ExternalID: "external", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/2/", ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://boards.greenhouse.io/acme/jobs/123"},
-		{ExternalID: "unknown", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/3/"},
+		{ExternalID: "1", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/1/", ApplyMethod: sources.ApplyOnSite},
+		{ExternalID: "2", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/2/", ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://boards.greenhouse.io/acme/jobs/123"},
+		{ExternalID: "3", Title: "Go Engineer", Company: "Acme", Description: "Build Go services", URL: "https://www.linkedin.com/jobs/view/3/"},
 	}}
 	store, outbound := &fakeStore{}, &outboundRecorder{}
 	runner := Runner{Registry: registry(src), Store: store, Outbound: outbound}
 	st, err := runner.Run(context.Background(), []sources.CompanyEntry{{Provider: "linkedin", Board: "Go"}})
-	if err != nil || len(store.saved) != 1 || store.saved[0].Fields().ExternalID != "Go:native" {
+	if err != nil || len(store.saved) != 1 || store.saved[0].Fields().ExternalID != "1" {
 		t.Fatalf("LinkedIn public writes = %+v, %v", store.saved, err)
 	}
 	if len(outbound.jobs) != 2 || st.Total().Discovered != 2 {
@@ -38,7 +38,7 @@ func TestLinkedInPublishesOnlyConfirmedOnsiteApplications(t *testing.T) {
 }
 
 func TestLinkedInDiscoveryKeepsTheCatalogueFilter(t *testing.T) {
-	src := fakeSource{provider: "linkedin", jobs: []sources.Job{{ExternalID: "nontech", Title: refusedTitle, Company: "Acme", URL: "https://www.linkedin.com/jobs/view/4/", ApplyMethod: sources.ApplyExternal}}}
+	src := fakeSource{provider: "linkedin", jobs: []sources.Job{{ExternalID: "4", Title: refusedTitle, Company: "Acme", URL: "https://www.linkedin.com/jobs/view/4/", ApplyMethod: sources.ApplyExternal}}}
 	store, outbound := &fakeStore{}, &outboundRecorder{}
 	runner := Runner{Registry: registry(src), Store: store, Outbound: outbound}
 	stats, err := runner.Run(context.Background(), []sources.CompanyEntry{{Provider: "linkedin", Board: "Go"}})

@@ -24,27 +24,31 @@ func (s ownershipPostingFixture) Posting(context.Context, string) (sources.Job, 
 }
 
 func TestOwnershipReconciliationTransfersExistingLinkedInIdentity(t *testing.T) {
-	pool := testdb.Pool(t)
-	ctx, q := context.Background(), db.New(pool)
-	origin, err := job.New(job.Draft{Input: jobderive.Input{Source: "linkedin", ExternalID: "software engineer:4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", Description: "Old LinkedIn discovery."}, URL: "https://www.linkedin.com/jobs/view/4472812273/"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	created, err := q.UpsertJob(ctx, origin.Fields().UpsertParams())
-	if err != nil {
-		t.Fatal(err)
-	}
-	registry := sources.Taxonomy()
-	registry["hrsmart"] = nativeDiscoveryFixture{}
-	reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/", ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://www.gistworld.com", ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735"}}
-	store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
-	report, err := reconcileLinkedInOwnership(ctx, q, reader, withEmployerProof(newNativeDiscovery(pool, registry, store)), 0)
-	if err != nil || report.Transferred != 1 || report.Pending != 0 {
-		t.Fatalf("ownership report = %+v, %v", report, err)
-	}
-	current, err := q.GetJob(ctx, created.ID)
-	if err != nil || current.Source != "hrsmart" || current.PublicSlug != origin.Fields().PublicSlug {
-		t.Fatalf("identity was not preserved: %+v, %v", current, err)
+	for _, externalID := range []string{"software engineer:4472812273", "4472812273"} {
+		t.Run(externalID, func(t *testing.T) {
+			pool := testdb.Pool(t)
+			ctx, q := context.Background(), db.New(pool)
+			origin, err := job.New(job.Draft{Input: jobderive.Input{Source: "linkedin", ExternalID: externalID, Title: "Senior Java Software Engineer", Company: "Gist Limited", Description: "Old LinkedIn discovery."}, URL: "https://www.linkedin.com/jobs/view/4472812273/"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			created, err := q.UpsertJob(ctx, origin.Fields().UpsertParams())
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry := sources.Taxonomy()
+			registry["hrsmart"] = nativeDiscoveryFixture{}
+			reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/", ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://www.gistworld.com", ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735"}}
+			store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
+			report, err := reconcileLinkedInOwnership(ctx, q, reader, withEmployerProof(newNativeDiscovery(pool, registry, store)), 0)
+			if err != nil || report.Transferred != 1 || report.Pending != 0 {
+				t.Fatalf("ownership report = %+v, %v", report, err)
+			}
+			current, err := q.GetJob(ctx, created.ID)
+			if err != nil || current.Source != "hrsmart" || current.PublicSlug != origin.Fields().PublicSlug {
+				t.Fatalf("identity was not preserved: %+v, %v", current, err)
+			}
+		})
 	}
 }
 

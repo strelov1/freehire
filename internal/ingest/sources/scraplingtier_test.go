@@ -33,7 +33,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cadremploi", "cleverstaff", "clinch", "echojobs", "epreselec", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kontur", "neogov", "occ", "pageup", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cadremploi", "cleverstaff", "clinch", "echojobs", "epreselec", "gradcracker", "gulftalent", "hh", "infojobs", "infojobsbr", "instahyre", "job104", "jobteaser", "kontur", "linkedin", "neogov", "occ", "pageup", "pracuj", "rwb", "senior", "spainjobs", "startupjobs", "turijobs", "vagas", "viterbit", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -101,6 +101,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"cleverstaff": {scraplingfetch.ModeHTTP, false},
 		"kontur":      {scraplingfetch.ModeHTTP, true},
 		"neogov":      {scraplingfetch.ModeHTTP, true},
+		"linkedin":    {scraplingfetch.ModeHTTP, true},
 		"echojobs":    {scraplingfetch.ModeBrowser, true},
 		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
 		"occ":         {scraplingfetch.ModeBrowser, false},

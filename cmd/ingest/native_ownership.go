@@ -47,13 +47,19 @@ func reconcileLinkedInOwnership(ctx context.Context, q *db.Queries, source sourc
 			report.Native++
 			continue
 		}
-		board := strings.TrimSuffix(row.ExternalID, ":"+posting.ExternalID)
-		if board == row.ExternalID {
+		board, scoped := strings.CutSuffix(row.ExternalID, ":"+posting.ExternalID)
+		global := posting.ExternalID != "" && row.ExternalID == posting.ExternalID && sources.LinkedInPostingID(row.URL) == posting.ExternalID
+		if !scoped && !global {
 			if _, err := q.WithholdLinkedInDiscovery(ctx, row.ID); err != nil {
 				return report, err
 			}
 			report.Pending++
 			continue
+		}
+		if global {
+			// Global posting keys have no search board; native discovery resolves
+			// their stored identity directly before its legacy URL fallback.
+			board = ""
 		}
 		if err := outbound.Resolve(ctx, sources.CompanyEntry{Provider: "linkedin", Board: board}, posting); err != nil {
 			report.Pending++
