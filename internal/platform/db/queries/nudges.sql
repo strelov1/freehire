@@ -52,12 +52,14 @@ WHERE ev.kind = 'stage_set'
 -- notification settings, application date, or closure age. The update guard is
 -- rechecked under the row lock, preserving outcomes set concurrently by a user.
 -- Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
+-- Source-verification withdrawal does not expire applications or announce closure.
 -- Events and notification records commit with the transition. Only notifications
 -- have a recency window, so repairing old tracker entries does not flood inboxes.
 WITH locked AS (
     SELECT j.id, j.closed_at
     FROM jobs j
     WHERE j.closed_at IS NOT NULL
+      AND j.closed_reason <> 'native_source_pending'
       AND EXISTS (
           SELECT 1 FROM applications a
           WHERE a.job_id = j.id

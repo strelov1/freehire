@@ -8055,6 +8055,7 @@ type Querier interface {
 	// notification settings, application date, or closure age. The update guard is
 	// rechecked under the row lock, preserving outcomes set concurrently by a user.
 	// Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
+	// Source-verification withdrawal does not expire applications or announce closure.
 	// Events and notification records commit with the transition. Only notifications
 	// have a recency window, so repairing old tracker entries does not flood inboxes.
 	SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error)
