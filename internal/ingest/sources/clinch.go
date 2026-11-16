@@ -26,7 +26,7 @@ import (
 // detail getter that holds the run's request rate under the WAF window. The first WAF
 // challenge LATCHES detail hydration off for the rest of the run (hammering a tripped WAF prolongs
 // the penalty), so the remaining postings keep the empty description. Coverage is therefore partial
-// and back-fills across runs.
+// and back-fills across runs using the catalogue hydration seen-set.
 type clinch struct {
 	sitemap XMLGetter  // the career-site sitemap.xml (one request per run)
 	detail  HTMLGetter // per-posting detail pages, paced under the WAF window
@@ -41,6 +41,12 @@ func NewClinch(sitemap XMLGetter, detail HTMLGetter) Source {
 func (clinch) Provider() string { return "clinch" }
 
 func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return c.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew spends detail requests only on missing or due bodies; all sitemap identities
+// still yield liveness evidence when a detail cannot be read.
+func (c clinch) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	url := fmt.Sprintf("https://%s/sitemap.xml", e.Board)
 	sitemap, err := getSitemap(ctx, c.sitemap, url)
 	if err != nil {
@@ -56,8 +62,10 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		title, loc := clinchSplitSlug(slug)
 
+		id := clinchExternalID(slug)
+		known := seen(id)
 		description := ""
-		if !latched {
+		if !known && !latched {
 			detail, challenged := c.hydrate(ctx, entry.Loc)
 			if challenged {
 				latched = true // remaining postings stay sitemap-only
@@ -75,7 +83,7 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 
 		jobs = append(jobs, Job{
-			ExternalID:  clinchExternalID(slug),
+			ExternalID:  id,
 			URL:         entry.Loc,
 			Title:       title,
 			Company:     e.Company,
@@ -83,6 +91,8 @@ func (c clinch) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Description: description,
 			Remote:      isRemote(loc),
 			PostedAt:    parseDate(entry.LastMod),
+			SeenRefresh: known,
+			Unreadable:  !known && strings.TrimSpace(description) == "",
 		})
 	}
 	return jobs, nil
