@@ -237,7 +237,10 @@
             <button
               type="button"
               class="mt-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              onclick={() => (open = false)}>Close</button
+              onclick={() => {
+                open = false;
+                trigger?.focus();
+              }}>Close</button
             >
           {/await}
         </div>

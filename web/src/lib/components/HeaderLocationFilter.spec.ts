@@ -14,8 +14,11 @@ it('lets visitors close and reopen location filters after a chunk fails', async 
   render(HeaderLocationFilter, { store });
   await fireEvent.click(screen.getByRole('button', { name: 'Location' }));
   expect((await screen.findByRole('alert')).textContent).toContain('Location filters could not load.');
-  await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  const close = screen.getByRole('button', { name: 'Close' });
+  close.focus();
+  await fireEvent.click(close);
   expect(screen.queryByRole('dialog')).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Location' }));
   await fireEvent.click(screen.getByRole('button', { name: 'Location' }));
   expect(await screen.findByRole('alert')).toBeTruthy();
 });
