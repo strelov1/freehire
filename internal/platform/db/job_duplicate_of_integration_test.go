@@ -172,7 +172,7 @@ func TestDuplicateReposts_HiddenFromListAndEnrichment(t *testing.T) {
 	}
 
 	// EnqueuePendingJobs enqueues the canon, not the repost.
-	if _, err := q.EnqueuePendingJobs(ctx, 1); err != nil {
+	if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: 1}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 	if !outboxHas(t, pool, canonID) {

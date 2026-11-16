@@ -69,13 +69,14 @@ func parseEnrichment(raw string) (Enrichment, error) {
 // paragraph are then dropped.
 func buildSystemPrompt(askGeo bool) string {
 	var b strings.Builder
-	b.WriteString("You read an IT job posting and return ONLY a JSON object.\n")
+	b.WriteString("You read a job posting and return ONLY a JSON object.\n")
 	// summary is the one synthesized field: stating it first and exempting it from the null
 	// rule stops a budget model from emptying it.
 	b.WriteString("ALWAYS include \"summary\" as the FIRST key: a 1-2 sentence, plain-English synopsis of ")
 	b.WriteString("the role — what the person does day to day and the core technologies. You WRITE this ")
 	b.WriteString("from the posting (the one field you synthesize, not extract); keep it under 400 ")
 	b.WriteString("characters and never invent facts the posting does not support.\n")
+	b.WriteString("ALWAYS fill \"category\" from the role the posting describes.\n")
 	b.WriteString("For every OTHER key: fill it only when the posting clearly states it; return null for anything not stated. Never guess.\n")
 	b.WriteString("Enum fields MUST use exactly one of the allowed values below.\n\n")
 	b.WriteString("Allowed enum values:\n")
@@ -83,8 +84,8 @@ func buildSystemPrompt(askGeo bool) string {
 	enum := func(field string, vals []string) {
 		fmt.Fprintf(&b, "- %s: %s\n", field, strings.Join(vals, ", "))
 	}
-	// work_mode, seniority, category, employment_type, education_level and english_level are
-	// not requested: jobview serves them from the dictionaries (internal/job/jobderive).
+	// work_mode, seniority, employment_type, education_level and english_level are not
+	// requested: jobview serves them from the dictionaries (internal/job/jobderive).
 	if askGeo {
 		enum("regions (array)", vocab.RegionValues)
 	}
@@ -104,6 +105,9 @@ func buildSystemPrompt(askGeo bool) string {
 	b.WriteString("  If the input states \"Known company type\", that is a VERIFIED fact — ")
 	b.WriteString("use it as company_type unless the posting itself explicitly contradicts it.\n")
 	enum("company_size", vocab.CompanySizeValues)
+	// category files the role itself: every posting implies one, so the null rule above
+	// exempts it (#4412).
+	enum("category (the role's job family; \"other\" only when none fits)", vocab.CategoryValues)
 
 	if askGeo {
 		// countries/regions are the only facets where the model may coin its own label

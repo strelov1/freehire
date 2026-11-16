@@ -18,16 +18,20 @@ import (
 // only place the runner's domain operations meet the DB layer; the success path
 // (SetJobEnrichment + DeleteEnrichmentEntry) runs in one transaction here.
 type dbStore struct {
-	pool *pgxpool.Pool
-	q    *db.Queries
+	pool           *pgxpool.Pool
+	q              *db.Queries
+	includeNonTech bool
 }
 
-func newDBStore(pool *pgxpool.Pool) *dbStore {
-	return &dbStore{pool: pool, q: db.New(pool)}
+func newDBStore(pool *pgxpool.Pool, includeNonTech bool) *dbStore {
+	return &dbStore{pool: pool, q: db.New(pool), includeNonTech: includeNonTech}
 }
 
 func (s *dbStore) Enqueue(ctx context.Context, targetVersion int) (int64, error) {
-	return s.q.EnqueuePendingJobs(ctx, int32(targetVersion))
+	return s.q.EnqueuePendingJobs(ctx, db.EnqueuePendingJobsParams{
+		TargetVersion:  int32(targetVersion), //nolint:gosec // enrich.Version, a small constant
+		IncludeNonTech: s.includeNonTech,
+	})
 }
 
 func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]enrich.Claimed, error) {

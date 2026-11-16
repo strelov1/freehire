@@ -2382,7 +2382,12 @@ type Querier interface {
 	// so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
 	// identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
 	// target_version), so running this every command invocation never duplicates work.
-	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
+	//
+	// include_non_tech (ENRICH_INCLUDE_NON_TECH, off by default) lifts the is_tech gate for this
+	// backfill only, so every open posting with a body is enriched and its category asked of the
+	// model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
+	// a new technical posting, and the next enrich run's backfill picks up the rest.
+	EnqueuePendingJobs(ctx context.Context, arg EnqueuePendingJobsParams) (int64, error)
 	// Idempotent backfill for the incremental semantic-embedding queue. Enqueues two
 	// kinds of outstanding work at the target embedder model:
 	//   1. OPEN jobs whose stored vector is missing, content-stale, or model-stale —

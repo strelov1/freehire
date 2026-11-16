@@ -51,7 +51,7 @@ func TestInvalidatedClaimCannotOverwritePromotedJobEnrichment(t *testing.T) {
 			if err := tx.QueryRow(ctx, "SELECT id FROM enrichment_outbox WHERE job_id=$1", original.ID).Scan(&freshID); err != nil {
 				t.Fatal(err)
 			}
-			store := newDBStore(pool)
+			store := newDBStore(pool, false)
 			if !overlap {
 				if err := tx.Commit(ctx); err != nil {
 					t.Fatal(err)

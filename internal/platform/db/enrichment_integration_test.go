@@ -131,7 +131,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		newer := insertJob(t, pool, "newer")
 		setPostedAt(t, pool, older, "2024-01-01T00:00:00Z")
 		setPostedAt(t, pool, newer, "2024-06-01T00:00:00Z")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -153,7 +153,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		dated := insertJob(t, pool, "dated")
 		setPostedAt(t, pool, dated, "2024-01-01T00:00:00Z")
 		undated := insertJob(t, pool, "undated") // posted_at NULL, created_at = now()
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -172,7 +172,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		open := insertJob(t, pool, "open")
 		gone := insertJob(t, pool, "closed")
 		closeJob(t, pool, gone)
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -198,7 +198,7 @@ func TestEnrichmentClaimPriority(t *testing.T) {
 		truncate(t, pool)
 		open := insertJob(t, pool, "open")
 		gone := insertJob(t, pool, "gone")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 		// Close one job after it was queued: the claim-time filter must skip it.
@@ -224,7 +224,7 @@ func TestEnrichmentQueue(t *testing.T) {
 		insertJob(t, pool, "idem")
 
 		for i := 0; i < 2; i++ {
-			if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+			if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 				t.Fatalf("enqueue: %v", err)
 			}
 		}
@@ -241,7 +241,7 @@ func TestEnrichmentQueue(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "j1")
 		insertJob(t, pool, "j2")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -265,7 +265,7 @@ func TestEnrichmentQueue(t *testing.T) {
 	t.Run("a stale lease is reclaimable", func(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "stale")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -285,7 +285,7 @@ func TestEnrichmentQueue(t *testing.T) {
 	t.Run("attempts reaching max dead-letters the entry", func(t *testing.T) {
 		truncate(t, pool)
 		insertJob(t, pool, "dead")
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 		claimed, err := q.ClaimEnrichmentBatch(ctx, ClaimEnrichmentBatchParams{LeaseSeconds: 3600, BatchSize: 10})
@@ -340,13 +340,33 @@ func TestEnqueueGatesOnIsTech(t *testing.T) {
 		unresolved := insertJob(t, pool, "unresolved")
 		setIsTech(t, pool, unresolved, nil)
 
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 
 		got := enqueuedJobIDs(t, pool)
 		if len(got) != 1 || got[0] != tech {
 			t.Fatalf("enqueued = %v, want [%d] (only the tech job)", got, tech)
+		}
+	})
+
+	// ENRICH_INCLUDE_NON_TECH lifts the gate for the backfill so the model files the postings
+	// the title dictionary could not (#4412).
+	t.Run("backfill with include_non_tech keeps false and NULL too", func(t *testing.T) {
+		truncate(t, pool)
+		tech := insertJob(t, pool, "tech")
+		setIsTech(t, pool, tech, &trueVal)
+		nonTech := insertJob(t, pool, "nontech")
+		setIsTech(t, pool, nonTech, &falseVal)
+		unresolved := insertJob(t, pool, "unresolved")
+		setIsTech(t, pool, unresolved, nil)
+
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion, IncludeNonTech: true}); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := enqueuedJobIDs(t, pool); len(got) != 3 {
+			t.Fatalf("enqueued = %v, want all three jobs", got)
 		}
 	})
 
@@ -405,7 +425,7 @@ func TestEnqueueGatesOnDescription(t *testing.T) {
 		blank := insertJob(t, pool, "blank")
 		setDescription(t, pool, blank, "")
 
-		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+		if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: targetVersion}); err != nil {
 			t.Fatal(err)
 		}
 		if got := enqueuedJobIDs(t, pool); len(got) != 0 {

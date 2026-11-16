@@ -231,7 +231,7 @@ func TestSuppressedAggregator_HiddenFromListAndEnrichmentButServedBySlug(t *test
 	}
 
 	// EnqueuePendingJobs enqueues the ATS canon, not the suppressed aggregator copy.
-	if _, err := q.EnqueuePendingJobs(ctx, 1); err != nil {
+	if _, err := q.EnqueuePendingJobs(ctx, EnqueuePendingJobsParams{TargetVersion: 1}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 	if !outboxHas(t, pool, atsID) {
