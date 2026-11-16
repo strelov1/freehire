@@ -9,7 +9,8 @@
   import { filterHref } from '#lib/enrichment.js';
   import { categoryLabel } from '#lib/labels.js';
   import { categoryLandingLink } from '#lib/roleLandings.js';
-  import { breadcrumbJsonLd, jobPageTitle, jobPostingJsonLd, jsonLdScript, metaDescription } from '#lib/seo.js';
+  import { breadcrumbJsonLd, jobPageTitle, jsonLdScript, metaDescription } from '#lib/seo.js';
+  import { jobPostingJsonLd } from '#lib/seoJobPosting.js';
   import type { Job } from '#lib/types.js';
   import { Breadcrumbs } from '#lib/ui/index.js';
   import type { PageData } from './$types';
