@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -10,7 +11,8 @@ import (
 )
 
 // pageup adapts PageUp People career sites, a multi-tenant ATS. Every tenant is served keylessly
-// through careers.pageuppeople.com/<instID>/, so the board is the numeric institution id. The
+// through careers.pageuppeople.com/<instID>/, except verified custom board 1023.
+// The board remains the numeric institution id. The
 // listing endpoint returns a JSON envelope whose "results" is a rendered HTML fragment; the row
 // wrapper differs per tenant (<tr>, <li> or <div>), so parsing keys on the stable a.job-link
 // anchor and pairs each job with the location and summary that follow it in document order. A
@@ -41,22 +43,32 @@ var pageupXHR = map[string]string{"X-Requested-With": "XMLHttpRequest"}
 // pageupJobRe extracts the stable numeric job id from a job-link href of the form
 // /<instID>/cw/en/job/<jobID>/<slug>.
 var pageupJobRe = regexp.MustCompile(`/cw/en/job/(\d+)/`)
+var pageupNorthMemorialJobRe = regexp.MustCompile(`^/nmh/en-us/job/(\d+)/`)
 
 // pageupEnvelope is the search endpoint's JSON envelope; results is an HTML fragment.
 type pageupEnvelope struct {
 	Results string `json:"results"`
-	Count   int    `json:"count"`
+	Count   *int   `json:"count"`
 }
 
 func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	url := fmt.Sprintf("%s/%s/cw/en/search/?page-items=1000", pageupHost, e.Board)
+	searchURL := fmt.Sprintf("%s/%s/cw/en/search/?page-items=1000", pageupHost, e.Board)
+	if e.Board == "1023" {
+		searchURL = "https://jobs.northmemorial.com/nmh/en-us/search/?page-items=1000"
+	}
 	var env pageupEnvelope
-	if err := p.http.GetJSONWithHeaders(ctx, url, pageupXHR, &env); err != nil {
+	if err := p.http.GetJSONWithHeaders(ctx, searchURL, pageupXHR, &env); err != nil {
 		return nil, fmt.Errorf("pageup: search %s: %w", e.Board, err)
 	}
 	jobs, err := pageupParseListing(env.Results, e.Board)
 	if err != nil {
 		return nil, fmt.Errorf("pageup: parse %s: %w", e.Board, err)
+	}
+	if e.Board == "1023" && env.Count == nil {
+		return nil, fmt.Errorf("pageup: search %s: missing count", e.Board)
+	}
+	if env.Count != nil && len(jobs) != *env.Count {
+		return nil, fmt.Errorf("pageup: incomplete listing %s: recognized %d of %d", e.Board, len(jobs), *env.Count)
 	}
 	for i := range jobs {
 		jobs[i].Company = e.Company
@@ -93,7 +105,8 @@ const pageupDetailDescriptionID = "job-details"
 // "already has a summary" skip would leave every job stuck with it; the full posting is in the
 // same #job-details container.
 var pageupAlwaysDetailBoards = map[string]bool{
-	"889": true,
+	"889":  true,
+	"1023": true,
 }
 
 // detailDescription fetches one job's detail page and returns its sanitized description
@@ -118,6 +131,12 @@ func (p pageup) detailDescription(ctx context.Context, jobURL string) string {
 // job, and the location and summary that follow before the next job-link attach to it; the link
 // is the only anchor common to the <tr> and <li> layouts.
 func pageupParseListing(fragment, board string) ([]Job, error) {
+	base := pageupHost
+	jobRe := pageupJobRe
+	if board == "1023" {
+		base = "https://jobs.northmemorial.com"
+		jobRe = pageupNorthMemorialJobRe
+	}
 	// Bare <tr>s meant for an existing <table> lose their cells to foster-parenting and drop the
 	// summary row, so supply the table wrapper.
 	if strings.Contains(fragment, "<tr") {
@@ -131,9 +150,23 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 		jobs []Job
 		cur  *Job
 	)
+	seen := map[string]int{}
 	flush := func() {
 		if cur != nil && cur.ExternalID != "" {
-			jobs = append(jobs, *cur)
+			if i, ok := seen[cur.ExternalID]; ok {
+				if jobs[i].Title == "" {
+					jobs[i].Title = cur.Title
+				}
+				if jobs[i].Location == "" {
+					jobs[i].Location = cur.Location
+				}
+				if jobs[i].Description == "" {
+					jobs[i].Description = cur.Description
+				}
+			} else {
+				seen[cur.ExternalID] = len(jobs)
+				jobs = append(jobs, *cur)
+			}
 		}
 		cur = nil
 	}
@@ -144,7 +177,11 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 		switch {
 		case n.Data == "a" && HasClass(n, "job-link"):
 			href := Attr(n, "href")
-			m := pageupJobRe.FindStringSubmatch(href)
+			parsed, err := url.Parse(href)
+			if err != nil || (parsed.IsAbs() && parsed.Scheme+"://"+parsed.Host != base) {
+				return true
+			}
+			m := jobRe.FindStringSubmatch(parsed.Path)
 			if m == nil {
 				return true // a nav/back link, not a posting
 			}
@@ -152,7 +189,7 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 			cur = &Job{
 				ExternalID: m[1],
 				Title:      textContent(n),
-				URL:        pageupHost + href,
+				URL:        base + parsed.RequestURI(),
 			}
 		case cur == nil:
 			// nothing to attach yet

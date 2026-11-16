@@ -189,3 +189,30 @@ func TestIntervieweb_BoardAndPagerErrors(t *testing.T) {
 		t.Error("unreachable listing: want error")
 	}
 }
+
+func TestInterviewebHTMLPostingWithoutJSONLD(t *testing.T) {
+	for _, id := range []string{"83980", "123"} {
+		page := `<div data-a2a-url="https://msc-technology-italia.intervieweb.it/jobs/noc-` + id + `/en/"></div><h2 id="description__vacancy-title">NOC Specialist</h2><span title="Location">Torino</span><div id="description__body"><h3>Position</h3><p>Monitor networks</p></div>`
+		f := &ivFake{pages: map[string]string{"https://msc-technology-italia.intervieweb.it/jobs/noc-83980/en/": page}}
+		j, ok := (intervieweb{http: f}).detail(context.Background(), CompanyEntry{Company: "MSC"}, ivLink{id: "83980", url: "https://msc-technology-italia.intervieweb.it/jobs/noc-83980/en/"})
+		if id == "123" {
+			if !ok || !j.Unreadable {
+				t.Fatal(j, ok)
+			}
+			continue
+		}
+		if !ok || j.Unreadable || j.Title != "NOC Specialist" || j.Location != "Torino" || !strings.Contains(j.Description, "Monitor networks") {
+			t.Fatal(j, ok)
+		}
+	}
+}
+
+func TestInterviewebHTMLPostingRejectsBlankBody(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<div data-a2a-url="https://example.com/jobs/noc-83980/en/"></div><h2 id="description__vacancy-title">NOC Specialist</h2><div id="description__body">` + "\n" + `</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ivHTMLPosting(root, CompanyEntry{}, ivLink{id: "83980"}); ok {
+		t.Fatal("whitespace-only body accepted")
+	}
+}

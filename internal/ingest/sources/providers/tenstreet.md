@@ -6,3 +6,15 @@
 - **Geography is US states, stated structurally**: a row is `select_states` (state code in `value`) or `zip_radius` (state in `state`, a ZIP prefix in `value`), and the page plots every row on a US map as `US-<state>`. `Countries` is therefore `us`, and `Location` lists the distinct codes plus `US` — the bare codes alone would be misread, since `IN`, `GA`, `DE`, `IL`, `AR` also spell countries. No posted date, work mode or employment type is published.
 - **Slow and uneven, never refused**: 357 posting pages at four in flight averaged ~2.2 req/s with no refusal, but 7 took over 10 s and one 78 s. Hence `NewLongTimeoutClient`, four detail workers and a run-wide pacer at ~2 req/s. A HydratingSource, so steady state is one listing request per board.
 - **Not an IT platform**: almost entirely trucking carriers (drivers, mechanics, dispatch). Nothing sets `IsTechHint`.
+
+**Template change, verified 2026-11-15:** MCK Trucking (company 52701), job 6343,
+now renders `#job_title`, `#job_description` and `#job_requirements` in HTML. Its
+nonempty `active_job_array` carries only hiring locations; the repeated
+`active_job_id` and posting fields are absent. The parser accepts this template
+through those explicit DOM fields while retaining legacy arrays and refusing
+mixed/mismatched IDs and empty arrays. `portal_user_id=1` is still necessary.
+
+The new location-only array has no posting ID. Before accepting it, validate the
+resolved detail URL's fixed Pulse host, `company_id` and `active_job_id` against
+the listing identity. Its provider-local client shares the existing limiter
+across listing and resolved-detail requests and retains the long timeout.

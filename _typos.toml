@@ -26,6 +26,8 @@ extend-exclude = [
 
 [default.extend-words]
 # Provider and product names, and places.
+Activ = "Activ" # genU acquired the provider using this name.
+jobb = "jobb"   # Swedish careers hostname in the incident evidence.
 emply = "emply"
 canva = "canva"
 mena = "mena"

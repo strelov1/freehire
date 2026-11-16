@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/time/rate"
 )
 
 // tenstreet adapts Tenstreet's "Pulse" share pages, the public job pages of a recruiting
@@ -26,11 +27,11 @@ import (
 // (`var active_job_array = [...]`) — one row per hiring location, each repeating the full
 // title, description and requirements.
 type tenstreet struct {
-	http HTMLGetter
+	http tenstreetHTTP
 }
 
 // NewTenstreet builds the Tenstreet adapter over the given client.
-func NewTenstreet(c HTMLGetter) Source { return tenstreet{http: c} }
+func NewTenstreet(c tenstreetHTTP) Source { return tenstreet{http: c} }
 
 func (tenstreet) Provider() string { return "tenstreet" }
 
@@ -139,7 +140,13 @@ func (s tenstreet) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 			return Job{ExternalID: id, URL: u, Company: e.Company, SeenRefresh: true}, true
 		}
 		wanted.Add(1)
-		root, err := s.http.GetHTML(ctx, u)
+		root, final, err := s.http.GetHTMLResolved(ctx, u)
+		if err == nil {
+			resolved, parseErr := url.Parse(final)
+			if parseErr != nil || resolved.Host != "pulse.tenstreet.com" || resolved.Query().Get("company_id") != board || resolved.Query().Get("active_job_id") != id {
+				return Job{}, false
+			}
+		}
 		if err != nil {
 			log.Printf("tenstreet: %s: %v; deferring", u, err)
 			return Job{}, false
@@ -203,10 +210,34 @@ func parseTenstreetPosting(root *html.Node, postingID string) (Job, bool) {
 		}
 		return false
 	})
-	if len(rows) == 0 || rows[0].ActiveJobID != postingID {
+	if len(rows) == 0 {
 		return Job{}, false
 	}
 	first := rows[0]
+	if first.ActiveJobID == "" {
+		// Current Pulse pages keep only hiring locations in the array; the body is HTML.
+		for _, row := range rows {
+			if row.ActiveJobID != "" {
+				return Job{}, false
+			}
+		}
+		walk(root, func(n *html.Node) bool {
+			switch Attr(n, "id") {
+			case "job_title":
+				first.JobTitle = textContent(n)
+			case "job_description":
+				first.JobDescription = innerHTML(n)
+			case "job_requirements":
+				first.JobRequirements = innerHTML(n)
+			case "job_pay":
+				first.JobPay = textContent(n)
+			}
+			return true
+		})
+	} else if first.ActiveJobID != postingID {
+		return Job{}, false
+	}
+
 	title := strings.Join(strings.Fields(first.JobTitle), " ")
 	if title == "" {
 		return Job{}, false
@@ -279,4 +310,28 @@ func tenstreetStates(rows []tenstreetRow) []string {
 		out = append(out, code)
 	}
 	return out
+}
+
+type tenstreetHTTP interface {
+	HTMLGetter
+	HTMLResolvedGetter
+}
+
+type tenstreetClient struct {
+	*Client
+	limiter waiter
+}
+
+func newTenstreetClient() tenstreetClient {
+	return tenstreetClient{Client: NewLongTimeoutClient(), limiter: rate.NewLimiter(rate.Every(tenstreetRequestInterval), tenstreetRequestBurst)}
+}
+func (c tenstreetClient) GetHTML(ctx context.Context, u string) (*html.Node, error) {
+	root, _, err := c.GetHTMLResolved(ctx, u)
+	return root, err
+}
+func (c tenstreetClient) GetHTMLResolved(ctx context.Context, u string) (*html.Node, string, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, "", err
+	}
+	return c.Client.GetHTMLResolved(ctx, u)
 }

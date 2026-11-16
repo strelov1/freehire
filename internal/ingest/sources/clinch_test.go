@@ -108,6 +108,12 @@ func TestClinchFetchChallengeLatchesRemainingToSitemapOnly(t *testing.T) {
 	if jobs[1].Description != "" || jobs[2].Description != "" {
 		t.Errorf("after a challenge, remaining descriptions must be empty; got %q, %q", jobs[1].Description, jobs[2].Description)
 	}
+	if jobs[1].Title != "Two" || jobs[1].Location != "London, England, United Kingdom" {
+		t.Errorf("challenged posting lost sitemap metadata: %+v", jobs[1])
+	}
+	if jobs[2].Title != "Three" || jobs[2].Location != "Warsaw, Masovian Voivodeship, Poland" {
+		t.Errorf("latched posting lost sitemap metadata: %+v", jobs[2])
+	}
 	// The latch must stop detail fetches: only j1 (ok) and j2 (challenge) are fetched, never j3.
 	if len(detail.calls) != 2 {
 		t.Errorf("detail fetches = %d (%v), want 2 — the latch must skip j3", len(detail.calls), detail.calls)
