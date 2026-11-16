@@ -395,7 +395,11 @@
   {:catch}
     <div class="fixed inset-x-4 bottom-4 z-50 rounded-lg border border-border bg-background p-4 shadow-lg">
       <p role="alert">Filters could not load.</p>
-      <button type="button" onclick={() => (filtersOpen = false)}>Close</button>
+      <button
+        type="button"
+        class="mt-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        onclick={() => (filtersOpen = false)}>Close</button
+      >
     </div>
   {/await}
 {/if}

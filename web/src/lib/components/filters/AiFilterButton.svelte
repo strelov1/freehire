@@ -35,7 +35,11 @@
   {#await import('./AiFilterDialog.svelte') then { default: AiFilterDialog }}
     <AiFilterDialog {store} {onApplied} onclose={() => (open = false)} />
   {:catch}
-    <p role="alert">AI filters could not load.</p>
-    <button type="button" onclick={() => (open = false)}>Close</button>
+    <p role="alert" class="text-sm text-destructive">{s.loadFailed}</p>
+    <button
+      type="button"
+      class="text-sm text-muted-foreground underline-offset-2 hover:underline"
+      onclick={() => (open = false)}>{s.close}</button
+    >
   {/await}
 {/if}
