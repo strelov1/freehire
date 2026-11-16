@@ -52,7 +52,7 @@
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "svelte-eslint-parser": "^1.10.0",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5",
