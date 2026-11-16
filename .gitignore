@@ -125,6 +125,7 @@ hire
 /serve-probe
 /server
 /set-job-application-url
+/promote-job-source
 /similar-backfill
 /social-digest
 /sweep-tracer-clicks

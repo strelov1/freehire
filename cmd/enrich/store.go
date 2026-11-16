@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -74,6 +75,9 @@ func (s *dbStore) Job(ctx context.Context, id int64) (enrich.JobInput, error) {
 }
 
 func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload json.RawMessage) error {
+	if entry.TargetVersion < math.MinInt32 || entry.TargetVersion > math.MaxInt32 {
+		return fmt.Errorf("enrichment target version is outside the database integer range")
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -81,6 +85,16 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.q.WithTx(tx)
+	if _, err := qtx.LockJobForEnrichmentCompletion(ctx, entry.JobID); err != nil {
+		return fmt.Errorf("lock enrichment posting: %w", err)
+	}
+	owns, err := qtx.HasEnrichmentCompletionClaim(ctx, db.HasEnrichmentCompletionClaimParams{OutboxID: entry.OutboxID, JobID: entry.JobID, TargetVersion: int32(entry.TargetVersion)})
+	if err != nil {
+		return fmt.Errorf("check enrichment claim: %w", err)
+	}
+	if !owns {
+		return tx.Commit(ctx)
+	}
 	if err := qtx.SetJobEnrichment(ctx, db.SetJobEnrichmentParams{
 		Enrichment:        payload,
 		EnrichedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
