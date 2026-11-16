@@ -18,7 +18,6 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
-	"github.com/strelov1/freehire/internal/ingest/rederive"
 	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
@@ -444,132 +443,6 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 	return set, nil
 }
 
-// Touch refreshes a posting's liveness (last_seen_at, reopen if closed) by (source, external_id) without rewriting content, for a HydratingSource (justjoin) re-listing an offer it did not re-fetch. A changed listing deadline is updated by the full touch. Implements pipeline.Toucher.
-func (s *dbStore) Touch(ctx context.Context, source, externalID string, deadline *time.Time) (string, error) {
-	params := db.TouchJobParams{
-		Source: source, ExternalID: externalID, WithheldIfSeenBefore: withheldIfSeenBefore(),
-	}
-	if deadline != nil {
-		params.ApplicationDeadline = pgtype.Date{Time: *deadline, Valid: true}
-	}
-	companySlug, live, err := s.touchLive(ctx, params)
-	if err != nil {
-		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
-	}
-	if !live {
-		// Closed, past its deadline, absent, or fenced: the full touch decides under its own
-		// transaction, now that the fast statement has ended and released its activity row.
-		touched, err := s.touchFull(ctx, params)
-		if err != nil {
-			return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
-		}
-		companySlug = touched.CompanySlug
-		if touched.Deferred {
-			if companySlug, err = s.reopenAndRederive(ctx, params); err != nil {
-				return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
-			}
-		}
-	}
-	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
-	// this company in scope. Otherwise a company whose offers were all touched (none newly
-	// saved) would fall out of the crawled-set and its removed offers would never close.
-	if s.crawled != nil {
-		s.crawled.record(source, companySlug)
-	}
-	// A touch IS the cheap write for a hydrating source: TouchJob refreshes liveness and writes
-	// no content, the same bargain RefreshUnchangedJob makes on the board path. Counting it keeps
-	// the per-provider share meaning one thing for both source shapes. Leaving it out would be
-	// worse than a gap — a hydrating provider re-lists through here and only NEW offers reach
-	// save(), so the run would report 0% and read as the very churn the line exists to expose.
-	s.tally.record(source, true)
-	return companySlug, nil
-}
-
-// touchLive is the ordinary touch of an open, unexpired posting: one autocommit statement that
-// writes only job_activity. It reports live=false when the row needs the full touch — closed,
-// past its deadline, absent, or a changed deadline — or when the state fence refused it after waiting;
-// the statement has
-// ended either way, so no lock is held when the caller falls back.
-func (s *dbStore) touchLive(ctx context.Context, params db.TouchJobParams) (companySlug string, live bool, err error) {
-	row, err := s.q.TouchOpenJob(ctx, db.TouchOpenJobParams{
-		Source:               params.Source,
-		ExternalID:           params.ExternalID,
-		WithheldIfSeenBefore: params.WithheldIfSeenBefore,
-		ApplicationDeadline:  params.ApplicationDeadline,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	return row.CompanySlug, !row.Fenced, nil
-}
-
-// touchFull is the touch that may move lifecycle (a deadline closing the row, a closed row it is
-// not allowed to reopen), in one transaction with the observation of the activity row: the
-// lifecycle SQL and its triggers run first, so the observation is a separate command after them.
-// A touch that would reopen writes nothing and reports Deferred for reopenAndRederive.
-func (s *dbStore) touchFull(ctx context.Context, params db.TouchJobParams) (db.TouchJobRow, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return db.TouchJobRow{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	touched, err := s.q.WithTx(tx).TouchJob(ctx, params)
-	if err != nil || touched.Deferred {
-		return touched, err
-	}
-	if err := job.Observe(ctx, tx, touched.ID, false, touched.ResetStrikes); err != nil {
-		return db.TouchJobRow{}, err
-	}
-	return touched, tx.Commit(ctx)
-}
-
-// reopenAndRederive reopens a posting the plain touch deferred and re-derives it in the same
-// transaction. A touch writes no content, so a posting closed under an older dictionary would
-// otherwise come back with that dictionary's facets, and backfill-derive reaches closed rows
-// only within its closed-within window. One transaction because the reopen is a one-shot
-// signal: a re-derive that failed after a committed reopen would never be retried. The row is
-// locked by the touch, so the derive reads the version it writes over. The company slug and
-// fingerprint stay as stored: moving them needs the companies reconcile only backfill-derive
-// runs. The row is requeued with a re-stamp, superseding the touch's own entry.
-func (s *dbStore) reopenAndRederive(ctx context.Context, params db.TouchJobParams) (string, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	qtx := s.q.WithTx(tx)
-	params.AllowReopen = true
-	touched, err := qtx.TouchJob(ctx, params)
-	if err != nil {
-		return "", err
-	}
-	if err := job.Observe(ctx, tx, touched.ID, false, touched.ResetStrikes); err != nil {
-		return "", err
-	}
-	if touched.Reopened {
-		j, err := qtx.GetJob(ctx, touched.ID)
-		if err != nil {
-			return "", err
-		}
-		params, _, _ := rederive.Row(j, nil)
-		params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
-		if rederive.FacetsDiffer(params, j) {
-			if err := qtx.UpdateJobDerived(ctx, params); err != nil {
-				return "", err
-			}
-		}
-		// Re-stamp after writing the final facets. Touch also re-arms its entry;
-		// this keeps the re-derived row's search publication explicit in this transaction.
-		if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
-			return "", err
-		}
-	}
-	return touched.CompanySlug, tx.Commit(ctx)
-}
-
 var _ pipeline.StoredBodyLookup = (*dbStore)(nil)
 
 // StoredDescription returns the body stored for a posting, "" when there is no row. Implements
@@ -580,22 +453,6 @@ func (s *dbStore) StoredDescription(ctx context.Context, source, externalID stri
 		return "", nil
 	}
 	return body, err
-}
-
-// RecordCompanyWebsite stores a posting's stated employer website on its company row
-// (company_info.feed_website) when the row has none yet, once per company per run. Implements pipeline.CompanyWebsiteRecorder.
-func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website string) error {
-	if _, done := s.websites.LoadOrStore(companySlug, struct{}{}); done {
-		return nil
-	}
-	err := s.q.SetCompanyFeedWebsiteIfAbsent(ctx, db.SetCompanyFeedWebsiteIfAbsentParams{
-		Slug:    companySlug,
-		Website: website,
-	})
-	if err != nil {
-		s.websites.Delete(companySlug) // the next posting of this company tries again
-	}
-	return err
 }
 
 // refreshCoveredChunk bounds one RefreshCoveredJobs statement. A board's covered postings are
@@ -691,73 +548,4 @@ func (s *dbStore) CloseCovered(ctx context.Context, source string, externalIDs [
 		}
 	}
 	return closed, nil
-}
-
-// CompanyDescriptionDue implements pipeline.CompanyDescriptionFiller: whether the company
-// still lacks a description and has had no answered fetch since checkedSince.
-func (s *dbStore) CompanyDescriptionDue(ctx context.Context, slug string, checkedSince time.Time) (bool, error) {
-	due, err := s.q.CompanyDescriptionDue(ctx, db.CompanyDescriptionDueParams{
-		Slug:         slug,
-		CheckedSince: pgtype.Timestamptz{Time: checkedSince, Valid: true},
-	})
-	if err != nil {
-		return false, fmt.Errorf("company description due %s: %w", slug, err)
-	}
-	return due, nil
-}
-
-// RecordCompanyDescription implements pipeline.CompanyDescriptionFiller: record an
-// answered company-description fetch (see sources.CompanyDescriber). A blank answer only
-// stamps the attempt; a non-empty one also fills the company's company_info gap. Stored
-// under company_info.summary rather than the short tagline field — this text is raw
-// employer-authored prose, not the terse, curated-style values tagline is reserved for
-// (the YC directory's one_liner, the Wikipedia backfill's Wikidata description).
-func (s *dbStore) RecordCompanyDescription(ctx context.Context, slug, name, description string) error {
-	if description == "" {
-		if err := s.q.MarkCompanyDescriptionChecked(ctx, db.MarkCompanyDescriptionCheckedParams{Slug: slug, Name: name}); err != nil {
-			return fmt.Errorf("mark company description checked %s: %w", slug, err)
-		}
-		return nil
-	}
-	info, err := json.Marshal(map[string]string{"summary": description})
-	if err != nil {
-		return fmt.Errorf("fill company description %s: encode company_info: %w", slug, err)
-	}
-	if err := s.q.FillCompanyDescriptionFromIngest(ctx, db.FillCompanyDescriptionFromIngestParams{
-		Slug:        slug,
-		Name:        name,
-		Tagline:     pgtype.Text{},
-		CompanyInfo: info,
-	}); err != nil {
-		return fmt.Errorf("fill company description %s: %w", slug, err)
-	}
-	return nil
-}
-
-// CanonicalCompanySlugs implements pipeline.AliasLookup: for a batch of folded company slugs,
-// the canonical slug a merge elected for each employer that has one.
-//
-// Read rather than written here, like ExistingExternalIDs — the store already owns the pool,
-// and the pipeline asks for this once per board run, not once per posting.
-func (s *dbStore) CanonicalCompanySlugs(ctx context.Context, foldedKeys []string) (map[string]string, error) {
-	rows, err := s.q.ResolveCompanySlugAliases(ctx, foldedKeys)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(rows))
-	for _, r := range rows {
-		// One canonical slug per folded key is the writer's invariant, not the schema's (see
-		// the query). Rows arrive ordered, so the first wins deterministically; a second,
-		// different one means two waves elected different winners for one employer, which
-		// would otherwise show up only as a company that keeps changing url.
-		if prev, ok := out[r.FoldedKey]; ok {
-			if prev != r.CanonicalSlug {
-				log.Printf("ingest: company alias conflict: folded key %q maps to both %q and %q; using %q",
-					r.FoldedKey, prev, r.CanonicalSlug, prev)
-			}
-			continue
-		}
-		out[r.FoldedKey] = r.CanonicalSlug
-	}
-	return out, nil
 }
