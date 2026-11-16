@@ -82,7 +82,7 @@ func (h *assistantHandlers) planMCPTool(origin string) assistant.Tool {
 			"paid_until is the end of the current paid period (it may renew; see plan_url). " +
 			"Here the metered feature is \"auto-apply\" (applications prepared for review): starting one for a new " +
 			"posting uses one; retrying, reviewing or cancelling an existing attempt, or starting the same posting " +
-			"again, uses nothing. The others (\"tailor\", \"match\", \"cover-letter\", \"assistant\", \"dictation\") " +
+			"again, uses nothing. The others (\"tailor\", \"match\", \"cover-letter\", \"assistant\", \"dictation\", \"mail-reply\") " +
 			"are used on the website. The free plan includes no AI features and is refused every new auto-apply: " +
 			"tell the person to upgrade at plan_url rather than retrying. On a paid plan, an enforced limit with " +
 			"nothing remaining refuses new starts until resets_at; an unenforced limit is only measured, so it " +

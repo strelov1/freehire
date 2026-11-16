@@ -9035,6 +9035,105 @@ func (s *Server) handleDraftCVCoverLetterRequest(args [1]string, argsEscaped boo
 	}
 }
 
+// handleDraftEmailReplyRequest handles draftEmailReply operation.
+//
+// One model call on the caller's daily `mail-reply` allowance; every request is a new draft and is
+// charged again. Nothing is sent or stored: the candidate edits the text and sends it themselves.
+// Facts only the candidate knows (availability, salary) come back as bracketed placeholders. 409 for a
+// message the caller sent; 402 without a paid plan or when the allowance is spent; 502 when the model
+// fails (the charge is returned).
+//
+// POST /me/emails/{id}/reply-draft
+func (s *Server) handleDraftEmailReplyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DraftEmailReplyOperation,
+			ID:   "draftEmailReply",
+		}
+	)
+	params, err := decodeDraftEmailReplyParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response DraftEmailReplyRes
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DraftEmailReplyOperation,
+			OperationSummary: "Draft a reply to a received message.",
+			OperationID:      "draftEmailReply",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DraftEmailReplyParams
+			Response = DraftEmailReplyRes
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDraftEmailReplyParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.DraftEmailReply(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.DraftEmailReply(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDraftEmailReplyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleDuplicateCVRequest handles duplicateCV operation.
 //
 // Creates a new base CV with the same document, template and appearance, titled " (copy)". Only a base

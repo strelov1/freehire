@@ -616,6 +616,45 @@ op rejectEmailLink(/** The message id. */ @path id: string): Data<InboxEmail> | 
 @post
 op createApplicationFromEmail(/** The message id. */ @path id: string, @body body?: InboxLinkTarget): Data<InboxEmail> | Problem;
 
+/** A reply for the candidate to review and send from their own mail client. */
+model MailReplyDraft {
+  /** The address the received message came from. */
+  recipient: string;
+  recipient_name: string;
+  subject: string;
+  body: string;
+}
+
+/**
+ * One model call on the caller's daily `mail-reply` allowance; every request is a new
+ * draft and is charged again. Nothing is sent or stored: the candidate edits the text and
+ * sends it themselves. Facts only the candidate knows (availability, salary) come back as
+ * bracketed placeholders. 409 for a message the caller sent; 402 without a paid plan or
+ * when the allowance is spent; 502 when the model fails (the charge is returned).
+ */
+@summary("Draft a reply to a received message.")
+@useAuth(SessionOrKey)
+@tag("Mail")
+@opExample(#{
+  returnType: #{
+    data: #{
+      recipient: "anna@acme.io",
+      recipient_name: "Anna Lee",
+      subject: "Re: Interview next week",
+      body: "Hi Anna,\n\nThank you for the invitation. I would be glad to talk; [times that suit you] work for me.\n\nBest regards,\n[Your name]",
+    },
+  },
+})
+@route("/me/emails/{id}/reply-draft")
+@post
+op draftEmailReply(/** The message id. */ @path id: string):
+  | Data<MailReplyDraft>
+  | {
+      @statusCode _: 402;
+      @body body: CvPlanRefusal;
+    }
+  | Problem;
+
 // The caller's application for a job slug with its linked mail. 404 when not tracked.
 /**
  * `events` is the application's ledger, newest first — the apply, employer replies,

@@ -101,6 +101,7 @@ const (
 	DismissJobOperation                     OperationName = "DismissJob"
 	DismissJobReportOperation               OperationName = "DismissJobReport"
 	DraftCVCoverLetterOperation             OperationName = "DraftCVCoverLetter"
+	DraftEmailReplyOperation                OperationName = "DraftEmailReply"
 	DuplicateCVOperation                    OperationName = "DuplicateCV"
 	EngagementStatsOperation                OperationName = "EngagementStats"
 	FileProcessReportOperation              OperationName = "FileProcessReport"

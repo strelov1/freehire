@@ -20,6 +20,7 @@ var attempts = map[string]attempt{
 	"dictation":    {"dictate to the AI assistant", ""},
 	"cover-letter": {"draft a cover letter", "draft a cover letter for %s"},
 	"auto-apply":   {"apply with auto-apply", "apply to %s with auto-apply"},
+	"mail-reply":   {"draft a reply to a recruiter's email", ""},
 	"ats_review":   {"get the AI review of your CV", ""},
 	"mail_recall":  {"pull the emails about an application into your tracker", "pull the emails about %s into your tracker"},
 	"autofill":     {"have the agent fill in an application form", "have the agent fill in the application for %s"},

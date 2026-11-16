@@ -556,6 +556,16 @@ type Handler interface {
 	//
 	// POST /me/cvs/{id}/cover-letter
 	DraftCVCoverLetter(ctx context.Context, params DraftCVCoverLetterParams) (DraftCVCoverLetterRes, error)
+	// DraftEmailReply implements draftEmailReply operation.
+	//
+	// One model call on the caller's daily `mail-reply` allowance; every request is a new draft and is
+	// charged again. Nothing is sent or stored: the candidate edits the text and sends it themselves.
+	// Facts only the candidate knows (availability, salary) come back as bracketed placeholders. 409 for a
+	// message the caller sent; 402 without a paid plan or when the allowance is spent; 502 when the model
+	// fails (the charge is returned).
+	//
+	// POST /me/emails/{id}/reply-draft
+	DraftEmailReply(ctx context.Context, params DraftEmailReplyParams) (DraftEmailReplyRes, error)
 	// DuplicateCV implements duplicateCV operation.
 	//
 	// Creates a new base CV with the same document, template and appearance, titled " (copy)". Only a base

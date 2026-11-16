@@ -7944,6 +7944,7 @@ func (s *CvPlanRefusal) SetUpgradeURL(val OptString) {
 }
 
 func (*CvPlanRefusal) draftCVCoverLetterRes() {}
+func (*CvPlanRefusal) draftEmailReplyRes()    {}
 func (*CvPlanRefusal) tailorCVRes()           {}
 
 // One CV: its document and the state around it.
@@ -9124,6 +9125,23 @@ func (s *DraftCVCoverLetterOK) SetData(val CvCoverLetter) {
 }
 
 func (*DraftCVCoverLetterOK) draftCVCoverLetterRes() {}
+
+// A single item: `{"data": ...}`.
+type DraftEmailReplyOK struct {
+	Data MailReplyDraft `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DraftEmailReplyOK) GetData() MailReplyDraft {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DraftEmailReplyOK) SetData(val MailReplyDraft) {
+	s.Data = val
+}
+
+func (*DraftEmailReplyOK) draftEmailReplyRes() {}
 
 // A single item: `{"data": ...}`.
 type DuplicateCVCreated struct {
@@ -16460,6 +16478,56 @@ func (s *MailRecalledPick) GetProviderID() OptNilString {
 // SetProviderID sets the value of ProviderID.
 func (s *MailRecalledPick) SetProviderID(val OptNilString) {
 	s.ProviderID = val
+}
+
+// A reply for the candidate to review and send from their own mail client.
+// Ref: #/components/schemas/MailReplyDraft
+type MailReplyDraft struct {
+	// The address the received message came from.
+	Recipient     string `json:"recipient"`
+	RecipientName string `json:"recipient_name"`
+	Subject       string `json:"subject"`
+	Body          string `json:"body"`
+}
+
+// GetRecipient returns the value of Recipient.
+func (s *MailReplyDraft) GetRecipient() string {
+	return s.Recipient
+}
+
+// GetRecipientName returns the value of RecipientName.
+func (s *MailReplyDraft) GetRecipientName() string {
+	return s.RecipientName
+}
+
+// GetSubject returns the value of Subject.
+func (s *MailReplyDraft) GetSubject() string {
+	return s.Subject
+}
+
+// GetBody returns the value of Body.
+func (s *MailReplyDraft) GetBody() string {
+	return s.Body
+}
+
+// SetRecipient sets the value of Recipient.
+func (s *MailReplyDraft) SetRecipient(val string) {
+	s.Recipient = val
+}
+
+// SetRecipientName sets the value of RecipientName.
+func (s *MailReplyDraft) SetRecipientName(val string) {
+	s.RecipientName = val
+}
+
+// SetSubject sets the value of Subject.
+func (s *MailReplyDraft) SetSubject(val string) {
+	s.Subject = val
+}
+
+// SetBody sets the value of Body.
+func (s *MailReplyDraft) SetBody(val string) {
+	s.Body = val
 }
 
 // Ref: #/components/schemas/MailboxStatus

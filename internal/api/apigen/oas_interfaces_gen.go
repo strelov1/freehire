@@ -13,6 +13,10 @@ type DraftCVCoverLetterRes interface {
 	draftCVCoverLetterRes()
 }
 
+type DraftEmailReplyRes interface {
+	draftEmailReplyRes()
+}
+
 type PostAssistantExtendRes interface {
 	postAssistantExtendRes()
 }

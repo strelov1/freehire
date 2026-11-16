@@ -42,6 +42,8 @@ const (
 	// FeatureAutoApply is one unattended application: a headless browser fills and submits the
 	// employer's form. Its pro ceiling is a real daily count rather than a fair-use guard.
 	FeatureAutoApply Feature = "auto-apply"
+	// FeatureMailReply is one drafted reply to a received hiring email: a single model call.
+	FeatureMailReply Feature = "mail-reply"
 )
 
 // AllFeatures lists every metered feature. Tests walk it and the usage surface reports each
@@ -49,7 +51,7 @@ const (
 func AllFeatures() []Feature {
 	return []Feature{
 		FeatureTailor, FeatureFit, FeatureAssistant, FeatureDictation, FeatureCoverLetter,
-		FeatureAutoApply,
+		FeatureAutoApply, FeatureMailReply,
 	}
 }
 
@@ -168,6 +170,11 @@ func DefaultConfig() Config {
 			FeatureAutoApply: {
 				pro:     tierAllowance{daily: 3},
 				ultra:   tierAllowance{daily: 100, unlimited: true},
+				enforce: true,
+			},
+			FeatureMailReply: {
+				pro:     tierAllowance{daily: 60, unlimited: true},
+				ultra:   tierAllowance{daily: 180, unlimited: true},
 				enforce: true,
 			},
 		},
