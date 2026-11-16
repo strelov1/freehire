@@ -3,6 +3,8 @@ import { minorUnitsValue } from './money';
 
 type CheckoutStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const key = 'fh:checkout';
+// Browser and provider timestamps need not share a clock; known charge IDs still exclude prior payments.
+const clockSkewMs = 10 * 60 * 1000;
 
 export function beginCheckoutTracking(
   userId: number,
@@ -47,8 +49,8 @@ export function claimCheckoutPurchase(
         a.id &&
         a.currency &&
         !chargeIds.includes(a.id) &&
-        Date.parse(a.date) >= started &&
-        Date.parse(a.date) <= now,
+        Date.parse(a.date) >= started - clockSkewMs &&
+        Date.parse(a.date) <= now + clockSkewMs,
     );
     if (!charge) return null;
     const value = minorUnitsValue(charge.amount_cents, charge.currency);

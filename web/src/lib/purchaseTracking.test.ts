@@ -51,7 +51,7 @@ describe('checkout purchase attribution', () => {
     beginCheckoutTracking(7, [], store, now);
     expect(claimCheckoutPurchase(8, [charge], store, now + 2000)).toBeNull();
     expect(
-      claimCheckoutPurchase(7, [{ ...charge, date: new Date(now - 1000).toISOString() }], store, now + 2000),
+      claimCheckoutPurchase(7, [{ ...charge, date: new Date(now - 11 * 60 * 1000).toISOString() }], store, now + 2000),
     ).toBeNull();
     expect(claimCheckoutPurchase(7, [charge], store, now + 86400001)).toBeNull();
   });
@@ -63,6 +63,13 @@ describe('checkout purchase attribution', () => {
       const store = storage();
       beginCheckoutTracking(7, [], store, now);
       expect(claimCheckoutPurchase(7, [{ ...charge, currency }], store, now + 2000)?.value).toBe(value);
+    }
+  });
+  it('accepts a new successful charge with browser clocks five minutes ahead or behind', () => {
+    for (const offset of [-300000, 300000]) {
+      const store = storage();
+      beginCheckoutTracking(7, ['ch_old'], store, now + offset);
+      expect(claimCheckoutPurchase(7, [charge], store, now + offset + 30000)?.transaction_id).toBe('ch_new');
     }
   });
   it('ignores corrupt or unavailable storage', () => {
