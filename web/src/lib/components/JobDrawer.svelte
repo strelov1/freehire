@@ -15,7 +15,6 @@
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { cardTagsFromCard } from '#lib/enrichment.js';
   import JobDescription from './JobDescription.svelte';
-  import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
   import { api } from '#lib/api.js';
@@ -493,7 +492,9 @@
                  would restate the panel's own content and offer a "View full analysis"
                  link that closes the drawer to show what is already open. -->
             <JobMatch job={posting} matchAnalysis={null} />
-            <MatchAnalysisFull job={posting} />
+            {#await import('./MatchAnalysisFull.svelte') then { default: MatchAnalysisFull }}
+              <MatchAnalysisFull job={posting} />
+            {/await}
           {:else if item.job}
             <p class="text-sm text-muted-foreground">{s.loading}</p>
           {/if}

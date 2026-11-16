@@ -7,7 +7,6 @@
   import { t } from '#lib/i18n/t.js';
   import type { Attachment } from './client';
   import Composer from './Composer.svelte';
-  import VoiceCall from './VoiceCall.svelte';
   import { messages } from './AssistantChat.messages';
 
   // AssistantChat's input area: the composer, or a hands-free voice call in its place while
@@ -76,7 +75,9 @@
   {#key sessionId}
     <div class="border-t border-border p-3">
       <div class="mx-auto w-full max-w-3xl">
-        <VoiceCall {sessionId} {onClose} {onUnavailable} />
+        {#await import('./VoiceCall.svelte') then { default: VoiceCall }}
+          <VoiceCall {sessionId} {onClose} {onUnavailable} />
+        {/await}
       </div>
     </div>
   {/key}

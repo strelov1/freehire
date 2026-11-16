@@ -2,12 +2,12 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ChevronDown, Globe, House, Blend, Building } from '@lucide/svelte';
-  import { WORK_MODE_OPTIONS, REGION_OPTIONS, type FacetStore, type FacetOption } from '#lib/facets.js';
+  import { WORK_MODE_OPTIONS, REGION_OPTIONS } from '#lib/locationOptions.js';
+  import type { FacetStore, FacetOption } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
   import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '#lib/headerScope.js';
   import { pillClass, pillPressed, pillTitle } from './facets/pill';
   import PillMeta from './facets/PillMeta.svelte';
-  import LocationPane from './filters/LocationPane.svelte';
   import { must } from '#lib/utils.js';
 
   // The header's cross-cutting location filter — a scope-prefix trigger inside the
@@ -230,7 +230,9 @@
           {@render storePills('work_mode', WORK_MODE_OPTIONS)}
         </div>
         <div class="border-t border-border pt-4">
-          <LocationPane store={must(store, 'store')} {counts} />
+          {#await import('./filters/LocationPane.svelte') then { default: LocationPane }}
+            <LocationPane store={must(store, 'store')} {counts} />
+          {/await}
         </div>
       {:else if variant === 'companies'}
         <div class="mb-4">

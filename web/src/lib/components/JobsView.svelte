@@ -351,11 +351,15 @@
   // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
   // with no skills has no percent to test (see computeClientMatch) and stays, matching
   // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
+  const clientMatches = $derived(
+    new Map(displayItems.map((job) => [job.public_slug, computeClientMatch(job.skills ?? [], profileSkills)])),
+  );
+
   const visibleJobs = $derived(
     displayItems.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
       if (!serverMatch && matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
-        return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
+        return (clientMatches.get(j.public_slug)?.percent ?? 0) >= minMatch;
       }
       return true;
     }),
@@ -564,12 +568,14 @@
     {:else}
       <JobsFeedList
         jobs={visibleJobs}
+        {clientMatches}
         {minMatch}
         {serverMatch}
         {holdingOver}
         {onHide}
         hideCompany={!!scope.company_slug}
       />
+
 
       <!-- Page links, and the only way through the results: a scroll-to-bottom
            auto-load used to sit here, which grew the page every time the reader

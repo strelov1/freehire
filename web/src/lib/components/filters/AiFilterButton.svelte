@@ -3,7 +3,6 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import type { FilterStore } from '#lib/filters.js';
-  import AiFilterDialog from './AiFilterDialog.svelte';
   import { messages } from './AiFilterButton.messages';
 
   // Rendered for everyone and opens for everyone, signed in or not. The interpreter and
@@ -33,5 +32,7 @@
 </button>
 
 {#if open}
-  <AiFilterDialog {store} {onApplied} onclose={() => (open = false)} />
+  {#await import('./AiFilterDialog.svelte') then { default: AiFilterDialog }}
+    <AiFilterDialog {store} {onApplied} onclose={() => (open = false)} />
+  {/await}
 {/if}

@@ -2,14 +2,13 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { ArrowRight } from '@lucide/svelte';
-  import FilterModal from './filters/FilterModal.svelte';
   import HeaderSearch from './HeaderSearch.svelte';
   import RecentJobsFeed from './RecentJobsFeed.svelte';
   import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
   import { api } from '#lib/api.js';
   import { browseQuery, planForSuggestion } from '#lib/browseTarget.js';
   import type { ApplyPlan } from '#lib/apiSuggestions.js';
-  import { countryLabel } from '#lib/facets.js';
+  import { countryLabel } from '#lib/locationOptions.js';
   import { emptyFilters, filtersToParams } from '#lib/facetModel.js';
   import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
@@ -381,13 +380,17 @@
      this modal has no list behind it. `counts` seeds the controls before the first
      staged fetch answers; `stagedCounts` is what keeps them right, and what gives the
      dynamic facets any options at all. -->
-<FilterModal
-  seed={emptyFilters()}
-  {counts}
-  {stagedCounts}
-  {previewCount}
-  open={filtersOpen}
-  onClose={() => (filtersOpen = false)}
-  applyLabel="Search jobs"
-  onApply={searchWithFilters}
-/>
+{#if filtersOpen}
+  {#await import('./filters/FilterModal.svelte') then { default: FilterModal }}
+    <FilterModal
+      seed={emptyFilters()}
+      {counts}
+      {stagedCounts}
+      {previewCount}
+      open={filtersOpen}
+      onClose={() => (filtersOpen = false)}
+      applyLabel="Search jobs"
+      onApply={searchWithFilters}
+    />
+  {/await}
+{/if}

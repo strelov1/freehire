@@ -2,10 +2,12 @@
   import States from './States.svelte';
   import type { Job } from '#lib/types.js';
   import JobRow from './JobRow.svelte';
+  import type { JobRowProps } from './JobRow.props';
 
   // The feed's rows on one surface, or why a page whose search matched shows none.
   let {
     jobs,
+    clientMatches,
     minMatch,
     serverMatch,
     holdingOver,
@@ -13,6 +15,7 @@
     hideCompany,
   }: {
     jobs: Job[];
+    clientMatches: ReadonlyMap<string, JobRowProps['clientMatch']>;
     minMatch: number | null;
     serverMatch: boolean;
     holdingOver: boolean;
@@ -43,7 +46,7 @@
     aria-busy={holdingOver}
   >
     {#each jobs as job (job.public_slug)}
-      <JobRow {job} {onHide} {hideCompany} flat />
+      <JobRow {job} clientMatch={clientMatches.get(job.public_slug)} {onHide} {hideCompany} flat />
     {/each}
   </div>
 {/if}
