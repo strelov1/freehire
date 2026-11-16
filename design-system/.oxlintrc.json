@@ -7,8 +7,8 @@
   },
   "categories": {
     "correctness": "error",
-    "suspicious": "warn",
-    "perf": "warn"
+    "suspicious": "error",
+    "perf": "error"
   },
   "rules": {
     "import/no-unassigned-import": "off"

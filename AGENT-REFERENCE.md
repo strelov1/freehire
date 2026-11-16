@@ -59,8 +59,8 @@ Non-obvious:
 - `internal/platform/db/` — **generated**; edit `internal/platform/db/queries/*.sql` and run `make sqlc` (the hook and CI regenerate and diff).
 - **Files have a size limit.** `scripts/check-file-size.mjs` (a pre-commit hook on staged files, the `file-size` CI job and `pnpm check:size` over all files) fails on a file over its `MAX_TOKENS` (tokens = bytes / 4), and its error says how to split one. Lockfiles, generated code, data assets, applied migrations and frozen history are ignored. The limit goes down step by step to 5000 as big files are split: lower it in the change that splits the files above the new value, never raise it.
 - **There is no `sources/` directory.** The board catalog is the `boards` table (`internal/ingest/boardcatalog`) and the Telegram channel list is `telegram_channels`; nothing parses a board file any more. `internal/ingest/sources` is the *adapters*, not the catalog.
-- `design-system/` — a separate pnpm package linked into `web/` (pnpm `link:`) and `extension/` (npm `file:`), both symlinks. **Install it before building either consumer** — neither package manager installs a linked package's own dependencies. A type it imports must be one version across all three manifests (`pnpm check:deps`; see [design-system/AGENTS.md](design-system/AGENTS.md)).
-- `extension/` — the browser extension (WXT + Svelte side-panel agent client), npm-managed unlike the rest of the JS. See [extension/AGENTS.md](extension/AGENTS.md).
+- `design-system/` — a separate pnpm package linked into `web/` (pnpm `link:`) and `extension/` (pnpm `file:`), both symlinks. **Install it before building either consumer** — neither package manager installs a linked package's own dependencies. A type it imports must be one version across all three manifests (`pnpm check:deps`; see [design-system/AGENTS.md](design-system/AGENTS.md)).
+- `extension/` — the browser extension (WXT + Svelte side-panel agent client), pnpm-managed like the rest of the JS. See [extension/AGENTS.md](extension/AGENTS.md).
 - **Host configuration is not in this repo.** Systemd units, nginx snippets and operator scripts (`release.sh`, `autodeploy.sh`, `gen-ingest-timers.sh`) live only in the private `freehire-ops` repository (`provision/host2/`, `scripts/host2/`; read `provision/host2/AGENTS.md`). Nothing there deploys itself: `release.sh` builds and flips the app but never touches a unit, snippet or script, so editing one is half the job — copy it to the host and `systemctl daemon-reload`; `scripts/host2/drift-check.sh` reports drift. `deploy/rollback/` stays here: those are a migration's SQL.
 
 ## Commands
@@ -92,7 +92,7 @@ nothing), then `go vet ./...` and `go test ./...`. Do not commit if they fail. S
 suite when the commit has no Go.
 
 **Formatting TS/JS/Svelte:** oxfmt, one root `.oxfmtrc.json` for `web/`, `design-system/`,
-`extension/`; `pnpm run format` (npm in `extension/`) rewrites, `format:check` is the gate — see
+`extension/`; `pnpm run format` rewrites, `format:check` is the gate — see
 [ci-checks](docs/agents/ci-checks.md#formatting-oxfmt).
 
 **`go test ./...` compiles no `//go:build integration` file, and those files are not

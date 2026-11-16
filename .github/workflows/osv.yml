@@ -25,4 +25,4 @@ jobs:
       # Explicit lockfiles exclude go.mod: govulncheck owns Go reachability analysis.
       # No secrets or dependency installation; Dependabot receives the same gate.
       - name: Scan JS dependencies
-        run: /tmp/osv-scanner scan source --lockfile=pnpm-lock.yaml --lockfile=web/pnpm-lock.yaml --lockfile=design-system/pnpm-lock.yaml --lockfile=extension/package-lock.json
+        run: /tmp/osv-scanner scan source --lockfile=pnpm-lock.yaml --lockfile=web/pnpm-lock.yaml --lockfile=design-system/pnpm-lock.yaml --lockfile=extension/pnpm-lock.yaml

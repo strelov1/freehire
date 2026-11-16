@@ -76,6 +76,7 @@ export function startErrorTelemetry(context: 'background' | 'panel' | 'content')
         // MV3 may suspend the worker as soon as the message finishes.
         return telemetry?.flush();
       }
+      return undefined;
     });
   }
   return telemetry;

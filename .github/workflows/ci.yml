@@ -23,6 +23,15 @@ jobs:
     outputs:
       backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
       web: ${{ steps.scope.outputs.web }}
+      backend: ${{ steps.scope.outputs.backend }}
+      scrapling_fetch: ${{ steps.scope.outputs.scrapling_fetch }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      migrations: ${{ steps.scope.outputs.migrations }}
+      contracts: ${{ steps.scope.outputs.contracts }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
+      design_system: ${{ steps.scope.outputs.design_system }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,6 +290,9 @@ jobs:
       #
       # The list comes from git rather than being written out here: a script added next year
       # is covered the day it is committed, not the day someone remembers this job exists.
+      - name: Install pinned ShellCheck
+        run: bash .github/scripts/install-shellcheck.sh
+
       - name: Check shell scripts
         run: |
           mapfile -t scripts < <(git ls-files '*.sh')
@@ -313,6 +325,8 @@ jobs:
   # through. Its own job because it needs the whole history (the merge base) and the
   # jobs beside it are shallow on purpose.
   api-breaking:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -350,6 +364,8 @@ jobs:
   # rename breaks one silently. Needs no dependencies — git and node — so it is its own
   # job rather than a step tacked onto one that installs a package tree.
   scrapling-fetch:
+    needs: changes
+    if: needs.changes.outputs.scrapling_fetch == 'true'
     # services/scrapling-fetch: the self-hosted fetch tier on host2. Its tests fake both
     # Scrapling fetchers, so they run on plain Python without a browser.
     runs-on: ubuntu-latest
@@ -399,6 +415,8 @@ jobs:
           done
 
   design-system:
+    needs: changes
+    if: needs.changes.outputs.design_system == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
