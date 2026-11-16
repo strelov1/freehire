@@ -2,9 +2,12 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
-  import { ArrowRight, CheckCircle2, SquarePen } from '@lucide/svelte';
+  import { ArrowRight, SquarePen } from '@lucide/svelte';
   import JobActionStrip from './JobActionStrip.svelte';
   import JobSaveButton from './JobSaveButton.svelte';
+  import JobAsides from './JobAsides.svelte';
+  import JobTitle from './JobTitle.svelte';
+  import JobTabPanels from './JobTabPanels.svelte';
   import { ApiError, api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
@@ -21,15 +24,8 @@
   import type { Display } from '#lib/generated/contracts.js';
   import type { Job, PlanState, UserJob } from '#lib/types.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { Button, Chip, TabStrip, tabStripId } from '#lib/ui/index.js';
-  import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import JobApplyForm from './JobApplyForm.svelte';
-  import JobCompanyPanel from './JobCompanyPanel.svelte';
-  import JobDiscussionPanel from './JobDiscussionPanel.svelte';
+  import { Button, TabStrip } from '#lib/ui/index.js';
   import JobFactsCard from './JobFactsCard.svelte';
-  import JobPostingBody from './JobPostingBody.svelte';
-  import { supersedesReality } from '#lib/ghost.js';
-  import GhostChecklist from './GhostChecklist.svelte';
   import JobPinnedHeader from './JobPinnedHeader.svelte';
   import JobApplyNotices from './JobApplyNotices.svelte';
   import JobSignInGate from './JobSignInGate.svelte';
@@ -40,9 +36,6 @@
   import JobScrollPadding from './JobScrollPadding.svelte';
   import JobProvenanceLine from './JobProvenanceLine.svelte';
   import JobClosedNotice from './JobClosedNotice.svelte';
-  import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
-  import ReferralBlock from './ReferralBlock.svelte';
-  import MentorBlock from './MentorBlock.svelte';
   import ReportDialog from './ReportDialog.svelte';
 
   // The job is server-rendered: it arrives as a prop from the route's `load`, so
@@ -525,18 +518,7 @@
   </JobProvenanceLine>
 
   <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
-    <div class="flex flex-wrap items-center gap-2.5">
-      <h1 class="text-2xl font-semibold tracking-tight" lang={contentLang}>{job.title}</h1>
-      <!-- Applied stays with the title: it is a fact about THIS READER, not about the
-           posting, so it does not belong on the provenance line above. -->
-      {#if applied}
-        <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
-          <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
-        </Chip>
-      {:else if appliedToCompany}
-        <AppliedCompanyBadge />
-      {/if}
-    </div>
+    <JobTitle title={job.title} lang={contentLang} {applied} {appliedToCompany} />
 
     <JobClosedNotice {job} {hasSimilar} />
 
@@ -565,30 +547,7 @@
       <JobActionStrip className="ml-auto -mr-2 flex max-w-full flex-wrap justify-end" iconOnly {...strip} />
     </div>
 
-    <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
-         once for the whole page: a gauge and the hedged wording here, the criteria and
-         a link to the full explanation behind its own disclosure. Placed above the
-         description, so somebody deciding whether this is worth an hour of unpaid work
-         meets the hedge before the pitch rather than after they have already invested
-         the reading. The caveat itself now lives on /features/ghost-jobs — the row
-         carries the ceiling on the claim ("possibly", two of four), not the essay. -->
-    {#if supersedesReality(job.ghost, locale())}
-      <GhostChecklist ghost={job.ghost} />
-    {/if}
-
-    {#if job.referral_available && job.company_slug}
-      <ReferralBlock
-        companySlug={job.company_slug}
-        companyName={job.company}
-        jobSlug={job.public_slug}
-        onTailor={() => void tailor.start()}
-      />
-    {/if}
-
-    <!-- Mentorship is a separate way to get help from someone at this company. -->
-    {#if job.company_slug}
-      <MentorBlock companySlug={job.company_slug} companyName={job.company} />
-    {/if}
+    <JobAsides {job} onTailor={() => void tailor.start()} />
   </header>
 
   <JobFactsCard {job} matchAnalysis={tailor.analysis} {closed} />
@@ -656,35 +615,7 @@
          doubled the space between the tab row and the description. -->
     <div class="hidden lg:contents">{@render signInFeedback()}</div>
 
-    <!-- One panel for every tab, its contents toggled by class rather than {#if}.
-         Unmounting the inactive one would throw away the company the visitor already
-         waited for, and re-render the description on every switch back. It also keeps
-         every panel in the server-rendered HTML, so a crawler reads what a visitor
-         would have to click for. -->
-    <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, tabs.current)}>
-      <div class={tabs.current === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
-        <JobPostingBody {job} lang={contentLang} />
-      </div>
-      {#if tabs.companyWithDetails}
-        <div class={tabs.current === 'company' ? 'block' : 'hidden'}>
-          {#key tabs.companySlug}
-            <JobCompanyPanel
-              company={tabs.companyWithDetails}
-              slug={tabs.companySlug}
-              name={job.company || 'this company'}
-            />
-          {/key}
-        </div>
-      {/if}
-      <div class={tabs.current === 'application' ? 'block' : 'hidden'}>
-        <JobApplyForm form={applyForm} />
-      </div>
-      <div class={tabs.current === 'discussion' ? 'block' : 'hidden'}>
-        {#key job.public_slug}
-          <JobDiscussionPanel slug={job.public_slug} active={tabs.current === 'discussion'} />
-        {/key}
-      </div>
-    </div>
+    <JobTabPanels {panelId} {tabs} {job} lang={contentLang} {applyForm} />
   </div>
 
   <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job

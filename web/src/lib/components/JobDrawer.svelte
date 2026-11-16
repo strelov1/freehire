@@ -2,8 +2,8 @@
   import { onDestroy, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
-  import { Trash2, X, ExternalLink, Send, SquarePen } from '@lucide/svelte';
+  import { Button, ConfirmDialog, cn } from '#lib/ui/index.js';
+  import { Trash2 } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { tailorHref } from '#lib/tailorHref.js';
   import { groupedStages, humanizeStage } from '#lib/stages.js';
@@ -14,7 +14,6 @@
   import { tablist } from '#lib/actions/tablist.js';
   import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { cardTagsFromCard } from '#lib/enrichment.js';
-  import { companyLogoUrl } from '#lib/logo.js';
   import JobDescription from './JobDescription.svelte';
   import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -39,6 +38,8 @@
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { messages } from './JobDrawer.messages';
   import JobDrawerLoadState from './JobDrawerLoadState.svelte';
+  import JobDrawerTitle from './JobDrawerTitle.svelte';
+  import JobDrawerActions from './JobDrawerActions.svelte';
   import { format, t } from '#lib/i18n/t.js';
 
   let {
@@ -308,9 +309,6 @@
     if (active) tabEdges.reveal(active);
   });
 
-  // Actions keep their natural width, including when only Tailor CV is offered.
-  const actionClass = 'h-9 min-w-0 gap-1.5 px-3 sm:h-8';
-
   const tabClass = (active: boolean) =>
     cn(
       'min-h-11 shrink-0 border-b-2 px-1 py-2 text-xs font-medium transition-colors sm:px-2 sm:text-sm',
@@ -336,86 +334,18 @@
   <!-- Employer, role, and posting details lead; status and application actions follow. -->
   <div class="shrink-0 border-b border-border">
     <div class="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
-      <div class="flex items-center gap-3">
-        <EntityLogo
-          name={company || s.unknownCompany}
-          src={companyLogoUrl(company) ?? undefined}
-          shape="square"
-          size="sm"
-          class="shrink-0"
-        />
-        <p class="min-w-0 flex-1 break-words text-sm font-medium text-muted-foreground">
-          {company || s.unknownCompany}
-        </p>
-        {#if item.job}
-          <a
-            href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-8 sm:text-sm"
-          >
-            <ExternalLink class="size-3.5" aria-hidden="true" />
-            {s.viewJob}
-          </a>
-        {/if}
-        <button
-          type="button"
-          onclick={close}
-          class="-mr-1.5 flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:size-8"
-          aria-label={s.close}
-        >
-          <X class="size-5" />
-        </button>
-      </div>
+      <JobDrawerTitle {company} {title} {tags} jobSlug={item.job?.public_slug} onClose={close} />
 
-      <h2 class="text-balance text-xl font-semibold leading-tight tracking-tight">{title}</h2>
-
-      {#if tags.length}
-        <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {#each tags as tag (tag)}
-            <span>{tag}</span>
-          {/each}
-        </p>
-      {/if}
-
-      {#if stageLabel || item.job || offersFollowUp}
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {#if stageLabel}
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <span class="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
-              {stageLabel}
-            </span>
-          {/if}
-          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {#if item.job}
-              <Button
-                variant={tailorIsPrimary ? 'primary' : 'outline'}
-                size="sm"
-                onclick={startTailoring}
-                disabled={tailoring}
-                class={actionClass}
-              >
-                <SquarePen class="size-3.5 shrink-0" />
-                <span class="truncate">{tailoring ? s.preparing : s.tailorCv}</span>
-              </Button>
-            {/if}
-            {#if offersFollowUp}
-              <Button
-                variant="outline"
-                size="sm"
-                onclick={() => onfollowup(item)}
-                class={cn(
-                  actionClass,
-                  'border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80',
-                )}
-              >
-                <Send class="size-3.5 shrink-0" />
-                <span class="truncate">{item.followed_up_at ? s.chaseAgain : s.followUp}</span>
-              </Button>
-            {/if}
-          </div>
-        </div>
-      {/if}
+      <JobDrawerActions
+        {stageLabel}
+        canTailor={!!item.job}
+        {tailorIsPrimary}
+        {tailoring}
+        onTailor={startTailoring}
+        {offersFollowUp}
+        followedUp={!!item.followed_up_at}
+        onFollowUp={() => onfollowup(item)}
+      />
       {#if buddyMember && buddyApplicationId !== null}
         <label class="flex items-center gap-2 text-sm text-muted-foreground">
           <input
