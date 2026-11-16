@@ -1,9 +1,9 @@
 package sources
 
 import (
- "maps"
- "slices"
- "sync"
+	"maps"
+	"slices"
+	"sync"
 )
 
 // Taxonomy assembles the registry for classification rather than crawling: every adapter this

@@ -392,5 +392,8 @@
       applyLabel="Search jobs"
       onApply={searchWithFilters}
     />
+  {:catch}
+    <p role="alert">Filters could not load.</p>
+    <button type="button" onclick={() => (filtersOpen = false)}>Close</button>
   {/await}
 {/if}

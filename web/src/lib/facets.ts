@@ -1,3 +1,4 @@
+import { SPECIALIZATION_ALIASES } from './specializationAliases';
 import { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
 export { WORK_MODE_OPTIONS, REGION_OPTIONS, countryLabel } from './locationOptions';
 // The job-search facets, as a data-driven registry. Each entry declares its
@@ -730,6 +731,7 @@ export const FACETS: FacetDef[] = [
     options: CATEGORY,
     excludable: true,
     placeholder: 'Search specializations',
+    searchAliases: SPECIALIZATION_ALIASES,
   },
   {
     param: 'ai_archetype',

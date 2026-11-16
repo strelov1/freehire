@@ -77,6 +77,9 @@
       <div class="mx-auto w-full max-w-3xl">
         {#await import('./VoiceCall.svelte') then { default: VoiceCall }}
           <VoiceCall {sessionId} {onClose} {onUnavailable} />
+        {:catch}
+          <p role="alert">Voice call could not load.</p>
+          <button type="button" onclick={() => (voiceCallOpen = false)}>Return to text</button>
         {/await}
       </div>
     </div>
