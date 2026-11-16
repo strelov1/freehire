@@ -84,7 +84,7 @@ describe('AiFilterButton', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: /Describe with AI/ }));
 
-    expect(screen.getByRole('dialog', { name: 'AI search' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'AI search' })).toBeTruthy();
   });
 });
 
