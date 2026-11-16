@@ -22,6 +22,13 @@ Created the OKF v0.2 navigation bundle from repository instructions and package
 references. Concepts include pinned source provenance and agent authorship;
 production state and human verification have not been asserted.
 
+## LinkedIn source identity and related discovery — 2026-11-16
+
+Recorded numeric posting identity with legacy id/history preservation, the closed-history
+URL lookup index, and bounded first-level related-job discovery. Configured Scrapling
+routing retains the source's request budget. This describes the checkout implementation;
+production rollout is verified separately.
+
 ## LinkedIn intake and related discovery — 2026-11-16
 
 Updated catalogue provenance for shared LinkedIn link intake, contributor attribution,

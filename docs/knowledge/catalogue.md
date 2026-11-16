@@ -4,7 +4,7 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T21:57:37+00:00
+  at: 2026-11-16T23:17:31+00:00
 sources:
   - resource: ../../internal/ingest/sources/wantapply.go
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
@@ -13,8 +13,11 @@ sources:
   - resource: ../../internal/ingest/linkimport/linkedin.go
   - resource: ../../internal/api/handler/intake_linkedin.go
   - resource: ../../internal/api/handler/intake_sources.go
+  - resource: ../../internal/ingest/contribution/contribution.go
+  - resource: ../../cmd/ingest/native_ownership.go
   - resource: ../../internal/job/job/upsert.go
   - resource: ../../internal/ingest/sources/linkedin_related.go
+  - resource: ../../internal/ingest/sources/scraplingtier.go
   - resource: ../../cmd/ingest/native_discovery_company.go
   - resource: ../../cmd/reindex/summary.go
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
@@ -61,13 +64,10 @@ so the ATS adapter owns subsequent updates and closure. See the
 
 The shared link intake accepts LinkedIn job URLs. Configured Scrapling transport is applied
 only to its LinkedIn adapter; other URL resolvers keep their guarded client. It verifies
-the application method before importing, attributes a discovered native board to the signed-in contributor,
-and queues unreadable or unverified destinations without publishing them. New LinkedIn
-identities use the numeric posting id across search slices and intake; writes reuse a
-legacy keyword-scoped row's id and public slug when its exact native URL already exists.
-A completed search may add at most twenty first-level recommendations from one verified
-full posting page; these pass the same detail, application and ATS ownership checks.
-
+the application method before importing, attributes a discovered native board and its
+region to the signed-in contributor, and queues unreadable or unverified destinations
+without publishing them. A recorded board adopts its provider even after a failed posting
+read, while an existing operator pause remains unchanged.
 
 ## WantApply regional inventory
 
@@ -78,3 +78,19 @@ vacancy at an employer does not establish that its whole inventory is present.
 Posting-level duplicate matching remains in place. See the
 [adapter](../../internal/ingest/sources/wantapply.go) and
 [coverage rule](../../internal/ingest/pipeline/pipeline_write.go).
+
+## LinkedIn source identity and related discovery
+
+New LinkedIn catalogue rows use the numeric posting id across search keywords and regions.
+The shared writer preserves an existing public legacy row's id, slug and saved history by
+its exact normalized native URL, including closed rows subject to ordinary rediscovery
+policy. A LinkedIn-only URL index covers that closed history.
+
+A completed bounded search may supplement its primary results with at most twenty
+first-level recommendations from one verified public posting page. Each candidate is read
+through the normal detail and application-ownership checks, with the same request limiter.
+LinkedIn uses the existing Scrapling HTTP proxy route when configured. The provider
+reference records the bounded access probes and their limits.
+
+Ownership reconciliation accepts both numeric LinkedIn posting keys and legacy
+keyword-scoped keys, so a later external-application transition can reach its native ATS.

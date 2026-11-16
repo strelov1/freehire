@@ -56,10 +56,12 @@
   share the adapter's existing limiter. A companion failure preserves the primary crawl;
   a recommendation refusal stops that branch and preserves earlier readable jobs.
 
-- New catalogue identities use the numeric LinkedIn posting id, independent of keyword,
-  country or link intake. The shared job upsert reuses any existing public keyword-scoped
+- New catalogue identities use the numeric LinkedIn posting id, independent of keyword or
+  country. The shared job upsert reuses any existing public keyword-scoped
   row with the exact normalized native URL, preserving its id, public slug and history.
   Cheap refresh and ATS-coverage retirement map numeric discoveries to those legacy keys.
+
+
 - The shared contribute/resolve intake uses the same application classification and native
   ATS proof. Hidden destinations may contribute an observed employer board without
   publishing a guessed vacancy. It never imports an unverified LinkedIn JSON-LD page as

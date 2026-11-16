@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+	"golang.org/x/time/rate"
 )
 
 // umFake serves canned pages by URL and records the requests.
@@ -219,5 +220,19 @@ func TestUmantisPageCapStopsEndlessPagination(t *testing.T) {
 	jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host})
 	if err != nil || len(jobs) != umantisMaxPages {
 		t.Fatalf("got %d jobs, err %v; want %d", len(jobs), err, umantisMaxPages)
+	}
+}
+
+// Every Umantis board draws on one request budget for the run: the tenant hosts share an
+// origin that answers 429 per client IP once parallel boards fan out unpaced.
+func TestUmantisIsPacedProviderWide(t *testing.T) {
+	u := All(NewClient())["umantis"].(umantis)
+	paced, ok := u.http.(rateLimitedHTMLGetter)
+	if !ok {
+		t.Fatal("umantis is not paced")
+	}
+	limiter := paced.limiter.(*rate.Limiter)
+	if limiter.Limit() != rate.Every(umantisRequestInterval) || limiter.Burst() != umantisRequestBurst {
+		t.Fatal("umantis budget changed")
 	}
 }
