@@ -36,9 +36,9 @@ func TestOwnershipReconciliationTransfersExistingLinkedInIdentity(t *testing.T) 
 	}
 	registry := sources.Taxonomy()
 	registry["hrsmart"] = nativeDiscoveryFixture{}
-	reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/", ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735"}}
+	reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/", ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://www.gistworld.com", ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735"}}
 	store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
-	report, err := reconcileLinkedInOwnership(ctx, q, reader, newNativeDiscovery(pool, registry, store), 0)
+	report, err := reconcileLinkedInOwnership(ctx, q, reader, withEmployerProof(newNativeDiscovery(pool, registry, store)), 0)
 	if err != nil || report.Transferred != 1 || report.Pending != 0 {
 		t.Fatalf("ownership report = %+v, %v", report, err)
 	}
@@ -61,7 +61,7 @@ func TestOwnershipReconciliationDoesNotCallUnresolvedDiscoveriesComplete(t *test
 	registry := sources.Taxonomy()
 	reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "123", Title: "Go Engineer", Company: "Unknown Employer", URL: "https://www.linkedin.com/jobs/view/123/", ApplyMethod: sources.ApplyExternal}}
 	store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
-	report, err := reconcileLinkedInOwnership(ctx, q, reader, newNativeDiscovery(pool, registry, store), 0)
+	report, err := reconcileLinkedInOwnership(ctx, q, reader, withEmployerProof(newNativeDiscovery(pool, registry, store)), 0)
 	if err == nil || report.Pending != 1 || report.Native != 0 {
 		t.Fatalf("unresolved external posting passed as native: %+v, %v", report, err)
 	}

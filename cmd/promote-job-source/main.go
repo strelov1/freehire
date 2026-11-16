@@ -21,6 +21,7 @@ func main() { worker.Main(run) }
 func run() int {
 	slug := flag.String("slug", "", "existing public posting slug")
 	raw := flag.String("url", "", "verified ATS posting URL; defaults to the stored application destination")
+	website := flag.String("company-website", "", "employer's published website, used to verify a new ATS board independently")
 	apply := flag.Bool("apply", false, "transfer identity and onboard the verified ATS board; otherwise preview")
 	flag.Parse()
 	if strings.TrimSpace(*slug) == "" || flag.NArg() != 0 {
@@ -44,8 +45,16 @@ func run() int {
 	*raw = destinationURL(row, *raw)
 	client := sources.NewClient()
 	registry := sources.All(client)
+	if err := sources.ApplyProxyEgress(registry); err != nil {
+		log.Printf("promote-job-source: %v", err)
+		return 1
+	}
+	if err := sources.ApplyScraplingEgress(registry); err != nil {
+		log.Printf("promote-job-source: %v", err)
+		return 1
+	}
 	im := linkimport.New(pool, q, nil, client, registry, boardresolve.New())
-	native, err := im.ResolveNative(ctx, row, *raw)
+	native, err := im.ResolveNative(ctx, row, *raw, *website)
 	if err != nil {
 		log.Printf("promote-job-source: resolve native destination: %v", err)
 		return 1

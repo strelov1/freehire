@@ -13,7 +13,7 @@ const adoptDiscoveredIngestProvider = `-- name: AdoptDiscoveredIngestProvider :e
 INSERT INTO ingest_schedule (provider, shards, cadence_sec, timeout_sec, enabled, managed, notes)
 SELECT $1, $2, $3,
        $4, true, true, 'Native ATS discovered from an external posting'
-WHERE NOT EXISTS (SELECT 1 FROM boards WHERE provider = $1 OFFSET 1)
+WHERE NOT EXISTS (SELECT 1 FROM boards WHERE provider = $1 AND status IN ('pending', 'active') OFFSET 1)
 ON CONFLICT (provider) DO NOTHING
 `
 

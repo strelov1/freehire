@@ -41,3 +41,20 @@ func TestDiscoveredProviderIsScheduledWithoutChangingOperatorOverrides(t *testin
 		t.Fatalf("discovery took over an existing static provider: %v", err)
 	}
 }
+
+func TestDiscoveryAdoptsAFirstLiveBoardDespiteRetiredOrRejectedHistory(t *testing.T) {
+	repo, pool := newRepo(t)
+	ctx := context.Background()
+	addBoard(t, pool, "hrsmart", "rejected.example.hrdepartment.com")
+	addBoard(t, pool, "hrsmart", "retired.example.hrdepartment.com")
+	if _, err := pool.Exec(ctx, "UPDATE boards SET status=CASE WHEN board LIKE 'rejected.%' THEN 'rejected' ELSE 'retired' END WHERE provider='hrsmart'"); err != nil {
+		t.Fatal(err)
+	}
+	addBoard(t, pool, "hrsmart", "gistworld.mua.hrdepartment.com")
+	if err := repo.AdoptDiscoveredProvider(ctx, "hrsmart"); err != nil {
+		t.Fatal(err)
+	}
+	if r := reportFor(t, repo, "hrsmart"); !r.Schedulable() {
+		t.Fatalf("inactive history blocked the first live ATS: %+v", r)
+	}
+}

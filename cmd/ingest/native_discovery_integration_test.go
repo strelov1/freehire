@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/ingest/linkimport"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -20,14 +21,22 @@ func (companyBoardFixture) ResolveCompany(context.Context, string) (string, stri
 	return "hrsmart", "gistworld.mua.hrdepartment.com", "https://gistworld.mua.hrdepartment.com/hrsmart/ats/JobSearch/viewAll", true
 }
 
+func withEmployerProof(d *nativeDiscovery) *nativeDiscovery {
+	d.boards = companyBoardFixture{}
+	d.importer = linkimport.New(d.pool, d.q, nil, nil, d.registry, d.boards)
+	return d
+}
+
 func TestCompanyDiscoveryQueuesTheNativeBoardForOrdinaryIngestion(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx, q := context.Background(), db.New(pool)
 	registry := sources.Taxonomy()
 	registry["hrsmart"] = nativeDiscoveryFixture{}
 	store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
-	resolver := newNativeDiscovery(pool, registry, store)
-	resolver.boards = companyBoardFixture{}
+	resolver := withEmployerProof(newNativeDiscovery(pool, registry, store))
+	if err := resolver.Resolve(ctx, sources.CompanyEntry{Provider: "linkedin", Board: "software engineer"}, sources.Job{ExternalID: "earlier", Title: "Senior Java Software Engineer", Company: "Gist Limited", ApplyMethod: sources.ApplyExternal}); err != nil {
+		t.Fatal(err)
+	}
 	err := resolver.Resolve(ctx, sources.CompanyEntry{Provider: "linkedin", Board: "software engineer"}, sources.Job{
 		ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/",
 		ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://www.gistworld.com",
@@ -61,10 +70,10 @@ func TestExternalLinkedInDiscoveryWritesOnlyTheNativeATSPosting(t *testing.T) {
 	registry := sources.Taxonomy()
 	registry["hrsmart"] = nativeDiscoveryFixture{}
 	store := newDBStore(pool, 1, nil, newWriteTally(), defaultSeenPolicy())
-	resolver := newNativeDiscovery(pool, registry, store)
+	resolver := withEmployerProof(newNativeDiscovery(pool, registry, store))
 	err := resolver.Resolve(ctx, sources.CompanyEntry{Provider: "linkedin", Board: "software engineer"}, sources.Job{
 		ExternalID: "4472812273", Title: "Senior Java Software Engineer", Company: "Gist Limited", URL: "https://www.linkedin.com/jobs/view/4472812273/",
-		ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735?src=LinkedIn",
+		ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://www.gistworld.com", ExternalApplyURL: "https://gistworld.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735?src=LinkedIn",
 	})
 	if err != nil {
 		t.Fatal(err)

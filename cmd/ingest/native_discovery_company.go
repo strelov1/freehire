@@ -25,11 +25,21 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 	}
 	value, _ := d.companies.LoadOrStore(key, &discoveredCompany{})
 	cached := value.(*discoveredCompany)
-	cached.once.Do(func() {
-		cached.err = d.discoverCompanyBoard(ctx, key, discovered)
-	})
-	if cached.err != nil {
-		return cached.err
+	cached.mu.Lock()
+	metadata := discovered.CompanyWebsite + "\x00" + discovered.CompanyProfileURL
+	attemptErr, attempted := cached.attempts[metadata]
+	if cached.done {
+		attemptErr = nil
+	} else if !attempted {
+		cached.done, attemptErr = d.discoverCompanyBoard(ctx, key, discovered)
+		if cached.attempts == nil {
+			cached.attempts = map[string]error{}
+		}
+		cached.attempts[metadata] = attemptErr
+	}
+	cached.mu.Unlock()
+	if attemptErr != nil {
+		return attemptErr
 	}
 	if previous != nil {
 		covered, err := newCoverage(d.pool).NonAggregatorCompanies(ctx, []string{previous.CompanySlug}, sources.AggregatorProviders(d.registry), previous.Countries)
@@ -44,12 +54,12 @@ func (d *nativeDiscovery) resolveCompany(ctx context.Context, discovered sources
 	return nil
 }
 
-func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string, discovered sources.Job) error {
+func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string, discovered sources.Job) (bool, error) {
 	website := discovered.CompanyWebsite
 	if website == "" {
 		company, err := d.q.GetCompany(ctx, slug)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
+			return false, err
 		}
 		if err == nil {
 			var info struct {
@@ -73,44 +83,44 @@ func (d *nativeDiscovery) discoverCompanyBoard(ctx context.Context, slug string,
 	}
 	if website == "" {
 		log.Printf("ingest: LinkedIn discovery %s has no accessible ATS address or employer website; not publishing as LinkedIn", discovered.ExternalID)
-		return nil
+		return false, nil
 	}
 	source, board, canonical, found := d.boards.ResolveCompany(ctx, website)
 	if !found || d.registry[source] == nil || sources.ProviderKind(d.registry, source) != "ats" {
 		log.Printf("ingest: no native ATS discovered for %s; not publishing as LinkedIn", discovered.ExternalID)
-		return nil
+		return false, nil
 	}
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback(ctx)
 	qtx := d.q.WithTx(tx)
 	b, err := boardcatalog.NewInserter(boardcatalog.NewQueriesRepository(qtx), d.registry).Insert(ctx,
 		boardcatalog.InsertInput{Provider: source, Board: board, Region: atsboard.Region(canonical), Company: discovered.Company}, boardcatalog.StatusPending)
 	if err != nil && !errors.Is(err, boardcatalog.ErrDuplicateBoard) {
-		return err
+		return false, err
 	}
 	if err == nil && b.Status == boardcatalog.StatusRejected {
-		return fmt.Errorf("discovered native board rejected by catalogue")
+		return false, fmt.Errorf("discovered native board rejected by catalogue")
 	}
 	if err == nil {
 		if err := ingestsched.NewQueriesRepository(qtx).AdoptDiscoveredProvider(ctx, source); err != nil {
-			return err
+			return false, err
 		}
 	}
 	cfg, err := qtx.GetIngestSchedule(ctx, source)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return false, err
 	}
 	disabled := err == nil && !cfg.Enabled
 	if err := tx.Commit(ctx); err != nil {
-		return err
+		return false, err
 	}
 	if disabled {
 		log.Printf("ingest: native provider %s is disabled; discovered board remains pending", strconv.Quote(source))
-		return nil
+		return true, nil
 	}
 	log.Printf("ingest: native board %s/%s discovered from LinkedIn employer %s; queued for ordinary scheduled ingestion", strconv.Quote(source), strconv.Quote(board), strconv.Quote(slug))
-	return nil
+	return true, nil
 }

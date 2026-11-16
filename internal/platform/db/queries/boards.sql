@@ -2,14 +2,15 @@
 -- Insert a board row. Callers that pass status='active' also pass a non-null
 -- activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
 -- for both status='pending' and status='rejected'. A collision with an existing
--- 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
--- the caller maps that to a duplicate-board error.
+-- 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — returns no row without aborting the caller's
+-- transaction; the repository maps that to a duplicate-board error.
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
                      submitted_by, surface, rejected_reason, activated_at)
 VALUES (sqlc.arg(provider), sqlc.arg(board), sqlc.arg(region), sqlc.arg(company),
         sqlc.arg(hub), sqlc.arg(tenants), sqlc.arg(url), sqlc.arg(status),
         sqlc.arg(submitted_by), sqlc.arg(surface), sqlc.arg(rejected_reason),
         sqlc.arg(activated_at))
+ON CONFLICT (provider, lower(board), region) WHERE status IN ('pending', 'active') DO NOTHING
 RETURNING *;
 
 -- name: ActivateBoard :execrows

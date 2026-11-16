@@ -16,8 +16,9 @@ import (
 )
 
 type NativeDestination struct {
-	Entry sources.CompanyEntry
-	Job   sources.Job
+	Entry           sources.CompanyEntry
+	Job             sources.Job
+	EmployerWebsite string
 }
 
 type destinationCatalog struct {
@@ -35,7 +36,7 @@ func (c destinationCatalog) Entry(ctx context.Context, source, board string) (so
 	return c.fallback, true, nil
 }
 
-func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw string) (NativeDestination, error) {
+func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employerWebsite string) (NativeDestination, error) {
 	registry, catalog := im.ingest, im.catalog
 	source, board, canonical, ok := atsboard.Recognize(raw)
 	if !ok && im.boards != nil {
@@ -53,6 +54,21 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw string) (
 			return NativeDestination{}, fmt.Errorf("native provider %s is disabled by its operator", source)
 		}
 	}
+	known := false
+	if catalog != nil {
+		var err error
+		_, known, err = catalog.Entry(ctx, source, board)
+		if err != nil {
+			return NativeDestination{}, err
+		}
+	}
+	if !known {
+		var err error
+		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, employerWebsite)
+		if err != nil {
+			return NativeDestination{}, err
+		}
+	}
 	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
 	e, _, err := c.Entry(ctx, source, board)
 	if err != nil {
@@ -68,5 +84,5 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw string) (
 	if normalize.CompanySlug(j.Company) != normalize.CompanySlug(row.Company) || !strings.EqualFold(strings.Join(strings.Fields(j.Title), " "), strings.Join(strings.Fields(row.Title), " ")) {
 		return NativeDestination{}, fmt.Errorf("native posting's employer or title differs; refusing automatic identity transfer")
 	}
-	return NativeDestination{Entry: e, Job: j}, nil
+	return NativeDestination{Entry: e, Job: j, EmployerWebsite: employerWebsite}, nil
 }

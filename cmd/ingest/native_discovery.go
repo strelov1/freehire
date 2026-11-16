@@ -33,8 +33,9 @@ type nativeDiscovery struct {
 }
 
 type discoveredCompany struct {
-	once sync.Once
-	err  error
+	mu       sync.Mutex
+	done     bool
+	attempts map[string]error
 }
 
 func newNativeDiscovery(pool *pgxpool.Pool, registry map[string]sources.Source, store *dbStore) *nativeDiscovery {
@@ -65,7 +66,7 @@ func (d *nativeDiscovery) Resolve(ctx context.Context, entry sources.CompanyEntr
 	if raw == "" {
 		return d.resolveCompany(ctx, discovered, previous)
 	}
-	native, err := d.importer.ResolveNative(ctx, origin, raw)
+	native, err := d.importer.ResolveNative(ctx, origin, raw, discovered.CompanyWebsite)
 	if err != nil {
 		return err
 	}
