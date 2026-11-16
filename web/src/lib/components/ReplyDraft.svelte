@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { Button, lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { api } from '#lib/api.js';
-  import { isPlanRefusal } from '#lib/api-core.js';
+  import { ApiError, isPlanRefusal } from '#lib/api-core.js';
   import { gmailHref, mailtoHref } from '#lib/followup.js';
   import { errorMessage } from '#lib/utils.js';
   import { announce } from '#lib/announce.svelte.js';
@@ -21,25 +21,41 @@
   let draft = $state.raw<MailReplyDraft | null>(null);
   let body = $state(''); // the candidate's edit of draft.body; the compose links carry it
   let error = $state<string | null>(null);
-  let paidOnly = $state(false);
+  let refused = $state(false); // a 402: the server's sentence, never a retry
+  let offerPlans = $state(false);
   let copied = $state(false);
+  // Bumped by every load and by closing, so a slower, earlier request cannot overwrite a newer draft.
+  let generation = 0;
 
   const s = $derived(t(messages, locale()));
   const compose = $derived(draft ? { ...draft, body } : null);
 
   async function load() {
+    const mine = ++generation;
     draft = null;
     error = null;
-    paidOnly = false;
+    refused = false;
+    offerPlans = false;
     copied = false;
     try {
-      draft = await api.draftEmailReply(emailId);
-      body = draft.body;
+      const next = await api.draftEmailReply(emailId);
+      if (mine !== generation) return;
+      draft = next;
+      body = next.body;
     } catch (e) {
-      paidOnly = isPlanRefusal(e);
-      error = paidOnly ? s.paidOnly : errorMessage(e, s.failed);
+      if (mine !== generation) return;
+      refused = isPlanRefusal(e);
+      // A paid account that spent today's allowance is told so; only a refusal carrying an
+      // upgrade link is offered the plans.
+      offerPlans = refused && e instanceof ApiError && typeof e.body?.upgrade_url === 'string';
+      error = errorMessage(e, s.failed);
       announce(error, 'assertive');
     }
+  }
+
+  function close() {
+    open = false;
+    generation++;
   }
 
   function start() {
@@ -70,7 +86,7 @@
   {s.draftReply}
 </Button>
 
-<svelte:window onkeydown={(e) => open && e.key === 'Escape' && (open = false)} />
+<svelte:window onkeydown={(e) => open && e.key === 'Escape' && close()} />
 
 {#if open}
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -78,7 +94,7 @@
       type="button"
       aria-label={s.closeAria}
       class="absolute inset-0 animate-modal-fade bg-black/50"
-      onclick={() => (open = false)}
+      onclick={close}
     ></button>
     <div
       role="dialog"
@@ -91,7 +107,7 @@
         <h2 class="flex-1 text-lg font-semibold leading-tight">{s.heading}</h2>
         <button
           type="button"
-          onclick={() => (open = false)}
+          onclick={close}
           aria-label={s.close}
           class="-mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
@@ -100,11 +116,16 @@
       </div>
 
       <div class="flex-1 overflow-y-auto overscroll-contain p-5">
-        {#if paidOnly}
-          <p class="text-sm">{s.paidOnly}</p>
-          <a href={resolve('/pricing')} class="mt-2 inline-block text-sm font-medium text-brand-strong hover:underline">
-            {s.viewPlans}
-          </a>
+        {#if refused}
+          <p class="text-sm">{error}</p>
+          {#if offerPlans}
+            <a
+              href={resolve('/pricing')}
+              class="mt-2 inline-block text-sm font-medium text-brand-strong hover:underline"
+            >
+              {s.viewPlans}
+            </a>
+          {/if}
         {:else if error && !draft}
           <p class="text-sm text-destructive">{error}</p>
         {:else if !draft}
@@ -150,7 +171,7 @@
           <!-- eslint-enable svelte/no-navigation-without-resolve -->
         {/if}
         <span class="ml-auto flex gap-2">
-          {#if draft || (error && !paidOnly)}
+          {#if draft || (error && !refused)}
             <Button variant="outline" onclick={load}>{s.redraft}</Button>
           {/if}
           <Button variant="primary" onclick={copy} disabled={!draft} class="gap-1.5">

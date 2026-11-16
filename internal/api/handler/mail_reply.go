@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/application/maillink"
 	"github.com/strelov1/freehire/internal/application/mailreply"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
@@ -58,11 +59,17 @@ func (h *inboxHandlers) DraftEmailReply(ctx context.Context, params apigen.Draft
 	}
 	draft, err := mailreply.New(model).Draft(ctx, mailreply.Message{
 		FromName: msg.FromName, FromAddr: msg.FromAddr, Subject: msg.Subject,
-		Body: msg.BodyText, Company: company,
+		Body: maillink.ReadableBody(msg.BodyText, msg.BodyHTML), Company: company,
 	})
 	if err != nil {
+		// Read before the release: a disconnect during it must not turn a model failure into a
+		// reported 500 whose error chain can quote the email.
+		cancelled := ctx.Err() != nil
 		h.releaseReply(userID, ref)
-		if errors.Is(err, mailreply.ErrModel) && ctx.Err() == nil {
+		if cancelled {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, mailreply.ErrModel) {
 			// Provider errors can quote the prompt, which holds the sender's mail: never log err.
 			log.Printf("mail-reply: user %d email %d: the model gave no usable draft", userID, msg.ID)
 			return nil, fiber.NewError(fiber.StatusBadGateway, "could not draft a reply right now")
