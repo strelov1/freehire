@@ -83,6 +83,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 			merged.st.Ingested += t.st.Ingested
 			merged.st.Skipped += t.st.Skipped
 			merged.st.ATSCovered += t.st.ATSCovered
+			merged.st.Discovered += t.st.Discovered
 			merged.st.Unreadable += t.st.Unreadable
 			merged.rej.merge(t.rej)
 			if merged.firstErr == nil {
@@ -106,6 +107,32 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		t.st.Unreadable++
 		_, externalID := jobIdentity(e, j)
 		t.refreshIDs = append(t.refreshIDs, externalID)
+		return
+	}
+	if e.Provider == "linkedin" && j.ApplyMethod != sources.ApplyOnSite {
+		dj, err := normalizeJob(e, j, canon, false)
+		if err != nil {
+			t.st.Skipped++
+			if t.firstErr == nil {
+				t.firstErr = err
+			}
+			return
+		}
+		t.rej.candidate()
+		if outOfCatalogue(dj) {
+			t.rej.reject(dj.Fields().Title)
+			return
+		}
+		if r.Outbound != nil {
+			if err := r.Outbound.Resolve(ctx, e, j); err != nil {
+				t.st.Skipped++
+				if t.firstErr == nil {
+					t.firstErr = err
+				}
+				return
+			}
+		}
+		t.st.Discovered++
 		return
 	}
 	// A HydratingSource marks an already-ingested posting it re-listed but did not

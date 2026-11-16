@@ -22,6 +22,9 @@ import (
 type Runner struct {
 	Registry map[string]sources.Source
 	Store    Store
+	// Outbound routes non-native LinkedIn discoveries into the destination ATS.
+	// They are never written as public LinkedIn postings, even without a resolver.
+	Outbound OutboundResolver
 	// BoardHealth is optional (nil disables per-board cooldown/health recording).
 	BoardHealth BoardHealth
 	// Coverage is optional (nil disables the aggregator ingest-time coverage gate).

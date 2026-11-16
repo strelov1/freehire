@@ -20,6 +20,7 @@ type Stats struct {
 	Quiet      int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
+	Discovered int // non-native LinkedIn postings handed to ATS discovery, never stored as LinkedIn
 	// Refreshed counts the stored open rows among covered or unreadable postings whose liveness the
 	// run refreshed (CoveredRefresher). Not Ingested — no content was written — but evidence the
 	// crawl worked all the same, so cmd/ingest sweeps a provider whose every posting was covered.
@@ -90,6 +91,7 @@ func (s *Stats) add(o Stats) {
 	s.Quiet += o.Quiet
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
+	s.Discovered += o.Discovered
 	s.Refreshed += o.Refreshed
 	s.RefreshFailed += o.RefreshFailed
 	s.Unreadable += o.Unreadable

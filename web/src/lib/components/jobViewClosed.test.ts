@@ -16,7 +16,7 @@ const notice = start === -1 ? '' : NOTICE.slice(start);
 
 describe('JobView closure notice', () => {
   it('finds the block it audits', () => {
-    expect(notice).toContain('no longer accepting applications');
+    expect(notice).toContain('no longer listed as open');
   });
 
   it('is rendered by JobView above the calls to action', () => {
