@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
@@ -220,9 +220,13 @@
   // a job that was merely saved has none.
   const canRecall = $derived(hasPosting && !!item.applied_at);
 
+  let disposed = false;
+  onDestroy(() => {
+    disposed = true;
+  });
   let emailsReloadRequested = false;
   async function loadEmails(force = false) {
-    if (!item.job || (emails !== null && !force)) return;
+    if (disposed || !item.job || (emails !== null && !force)) return;
     if (emailsLoading) {
       emailsReloadRequested ||= force;
       return;
@@ -231,6 +235,7 @@
     emailsError = null;
     try {
       const app = await api.getTrackedApplication(item.job.public_slug);
+      if (disposed) return;
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
       autoApply = app.auto_apply ?? null;

@@ -251,3 +251,20 @@ it('reconciles the board after retrying an unsuccessful application reload', asy
   await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
   await waitFor(() => expect(onautoapplyreview).toHaveBeenCalledWith('approved'));
 });
+
+it('ignores a late application response after the drawer is closed', async () => {
+  let finish = () => {};
+  getTrackedApplication.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({ job, emails: [], events: [], auto_apply: { status: 'approved', queue_id: 1 } });
+      }),
+  );
+  const onautoapplyreview = vi.fn();
+  const drawer = render(JobDrawer, { ...props(), onautoapplyreview, initialTab: 'auto_apply' });
+  await waitFor(() => expect(getTrackedApplication).toHaveBeenCalledTimes(1));
+  drawer.unmount();
+  finish();
+  await Promise.resolve();
+  expect(onautoapplyreview).not.toHaveBeenCalled();
+});
