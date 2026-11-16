@@ -1,9 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Bookmark, Check, FileText, Lock } from '@lucide/svelte';
+  import { Bookmark, FileText, Lock } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
   import { cardLocation } from '#lib/cardLocation.js';
   import JobMatchBar from './JobMatchBar.svelte';
@@ -16,7 +15,6 @@
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { foreignContentLang, metaDescription } from '#lib/seo.js';
-  import type { Job, JobCard } from '#lib/types.js';
   import { EntityLogo } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { ghostBadge, supersedesReality } from '#lib/ghost.js';
@@ -33,6 +31,8 @@
   import JobRowRailFacts from './JobRowRailFacts.svelte';
   import JobRowSavedNote from './JobRowSavedNote.svelte';
   import JobRowSkills from './JobRowSkills.svelte';
+  import JobRowMetaLine from './JobRowMetaLine.svelte';
+  import type { JobRowProps } from './JobRow.props';
   import { countryLabel, skillLabel } from '#lib/facets.js';
   import { backerBadges } from '#lib/backers.js';
   import { formatCount, timeAgo } from '#lib/utils.js';
@@ -44,34 +44,8 @@
   import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
 
   // Single source of truth for how a job appears in any list (jobs list and
-  // company detail). The whole card is a link to the job detail.
-  //
-  // `dimViewed` dims the card when the signed-in user has already viewed this
-  // job, so the browse list shows what's been seen. The My Jobs surfaces (where
-  // every card is viewed by definition) pass `dimViewed={false}` to opt out.
-  // `newTab` opens the job in a new browser tab (used when the card is rendered
-  // inside the assistant chat, so the conversation stays open). Both default off so the
-  // jobs list / company pages are unchanged.
-  //
-  // `compact` is the narrow-chat-column card, and it decides more than density. As well
-  // as the smaller padding and title, the one-line title and the dropped blurb, it
-  // selects the card's whole control inventory: there is no action row, so Save stays
-  // the corner glyph it always was and `onHide` has nowhere to render. The two concerns
-  // are fused on purpose — the column is ~360px wide, and every control that earns a
-  // word on a full card has to give it back here. Splitting them would be a second flag
-  // whose only honest value is the same as this one's.
-  //
-  // `footer` is an optional actions row rendered inside the card, below the link
-  // content (a sibling of the <a>, never nested in it — so its interactive controls
-  // don't fight the card's navigation). The hidden list passes an un-hide control here,
-  // and gets it as a second row under the card's own Save row.
-  //
-  // `onHide` is the feed's hook for the "hide this job" gesture: when set on a NON-compact
-  // card (only the browse feed passes it), the action row gains a hover-revealed hide
-  // control, and after a successful dismiss it calls back with the slug so the feed can
-  // surface an undo affordance. Surfaces that reuse JobRow without it (saved/hidden
-  // lists, tracking board, assistant chat) get no hide control — leaving it out scopes
-  // the gesture to the feed.
+  // company detail). The whole card is a link to the job detail. The props, and what
+  // `dimViewed`, `newTab`, `compact`, `footer` and `onHide` change, are told in JobRow.props.ts.
   let {
     job,
     dimViewed = true,
@@ -82,24 +56,7 @@
     footer,
     onHide,
     unsave = api.unsaveJob,
-  }: {
-    // Either the catalogue's full posting or the tracking listing's card. The row draws the
-    // same thing from both: the card carries a server-cut blurb where the posting carries the
-    // whole description, and the two facet fields a full Job keeps inside `enrichment` arrive
-    // flat. Everything the card omits is optional here already.
-    job: Job | JobCard;
-    dimViewed?: boolean;
-    newTab?: boolean;
-    compact?: boolean;
-    // On the employer's own page every card would repeat its logo, name and backers.
-    hideCompany?: boolean;
-    // A row in a divided list (the feed draws the frame and the dividers), not a framed card.
-    flat?: boolean;
-    footer?: Snippet;
-    onHide?: (slug: string) => void;
-    /** Allows a saved list to serialize removal with pagination. */
-    unsave?: (slug: string) => Promise<unknown>;
-  } = $props();
+  }: JobRowProps = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
   // Whether the reader has applied to this employer before, through any of its postings.
@@ -507,45 +464,7 @@
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
            Indexed keys: a tag's text could equal one of the trailing facts. -->
-        {#if metaFacts.length || salary || touchPosted || (hideCompany && isViewed)}
-          <!-- Inline flow, not a flex row: it wraps between facts the way a sentence does. Each
-               fact is an inline-block carrying the dot that follows it, so a wrapped line ends
-               on "·" and the next one starts on a fact — a flex row left the dots as items of
-               their own, free to open a line. The gap is a margin, not a space: Svelte trims
-               whitespace at an {#each} boundary, which is how "views ·Remote" ran together.
-               The opening dot is a flex item of its own, so when the whole line wraps under
-               the badges it stays behind at the end of theirs; when the touch-only date is all
-               the line holds, it is touch-only too, or a desktop card ends on "New ·". -->
-          {#if metaLeadDot}<span
-              class={[
-                'text-xs text-muted-foreground',
-                !(metaFacts.length || salary || (hideCompany && isViewed)) && 'hidden pointer-coarse:inline',
-              ]}
-              aria-hidden="true">·</span
-            >{/if}
-          <span class="min-w-0 text-xs font-medium text-muted-foreground">
-            <!-- The rail's viewed mark, for the employer's page where the rail is not drawn. -->
-            {#if hideCompany && isViewed}<Check
-                class="mr-1 inline size-3.5 align-text-bottom"
-                aria-label="You have viewed this"
-              />{/if}
-            {#if touchPosted}
-              <span class="mr-1 hidden whitespace-nowrap tabular-nums pointer-coarse:inline-block"
-                >{touchPosted}{#if metaFacts.length || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
-              >
-            {/if}
-            {#each metaFacts as fact, i (i)}
-              <span class="mr-1 inline-block whitespace-nowrap"
-                >{fact}{#if i < metaFacts.length - 1 || salary}<span aria-hidden="true">&nbsp;·</span>{/if}</span
-              >
-            {/each}
-            <!-- The pay leads into the same line, in ink, rather than standing alone in bold at
-               the card's foot, where cards with and without it ended at different heights. -->
-            {#if salary}
-              <span class="inline-block whitespace-nowrap font-semibold tabular-nums text-foreground">{salary}</span>
-            {/if}
-          </span>
-        {/if}
+        <JobRowMetaLine {metaFacts} {salary} {touchPosted} {hideCompany} {isViewed} {metaLeadDot} />
         <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->

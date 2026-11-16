@@ -8,6 +8,23 @@ import type { MatchAnalysis, MatchRequirement, Signal } from './types';
 /** A colour tone bucket the component maps to Tailwind classes. */
 export type Tone = 'strong' | 'good' | 'moderate' | 'weak' | 'poor';
 
+/** Text colour for each verdict tone. */
+export const toneText: Record<Tone, string> = {
+  strong: 'text-brand-strong',
+  good: 'text-brand-strong',
+  moderate: 'text-warning-strong',
+  weak: 'text-warning-strong',
+  poor: 'text-destructive-strong',
+};
+/** Bar fill for each verdict tone. */
+export const toneBar: Record<Tone, string> = {
+  strong: 'bg-brand',
+  good: 'bg-brand',
+  moderate: 'bg-warning',
+  weak: 'bg-warning',
+  poor: 'bg-destructive',
+};
+
 /** verdictTone buckets a 0-100 overall score into a colour tone, on the same
  *  thresholds the backend uses to derive the verdict label (kept in sync by hand —
  *  the label is authoritative, this only drives colour). */
