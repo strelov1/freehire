@@ -61,12 +61,11 @@ WITH locked AS MATERIALIZED (
 ), withdrawn AS (
     UPDATE jobs j SET closed_at = now(), closed_reason = 'native_source_pending', updated_at = now()
     FROM locked l WHERE j.id = l.id
-    RETURNING j.id, COALESCE(j.posted_at, j.created_at) AS posted_at
+    RETURNING j.id
 ), queued AS (
-    INSERT INTO search_outbox (job_id, job_posted_at)
-    SELECT id, posted_at FROM withdrawn
-    ON CONFLICT (job_id) DO UPDATE
-        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM withdrawn
+    ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*)::bigint FROM withdrawn
 `
