@@ -2,8 +2,9 @@ package sources
 
 import (
 	"context"
-	"golang.org/x/net/html"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 func TestLinkedInCompanyWebsiteReadsOnlyOrganizationMetadata(t *testing.T) {
