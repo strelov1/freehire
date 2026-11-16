@@ -494,6 +494,9 @@
             <JobMatch job={posting} matchAnalysis={null} />
             {#await import('./MatchAnalysisFull.svelte') then { default: MatchAnalysisFull }}
               <MatchAnalysisFull job={posting} />
+            {:catch}
+              <p role="alert">Analysis could not load.</p>
+              <button type="button" onclick={() => (tab = 'description')}>Return to job description</button>
             {/await}
           {:else if item.job}
             <p class="text-sm text-muted-foreground">{s.loading}</p>
