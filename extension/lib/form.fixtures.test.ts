@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { extractForm, extractUploads, fillByLabel, looksLikeApplication } from './form';
+import { extractForm, extractUploads, fillByLabel } from './form';
+import { looksLikeApplication } from './fillPlan';
 import { matchFieldKey } from './fieldKeys';
 import type { LabelFill } from './protocol';
 import { must } from './test-utils';
