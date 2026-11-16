@@ -36,7 +36,12 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	const host = "gistworld.mua.hrdepartment.com"
+	minimum, maximum := 90000, 120000
 	native := NativeDestination{Entry: sources.CompanyEntry{Provider: "hrsmart", Board: host, Company: "Gist Limited"}, Job: sources.Job{ExternalID: host + ":3735", URL: "https://" + host + "/hrsmart/ats/Posting/view/3735", Title: previous.Title, Company: previous.Company, Description: "The native ATS supplied the current Java role.", Location: "Basingstoke, United Kingdom"}}
+	native.Job.SalaryMin, native.Job.SalaryMax = &minimum, &maximum
+	native.Job.SalaryCurrency, native.Job.SalaryPeriod = "GBP", "year"
+	native.Job.Location = "Remote"
+	native.Job.Countries, native.Job.EmploymentType = []string{"gb"}, "full_time"
 	im := New(pool, q, nil, nil, sources.All(nil), nil)
 	result, err := im.WriteNative(ctx, &previous, native)
 	if err != nil {
@@ -45,6 +50,9 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 	current, err := q.GetJobBySlug(ctx, previous.PublicSlug)
 	if err != nil || current.ID != previous.ID || current.Source != "hrsmart" || current.ExternalID != native.Job.ExternalID || current.URL != native.Job.URL || current.Description != native.Job.Description || result.PublicSlug != previous.PublicSlug {
 		t.Fatalf("native ownership/content = %+v, result %+v, %v", current, result, err)
+	}
+	if !current.SalaryMinSource.Valid || current.SalaryMinSource.Int32 != int32(minimum) || !current.SalaryMaxSource.Valid || current.SalaryMaxSource.Int32 != int32(maximum) || current.SalaryCurrencySource != "GBP" || current.SalaryPeriodSource != "year" || current.EmploymentType != "full_time" || len(current.Countries) != 1 || current.Countries[0] != "gb" {
+		t.Fatalf("native structured salary/geography/employment was lost: %+v", current)
 	}
 	if entry, found, err := boardcatalog.NewQueriesRepository(q).Entry(ctx, "hrsmart", host); err != nil || !found || entry.Company != previous.Company {
 		t.Fatalf("native board missing: %+v, %v, %v", entry, found, err)
