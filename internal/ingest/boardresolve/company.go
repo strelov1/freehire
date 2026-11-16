@@ -28,8 +28,20 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 		if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Hostname() == "" || base.User != nil {
 			continue
 		}
-		body, err := r.http.GetText(ctx, p.url)
+		var body string
+		final := p.url
+		if resolved, ok := r.http.(interface {
+			GetTextResolved(context.Context, string) (string, string, error)
+		}); ok {
+			body, final, err = resolved.GetTextResolved(ctx, p.url)
+		} else {
+			body, err = r.http.GetText(ctx, p.url)
+		}
 		if err != nil {
+			continue
+		}
+		base, err = url.Parse(final)
+		if err != nil || (base.Scheme != "https" && base.Scheme != "http") || base.Hostname() == "" || base.User != nil {
 			continue
 		}
 		// Keep the observed vendor URL, including any data-residency host.
@@ -38,11 +50,8 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 				return s, b, c, true
 			}
 		}
-		if s, b, c, found := resolveContent(body, p.url); found {
+		if s, b, c, found := resolveContent(body, final); found {
 			return s, b, c, true
-		}
-		if p.depth >= 2 {
-			continue
 		}
 		root, err := html.Parse(strings.NewReader(body))
 		if err != nil {
@@ -50,6 +59,9 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 		}
 		var walk func(*html.Node)
 		walk = func(n *html.Node) {
+			if ok {
+				return
+			}
 			if n.Type == html.ElementNode && n.Data == "a" {
 				href := sources.Attr(n, "href")
 				lower := strings.ToLower(href)
@@ -57,9 +69,13 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 				for _, word := range []string{"career", "job", "vacan", "work-for", "join-us", "karriere", "stellen", "werken"} {
 					career = career || strings.Contains(lower, word)
 				}
-				if u, err := base.Parse(href); career && err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != "" && u.User == nil {
+				if u, err := base.Parse(href); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != "" && u.User == nil {
 					u.Fragment = ""
-					if raw := u.String(); !seen[raw] && len(queue) < 8 {
+					if s, b, c, found := atsboard.Recognize(u.String()); found {
+						source, board, canonical, ok = s, b, c, true
+						return
+					}
+					if raw := u.String(); career && p.depth < 2 && !seen[raw] && len(queue) < 8 {
 						seen[raw] = true
 						queue = append(queue, page{url: raw, depth: p.depth + 1})
 					}
@@ -70,6 +86,9 @@ func (r *Resolver) ResolveCompany(ctx context.Context, website string) (source, 
 			}
 		}
 		walk(root)
+		if ok {
+			return source, board, canonical, true
+		}
 	}
 	return "", "", "", false
 }
