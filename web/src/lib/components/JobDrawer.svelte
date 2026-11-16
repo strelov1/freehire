@@ -39,9 +39,6 @@
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { messages } from './JobDrawer.messages';
   import JobDrawerLoadState from './JobDrawerLoadState.svelte';
-  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
-  import AssistantPanel from '#lib/components/AssistantPanel.svelte';
-  import { openApplyChat } from '#lib/assistant/api.js';
   import { format, t } from '#lib/i18n/t.js';
 
   let {
@@ -132,21 +129,6 @@
   // else loadEmails() fetches (openspec/changes/auto-apply-review-tracking) — null for a
   // job with none.
   let autoApply = $state.raw<AutoApplyReviewInfo | null>(null);
-
-  let applyChatId = $state<string | null>(null);
-  let applyChatOpen = $state(false);
-  let applyChatError = $state<string | null>(null);
-
-  async function startApplyChat() {
-    if (!item.job) return;
-    applyChatError = null;
-    try {
-      applyChatId ??= (await openApplyChat(item.job.public_slug)).id;
-      applyChatOpen = true;
-    } catch (e) {
-      applyChatError = errorMessage(e, s.applyChat.openFailed);
-    }
-  }
 
   // The application's history, newest first, from the ledger — also loaded by
   // loadEmails() below. It replaces a strip that read as a timeline and was not one:
@@ -316,12 +298,8 @@
 </script>
 
 <!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
-<!-- Not while the application chat is open: Escape there belongs to the chat (the covering
-     panel closes itself on it), and closing the whole drawer under a half-typed answer would
-     throw the conversation away. -->
 <svelte:window
-  onkeydown={(e) =>
-    e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && !confirmTailorDialog.open && close()}
+  onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && !confirmTailorDialog.open && close()}
 />
 
 <!-- A focused desktop dialog; the same application uses the full screen on phones. -->
@@ -544,7 +522,7 @@
             <p class="text-sm text-muted-foreground">{s.noHistory}</p>
           {/if}
         {/if}
-      {:else if tab === 'auto_apply' && (emailsLoading || emails === null || emailsError)}
+      {:else if tab === 'auto_apply' && (emails === null || emailsError)}
         <JobDrawerLoadState
           loading={emailsLoading || (emails === null && !emailsError)}
           error={emailsError}
@@ -553,14 +531,12 @@
       {:else if tab === 'auto_apply'}
         <JobDrawerAutoApply
           slug={item.job?.public_slug ?? null}
-          {hasPosting}
-          bind:autoApply
-          onevents={(next) => (events = next)}
-          {autoApplied}
-          {applyChatError}
-          onstartapplychat={startApplyChat}
-          {onautoapplyreview}
-          ongone={() => (tab = 'application')}
+          onTurnComplete={async () => {
+            await loadEmails(true);
+            if (autoApply?.status === 'approved' || autoApply?.status === 'declined') {
+              onautoapplyreview(autoApply.status);
+            }
+          }}
         />
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
@@ -682,23 +658,6 @@
       </Button>
     </div>
   </div>
-
-  <!-- Inside the drawer's root on purpose: the drawer covers the screen at z-50, so a panel
-       docked outside it would sit underneath. Here it is drawn over the drawer's right edge,
-       or over the whole drawer where there is no room to dock. -->
-  {#if applyChatId}
-    <AssistantPanel open={applyChatOpen} title={s.applyChat.title} onClose={() => (applyChatOpen = false)}>
-      {#snippet children(setSessionId)}
-        <AssistantChat
-          session={applyChatId ?? undefined}
-          showSessionRail={false}
-          syncApplication={applyChatOpen}
-          onSessionChange={setSessionId}
-          onTurnComplete={() => void loadEmails(true)}
-        />
-      {/snippet}
-    </AssistantPanel>
-  {/if}
 </div>
 
 <!-- Outside the panel's root on purpose: the panel's focus trap handles Tab on its own

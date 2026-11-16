@@ -20,7 +20,14 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { getTrackedApplication } = vi.hoisted(() => ({ getTrackedApplication: vi.fn() }));
+const { getTrackedApplication, openApplyChat } = vi.hoisted(() => ({
+  getTrackedApplication: vi.fn(),
+  openApplyChat: vi.fn(),
+}));
+vi.mock('#lib/assistant/api.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/assistant/api.js')>()),
+  openApplyChat,
+}));
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication }, isPlanRefusal: () => false }));
 
 const job = {
@@ -63,6 +70,7 @@ const props = (over: Partial<MyJob> = {}) => ({
 });
 
 beforeEach(() => {
+  openApplyChat.mockReset().mockRejectedValue(new Error('chat unavailable'));
   getTrackedApplication.mockReset().mockResolvedValue({
     job,
     emails: [],
@@ -195,4 +203,19 @@ it('opens Application for a removed posting even when the deep link requests Pro
   expect(screen.getByRole('tab', { name: 'Заявка' }).getAttribute('aria-selected')).toBe('true');
   expect(screen.queryByRole('tab', { name: 'Прогресс' })).toBeNull();
   expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('opens the application chat directly in Progress and retries a failed opening without a form', async () => {
+  getTrackedApplication.mockResolvedValue({
+    job,
+    emails: [],
+    events: [],
+    auto_apply: { status: 'pending_review', queue_id: 1 },
+  });
+  render(JobDrawer, { ...props(), initialTab: 'auto_apply' });
+  expect(await screen.findByText('chat unavailable')).toBeTruthy();
+  expect(openApplyChat).toHaveBeenCalledWith(job.public_slug);
+  expect(screen.queryByRole('textbox')).toBeNull();
+  await fireEvent.click(screen.getByRole('button', { name: 'Попробовать снова' }));
+  await waitFor(() => expect(openApplyChat).toHaveBeenCalledTimes(2));
 });
