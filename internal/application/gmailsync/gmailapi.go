@@ -25,12 +25,25 @@ const gmailBaseURL = "https://gmail.googleapis.com/gmail/v1/users/me"
 type apiReader struct {
 	client  *http.Client
 	learned []string
+	// waited is how much of limitWaitBudget this reader (one mailbox, one run) has spent.
+	waited time.Duration
+	sleep  func(ctx context.Context, d time.Duration) error
 }
+
+// Gmail's per-user quota is per minute, and a large first sync spends it in about thirty
+// seconds; giving up on the first refusal stopped every run at the same point. A refused
+// call waits and retries, doubling the pause, until the mailbox's budget for the run is
+// spent; then the refusal is returned and the next run continues.
+const (
+	limitFirstWait  = 2 * time.Second
+	limitMaxWait    = 32 * time.Second
+	limitWaitBudget = 3 * time.Minute
+)
 
 // NewAPIReader wraps a token-bearing HTTP client as a GmailReader, unioning the
 // learned domains into its search query.
 func NewAPIReader(client *http.Client, learned []string) GmailReader {
-	return &apiReader{client: client, learned: learned}
+	return &apiReader{client: client, learned: learned, sleep: sleepCtx}
 }
 
 // ListATSMessageIDs pages through the ATS-scoped search, returning all matching ids.
@@ -97,18 +110,11 @@ func (r *apiReader) ListThreadMessageIDs(ctx context.Context, threadID string) (
 // GetMessage fetches one full message and parses it.
 func (r *apiReader) GetMessage(ctx context.Context, id string) (Message, error) {
 	u := fmt.Sprintf("%s/messages/%s?format=full", gmailBaseURL, url.PathEscape(id))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return Message{}, err
-	}
-	resp, err := r.client.Do(req)
+	resp, err := r.get(ctx, u, fmt.Sprintf("gmail: get message %s", id))
 	if err != nil {
 		return Message{}, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Message{}, NewAPIError(fmt.Sprintf("gmail: get message %s", id), resp)
-	}
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return Message{}, err
@@ -117,19 +123,53 @@ func (r *apiReader) GetMessage(ctx context.Context, id string) (Message, error) 
 }
 
 func (r *apiReader) getJSON(ctx context.Context, u string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := r.client.Do(req)
+	resp, err := r.get(ctx, u, "gmail: "+u)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return NewAPIError("gmail: "+u, resp)
-	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// get returns a 200 response, waiting out rate-limit refusals within the reader's budget.
+// A daily quota does not recover within a run, so it is returned at once.
+func (r *apiReader) get(ctx context.Context, u, op string) (*http.Response, error) {
+	wait := limitFirstWait
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := r.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+		apiErr := NewAPIError(op, resp)
+		_ = resp.Body.Close()
+		if !LimitHit(apiErr) || strings.Contains(strings.ToLower(apiErr.Reason), "daily") ||
+			r.waited+wait > limitWaitBudget {
+			return nil, apiErr
+		}
+		if err := r.sleep(ctx, wait); err != nil {
+			return nil, apiErr
+		}
+		r.waited += wait
+		wait = min(2*wait, limitMaxWait)
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // --- pure parsing -----------------------------------------------------------
