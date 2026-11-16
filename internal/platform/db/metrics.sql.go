@@ -452,7 +452,7 @@ type NotifyBacklogMetricsRow struct {
 // the `true` one.
 //
 // The CASE is the SQL twin of recipient() in internal/engage/notify/notify.go, over the
-// same live columns GetSubscriptionForDelivery reads (queries/subscriptions.sql). Change
+// same live columns GetSubscriptionForDelivery reads (queries/subscription_delivery.sql). Change
 // one and change the other: a metric that disagrees with the sender about who is reachable
 // would page on a subscription the sender correctly skips, or hide one it fails.
 //
