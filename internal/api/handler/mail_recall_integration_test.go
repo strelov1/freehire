@@ -129,7 +129,7 @@ func seedRecallFixture(t *testing.T, pool *pgxpool.Pool) recallFixture {
 func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, *auth.Issuer) {
 	t.Helper()
 	queries := db.New(pool)
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test")
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test", nil)
 	if model != nil {
 		client := llm.NewWithModel(model)
 		// A real binding, not a zero one: it drives the whole userLLM path — resolve the
@@ -390,7 +390,7 @@ func recallSearchApp(t *testing.T, pool *pgxpool.Pool, model llms.Model, box *fa
 	t.Helper()
 	queries := db.New(pool)
 	client := llm.NewWithModel(model)
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test").
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test", nil).
 		withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
 			llmBinding{client: client}, &fakeMailboxes{box: box})
 

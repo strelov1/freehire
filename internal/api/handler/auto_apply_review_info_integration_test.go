@@ -27,7 +27,7 @@ import (
 
 func newAutoApplyReviewInfoApp(pool *pgxpool.Pool, iss *auth.Issuer) *fiber.App {
 	queries := db.New(pool)
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "")
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "", nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
 	api.Get("/me/tracking/:slug", auth.RequireAuth(iss, testVersions), newContract(contractHandlers{inboxHandlers: h}))

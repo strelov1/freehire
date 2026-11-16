@@ -36,9 +36,8 @@ func postReplyDraft(t *testing.T, fx recallFixture, model *recallModel, userID, 
 	makePro(t, fx.pool, fx.userID)
 	plans := plan.NewStore(queries, fx.pool, plan.DefaultConfig().WithProCeiling(plan.FeatureMailReply, 1).Enforcing())
 	client := llm.NewWithModel(model)
-	h := newInboxHandlers(queries, fx.pool, nil, nil, "", false, "inbox.freehire.test").
+	h := newInboxHandlers(queries, fx.pool, nil, nil, "", false, "inbox.freehire.test", plans).
 		withRecall(nil, llmBinding{client: client}, nil)
-	h.plans = plans
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

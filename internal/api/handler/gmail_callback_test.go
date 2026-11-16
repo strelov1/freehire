@@ -121,7 +121,7 @@ func newGmailCallbackApp(t *testing.T) (*fiber.App, string) {
 		t.Fatalf("cipher: %v", err)
 	}
 	const frontend = "https://freehire.me"
-	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "")
+	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "", nil)
 
 	iss := auth.NewIssuer(testGmailSecret, time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -206,7 +206,7 @@ func TestOAuthCallbackReportsAPartialGrant(t *testing.T) {
 		t.Fatalf("cipher: %v", err)
 	}
 	const frontend = "https://freehire.me"
-	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "")
+	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "", nil)
 	iss := auth.NewIssuer(testGmailSecret, time.Hour)
 	token, err := iss.Issue(1, testTokenVersion)
 	if err != nil {

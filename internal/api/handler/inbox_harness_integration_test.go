@@ -65,7 +65,7 @@ func newHarnessInboxFixture(t *testing.T, email string) *harnessInboxFixture {
 		t.Fatalf("store key: %v", err)
 	}
 
-	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test")
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test", nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
 		paidAI: markPaidAI,

@@ -90,7 +90,7 @@ func testMCPUnreadMail(t *testing.T, endpoint string) {
 	seed(owner, "oth", "Newsletter", "Weekly digest", "other", false, 3*time.Hour)
 	seed(other, "theirs", "Theirs", "Someone else's interview", "interview_invitation", false, time.Minute)
 
-	mail := newInboxHandlers(queries, pool, nil, nil, "", false, "")
+	mail := newInboxHandlers(queries, pool, nil, nil, "", false, "", nil)
 	seedApplyFormJob(t, queries, "mcp-mail-job", "mcp-mail-job")
 	if _, err := mail.inbox.RecordApplication(ctx, owner, linkedID, "mcp-mail-job"); err != nil {
 		t.Fatalf("RecordApplication: %v", err)

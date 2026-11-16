@@ -217,7 +217,7 @@ func Register(app *fiber.App, cfg Config) {
 	cvH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	referralMessageH := newReferralMessageHandlers(queries, bank, resumeStore, fitSvc, letterDeps.chain, llmBinding{client: cfg.LLM, keys: llmKeys}, plans)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
-	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain, plans)
 	discordH := newDiscordHandlers(cfg.DiscordLinker, cfg.DiscordClientID, cfg.FrontendOrigin, cfg.CookieSecure)
 	// The pull direction is wired only where there is a model to ask; left nil, its endpoint
 	// reports the feature off.
@@ -229,7 +229,6 @@ func Register(app *fiber.App, cfg Config) {
 			llmBinding{client: cfg.LLM, keys: llmKeys},
 			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
 	}
-	inboxH.plans = plans
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is, and neither may stop a member from
 	// leaving. The gateway credential is the third external system; attached below.

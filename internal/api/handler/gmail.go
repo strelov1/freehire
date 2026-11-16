@@ -82,7 +82,7 @@ func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, s
 	return err
 }
 
-func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
+func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string, plans *plan.Store) *inboxHandlers {
 	// WithReminders, like every other construction of this service, so jobtracking's
 	// saved-job reminder cancellation also runs on the mail path.
 	tracking := jobtracking.New(
@@ -100,6 +100,7 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 		cookieSecure:   cookieSecure,
 		mailDomain:     mailDomain,
 		accounts:       accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
+		plans:          plans,
 	}
 }
 
