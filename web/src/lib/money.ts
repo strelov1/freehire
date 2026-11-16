@@ -21,6 +21,13 @@
  *  a kr 5 charge: a hundredfold error against the customer, on the receipt list. */
 const STRIPE_HUNDREDFOLD = new Set(['ISK', 'UGX']);
 
+export function minorUnitsValue(minor: number, currency: string): number {
+  const code = currency.toUpperCase();
+  const fmt = new Intl.NumberFormat('en', { style: 'currency', currency: code });
+  const exponent = STRIPE_HUNDREDFOLD.has(code) ? 2 : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
+  return minor / 10 ** exponent;
+}
+
 // `locale` defaults to the runtime's own. A caller whose text is rendered on the server
 // and hydrated in the browser passes one, since the two runtimes need not share a locale.
 // `trimWhole` drops a zero fraction ("$5", not "$5.00") for a price headline; amounts that
@@ -33,8 +40,7 @@ export function formatMinorUnits(
 ): string {
   const code = (currency || 'usd').toUpperCase();
   const fmt = new Intl.NumberFormat(locale, { style: 'currency', currency: code });
-  const exponent = STRIPE_HUNDREDFOLD.has(code) ? 2 : (fmt.resolvedOptions().maximumFractionDigits ?? 2);
-  const value = minor / 10 ** exponent;
+  const value = minorUnitsValue(minor, code);
   if (trimWhole && Number.isInteger(value)) {
     return new Intl.NumberFormat(locale, {
       style: 'currency',

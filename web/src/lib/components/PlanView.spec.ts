@@ -2,6 +2,9 @@ import { render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Allowance, PlanState } from '#lib/types.js';
 import PlanView from './PlanView.svelte';
+import { page } from '$app/state';
+import { track } from '#lib/analytics.js';
+import { beginCheckoutTracking } from '#lib/purchaseTracking.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('$app/navigation', () => ({ replaceState: vi.fn() }));
@@ -10,15 +13,21 @@ vi.mock('#lib/analytics.js', () => ({ track: vi.fn() }));
 vi.mock('#lib/i18n/currentLocale.svelte.js', () => ({ locale: () => 'en' }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => true,
-  currentUser: () => ({ beta_tester: false }),
+  currentUser: () => ({ id: 7, beta_tester: false }),
 }));
-const { myPlan, myPlanHistory, getApiPlan, billingManageUrl } = vi.hoisted(() => ({
+const { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts } = vi.hoisted(() => ({
   myPlan: vi.fn(),
   myPlanHistory: vi.fn(),
   getApiPlan: vi.fn(),
   billingManageUrl: vi.fn(),
+  billingAttempts: vi.fn(),
 }));
-vi.mock('#lib/api.js', () => ({ api: { myPlan, myPlanHistory, getApiPlan, billingManageUrl } }));
+vi.mock('#lib/api.js', () => ({ api: { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts } }));
+
+beforeEach(() => {
+  billingAttempts.mockResolvedValue([]);
+  page.url = new URL('http://localhost/my/plan');
+});
 
 const allowance = (feature: string, over: Partial<Allowance> = {}): Allowance => ({
   feature,
@@ -98,5 +107,35 @@ describe('PlanView API plan', () => {
     getApiPlan.mockRejectedValue(new Error('network'));
     render(PlanView);
     expect(await screen.findByText("Couldn't check your API plan. Reload the page to try again.")).toBeTruthy();
+  });
+});
+
+describe('PlanView purchase confirmation', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.mocked(track).mockClear();
+    page.url = new URL('http://localhost/my/plan?checkout=success');
+    myPlan.mockResolvedValue(freePlan([]));
+    myPlanHistory.mockResolvedValue([]);
+    getApiPlan.mockResolvedValue({ tier: '' });
+  });
+
+  it('reports the confirmed charge even before the entitlement catches up', async () => {
+    beginCheckoutTracking(7, [], sessionStorage, Date.now() - 2000);
+    billingAttempts.mockResolvedValue([
+      { id: 'ch_confirmed', date: new Date().toISOString(), amount_cents: 999, currency: 'usd', status: 'succeeded' },
+    ]);
+    render(PlanView);
+    await vi.waitFor(() =>
+      expect(track).toHaveBeenCalledWith('subscribe', { transaction_id: 'ch_confirmed', value: 9.99, currency: 'USD' }),
+    );
+  });
+
+  it('does not treat the return marker as a purchase', async () => {
+    billingAttempts.mockResolvedValue([]);
+    render(PlanView);
+    await vi.waitFor(() => expect(billingAttempts).toHaveBeenCalled());
+    expect(track).not.toHaveBeenCalledWith('subscribe', expect.anything());
+    page.url = new URL('http://localhost/my/plan');
   });
 });
