@@ -110,6 +110,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// from the portal's search API, whose rows carry the full offer. See cbop.go.
 		NewCBOP(c),
 		NewWantapply(c),
+		NewWantapplyCy(c),
 		NewInfoJobs(c),
 		NewJobtech(c),
 		NewJobnet(c),

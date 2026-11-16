@@ -20,8 +20,8 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// Also paced (pacedEightfoldGetter): the proxy alone recovers an outright IP blocklist, but
 	// eightfold's failures are volume rate-limiting (a per-window cap spent by this crawl's own
 	// aggregate rate across the shared proxy IP). See pacer.go.
-	"eightfold": func(c HTTPClient) Source { return NewEightfold(pacedEightfoldGetter(c)) },
-	"wantapply": func(c HTTPClient) Source { return NewWantapply(c) },
+	"eightfold":    func(c HTTPClient) Source { return NewEightfold(pacedEightfoldGetter(c)) },
+	"wantapply-cy": func(c HTTPClient) Source { return NewWantapplyCy(c) },
 	// djinni.co IP-blocklists the prod datacenter IP: a fast crawl escalates to a hard "your IP has
 	// been blocked" page, while a residential IP is served the full JSON-LD listing.
 	"djinni": func(c HTTPClient) Source { return NewDjinni(c) },

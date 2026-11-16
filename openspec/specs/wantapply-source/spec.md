@@ -1,81 +1,69 @@
 # wantapply-source Specification
 
 ## Purpose
-TBD - created by archiving change add-wantapply-source. Update Purpose after archive.
+
+Collect original WantApply vacancies from the independent global and Cyprus catalogues,
+using the public listing the website itself reads.
+
 ## Requirements
-### Requirement: Wantapply sitemap crawl
 
-The system SHALL provide a `wantapply` source adapter that crawls the Wantapply site over its
-WAF-free mirror host `https://wantapply.cy`. The adapter is boardless and an aggregator (it stays
-in the source facet and takes each posting's company from the posting). It SHALL discover vacancies
-from `https://wantapply.cy/sitemap.xml`, treating a `<loc>` as a vacancy candidate only when its
-path has exactly one segment and that segment is not a reserved page. Reserved (non-vacancy) paths
-are the static set (`/`, `/create`, `/sign-in`, `/sign-up`, `/privacy-policy`, `/terms-of-service`)
-and any multi-segment path (notably `/company/*` and `/jobs/*`). The vacancy slug SHALL be the
-posting's `ExternalID` and the stored URL SHALL be `https://wantapply.cy/<slug>`.
+### Requirement: Independent regional catalogues
 
-#### Scenario: Vacancy slug becomes a candidate
+The `wantapply` source SHALL read `https://wantapply.com/api/jobs` with
+`filters={"domain":"tech"}`. The `wantapply-cy` source SHALL read
+`https://wantapply.cy/api/jobs` with `filters={"jobLocations":["CYP"]}`.
+Both are boardless multi-employer sources. A transport failure SHALL NOT switch domains.
+The global source uses the Scrapling browser in production; Cyprus retains proxy egress.
 
-- **WHEN** the sitemap contains `<loc>https://wantapply.cy/android-team-lead-at-tradingview-3</loc>`
-- **THEN** the adapter treats it as a vacancy candidate with `ExternalID` `android-team-lead-at-tradingview-3` and URL `https://wantapply.cy/android-team-lead-at-tradingview-3`
+#### Scenario: Preserve published identity
 
-#### Scenario: Non-vacancy paths are filtered out
+- **WHEN** either listing returns `url="backend-at-acme"`
+- **THEN** its adapter yields `ExternalID="backend-at-acme"` and that source's own domain URL
+- **AND** it does not replace the existing slug identity with the API's UUID
 
-- **WHEN** the sitemap contains `/company/tradingview`, `/jobs/data-analyst`, `/sign-in`, and the root `/`
-- **THEN** the adapter yields none of them as vacancy candidates
+### Requirement: Complete, bounded pagination
 
-### Requirement: Wantapply hydrates only unseen vacancies
+The adapter SHALL request pages of 50, the frontend's actual maximum, and follow
+`hasNextPage`. A crawl SHALL succeed only after observing an explicit collection,
+explicit pagination metadata, a stable nonnegative `total`, and exactly that many
+unique usable published vacancies. A missing collection, request failure, repeated
+posting, changed total, count mismatch, empty nonterminal page, or page ceiling SHALL
+fail the crawl without returning a partial catalogue.
 
-The adapter SHALL implement the hydrating crawl: it receives a `seen(externalID)` predicate and
-fetches a vacancy's detail page only for a slug the catalogue does not already have, so a
-steady-state crawl issues detail requests only for new vacancies. For an unseen slug it SHALL GET
-`https://wantapply.cy/<slug>`, extract the page's `JobPosting` JSON-LD, and map it into a `Job`:
-title from `title`; company from `hiringOrganization.name`; description from the sanitized
-`description` HTML; posted-at from `datePosted`; location from the `jobLocation[].address`
-components; work mode `remote` (and the `Remote` flag) when `jobLocationType` is `TELECOMMUTE`;
-and employment type mapped from the first `employmentType` entry into freehire's employment-type
-vocabulary (`FULL_TIME` → `full-time`), left empty when it does not map. For a seen slug the adapter
-SHALL yield a liveness-refresh `Job` (marked, no detail request) so the pipeline refreshes the row's
-last-seen and open state WITHOUT rewriting its already-hydrated content. A vacancy whose detail page
-has no `JobPosting` JSON-LD or no company SHALL be dropped (it cannot be normalized). Detail requests
-SHALL be bounded (a single crawl SHALL NOT issue unbounded concurrent detail requests), and one
-vacancy's detail failure SHALL be isolated: the adapter logs and skips that vacancy rather than
-aborting the crawl.
+#### Scenario: A later page fails
 
-#### Scenario: New vacancy is hydrated from JobPosting
+- **WHEN** a later request fails after an earlier page was read
+- **THEN** Fetch returns an error and no partial jobs, preventing a source-wide close
 
-- **WHEN** the crawl encounters a slug whose `ExternalID` is not in the seen set and its detail page carries a `JobPosting` with `title`, `hiringOrganization.name`, `description`, and `datePosted`
-- **THEN** the adapter fetches that page and yields a `Job` with title, company, sanitized description, posted-at, and location taken from the JSON-LD
+#### Scenario: A verified empty catalogue
 
-#### Scenario: Remote vacancy sets the work mode
+- **WHEN** the API returns `data=[]`, `hasNextPage=false`, and `total=0`
+- **THEN** Fetch succeeds with an empty result
 
-- **WHEN** an unseen vacancy's `JobPosting` has `jobLocationType` equal to `TELECOMMUTE`
-- **THEN** the yielded `Job` has `Remote` true and `WorkMode` `remote`
+### Requirement: Inline posting content
 
-#### Scenario: Already-ingested vacancy skips the detail request and preserves content
+The adapter SHALL read sanitized rich descriptions, employer names, publication timestamps (creation time as fallback),
+expiration dates, structured country codes, remote/workplace types, and employment types
+from the listing. Employer names use the company profile name, falling back to the posting's company-name field. It SHALL refresh
+all listed bodies each pass without an individual HTML request or a seen-set hydration gate.
 
-- **WHEN** the crawl encounters a slug whose `ExternalID` is already in the seen set
-- **THEN** the adapter yields a liveness-refresh `Job` (marked, no detail request), and the pipeline only refreshes the row's last-seen/open state — its stored description and facets are not overwritten
+#### Scenario: An employer edits a description
 
-#### Scenario: A vacancy with no JobPosting is dropped
+- **WHEN** the next listing contains an edited description for an existing slug
+- **THEN** the pipeline receives the new body under the same posting identity
 
-- **WHEN** an unseen vacancy's detail page has no `JobPosting` JSON-LD (e.g. a closed posting returning an empty page)
-- **THEN** the adapter drops that vacancy and continues crawling the rest
+### Requirement: Original postings survive company coverage
 
-#### Scenario: A single detail failure does not abort the crawl
+Both sources SHALL retain original postings even when another source has an open vacancy
+at the same employer. Posting-level deduplication SHALL still apply.
 
-- **WHEN** the detail request for one unseen vacancy fails
-- **THEN** the adapter logs and skips that vacancy and continues crawling the remaining vacancies
+#### Scenario: Another vacancy does not establish duplication
 
-### Requirement: Wantapply closes via the unseen-sweep
+- **WHEN** WantApply publishes a Backend Engineer vacancy and another source covers the employer
+- **THEN** the pipeline saves the vacancy rather than discarding it by company coverage
 
-The `wantapply` adapter SHALL NOT be self-closing: it re-lists every current vacancy each crawl
-(hydrating new ones and liveness-refreshing seen ones), so the pipeline's post-run unseen-sweep is
-the authoritative close signal. A vacancy that drops out of the sitemap is no longer listed or
-refreshed and SHALL be closed by the sweep after its unseen window.
+### Requirement: Verified source-wide unseen sweep
 
-#### Scenario: Vanished vacancy is closed by the sweep
-
-- **WHEN** a vacancy previously ingested from `wantapply` no longer appears in the sitemap across the sweep's unseen window
-- **THEN** the post-run unseen-sweep closes that vacancy (it is not excluded as a self-closing source)
-
+Both adapters SHALL carry the full-catalogue capability because incomplete reads fail.
+A vacancy absent from a complete published listing SHALL age out through the ordinary
+source-wide unseen sweep. Neither source is self-closing.

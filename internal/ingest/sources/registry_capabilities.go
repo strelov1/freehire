@@ -193,6 +193,13 @@ func MarketCountries(reg map[string]Source, e CompanyEntry) []string {
 	return nil
 }
 
+// HasOriginalPostings reports whether a provider publishes independent vacancies rather than
+// only copies of an employer's ATS catalogue. Such a board must be deduplicated per posting.
+func HasOriginalPostings(reg map[string]Source, provider string) bool {
+	_, ok := reg[provider].(originalPostings)
+	return ok
+}
+
 // BoardKeyedProviders returns the sorted provider names in reg whose adapter is addressed by
 // a board id — every adapter that is not boardless. A caller that wants to say something about
 // ONE board (cmd/harvest-boards validating a candidate) needs this: a boardless adapter serves

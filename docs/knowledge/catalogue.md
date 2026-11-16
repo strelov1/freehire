@@ -3,9 +3,11 @@ type: Reference
 title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
-  by: codex/gpt-6.1-sol
-  at: 2026-11-15T18:33:40-03:00
+  by: codex
+  at: 2026-11-16T14:57:01-03:00
 sources:
+  - resource: ../../internal/ingest/sources/wantapply.go
+  - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
   - resource: ../../cmd/ingest/native_discovery_company.go
@@ -51,3 +53,13 @@ public slug. Employer website discovery onboards native boards for the existing 
 so the ATS adapter owns subsequent updates and closure. See the
 [LinkedIn provider reference](../../internal/ingest/sources/providers/linkedin.md) and
 [ownership curator](../agents/workers/ops.md#promote-job-source).
+
+## WantApply regional inventory
+
+WantApply global (`wantapply.com`, source `wantapply`) and Cyprus (`wantapply.cy`,
+source `wantapply-cy`) have independent vacancy sets. Neither domain substitutes the
+other. Original-posting boards bypass company-wide ingest coverage: another open
+vacancy at an employer does not establish that its whole inventory is present.
+Posting-level duplicate matching remains in place. See the
+[adapter](../../internal/ingest/sources/wantapply.go) and
+[coverage rule](../../internal/ingest/pipeline/pipeline_write.go).
