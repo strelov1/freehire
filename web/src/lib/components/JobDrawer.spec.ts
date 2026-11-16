@@ -277,7 +277,7 @@ it('keeps the drawer usable when the analysis chunk fails', async () => {
   const fitTab = screen.getAllByRole('tab').find((el) => el.id === 'jobdrawer-tab-fit');
   if (!fitTab) throw new Error('Missing fit tab');
   await fireEvent.click(fitTab);
-  expect((await screen.findByRole('alert')).textContent).toContain('Analysis could not load.');
-  await fireEvent.click(screen.getByRole('button', { name: 'Return to job description' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Не удалось загрузить анализ.');
+  await fireEvent.click(screen.getByRole('button', { name: 'Вернуться к описанию вакансии' }));
   expect(document.getElementById('jobdrawer-tab-description')?.getAttribute('aria-selected')).toBe('true');
 });

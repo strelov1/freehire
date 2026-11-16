@@ -492,11 +492,13 @@
                  would restate the panel's own content and offer a "View full analysis"
                  link that closes the drawer to show what is already open. -->
             <JobMatch job={posting} matchAnalysis={null} />
-            {#await import('./MatchAnalysisFull.svelte') then { default: MatchAnalysisFull }}
+            {#await import('./MatchAnalysisFull.svelte')}
+              <p role="status" class="text-sm text-muted-foreground">{s.loading}</p>
+            {:then { default: MatchAnalysisFull }}
               <MatchAnalysisFull job={posting} />
             {:catch}
-              <p role="alert">Analysis could not load.</p>
-              <button type="button" onclick={() => (tab = 'description')}>Return to job description</button>
+              <p role="alert">{s.analysisLoadError}</p>
+              <button type="button" onclick={() => (tab = 'description')}>{s.returnToDescription}</button>
             {/await}
           {:else if item.job}
             <p class="text-sm text-muted-foreground">{s.loading}</p>
