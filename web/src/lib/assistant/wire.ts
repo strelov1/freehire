@@ -20,7 +20,7 @@ export type TurnEvent =
   | { type: 'assistant_thought'; text: string }
   | { type: 'tool_use'; name: string; input?: unknown }
   | { type: 'tool_result'; name: string; result?: string; is_error?: boolean }
-  | { type: 'usage'; input_tokens?: number; output_tokens?: number }
+  | { type: 'usage'; input_tokens?: number; cached_input_tokens?: number; output_tokens?: number }
   | { type: 'result'; stop_reason?: StopReason; is_error?: boolean };
 
 /** A conversation in the session rail. */

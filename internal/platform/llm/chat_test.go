@@ -22,6 +22,7 @@ type chatModel struct {
 	gotTools     []llms.Tool
 	gotTemp      float64
 	gotReasoning ReasoningEffort
+	gotChoice    any
 }
 
 func (m *chatModel) GenerateContent(ctx context.Context, msgs []llms.MessageContent, opts ...llms.CallOption) (*llms.ContentResponse, error) {
@@ -33,6 +34,7 @@ func (m *chatModel) GenerateContent(ctx context.Context, msgs []llms.MessageCont
 	}
 	m.gotTools = co.Tools
 	m.gotTemp = co.Temperature
+	m.gotChoice = co.ToolChoice
 	if m.err != nil {
 		return nil, m.err
 	}

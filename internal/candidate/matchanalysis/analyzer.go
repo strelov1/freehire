@@ -356,20 +356,26 @@ func stage3SystemPrompt(language string) string {
 	return b.String()
 }
 
-// stage1UserPrompt carries the (bounded) job text, the deterministic anchor, and the
-// de-identified structured résumé (the candidate context — no raw CV is sent).
+// Every stage's user prompt opens with the candidate context, before anything about the job.
+// It is the one block that repeats when a candidate analyses several vacancies, and a provider
+// prompt cache reuses only an identical prefix: placed after the job it is recomputed on every
+// call, placed first it rides on the stage's static system prompt.
+
+// stage1UserPrompt carries the de-identified structured résumé (the candidate context — no raw
+// CV is sent), the (bounded) job text and the deterministic anchor.
 func stage1UserPrompt(in Input, candidate string) string {
 	var b strings.Builder
+	writeCandidate(&b, candidate)
 	writeJob(&b, in)
 	writeAnchor(&b, in.Match)
 	writeBlockers(&b, in.Blockers)
-	writeCandidate(&b, candidate)
 	return b.String()
 }
 
 // stage2UserPrompt adds the company info and the Stage-1 requirement match.
 func stage2UserPrompt(in Input, reqs []Requirement, candidate string) string {
 	var b strings.Builder
+	writeCandidate(&b, candidate)
 	writeJob(&b, in)
 	if info := strings.TrimSpace(in.CompanyInfo); info != "" {
 		b.WriteString("Company info (JSON):\n")
@@ -380,13 +386,13 @@ func stage2UserPrompt(in Input, reqs []Requirement, candidate string) string {
 	writeLocation(&b, in)
 	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
-	writeCandidate(&b, candidate)
 	return b.String()
 }
 
 // stage3UserPrompt carries the Stage-2 verdict to audit plus the same evidence.
 func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict, candidate string) string {
 	var b strings.Builder
+	writeCandidate(&b, candidate)
 	b.WriteString("Verdict to audit (JSON):\n")
 	if blob, err := json.Marshal(v); err == nil {
 		b.Write(blob)
@@ -394,7 +400,6 @@ func stage3UserPrompt(in Input, reqs []Requirement, v recruiterVerdict, candidat
 	}
 	writeBlockers(&b, in.Blockers)
 	writeRequirements(&b, reqs)
-	writeCandidate(&b, candidate)
 	return b.String()
 }
 
