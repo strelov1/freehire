@@ -16,15 +16,18 @@
   import { Bot, Briefcase, FolderKanban, Plus, X } from '@lucide/svelte';
   import type { Component } from 'svelte';
   import { api } from '#lib/api.js';
-  import { Alert, Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
+  import { Alert, Button, ConfirmDialog } from '#lib/ui/index.js';
   import { ActionError } from '#lib/actionError.svelte.js';
   import { announce } from '#lib/announce.svelte.js';
-  import CompanyPicker from '#lib/components/CompanyPicker.svelte';
   import ExperienceAssistantPanel from '#lib/components/ExperienceAssistantPanel.svelte';
   import ExperienceEmploymentCard from '#lib/components/ExperienceEmploymentCard.svelte';
   import ExperienceAchievementRow from '#lib/components/ExperienceAchievementRow.svelte';
   import States from '#lib/components/States.svelte';
-  import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
+  import ExperienceBankIntro from './ExperienceBankIntro.svelte';
+  import CvParseBanner from './CvParseBanner.svelte';
+  import UnconfirmedNotice from './UnconfirmedNotice.svelte';
+  import NewJobForm from './NewJobForm.svelte';
+  import NewProjectForm from './NewProjectForm.svelte';
   import { profileKickoff } from '#lib/assistant/presets.js';
   import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '#lib/experienceBank.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
@@ -609,16 +612,7 @@
 />
 
 <div class="min-w-0">
-  {#if resumeParse === 'failed'}
-    <!-- The CV's parse_status, surfaced where a candidate actually manages experience
-           rather than only once at sign-up. -->
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
-      <p>Couldn't read your CV — that may be why this looks empty.</p>
-      <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>Try again</Button>
-    </div>
-  {:else if resumeParse === 'waiting'}
-    <div class="mb-4 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">Reading your CV again…</div>
-  {/if}
+  <CvParseBanner state={resumeParse} onRetry={() => void retryResumeExtraction()} />
   {#if loading}
     <States state="loading" />
   {:else if loadError}
@@ -642,47 +636,12 @@
         </Alert>
       {/if}
 
-      <!-- The header states what this page is FOR, because "experience bank" means nothing
-             to someone meeting it for the first time. -->
-      <!-- A container query, not a viewport one: the same view fills /my/profile and sits in
-             the tailoring workspace's ~350px side panel, where a wide viewport still left the
-             paragraph one word per line beside the button. -->
-      <div class="@container">
-        <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <p class="max-w-prose flex-1 text-sm text-muted-foreground">
-            {#if totalAtoms === 0}
-              Nothing recorded yet. Upload a CV, add a job or project below, or talk it through with the assistant —
-              whatever you confirm is kept here and reused in every CV you build.
-            {:else}
-              {totalAtoms} achievement{totalAtoms === 1 ? '' : 's'} on record. These are what your tailored CVs are built
-              from — edit or remove anything that is not right.
-            {/if}
-          </p>
-          <!-- Capped, and right-aligned only once it shares the row: the example is two lines
-                 of hint, and letting it set the row's width pushed the whole action under the
-                 paragraph. Narrow, it takes its own line and follows the text's edge.
-                 `basis-full` below `@lg` is what forces that own line — `flex-wrap` alone could not,
-                 because the paragraph beside it is `flex-1` (so `flex-basis: 0`) and never claims
-                 enough width to push anything down. With the action also refusing to shrink, it held
-                 its full 16rem on a phone and crushed the paragraph to one word per line. -->
-          <div
-            class="flex basis-full flex-col items-start gap-1.5 text-left @lg:max-w-[16rem] @lg:basis-auto @lg:shrink-0 @lg:items-end @lg:text-right"
-          >
-            {@render interviewEntry()}
-          </div>
-        </div>
-      </div>
+      <ExperienceBankIntro {totalAtoms}>
+        {@render interviewEntry()}
+      </ExperienceBankIntro>
 
       {#if needsConfirming > 0}
-        <button
-          type="button"
-          onclick={jumpToUnconfirmed}
-          class="rounded-lg bg-warning/5 px-4 py-3 text-left text-sm transition-colors hover:bg-warning/10"
-        >
-          <strong class="font-medium">{needsConfirming} not confirmed.</strong>
-          The assistant recorded these as its own reading of something you said. They will not appear on any CV until you
-          confirm them — click to jump to one, then confirm it as-is, edit it to change it first, or remove it.
-        </button>
+        <UnconfirmedNotice count={needsConfirming} onJump={jumpToUnconfirmed} />
       {/if}
 
       {#if selected.length > 0}
@@ -719,41 +678,17 @@
         })}
 
         {#if addingJob}
-          <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-            <p class="text-sm font-medium">New experience</p>
-            <FormField label="Company">
-              {#snippet children({ id, describedBy })}
-                <CompanyPicker {id} aria-describedby={describedBy} bind:value={jobCompany} />
-              {/snippet}
-            </FormField>
-            <div class="flex gap-2">
-              <FormField label="Role" class="flex-1">
-                {#snippet children({ id, describedBy })}
-                  <Input {id} aria-describedby={describedBy} bind:value={jobRole} />
-                {/snippet}
-              </FormField>
-              <FormField label="Location" class="flex-1">
-                {#snippet children({ id, describedBy })}
-                  <Input {id} aria-describedby={describedBy} bind:value={jobLocation} />
-                {/snippet}
-              </FormField>
-            </div>
-            <div class="flex gap-2">
-              <PeriodDateInput bind:value={jobStart} placeholder="Start" label="Job start" />
-              {#if !jobCurrent}
-                <PeriodDateInput bind:value={jobEnd} placeholder="End" label="Job end" />
-              {/if}
-            </div>
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" bind:checked={jobCurrent} class="h-4 w-4" />
-              <span class="text-muted-foreground">I currently work here</span>
-            </label>
-            <div class="flex gap-2">
-              <Button size="sm" variant="primary" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button
-              >
-              <Button size="sm" variant="ghost" onclick={() => (addingJob = false)}>Cancel</Button>
-            </div>
-          </div>
+          <NewJobForm
+            bind:company={jobCompany}
+            bind:role={jobRole}
+            bind:location={jobLocation}
+            bind:start={jobStart}
+            bind:end={jobEnd}
+            bind:current={jobCurrent}
+            {busy}
+            onSave={createJob}
+            onCancel={() => (addingJob = false)}
+          />
         {/if}
 
         <div class="flex flex-col gap-6">
@@ -776,29 +711,15 @@
         })}
 
         {#if addingProject}
-          <div class="flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-            <p class="text-sm font-medium">New project</p>
-            <FormField label="Name">
-              {#snippet children({ id, describedBy })}
-                <Input {id} aria-describedby={describedBy} bind:value={projName} />
-              {/snippet}
-            </FormField>
-            <FormField label="Link" hint="Optional">
-              {#snippet children({ id, describedBy })}
-                <Input {id} aria-describedby={describedBy} bind:value={projLink} placeholder="https://…" />
-              {/snippet}
-            </FormField>
-            <div class="flex gap-2">
-              <PeriodDateInput bind:value={projStart} placeholder="Start" label="Project start" />
-              <PeriodDateInput bind:value={projEnd} placeholder="End" label="Project end" />
-            </div>
-            <div class="flex gap-2">
-              <Button size="sm" variant="primary" disabled={busy || !projName.trim()} onclick={createProject}
-                >Save</Button
-              >
-              <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
-            </div>
-          </div>
+          <NewProjectForm
+            bind:name={projName}
+            bind:link={projLink}
+            bind:start={projStart}
+            bind:end={projEnd}
+            {busy}
+            onSave={createProject}
+            onCancel={() => (addingProject = false)}
+          />
         {/if}
 
         <div class="flex flex-col gap-6">
