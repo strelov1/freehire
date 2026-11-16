@@ -80,7 +80,7 @@ var scraplingProviders = map[string]scraplingProvider{
 	"gulftalent": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewGulfTalent(f)
 	}},
-	// The global catalogue's sitemap and pages must both come from .com. The Cyprus
+	// The global catalogue's public listing must come from .com. The Cyprus
 	// catalogue is a separate provider, never a fallback for a refused global page.
 	"wantapply": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
 		return NewWantapply(f)

@@ -14,7 +14,7 @@ import (
 
 // schemaEmploymentType maps a schema.org JobPosting employmentType enum onto the freehire
 // vocabulary, returning "" for an unknown/absent value (e.g. "OTHER") so the description parser
-// decides. Shared by the ld+json adapters (northstone, briefhq, djinni, talentlyft, wantapply,
+// decides. Shared by the ld+json adapters (northstone, briefhq, djinni, talentlyft,
 // onstrider).
 func schemaEmploymentType(t string) string {
 	switch strings.ToUpper(strings.TrimSpace(t)) {

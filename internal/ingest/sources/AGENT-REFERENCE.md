@@ -127,9 +127,11 @@ and each keeps its earlier transport — which is also the rollback.
 No adapter changed: the tier is a `*Client` whose transport forwards to the service, so every
 getter, the retries and the body cap are the same code every other provider uses.
 
-**WantApply has two regional catalogues, not mirrors.** `wantapply` always reads its sitemap
-and detail pages from `.com`, through the Scrapling browser in production. `wantapply-cy` reads
-only `.cy`, through the proxy. Neither substitutes the other domain. Both publish original
+**WantApply has two regional catalogues, not mirrors.** `wantapply` reads the public `.com/api/jobs` listing with the `tech` domain filter, through
+the Scrapling browser in production. `wantapply-cy` reads `.cy/api/jobs` with the `CYP` location
+filter, through the proxy. The endpoint caps pages at 50 and carries complete descriptions.
+Every pass refreshes bodies, verifies unique count against `total`, and follows `hasNextPage`;
+any incomplete or inconsistent page fails before the full-catalogue sweep can run. Neither substitutes the other domain. Both publish original
 vacancies, so company-wide ATS coverage does not suppress their postings; posting-level dedup
 still applies. On 2026-11-16 the company gate discarded 1,514 of 2,113 readable global postings.
 
