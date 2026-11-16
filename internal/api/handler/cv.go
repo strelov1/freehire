@@ -289,28 +289,6 @@ func cvRecordOf(rec cv.Record) (apigen.CvRecord, error) {
 	return out, nil
 }
 
-// ListCVTemplates returns the registered CV templates and their display metadata (id, label,
-// style, photo) so the UI can render the template gallery. Static registry data — no DB.
-func (h *cvHandlers) ListCVTemplates(ctx context.Context) (*apigen.ListCVTemplatesOK, error) {
-	raw, err := json.Marshal(cv.Templates())
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.ListCVTemplatesOK{Data: raw}, nil
-}
-
-// ListCVFonts returns the registered typefaces a CV may choose (id, label, the familiar face
-// it matches, and the CSS stack the live preview renders with). Static registry data — no DB.
-// The client reads it instead of hard-coding a list, which is what keeps a second copy of the
-// registry from growing in the web app and drifting from the one the renderer obeys.
-func (h *cvHandlers) ListCVFonts(ctx context.Context) (*apigen.ListCVFontsOK, error) {
-	raw, err := json.Marshal(cv.Fonts())
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.ListCVFontsOK{Data: raw}, nil
-}
-
 // ListCVs returns the caller's TAILORED CVs (the re-open list), newest edit first, each with
 // its vacancy slug and bound agent session so the client links back to the tailoring workspace.
 func (h *cvHandlers) ListCVs(ctx context.Context) (*apigen.ListCVsOK, error) {
@@ -472,75 +450,6 @@ func (h *cvHandlers) UpdateCV(ctx context.Context, req *apigen.CvUpdate, params 
 	return &apigen.UpdateCVOK{Data: cvMetaOf(meta)}, nil
 }
 
-// SetCVTracerLinks records the candidate's decision to have the links in this CV's PDF traced,
-// or to stop. Off is the state of every CV that has not been through here.
-//
-// Enabling is refused when the deployment has no visitor salt: without one there is no honest way
-// to tell one visitor from another, and accepting the consent while quietly recording less would
-// answer a question the candidate did not ask. Disabling is never refused — withdrawing consent is
-// not a favour the deployment grants.
-func (h *cvHandlers) SetCVTracerLinks(ctx context.Context, req *apigen.CvTracerLinksSetting, params apigen.SetCVTracerLinksParams) (*apigen.SetCVTracerLinksOK, error) {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return nil, err
-	}
-	enabled := req.Enabled.Value
-	if enabled && h.tracerSalt == "" {
-		return nil, fiber.NewError(fiber.StatusConflict,
-			"link tracing is not configured on this deployment")
-	}
-	if err := h.cvStore.SetTracerLinks(ctx, id, userID, enabled); err != nil {
-		return nil, mapCVError(err)
-	}
-	return &apigen.SetCVTracerLinksOK{Data: apigen.CvTracerLinksState{TracerLinksEnabled: enabled}}, nil
-}
-
-// ListCVTracerLinks reports what is known about each of an owned CV's traced links.
-//
-// Clicks the owner made themselves are excluded by the query — they are recorded so the history
-// stays complete, not so they can be read back as somebody else's interest. Automated traffic is
-// counted separately rather than dropped, so the UI's "include likely bots" switch needs no second
-// request.
-func (h *cvHandlers) ListCVTracerLinks(ctx context.Context, params apigen.ListCVTracerLinksParams) (*apigen.ListCVTracerLinksOK, error) {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := h.queries.ListTracerLinkStats(ctx, db.ListTracerLinkStatsParams{CvID: id, UserID: userID})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]apigen.CvTracerLink, 0, len(rows))
-	for _, r := range rows {
-		item := apigen.CvTracerLink{
-			SourcePath:     r.SourcePath,
-			DestinationURL: r.DestinationUrl,
-			TracedURL:      h.tracerBaseURL + "/cv/" + r.Token,
-			Clicks:         r.Clicks,
-			BotClicks:      r.BotClicks,
-		}
-		// DistinctVisitors is omitted rather than reported as zero when the deployment has no
-		// salt: every click then carries an empty hash, and counting those would say "one
-		// visitor" about any number of people. Absent is the honest answer; zero a wrong one.
-		if h.tracerSalt != "" {
-			item.DistinctVisitors = apigen.NewOptInt64(r.DistinctVisitors)
-		}
-		if r.LastClickAt.Valid {
-			item.LastClickAt = apigen.NewOptDateTime(r.LastClickAt.Time)
-		}
-		out = append(out, item)
-	}
-	return &apigen.ListCVTracerLinksOK{Data: out}, nil
-}
-
 // DeleteCV removes an owned CV.
 func (h *cvHandlers) DeleteCV(ctx context.Context, params apigen.DeleteCVParams) error {
 	userID, err := requireUserIDFromContext(ctx)
@@ -569,39 +478,6 @@ func (h *cvHandlers) SetCVSession(ctx context.Context, req *apigen.CvSessionBind
 		return err
 	}
 	if err := h.cvStore.SetSession(ctx, id, userID, req.SessionID.Value); err != nil {
-		return mapCVError(err)
-	}
-	return nil
-}
-
-// SetCVTemplate changes only the template of an owned CV (title and document untouched). The
-// gallery uses this to switch templates without re-sending the whole document. Owner-scoped
-// (a foreign/missing id is a 404); an unknown template_id is a 400.
-func (h *cvHandlers) SetCVTemplate(ctx context.Context, req *apigen.CvTemplateChoice, params apigen.SetCVTemplateParams) error {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return err
-	}
-	tmplID, err := validCVTemplate(req.TemplateID.Value)
-	if err != nil {
-		return err
-	}
-	// Through the editor like every other change: "switched to the Sidebar template" is a
-	// legitimate line in the history, and one the candidate may want to undo.
-	path, err := cvedit.ParsePath("template_id")
-	if err != nil {
-		return err
-	}
-	_, _, err = h.editor.Commit(ctx, id, userID, cvedit.Change{
-		Actor:  cvedit.ActorCandidate,
-		Origin: cvedit.OriginTemplate,
-		Ops:    []cvedit.Op{{Kind: cvedit.OpSet, Path: path, Value: tmplID}},
-	})
-	if err != nil {
 		return mapCVError(err)
 	}
 	return nil
@@ -706,95 +582,6 @@ func cvID(raw string) (uuid.UUID, error) {
 		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "cv not found")
 	}
 	return id, nil
-}
-
-// ListCVRevisions serves the history of what changed this CV, newest first.
-//
-// The feed carries the addresses each revision touched but not the operations themselves:
-// the preview needs the places to underline, and the inverses hold the candidate's own
-// earlier text, which has no business travelling out for a list view.
-func (h *cvHandlers) ListCVRevisions(ctx context.Context, params apigen.ListCVRevisionsParams) (*apigen.ListCVRevisionsOK, error) {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return nil, err
-	}
-	// Owner-scoped read first, so a foreign CV is a 404 rather than an empty feed — the
-	// same answer "no such CV" and "not yours" have everywhere else here.
-	if _, err := h.cvStore.Get(ctx, id, userID); err != nil {
-		return nil, mapCVError(err)
-	}
-	revisions, err := h.editor.History(ctx, id, userID)
-	if err != nil {
-		return nil, mapCVError(err)
-	}
-	raw, err := json.Marshal(cvedit.Views(revisions))
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.ListCVRevisionsOK{Data: raw}, nil
-}
-
-// UndoCVRevision reverses one entry, leaving later edits in place. The undo is itself
-// recorded, so the feed keeps describing what actually happened to the document.
-func (h *cvHandlers) UndoCVRevision(ctx context.Context, params apigen.UndoCVRevisionParams) (*apigen.UndoCVRevisionOK, error) {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return nil, err
-	}
-	revisionID, err := uuid.Parse(params.Rid)
-	if err != nil {
-		// A malformed id names no revision, so it is reported as missing rather than as a
-		// bad request — keeping "no such revision" and "not yours" the same answer.
-		return nil, fiber.NewError(fiber.StatusNotFound, "revision not found")
-	}
-	meta, undo, err := h.editor.Revert(ctx, id, userID, revisionID)
-	if err != nil {
-		return nil, mapCVError(err)
-	}
-	view, err := json.Marshal(undo.View())
-	if err != nil {
-		return nil, err
-	}
-	return &apigen.UndoCVRevisionOK{Data: apigen.CvRevisionUndo{Cv: cvMetaOf(meta), Revision: view}}, nil
-}
-
-// UndoCVRevisionBatch reverses every standing edit of one agent turn, newest first.
-//
-// The batch id comes from the feed rather than from a column on the CV: the run's own
-// revisions carry it, which is what let the pre-run snapshot be retired along with the edge
-// two concurrent runs used to create.
-func (h *cvHandlers) UndoCVRevisionBatch(ctx context.Context, params apigen.UndoCVRevisionBatchParams) (*apigen.UndoCVRevisionBatchOK, error) {
-	userID, err := requireUserIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	id, err := cvID(params.ID)
-	if err != nil {
-		return nil, err
-	}
-	batchID, err := uuid.Parse(params.Bid)
-	if err != nil {
-		return nil, fiber.NewError(fiber.StatusNotFound, "run not found")
-	}
-	meta, err := h.editor.RevertBatch(ctx, id, userID, batchID)
-	if err != nil {
-		return nil, mapCVError(err)
-	}
-	// The run report goes with the run: it describes what the run made of each requirement,
-	// and those edits have just been reversed. Best-effort — the document is already back,
-	// and failing the request now would tell the candidate nothing was undone.
-	if err := h.cvStore.SetAutopilotReport(ctx, id, userID, nil); err != nil {
-		log.Printf("cv: clearing the run report after a batch revert: %v", err)
-	}
-	return &apigen.UndoCVRevisionBatchOK{Data: cvMetaOf(meta)}, nil
 }
 
 // cv is the refusal as the CV contract answers it: the body write402 sends, with the
