@@ -7,7 +7,8 @@
 // full-page OAuth redirect (mirrors filterStorage.ts's guards).
 
 import { ApiError } from './api';
-import { canonicalQuery, filtersFromParams } from './facetModel';
+import { filtersFromParams } from './facetModel';
+import { canonicalQuery } from './savedSearchQuery';
 import { FACETS, dynamicLabel } from './facets';
 import type { SavedSearch, Subscription } from './types';
 
