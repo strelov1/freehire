@@ -7,7 +7,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Only the destinations verified in the PageUp migration ledger use the proxy lane.
+// Only verified public Clinch hosts use the proxy lane.
 var clinchMigratedHosts = map[string]bool{
 	"careers.madergroup.com.au":                                        true,
 	"armaguard-careers.careerpages.rec-marketing.dc2.pageuppeople.com": true,
@@ -47,6 +47,7 @@ var clinchMigratedHosts = map[string]bool{
 	"careers.ses.nsw.gov.au":  true,
 	"careers.rfs.nsw.gov.au":  true,
 	"careers.icac.nsw.gov.au": true,
+	"careers.withwaymo.com":   true,
 }
 
 type clinchDetailHTTP struct {
