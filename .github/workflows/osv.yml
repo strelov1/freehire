@@ -1,0 +1,28 @@
+name: osv
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '41 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install OSV-Scanner
+        env:
+          OSV_VERSION: 2.7.1
+          OSV_SHA256: fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8
+        run: |
+          curl -fsSL --retry 5 --retry-all-errors "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" -o /tmp/osv-scanner
+          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum --check --strict -
+          chmod +x /tmp/osv-scanner
+      # Explicit lockfiles exclude go.mod: govulncheck owns Go reachability analysis.
+      # No secrets or dependency installation; Dependabot receives the same gate.
+      - name: Scan JS dependencies
+        run: /tmp/osv-scanner scan source --lockfile=pnpm-lock.yaml --lockfile=web/pnpm-lock.yaml --lockfile=design-system/pnpm-lock.yaml --lockfile=extension/package-lock.json

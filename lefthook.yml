@@ -17,7 +17,7 @@ pre-commit:
     # the pre-existing backlog. Same policy as CI (see .golangci.yml).
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run --new-from-rev=HEAD --allow-parallel-runners ./...
+      run: make lint
     # Blocking: `govulncheck ./...` is clean on main under the pinned toolchain, so a
     # failure now comes from a dependency advisory or from the commit itself.
     # A missing binary skips on purpose, unlike gitleaks; the CI job is the gate.
