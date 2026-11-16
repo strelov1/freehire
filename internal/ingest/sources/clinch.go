@@ -95,6 +95,14 @@ func (c clinch) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) 
 			Unreadable:  !known && strings.TrimSpace(description) == "",
 		})
 	}
+	for _, job := range jobs {
+		if !job.Unreadable {
+			return jobs, nil
+		}
+	}
+	if len(jobs) > 0 {
+		return nil, fmt.Errorf("clinch: %s: listed %d postings and read none of their details", e.Board, len(jobs))
+	}
 	return jobs, nil
 }
 

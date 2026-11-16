@@ -62,8 +62,8 @@ func TestClinchEmptyDetailRemainsUnreadable(t *testing.T) {
 	for _, body := range []string{"<html>No description component</html>", clinchDetailHTML("  "), "CHALLENGE"} {
 		detail := &routedDetail{routes: map[string]string{"/jobs/": body}}
 		jobs, err := NewClinch(sitemap, detail).Fetch(context.Background(), CompanyEntry{Board: "careers.withwaymo.com"})
-		if err != nil || len(jobs) != 1 || !jobs[0].Unreadable || jobs[0].SeenRefresh {
-			t.Fatalf("empty/challenged detail must not be saved as hydrated: %+v, %v", jobs, err)
+		if err == nil || len(jobs) != 0 {
+			t.Fatalf("wholly unreadable listing must fail: %+v, %v", jobs, err)
 		}
 	}
 }

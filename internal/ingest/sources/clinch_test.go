@@ -120,17 +120,19 @@ func TestClinchFetchChallengeLatchesRemainingToSitemapOnly(t *testing.T) {
 	}
 }
 
-func TestClinchFetchDetailErrorKeepsPostingWithEmptyDescription(t *testing.T) {
+func TestClinchFetchDetailErrorKeepsPartialListing(t *testing.T) {
 	job := "https://careers.withwaymo.com/jobs/backend-engineer-warsaw-masovian-voivodeship-poland"
-	sitemap := (&routedHTTP{}).route("/sitemap.xml", clinchSitemapXML(job))
+	sitemap := (&routedHTTP{}).route("/sitemap.xml", clinchSitemapXML(job,
+		"https://careers.withwaymo.com/jobs/known-london-united-kingdom"))
 	detail := &routedDetail{routes: map[string]string{}} // no route → per-posting error (not a challenge)
 
-	jobs, err := NewClinch(sitemap, detail).Fetch(context.Background(), CompanyEntry{Board: "careers.withwaymo.com"})
+	jobs, err := NewClinch(sitemap, detail).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Board: "careers.withwaymo.com"}, func(id string) bool { return strings.HasPrefix(id, "known-") })
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1 (a detail error must not drop the posting)", len(jobs))
+	if len(jobs) != 2 || !jobs[0].Unreadable || !jobs[1].SeenRefresh {
+		t.Fatalf("got %+v, want unreadable posting and known liveness refresh", jobs)
 	}
 	if jobs[0].Description != "" {
 		t.Errorf("Description = %q, want empty on a detail error", jobs[0].Description)
@@ -233,11 +235,10 @@ func TestClinchFetchParsesSitemapAndFiltersNonJobURLs(t *testing.T) {
 		job,
 	))
 
-	// No detail route: hydration fails per-posting (a non-challenge error), so the description
-	// stays empty and the sitemap-only fields are what this test asserts.
-	jobs, err := NewClinch(fake, &routedDetail{routes: map[string]string{}}).Fetch(context.Background(), CompanyEntry{
+	// A known posting uses the sitemap for liveness without fetching its detail.
+	jobs, err := NewClinch(fake, &routedDetail{routes: map[string]string{}}).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
 		Company: "Waymo", Provider: "clinch", Board: "careers.withwaymo.com",
-	})
+	}, func(string) bool { return true })
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}

@@ -72,7 +72,7 @@ func TestClinchHydrationPreservesStoredBodyUntilRecovery(t *testing.T) {
 	read()
 	before := hydrated
 	pages.blocked = true
-	if st := run(); st.Unreadable != 1 {
+	if st := run(); st.Failed != 1 {
 		t.Fatalf("challenge not counted: %+v", st)
 	}
 	read()

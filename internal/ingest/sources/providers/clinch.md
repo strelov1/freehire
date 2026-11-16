@@ -21,7 +21,9 @@ listing liveness without rewriting content or advancing `hydrated_at`; unreadabl
 postings remain pending and prevent quiet backoff; excessive unreadable coverage
 withholds unsafe sweeps under the shared pipeline policy. New unreadable
 IDs are emitted but are not persisted until a real body is available. Ordinary detail
-errors do not latch or drop listing identities.
+errors do not latch or drop listing identities in a partially readable result. A
+nonempty listing containing only unreadable postings fails the board; empty listings
+and results containing known liveness refreshes remain valid.
 
 The shared seen-set retries recent persisted empty bodies and, when enabled, withholds
 stale bodies in daily slices so employer edits still reach stored postings. Production
