@@ -19,11 +19,11 @@ Read [How it works](AGENT-REFERENCE.md#how-it-works) before work involving this 
 
 ## Adding a tool
 
-Read [Adding a tool](AGENT-REFERENCE.md#adding-a-tool) before work involving this topic.
+Read [Adding a tool](AGENT-REFERENCE-TOOLS.md#adding-a-tool) before work involving this topic.
 
 ## Choosing the turn model: the bake-off
 
-Read [Choosing the turn model: the bake-off](AGENT-REFERENCE.md#choosing-the-turn-model-the-bake-off) before work involving this topic.
+Read [Choosing the turn model: the bake-off](AGENT-REFERENCE-TOOLS.md#choosing-the-turn-model-the-bake-off) before work involving this topic.
 
 ## Limitations
 

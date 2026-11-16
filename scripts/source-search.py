@@ -19,7 +19,7 @@ if args.full:
 else:
     for glob in (
         "!**/AGENTS.md",
-        "!**/AGENT-REFERENCE.md",
+        "!**/AGENT-REFERENCE*.md",
         "!**/node_modules/**",
         "!**/vendor/**",
         "!**/.git/**",
