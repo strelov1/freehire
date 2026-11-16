@@ -173,6 +173,10 @@ func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.Comp
 // the id followed by a readable slug — SmartRecruiters' "<id>-<title-slug>", where the id is
 // never a segment of its own.
 func segmentNamesID(seg, id string) bool {
+	// Complete paths identify one posting exactly; a hyphen suffix may name a sibling.
+	if strings.HasPrefix(seg, "/") {
+		return sameRef(seg, id)
+	}
 	return id != "" && (sameRef(seg, id) || strings.HasPrefix(seg, id+"-"))
 }
 
@@ -290,7 +294,7 @@ func normalizeURL(raw string) string {
 }
 
 // postingRefs returns what in a link may name the posting's id, in the order to try them: the
-// path segments last-first, then the query values. Most platforms put the id in the path; a few
+// path segments last-first, then path suffixes and query values. Most platforms put the id in the path; a few
 // name it only in the query (eRecruiter's oid), and a query value that names no posting on the
 // board matches nothing.
 func postingRefs(raw string) []string {
@@ -298,6 +302,12 @@ func postingRefs(raw string) []string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return refs
+	}
+	// Workday's external id is a complete /job/<location>/<slug> path. Keep
+	// component boundaries so a different location or requisition cannot match it.
+	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i := len(segments) - 1; i >= 0; i-- {
+		refs = append(refs, "/"+strings.Join(segments[i:], "/"))
 	}
 	q := u.Query()
 	for _, k := range slices.Sorted(maps.Keys(q)) {
