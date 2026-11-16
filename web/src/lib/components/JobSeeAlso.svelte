@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import type { SeeAlsoCard } from '#lib/collections.js';
+  import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import CollectionMark from './CollectionMark.svelte';
 
   // A horizontally-scrolling row of links into existing /collections/:slug
@@ -10,18 +11,21 @@
   // server-side (+page.server.ts) from this job's own facets and its
   // company's collections; no client-side fetch.
   let { cards }: { cards: SeeAlsoCard[] } = $props();
+  const edges = new ScrollEdges();
 </script>
 
 {#if cards.length > 0}
   <section class="mt-8">
     <h2 class="mb-3 text-sm font-semibold text-muted-foreground">See also</h2>
-    <!-- On a phone, one sideways-scrolling row that runs to the screen's edges (the negative
-         margin cancels the page gutter, the padding restores it for the first card), so a
-         card cut at the edge reads as "there is more" and a swipe reaches it. From lg the
-         row wraps instead: a mouse has no swipe, and the hidden scrollbar left it no way
-         to reach the cards past the edge. -->
+    <!-- Keep one horizontally scrolling row at every width. On smaller screens it runs
+         to the page edges so the next card remains visible as a cue to scroll. -->
     <div
-      class="no-scrollbar -mx-5 flex snap-x gap-2 overflow-x-auto scroll-px-5 px-5 pb-1 sm:-mx-4 sm:scroll-px-4 sm:px-4 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0"
+      {@attach edges.attach}
+      class={[
+        'no-scrollbar -mx-5 flex snap-x gap-2 overflow-x-auto scroll-px-5 px-5 pb-1 sm:-mx-4 sm:scroll-px-4 sm:px-4 lg:mx-0 lg:scroll-px-0 lg:px-0',
+        !edges.atStart && 'mask-l-from-97%',
+        !edges.atEnd && 'mask-r-from-97%',
+      ]}
     >
       {#each cards as card (card.slug)}
         <a
