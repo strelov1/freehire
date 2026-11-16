@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -60,7 +61,9 @@ func TestRevokedGrant(t *testing.T) {
 // value. Both entry points, since a wave's list and its per-message fetches fail apart.
 func TestAPIReaderCarriesTheStatus(t *testing.T) {
 	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
-		r := &apiReader{client: &http.Client{Transport: answering(status)}}
+		// A 429 would be waited out; a refused wait returns the status as it stood.
+		noWait := func(context.Context, time.Duration) error { return context.Canceled }
+		r := &apiReader{client: &http.Client{Transport: answering(status)}, sleep: noWait}
 
 		var apiErr *APIError
 		if err := r.getJSON(context.Background(), "https://example.test/messages", &struct{}{}); !errors.As(err, &apiErr) {
