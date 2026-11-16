@@ -1,11 +1,11 @@
 // Command notify is the standalone filter-subscription notification worker. One run first
-// delivers opted-in inbox digests, independently of search, then does a match-then-deliver
+// delivers opted-in inbox and application digests, independently of search, then does a match-then-deliver
 // pass: it re-runs each distinct saved-search query against the search index, records new
 // matches in the dedup ledger, and delivers each subscription's pending matches as one digest
 // over its channel (Telegram, email, push, webhook). Run it on a schedule; it processes a
 // bounded batch and exits non-zero on delivery failures so cron can alert.
 //
-// With the search backend unconfigured, matching is disabled and inbox digests still run.
+// With the search backend unconfigured, matching is disabled and email summaries still run.
 // Telegram and email are registered only when their server credential is set (bot token /
 // SES region and from address); push and webhook need none and are always registered. A
 // subscription on a channel not configured this run (or a push user with no device, or a
@@ -17,6 +17,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/engage/applicationdigest"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/inboxdigest"
@@ -82,6 +83,15 @@ func run() int {
 		log.Printf("inbox-digest: sent=%d failed=%d skipped=%d", inboxStats.Sent, inboxStats.Failed, inboxStats.Skipped)
 		if err != nil {
 			log.Printf("inbox-digest: %v", err)
+			inboxFailures++
+		}
+	}
+	if inboxSender != nil {
+		stats, err := applicationdigest.New(applicationdigest.NewDBStore(queries), applicationdigest.NewMailer(cfg.NotifyEmailFrom, cfg.FrontendOrigin, cfg.JWTSecret), inboxSender).Run(ctx, time.Now())
+		inboxFailures += stats.Failed
+		log.Printf("application-digest: sent=%d failed=%d skipped=%d", stats.Sent, stats.Failed, stats.Skipped)
+		if err != nil {
+			log.Printf("application-digest: %v", err)
 			inboxFailures++
 		}
 	}

@@ -435,6 +435,8 @@ type Querier interface {
 	// The claim returns the job's external_id and url because the fetcher needs the posting
 	// id and the exact stored URL to hit the same page the ingest write recorded.
 	ClaimAdzunaDescriptionBatch(ctx context.Context, arg ClaimAdzunaDescriptionBatchParams) ([]ClaimAdzunaDescriptionBatchRow, error)
+	// Recheck live consent and recipient eligibility immediately before reserving the week.
+	ClaimApplicationDigest(ctx context.Context, arg ClaimApplicationDigestParams) (int64, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimSemanticBatch: FOR UPDATE OF o locks only outbox rows (a bare
 	// FOR UPDATE would also lock jobs, making concurrent claim waves contend), SKIP LOCKED
@@ -2737,6 +2739,8 @@ type Querier interface {
 	// MCP server reads it so an agent can only subscribe on a channel that will deliver,
 	// instead of creating a subscription whose matches are soft-skipped forever.
 	GetAlertChannelState(ctx context.Context, id int64) (GetAlertChannelStateRow, error)
+	// Live, unretracted ledger facts; the current board is deliberately a separate view.
+	GetApplicationDigestSnapshot(ctx context.Context, arg GetApplicationDigestSnapshotParams) (GetApplicationDigestSnapshotRow, error)
 	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
 	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
 	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
@@ -4016,6 +4020,10 @@ type Querier interface {
 	// posting that has since been recognised as a recruiter's, and report how many it
 	// declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
+	// Keyset pagination lets the worker skip empty snapshots without starving later accounts.
+	ListApplicationDigestCandidates(ctx context.Context, arg ListApplicationDigestCandidatesParams) ([]ListApplicationDigestCandidatesRow, error)
+	// Mirror the board's activity clock: a candidate's chase or stage edit is not a reply.
+	ListApplicationDigestSilentCandidates(ctx context.Context, arg ListApplicationDigestSilentCandidatesParams) ([]ListApplicationDigestSilentCandidatesRow, error)
 	// One application's live events, newest first — what the application panel renders as its
 	// history, where ListApplicationEventsInRange paints a month for the calendar.
 	//
@@ -5937,6 +5945,7 @@ type Querier interface {
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
 	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
+	MarkApplicationDigestSent(ctx context.Context, arg MarkApplicationDigestSentParams) (int64, error)
 	// Park an attempt the sidecar could not fully resolve: record which fields stopped it and
 	// why, and leave the lease in place. Unlike RecordAutoApplyFailure this is not a retry
 	// countdown — a parked attempt needs new data, not another try — so attempts is left
@@ -7214,6 +7223,8 @@ type Querier interface {
 	// usable destination on any configured channel) is retried promptly on a later
 	// pass instead of waiting out the lease.
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
+	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
+	ReleasePausedApplicationDigest(ctx context.Context, arg ReleasePausedApplicationDigestParams) error
 	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
 	ReleasePausedInboxDigest(ctx context.Context, arg ReleasePausedInboxDigestParams) error
 	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no

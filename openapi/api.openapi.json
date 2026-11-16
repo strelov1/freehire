@@ -15687,6 +15687,7 @@
                 },
                 "example": {
                   "data": {
+                    "application_digest_enabled": false,
                     "inbox_digest_enabled": true,
                     "enabled": true,
                     "channels": [
@@ -15741,6 +15742,7 @@
                 },
                 "example": {
                   "data": {
+                    "application_digest_enabled": false,
                     "inbox_digest_enabled": true,
                     "enabled": true,
                     "channels": [
@@ -32061,6 +32063,7 @@
       "NotificationSettings": {
         "type": "object",
         "required": [
+          "application_digest_enabled",
           "inbox_digest_enabled",
           "enabled",
           "channels",
@@ -32071,6 +32074,10 @@
           "quiet_hours_end"
         ],
         "properties": {
+          "application_digest_enabled": {
+            "type": "boolean",
+            "description": "Opt-in Monday summary of application activity. Uses digest_time and account timezone."
+          },
           "inbox_digest_enabled": {
             "type": "boolean",
             "description": "Opt-in daily summary of classified hiring mail. Uses digest_time."
@@ -32127,6 +32134,17 @@
       "NotificationSettingsUpdate": {
         "type": "object",
         "properties": {
+          "application_digest_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted or null preserves the current weekly application digest choice."
+          },
           "inbox_digest_enabled": {
             "anyOf": [
               {

@@ -46,7 +46,7 @@ func Parse(raw []byte) (Parsed, error) {
 
 	p := Parsed{
 		MessageID:          trimAngles(env.GetHeader("Message-ID")),
-		SystemNotification: env.GetHeader(mailmeta.NotificationHeader) == mailmeta.InboxDigest && env.GetHeader("Auto-Submitted") == "auto-generated",
+		SystemNotification: mailmeta.IsDigest(env.GetHeader(mailmeta.NotificationHeader), env.GetHeader("Auto-Submitted")),
 		Subject:            env.GetHeader("Subject"),
 		TextBody:           env.Text,
 		HTMLBody:           env.HTML,

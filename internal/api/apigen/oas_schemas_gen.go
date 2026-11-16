@@ -19646,6 +19646,8 @@ func (s *NotificationPage) SetMeta(val NotificationListMeta) {
 
 // Ref: #/components/schemas/NotificationSettings
 type NotificationSettings struct {
+	// Opt-in Monday summary of application activity. Uses digest_time and account timezone.
+	ApplicationDigestEnabled bool `json:"application_digest_enabled"`
 	// Opt-in daily summary of classified hiring mail. Uses digest_time.
 	InboxDigestEnabled bool     `json:"inbox_digest_enabled"`
 	Enabled            bool     `json:"enabled"`
@@ -19656,6 +19658,11 @@ type NotificationSettings struct {
 	DigestIntervalHours int64     `json:"digest_interval_hours"`
 	QuietHoursStart     NilString `json:"quiet_hours_start"`
 	QuietHoursEnd       NilString `json:"quiet_hours_end"`
+}
+
+// GetApplicationDigestEnabled returns the value of ApplicationDigestEnabled.
+func (s *NotificationSettings) GetApplicationDigestEnabled() bool {
+	return s.ApplicationDigestEnabled
 }
 
 // GetInboxDigestEnabled returns the value of InboxDigestEnabled.
@@ -19696,6 +19703,11 @@ func (s *NotificationSettings) GetQuietHoursStart() NilString {
 // GetQuietHoursEnd returns the value of QuietHoursEnd.
 func (s *NotificationSettings) GetQuietHoursEnd() NilString {
 	return s.QuietHoursEnd
+}
+
+// SetApplicationDigestEnabled sets the value of ApplicationDigestEnabled.
+func (s *NotificationSettings) SetApplicationDigestEnabled(val bool) {
+	s.ApplicationDigestEnabled = val
 }
 
 // SetInboxDigestEnabled sets the value of InboxDigestEnabled.
@@ -19741,6 +19753,8 @@ func (s *NotificationSettings) SetQuietHoursEnd(val NilString) {
 // Every field is read as its zero value when left out. Times are `HH:MM`.
 // Ref: #/components/schemas/NotificationSettingsUpdate
 type NotificationSettingsUpdate struct {
+	// Omitted or null preserves the current weekly application digest choice.
+	ApplicationDigestEnabled OptNilBool `json:"application_digest_enabled"`
 	// Omitted or null preserves the current inbox digest choice.
 	InboxDigestEnabled OptNilBool `json:"inbox_digest_enabled"`
 	// Turn notifications on or off.
@@ -19753,6 +19767,11 @@ type NotificationSettingsUpdate struct {
 	DigestIntervalHours OptNilInt64       `json:"digest_interval_hours"`
 	QuietHoursStart     OptNilString      `json:"quiet_hours_start"`
 	QuietHoursEnd       OptNilString      `json:"quiet_hours_end"`
+}
+
+// GetApplicationDigestEnabled returns the value of ApplicationDigestEnabled.
+func (s *NotificationSettingsUpdate) GetApplicationDigestEnabled() OptNilBool {
+	return s.ApplicationDigestEnabled
 }
 
 // GetInboxDigestEnabled returns the value of InboxDigestEnabled.
@@ -19793,6 +19812,11 @@ func (s *NotificationSettingsUpdate) GetQuietHoursStart() OptNilString {
 // GetQuietHoursEnd returns the value of QuietHoursEnd.
 func (s *NotificationSettingsUpdate) GetQuietHoursEnd() OptNilString {
 	return s.QuietHoursEnd
+}
+
+// SetApplicationDigestEnabled sets the value of ApplicationDigestEnabled.
+func (s *NotificationSettingsUpdate) SetApplicationDigestEnabled(val OptNilBool) {
+	s.ApplicationDigestEnabled = val
 }
 
 // SetInboxDigestEnabled sets the value of InboxDigestEnabled.
