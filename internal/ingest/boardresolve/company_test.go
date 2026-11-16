@@ -33,3 +33,27 @@ func TestCompanyDiscoveryFollowsObservedCareersLinksToNativeATS(t *testing.T) {
 		t.Fatalf("native board = %s/%s/%v", source, board, ok)
 	}
 }
+
+type redirectedCompanyPages struct{ companyPages }
+
+func (p redirectedCompanyPages) GetTextResolved(ctx context.Context, raw string) (string, string, error) {
+	if raw == "https://old.example/start" {
+		return `<a href="careers">Careers</a>`, "https://new.example/team/", nil
+	}
+	body, err := p.GetText(ctx, raw)
+	return body, raw, err
+}
+func TestCompanyDiscoveryUsesTheFinalWebsiteForRelativeCareerLinks(t *testing.T) {
+	r := &Resolver{http: redirectedCompanyPages{companyPages{"https://new.example/team/careers": `<a href="//gistworld.mua.hrdepartment.com/hrsmart/ats/JobSearch/viewAll">Jobs</a>`}}}
+	source, board, _, ok := r.ResolveCompany(context.Background(), "https://old.example/start")
+	if !ok || source != "hrsmart" || board != "gistworld.mua.hrdepartment.com" {
+		t.Fatalf("redirected employer discovery: %s/%s/%v", source, board, ok)
+	}
+}
+func TestCompanyDiscoveryRecognizesProtocolRelativeATSWithoutFetchingIt(t *testing.T) {
+	r := &Resolver{http: companyPages{"https://www.gistworld.com/": `<a href="//gistworld.mua.hrdepartment.com/hrsmart/ats/JobSearch/viewAll">Jobs</a>`}}
+	source, board, _, ok := r.ResolveCompany(context.Background(), "https://www.gistworld.com/")
+	if !ok || source != "hrsmart" || board != "gistworld.mua.hrdepartment.com" {
+		t.Fatalf("protocol-relative ATS discovery: %s/%s/%v", source, board, ok)
+	}
+}
