@@ -25,6 +25,8 @@ func testCipher(t *testing.T) *tokencrypt.Cipher {
 
 type fakeStore struct {
 	cooldown          time.Time
+	cooldownReadErr   error
+	cooldownWriteErr  error
 	conns             []Connection
 	encToken          string
 	upserted          []StoredEmail
@@ -626,8 +628,13 @@ func TestRunOnceRefetchesALegacyStoredMessage(t *testing.T) {
 	}
 }
 
-func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) { return f.cooldown, nil }
+func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) {
+	return f.cooldown, f.cooldownReadErr
+}
 func (f *fakeStore) SetCooldown(context.Context, int64) error {
+	if f.cooldownWriteErr != nil {
+		return f.cooldownWriteErr
+	}
 	f.cooldown = time.Now().Add(time.Hour)
 	return nil
 }
@@ -647,5 +654,31 @@ func TestThrottlePersistsCooldownBeforeThreadDiscovery(t *testing.T) {
 	}
 	if stats.Throttled != 1 || store.cooldown.IsZero() || store.knownThreadsCalls != 0 || store.syncedCalled {
 		t.Fatalf("stats=%+v cooldown=%v threadCalls=%d synced=%v", stats, store.cooldown, store.knownThreadsCalls, store.syncedCalled)
+	}
+}
+
+func TestCooldownFailuresRemainVisible(t *testing.T) {
+	for _, stage := range []string{"read", "write"} {
+		t.Run(stage, func(t *testing.T) {
+			c := testCipher(t)
+			enc, _ := c.Encrypt("refresh")
+			store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc}
+			failure := errors.New("cooldown storage unavailable")
+			if stage == "read" {
+				store.cooldownReadErr = failure
+			} else {
+				store.cooldownWriteErr = failure
+			}
+			reader := &fakeReader{listErr: &APIError{StatusCode: 429}}
+			calls := 0
+			w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { calls++; return reader })
+			stats, err := w.RunOnce(context.Background())
+			if err != nil || stats.Failed != 1 || stats.Throttled != 0 || store.syncedCalled {
+				t.Fatalf("stats=%+v err=%v", stats, err)
+			}
+			if stage == "read" && calls != 0 {
+				t.Fatal("queried Gmail despite unreadable cooldown")
+			}
+		})
 	}
 }

@@ -52,3 +52,47 @@ func TestStoredMessagesReportsOnlyTheUsersStoredIDs(t *testing.T) {
 		t.Errorf("StoredMessages(nil) = %v, %v; want nothing", empty, err)
 	}
 }
+
+func TestCooldownSurvivesStoreRecreationAndSkipsGmailQueries(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	var id int64
+	if err := pool.QueryRow(ctx, "INSERT INTO users(email) VALUES ('cooldown@example.test') RETURNING id").Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO gmail_connections(user_id,email,refresh_token_enc,status) VALUES ($1,'cooldown@example.test','token','connected')", id); err != nil {
+		t.Fatal(err)
+	}
+	store := NewDBStore(db.New(pool))
+	until, err := store.CooldownUntil(ctx, id)
+	if err != nil || !until.IsZero() {
+		t.Fatalf("initial cooldown=%v err=%v", until, err)
+	}
+	var before time.Time
+	if err := pool.QueryRow(ctx, "SELECT now()").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetCooldown(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	fresh := NewDBStore(db.New(pool))
+	until, err = fresh.CooldownUntil(ctx, id)
+	if err != nil || until.Before(before.Add(59*time.Minute)) || until.After(before.Add(61*time.Minute)) {
+		t.Fatalf("persisted cooldown=%v err=%v", until, err)
+	}
+	w := NewWorker(fresh, testCipher(t), func(context.Context, string, []string) GmailReader {
+		t.Fatal("queried Gmail during persisted cooldown")
+		return nil
+	})
+	stats, err := w.RunOnce(ctx)
+	if err != nil || stats.Throttled != 1 {
+		t.Fatalf("stats=%+v err=%v", stats, err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE gmail_connections SET gmail_retry_after=now()-interval '1 second' WHERE user_id=$1", id); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := fresh.ListConnected(ctx)
+	if err != nil || len(rows) != 1 || rows[0].UserID != id {
+		t.Fatalf("eligible connections=%v err=%v", rows, err)
+	}
+}

@@ -1,6 +1,10 @@
 package assistant
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tmc/langchaingo/llms"
+)
 
 func TestReplayDropsEmptyAssistantAndMidHistoryOrphan(t *testing.T) {
 	empty, err := EncodeAssistant("", nil)
@@ -23,5 +27,17 @@ func TestReplayDropsEmptyAssistantAndMidHistoryOrphan(t *testing.T) {
 		if msg.Role != RoleAssistant {
 			t.Fatalf("unexpected role %s", msg.Role)
 		}
+	}
+}
+
+func TestReplayKeepsOnlyFirstMatchingToolAnswer(t *testing.T) {
+	call, _ := EncodeAssistant("", []llms.ToolCall{{ID: "call", Type: "function", FunctionCall: &llms.FunctionCall{Name: "echo", Arguments: "{}"}}})
+	first, _ := EncodeToolResult("call", "echo", "first")
+	duplicate, _ := EncodeToolResult("call", "echo", "duplicate")
+	orphan, _ := EncodeToolResult("other", "echo", "orphan")
+	empty, _ := EncodeToolResult("", "echo", "empty")
+	got := closeDanglingToolCalls([]Message{call, orphan, empty, first, duplicate})
+	if len(got) != 2 || string(got[1].Content) != string(first.Content) {
+		t.Fatalf("replayed results=%+v", got)
 	}
 }
