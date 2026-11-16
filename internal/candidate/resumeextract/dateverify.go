@@ -133,7 +133,13 @@ func dropUnsupportedYears(s *Structured, cvText string) int {
 	}
 	for i := range s.Experience {
 		drop(&s.Experience[i].Start)
-		drop(&s.Experience[i].End)
+		e := &s.Experience[i]
+		droppedEnd := ev.unsupportedYear(e.End)
+		drop(&e.End)
+		if droppedEnd && !e.Current && e.Start != nil {
+			e.Start = nil
+			dropped++
+		}
 	}
 	for i := range s.Education {
 		drop(&s.Education[i].Year)
@@ -155,7 +161,9 @@ func supportedDates(s Structured, cvText string) int {
 		}
 	}
 	for _, e := range s.Experience {
-		count(e.Start)
+		if e.Current || !ev.unsupportedYear(e.End) {
+			count(e.Start)
+		}
 		count(e.End)
 	}
 	for _, e := range s.Education {

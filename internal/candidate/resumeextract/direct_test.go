@@ -118,3 +118,14 @@ func TestExtract_KeepsContactsOutOfProfessionalFacts(t *testing.T) {
 		}
 	}
 }
+
+func TestExtract_BareSiteNamesPreserveProfessionalFacts(t *testing.T) {
+	m := &scriptedModel{resps: []string{`{"full_name":"Jane Doe","email":"jane@doe.dev","links":["LinkedIn","GitHub"],"skills":["Go","GitHub"],"experience":[{"title":"Software Engineer","company":"LinkedIn","start":{"year":2019},"end":{"year":2023},"highlights":["Moved CI to GitHub Actions"]}]}`}}
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "Jane Doe\njane@doe.dev | LinkedIn | GitHub\nSoftware Engineer, LinkedIn, 2019 - 2023\n- Moved CI to GitHub Actions\nSkills: Go, GitHub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Experience[0].Company != "LinkedIn" || len(got.Experience[0].Highlights) != 1 || len(got.Skills) != 2 {
+		t.Fatalf("lost professional facts: %+v", got)
+	}
+}

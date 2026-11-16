@@ -747,3 +747,27 @@ func TestDerive_ExplicitRemoteWorkFromHomeDenial(t *testing.T) {
 		t.Errorf("WorkMode = %q, want onsite", got.WorkMode)
 	}
 }
+
+func TestDerive_StructuredGeographyShadow(t *testing.T) {
+	for _, tc := range []struct {
+		location                 string
+		countries, regions, want []string
+	}{
+		{"Anywhere, USA", []string{"us"}, []string{"global", "north_america"}, []string{"north_america"}},
+		{"Remote anywhere or On-site Prague", []string{"cz"}, []string{"global", "eu"}, []string{"eu", "global"}},
+	} {
+		t.Run(tc.location, func(t *testing.T) {
+			got := Derive(Input{Title: "Backend Engineer", Location: tc.location, Countries: tc.countries, Regions: tc.regions})
+			if !reflect.DeepEqual(got.Regions, tc.want) {
+				t.Fatalf("regions = %v, want %v", got.Regions, tc.want)
+			}
+		})
+	}
+}
+func TestDerive_NegativeStructuredExperience(t *testing.T) {
+	n := -1
+	got := Derive(Input{Title: "Backend Engineer", ExperienceYearsMin: &n})
+	if got.ExperienceYearsMin != nil {
+		t.Fatalf("experience = %v, want nil", *got.ExperienceYearsMin)
+	}
+}

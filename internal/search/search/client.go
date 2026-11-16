@@ -513,7 +513,7 @@ func facetSettings() *meilisearch.Settings {
 			// follow the backfill-derive that fills existing rows.
 			"perks",
 			// engagement is a multi-value text[] facet enrolled through StringFacets; existing rows
-			// reach the index via cmd/backfill-engagement.
+			// get the column from cmd/backfill-derive, followed by make reindex.
 			"engagement",
 			// apply_questions is the captured form's required-question count, attached at index time
 			// and ABSENT when no form was captured, so `apply_questions <= N` never matches an unread
