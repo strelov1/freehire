@@ -69,6 +69,14 @@ func TestOwnershipReconciliationDoesNotCallUnresolvedDiscoveriesComplete(t *test
 	if err == nil || report.Pending != 1 || report.Native != 0 {
 		t.Fatalf("unresolved external posting passed as native: %+v, %v", report, err)
 	}
+	claimed, err := q.ClaimSearchDeleteOutboxBatch(ctx, db.ClaimSearchDeleteOutboxBatchParams{LeaseSeconds: 60, BatchSize: 10})
+	if err != nil || len(claimed) != 1 || claimed[0].JobID != current.ID {
+		t.Fatalf("withdrawn discovery has no claimable search removal: %+v, %v", claimed, err)
+	}
+	deletions, err := q.PrepareSearchDeletions(ctx, []int64{current.ID})
+	if err != nil || len(deletions) != 1 || !deletions[0].IsClosed {
+		t.Fatalf("withdrawn discovery has no closed search marker: %+v, %v", deletions, err)
+	}
 }
 
 func TestOwnershipReconciliationRestoresOnlyVerifiedPendingApplications(t *testing.T) {
@@ -85,6 +93,10 @@ func TestOwnershipReconciliationRestoresOnlyVerifiedPendingApplications(t *testi
 	if _, err := q.WithholdLinkedInDiscovery(ctx, created.ID); err != nil {
 		t.Fatal(err)
 	}
+	claimed, err := q.ClaimSearchDeleteOutboxBatch(ctx, db.ClaimSearchDeleteOutboxBatchParams{LeaseSeconds: 60, BatchSize: 10})
+	if err != nil || len(claimed) != 1 || claimed[0].JobID != created.ID {
+		t.Fatalf("pending removal not claimed: %+v, %v", claimed, err)
+	}
 	reader := ownershipPostingFixture{posting: sources.Job{ExternalID: "123", ApplyMethod: sources.ApplyOnSite}}
 	report, err := reconcileLinkedInOwnership(ctx, q, reader, nil, 0)
 	if err != nil || report.Native != 1 {
@@ -93,6 +105,18 @@ func TestOwnershipReconciliationRestoresOnlyVerifiedPendingApplications(t *testi
 	current, err := q.GetJob(ctx, created.ID)
 	if err != nil || current.ClosedAt.Valid || current.PublicSlug != origin.Fields().PublicSlug {
 		t.Fatalf("pending identity not restored: %+v, %v", current, err)
+	}
+	deletions, err := q.PrepareSearchDeletions(ctx, []int64{created.ID})
+	if err != nil || len(deletions) != 0 {
+		t.Fatalf("restored discovery still selected for removal: %+v, %v", deletions, err)
+	}
+	var pendingRemovals int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM search_delete_outbox WHERE job_id=$1", created.ID).Scan(&pendingRemovals); err != nil || pendingRemovals != 0 {
+		t.Fatalf("restored removal was not cancelled: %d, %v", pendingRemovals, err)
+	}
+	indexed, err := q.ClaimSearchOutboxBatch(ctx, db.ClaimSearchOutboxBatchParams{LeaseSeconds: 60, BatchSize: 10})
+	if err != nil || len(indexed) != 1 || indexed[0].JobID != created.ID {
+		t.Fatalf("restored discovery has no claimable indexing work: %+v, %v", indexed, err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now(), closed_reason = 'employer_closed' WHERE id = $1", created.ID); err != nil {
 		t.Fatal(err)
