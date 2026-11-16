@@ -189,7 +189,7 @@ func (r *QueriesRepository) InsertRow(ctx context.Context, in InsertInput, statu
 		ActivatedAt:    activatedAt,
 	})
 	if err != nil {
-		if pgerr.IsUniqueViolation(err) {
+		if errors.Is(err, pgx.ErrNoRows) || pgerr.IsUniqueViolation(err) {
 			return Board{}, ErrDuplicateBoard
 		}
 		return Board{}, err

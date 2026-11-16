@@ -81,3 +81,28 @@ func TestPromoteJobSourceCannotOverwriteAnExistingNativeIdentity(t *testing.T) {
 		t.Fatalf("failed transfer changed old posting: %+v, %v", row, err)
 	}
 }
+
+func TestPromoteJobSourceFencesAChangedDestinationBeforeOwnershipMoves(t *testing.T) {
+	pool := startPostgres(t)
+	truncate(t, pool)
+	ctx := context.Background()
+	q := New(pool)
+	p := ingestParams("search:curator-edit", "Java Engineer")
+	p.Source = "linkedin"
+	old, err := q.UpsertJob(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := "https://acme.hrdepartment.com/hrsmart/ats/Posting/view/1"
+	newer := "https://acme.hrdepartment.com/hrsmart/ats/Posting/view/2"
+	if _, err := q.SetJobApplicationURL(ctx, SetJobApplicationURLParams{JobID: old.ID, ApplicationUrl: newer}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.PromoteJobSource(ctx, PromoteJobSourceParams{JobID: old.ID, ExpectedSource: p.Source, ExpectedExternalID: p.ExternalID, ExpectedUrl: p.URL, ExpectedApplicationUrl: stale, Source: "hrsmart", ExternalID: "acme.hrdepartment.com:1", URL: stale}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("stale destination transferred ownership: %v", err)
+	}
+	row, err := q.GetJob(ctx, old.ID)
+	if err != nil || row.Source != "linkedin" || row.ApplicationUrl != newer {
+		t.Fatalf("curator destination edit was lost: %+v, %v", row, err)
+	}
+}

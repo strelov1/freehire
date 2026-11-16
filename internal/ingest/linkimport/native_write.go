@@ -31,7 +31,7 @@ func (im *Importer) WriteNative(ctx context.Context, previous *db.Job, native Na
 	defer tx.Rollback(ctx)
 	qtx := im.q.WithTx(tx)
 	b, err := boardcatalog.NewInserter(boardcatalog.NewQueriesRepository(qtx), im.ingest).Insert(ctx, boardcatalog.InsertInput{
-		Provider: native.Entry.Provider, Board: native.Entry.Board, Company: native.Entry.Company, Region: native.Entry.Region,
+		Provider: native.Entry.Provider, Board: native.Entry.Board, Company: native.Entry.Company, Region: native.Entry.Region, URL: native.EmployerWebsite,
 	}, boardcatalog.StatusActive)
 	if err != nil && !errors.Is(err, boardcatalog.ErrDuplicateBoard) {
 		return Result{}, fmt.Errorf("onboard native board: %w", err)

@@ -81,6 +81,16 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.q.WithTx(tx)
+	if _, err := qtx.LockJobForEnrichmentCompletion(ctx, entry.JobID); err != nil {
+		return fmt.Errorf("lock enrichment posting: %w", err)
+	}
+	owns, err := qtx.HasEnrichmentCompletionClaim(ctx, db.HasEnrichmentCompletionClaimParams{OutboxID: entry.OutboxID, JobID: entry.JobID, TargetVersion: int32(entry.TargetVersion)})
+	if err != nil {
+		return fmt.Errorf("check enrichment claim: %w", err)
+	}
+	if !owns {
+		return tx.Commit(ctx)
+	}
 	if err := qtx.SetJobEnrichment(ctx, db.SetJobEnrichmentParams{
 		Enrichment:        payload,
 		EnrichedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},

@@ -16,7 +16,8 @@ WITH locked AS MATERIALIZED (
 ), moved AS (
     UPDATE jobs j
     SET source = sqlc.arg(source), external_id = sqlc.arg(external_id),
-        url = sqlc.arg(url), application_url = '', content_hash = '', updated_at = now()
+        url = sqlc.arg(url), application_url = '', content_hash = '', updated_at = now(),
+        enrichment = '{}'::jsonb, enriched_at = NULL, enrichment_version = 0
     FROM locked l WHERE j.id = l.id
     RETURNING j.id, COALESCE(j.posted_at, j.created_at) AS job_posted_at
 ), queued AS (
@@ -24,5 +25,7 @@ WITH locked AS MATERIALIZED (
     SELECT id, job_posted_at FROM moved
     ON CONFLICT (job_id) DO UPDATE
         SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+), invalidated_enrichment AS (
+    DELETE FROM enrichment_outbox o USING moved m WHERE o.job_id = m.id
 )
 SELECT id FROM moved;

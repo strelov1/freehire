@@ -3561,6 +3561,7 @@ type Querier interface {
 	// second guard: with the pass serialized it is always right, and if the lock is ever lost
 	// the damage is one extra reward rather than an unbounded run.
 	GrantInviteReward(ctx context.Context, arg GrantInviteRewardParams) (int64, error)
+	HasEnrichmentCompletionClaim(ctx context.Context, arg HasEnrichmentCompletionClaimParams) (bool, error)
 	// Whether this account has already spent its one redemption. Asked after a refusal, to turn
 	// the deliberately vague "no" above into the one explanation that is about the caller.
 	HasRedeemedPromoCode(ctx context.Context, userID int64) (bool, error)
@@ -3638,8 +3639,8 @@ type Querier interface {
 	// Insert a board row. Callers that pass status='active' also pass a non-null
 	// activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
 	// for both status='pending' and status='rejected'. A collision with an existing
-	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
-	// the caller maps that to a duplicate-board error.
+	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — returns no row without aborting the caller's
+	// transaction; the repository maps that to a duplicate-board error.
 	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
 	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
 	// submission of the same link; the caller maps that violation the same way a duplicate
@@ -5903,6 +5904,10 @@ type Querier interface {
 	// missing the other's user_jobs row and both bump applied_count. Called first in
 	// the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
 	LockJobForApply(ctx context.Context, id int64) error
+	// Lock the posting before checking the claim in a SECOND statement. If an
+	// ownership transfer completed while waiting, that second READ COMMITTED snapshot
+	// must see its invalidated queue entry rather than a pre-lock snapshot.
+	LockJobForEnrichmentCompletion(ctx context.Context, id int64) (int64, error)
 	// Take the job row's lock so concurrent votes on the same job serialize. Without
 	// it, two votes in the same window under READ COMMITTED each recompute against a
 	// snapshot missing the other's user_jobs row, permanently undercounting the target

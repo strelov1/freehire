@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
@@ -24,6 +25,9 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET enrichment='{\"summary\":\"Old discovery enrichment\"}', enriched_at=now(), enrichment_version=$2 WHERE id=$1", created.ID, enrich.Version); err != nil {
+		t.Fatal(err)
+	}
 	previous, err := q.GetJob(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +37,10 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 	}
 	var oldQueue int64
 	if err := pool.QueryRow(ctx, "UPDATE search_outbox SET claimed_at=now(), attempts=8,failed_at=now(),last_error='old lease' WHERE job_id=$1 RETURNING id", created.ID).Scan(&oldQueue); err != nil {
+		t.Fatal(err)
+	}
+	var oldEnrichmentID int64
+	if err := pool.QueryRow(ctx, "INSERT INTO enrichment_outbox(job_id,target_version,attempts,claimed_at,failed_at,last_error) VALUES($1,$2,8,now(),now(),'old discovery failure') RETURNING id", created.ID, enrich.Version).Scan(&oldEnrichmentID); err != nil {
 		t.Fatal(err)
 	}
 	const host = "gistworld.mua.hrdepartment.com"
@@ -54,6 +62,9 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 	if !current.SalaryMinSource.Valid || current.SalaryMinSource.Int32 != int32(minimum) || !current.SalaryMaxSource.Valid || current.SalaryMaxSource.Int32 != int32(maximum) || current.SalaryCurrencySource != "GBP" || current.SalaryPeriodSource != "year" || current.EmploymentType != "full_time" || len(current.Countries) != 1 || current.Countries[0] != "gb" {
 		t.Fatalf("native structured salary/geography/employment was lost: %+v", current)
 	}
+	if current.EnrichedAt.Valid || current.EnrichmentVersion != 0 || string(current.Enrichment) != "{}" {
+		t.Fatalf("native transfer retained discovery enrichment: %s v%d", current.Enrichment, current.EnrichmentVersion)
+	}
 	if entry, found, err := boardcatalog.NewQueriesRepository(q).Entry(ctx, "hrsmart", host); err != nil || !found || entry.Company != previous.Company {
 		t.Fatalf("native board missing: %+v, %v, %v", entry, found, err)
 	}
@@ -65,7 +76,8 @@ func TestWriteNativeTransfersContentAndCrawlOwnershipAtomically(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT id,attempts=0 AND failed_at IS NULL AND last_error='' FROM search_outbox WHERE job_id=$1", current.ID).Scan(&newQueue, &retryable); err != nil || oldQueue == newQueue || !retryable {
 		t.Fatalf("new source was not queued safely: old=%d new=%d retryable=%v, %v", oldQueue, newQueue, retryable, err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM enrichment_outbox WHERE job_id=$1)", current.ID).Scan(&retryable); err != nil || !retryable {
-		t.Fatalf("native content not queued for enrichment: %v %v", retryable, err)
+	var freshEnrichmentID int64
+	if err := pool.QueryRow(ctx, "SELECT id,attempts=0 AND claimed_at IS NULL AND failed_at IS NULL FROM enrichment_outbox WHERE job_id=$1", current.ID).Scan(&freshEnrichmentID, &retryable); err != nil || !retryable || freshEnrichmentID == oldEnrichmentID {
+		t.Fatalf("native content reused a failed or stale enrichment lease: old=%d new=%d retryable=%v err=%v", oldEnrichmentID, freshEnrichmentID, retryable, err)
 	}
 }
