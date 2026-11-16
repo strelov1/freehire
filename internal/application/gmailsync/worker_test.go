@@ -24,17 +24,19 @@ func testCipher(t *testing.T) *tokencrypt.Cipher {
 }
 
 type fakeStore struct {
-	cooldown       time.Time
-	conns          []Connection
-	encToken       string
-	upserted       []StoredEmail
-	upsertErrIDs   map[string]bool // message ids on which UpsertEmail fails
-	syncedSent     int64
-	knownThreads   []string
-	syncedCursor   int64
-	syncedCalled   bool
-	reconsentUsers []int64
-	reconsentErr   error
+	cooldown          time.Time
+	conns             []Connection
+	encToken          string
+	upserted          []StoredEmail
+	upsertErrIDs      map[string]bool // message ids on which UpsertEmail fails
+	syncedSent        int64
+	knownThreads      []string
+	knownThreadsErr   error
+	knownThreadsCalls int
+	syncedCursor      int64
+	syncedCalled      bool
+	reconsentUsers    []int64
+	reconsentErr      error
 }
 
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
@@ -61,7 +63,8 @@ func (f *fakeStore) SetNeedsReconsent(_ context.Context, userID int64) error {
 }
 
 func (f *fakeStore) ListThreadIDs(context.Context, int64) ([]string, error) {
-	return f.knownThreads, nil
+	f.knownThreadsCalls++
+	return f.knownThreads, f.knownThreadsErr
 }
 
 // StoredMessages answers from what this fake has upserted, leaving out rows with no recipients
@@ -627,4 +630,22 @@ func (f *fakeStore) CooldownUntil(context.Context, int64) (time.Time, error) { r
 func (f *fakeStore) SetCooldown(context.Context, int64) error {
 	f.cooldown = time.Now().Add(time.Hour)
 	return nil
+}
+
+func TestThrottlePersistsCooldownBeforeThreadDiscovery(t *testing.T) {
+	c := testCipher(t)
+	enc, err := c.Encrypt("refresh-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeStore{conns: []Connection{{UserID: 7}}, encToken: enc, knownThreadsErr: errors.New("thread storage unavailable")}
+	reader := &fakeReader{ids: []string{"limited"}, getErrIDs: map[string]error{"limited": &APIError{StatusCode: http.StatusForbidden, Reason: "rateLimitExceeded"}}}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+	stats, err := w.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Throttled != 1 || store.cooldown.IsZero() || store.knownThreadsCalls != 0 || store.syncedCalled {
+		t.Fatalf("stats=%+v cooldown=%v threadCalls=%d synced=%v", stats, store.cooldown, store.knownThreadsCalls, store.syncedCalled)
+	}
 }

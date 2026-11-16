@@ -291,6 +291,13 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) outcome {
 			break
 		}
 	}
+	if throttled {
+		result := w.markThrottled(ctx, u.UserID)
+		if sawFailure {
+			return outcomeFailed
+		}
+		return result
+	}
 	// Existing stored threads are the privacy boundary for outgoing discovery.
 	knownThreads, err := w.store.ListThreadIDs(ctx, u.UserID)
 	if err != nil {
