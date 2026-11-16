@@ -220,8 +220,13 @@
   // a job that was merely saved has none.
   const canRecall = $derived(hasPosting && !!item.applied_at);
 
+  let emailsReloadRequested = false;
   async function loadEmails(force = false) {
-    if (!item.job || (emails !== null && !force) || emailsLoading) return;
+    if (!item.job || (emails !== null && !force)) return;
+    if (emailsLoading) {
+      emailsReloadRequested ||= force;
+      return;
+    }
     emailsLoading = true;
     emailsError = null;
     try {
@@ -239,6 +244,10 @@
       emailsError = errorMessage(e, s.errors.loadEmails);
     } finally {
       emailsLoading = false;
+      if (emailsReloadRequested) {
+        emailsReloadRequested = false;
+        void loadEmails(true);
+      }
     }
   }
 
