@@ -19,6 +19,8 @@ require (
 	github.com/chromedp/chromedp v0.21.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/fasthttp/websocket v1.5.12
+	github.com/go-faster/errors v0.8.0
+	github.com/go-faster/jx v1.2.0
 	github.com/gofiber/contrib/websocket v1.3.4
 	github.com/gofiber/fiber/v2 v2.52.16
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -27,7 +29,7 @@ require (
 	github.com/gowebpki/jcs v1.0.2
 	github.com/gzuidhof/tygo v0.2.21
 	github.com/inngest/inngestgo v0.16.5
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056
 	github.com/jhillyerd/enmime v1.3.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
@@ -36,6 +38,7 @@ require (
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/mozillazg/go-unidecode v0.2.0
+	github.com/ogen-go/ogen v1.24.0
 	github.com/pgvector/pgvector-go v0.4.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
@@ -118,8 +121,6 @@ require (
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/go-faster/errors v0.8.0 // indirect
-	github.com/go-faster/jx v1.2.0 // indirect
 	github.com/go-faster/yaml v0.4.6 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -135,7 +136,7 @@ require (
 	github.com/inngest/inngest v1.19.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
@@ -161,7 +162,6 @@ require (
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/ogen-go/ogen v1.24.0 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
