@@ -62,21 +62,21 @@ func TestLinkedInPostingEvidence(t *testing.T) {
 	}
 }
 
-func TestLinkedInFetchHydratesAndRefreshes(t *testing.T) {
+func TestLinkedInFetchRechecksApplicationMethodOnEveryCrawl(t *testing.T) {
 	listing := `<li data-entity-urn="urn:li:jobPosting:123"><a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/engineer-123/"></a><h3 class="base-search-card__title">Go Engineer</h3><h4 class="base-search-card__subtitle">Acme</h4></li>`
 	fake := (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs-guest/jobs/api/jobPosting/123", linkedInOpenPage)
 	s := NewLinkedIn(fake).(linkedIn)
 	s.pace = &recordingWaiter{}
 	entry := CompanyEntry{Board: "Go engineer", Region: "United Kingdom"}
-	jobs, err := s.FetchNew(context.Background(), entry, func(string) bool { return false })
+	jobs, err := s.Fetch(context.Background(), entry)
 	if err != nil || len(jobs) != 1 || jobs[0].Description == "" {
 		t.Fatalf("FetchNew: %+v, %v", jobs, err)
 	}
-	fake = (&routedHTTP{}).route("start=0", listing).route("start=1", listing)
+	fake = (&routedHTTP{}).route("start=0", listing).route("start=1", listing).route("/jobs-guest/jobs/api/jobPosting/123", linkedInOpenPage)
 	s = NewLinkedIn(fake).(linkedIn)
 	s.pace = &recordingWaiter{}
-	jobs, err = s.FetchNew(context.Background(), entry, func(id string) bool { return id == "123" })
-	if err != nil || len(jobs) != 1 || !jobs[0].SeenRefresh {
+	jobs, err = s.Fetch(context.Background(), entry)
+	if err != nil || len(jobs) != 1 || jobs[0].SeenRefresh || jobs[0].Description == "" {
 		t.Fatalf("refresh: %+v, %v", jobs, err)
 	}
 }
@@ -155,6 +155,11 @@ func TestLinkedInBoundsAndScopesItsSearch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if strings.HasPrefix(u.Path, "/jobs-guest/jobs/api/jobPosting/") {
+			id := strings.TrimPrefix(u.Path, "/jobs-guest/jobs/api/jobPosting/")
+			root, err := html.Parse(strings.NewReader(strings.ReplaceAll(linkedInOpenPage, "/123/", "/"+id+"/")))
+			return root, raw, err
+		}
 		q := u.Query()
 		if q.Get("keywords") != "Go & API" || q.Get("location") != "United Kingdom" || q.Get("f_TPR") != "r604800" || q.Get("start") != strconv.Itoa(pages) {
 			t.Fatalf("unscoped or incorrect search: %s", raw)
@@ -167,8 +172,8 @@ func TestLinkedInBoundsAndScopesItsSearch(t *testing.T) {
 	s := NewLinkedIn(getter).(linkedIn)
 	gate := &recordingWaiter{}
 	s.pace = gate
-	jobs, err := s.FetchNew(context.Background(), CompanyEntry{Board: "Go & API", Region: "United Kingdom"}, func(string) bool { return true })
-	if err != nil || len(jobs) != 10 || pages != 10 || gate.calls != 10 {
+	jobs, err := s.Fetch(context.Background(), CompanyEntry{Board: "Go & API", Region: "United Kingdom"})
+	if err != nil || len(jobs) != 10 || pages != 10 || gate.calls != 20 {
 		t.Fatalf("unbounded crawl or ungated request: jobs=%d pages=%d pace=%d err=%v", len(jobs), pages, gate.calls, err)
 	}
 }

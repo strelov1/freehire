@@ -20,3 +20,22 @@ Needs `DATABASE_URL`, no timer. Refuses private and on-site application postings
 URLs and URL credentials. The write fences competing curator edits and queues search in
 one statement. The source URL, source attribution and liveness are unchanged; re-ingest
 cannot erase the destination. It does not discover addresses hidden behind LinkedIn sign-in.
+
+## `promote-job-source`
+
+Manual ownership reconciliation for an existing public LinkedIn discovery:
+`go run ./cmd/promote-job-source --slug=<public-slug> --url=<native-posting-url>`.
+Preview is the default; `--apply` writes. A new board must be independently associated
+with the employer: its published website (from stored company metadata, public LinkedIn
+Organization metadata, or `--company-website=<published-employer-site>`) must link to that
+ATS board. An already curated catalogue entry supplies the same association. Without
+`--url`, uses its stored verified
+application destination. Needs `DATABASE_URL` and network access, no timer.
+
+Reads the actual native ATS posting, checks employer and title, then atomically onboards
+its board, transfers source/external id/URL, clears the old application override, writes
+native content, invalidates discovery enrichment and replaces its old queue claim, then
+queues search/enrichment. Preserves the job id, public slug and history.
+A native identity collision refuses the transaction; it never overwrites another row.
+Existing provider pauses and unmanaged/static ownership remain intact. A genuinely new
+provider joins the normal managed scheduler. Subsequent ATS polling owns freshness and closure.

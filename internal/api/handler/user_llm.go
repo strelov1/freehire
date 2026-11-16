@@ -20,6 +20,7 @@ const (
 	tagATSReview       = "ats-review"
 	tagAutofill        = "autofill"
 	tagMailRecall      = "mail-recall"
+	tagMailReply       = "mail-reply"
 	tagSearchIntent    = "search-intent"
 	tagCoverLetter     = "cover-letter"
 	tagReferralMessage = "referral-message"

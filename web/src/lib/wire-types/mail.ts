@@ -30,3 +30,5 @@ export type TrackedApplication = Omit<components['schemas']['InboxApplicationDet
 };
 
 export type FollowUpDraft = components['schemas']['MailFollowUpDraft'];
+/** A reply to one received message, drafted for the candidate to edit and send themselves. */
+export type MailReplyDraft = components['schemas']['MailReplyDraft'];

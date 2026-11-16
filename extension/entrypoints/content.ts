@@ -1,6 +1,7 @@
 import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
-import { extractForm, extractUploads, fillByLabel, revealField } from '../lib/form';
+import { extractForm, extractUploads, fillByLabel } from '../lib/form';
+import { revealField } from '../lib/revealField';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import type { RuntimeMessage } from '../lib/protocol';

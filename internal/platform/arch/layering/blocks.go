@@ -145,7 +145,7 @@ var blocks = map[string][]string{
 	"application": {
 		"agentview", "appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
 		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking",
-		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl",
+		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailreply", "mailtpl",
 		"userjob", "viewlog",
 	},
 	"search": {
@@ -179,7 +179,7 @@ var blocks = map[string][]string{
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.
 		"mentorship/busysync",
-		"inboxdigest", "notify", "nudge", "onboarding", "problemreport",
+		"applicationdigest", "inboxdigest", "notify", "nudge", "onboarding", "problemreport",
 		// ga4mp sends one sign-up event to Google Analytics, imports only the standard library,
 		// and is called by the auth handlers; a growth measurement, so engage.
 		"ga4mp",

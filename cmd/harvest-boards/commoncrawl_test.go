@@ -176,3 +176,13 @@ func TestAshbyProberDiscoversFromCommonCrawl(t *testing.T) {
 		t.Errorf("discover = %v, want %v", got, want)
 	}
 }
+
+func TestCommonCrawlCandidatesErrorsWhenEveryPageFails(t *testing.T) {
+	f := fakeGetter{"https://index.commoncrawl.org/collinfo.json": commonCrawlCollInfoBody}
+	for _, snapshot := range []string{"2026-30", "2026-25", "2026-21"} {
+		f["https://index.commoncrawl.org/CC-MAIN-"+snapshot+"-index?url=boards.greenhouse.io/*&output=json&showNumPages=true&pageSize=1"] = `{"pages":1}`
+	}
+	if got, err := commonCrawlCandidates(context.Background(), f, "boards.greenhouse.io/*", commonCrawlSlug); err == nil {
+		t.Fatalf("got %v without error", got)
+	}
+}

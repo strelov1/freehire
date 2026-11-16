@@ -207,3 +207,43 @@ func TestUKGFetchReadsJobLocationType(t *testing.T) {
 		}
 	}
 }
+
+func TestUKGFetchNewHydratesOnlyDueIDs(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("LoadSearchResults", `{"totalCount":2,"opportunities":[{"Id":"known","Title":"Stored title"},{"Id":"due","Title":"Edited role"}]}`).
+		route("OpportunityDetail", ukgDetailHTML("<p>Edited full body</p>"))
+	src, ok := NewUKG(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("UKG must implement HydratingSource")
+	}
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "host/tenant/guid"}, func(id string) bool { return id == "known" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.calls != 2 {
+		t.Fatalf("requests = %d, want listing + due detail", fake.calls)
+	}
+	if len(jobs) != 2 || !jobs[0].SeenRefresh || jobs[0].Title != "Stored title" || jobs[0].Description != "" || !strings.Contains(jobs[1].Description, "Edited full body") {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+	// A body-refresh-due ID is absent from the pipeline's seen set on the next call.
+	jobs, err = src.FetchNew(context.Background(), CompanyEntry{Board: "host/tenant/guid"}, func(string) bool { return false })
+	if err != nil || jobs[0].SeenRefresh || !strings.Contains(jobs[0].Description, "Edited full body") {
+		t.Fatalf("body refresh = %+v, %v", jobs, err)
+	}
+}
+
+func TestUKGFetchNewUnreadableProtection(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("LoadSearchResults", `{"totalCount":3,"opportunities":[{"Id":"known"},{"Id":"good"},{"Id":"bad","BriefDescription":"A brief must not replace a stored full body"}]}`).
+		route("opportunityId=good", ukgDetailHTML("full body"))
+	src := NewUKG(fake).(HydratingSource)
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "host/t/g"}, func(id string) bool { return id == "known" })
+	if err != nil || len(jobs) != 3 || !jobs[2].Unreadable || jobs[2].SeenRefresh {
+		t.Fatalf("partial = %+v, %v", jobs, err)
+	}
+	_, err = src.FetchNew(context.Background(), CompanyEntry{Board: "host/t/g"}, func(id string) bool { return id != "bad" })
+	if err == nil {
+		t.Fatal("all requested details unreadable must fail even with known refreshes")
+	}
+}

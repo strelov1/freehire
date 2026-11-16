@@ -433,13 +433,27 @@ func (c *Client) GetText(ctx context.Context, url string) (string, error) {
 // endpoint gated behind a non-secret header (e.g. a Next.js RSC data endpoint reached with
 // "RSC: 1").
 func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error) {
+	body, _, err := c.getText(ctx, url, headers)
+	return body, err
+}
+
+// GetTextResolved returns the raw body and final URL from the same bounded fetch.
+func (c *Client) GetTextResolved(ctx context.Context, url string) (string, string, error) {
+	return c.getText(ctx, url, nil)
+}
+
+func (c *Client) getText(ctx context.Context, url string, headers map[string]string) (string, string, error) {
 	var body string
+	final := url
 	err := c.do(ctx, request{
 		method:  http.MethodGet,
 		url:     url,
 		accept:  "text/html",
 		headers: headers,
 		decode: func(resp *http.Response) error {
+			if resp.Request != nil && resp.Request.URL != nil {
+				final = resp.Request.URL.String()
+			}
 			// cappedReader rather than a bare io.LimitReader, so truncation is signalled: do's own 64 MiB
 			// cap can never fire for this read. The bytes read so far are kept for a caller that can use a
 			// prefix.
@@ -448,7 +462,7 @@ func (c *Client) GetTextWithHeaders(ctx context.Context, url string, headers map
 			return err
 		},
 	})
-	return body, err
+	return body, final, err
 }
 
 // GetLargeText fetches url and returns its raw response body, like GetText but without the

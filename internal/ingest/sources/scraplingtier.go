@@ -3,6 +3,7 @@ package sources
 import (
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"strings"
 	"time"
@@ -33,6 +34,37 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// Migrated PageUp sites expose sitemaps directly; real detail bodies require HTTP + proxy.
+	"clinch": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		plain := NewClient()
+		return NewClinch(plain, pacedHTMLGetter(clinchDetailHTTP{plain: plain, migrated: f}, clinchRequestInterval, clinchRequestBurst))
+	}},
+	// Only North Memorial's custom PageUp host needs this lane; canonical tenants stay direct.
+	"pageup": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewPageUp(pageupCustomHTTP{plain: NewClient(), custom: f})
+	}},
+	// Direct HTTP returned 498; browser listing pages and vacancy details passed.
+	"rwb": {scraplingRoute{mode: scraplingfetch.ModeBrowser, proxy: false}, func(f *Client) Source {
+		return NewRWB(f)
+	}},
+	// The anonymous POST API refuses plain proxy and direct fingerprints; HTTP + proxy passes.
+	"senior": {scraplingRoute{mode: scraplingfetch.ModeHTTP, proxy: true}, func(f *Client) Source {
+		return NewSenior(f)
+	}},
+	// The fingerprint tier is refused; Scrapling HTTP direct serves both disciplines and bodies.
+	"gradcracker": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewGradcracker(pacedGradcracker(f), 0)
+	}},
+	// Azure WAF refuses direct egress. The listing's session cookie must survive into fragments.
+	"infojobsbr": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		jar, _ := cookiejar.New(nil)
+		f.httpClient.Jar = jar
+		return NewInfoJobsBR(f)
+	}},
+	// Cloudflare refuses direct egress; HTTP + proxy serves the sitemaps and posting bodies.
+	"spainjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewSpainJobs(f)
+	}},
 	// 405 to the crawl host's IP; through the proxy, a GeeTest challenge from the sixth listing
 	// page on a plain client; a browser over the same proxy passes.
 	"infojobs": {scraplingRoute{scraplingfetch.ModeBrowser, true}, func(f *Client) Source {

@@ -22,6 +22,7 @@ func All(c HTTPClient) map[string]Source {
 	registry := reg(slices.Concat(
 		[]Source{
 			NewGreenhouse(c),
+			NewHRsmart(c),
 			NewLever(c),
 			NewAshby(c),
 			// Rate-paced (pacedWorkableGetter): all boards share one metered widget host, and
@@ -104,7 +105,7 @@ func All(c HTTPClient) map[string]Source {
 			// refusing for minutes. See gohire.go.
 			NewGoHire(gohirePacedGetter(c)),
 			NewHrmos(c),
-			NewJoin(pacedJoinGetter(c)),
+			NewJoin(c),
 			NewRapyd(c),
 			NewCareerPlug(c),
 			NewHRMDirect(c),

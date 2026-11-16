@@ -6,6 +6,9 @@ generated:
   by: codex/gpt-6.1-sol
   at: 2026-11-15T18:33:40-03:00
 sources:
+  - resource: ../../internal/ingest/sources/providers/linkedin.md
+  - resource: ../../internal/ingest/linkimport/native_write.go
+  - resource: ../../cmd/ingest/native_discovery_company.go
   - resource: ../../cmd/reindex/summary.go
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/AGENTS.md
   - resource: https://github.com/strelov1/freehire/blob/c0fc3518d5f25c66f39b069c943fe7a1fab840b9/internal/ingest/AGENTS.md
@@ -39,3 +42,12 @@ The existing fuzzy marker pass handles conservative WhatJobs summary matching as
 well as near-identical descriptions. Its rules and operational limits are in
 [the search worker reference](../agents/workers/search.md#whatjobs-summary-duplicates).
 This describes the checkout implementation, not a deployed deduplication run.
+
+## LinkedIn as discovery
+
+LinkedIn owns only postings with confirmed on-site application. External applications
+resolve to their native ATS identity; verified transfers preserve the Freehire job id and
+public slug. Employer website discovery onboards native boards for the existing scheduler,
+so the ATS adapter owns subsequent updates and closure. See the
+[LinkedIn provider reference](../../internal/ingest/sources/providers/linkedin.md) and
+[ownership curator](../agents/workers/ops.md#promote-job-source).

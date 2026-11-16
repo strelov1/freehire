@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
 // halyk adapts Halyk Bank's career site (halykbank.kz/about/career/vacancies), a
@@ -25,9 +27,9 @@ import (
 // the page and writes the URL it just opened.
 //
 // Identity is the title and the city, both on the card, so the id is known before the
-// detail fetch and a reshuffle of the numbers does not mint a new job. Two live cards
-// sharing a title and a city fail the crawl: collapsing them would hide one. A renamed
-// posting becomes a new row and the old one closes as unseen.
+// detail fetch and a reshuffle of the numbers does not mint a new job. A shared title
+// and city additionally needs a distinct readable body; see providers/halyk.md for the
+// identity transitions when that collision appears or disappears.
 //
 // The listing states its own total ("Всего: N вакансий"). The crawl fails unless the
 // parsed cards equal that total, which is what earns fullBoardListing. A detail page
@@ -59,6 +61,10 @@ func (s halyk) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if err != nil {
 		return nil, err
 	}
+	counts := map[string]int{}
+	for _, card := range cards {
+		counts[card.id]++
+	}
 	jobs := fetchDetails(cards, defaultDetailWorkers, func(card halykCard) (Job, bool) {
 		job, ok := s.detail(ctx, e, card)
 		if !ok {
@@ -68,6 +74,23 @@ func (s halyk) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	})
 	if len(cards) > 0 && len(jobs) == 0 {
 		return nil, fmt.Errorf("halyk: listed %d vacancies and read none of their pages", len(cards))
+	}
+	seen := map[string]bool{}
+	for i := range jobs {
+		job := &jobs[i]
+		if counts[job.ExternalID] < 2 {
+			continue
+		}
+		body := strings.ToLower(halykText(htmltext.ToTextFull(job.Description)))
+		if job.Unreadable || body == "" {
+			return nil, fmt.Errorf("halyk: shared title/city identity %s has an unreadable detail", job.ExternalID)
+		}
+		sum := sha256.Sum256([]byte(body))
+		job.ExternalID += ":" + hex.EncodeToString(sum[:8])
+		if seen[job.ExternalID] {
+			return nil, fmt.Errorf("halyk: ambiguous shared title %q in %q", job.Title, job.Location)
+		}
+		seen[job.ExternalID] = true
 	}
 	return jobs, nil
 }
@@ -86,7 +109,6 @@ func (s halyk) list(ctx context.Context) ([]halykCard, error) {
 		return nil, err
 	}
 	var cards []halykCard
-	seen := map[string]bool{}
 	var walkErr error
 	walk(root, func(n *html.Node) bool {
 		if walkErr != nil || n.Type != html.ElementNode || n.Data != "a" {
@@ -102,11 +124,6 @@ func (s halyk) list(ctx context.Context) ([]halykCard, error) {
 		}
 		city := halykCity(n)
 		id := halykExternalID(title, city)
-		if seen[id] {
-			walkErr = fmt.Errorf("halyk: two vacancies share title %q in %q", title, city)
-			return false
-		}
-		seen[id] = true
 		link, err := halykAbsURL(href)
 		if err != nil {
 			walkErr = err
@@ -168,7 +185,7 @@ func halykAbsURL(href string) (string, error) {
 }
 
 // halykExternalID is the stable identity. The path number is not: it moves when the list
-// grows or shrinks. Title and city are unique across the live cards.
+// grows or shrinks. Fetch qualifies identities shared by multiple live cards.
 func halykExternalID(title, city string) string {
 	key := strings.ToLower(halykText(title)) + "\n" + strings.ToLower(halykText(city))
 	sum := sha256.Sum256([]byte(key))

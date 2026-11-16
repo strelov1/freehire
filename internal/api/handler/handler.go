@@ -227,7 +227,7 @@ func Register(app *fiber.App, cfg Config) {
 		inboxH = inboxH.withRecall(
 			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
 			llmBinding{client: cfg.LLM, keys: llmKeys},
-			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
+			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector), plans)
 	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is, and neither may stop a member from

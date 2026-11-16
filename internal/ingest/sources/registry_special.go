@@ -152,7 +152,7 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	if c == nil {
 		registry["tenstreet"] = NewTenstreet(nil)
 	} else {
-		registry["tenstreet"] = NewTenstreet(pacedHTMLGetter(NewLongTimeoutClient(), tenstreetRequestInterval, tenstreetRequestBurst))
+		registry["tenstreet"] = NewTenstreet(newTenstreetClient())
 	}
 	// Paradox: frontline-hiring ATS, board = "<host>/<site>". The listing API is slow per
 	// row, so a 100-row page can take ~11 s, too close to the standard 15 s timeout — and the

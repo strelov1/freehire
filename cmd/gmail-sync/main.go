@@ -47,8 +47,8 @@ func run() int {
 		log.Printf("gmail-sync: %v", err)
 		return 1
 	}
-	log.Printf("gmail-sync done: connections=%d synced=%d failed=%d needs_reconsent=%d",
-		stats.Connections, stats.Synced, stats.Failed, stats.Reconsent)
+	log.Printf("gmail-sync done: connections=%d synced=%d failed=%d needs_reconsent=%d throttled=%d",
+		stats.Connections, stats.Synced, stats.Failed, stats.Reconsent, stats.Throttled)
 	// A flagged grant is this worker's dead letter: only a browser consent clears the flag, so
 	// no later run retries it. Both counts must reach the exit code.
 	return worker.ExitCode(stats.Failed, stats.Reconsent)

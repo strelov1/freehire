@@ -166,7 +166,7 @@ func TestSettleClosedApplications(t *testing.T) {
 
 	activeJob := insertJob(t, pool, "closed-active")
 	insertApplication(t, pool, uid, activeJob, appliedAt, "screening")
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1 WHERE id = $2", recentClose, activeJob); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1, closed_reason = 'employer_closed' WHERE id = $2", recentClose, activeJob); err != nil {
 		t.Fatalf("close active job: %v", err)
 	}
 
@@ -185,6 +185,12 @@ func TestSettleClosedApplications(t *testing.T) {
 	openJob := insertJob(t, pool, "still-open")
 	insertApplication(t, pool, uid, openJob, appliedAt, "screening")
 
+	pendingJob := insertJob(t, pool, "source-verification-pending")
+	insertApplication(t, pool, uid, pendingJob, appliedAt, "screening")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1, closed_reason = 'native_source_pending' WHERE id = $2", recentClose, pendingJob); err != nil {
+		t.Fatal(err)
+	}
+
 	count, err := q.SettleClosedApplications(ctx, 7)
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +198,7 @@ func TestSettleClosedApplications(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("notifications = %d, want 1", count)
 	}
-	for id, want := range map[int64]string{activeJob: "expired", staleJob: "expired", settledJob: "withdrawn", openJob: "screening"} {
+	for id, want := range map[int64]string{activeJob: "expired", staleJob: "expired", settledJob: "withdrawn", openJob: "screening", pendingJob: "screening"} {
 		var stage string
 		if err := pool.QueryRow(ctx, "SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", uid, id).Scan(&stage); err != nil {
 			t.Fatal(err)
@@ -201,6 +207,14 @@ func TestSettleClosedApplications(t *testing.T) {
 			t.Errorf("job %d stage = %s, want %s", id, stage, want)
 		}
 	}
+	var events, nudges int
+	if err := pool.QueryRow(ctx, "SELECT (SELECT count(*) FROM application_events WHERE job_id = $1), (SELECT count(*) FROM application_nudges WHERE job_id = $1)", pendingJob).Scan(&events, &nudges); err != nil {
+		t.Fatal(err)
+	}
+	if events != 0 || nudges != 0 {
+		t.Fatalf("source verification created closure side effects: events=%d nudges=%d", events, nudges)
+	}
+
 }
 
 func TestRecordNudge_IsIdempotentPerEpisode(t *testing.T) {

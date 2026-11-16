@@ -111,13 +111,12 @@ func severityToStatus(sev int16) providerStatus {
 	return severityOrder[sev]
 }
 
-// providerRollup is the derivation input for one provider, decoupled from the db row so
-// deriveStatus stays pure. healthy counts boards not in an active cooldown: a board that erred
-// once but is still crawled is healthy. A zero lastSuccess means "never succeeded".
+// providerRollup keeps status policy independent of DB rows. Healthy boards are outside
+// active cooldown; freshnessAt includes legitimate quiet pauses, while lastSuccess is observed.
 type providerRollup struct {
 	total       int64
 	healthy     int64
-	lastSuccess time.Time
+	freshnessAt time.Time
 }
 
 // deriveStatus maps a provider's rollup to its status at instant now:
@@ -128,7 +127,7 @@ func deriveStatus(r providerRollup, now time.Time) providerStatus {
 	if r.total <= 0 {
 		return statusDown
 	}
-	fresh := !r.lastSuccess.IsZero() && now.Sub(r.lastSuccess) <= successFreshness
+	fresh := !r.freshnessAt.IsZero() && now.Sub(r.freshnessAt) <= successFreshness
 	if !fresh {
 		return statusDown
 	}
@@ -154,8 +153,8 @@ func fleetStatus(rolls []providerRollup, now time.Time) providerStatus {
 	for _, r := range rolls {
 		fleet.total += r.total
 		fleet.healthy += r.healthy
-		if r.lastSuccess.After(fleet.lastSuccess) {
-			fleet.lastSuccess = r.lastSuccess
+		if r.freshnessAt.After(fleet.freshnessAt) {
+			fleet.freshnessAt = r.freshnessAt
 		}
 	}
 	return deriveStatus(fleet, now)
@@ -240,7 +239,7 @@ func (h *statsHandlers) IngestStatus(ctx context.Context) (*apigen.IngestStatusO
 		rolls[i] = providerRollup{
 			total:       r.TotalBoards,
 			healthy:     r.HealthyBoards,
-			lastSuccess: tsTime(r.LastSuccessAt),
+			freshnessAt: tsTime(r.FreshnessAt),
 		}
 		providers[i] = apigen.StatusProvider{
 			Provider:      r.Provider,

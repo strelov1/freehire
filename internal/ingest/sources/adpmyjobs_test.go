@@ -227,3 +227,40 @@ func TestADPMyJobsIsRegistered(t *testing.T) {
 		t.Error("adp disappeared from the registry")
 	}
 }
+
+func TestADPMyJobsFetchNewRefreshesKnownAndHydratesNew(t *testing.T) {
+	fake := (&headerRoutedHTTP{}).
+		route("career-site/acme", adpMyJobsSiteBody).
+		route("job-requisitions/5002", adpMyJobsDetailBody("5002", "<p>New role</p>")).
+		route("job-requisitions?", adpMyJobsListBody(2, "5001", "5002"))
+	source, ok := NewADPMyJobs(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("ADP MyJobs must avoid re-reading known posting details")
+	}
+	jobs, err := source.FetchNew(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"}, func(id string) bool { return id == "5001" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want known and new postings", len(jobs))
+	}
+	byID := byExternalID(jobs)
+	known := byID["5001"]
+	if !known.SeenRefresh || known.Title != "Sr. SQE" || known.Description != "" || known.ExternalID != "5001" || known.URL != "https://myjobs.adp.com/acme/cx/job/5001" {
+		t.Errorf("known posting must refresh identity: %+v", known)
+	}
+	if fresh := byID["5002"]; fresh.SeenRefresh || !strings.Contains(fresh.Description, "New role") {
+		t.Errorf("new posting must hydrate: %+v", fresh)
+	}
+	if len(fake.sent) != 3 {
+		t.Errorf("got %d requests, want site, listing and only new detail", len(fake.sent))
+	}
+}
+
+func TestADPMyJobsFailsWhenEveryNewDetailIsUnreadable(t *testing.T) {
+	fake := (&headerRoutedHTTP{}).route("career-site/acme", adpMyJobsSiteBody).route("job-requisitions?", adpMyJobsListBody(2, "5001", "5002"))
+	_, err := NewADPMyJobs(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "acme"}, func(id string) bool { return id == "5001" })
+	if err == nil {
+		t.Fatal("new detail failed but the board reported success")
+	}
+}

@@ -51,7 +51,7 @@ func TestJoinIsPaced(t *testing.T) {
 	if !ok {
 		t.Fatal("join is not registered, or no longer the join type")
 	}
-	if _, paced := src.http.(rateLimitedJSONGetter); !paced {
+	if _, paced := src.http.(rateLimitedJSONPoster); !paced {
 		t.Errorf("registry join is not paced: got %T", src.http)
 	}
 }

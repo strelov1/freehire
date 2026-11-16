@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -154,5 +156,31 @@ func TestProbeAllExpectedPostingIDIsInertWithoutIDProber(t *testing.T) {
 	}
 	if failures != 0 || mismatches != 0 {
 		t.Errorf("failures = %d, mismatches = %d, want 0 and 0", failures, mismatches)
+	}
+}
+
+func TestExpectIDOnlySeedRejectsWrongBoard(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seed.json")
+	if err := os.WriteFile(path, []byte(`[{"board":"acme","expect_id":"4698693006"}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := scriptedIDProber{scriptedProber: scriptedProber{"acme": {company: "Acme", openJobs: 2}}, ids: map[string][]string{"acme": {"111"}}}
+	boards, expected, err := resolveCandidates(context.Background(), p, nil, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected["acme"].postingID != "4698693006" {
+		t.Fatalf("expectations = %+v", expected)
+	}
+	kept, failures, mismatches := probeAll(context.Background(), nil, p, boards, expected, defaultProbeWorkers)
+	if len(kept) != 0 || failures != 0 || mismatches != 1 {
+		t.Fatalf("kept=%v failures=%d mismatches=%d", kept, failures, mismatches)
+	}
+}
+func TestEmptyPostingIDsKeepLiveBoard(t *testing.T) {
+	p := scriptedIDProber{scriptedProber: scriptedProber{"acme": {company: "Acme", openJobs: 2}}, ids: map[string][]string{"acme": {}}}
+	kept, failures, mismatches := probeAll(context.Background(), nil, p, []string{"acme"}, map[string]expectation{"acme": {postingID: "1"}}, defaultProbeWorkers)
+	if len(kept) != 1 || failures != 0 || mismatches != 0 {
+		t.Fatalf("kept=%v failures=%d mismatches=%d", kept, failures, mismatches)
 	}
 }

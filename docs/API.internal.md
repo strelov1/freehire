@@ -739,6 +739,7 @@ curl "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
 ```json
 {
   "data": {
+    "application_digest_enabled": false,
     "inbox_digest_enabled": true,
     "enabled": true,
     "channels": [
@@ -765,6 +766,7 @@ An enabled rule needs a valid channel. Session cookie only.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
+| `application_digest_enabled` | boolean \| null | no | Omitted or null preserves the current weekly application digest choice. |
 | `inbox_digest_enabled` | boolean \| null | no | Omitted or null preserves the current inbox digest choice. |
 | `enabled` | boolean \| null | no | Turn notifications on or off. |
 | `channels` | string[] \| null | no | Delivery channels: `email`, `telegram`, `push`. Adding `push` needs a device the mobile app has registered (409 otherwise). |
@@ -781,6 +783,7 @@ curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
 ```json
 {
   "data": {
+    "application_digest_enabled": false,
     "inbox_digest_enabled": true,
     "enabled": true,
     "channels": [

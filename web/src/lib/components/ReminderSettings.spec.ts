@@ -127,3 +127,62 @@ it('sends a later change only after the earlier save finishes', async () => {
   );
   expect(backend.updateNotificationSettings).toHaveBeenCalledTimes(2);
 });
+
+describe('Weekly application summary settings', () => {
+  it('requires independent consent and keeps the chosen time for batched search alerts', async () => {
+    render(ReminderSettings);
+    const toggle = await screen.findByRole('switch', { name: 'Weekly application summary' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    await fireEvent.click(toggle);
+    const time = screen.getByLabelText('Daily digest time');
+    await fireEvent.input(time, { target: { value: '14:30' } });
+    await fireEvent.change(time);
+    await vi.waitFor(() =>
+      expect(backend.updateNotificationSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          application_digest_enabled: true,
+          inbox_digest_enabled: false,
+          digest_time: '14:30',
+          digest_frequency: 'interval',
+        }),
+      ),
+    );
+    expect(screen.getByText(/Every Monday at the digest time/)).toBeTruthy();
+  });
+
+  it('allows withdrawing consent after a subscription ends and notifications are disabled', async () => {
+    backend.myPlan.mockResolvedValue({ plan: 'free' });
+    backend.getNotificationSettings.mockResolvedValue({
+      ...settings,
+      enabled: false,
+      application_digest_enabled: true,
+    });
+    render(ReminderSettings);
+    const toggle = await screen.findByRole('switch', { name: 'Weekly application summary' });
+    expect(toggle.hasAttribute('disabled')).toBe(false);
+    await fireEvent.click(toggle);
+    await vi.waitFor(() =>
+      expect(backend.updateNotificationSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ application_digest_enabled: false, enabled: false }),
+      ),
+    );
+  });
+
+  it('sends a free account to plans without saving consent', async () => {
+    backend.myPlan.mockResolvedValue({ plan: 'free' });
+    render(ReminderSettings);
+    const toggle = await screen.findByRole('switch', { name: 'Weekly application summary' });
+    await fireEvent.click(toggle);
+    expect(navigation.goto).toHaveBeenCalledWith('/pricing');
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(backend.updateNotificationSettings).not.toHaveBeenCalled();
+  });
+
+  it('requires email delivery before new consent', async () => {
+    backend.getNotificationSettings.mockResolvedValue({ ...settings, channels: ['telegram'] });
+    render(ReminderSettings);
+    expect((await screen.findByRole('switch', { name: 'Weekly application summary' })).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+});

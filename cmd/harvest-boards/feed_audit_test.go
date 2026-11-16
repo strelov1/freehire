@@ -50,6 +50,7 @@ func TestCompareFeedAuditReportsLossesOnMatchedJobs(t *testing.T) {
 func TestAdapterObservationRejectsUnusableIdentity(t *testing.T) {
 	for _, jobs := range [][]sources.Job{
 		{{Title: "No id"}},
+		{{ExternalID: "1", Unreadable: true}},
 		{{ExternalID: "1"}, {ExternalID: "1"}},
 	} {
 		if _, err := adapterObservation(jobs); err == nil {
@@ -84,5 +85,17 @@ func TestAuditBaselineDetectsSwallowedRequestFailure(t *testing.T) {
 func TestAuditBodyPreservesInlineWords(t *testing.T) {
 	if got := auditBody(`<p>Type<strong>Script</strong> &amp; Go</p><p>Next role</p>`); got != "TypeScript & Go Next role" {
 		t.Fatal(got)
+	}
+}
+
+func TestCompareFeedAuditPreservesSharedField(t *testing.T) {
+	date := time.Now()
+	baseline, err := adapterObservation([]sources.Job{{ExternalID: "1", PostedAt: &date}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := compareFeedAudit(feedObservation{Rows: 1, Jobs: map[string]auditPosting{"1": {ID: "1", Fields: map[string]bool{"posted_at": true}}}}, baseline)
+	if got.Matched != 1 || got.MissingFields["posted_at"] != 0 {
+		t.Fatalf("comparison = %+v", got)
 	}
 }

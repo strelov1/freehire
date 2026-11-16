@@ -33,7 +33,7 @@ func boardReachedPostings(st Stats) bool {
 // feed is not empty, our reading of it is broken, and that is a different diagnosis with a
 // different remedy.
 func boardListedAnyPosting(st Stats) bool {
-	return st.Ingested+st.Rejected+st.ATSCovered+st.Skipped+st.Unreadable > 0
+	return st.Ingested+st.Rejected+st.ATSCovered+st.Discovered+st.Skipped+st.Unreadable > 0
 }
 
 // maxUnreadablePercent is the share of a board's listed postings that may be unreadable before
@@ -83,7 +83,7 @@ const maxUnreadablePercent = 5
 // is gone is evidence rather than a hole, and a board whose listing has gone entirely stale
 // should still be allowed to retire it.
 func boardReadWhatItListed(st Stats) bool {
-	listed := st.Ingested + st.Rejected + st.ATSCovered + st.Skipped + st.Unreadable
+	listed := st.Ingested + st.Rejected + st.ATSCovered + st.Discovered + st.Skipped + st.Unreadable
 	return st.Unreadable*100 <= listed*maxUnreadablePercent
 }
 

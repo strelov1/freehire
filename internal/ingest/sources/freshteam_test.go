@@ -208,3 +208,21 @@ func TestFreshteamGoneDetailDropsThePosting(t *testing.T) {
 		t.Fatalf("got %v, want only the kept posting — a 404 is evidence, not a hole", jobs)
 	}
 }
+
+func TestFreshteamReadsRenderedDetailWhenTemplateBreaksJSONLD(t *testing.T) {
+	page := `<div id="job-details-header"><h1 class="brand-color">Technical Product Manager</h1><div class="stick-hide-in-mobile">Noida, Uttar Pradesh<div>Work Type: Full Time</div></div></div><div class="job-details-content content"><div><p>Build product tools with List&lt;T&gt;.</p></div><p>Requirements: Go.</p><div>Liquid error: undefined method public_fields</div></div>`
+	fake := (&routedHTTP{}).route("/jobs/QjrN6azL0OS-", page)
+	job, ok := (freshteam{http: fake}).detail(context.Background(), CompanyEntry{Company: "10times"}, "https://10times.freshteam.com/jobs/QjrN6azL0OS-/technical-product-manager")
+	if !ok || job.Title != "Technical Product Manager" || !strings.Contains(job.Description, "Build product tools") || strings.Contains(job.Description, "Liquid error") || !strings.Contains(job.Description, "List&lt;T&gt;") || !strings.Contains(job.Description, "Requirements: Go.") || job.Location != "Noida, Uttar Pradesh" || job.PostedAt != nil {
+		t.Fatalf("rendered posting = %+v, readable=%v", job, ok)
+	}
+}
+
+func TestFreshteamRenderedMarkupWithoutTextIsUnreadable(t *testing.T) {
+	page := `<div id="job-details-header"><h1 class="brand-color">Engineer</h1></div><div class="job-details-content"><div></div></div>`
+	fake := (&routedHTTP{}).route("/jobs/abcdefghijkl/engineer", page)
+	job, ok := NewFreshteam(fake).(freshteam).detail(context.Background(), CompanyEntry{Board: "acme", Company: "Acme"}, "https://acme.freshteam.com/jobs/abcdefghijkl/engineer")
+	if !ok || !job.Unreadable {
+		t.Fatalf("empty rendered posting accepted: ok=%v unreadable=%v", ok, job.Unreadable)
+	}
+}

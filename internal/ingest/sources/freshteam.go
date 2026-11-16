@@ -53,8 +53,8 @@ func (f freshteam) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 // detail fetches one job page for its JobPosting ld+json block, mapping it to a Job. A page
 // the platform reports gone (404/410) is dropped, as is a link carrying no parseable id; any
-// other read failure — including a 200 carrying no JobPosting block — comes back as an
-// unreadableDetail marker, since the page is the posting's only source and a dropped posting
+// other read failure — including a 200 carrying neither structured nor rendered job data —
+// comes back as an unreadableDetail marker, since the page is the posting's only source and a dropped posting
 // would be indistinguishable from one taken down.
 func (f freshteam) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job, bool) {
 	id := ftJobID(jobURL)
@@ -69,10 +69,20 @@ func (f freshteam) detail(ctx context.Context, e CompanyEntry, jobURL string) (J
 		return Job{}, false
 	}
 	var p ftPosting
+	rendered := false
 	if !ldJobPosting(root, &p) {
-		return unreadableDetail(id, jobURL, e.Company), true
+		rendered = true
+		var ok bool
+		p, ok = ftRenderedPosting(root)
+		if !ok {
+			return unreadableDetail(id, jobURL, e.Company), true
+		}
 	}
 
+	description := p.Description
+	if !rendered {
+		description = html.UnescapeString(description)
+	}
 	location := p.JobLocation.Address.Location()
 
 	// Freshteam carries an explicit remote flag as a string ("true"/"false"); isRemote
@@ -86,7 +96,7 @@ func (f freshteam) detail(ctx context.Context, e CompanyEntry, jobURL string) (J
 		Title:       p.Title,
 		Company:     e.Company,
 		Location:    location,
-		Description: sanitizeHTML(html.UnescapeString(p.Description)),
+		Description: sanitizeHTML(description),
 		Remote:      remote,
 		WorkMode:    workModeFromRemote(remote),
 		PostedAt:    parseSpaceTime(p.DatePosted),
@@ -123,4 +133,42 @@ type ftPosting struct {
 // title and apply button).
 func ftJobLinks(base *url.URL, root *html.Node) []string {
 	return jobLinks(base, root, func(href string) bool { return ftJobID(href) != "" })
+}
+
+// A broken Freshteam Liquid template can omit JSON-LD while still rendering the job body.
+func ftRenderedPosting(root *html.Node) (ftPosting, bool) {
+	header := firstByID(root, "job-details-header")
+	content := firstByClass(root, "job-details-content")
+	if header == nil || content == nil {
+		return ftPosting{}, false
+	}
+	title := firstByClass(header, "brand-color")
+	var body strings.Builder
+	var hasText bool
+	for n := content.FirstChild; n != nil; n = n.NextSibling {
+		if strings.HasPrefix(textContent(n), "Liquid error:") {
+			continue
+		}
+		if err := html.Render(&body, n); err != nil {
+			return ftPosting{}, false
+		}
+		if collapseSpace(textContent(n)) != "" {
+			hasText = true
+		}
+	}
+	if title == nil || collapseSpace(textContent(title)) == "" || !hasText {
+		return ftPosting{}, false
+	}
+	p := ftPosting{Title: textContent(title), Description: body.String()}
+
+	if loc := firstByClass(header, "stick-hide-in-mobile"); loc != nil {
+		var place strings.Builder
+		for n := loc.FirstChild; n != nil; n = n.NextSibling {
+			if n.Type == html.TextNode {
+				place.WriteString(n.Data)
+			}
+		}
+		p.JobLocation.Address.AddressLocality = collapseSpace(place.String())
+	}
+	return p, true
 }

@@ -6,7 +6,7 @@
   pages. One limiter across the adapter's boards and both request paths allows one request
   every two seconds. This is an initial conservative budget, not a measured sustained limit.
 - Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
-  sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Seen postings take the normal `SeenRefresh` path. Missing details emit
+  sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Every listed posting is re-read, including previously seen identities: its application method can change. Missing details emit
   `Unreadable`; a wholly unreadable board fails. A detail refusal stops the board.
 - The bounded listing never supplies a quiet-board fingerprint, including on partial
   progress after later-page errors; an unchanged prefix must not delay its next crawl.
@@ -22,10 +22,23 @@
   --region='United Kingdom' --company='LinkedIn UK software' --apply`, then arrange the
   normal ingest and liveness schedules in freehire-ops. Adapter registration alone starts
   no crawl. A LinkedIn closure does not close an independent employer ATS copy.
-- Guest pages sampled 2026-11-15 hide the external Apply destination behind sign-in.
-  Do not infer an ATS address from the employer name or description links. When a curator
-  has verified it, `cmd/set-job-application-url --slug=... --url=... --apply` records it in
-  `jobs.application_url`; public Apply links prefer it. `jobs.url` remains the LinkedIn
-  posting used by liveness, and ingest leaves the separately recorded destination alone.
-  Destination lookup preserves form paths, path case and unknown query parameters (vacancy
-  IDs included); only `utm_*` and `trk` are ignored. It precedes source-page canonicalisation.
+- Only the explicit `public_jobs_apply-link-onsite` control establishes LinkedIn-native
+  application. The off-site control or its external-arrow icon establishes external Apply;
+  generic Apply and conflicting controls remain unknown. External and unknown discoveries
+  never enter the public catalogue under the LinkedIn source.
+- External destinations resolve through the native ATS adapter and use its ordinary
+  `(provider, board:native-id)` identity. `cmd/ingest` onboards the board, transfers an
+  existing LinkedIn row when the native employer/title agree, and preserves its id, public
+  slug and history. An already stored native identity stays canonical; the old discovery
+  copy closes through the existing `ats_covered` policy. Conflicts are never merged blindly.
+- Guest pages sampled 2026-11-16 hide external Apply addresses behind sign-in. Reuse the
+  public company profile's Organization.sameAs and follow observed employer careers links
+  through the shared board resolver. Never guess ATS hosts from employer names. A discovered
+  board is pending until the normal ATS ingest proves it; no nested whole-board crawl runs
+  inside the LinkedIn worker. New providers join managed scheduling on existing defaults;
+  existing static providers and operator pauses keep their ownership/settings.
+- Reconcile legacy rows with `ingest linkedin --reconcile-linkedin`. It directly checks up
+  to 300 stored identities; use the reported `--reconcile-after` cursor for another batch.
+  Unresolved rows are reported as pending and exit nonzero. A verified curator destination
+  can be transferred with `cmd/promote-job-source --slug=... --url=... --apply`; merely setting
+  `application_url` does not change ownership. LinkedIn disappearance never closes the ATS.

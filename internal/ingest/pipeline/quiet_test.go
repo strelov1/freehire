@@ -324,7 +324,7 @@ func (linkedInQuietHTTP) GetHTMLResolved(_ context.Context, raw string) (*html.N
 	case strings.Contains(raw, "start=0"):
 		body = `<div data-entity-urn="urn:li:jobPosting:123"><h3 class="base-search-card__title">Software Engineer</h3><h4 class="base-search-card__subtitle">Acme</h4></div>`
 	case strings.Contains(raw, "/jobPosting/123"):
-		body = `<section class="top-card-layout"><h1 class="top-card-layout__title">Software Engineer</h1><a class="topcard__org-name-link">Acme</a><button data-modal="job-details-topcard-apply-modal">Apply</button></section><div class="show-more-less-html__markup">Build Go APIs.</div>`
+		body = `<section class="top-card-layout"><h1 class="top-card-layout__title">Software Engineer</h1><a class="topcard__org-name-link">Acme</a><button data-tracking-control-name="public_jobs_apply-link-onsite">Apply</button></section><div class="show-more-less-html__markup">Build Go APIs.</div>`
 	default:
 		return nil, raw, errors.New("later listing refused")
 	}

@@ -124,7 +124,7 @@ func (r Runner) run(ctx context.Context, opt RunOptions, oneWave bool) (Stats, e
 					rn.stats.Indexed, rn.stats.Failed, rn.stats.DeadLettered)
 			}
 		},
-	}, rn.processWave, rn.unreachableFallback)
+	}, rn.processWave, nil)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim: %w", err)
 	}
@@ -153,7 +153,7 @@ type run struct {
 }
 
 // processWave is search-drain's outbox.BatchProcessor: it runs processBatch and reports the
-// wave's delta. It never returns an error, so unreachableFallback is never invoked.
+// wave's delta. It never returns an error, so no outer fallback is needed.
 func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
 	rn.processBatch(ctx, batch)
@@ -164,12 +164,6 @@ func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, 
 	}
 	delta.Deferred = len(batch) - delta.Succeeded - delta.Failed - delta.DeadLettered
 	return delta, nil
-}
-
-// unreachableFallback satisfies outbox.RunBatch's Processor parameter; processWave never errors,
-// so it is never called.
-func (rn *run) unreachableFallback(context.Context, Claimed) outbox.Outcome {
-	panic("search-drain: outer per-item fallback invoked, but processWave never returns an error")
 }
 
 // processBatch indexes a whole wave in one batch and completes it in one call. Any batch-level

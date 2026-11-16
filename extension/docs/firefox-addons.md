@@ -12,7 +12,7 @@ first one is created in the browser:
 
 1. Get the two files — download the `extension` artifact from the `build`
    workflow (or the latest `extension-v*` GitHub Release), or run
-   `cd extension && npm run zip:firefox`:
+   `cd extension && pnpm run zip:firefox`:
    - `freehire-extension-<version>-firefox.zip` — the add-on;
    - `freehire-extension-<version>-sources.zip` — the source code.
 2. [Developer Hub](https://addons.mozilla.org/developers/) → **Submit a New
@@ -20,8 +20,8 @@ first one is created in the browser:
 3. When asked whether the code is minified or bundled, say **yes** and upload the
    `-sources.zip`. Build instructions for the reviewer:
 
-   > Node 24, pnpm and npm. From the archive root:
-   > `cd design-system && pnpm install --frozen-lockfile && cd ../extension && npm ci && npm run build:firefox`.
+   > Node 24 and pnpm. From the archive root:
+   > `cd design-system && pnpm install --frozen-lockfile && cd ../extension && pnpm install --frozen-lockfile && pnpm run build:firefox`.
    > The output is `extension/.output/firefox-mv2`.
 
 4. Fill the listing from `chrome-web-store.md` and submit. Review is manual.

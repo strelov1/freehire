@@ -12,6 +12,8 @@ strictDepBuilds: false
 # path when `from` is unset, letting a crafted stylesheet exfiltrate
 # arbitrary local .map files. Pulled in transitively by vite (Storybook builder).
 overrides:
+  # GHSA-3g3m-2fjr-6pw4: cancellation bypass; retain the glob API with its patched major.
+  glob@<14.0.2: 14.0.2
   # GHSA-g3hv-75wg-m249: glob preprocessing amplification, fixed in 11.0.1.
   # ESLint, typescript-eslint and glob still request 10.x; this deliberately
   # crosses a major version to remove the vulnerable build-time copies.

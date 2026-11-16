@@ -19,7 +19,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
+      web: ${{ steps.scope.outputs.web }}
+      backend: ${{ steps.scope.outputs.backend }}
+      scrapling_fetch: ${{ steps.scope.outputs.scrapling_fetch }}
+      extension: ${{ steps.scope.outputs.extension }}
+      docs: ${{ steps.scope.outputs.docs }}
+      migrations: ${{ steps.scope.outputs.migrations }}
+      contracts: ${{ steps.scope.outputs.contracts }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
+      design_system: ${{ steps.scope.outputs.design_system }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test CI scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - name: Select required checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
   docs:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -199,6 +231,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install pinned ShellCheck
+        run: bash .github/scripts/install-shellcheck.sh
+
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
@@ -311,9 +346,8 @@ jobs:
       - name: Install web dependencies
         run: pnpm --dir web install --frozen-lockfile
 
-      # npm, not pnpm — extension/ is the one JS package in this repository managed by npm.
       - name: Install extension dependencies
-        run: npm --prefix extension ci
+        run: pnpm --dir extension install --frozen-lockfile
 
       - name: Check for dead code and unused dependencies
         run: pnpm check:dead

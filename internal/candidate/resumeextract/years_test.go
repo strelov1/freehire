@@ -46,3 +46,10 @@ func TestDatedYears_YearOnlyBoundsAreConservative(t *testing.T) {
 		}
 	}
 }
+
+func TestDatedYears_CapsFutureEnd(t *testing.T) {
+	got := datedYears([]Experience{{Start: &perioddate.PeriodDate{Year: 2024, Month: 1}, End: &perioddate.PeriodDate{Year: 2030, Month: 1}}}, time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC))
+	if got != 2 {
+		t.Fatalf("years = %v, want 2", got)
+	}
+}

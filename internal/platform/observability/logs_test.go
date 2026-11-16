@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	otellog "go.opentelemetry.io/otel/log"
 	collector "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -141,21 +142,33 @@ func TestLogsCollectorFailureIsBounded(t *testing.T) {
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
 	defer server.Close()
-	defer close(release)
+
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
 	shutdown, err := InitLogs("test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer shutdown()
-	started := time.Now()
-	for range 300 {
+	captured := make(chan struct{})
+	defer func() {
+		close(release)
+		<-captured
+		shutdown()
+	}()
+	logger := logs.provider.Logger("queue-pressure-test")
+	go func() {
+		// Fill the queue without turning the backpressure check into a stack-capture benchmark.
+		for range 1024 {
+			logger.Emit(context.Background(), otellog.Record{})
+		}
 		CaptureError(context.Background(), errors.New("collector unavailable"))
+		close(captured)
+	}()
+	select {
+	case <-captured:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("exception capture blocked behind the collector")
 	}
-	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
-		t.Fatalf("exception capture blocked for %s", elapsed)
-	}
-	started = time.Now()
+	started := time.Now()
 	shutdown()
 	if elapsed := time.Since(started); elapsed > 2500*time.Millisecond {
 		t.Fatalf("shutdown exceeded budget: %s", elapsed)

@@ -41,6 +41,10 @@ type Querier interface {
 	// list is at the limit and this company is not on it: the limit never refuses a company
 	// already stored, so adding it again stays idempotent on a full list.
 	AddToWatchlist(ctx context.Context, arg AddToWatchlistParams) (pgtype.Timestamptz, error)
+	// A genuinely new native provider joins the existing scheduler. An existing row
+	// belongs to the operator: do not unpause it, change cadence, or take over a static
+	// provider still outside the managed rollout.
+	AdoptDiscoveredIngestProvider(ctx context.Context, arg AdoptDiscoveredIngestProviderParams) error
 	// Move the narrated-event cursor, but only from the value the caller read: two syncs racing
 	// over the same events both narrate, and only the first to finish moves the cursor, so the
 	// second neither rewinds it nor skips past an event it never saw.
@@ -435,6 +439,8 @@ type Querier interface {
 	// The claim returns the job's external_id and url because the fetcher needs the posting
 	// id and the exact stored URL to hit the same page the ingest write recorded.
 	ClaimAdzunaDescriptionBatch(ctx context.Context, arg ClaimAdzunaDescriptionBatchParams) ([]ClaimAdzunaDescriptionBatchRow, error)
+	// Recheck live consent and recipient eligibility immediately before reserving the week.
+	ClaimApplicationDigest(ctx context.Context, arg ClaimApplicationDigestParams) (int64, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimSemanticBatch: FOR UPDATE OF o locks only outbox rows (a bare
 	// FOR UPDATE would also lock jobs, making concurrent claim waves contend), SKIP LOCKED
@@ -2737,6 +2743,8 @@ type Querier interface {
 	// MCP server reads it so an agent can only subscribe on a channel that will deliver,
 	// instead of creating a subscription whose matches are soft-skipped forever.
 	GetAlertChannelState(ctx context.Context, id int64) (GetAlertChannelStateRow, error)
+	// Live, unretracted ledger facts; the current board is deliberately a separate view.
+	GetApplicationDigestSnapshot(ctx context.Context, arg GetApplicationDigestSnapshotParams) (GetApplicationDigestSnapshotRow, error)
 	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
 	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
 	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
@@ -3092,6 +3100,7 @@ type Querier interface {
 	// Retire the entire covered window on success, including overflow. Display only the newest
 	// message in each provider conversation; messages without a thread remain separate.
 	GetInboxDigestSnapshot(ctx context.Context, arg GetInboxDigestSnapshotParams) (GetInboxDigestSnapshotRow, error)
+	GetIngestSchedule(ctx context.Context, provider string) (IngestSchedule, error)
 	// One category's open count in the all-countries cell: every open canonical public
 	// posting of the category, whatever its seniority. No row means nothing open at either
 	// point; the caller serves zero.
@@ -3536,6 +3545,7 @@ type Querier interface {
 	// unverified account should be told to confirm its address rather than that somebody
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
+	GmailCooldownUntil(ctx context.Context, userID int64) (pgtype.Timestamptz, error)
 	// Move one reward to granted at the amount it is worth today, if the referrer is below the
 	// ceiling.
 	//
@@ -3556,6 +3566,7 @@ type Querier interface {
 	// second guard: with the pass serialized it is always right, and if the lock is ever lost
 	// the damage is one extra reward rather than an unbounded run.
 	GrantInviteReward(ctx context.Context, arg GrantInviteRewardParams) (int64, error)
+	HasEnrichmentCompletionClaim(ctx context.Context, arg HasEnrichmentCompletionClaimParams) (bool, error)
 	// Whether this account has already spent its one redemption. Asked after a refusal, to turn
 	// the deliberately vague "no" above into the one explanation that is about the caller.
 	HasRedeemedPromoCode(ctx context.Context, userID int64) (bool, error)
@@ -3633,8 +3644,8 @@ type Querier interface {
 	// Insert a board row. Callers that pass status='active' also pass a non-null
 	// activated_at (a curator addition via cmd/add-board); every other caller passes NULL,
 	// for both status='pending' and status='rejected'. A collision with an existing
-	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — fails as a unique violation;
-	// the caller maps that to a duplicate-board error.
+	// 'pending'/'active' row on (provider, lower(board), region) — boards_identity_key — returns no row without aborting the caller's
+	// transaction; the repository maps that to a duplicate-board error.
 	InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error)
 	// Queue an unclassified URL for triage. The unique index on (url) rejects a duplicate
 	// submission of the same link; the caller maps that violation the same way a duplicate
@@ -4016,6 +4027,10 @@ type Querier interface {
 	// posting that has since been recognised as a recruiter's, and report how many it
 	// declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
+	// Keyset pagination lets the worker skip empty snapshots without starving later accounts.
+	ListApplicationDigestCandidates(ctx context.Context, arg ListApplicationDigestCandidatesParams) ([]ListApplicationDigestCandidatesRow, error)
+	// Mirror the board's activity clock: a candidate's chase or stage edit is not a reply.
+	ListApplicationDigestSilentCandidates(ctx context.Context, arg ListApplicationDigestSilentCandidatesParams) ([]ListApplicationDigestSilentCandidatesRow, error)
 	// One application's live events, newest first — what the application panel renders as its
 	// history, where ListApplicationEventsInRange paints a month for the calendar.
 	//
@@ -4365,6 +4380,7 @@ type Querier interface {
 	// the two callers' needs differ, so one query with a caller-supplied cap serves both rather
 	// than duplicating the threshold logic across an uncapped and a capped variant. total is the
 	// FULL count before the cap, same convention as ListUnhealthyBoards.Total.
+	// Only scheduled (active/pending) catalog identities participate; history stays in health.
 	//
 	// No differently-cased-twin guard here any more: board_health's identity is
 	// case-insensitive as of migration 0171 (board_health_identity_key), so two rows for the
@@ -5088,6 +5104,9 @@ type Querier interface {
 	// The tier check mirrors plan.TierOf's own rule directly rather than calling it: free
 	// is "neither until reaches past now", and a NULL until reads the same as a past one.
 	ListLimitHitUsersMissingNudgeEmail(ctx context.Context, arg ListLimitHitUsersMissingNudgeEmailParams) ([]ListLimitHitUsersMissingNudgeEmailRow, error)
+	// Operator reconciliation reads the existing public discoveries, independently
+	// of LinkedIn's bounded recent listing. Only source-pending withdrawals are revisited; genuine closed/private history is untouched.
+	ListLinkedInOwnershipCandidates(ctx context.Context, arg ListLinkedInOwnershipCandidatesParams) ([]Job, error)
 	// Id-only projection of ListLiveJobsByIDAfter, for the same corruption-degrade path
 	// ListJobIDsAfter serves. The predicate must match its wide sibling exactly: a
 	// degraded re-read that scanned a different window would skip rows silently.
@@ -5660,7 +5679,7 @@ type Querier interface {
 	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
 	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
 	// boards are broken without a second round trip and without naming them all. Ask this table
-	// directly for the rest.
+	// directly for the rest. Only scheduled (active/pending) catalog identities participate.
 	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
 	// The reconciler's first pass: events recorded but never applied, oldest first, served by
 	// the partial index on (received_at) WHERE processed_at IS NULL.
@@ -5898,6 +5917,10 @@ type Querier interface {
 	// missing the other's user_jobs row and both bump applied_count. Called first in
 	// the apply transaction, before MarkJobApplied (same pattern as LockJobForVote).
 	LockJobForApply(ctx context.Context, id int64) error
+	// Lock the posting before checking the claim in a SECOND statement. If an
+	// ownership transfer completed while waiting, that second READ COMMITTED snapshot
+	// must see its invalidated queue entry rather than a pre-lock snapshot.
+	LockJobForEnrichmentCompletion(ctx context.Context, id int64) (int64, error)
 	// Take the job row's lock so concurrent votes on the same job serialize. Without
 	// it, two votes in the same window under READ COMMITTED each recompute against a
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
@@ -5937,6 +5960,7 @@ type Querier interface {
 	// Bulk mark-as-read for the caller; only unread rows are touched, and the
 	// affected count is returned to the client as confirmation.
 	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
+	MarkApplicationDigestSent(ctx context.Context, arg MarkApplicationDigestSentParams) (int64, error)
 	// Park an attempt the sidecar could not fully resolve: record which fields stopped it and
 	// why, and leave the lease in place. Unlike RecordAutoApplyFailure this is not a retry
 	// countdown — a parked attempt needs new data, not another try — so attempts is left
@@ -6395,6 +6419,11 @@ type Querier interface {
 	// the caller rather than about the code, and telling them "you have already used a code" is
 	// both useful and leaks nothing.
 	PreviewPromoCode(ctx context.Context, code string) (int16, error)
+	// Transfer a verified discovery posting to its native ATS identity without changing
+	// its id, public slug, or referencing application history. The native unique key
+	// refuses a collision rather than overwriting another posting. Lock posting then
+	// activity before the queue, matching ordinary ingest and curator writers.
+	PromoteJobSource(ctx context.Context, arg PromoteJobSourceParams) (int64, error)
 	// Domains with enough confident hits AND mostly job mail: at most max_other_share of their
 	// sightings classified `other`. The sync worker unions these into the Gmail search query.
 	// The share is compared as a quotient so an exact boundary (2 of 6 against 1/3) is inclusive;
@@ -6429,7 +6458,7 @@ type Querier interface {
 	// yields 0, not NULL). A provider with no ACTIVE board is left out: board_health rows
 	// outlive the boards they describe, so a provider whose boards were all retired or rejected
 	// (apploi's 5,833, retired 2026-09-15) would otherwise read "down" forever for a crawl
-	// nobody runs any more.
+	// nobody runs any more. Each health identity must match an active catalog identity.
 	ProviderHealthRollup(ctx context.Context) ([]ProviderHealthRollupRow, error)
 	// Per-provider ingest health: when the provider's most recent board crawl succeeded, and
 	// how its boards split across four mutually exclusive states. It is also the ONLY source of
@@ -7215,6 +7244,8 @@ type Querier interface {
 	// pass instead of waiting out the lease.
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
 	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
+	ReleasePausedApplicationDigest(ctx context.Context, arg ReleasePausedApplicationDigestParams) error
+	// Used only when dispatch was definitely withheld (e.g. the SES circuit breaker).
 	ReleasePausedInboxDigest(ctx context.Context, arg ReleasePausedInboxDigestParams) error
 	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no
 	// usable destination on any configured channel) is retried promptly on a later pass
@@ -7420,11 +7451,15 @@ type Querier interface {
 	// such company, which is what a typo in a request looks like. A company with no open job
 	// still resolves — it is the one a watchlist is for.
 	ResolveWatchableCompany(ctx context.Context, slug string) (ResolveWatchableCompanyRow, error)
+	// Called only after reading the primary on-site application control. Genuine
+	// source closures and duplicate/private history are never reopened by this repair.
+	RestoreConfirmedLinkedInApplication(ctx context.Context, jobID int64) (int64, error)
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// Retire a live (pending or active) board without deleting its row.
 	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
+	RetirePendingLinkedInDiscovery(ctx context.Context, id int64) error
 	// Withdraw the caller's own live report. Guarded on retracted_at IS NULL so a second
 	// withdrawal returns no row (404) rather than silently restamping the timestamp, and
 	// so the row is never deleted.
@@ -7816,6 +7851,7 @@ type Querier interface {
 	// So the insert writes the never-configured default explicitly. A row created by
 	// this statement leaves the account receiving precisely what it received before.
 	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
+	SetGmailCooldown(ctx context.Context, userID int64) error
 	// A move to 'needs_reconsent' also clears mentor_busy_sync_opted_in — every caller
 	// (gmail-sync, cal-sync, mentor-calendar-write, mentor-busy-sync) marks that status only
 	// when this account's ONE shared refresh token has failed, and the flag exists solely to
@@ -8021,6 +8057,7 @@ type Querier interface {
 	// notification settings, application date, or closure age. The update guard is
 	// rechecked under the row lock, preserving outcomes set concurrently by a user.
 	// Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
+	// Source-verification withdrawal does not expire applications or announce closure.
 	// Events and notification records commit with the transition. Only notifications
 	// have a recency window, so repairing old tracker entries does not flood inboxes.
 	SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error)
@@ -8112,6 +8149,7 @@ type Querier interface {
 	// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
 	// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
 	StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error)
+	StoredJobDescriptions(ctx context.Context, arg StoredJobDescriptionsParams) ([]StoredJobDescriptionsRow, error)
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//
@@ -8936,6 +8974,9 @@ type Querier interface {
 	// independent decisions, and writing both here is what made a withdrawn profile show up
 	// labelled "paused".
 	WithdrawMentorProfile(ctx context.Context, userID int64) (int64, error)
+	// This is a catalogue withdrawal, not an employer-death signal. Preserve the
+	// posting/history while a native application method or ATS owner is unverified.
+	WithholdLinkedInDiscovery(ctx context.Context, jobID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

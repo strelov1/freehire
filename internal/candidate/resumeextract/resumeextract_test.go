@@ -450,3 +450,51 @@ func TestDateEvidence_AsciiHyphenAbbreviatedRangeCountsAsAYear(t *testing.T) {
 		}
 	}
 }
+
+func TestExtract_UnsupportedEndDoesNotExtendFinishedRole(t *testing.T) {
+	m := &scriptedModel{resps: []string{`{"experience":[{"title":"Backend Engineer","company":"Acme","start":{"year":2010},"end":{"year":2013},"current":false}]}`}}
+	got, err := NewExtractor(llm.NewWithModel(m)).Extract(context.Background(), "Jane Doe\nBackend Engineer, Acme, 2010 - 2012\n- Built billing in Go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Experience[0].Start != nil || got.EffectiveYears(time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)) > 2 {
+		t.Fatalf("finished role became ongoing: %+v", got)
+	}
+}
+
+func TestRetryContextReserve(t *testing.T) {
+	for _, budget := range []time.Duration{2 * time.Minute, 50 * time.Second, 0} {
+		t.Run(budget.String(), func(t *testing.T) {
+			parent := context.Background()
+			if budget != 0 {
+				var cancel context.CancelFunc
+				parent, cancel = context.WithTimeout(parent, budget)
+				defer cancel()
+			}
+			ctx, cancel, ok := retryContext(parent)
+			defer cancel()
+			if ok != (budget != 50*time.Second) {
+				t.Fatalf("retry allowed = %v", ok)
+			}
+			if budget == 2*time.Minute {
+				want, _ := parent.Deadline()
+				got, _ := ctx.Deadline()
+				if !got.Equal(want.Add(-retryReserve)) {
+					t.Fatalf("deadline = %v", got)
+				}
+			}
+			if budget == 0 {
+				if _, set := ctx.Deadline(); set {
+					t.Fatal("unexpected deadline")
+				}
+			}
+		})
+	}
+}
+
+func TestSupportedDates_ExcludesCascadedStartRemoval(t *testing.T) {
+	s := Structured{Experience: []Experience{{Start: &perioddate.PeriodDate{Year: 2010}, End: &perioddate.PeriodDate{Year: 2013}}}}
+	if got := supportedDates(s, "2010 - 2012"); got != 0 {
+		t.Fatalf("supported dates = %d, want 0", got)
+	}
+}

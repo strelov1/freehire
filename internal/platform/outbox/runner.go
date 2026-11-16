@@ -109,6 +109,7 @@ type BatchProcessor[C any] func(ctx context.Context, items []C) (Stats, error)
 // RunBatch drains via one BatchProcessor call per wave, falling back to per-item Processor
 // calls only when the batch call itself fails outright, so one poison item cannot sink a
 // healthy wave and a closure with its own fallback is never double-processed.
+// With a nil processOne, a failed batch is counted as failed and left for lease-expiry retry.
 func RunBatch[C any](ctx context.Context, claimer Claimer[C], opt RunOptions, processBatch BatchProcessor[C], processOne Processor[C]) (Stats, error) {
 	var stats Stats
 	for {
@@ -124,7 +125,9 @@ func RunBatch[C any](ctx context.Context, claimer Claimer[C], opt RunOptions, pr
 			return stats, nil
 		}
 		waveStats, err := processBatch(ctx, batch)
-		if err != nil {
+		if err != nil && processOne == nil {
+			stats.Failed += len(batch)
+		} else if err != nil {
 			for _, item := range batch {
 				tally(&stats, processOne(ctx, item))
 			}

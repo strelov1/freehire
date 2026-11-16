@@ -3388,6 +3388,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/emails/{id}/reply-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft a reply to a received message.
+         * @description One model call on the caller's daily `mail-reply` allowance; every request is a new
+         *     draft and is charged again. Nothing is sent or stored: the candidate edits the text and
+         *     sends it themselves. Facts only the candidate knows (availability, salary) come back as
+         *     bracketed placeholders. 409 for a message the caller sent; 402 without a paid plan or
+         *     when the allowance is spent; 502 when the model fails (the charge is returned).
+         */
+        post: operations["draftEmailReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/emails/{id}/restore": {
         parameters: {
             query?: never;
@@ -8614,6 +8638,14 @@ export interface components {
         MailRecalledPick: {
             provider_id?: string | null;
         };
+        /** @description A reply for the candidate to review and send from their own mail client. */
+        MailReplyDraft: {
+            /** @description The address the received message came from. */
+            recipient: string;
+            recipient_name: string;
+            subject: string;
+            body: string;
+        };
         MailboxStatus: {
             available: boolean;
             address: string | null;
@@ -8922,6 +8954,8 @@ export interface components {
             meta: components["schemas"]["NotificationListMeta"];
         };
         NotificationSettings: {
+            /** @description Opt-in Monday summary of application activity. Uses digest_time and account timezone. */
+            application_digest_enabled: boolean;
             /** @description Opt-in daily summary of classified hiring mail. Uses digest_time. */
             inbox_digest_enabled: boolean;
             enabled: boolean;
@@ -8936,6 +8970,8 @@ export interface components {
         };
         /** @description Every field is read as its zero value when left out. Times are `HH:MM`. */
         NotificationSettingsUpdate: {
+            /** @description Omitted or null preserves the current weekly application digest choice. */
+            application_digest_enabled?: boolean | null;
             /** @description Omitted or null preserves the current inbox digest choice. */
             inbox_digest_enabled?: boolean | null;
             /** @description Turn notifications on or off. */
@@ -19235,6 +19271,59 @@ export interface operations {
             };
         };
     };
+    draftEmailReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The message id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "recipient": "anna@acme.io",
+                     *         "recipient_name": "Anna Lee",
+                     *         "subject": "Re: Interview next week",
+                     *         "body": "Hi Anna,\n\nThank you for the invitation. I would be glad to talk; [times that suit you] work for me.\n\nBest regards,\n[Your name]"
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["MailReplyDraft"];
+                    };
+                };
+            };
+            /** @description Client error */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvPlanRefusal"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     restoreEmail: {
         parameters: {
             query?: never;
@@ -21001,6 +21090,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
+                     *         "application_digest_enabled": false,
                      *         "inbox_digest_enabled": true,
                      *         "enabled": true,
                      *         "channels": [
@@ -21052,6 +21142,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
+                     *         "application_digest_enabled": false,
                      *         "inbox_digest_enabled": true,
                      *         "enabled": true,
                      *         "channels": [

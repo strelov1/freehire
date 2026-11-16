@@ -32,6 +32,7 @@ func foldHealthFamilies(rows []db.ProviderHealthRollupRow) []db.ProviderHealthRo
 		f.IngestedTotal += r.IngestedTotal
 		f.LastRunAt = latest(f.LastRunAt, r.LastRunAt)
 		f.LastSuccessAt = latest(f.LastSuccessAt, r.LastSuccessAt)
+		f.FreshnessAt = latest(f.FreshnessAt, r.FreshnessAt)
 	}
 	return out
 }

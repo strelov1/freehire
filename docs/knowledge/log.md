@@ -1,5 +1,11 @@
 # Knowledge update history
 
+## 2026-11-16
+
+Documented native ATS ownership for external LinkedIn discoveries, identity-preserving
+transfer, board discovery and scheduler ownership. Evidence is the implementation and
+public Gist HRsmart sample; deployment is verified separately.
+
 ## 2026-11-15
 
 Linked the catalogue concept to the WhatJobs summary-matching implementation and

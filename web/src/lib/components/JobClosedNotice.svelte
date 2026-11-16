@@ -21,7 +21,7 @@
     <p class="inline-flex items-center gap-2 font-medium">
       <CircleSlash class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span>
-        This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
+        This posting is no longer listed as open{closedOn ? ` (closed ${closedOn})` : ''}.
       </span>
     </p>
     <!-- The posting's own page stays reachable: a reader who doubts the closure (or

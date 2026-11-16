@@ -8,3 +8,10 @@
 - **Places stay in Japanese.** The location dictionary knows no kanji place names, so the country comes from the structured `addressCountry` (`Countries: jp`), with Japan as every card's fallback country.
 - **Tech hint on `o16` only.** `o17` is hardware engineering. `リモートワーク可` on a card is "remote work possible", not a work arrangement, and is not read.
 - **Not `fullBoardListing`.** Nothing proves the walk saw every posting, and a later page failing ends the walk with what was read.
+
+- **Some real adverts omit JobPosting JSON-LD (2026-11-15).** The proxy still serves full
+  pages, but `/jobinfo-328792-2-29-1/` carries only BreadcrumbList. Read the visible
+  `jobPointArea__wrap-jobDescription`, the candidate requirements after `jobInfo2`, and
+  `jobOfferTable`, requiring an exact `og:url` match before accepting the fallback. Preserve
+  listing facts and avoid inventing structured salary/location from the prose. The recorded
+  fixture `detail_without_jsonld.html` retains these live sections.

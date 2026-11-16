@@ -1,0 +1,7 @@
+--- a/internal/ingest/sources/scraplingtier.go
++++ b/internal/ingest/sources/scraplingtier.go
+@@ -35,0 +36,4 @@
++	// Direct HTTP returned 498; browser listing pages and vacancy 41107 passed.
++	"rwb": {scraplingRoute{scraplingfetch.ModeBrowser, false}, func(f *Client) Source {
++		return NewRWB(f)
++	}},

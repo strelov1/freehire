@@ -15,6 +15,8 @@ import (
 // Only providers served by the standard client belong here: the fingerprint-client providers
 // (bayt/gulftalent) need proxy support wired into fingerprintHTTP instead.
 var proxiedProviders = map[string]func(HTTPClient) Source{
+	// Optomi's public REST API refuses the crawl host but serves the existing proxy.
+	"bullhorn": func(c HTTPClient) Source { return NewBullhorn(c) },
 	// Also paced (pacedEightfoldGetter): the proxy alone recovers an outright IP blocklist, but
 	// eightfold's failures are volume rate-limiting (a per-window cap spent by this crawl's own
 	// aggregate rate across the shared proxy IP). See pacer.go.

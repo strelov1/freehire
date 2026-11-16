@@ -13,6 +13,7 @@
   import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
+  import ReplyDraft from './ReplyDraft.svelte';
   import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2, Inbox, Settings, X } from '@lucide/svelte';
   import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { ActionError } from '#lib/actionError.svelte.js';
@@ -728,7 +729,9 @@
                   </div>{/if}
                 {@const linkState = inboxLinkState(msg, lastUnlinked)}
                 <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                  {#if msg.direction !== 'outgoing'}<StatusChip signal={msg.status_signal} />{/if}
+                  {#if msg.direction !== 'outgoing'}<StatusChip signal={msg.status_signal} /><ReplyDraft
+                      emailId={msg.id}
+                    />{/if}
                   {#if linkState === 'linked' && msg.linked_slug}
                     <a
                       href={resolve('/my/tracking/[id]', { id: msg.linked_slug })}

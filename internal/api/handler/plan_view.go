@@ -93,6 +93,8 @@ func featureNoun(feature plan.Feature) string {
 		return "dictation"
 	case plan.FeatureAutoApply:
 		return "automatic applications"
+	case plan.FeatureMailReply:
+		return "reply drafts"
 	default:
 		return ""
 	}
