@@ -52,8 +52,13 @@ type Job struct {
 	Company     string
 	Location    string
 	Description string
-	Remote      bool
-	PostedAt    *time.Time
+	// ApplyMethod and ExternalApplyURL are discovery evidence from the provider's
+	// primary application control. They are not a catalogue destination override.
+	// An unknown method must not be treated as a provider-native application.
+	ApplyMethod      ApplicationMethod
+	ExternalApplyURL string
+	Remote           bool
+	PostedAt         *time.Time
 	// ApplicationDeadline is the source's inclusive last application date, in UTC.
 	// Nil means the source did not provide a deadline.
 	ApplicationDeadline *time.Time
@@ -138,6 +143,9 @@ type Job struct {
 	// out of the job aggregate and its content hash. A shared website is the strongest evidence that
 	// two spellings are one employer (docs/agents/company-identity.md).
 	CompanyWebsite string
+	// CompanyProfileURL is the provider's own employer profile, used only to
+	// discover a structured employer website when an external apply URL is hidden.
+	CompanyProfileURL string
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged
 	// removed in JobStream's incremental feed). A streaming, self-closing source emits
 	// these so the pipeline closes the job by identity instead of upserting it; all other
@@ -190,6 +198,13 @@ type Job struct {
 	// only exists after the upsert's ON CONFLICT resolves.
 	ApplyForm *applyform.Form
 }
+
+type ApplicationMethod string
+
+const (
+	ApplyOnSite   ApplicationMethod = "onsite"
+	ApplyExternal ApplicationMethod = "external"
+)
 
 // Source adapts one job-source platform. Provider is the platform key that selects
 // the adapter (it matches CompanyEntry.Provider and the stored jobs.source); Fetch

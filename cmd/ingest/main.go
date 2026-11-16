@@ -53,8 +53,19 @@ func run() int {
 	// narrowed by --region=<code>) is the operator's hand-run: resync one company/keyword
 	// without disturbing the rest of the crawl.
 	var provider, shardSpec, boardFilter, regionFilter string
+	var reconcileLinkedIn bool
+	var reconcileAfter int64
 	for _, a := range os.Args[1:] {
 		switch {
+		case a == "--reconcile-linkedin":
+			reconcileLinkedIn = true
+		case strings.HasPrefix(a, "--reconcile-after="):
+			var err error
+			reconcileAfter, err = strconv.ParseInt(strings.TrimPrefix(a, "--reconcile-after="), 10, 64)
+			if err != nil || reconcileAfter < 0 {
+				log.Print("config: --reconcile-after needs a non-negative posting id")
+				return 2
+			}
 		case strings.HasPrefix(a, "--shard="):
 			shardSpec = strings.TrimPrefix(a, "--shard=")
 		case a == "--shard":
@@ -85,6 +96,10 @@ func run() int {
 	if provider == "" {
 		log.Print("config: no provider given (pass it as an argument or set INGEST_PROVIDER)")
 		return 1
+	}
+	if (reconcileLinkedIn && (provider != "linkedin" || shardSpec != "" || boardFilter != "" || regionFilter != "")) || (!reconcileLinkedIn && reconcileAfter != 0) {
+		log.Print("config: ownership reconciliation requires linkedin without board, region or shard filters")
+		return 2
 	}
 
 	registry := sources.All(sources.NewClient())
@@ -208,6 +223,7 @@ func run() int {
 	runner := pipeline.Runner{
 		Registry:    registry,
 		Store:       store,
+		Outbound:    newNativeDiscovery(pool, registry, store),
 		BoardHealth: newBoardHealth(pool),
 		// The coverage gate reads the same pool: last_seen_at decides the answer and no index
 		// can hold it (see coverage.go).
@@ -219,6 +235,15 @@ func run() int {
 	}
 
 	crawlCtx, cancelCrawl := budget.crawlContext(ctx, started)
+	if reconcileLinkedIn {
+		defer cancelCrawl()
+		report, err := reconcileLinkedInOwnership(crawlCtx, db.New(pool), registry["linkedin"], runner.Outbound, reconcileAfter)
+		log.Printf("ingest: LinkedIn ownership reconciliation: %+v error=%v", report, err)
+		if err != nil || report.More {
+			return 1
+		}
+		return 0
+	}
 	runStats, crawlErr := runner.Run(crawlCtx, sourceCfg.Sources)
 	cancelCrawl()
 
