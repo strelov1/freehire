@@ -16,7 +16,7 @@ Measured 2026-10-27 over 25,017 Spanish postings (whatjobs excluded): category 1
 
 ## Portuguese heads and fields
 
-`portuguese.go`'s `portugueseCategoryTable` uses the Spanish shape, folding and bands, for words Spanish does not already read ("vendedor", "comercial", "logística" are Spanish-table hits). It runs after Spanish, so no Spanish answer changes and a Spanish veto ("Programador de Manutenção") still blinds the title. Both standards are listed where they differ (equipe/equipa, empilhadeira/empilhador). Field-less heads (analista, auxiliar, técnico, operador, engenheiro, ...) resolve nothing — "analista" heads 1 in 12 Brazilian titles.
+`portuguese_table.go`'s `portugueseCategoryTable` uses the Spanish shape, folding and bands, for words Spanish does not already read ("vendedor", "comercial", "logística" are Spanish-table hits). It runs after Spanish, so no Spanish answer changes and a Spanish veto ("Programador de Manutenção") still blinds the title. Both standards are listed where they differ (equipe/equipa, empilhadeira/empilhador). Field-less heads (analista, auxiliar, técnico, operador, engenheiro, ...) resolve nothing — "analista" heads 1 in 12 Brazilian titles.
 
 Placements: the lawyer outranks the tax field ("Advogado Tributário" is legal); "fiscal" is the tax desk only after a desk head ("Fiscal de Loja/Obras" guard/inspect); the sales field outranks shop and service desk ("Consultor de Vendas - Loja"); "DP" counts only as "de DP" (DP World, dynamic positioning); "auxiliar de sala" absent (Spanish waiting); "desenvolvedor" alone is software, after business/product/property developer.
 
