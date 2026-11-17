@@ -42,10 +42,17 @@ func (s *dbStore) linkedInReadCutoff(now time.Time) time.Time {
 // the set as it was: the postings are read again, which is the pre-cache behaviour.
 func (s *dbStore) addLinkedInReads(ctx context.Context, set map[string]bool) {
 	now := time.Now()
-	if err := s.q.PruneLinkedInPostingsRead(ctx, pgtype.Timestamptz{Time: now.Add(-linkedInReadRetention), Valid: true}); err != nil {
+	lookup := s.linkedInReadCutoff(now)
+	// Retention stretches to cover the window: a BODY_REFRESH_DAYS above the retention must not
+	// have its still-usable rows pruned out from under the lookup.
+	prune := now.Add(-linkedInReadRetention)
+	if lookup.Before(prune) {
+		prune = lookup
+	}
+	if err := s.q.PruneLinkedInPostingsRead(ctx, pgtype.Timestamptz{Time: prune, Valid: true}); err != nil {
 		log.Printf("ingest: linkedin read-cache prune: %v", err)
 	}
-	ids, err := s.q.LinkedInPostingsReadSince(ctx, pgtype.Timestamptz{Time: s.linkedInReadCutoff(now), Valid: true})
+	ids, err := s.q.LinkedInPostingsReadSince(ctx, pgtype.Timestamptz{Time: lookup, Valid: true})
 	if err != nil {
 		log.Printf("ingest: linkedin read-cache lookup failed, re-reading its postings: %v", err)
 		return

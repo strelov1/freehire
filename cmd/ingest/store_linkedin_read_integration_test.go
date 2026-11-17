@@ -56,6 +56,25 @@ func TestLinkedInReadCache_SeenWithinWindowOnly(t *testing.T) {
 		t.Error("a 5-day-old read is not seen under BODY_REFRESH_DAYS=7")
 	}
 
+	// A window longer than the 30-day retention keeps its rows: a 35-day-old read is still
+	// seen under BODY_REFRESH_DAYS=45 and is not pruned away.
+	if _, err := pool.Exec(ctx, `INSERT INTO linkedin_postings_read (posting_id, apply_method, read_at)
+		VALUES ('444', 'external', now() - interval '35 days')`); err != nil {
+		t.Fatal(err)
+	}
+	long, err := sweeppolicy.BodyRefreshFor("45", "1", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy.bodies = long
+	set, err = newDBStore(pool, 1, newCrawledSet(), nil, policy).ExistingExternalIDs(ctx, "linkedin", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := set["444"]; !ok {
+		t.Error("a 35-day-old read is not seen under BODY_REFRESH_DAYS=45: retention capped the window")
+	}
+
 	// Other providers never see the cache.
 	other, err := store.ExistingExternalIDs(ctx, "justjoin", "")
 	if err != nil {
