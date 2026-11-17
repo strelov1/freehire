@@ -252,6 +252,11 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// online-postings sitemap, each new posting's body read from its page's schema.org JobPosting.
 	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See cadremploi.go.
 	registry["cadremploi"] = NewCadremploi(c)
+	// ClearedJobs.net: US security-clearance jobs, enumerated from its active-jobs sitemap plus the
+	// newest-postings page the sitemap's 10,000-entry cap leaves out, each new posting's body read
+	// from its page's schema.org JobPosting. Its edge refuses a plain client: crawled through the
+	// Scrapling tier (scraplingProviders). See clearedjobs.go.
+	registry["clearedjobs"] = NewClearedJobs(c)
 	// JobTeaser: the European careers platform of business and engineering schools, one board per
 	// posting language, enumerated from its job-ads sitemaps, each new posting's body read from its
 	// page's schema.org JobPosting. Pages behind Cloudflare: read through the Scrapling tier
