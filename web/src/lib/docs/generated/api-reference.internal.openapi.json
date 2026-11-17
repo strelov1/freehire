@@ -6429,6 +6429,7 @@
                       "email"
                     ],
                     "digest_frequency": "daily",
+                    "faster_alerts_available": false,
                     "digest_time": null,
                     "digest_interval_hours": 1,
                     "quiet_hours_start": null,
@@ -6484,6 +6485,7 @@
                       "email"
                     ],
                     "digest_frequency": "daily",
+                    "faster_alerts_available": false,
                     "digest_time": null,
                     "digest_interval_hours": 1,
                     "quiet_hours_start": null,
@@ -15016,6 +15018,7 @@
           "enabled",
           "channels",
           "digest_frequency",
+          "faster_alerts_available",
           "digest_time",
           "digest_interval_hours",
           "quiet_hours_start",
@@ -15040,7 +15043,12 @@
             }
           },
           "digest_frequency": {
-            "type": "string"
+            "type": "string",
+            "description": "The saved preference. A Free account that kept `instant` or `interval` is sent a daily\ndigest regardless (see `faster_alerts_available`); the preference is kept so a renewal restores it."
+          },
+          "faster_alerts_available": {
+            "type": "boolean",
+            "description": "Whether the account may choose saved-search alerts faster than daily: a live Pro or Ultra\nplan. When false only `daily` takes effect, and asking for another frequency is refused\nwith 402."
           },
           "digest_time": {
             "anyOf": [

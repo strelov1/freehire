@@ -165,11 +165,10 @@ export function accountApi({ call, request, requestData }: Http) {
 
   /** Replace the caller's notification rule. An enabled rule needs at least one
    *  channel, else the server rejects it (400). */
-  async function updateNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings> {
-    return requestData<NotificationSettings>(
-      '/api/v1/me/notification-settings',
-      jsonBody('PUT', settings satisfies components['schemas']['NotificationSettingsUpdate']),
-    );
+  async function updateNotificationSettings(
+    settings: components['schemas']['NotificationSettingsUpdate'],
+  ): Promise<NotificationSettings> {
+    return requestData<NotificationSettings>('/api/v1/me/notification-settings', jsonBody('PUT', settings));
   }
 
   /** Sets the account's IANA timezone (e.g. "Europe/Moscow"). 400s on a name Go's

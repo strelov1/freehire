@@ -48,6 +48,12 @@ func insertNotifyIntegrationUser(t *testing.T, pool *pgxpool.Pool, email string)
 		`INSERT INTO notification_settings (user_id, digest_frequency) VALUES ($1, 'interval')`, id); err != nil {
 		t.Fatalf("insert notification settings: %v", err)
 	}
+	// Faster than daily is a paid benefit (free_daily_integration_test.go): these users are Pro
+	// so the delivery tests keep exercising the interval schedule they pin above.
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET pro_until_granted = now() + interval '10 years' WHERE id = $1`, id); err != nil {
+		t.Fatalf("grant plan: %v", err)
+	}
 	return id
 }
 

@@ -60,6 +60,10 @@ func ValidChannel(c string) bool {
 //
 // FrequencyDaily at DefaultDigestTime is the default for an account with no settings
 // row (migration 0246). An unknown stored value reads as FrequencyInterval.
+//
+// Anything faster than daily is a Pro/Ultra benefit: the queries that feed this package
+// return the EFFECTIVE frequency (daily for an account without a live plan, webhook
+// excepted), so a stored preference never buys speed by itself.
 const (
 	FrequencyInstant  = "instant"
 	FrequencyDaily    = "daily"

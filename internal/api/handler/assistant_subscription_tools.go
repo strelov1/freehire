@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/subscription"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -477,10 +478,25 @@ func (h *assistantHandlers) deliverySchedule(ctx context.Context, userID int64, 
 	if row.DigestFrequency != "" {
 		out.DigestFrequency = row.DigestFrequency
 	}
+	// What is shown is what takes effect: faster than daily is a paid benefit, and a Free
+	// account that kept it is sent daily (at its stored time) until it renews.
+	if out.DigestFrequency != notify.FrequencyDaily {
+		untils, err := h.queries.GetPlanUntils(ctx, userID)
+		if err != nil {
+			return deliverySchedule{}, err
+		}
+		if !plan.TierOf(untils.ProUntil.Time, untils.UltraUntil.Time, time.Now()).Paid() {
+			out.DigestFrequency = notify.FrequencyDaily
+		}
+	}
 	switch out.DigestFrequency {
 	case notify.FrequencyDaily:
+		// An interval/instant rule may carry no time; delivery reads that as the default.
 		if row.DigestTime.Valid {
 			out.DigestTime = clockOf(row.DigestTime)
+		} else {
+			d := notify.DefaultDigestTime
+			out.DigestTime = *formatHHMM(&d)
 		}
 	case notify.FrequencyInterval:
 		out.DigestIntervalHours = int(row.DigestIntervalHours)

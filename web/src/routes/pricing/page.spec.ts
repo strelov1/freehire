@@ -62,3 +62,12 @@ describe('/pricing — the API plans', () => {
     expect(screen.queryByText('For builders')).toBeNull();
   });
 });
+
+describe('/pricing — saved-search alert frequency', () => {
+  it('says free alerts are daily and that faster ones are a paid benefit', async () => {
+    renderPricing();
+    expect(await screen.findByText('Daily saved-search alerts by email, Telegram and push')).toBeTruthy();
+    expect(screen.getByText('Instant or batched saved-search alerts, not only a daily digest')).toBeTruthy();
+    expect(screen.queryByText('Alerts by email, Telegram and push')).toBeNull();
+  });
+});

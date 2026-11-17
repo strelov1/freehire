@@ -158,14 +158,33 @@ mail-ingest before enabling delivery, as with the inbox summary.
   the send still walks the first member's own slice. `internal/engage/nudge` has no such
   split: `GetNudgeForDelivery` reads `notification_settings.channels` live, which IS an
   account property.
-- **A saved-search digest has three frequencies, and the default is an hourly batch.**
+- **A saved-search digest has three frequencies; Free is always `daily`.**
   `notification_settings.digest_frequency` is `interval` (at most one message per
   person and channel every `digest_interval_hours`, 1-23), `instant` (every pass that finds
-  something) or `daily` (once a local day at `digest_time`). `interval` at one hour is the
-  column default, what an account with NO settings row reads as, and since migration 0233
-  what every stored `instant` was moved to — measured 2026-11-04, `instant` meant a p90 of
-  ~32 digests a day and 141 for the busiest account, on 96% of subscribers, most of whom
-  never opened the setting. **The interval gate is in `ClaimSubscriptionMatches`, not in
+  something) or `daily` (once a local day at `digest_time`). `daily` at 09:00 is the column
+  default (migration 0246) and what an account with NO settings row reads as; before that
+  the default was an hourly `interval`, and migration 0233 moved every stored `instant` to
+  it — measured 2026-11-04, `instant` meant a p90 of ~32 digests a day and 141 for the
+  busiest account, on 96% of subscribers, most of whom never opened the setting.
+  **Anything faster than `daily` is a Pro/Ultra benefit.** The stored value is a
+  PREFERENCE; the schedule that takes effect is computed where it is READ, by the same SQL
+  expression in `ListActiveSubscriptions`, `ListDeliveryCandidates`,
+  `GetSubscriptionForDelivery` and the interval gate of `ClaimSubscriptionMatches`: an
+  account whose `users.pro_until` and `ultra_until` (any source: Stripe, RevenueCat,
+  granted) are both past reads as `daily` at its stored `digest_time` and timezone, so an
+  expired subscription or a legacy `instant` never buys speed, and nothing else (`searchDue`,
+  the pre-claim `deliveryHold`, the per-person daily gate) needs to know. A renewal
+  restores the stored preference. The **webhook** channel is exempt: it is a program's
+  endpoint, not a person's digest, and keeps the stored value. The commercial API licence
+  unlocks nothing here. On the settings write (`reminder.Service.UpdateSettings`) only a
+  CHANGE to a faster frequency (or a changed interval) is refused for Free, with `402`
+  (`ErrFasterAlertsNeedPaidPlan`): the page sends the whole rule back, so unrelated edits
+  and opt-outs keep working with an old `instant`, and the stored preference is left
+  alone. `GET` returns the stored preference plus the response-only
+  `faster_alerts_available`; the web page and the MCP `delivery_schedule` show the schedule
+  that takes effect. No search quota is attached: search itself stays free. Paid `instant`
+  means "the next pass that finds something", not realtime: the worker runs on a timer.
+  **The interval gate is in `ClaimSubscriptionMatches`, not in
   `deliverOne`**: a subscription that is not due is not claimed at all, because claiming
   and releasing ~23k matches an hour on every five-minute pass is write churn for
   nothing. That SQL predicate is the only definition of "interval elapsed"; its defaults

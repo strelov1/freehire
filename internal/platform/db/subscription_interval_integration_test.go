@@ -25,6 +25,11 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 	// a last-digest stamp lastSent ago (SQL interval text; "" leaves it NULL).
 	seed := func(email, settingsSQL, lastSent string) int64 {
 		uid := insertUser(t, pool, email)
+		// Interval and instant are paid schedules; a Free account reads as daily, which
+		// the claim does not gate (see the Free case below).
+		if _, err := pool.Exec(ctx, `UPDATE users SET pro_until_granted = now() + interval '1 year' WHERE id = $1`, uid); err != nil {
+			t.Fatalf("seed plan: %v", err)
+		}
 		if settingsSQL != "" {
 			if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, enabled, channels) VALUES ($1, true, '{email}')`, uid); err != nil {
 				t.Fatalf("seed settings: %v", err)
@@ -61,6 +66,13 @@ func TestClaimSubscriptionMatches_IntervalGate(t *testing.T) {
 		seed("instant@example.test", "digest_frequency = 'instant'", "1 minute"),
 		seed("daily@example.test", "digest_frequency = 'daily', digest_time = '09:00'", "1 minute"),
 	}
+	// A Free account's stored interval is not honoured: effective daily, timed in Go, so the
+	// claim leaves it alone even a minute after its last digest (Go holds it until tomorrow).
+	freeID := seed("free-interval@example.test", "digest_frequency = 'interval'", "1 minute")
+	if _, err := pool.Exec(ctx, `UPDATE users SET pro_until_granted = NULL WHERE email = 'free-interval@example.test'`); err != nil {
+		t.Fatalf("make free: %v", err)
+	}
+	due = append(due, freeID)
 
 	claimed, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{SubscriptionIds: allSubscriptionIDs(t, pool), LeaseSeconds: 3600, PerSubscription: 100, BatchSize: 100})
 	if err != nil {
@@ -133,6 +145,9 @@ func TestClaimSubscriptionMatches_IntervalGateIsPerPersonAndChannel(t *testing.T
 	// Both on the hourly interval: the no-row default is daily (migration 0246), which
 	// the claim does not gate.
 	for _, uid := range []int64{recent, elapsed} {
+		if _, err := pool.Exec(ctx, `UPDATE users SET pro_until_granted = now() + interval '1 year' WHERE id = $1`, uid); err != nil {
+			t.Fatalf("seed plan: %v", err)
+		}
 		if _, err := pool.Exec(ctx, `INSERT INTO notification_settings (user_id, digest_frequency) VALUES ($1, 'interval')`, uid); err != nil {
 			t.Fatalf("seed settings: %v", err)
 		}
