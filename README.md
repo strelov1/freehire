@@ -2,16 +2,16 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-  <img src="docs/assets/logo-light.svg" alt="freehire" width="84" height="84">
+  <img src="docs/assets/logo-light.svg" alt="freehire.me" width="84" height="84">
 </picture>
 
-# freehire
+# [**freehire.me**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero)
 
 <!-- The tagline is a deliberate subtitle under the title, so it skips a heading level. -->
 <!-- rumdl-disable-next-line MD001 -->
 ### Every tech job, straight from the source — for you and your agent.
 
-**4.9M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**5M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
