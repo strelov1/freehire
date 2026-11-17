@@ -45,6 +45,7 @@ func newCompaniesHandlers(queries *db.Queries, companySearch companySearcher) *c
 func (h *companiesHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	api.Get("/companies", contract)
 	api.Get("/companies/subindustries", contract)
+	api.Get("/companies/by-domain", contract)
 	api.Get("/companies/:slug", mw.optional, h.GetCompany)
 	api.Get("/companies/:slug/hiring", h.CompanyHiring)
 	api.Get("/companies/:slug/closed-jobs", h.CompanyClosedJobs)

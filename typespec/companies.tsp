@@ -110,3 +110,57 @@ op listCompanies(
 @route("/companies/subindustries")
 @get
 op companySubindustries(): Data<CompanySubindustry[]> | Problem;
+
+/** One company whose site matches a requested domain. */
+model CompanyByDomain {
+  /** The normalized domain it matched. */
+  domain: string;
+  slug: string;
+  name: string;
+  /** Open postings; 0 when the company is not hiring now. */
+  job_count: int64;
+  /** The site as stored (`website`, else `homepage`). */
+  website: string;
+}
+
+model CompanyByDomainMeta {
+  /** Requested domains that matched no company, normalized. */
+  unmatched: string[];
+}
+
+model CompanyByDomainPage {
+  data: CompanyByDomain[];
+  meta: CompanyByDomainMeta;
+}
+
+// `domain` is read from the raw query, repeated or comma-joined.
+/**
+ * Resolves company web domains to companies. Each `domain` is a bare domain or a full URL;
+ * it is reduced to a lowercase host without `www.`, port or trailing dot, and compared
+ * with the same reduction of the company's site. Every match is returned (two companies
+ * can share a site), including companies with `job_count` 0. Up to 100 domains. Then read
+ * the postings with `GET /jobs?company_slug=<slug>`.
+ */
+@summary("Find companies by web domain.")
+@useAuth(NoAuth)
+@tag("Companies")
+@opExample(#{
+  returnType: #{
+    data: #[
+      #{
+        domain: "acme.io",
+        slug: "acme",
+        name: "Acme",
+        job_count: 12,
+        website: "https://www.acme.io/",
+      },
+    ],
+    meta: #{ unmatched: #["nope.example"] },
+  },
+})
+@route("/companies/by-domain")
+@get
+op companiesByDomain(
+  /** Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) */
+  @query domain?: string,
+): CompanyByDomainPage | Problem;

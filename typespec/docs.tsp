@@ -69,6 +69,10 @@ How often a posting is re-checked is set by each source's crawl schedule, and it
 
 Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`.
 
+### Finding companies by domain
+
+If you hold a list of company web domains, `GET /companies/by-domain?domain=stripe.com&domain=https://www.acme.io/careers` (repeatable or comma-joined, up to 100) returns `{"data": [{"domain", "slug", "name", "job_count", "website"}], "meta": {"unmatched": [...]}}`. Domains are compared by host (lowercase, no `www.`, port or trailing dot) against each company's site; every match is returned, including companies with `job_count` 0, and domains with no match are listed in `meta.unmatched`. Then read a company's postings with `GET /jobs?company_slug=<slug>`.
+
 ### Keeping a mirror in sync
 
 `GET /jobs/changes` is the feed of every opening, closing and reopening of a public, canonical posting. To keep a copy of the catalogue current:
