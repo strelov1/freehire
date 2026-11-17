@@ -189,7 +189,7 @@
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <Button variant="cta" size="sm" disabled={busy} onclick={resume}>{s.continue}</Button>
-        <Button variant="ghost" size="sm" onclick={dismiss}>{s.notNow}</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onclick={dismiss}>{s.notNow}</Button>
       </div>
       {#if failed === 'workspace'}
         <p class="text-xs text-destructive" role="alert">
@@ -215,7 +215,7 @@
           <Button variant="cta" size="sm" disabled={busy} onclick={retry}>{s.tryAgain}</Button>
         {/if}
         <Button href={resolve('/jobs/[slug]', { slug: ctx.slug })} variant="outline" size="sm">{s.backToRole}</Button>
-        <Button variant="ghost" size="sm" onclick={dismiss}>{s.dismiss}</Button>
+        <Button variant="ghost" size="sm" disabled={busy} onclick={dismiss}>{s.dismiss}</Button>
       </div>
       {#if failed === 'checkout'}
         <p class="text-xs text-destructive" role="alert">

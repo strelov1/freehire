@@ -60,6 +60,8 @@
   const offer = $derived(refused && notInPlan(allowance) ? confirmTailorDialog.proOffer : null);
   let buying = $state(false);
   let buyError = $state(false);
+  // Bumped when the dialog closes, so a checkout answer that lands later is ignored.
+  let checkoutAttempt = 0;
 
   // Once per ask, however many times the plan is re-read when the tab regains focus.
   let viewedFor = '';
@@ -72,6 +74,7 @@
   });
   $effect(() => {
     if (!confirmTailorDialog.open) {
+      checkoutAttempt++;
       viewedFor = '';
       buying = false;
       buyError = false;
@@ -82,15 +85,14 @@
     if (!offer || buying) return;
     buying = true;
     buyError = false;
+    const attempt = ++checkoutAttempt;
     try {
       // The base is sent along even when it is the only one: resuming must land on exactly it.
       const baseCvId = confirmTailorDialog.baseCvId || undefined;
-      window.location.href = await startTailorCheckout(
-        currentUser()?.id,
-        { slug: confirmTailorDialog.slug, baseCvId },
-        offer,
-      );
+      const url = await startTailorCheckout(currentUser()?.id, { slug: confirmTailorDialog.slug, baseCvId }, offer);
+      if (attempt === checkoutAttempt) window.location.href = url;
     } catch {
+      if (attempt !== checkoutAttempt) return;
       buyError = true;
       buying = false;
     }

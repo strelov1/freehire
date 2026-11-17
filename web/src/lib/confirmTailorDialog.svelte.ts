@@ -23,6 +23,8 @@ let proOffer = $state.raw<PublicPrice | null>(null);
 // Bumped by every ask, so a plan or price read that outlives its ask cannot offer a
 // purchase to the next one.
 let askId = 0;
+// Bumped by every plan read, so only the newest one may set the allowance or the offer.
+let refreshSeq = 0;
 let resolver: ((value: TailorChoice | null) => void) | null = null;
 
 /** What the candidate confirmed. `baseCvId` is set only when they had a choice to make (two or
@@ -124,9 +126,12 @@ export function askConfirmTailor(forSlug: string, label?: string): Promise<Tailo
  *  there should turn this dialog's refusal into a working confirm without a reload. */
 export function refreshConfirmTailorAllowance() {
   const mine = askId;
+  const seq = ++refreshSeq;
+  const latest = () => seq === refreshSeq && mine === askId;
   api
     .myPlan()
     .then(async (p) => {
+      if (!latest()) return;
       allowance = p.allowances.find((a) => a.feature === 'tailor') ?? null;
       // The server's own answer decides who may be offered Pro, never the cached session tier.
       if (p.plan !== 'free' || !notInPlan(allowance)) {
@@ -135,7 +140,7 @@ export function refreshConfirmTailorAllowance() {
       }
       if (proOffer) return;
       const price = proMonthlyPrice(await api.plans().catch(() => null));
-      if (mine === askId) proOffer = price;
+      if (latest()) proOffer = price;
     })
     .catch(() => {
       allowance = null;
