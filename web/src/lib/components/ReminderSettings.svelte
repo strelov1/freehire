@@ -288,26 +288,26 @@
 
       <div class="flex flex-col gap-2 border-t border-border pt-4">
         <span class={sectionLabel}>Timing</span>
-        <dl class="flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Apply reminder —</dt>
+        <dl class="flex flex-col gap-3 text-xs text-muted-foreground">
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Apply reminder</dt>
             <dd>3 days after you save a job you haven't applied to yet.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Follow-up —</dt>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Follow-up</dt>
             <dd>
-              once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
+              Once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once
               interviewing, 5 with an offer out.
             </dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
-            <dd>right when you move a card to Interview.</dd>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Interview prep</dt>
+            <dd>Right when you move a card to Interview.</dd>
           </div>
-          <div class="flex gap-1.5">
-            <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
+          <div class="flex flex-col gap-0.5">
+            <dt class="font-medium text-foreground">Listing closed</dt>
             <dd>
-              right when a job you're still actively tracking closes — the card also moves to Expired on your board.
+              Right when a job you're still actively tracking closes — the card also moves to Expired on your board.
             </dd>
           </div>
         </dl>

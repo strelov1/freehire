@@ -39,7 +39,7 @@
   <title>{s.headTitle}</title>
 </svelte:head>
 
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-4 lg:gap-6">
   <AccountPageHeading>{s.title}</AccountPageHeading>
 
   <TabStrip {tabs} {active} label={s.tablistLabel} panelId={PANEL_ID} />
