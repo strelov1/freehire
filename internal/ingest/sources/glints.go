@@ -13,22 +13,18 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
-
-	"github.com/strelov1/freehire/internal/dict/classify"
 )
 
 // glints adapts Glints (glints.com), the large Southeast Asian job platform (Indonesia, Vietnam,
-// Singapore, Malaysia; ~125k public postings, almost none of them IT). It is boardless and an
-// aggregator — the employer is read per posting. See the "Glints traps" section of AGENTS.md for
-// the measurements behind each rule.
+// Singapore, Malaysia; ~80k public postings across every profession). It is boardless and an
+// aggregator — the employer is read per posting. See providers/glints.md for the measurements
+// behind each rule.
 //
 // The posting set comes from the job sitemaps (robots.txt disallows the explore search, and its
 // GraphQL API answers an anonymous client a four-posting stub that ignores every filter and
-// page), which carry nothing but each posting's URL, whose slug is the title. The crawl is
-// scoped to the technical postings by that title (classify.IsTech), because the catalogue is
-// mostly hospitality, sales and logistics and a posting's page is 350 KB. Every fact is then
-// bought with the posting page: the adapter hydrates only postings the catalogue lacks and
-// refreshes the rest by identity.
+// page), which carry nothing but each posting's URL. The whole catalogue is crawled and the
+// pipeline's own catalogue filter decides what is stored. Every fact is bought with the posting
+// page: the adapter hydrates only postings the catalogue lacks and refreshes the rest by identity.
 //
 // glints.com answers a plain Go client 403, so production crawls it through the Scrapling tier's
 // impersonating fetcher (scraplingtier.go).
@@ -57,11 +53,13 @@ const (
 	// glintsShardAttempts is how often one sitemap shard is asked for before the crawl fails: the
 	// listing is the whole catalogue or an error, and ~870 shards make a single refusal likely.
 	glintsShardAttempts = 3
-	// glintsMaxNewPerRun bounds how many unseen postings one run hydrates: 1000 pages at two a
-	// second is ~9 minutes beside the ~7 minutes the shards take. See hydrationLanes for how the
-	// budget is split.
-	glintsMaxNewPerRun = 1000
-	glintsBacklogLane  = 700
+	// glintsMaxNewPerRun bounds how many unseen postings one run hydrates: 3000 pages at two a
+	// second is ~25 minutes beside the ~7 minutes the shards take. The first runs face the whole
+	// ~80k catalogue, taken in slices; the pipeline stores every posting it is handed, so what is
+	// hydrated leaves the unseen set. The backlog lane (see hydrationLanes) is only for pages
+	// that failed to read, which would otherwise sit at the head of the queue.
+	glintsMaxNewPerRun = 3000
+	glintsBacklogLane  = 500
 	// glintsITCategory is the id of Glints' own top-level category "Computer & Software", the
 	// one structured statement of IT-ness a posting carries.
 	glintsITCategory = "9dd9bc4d-38d5-4b5e-876a-de19bc22da45"
@@ -86,7 +84,7 @@ func (glints) boardless() {}
 func (glints) aggregator() {}
 
 // fullCatalog: the listing reads the sitemap index and every job shard, and fails on any shard
-// still unreadable after its attempts, or on a listing with no technical posting in it, so a
+// still unreadable after its attempts, or on a listing with no posting in it, so a
 // finished crawl has seen every posting the site lists. See the fullCatalog interface (source.go).
 func (glints) fullCatalog() {}
 
@@ -101,7 +99,7 @@ var (
 	glintsPostingRE = regexp.MustCompile(`^https://glints\.com/[a-z]{2}/opportunities/jobs/([^/]+)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
 )
 
-// glintsLink is one technical posting the sitemaps name.
+// glintsLink is one posting the sitemaps name.
 type glintsLink struct{ ID, URL string }
 
 // Fetch hydrates every listed posting: the path for callers that supply no seen set. FetchNew is
@@ -156,7 +154,7 @@ func (g glints) FetchNew(ctx context.Context, _ CompanyEntry, seen func(external
 	return append(jobs, hydrated...), nil
 }
 
-// listing reads the sitemap index and every job shard and returns the technical postings. A
+// listing reads the sitemap index and every job shard and returns every posting. A
 // shard that cannot be read, or one that lists no posting at all, fails it: glints is swept by
 // source, so a listing missing a shard would close every posting in it.
 func (g glints) listing(ctx context.Context) ([]glintsLink, error) {
@@ -175,7 +173,6 @@ func (g glints) listing(ctx context.Context) ([]glintsLink, error) {
 	}
 	type shardResult struct {
 		links []glintsLink
-		all   int
 		err   error
 	}
 	results := make([]shardResult, len(shards))
@@ -197,32 +194,24 @@ func (g glints) listing(ctx context.Context) ([]glintsLink, error) {
 				if m == nil {
 					continue
 				}
-				results[i].all++
-				if classify.IsTech(strings.ReplaceAll(m[1], "-", " ")) {
-					results[i].links = append(results[i].links, glintsLink{ID: m[2], URL: strings.TrimSpace(u.Loc)})
-				}
+				results[i].links = append(results[i].links, glintsLink{ID: m[2], URL: strings.TrimSpace(u.Loc)})
 			}
 		}()
 	}
 	wg.Wait()
 	var links []glintsLink
-	total := 0
 	for i, r := range results {
 		if r.err != nil {
 			return nil, r.err
 		}
 		// A shard with no posting in it is not an empty slice of the site but a page other than
 		// the one we read (a challenge, a moved layout).
-		if r.all == 0 {
+		if len(r.links) == 0 {
 			return nil, fmt.Errorf("glints: shard %s listed no job posting", shards[i])
 		}
-		total += r.all
 		links = append(links, r.links...)
 	}
-	if len(links) == 0 {
-		return nil, fmt.Errorf("glints: %d shards listed %d postings and none is technical", len(shards), total)
-	}
-	log.Printf("glints: %d shards list %d postings, %d technical by title", len(shards), total, len(links))
+	log.Printf("glints: %d shards list %d postings", len(shards), len(links))
 	return links, nil
 }
 
