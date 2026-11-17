@@ -1,4 +1,5 @@
-import type { Company, FacetCounts, Job, PlansMatrix, CatalogScale } from '../../src/lib/types.ts';
+import type { InsightRole, InsightRoleCountryCell } from '../../src/lib/api-types.ts';
+import type { CatalogScale, Company, FacetCounts, Job, PlansMatrix, SourceEntry } from '../../src/lib/types.ts';
 
 // Invented data only. Typed against the app's own wire types so a field the pages
 // start requiring shows up here as a type error rather than a half-rendered page.
@@ -107,3 +108,45 @@ export const plans: PlansMatrix = {
   ],
   enforced: [],
 };
+
+// /insights: the hub lists a category once its roles clear MIN_CATEGORY_OPEN.
+const INSIGHT_CATEGORIES = ['software_engineering', 'backend', 'frontend', 'devops', 'data_science', 'mobile'];
+
+export const insightRoles: InsightRole[] = INSIGHT_CATEGORIES.map((category, i) => ({
+  category,
+  seniority: 'senior',
+  open_count: 5000 - i * 500,
+  growth: 0.1,
+}));
+
+// The role × country grid at its real width (ten countries), with gaps and one country
+// whose count jumped, so the screen-reader-only text it prints is on the page too.
+const GRID_COUNTRIES = ['US', 'RU', 'BR', 'DE', 'GB', 'IN', 'FR', 'CA', 'NL', 'PL'];
+
+export const roleCountries = {
+  data: INSIGHT_CATEGORIES.flatMap((category, i) =>
+    GRID_COUNTRIES.filter((_, j) => (i + j) % 4 !== 0).map((country, j): InsightRoleCountryCell => ({
+      category,
+      country,
+      open_count: 150000 - i * 9000 - j * 7000,
+      open_count_prev: country === 'BR' ? 40000 : 140000 - i * 8000 - j * 6000,
+    })),
+  ),
+  meta: { countries: GRID_COUNTRIES },
+};
+
+export const sources: SourceEntry[] = ['greenhouse', 'job104', 'workday', 'nsz'].map((source, i) => ({
+  source,
+  kind: i === 1 ? 'aggregator' : 'ats',
+  adapter: true,
+  jobs: { open: 129118, browsable: 101234, ats_matched: 0, ats_unmatched: 301472, measured_at: NOW },
+  health: {
+    status: 'operational',
+    total_boards: 4200,
+    healthy_boards: 4100,
+    cooled_boards: 3,
+    last_run: NOW,
+    last_success: NOW,
+    ingested_total: 301472,
+  },
+}));

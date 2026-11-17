@@ -181,7 +181,7 @@
         <h2 class="text-xl font-semibold tracking-tight">{group.title}</h2>
         <p class="mt-1 text-sm text-muted-foreground">{group.blurb}</p>
 
-        <ul class="mt-5 grid gap-3 sm:grid-cols-2">
+        <ul class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {#each group.entries as entry (entry.source)}
             {@const label = sourceLabel(entry.source)}
             {@const jobs = browsable(entry)}
