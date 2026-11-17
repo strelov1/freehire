@@ -11446,9 +11446,9 @@ export interface operations {
     };
     companiesByDomain: {
         parameters: {
-            query?: {
+            query: {
                 /** @description Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) */
-                domain?: string;
+                domain: string;
             };
             header?: never;
             path?: never;

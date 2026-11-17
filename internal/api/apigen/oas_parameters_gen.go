@@ -3065,7 +3065,7 @@ func decodeCloseThreadParams(args [1]string, argsEscaped bool, r *http.Request) 
 // CompaniesByDomainParams is parameters of companiesByDomain operation.
 type CompaniesByDomainParams struct {
 	// Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`).
-	Domain OptString `json:",omitempty,omitzero"`
+	Domain string
 }
 
 func unpackCompaniesByDomainParams(packed middleware.Parameters) (params CompaniesByDomainParams) {
@@ -3074,9 +3074,7 @@ func unpackCompaniesByDomainParams(packed middleware.Parameters) (params Compani
 			Name: "domain",
 			In:   "query",
 		}
-		if v, ok := packed[key]; ok {
-			params.Domain = v.(OptString)
-		}
+		params.Domain = packed[key].(string)
 	}
 	return params
 }
@@ -3093,28 +3091,23 @@ func decodeCompaniesByDomainParams(args [0]string, argsEscaped bool, r *http.Req
 
 		if err := q.HasParam(cfg); err == nil {
 			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
-				var paramsDotDomainVal string
-				if err := func() error {
-					val, err := d.DecodeValue()
-					if err != nil {
-						return err
-					}
-
-					c, err := conv.ToString(val)
-					if err != nil {
-						return err
-					}
-
-					paramsDotDomainVal = c
-					return nil
-				}(); err != nil {
+				val, err := d.DecodeValue()
+				if err != nil {
 					return err
 				}
-				params.Domain.SetTo(paramsDotDomainVal)
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.Domain = c
 				return nil
 			}); err != nil {
 				return err
 			}
+		} else {
+			return err
 		}
 		return nil
 	}(); err != nil {

@@ -1023,7 +1023,7 @@ the postings with `GET /jobs/search?company_slug=<slug>`.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `domain` | string | no | Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) |
+| `domain` | string | yes | Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) |
 
 ```bash
 curl "https://freehire.me/api/v1/companies/by-domain"

@@ -429,7 +429,7 @@ WHERE c.slug = ANY(@slugs::text[])
 -- given hosts, job_count 0 included. Rides companies_site_host_idx.
 SELECT company_site_host(company_info)::text AS domain,
        slug, name, job_count,
-       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), NULLIF(btrim(company_info ->> 'homepage'), ''))::text AS website
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^\s+|\s+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^\s+|\s+$', '', 'g'), ''))::text AS website
 FROM companies
 WHERE company_site_host(company_info) = ANY(sqlc.arg(hosts)::text[])
 ORDER BY domain, job_count DESC, slug;

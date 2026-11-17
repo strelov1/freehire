@@ -11,6 +11,7 @@ var siteHostCases = []struct{ in, want string }{
 	{"https://user:pw@acme.io:443/", "acme.io"},
 	{"acme.io.", "acme.io"},
 	{" www.acme.io/ ", "acme.io"},
+	{"\tacme.io\r\n", "acme.io"},
 	{"https://jobs.acme.io", "jobs.acme.io"},
 	{"https://acme.io?ref=1", "acme.io"},
 	{"", ""},

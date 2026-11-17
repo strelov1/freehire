@@ -1263,7 +1263,7 @@
           {
             "name": "domain",
             "in": "query",
-            "required": false,
+            "required": true,
             "description": "Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`)",
             "schema": {
               "type": "string"

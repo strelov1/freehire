@@ -162,5 +162,5 @@ model CompanyByDomainPage {
 @get
 op companiesByDomain(
   /** Company domain or URL; repeatable or comma-joined, at most 100. (e.g. `acme.io`) */
-  @query domain?: string,
+  @query domain: string,
 ): CompanyByDomainPage | Problem;
