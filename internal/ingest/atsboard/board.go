@@ -152,6 +152,13 @@ const (
 	// position, so a vendor page that merely shares the leading word matches nothing. A path the
 	// pattern does not match is declined, never read some other way.
 	modePathPattern = "pathpattern"
+	// njoyn: board = "<tenant>/<site>/<clid>", lower-cased, from
+	// <tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<clid>&…. Every page of a Njoyn career site is
+	// that one classic-ASP script, and only its query says which page and client it is; the
+	// <site> segment is the tenant's own (CGI's is CORP) and the script 404s under any other, so
+	// the adapter needs all three (internal/ingest/sources/njoyn.go). Query keys come in either
+	// case (clid / CLID) and are matched case-blind; the client id must be all digits.
+	modeNjoyn = "njoyn"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
