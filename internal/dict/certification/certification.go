@@ -40,6 +40,11 @@ var aliases = map[string]string{
 	"pmp":                             "pmp",
 	"project management professional": "pmp",
 
+	// Procurement.
+	"cips": "cips",
+	"chartered institute of procurement and supply": "cips",
+	"cips certified": "cips",
+
 	// Industrial maintenance and reliability.
 	"cmrp": "cmrp",
 	"certified maintenance & reliability professional":   "cmrp",

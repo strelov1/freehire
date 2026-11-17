@@ -335,13 +335,18 @@ var coreCategoryTable17 = []aliasEntry{
 	{"support", "support"},
 
 	// English titles filed by their twin, after the bare "support" so no title it placed moves:
-	// HR assistant, office administrator, finance and purchasing specialists, supply and demand
-	// planners, PPC specialist, physiotherapist, midwife.
+	// HR assistant, office administrator, finance specialists, the purchasing specialist and its
+	// agent, analyst and coordinator twins, supply and demand planners, PPC specialist, physiotherapist,
+	// midwife. A bare "sourcing specialist" is deliberately absent: it is a recruiter's title as often
+	// as a buyer's.
 	{"hr assistant", "hr"},
 	{"office administrator", "administration"},
 	{"finance specialist", "finance"},
 	{"financial specialist", "finance"},
 	{"purchasing specialist", "operations"},
+	{"purchasing agent", "operations"},
+	{"purchasing analyst", "operations"},
+	{"purchasing coordinator", "operations"},
 	{"supply planner", "logistics"},
 	{"demand planner", "logistics"},
 	{"google ads specialist", "marketing"},

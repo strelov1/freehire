@@ -76,3 +76,10 @@ func TestCanonicalize_OccupationalSafetyCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalizeProcurementCredential(t *testing.T) {
+	got := Canonicalize([]string{"CIPS", "Chartered Institute of Procurement and Supply", "CIPS Certified", "CPSM"})
+	if want := []string{"cips"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Canonicalize = %v, want %v (CPSM is not in the dictionary)", got, want)
+	}
+}
