@@ -2,8 +2,10 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -25,25 +27,36 @@ import (
 // The listing is the JSON search the site's own app calls (POST /search on the search gateway),
 // 200 rows a page, newest first. It carries no body, so this is a HydratingSource that reads a
 // posting's JSON from the same gateway (GET /job) only when the catalogue lacks it, up to
-// kariyernetDetailBudget a run. The gateway answers a plain client an HTML 403 on /job and passes
-// the Scrapling tier's impersonating fetcher (scraplingtier.go), so both requests go through it.
-// See providers/kariyernet.md.
+// kariyernetDetailBudget a run. The body is read from the posting's own page: its server-rendered
+// Nuxt state carries the posting as the gateway's /job would answer it (kariyernet_page.go), and
+// /job refuses the crawl hosts. The page sits behind a bot wall and is read through the Scrapling
+// tier over its proxy (scraplingtier.go), while the search answers a plain client. See
+// providers/kariyernet.md.
 type kariyernet struct {
 	api kariyernetAPI
 	// detailBudget bounds one run's detail reads; non-positive takes kariyernetDetailBudget.
 	detailBudget int
+	// retryBackoff is the first wait before asking a refused page again; zero takes
+	// kariyernetRetryBackoff.
+	retryBackoff time.Duration
 }
 
+// kariyernetAPI is the two transports one crawl needs: the JSON search and the posting pages.
 type kariyernetAPI interface {
-	JSONGetter
 	JSONPoster
+	TextGetter
+}
+
+// kariyernetSplit sends the search and the pages over different clients.
+type kariyernetSplit struct {
+	JSONPoster
+	TextGetter
 }
 
 const (
 	kariyernetBase      = "https://www.kariyer.net"
 	kariyernetGateway   = "https://candidatesearchapigateway.kariyer.net"
 	kariyernetSearchURL = kariyernetGateway + "/search"
-	kariyernetDetailURL = kariyernetGateway + "/job?jobId="
 
 	// kariyernetPageSize is the largest page the search served (200 rows came back for size=200).
 	kariyernetPageSize = 200
@@ -54,7 +67,12 @@ const (
 	// beside the ~200 listing requests (~3.5 minutes) inside the scheduler's 2,400 s crawl budget.
 	// The catalogue holds ~24.6k postings and a cold start reads them over ~17 runs, newest and
 	// technical first; a day's new postings are a few thousand at most.
-	kariyernetDetailBudget   = 1500
+	kariyernetDetailBudget = 1500
+	// kariyernetPageRetries asks a refused page again this many times: over the proxy each
+	// request leaves from a different exit, and on 2026-11-17 a page was refused or served by the
+	// exit it drew. The first wait is kariyernetRetryBackoff, doubling.
+	kariyernetPageRetries    = 3
+	kariyernetRetryBackoff   = 2 * time.Second
 	kariyernetDetailWorkers  = 2
 	kariyernetRequestPeriod  = time.Second
 	kariyernetRequestBurst   = 1
@@ -68,27 +86,32 @@ const (
 // so no posting is hinted technical.
 var kariyernetITAreas = []string{"78", "5", "55", "60", "54"}
 
-// NewKariyerNet builds the Kariyer.net adapter over api, which must reach the search gateway.
+// NewKariyerNet builds the Kariyer.net adapter over api, which must reach the search gateway and
+// the posting pages.
 func NewKariyerNet(api kariyernetAPI) Source {
 	return kariyernet{api: api}
 }
 
-// pacedKariyerNet holds the search and the detail reads of a run to one limiter.
-func pacedKariyerNet(api kariyernetAPI) Source {
-	return NewKariyerNet(kariyernetPacer{inner: api, limiter: rate.NewLimiter(rate.Every(kariyernetRequestPeriod), kariyernetRequestBurst)})
+// pacedKariyerNet holds the search and the page reads of a run to one limiter: search over the
+// search client, pages over the page client.
+func pacedKariyerNet(search JSONPoster, pages TextGetter) Source {
+	return NewKariyerNet(kariyernetPacer{
+		inner:   kariyernetSplit{JSONPoster: search, TextGetter: pages},
+		limiter: rate.NewLimiter(rate.Every(kariyernetRequestPeriod), kariyernetRequestBurst),
+	})
 }
 
-// kariyernetPacer shares one limiter between the POST search and the GET detail.
+// kariyernetPacer shares one limiter between the POST search and the page reads.
 type kariyernetPacer struct {
 	inner   kariyernetAPI
 	limiter waiter
 }
 
-func (p kariyernetPacer) GetJSON(ctx context.Context, url string, v any) error {
+func (p kariyernetPacer) GetText(ctx context.Context, url string) (string, error) {
 	if err := p.limiter.Wait(ctx); err != nil {
-		return err
+		return "", err
 	}
-	return p.inner.GetJSON(ctx, url, v)
+	return p.inner.GetText(ctx, url)
 }
 
 func (p kariyernetPacer) PostJSON(ctx context.Context, url string, body, v any) error {
@@ -113,6 +136,7 @@ type kariyernetItem struct {
 	Title        string `json:"title"`
 	CompanyName  string `json:"companyName"`
 	Confidential bool   `json:"confidential"`
+	JobURL       string `json:"jobUrl"`
 }
 
 type kariyernetSearchResponse struct {
@@ -265,8 +289,8 @@ func (s kariyernet) hydrate(ctx context.Context, items []kariyernetItem, seen fu
 			return Job{ExternalID: id, Title: strings.TrimSpace(it.Title), Company: strings.TrimSpace(it.CompanyName), SeenRefresh: true}, true
 		}
 		wanted.Add(1)
-		var d kariyernetDetail
-		if err := s.api.GetJSON(ctx, kariyernetDetailURL+id, &d); err != nil {
+		d, err := s.readPage(ctx, id, it.JobURL)
+		if err != nil {
 			if detailUnreadable(err) {
 				log.Printf("kariyernet: detail %s failed; deferring: %v", id, err)
 			}
@@ -285,6 +309,30 @@ func (s kariyernet) hydrate(ctx context.Context, items []kariyernetItem, seen fu
 		return nil, fmt.Errorf("kariyernet: listed %d new postings and read none of them", wanted.Load())
 	}
 	return jobs, nil
+}
+
+// readPage reads a posting's page and the state it carries. A refused page (403/429) or a server
+// failure is asked again, the Scrapling client retrying nothing itself.
+func (s kariyernet) readPage(ctx context.Context, id, path string) (kariyernetDetail, error) {
+	backoff := s.retryBackoff
+	if backoff <= 0 {
+		backoff = kariyernetRetryBackoff
+	}
+	var d kariyernetDetail
+	err := retryWhile(ctx, kariyernetPageRetries, backoff, kariyernetRefused, func() error {
+		page, err := s.api.GetText(ctx, kariyernetPostingURL(id, path))
+		if err != nil {
+			return err
+		}
+		d, err = kariyernetPageDetail(page)
+		return err
+	})
+	return d, err
+}
+
+func kariyernetRefused(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests || se.Code >= 500)
 }
 
 // kariyernetPlace is one of a posting's locations.

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,19 +10,31 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// kariyernetFixtures holds the posting page the fake serves: the Franklin Electric page fetched
+// on 2026-11-17, trimmed to its server-rendered state (testdata/kariyernet/posting_4597170.html).
+//
+//go:embed testdata/kariyernet
+var kariyernetFixtures embed.FS
 
 // kariyernetFake serves responses shaped like the ones the search gateway answered on
 // 2026-11-17 (rows and the Franklin Electric posting trimmed to the fields the adapter reads).
 // The unfiltered request answers the filter list (areas, default the one work area "78"); a
 // request for a work area is answered from byArea[area], or from pages when byArea is unset.
-// pages and byArea map a currentPage to a search response; details maps a posting id to a /job
-// response, and a missing id answers 404 as the gateway does.
+// pages and byArea map a currentPage to a search response. details maps a posting id to the
+// posting JSON (the shape the gateway's /job answered, and the page's state carries), which the
+// fake serves as the posting's page; a missing id answers 404. refusals counts the 403s a page
+// answers before it is served.
 type kariyernetFake struct {
 	areas   []string
 	pages   map[int]string
 	byArea  map[string]map[int]string
 	details map[string]string
+	// refusals maps a posting id to how many reads answer 403 before the page is served; -1 is
+	// every read.
+	refusals map[string]int
 
 	mu       sync.Mutex
 	searches []map[string]any
@@ -57,19 +70,41 @@ func (f *kariyernetFake) PostJSON(_ context.Context, url string, body, v any) er
 	return json.Unmarshal([]byte(raw), v)
 }
 
-func (f *kariyernetFake) GetJSON(_ context.Context, u string, v any) error {
-	id, ok := strings.CutPrefix(u, kariyernetDetailURL)
-	if !ok {
-		return fmt.Errorf("kariyernetFake: no GET route for %s", u)
+func (f *kariyernetFake) GetText(_ context.Context, u string) (string, error) {
+	if !strings.HasPrefix(u, kariyernetBase+"/is-ilani/") {
+		return "", fmt.Errorf("kariyernetFake: no GET route for %s", u)
 	}
+	id := u[strings.LastIndexAny(u, "-/")+1:]
 	f.mu.Lock()
 	f.read = append(f.read, id)
+	left, refused := f.refusals[id]
+	if refused && left > 0 {
+		f.refusals[id]--
+	}
 	f.mu.Unlock()
+	if refused && left != 0 {
+		return "", &StatusError{Method: "GET", Code: 403, URL: u}
+	}
 	raw, ok := f.details[id]
 	if !ok {
-		return &StatusError{Method: "GET", Code: 404, URL: u}
+		return "", &StatusError{Method: "GET", Code: 404, URL: u}
 	}
-	return json.Unmarshal([]byte(raw), v)
+	if strings.HasPrefix(raw, "<") {
+		return raw, nil
+	}
+	return kariyernetPageOf(raw), nil
+}
+
+// kariyernetPageOf wraps posting JSON in the page shape the site serves: the posting is the
+// jobInfo of the Nuxt state.
+func kariyernetPageOf(raw string) string {
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		panic(err)
+	}
+	return `<html><body><script>window.__NUXT__=(function(){return {layout:"default",state:{jobDetail:{jobInfo:` + string(env.Data) + `}}}}());</script></body></html>`
 }
 
 func kariyernetRow(id int, title, company string, confidential bool) string {
@@ -324,7 +359,7 @@ func TestKariyerNetFailsOnAnEmptyOrBrokenListing(t *testing.T) {
 type kariyernetFailingAPI struct{ err error }
 
 func (f kariyernetFailingAPI) PostJSON(context.Context, string, any, any) error { return f.err }
-func (f kariyernetFailingAPI) GetJSON(context.Context, string, any) error       { return f.err }
+func (f kariyernetFailingAPI) GetText(context.Context, string) (string, error)  { return "", f.err }
 
 func TestKariyerNetWorkModeFallsBackToTheRemoteFlag(t *testing.T) {
 	d := kariyernetDetailFor(7, func(s string) string {
@@ -388,5 +423,120 @@ func TestKariyerNetFailsWhenAnAreaNeverEnds(t *testing.T) {
 	_, err := NewKariyerNet(f).Fetch(context.Background(), CompanyEntry{})
 	if err == nil || !strings.Contains(err.Error(), "end was not reached") {
 		t.Errorf("err = %v, want the unfinished area to fail the crawl", err)
+	}
+}
+
+// The page of a real posting (testdata/kariyernet/posting_4597170.html, trimmed to its state) is
+// read through the state's own parameter names: the title, company and dates are arguments the
+// returned object points at.
+func TestKariyerNetReadsARealPage(t *testing.T) {
+	page, err := kariyernetFixtures.ReadFile("testdata/kariyernet/posting_4597170.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &kariyernetFake{
+		pages: map[int]string{1: kariyernetPage(1,
+			`{"id":4597170,"title":"x","companyName":"x","confidential":false,"jobUrl":"/is-ilani/franklin-electric-senior-purchasing-specialist-4597170"}`)},
+		details: map[string]string{"4597170": string(page)},
+	}
+	jobs, err := NewKariyerNet(f).Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs = %d err = %v", len(jobs), err)
+	}
+	j := jobs[0]
+	// The posting was republished the morning the page was fetched, so the page's own date is the 18th.
+	if j.Title != "Senior Purchasing Specialist" || j.Company != "Franklin Electric" {
+		t.Errorf("title/company = %q / %q", j.Title, j.Company)
+	}
+	if j.URL != "https://www.kariyer.net/is-ilani/franklin-electric-senior-purchasing-specialist-4597170" {
+		t.Errorf("URL = %q", j.URL)
+	}
+	if !strings.Contains(j.Description, "Senior Purchasing Specialist") || !strings.Contains(j.Description, "Torbalı, İzmir") {
+		t.Errorf("Description = %.120q", j.Description)
+	}
+	if j.Location != "İzmir" || j.WorkMode != "onsite" || j.EmploymentType != "full_time" {
+		t.Errorf("location/mode/type = %q / %q / %q", j.Location, j.WorkMode, j.EmploymentType)
+	}
+	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-11-18" {
+		t.Errorf("PostedAt = %v", j.PostedAt)
+	}
+	if j.ApplicationDeadline == nil || j.ApplicationDeadline.Format("2006-01-02") != "2026-12-12" {
+		t.Errorf("ApplicationDeadline = %v", j.ApplicationDeadline)
+	}
+	if got := f.read; len(got) != 1 || got[0] != "4597170" {
+		t.Errorf("pages read = %v", got)
+	}
+}
+
+// Over the proxy each request leaves from a different exit, so a refused page is asked again; a
+// page refused on every attempt defers its posting, and a crawl in which every page is refused
+// fails rather than reporting a quiet run.
+func TestKariyerNetAsksARefusedPageAgain(t *testing.T) {
+	rows := kariyernetPage(2, kariyernetRow(1, "a", "Acme", false), kariyernetRow(2, "b", "Acme", false))
+	f := &kariyernetFake{
+		pages:    map[int]string{1: rows},
+		details:  map[string]string{"1": kariyernetDetailFor(1, nil), "2": kariyernetDetailFor(2, nil)},
+		refusals: map[string]int{"1": kariyernetPageRetries, "2": -1},
+	}
+	jobs, err := kariyernet{api: f, retryBackoff: time.Nanosecond}.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "1" {
+		t.Errorf("jobs = %+v, want the page served on its last attempt only", jobs)
+	}
+	count := map[string]int{}
+	for _, id := range f.read {
+		count[id]++
+	}
+	if count["1"] != kariyernetPageRetries+1 || count["2"] != kariyernetPageRetries+1 {
+		t.Errorf("reads per posting = %v, want %d attempts each", count, kariyernetPageRetries+1)
+	}
+
+	every := &kariyernetFake{
+		pages:    map[int]string{1: rows},
+		details:  map[string]string{"1": kariyernetDetailFor(1, nil), "2": kariyernetDetailFor(2, nil)},
+		refusals: map[string]int{"1": -1, "2": -1},
+	}
+	if _, err := (kariyernet{api: every, retryBackoff: time.Nanosecond}).Fetch(context.Background(), CompanyEntry{}); err == nil || !strings.Contains(err.Error(), "read none") {
+		t.Errorf("err = %v, want a crawl whose every page is refused to fail", err)
+	}
+}
+
+// A page that is not the posting (a challenge page, a moved layout) is no answer: the posting is
+// deferred, never stored half-read.
+func TestKariyerNetDefersAPageWithoutState(t *testing.T) {
+	for name, page := range map[string]string{
+		"challenge":  "<html><body>Just a moment...</body></html>",
+		"no jobInfo": `<html><script>window.__NUXT__=(function(a){return {state:{x:a}}}(1));</script></html>`,
+		"call":       `<html><script>window.__NUXT__=(function(a){return {state:{jobDetail:{jobInfo:{id:Date.now()}}}}}(1));</script></html>`,
+		"unbound":    `<html><script>window.__NUXT__=(function(a){return {state:{jobDetail:{jobInfo:{id:zz}}}}}(1));</script></html>`,
+	} {
+		if _, err := kariyernetPageDetail(page); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+}
+
+// The state's literals: parameters resolved to their arguments, minified booleans, void 0,
+// JavaScript escapes (Nuxt writes "/" as \u002F) and astral characters spelled as a pair.
+func TestKariyerNetPageLiteral(t *testing.T) {
+	page := `<script>window.__NUXT__=(function(a,b,c,d){return {state:{jobDetail:{jobInfo:{
+		jobGeneralInformation:{id:7,title:a,confidential:!1,isActive:!0,qualificationsWithHtml:"<p>x\u003C\u002Fp>\n\ud83d\ude00 \x41",
+		locations:[{cityName:b,countryName:c}],postingDate:d,jobCode:void 0},
+		jobCompanyInformation:{companyName:"Acme"}}}}}}("Title, \"quoted\"","İzmir","Türkiye","2026-11-13"));</script>`
+	d, err := kariyernetPageDetail(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := d.Data.General
+	if g.Title != `Title, "quoted"` || g.ID != 7 || g.Confidential || !g.IsActive || g.PostingDate != "2026-11-13" {
+		t.Errorf("general = %+v", g)
+	}
+	if g.QualificationsHTML != "<p>x</p>\n\U0001F600 A" {
+		t.Errorf("html = %q", g.QualificationsHTML)
+	}
+	if len(g.Locations) != 1 || g.Locations[0].CityName != "İzmir" || d.Data.Company.Name != "Acme" {
+		t.Errorf("locations = %+v company = %q", g.Locations, d.Data.Company.Name)
 	}
 }
