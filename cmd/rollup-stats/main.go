@@ -70,6 +70,15 @@ func run() int {
 	}
 	defer cleanup()
 
+	// The catalogue-scale snapshot is published FIRST, ahead of the rollups. It reads
+	// nothing they write, and it is the figure every public surface quotes (the
+	// homepage, /open, the OG card): behind the rollups' single long transaction, one
+	// slow or failed rebuild left it hours stale while /jobs, read live from
+	// Meilisearch, kept moving — the homepage said 4.8M beside a catalogue showing
+	// 5.17M. It is a separate concern with its own failure mode, so it never changes
+	// this run's exit code.
+	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(pool))
+
 	// The clear + rebuild run in one transaction so the swap is atomic: readers keep
 	// seeing the previous rollups until commit, and orphaned rows vanish in the same step.
 	tx, err := pool.Begin(ctx)
@@ -113,12 +122,6 @@ func run() int {
 	}
 
 	log.Printf("rollup-stats: rebuilt job_daily_stats (%d active day rows) and insights_* rollups", days)
-
-	// The catalogue-scale snapshot rides along after the rollups have committed. It is
-	// a separate concern with its own failure mode, so it neither joins their
-	// transaction nor changes this run's exit code: the rollups are the worker's job,
-	// and they are already done.
-	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(pool))
 
 	// So does the per-source snapshot behind the public /sources page, for the same
 	// reason and on the same terms.
