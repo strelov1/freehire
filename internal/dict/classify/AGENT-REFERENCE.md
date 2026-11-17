@@ -7,7 +7,7 @@ Deterministic seniority/category tagging from job title, feeding enrichment face
 - Parses the **job title** at ingest into canonical `jobs.seniority`/`jobs.category` columns.
 - Values from `vocab.SeniorityValues`/`vocab.CategoryValues` — EN+RU aliases, whole-word matched. Russian forms are full surface forms (not stems): the matcher requires word boundaries. **Never guesses**.
 - Same alias→canonical dictionary design as `internal/dict/location` and `internal/dict/skilltag`.
-- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese, French, Polish, BCS, Slovenian. A `categoryNone` veto at any step ends the chain. Seniority reads `japaneseSeniorityTable`, `chineseSeniorityTable` and then `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
+- The main table resolves in declaration order, not title order. When it resolves nothing, the fallbacks run in this order (see `classify.go`): German, Dutch, Danish, Spanish, Portuguese, French, Polish, BCS, Slovenian, Turkish. A `categoryNone` veto at any step ends the chain. Seniority reads `japaneseSeniorityTable`, `chineseSeniorityTable` and then `indianSeniorityTable` first, then the same chain. A fallback never changes a title an earlier table resolved.
 
 ## Grade-blind phrases
 
