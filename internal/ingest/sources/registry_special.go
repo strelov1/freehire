@@ -274,6 +274,10 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// posting pages need the Scrapling tier (see scraplingProviders), so over this plain client
 	// only the sitemap is read. See turijobs.go.
 	registry["turijobs"] = NewTurijobs(c, c)
+	// CryptoJobsList: the web3 job board, enumerated from its jobs sitemap, each new posting read
+	// from its page's Next.js state. Cloudflare refuses a plain client on every path, so over
+	// this client nothing is read; see scraplingProviders and cryptojobslist.go.
+	registry["cryptojobslist"] = NewCryptoJobsList(c, c)
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
