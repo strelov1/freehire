@@ -104,7 +104,7 @@ const Missing = "missing"
 
 // UnindexedReasons lists every Unindexed key, for a stable report.
 var UnindexedReasons = []string{
-	string(search.WithheldNoCategory), string(search.WithheldNoDescription), string(search.WithheldUnseen), Missing,
+	string(search.WithheldNoDescription), string(search.WithheldUnseen), Missing,
 }
 
 // Report is one probe's result. Unindexed counts sampled rows with no Meilisearch document, by

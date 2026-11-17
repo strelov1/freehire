@@ -2,14 +2,9 @@ package pipeline
 
 // Stats reports what a run did: Ingested counts saved jobs, Failed counts boards that
 // errored (unknown provider or a fetch failure), Skipped counts jobs that fetched fine
-// but failed to persist, Cooled counts boards skipped because they are in cooldown (a
-// deliberate back-off, distinct from a failure), and Rejected counts postings the
-// catalogue filter turned away before the write path. Skipped is surfaced so a run whose
+// but failed to persist, and Cooled counts boards skipped because they are in cooldown (a
+// deliberate back-off, distinct from a failure). Skipped is surfaced so a run whose
 // every save fails (e.g. a DB schema drift) is not mistaken for a clean success.
-//
-// Rejected is kept apart from Skipped because the two mean opposite things: a rejection
-// is the filter working as intended, a skip is something broken. Folded together, a board
-// whose every save fails would read as a board full of non-technical postings.
 type Stats struct {
 	Ingested int
 	Failed   int
@@ -18,7 +13,6 @@ type Stats struct {
 	// Quiet counts boards skipped because their listing kept coming back unchanged (QuietFor) —
 	// kept apart from Cooled, which means a FAILING board.
 	Quiet      int
-	Rejected   int
 	Discovered int // non-native LinkedIn postings handed to ATS discovery, never stored as LinkedIn
 	// Refreshed counts the stored open rows among unreadable postings whose liveness the
 	// run refreshed (CoveredRefresher). Not Ingested — no content was written — but evidence the
@@ -88,7 +82,6 @@ func (s *Stats) add(o Stats) {
 	s.Skipped += o.Skipped
 	s.Cooled += o.Cooled
 	s.Quiet += o.Quiet
-	s.Rejected += o.Rejected
 	s.Discovered += o.Discovered
 	s.Refreshed += o.Refreshed
 	s.RefreshFailed += o.RefreshFailed

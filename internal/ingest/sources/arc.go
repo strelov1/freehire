@@ -155,7 +155,7 @@ func (s arc) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID 
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, seen, nil, nil)
+	return s.hydrate(ctx, rows, seen, nil)
 }
 
 // FetchNewGated is FetchNew told which postings the pipeline will discard anyway, so a
@@ -173,7 +173,7 @@ func (s arc) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 		}
 		covered = gate.Covered(names)
 	}
-	return s.hydrate(ctx, rows, seen, covered, gate.Rejected)
+	return s.hydrate(ctx, rows, seen, covered)
 }
 
 // list walks every job type's listing to its end. Any page failing fails the crawl, and so does
@@ -236,12 +236,12 @@ func (s arc) list(ctx context.Context) ([]arcListing, error) {
 }
 
 // hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request; a
-// posting the pipeline will discard — its employer covered, or its title rejected — is yielded
+// posting the pipeline will discard — its employer covered — is yielded
 // body-less for the pipeline to count; every other posting costs one page, up to the run's
 // budget. A page that could not be read defers its posting to a later run rather than storing it
 // body-less, which would never be hydrated again.
 func (s arc) hydrate(ctx context.Context, rows []arcListing, seen func(string) bool,
-	covered map[string]bool, rejected func(Job) bool) ([]Job, error) {
+	covered map[string]bool) ([]Job, error) {
 	var budget, answered atomic.Int64
 	jobs := fetchDetails(rows, arcDetailWorkers, func(r arcListing) (Job, bool) {
 		base, ok := r.toJob()
@@ -252,7 +252,7 @@ func (s arc) hydrate(ctx context.Context, rows []arcListing, seen func(string) b
 			base.SeenRefresh = true
 			return base, true
 		}
-		if covered[base.Company] || (rejected != nil && rejected(base)) {
+		if covered[base.Company] {
 			return base, true
 		}
 		if budget.Add(1) > arcDetailBudget {

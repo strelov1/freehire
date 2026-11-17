@@ -299,7 +299,7 @@ func TestWTTJFetchMapsRealPostings(t *testing.T) {
 	}
 }
 
-func TestWTTJFetchNewSkipsSeenCoveredAndRejected(t *testing.T) {
+func TestWTTJFetchNewSkipsSeenAndCovered(t *testing.T) {
 	f := newWTTJFixture(t)
 	seen := func(id string) bool { return id == "b4c67a99-a423-4e69-b3ee-8ca88858efc7" }
 	var asked []string
@@ -307,10 +307,8 @@ func TestWTTJFetchNewSkipsSeenCoveredAndRejected(t *testing.T) {
 		asked = companies
 		return map[string]bool{"Scribd": true}
 	}
-	// The catalogue filter judges the body-less listing Job, so it must already carry the title.
-	rejected := func(j Job) bool { return j.Title == "Agentic Detection & Response Specialist" }
 	jobs, err := wttj{http: f}.FetchNewGated(context.Background(), CompanyEntry{Board: wttjTestBoard}, seen,
-		DetailGate{Covered: covered, Rejected: rejected})
+		DetailGate{Covered: covered})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,11 +322,10 @@ func TestWTTJFetchNewSkipsSeenCoveredAndRejected(t *testing.T) {
 	if j, ok := by["f1a7304c-fb1c-461f-b40e-a8872a1240e2"]; !ok || j.Description != "" || j.SeenRefresh {
 		t.Errorf("covered posting = %+v, want yielded body-less for the gate", j)
 	}
-	if j, ok := by["f5e30c4a-56e0-458d-a133-46079b6de0cb"]; !ok || j.Description != "" {
-		t.Errorf("rejected posting = %+v, want yielded body-less for the filter", j)
-	}
-	if !slices.Equal(f.detailsAsked, []string{"syspertec-group/vp-engineering-h-f_saint-cloud"}) {
-		t.Errorf("detail requests = %v, want only the new posting neither gate discards", f.detailsAsked)
+	want := []string{"syspertec-group/vp-engineering-h-f_saint-cloud", "plain-concepts/agentic-detection-response-specialist_es_iri2qklj"}
+	// Details are fetched concurrently, so compare them as a set.
+	if got := slices.Sorted(slices.Values(f.detailsAsked)); !slices.Equal(got, slices.Sorted(slices.Values(want))) {
+		t.Errorf("detail requests = %v, want only the new uncovered postings", f.detailsAsked)
 	}
 }
 

@@ -197,9 +197,7 @@ var (
 	// unresolved), which enriched almost nothing useful. The back-office roles
 	// (recruiting/hr/finance/legal/operations/customer_success) and `engineering_design`
 	// (draughting: engineering, but not the IT work this catalogue serves) join this
-	// set: filterable facets, kept out of the LLM and embedding budget. Membership never
-	// makes a posting refusable: the ingest filter (`classify.ConfirmedNonTech`) keeps
-	// every posting that resolves ANY category.
+	// set: filterable facets, kept out of the LLM and embedding budget.
 	NonTechCategories = []string{
 		"marketing", "sales", "support",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",

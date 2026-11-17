@@ -443,8 +443,8 @@ func TestEightfoldFetchNewBoundsNewDetailsPerBoard(t *testing.T) {
 }
 
 // The budget is spent on a random sample of the unseen positions, not on a fixed prefix of the
-// listing: a position the catalogue filter rejects is never stored, so it stays unseen, and a
-// fixed prefix of such positions would hold the budget on every run and starve the rest.
+// listing: a position that is never stored stays unseen, and a fixed prefix of such positions
+// would hold the budget on every run and starve the rest.
 func TestEightfoldFetchNewSamplesTheBudgetAcrossRuns(t *testing.T) {
 	var positions []string
 	for i := 1; i <= 2*eightfoldMaxNewPerBoard; i++ {

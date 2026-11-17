@@ -31,27 +31,15 @@ HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
   creating skeletons. Private/missing rows still require physical removal; a full rebuild
   omits closed/duplicate rows to reclaim retained storage. Before rolling back readers,
   physically remove marked documents and await completion or the old filter exposes them.
-- **A job whose category is unresolved by both the title dictionary and the LLM never
-  enters the index.** `search.CategoryUnresolved` (`document.go`) reports true when
-  `jobs.category` is empty (`internal/dict/classify` found nothing in the title) AND the raw
-  LLM enrichment's own `category` is also empty or the catch-all `"other"` — read from
-  the raw JSON, not `jobview`'s folded `Enrichment.Category`, which the dictionary
-  column always overwrites (`internal/dict/classify/AGENTS.md`) and so never carries the
-  LLM's answer. Both `cmd/reindex`'s `splitJobs` and `cmd/search-drain`'s `IndexBatch`
-  apply it — added because this bucket was measured at ~65% of the open catalogue
-  (broad multi-industry ATS crawls contribute postings like "Industrial Painter" or
-  "Backhoe Loader Operator" that neither dictionary was ever meant to place), diluting
-  every keyword and category-filtered search with undifferentiated noise. A job later
-  categorized by a dictionary update or a fresh LLM pass is picked up by the next full
-  `cmd/reindex` run, not incrementally — `SetJobEnrichment` does not enqueue
-  `search_outbox`, so there is no faster path today. Two placements other than a category
-  keep a job in: `is_tech` confidently true, and a title `internal/dict/roletype` marks
-  `people_manager` — the `role_type` facet reaches a General Manager no category files,
-  and that axis is what the retired `management` category was a proxy for. The gate reads
-  the same `roletype.Derive` `FromJob` writes onto the document, and
-  `classify.ConfirmedNonTech` applies the same veto at ingest, so a posting is kept iff
-  some facet reaches it. The company count in `RefreshCompanyFacets` mirrors every
-  branch but that one (the dictionary is Go), so it under-counts such postings.
+- **A job no category resolves is indexed under `other`, not withheld (#4412).** `FromJob`
+  (`document.go`) sets the document's `enrichment.category` to the residual `"other"` when the
+  dictionary column (which `jobview` folds over the LLM's answer) is empty, so such a posting is
+  findable by keyword, country, company and source, and `category=other` filters to it as one
+  bucket (labelled "Unclassified" on the web). A resolved category is never overwritten. Role
+  landings and insights keep excluding `other`. The gate it replaced (`CategoryUnresolved`)
+  withheld ~2.2M open postings, 10-18% of each national board. The company count in
+  `RefreshCompanyFacets`, the Google/Bing ping query and the ingest pipeline (which no longer
+  refuses unfileable non-tech titles) follow the same rule.
 - **`category=management` is translated, not dropped.** The category is retired
   (`vocab.RetiredCategoryManagement`), but saved searches, alerts and shared links carry
   it, often ORed with other categories. `retiredCategory` (`query_filter.go`) answers the
@@ -76,7 +64,7 @@ HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
   job existing, and a later crawl can hydrate it), so a body-less row is a recoverable ingest
   state, not an error — but a vacancy page with a title and nothing under it is not a listing
   anyone can act on. `cmd/reindex`'s `splitJobs`, `cmd/search-drain`'s `IndexBatch`, and
-  `internal/ingest/linkimport` all apply it, alongside `CategoryUnresolved`. Measured at 15,816 live
+  `internal/ingest/linkimport` all apply it (through `search.Withheld`). Measured at 15,816 live
   rows (0.48% of the open catalogue) when the rule was added (freehire#1866). The exclusion is
   self-healing: a row re-enters the index the moment a crawl fills its description, with no
   backfill or manual step.
@@ -125,8 +113,8 @@ HNSW index were dropped by `0228_drop_precomputed_similar_jobs.sql` and
   count-honesty cap, **not** the pagination guard (that's `maxPageWindow` in the handler,
   which bounds the Postgres-backed lists too since the 2026-09-14 deep-offset outage).
 - **Both indexes are also what the sitemaps page** (`sitemap.go` → `/api/v1/jobs/sitemap`
-  and `/api/v1/companies/sitemap`), which makes the "unresolved category never enters the
-  index" rule above a decision about what Google crawls, not only about what search
+  and `/api/v1/companies/sitemap`), which makes the withholding rules above (no body, unseen)
+  a decision about what Google crawls, not only about what search
   returns. They read through `GET /indexes/<uid>/documents` — offset-addressed, unaffected
   by `maxTotalHits` and `maxPageWindow` (both bound `/search`, not this route), and
   measured flat in the offset: 0 and 1.2M both answer under 0.25s on prod. That replaced a

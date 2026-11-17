@@ -26,8 +26,7 @@ func (w UnseenWindows) Unseen(j db.Job, now time.Time) bool {
 }
 
 // Withheld reports whether search keeps an otherwise-listable job (open, canonical, public)
-// out of its index: no category (CategoryUnresolved), no body (DescriptionMissing), or an
-// unseen source (UnseenWindows.Unseen). Every index writer (cmd/reindex, cmd/search-drain,
+// out of its index: no body (DescriptionMissing) or an unseen source (UnseenWindows.Unseen). Every index writer (cmd/reindex, cmd/search-drain,
 // linkimport) asks this one predicate.
 //
 // The unseen rule applies when a document is written, not as a query-time filter on an
@@ -44,7 +43,6 @@ func Withheld(j db.Job, now time.Time, unseen UnseenWindows) bool {
 type WithholdReason string
 
 const (
-	WithheldNoCategory    WithholdReason = "category_unresolved"
 	WithheldNoDescription WithholdReason = "description_missing"
 	WithheldUnseen        WithholdReason = "unseen"
 )
@@ -52,8 +50,6 @@ const (
 // WithheldBy is Withheld with its reason: the first rule that holds, so counts partition.
 func WithheldBy(j db.Job, now time.Time, unseen UnseenWindows) WithholdReason {
 	switch {
-	case CategoryUnresolved(j):
-		return WithheldNoCategory
 	case DescriptionMissing(j):
 		return WithheldNoDescription
 	case unseen.Unseen(j, now):

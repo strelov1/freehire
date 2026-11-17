@@ -162,7 +162,7 @@ func (s servicepublic) FetchNewGated(ctx context.Context, _ CompanyEntry, seen f
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.employer] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.employer] {
 			jobs = append(jobs, base)
 			continue
 		}

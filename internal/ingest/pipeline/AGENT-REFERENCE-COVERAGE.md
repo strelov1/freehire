@@ -10,9 +10,8 @@ Posting-level duplicate detection remains in the store and the periodic marker p
 identity, role fingerprints, aggregator/ATS title matching, and fuzzy matching. Duplicate
 markers hide copies without discarding the source posting.
 
-`CoverageGated` adapters still receive the listing rejection predicate to avoid hydrating
-postings the catalogue filter rejects. Their company-coverage resolver always returns no
-covered companies. Unreadable details keep the existing open-only liveness refresh and
+`CoverageGated` adapters receive a gate that condemns nothing: the company-coverage resolver
+always returns no covered companies, and no posting is refused on title (#4412). Unreadable details keep the existing open-only liveness refresh and
 withhold stale-close scopes when the unreadable share exceeds the normal threshold.
 
 The `ats_covered` reason is historical for ordinary aggregator ingestion. LinkedIn native-board

@@ -15,7 +15,7 @@ func TestSweepableProviders(t *testing.T) {
 	rs := pipeline.RunStats{
 		"vk":         {Ingested: 5},
 		"personio":   {EmptyBoards: refs("emptied")},
-		"board-only": {Rejected: 2, QualifyingBoards: refs("read-completely")},
+		"board-only": {QualifyingBoards: refs("read-completely")},
 		"ozon":       {Ingested: 0, Failed: 3}, // crawl failed → excluded
 		"sber":       {Ingested: 2},
 	}

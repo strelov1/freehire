@@ -25,11 +25,9 @@ import (
 // be crawled.
 //
 // Crawling the whole index would be wrong too: it is a school board, not an IT one.
-// `classify.ConfirmedNonTech`, the gate that decides what a crawl may store, is a title
-// dictionary written against tech-company ATS boards with no term for K-12 classified staff, so
-// it admits school psychologists, bus monitors, coaches and cafeteria workers. An unscoped crawl
-// would move tens of thousands of non-technical postings into the catalogue and re-fetch their
-// bodies every run (a rejected posting is never stored, so it is never `seen`).
+// Ingest stores every posting a crawl yields (#4412), so an unscoped crawl would move tens of
+// thousands of non-technical postings (school psychologists, bus monitors, coaches, cafeteria
+// workers) into the catalogue.
 //
 // The platform's `category` facet does not work as a scope: many postings carry no category, the
 // densest categories cover only a fraction of the technical postings, and categories overlap so

@@ -1,6 +1,6 @@
 package classify
 
-// chineseCategoryTable is the Chinese block of categoryTable: Simplified from the mainland ATS crawl (mokahr) and Traditional from the Taiwanese boards (job104, cake, foxconn, asus, realtek, quanta, mediatek). Without it almost no such title resolves a category, so search.CategoryUnresolved hides it.
+// chineseCategoryTable is the Chinese block of categoryTable: Simplified from the mainland ATS crawl (mokahr) and Traditional from the Taiwanese boards (job104, cake, foxconn, asus, realtek, quanta, mediatek). Without it almost no such title resolves a category, so search files it under "other".
 //
 // Chinese writes no spaces, so these aliases match glued to whatever qualifies them (titleBoundary, cjk.go), and the choice of alias is the whole safety margin. Every alias is a compound that names the ROLE (會計 accounting, 倉管 warehouse keeping, 韌體 firmware), never a head every title ends in: 工程師 ("engineer"), 人員 ("staff"), 專員 ("specialist"), 助理 ("assistant"), 開發 ("development"), 設計 ("design"). Those resolve nothing alone: 研發工程師 is an R&D engineer of any discipline, 軟內飾開發 develops a car's soft interior trim. Every alias also carries a Han character: a purely Latin one ("cnc", "cad") would reach Latin titles too, and the core table already reads the Latin fragments of a Chinese title ("Java开发工程师"), since a Han neighbour is a boundary.
 //

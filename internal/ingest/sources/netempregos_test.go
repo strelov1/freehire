@@ -87,7 +87,6 @@ func TestNetEmpregosHydratesNewPostingsNewestFirst(t *testing.T) {
 		Covered: func(cs []string) map[string]bool {
 			return map[string]bool{"Gi Group": slices.Contains(cs, "Gi Group")}
 		},
-		Rejected: func(Job) bool { return false },
 	}
 	jobs, err := newTestNetEmpregos(f).FetchNewGated(context.Background(), CompanyEntry{}, func(id string) bool { return id == "16140000" }, gate)
 	if err != nil {

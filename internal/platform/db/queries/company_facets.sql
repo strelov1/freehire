@@ -22,7 +22,7 @@
 -- the wider table scope did all three: 294,021 company URLs in the sitemap of which
 -- most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
 -- through could not find, and Stripe listed at 570 on /companies against 444 on its
--- own page. The four predicates below (private, body, category, unseen) are the ones
+-- own page. The three predicates below (private, body, unseen) are the ones
 -- cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
 --
 -- industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
@@ -53,10 +53,6 @@ oj AS MATERIALIZED (
     FROM jobs j
     LEFT JOIN unseen_window uw ON uw.source = j.source
     LEFT JOIN job_activity a ON a.job_id = j.id
-    -- kept_ids (see the category predicate below) as a relation: ~400k ids, so a hash join that
-    -- can spill, not an IN subplan that degrades to a per-row scan once it outgrows hash memory.
-    -- The ids are primary keys from one query, so the join never multiplies a job.
-    LEFT JOIN unnest(sqlc.arg('kept_ids')::bigint[]) AS k(id) ON k.id = j.id
     WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
       -- search.UnseenWindows.Unseen: the source has stopped showing the posting. last_seen_at is
       -- job_activity's; a job without an activity row reads as unseen, only for a windowed source.
@@ -68,29 +64,7 @@ oj AS MATERIALIZED (
       -- residual is small and self-limiting: such a company reaches the sitemap, and
       -- its page answers noindex off the same search that excluded the row.
       AND j.description <> ''
-      -- search.CategoryUnresolved: the column answers, or the enrichment does, or
-      -- is_tech is confidently true (a confirmed-technical job — e.g. Profession's
-      -- dedicated itdev/itops boards, issue #2601 — is never the undifferentiated
-      -- bulk this predicate exists to keep out, even lacking a specific category) —
-      -- and "other" is the classifier declining, not an answer. This is the predicate
-      -- that excluded almost everything in the sample, the dictionaries being
-      -- deliberately dict-only: a Samara kindergarten's vacancy resolves to no tech
-      -- category and no is_tech, so nobody can find it and its employer is not a page
-      -- worth handing a crawler. Keep this in step with search.CategoryUnresolved
-      -- (internal/search/search/document.go) — a company whose only open jobs are
-      -- confirmed-technical-but-uncategorized would otherwise show 0 open jobs here
-      -- while those same jobs are live in search.
-      --
-      -- The title branch search also keeps (a roletype role or a manager title, "General
-      -- Manager", "Vodja oddelka") runs Go dictionaries SQL cannot: the caller resolves it over
-      -- ListUncategorizedOpenJobTitles and passes the kept ids in. Without it a company hiring
-      -- only for such roles counted 0 and fell out of the companies index while its jobs stayed
-      -- live (#4503).
-      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE
-           -- The two branches search.CategoryUnresolved keeps that SQL cannot derive: a title
-           -- the Go role dictionaries keep (resolved by the caller, search.TitleKeepsUncategorized)
-           -- and a vacancy a verified employer published.
-           OR k.id IS NOT NULL OR j.source = sqlc.arg('employer_source')::text)
+      -- No category predicate: search indexes an uncategorized posting under "other" (#4412).
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug

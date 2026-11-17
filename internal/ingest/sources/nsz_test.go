@@ -162,10 +162,10 @@ func TestNSZHydratesUnseenVacancies(t *testing.T) {
 	}
 }
 
-func TestNSZRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
+func TestNSZRefreshesSeenVacancies(t *testing.T) {
 	s, fake := newTestNSZ(t)
 	seen := func(id string) bool { return id == "104454" }
-	gate := DetailGate{Rejected: func(j Job) bool { return j.ExternalID == "104097" }}
+	gate := DetailGate{}
 	jobs, err := s.FetchNewGated(context.Background(), CompanyEntry{Provider: "nsz"}, seen, gate)
 	if err != nil {
 		t.Fatalf("FetchNewGated: %v", err)
@@ -174,11 +174,8 @@ func TestNSZRefreshesSeenAndSparesGatedVacancies(t *testing.T) {
 	if j := got["104454"]; !j.SeenRefresh || j.Description != "" || j.Title != "Vaspitač u predškolskoj ustanovi" {
 		t.Errorf("a stored vacancy must be refreshed by identity, in Latin: %+v", j)
 	}
-	if got["104097"].Description != "" {
-		t.Error("a rejected vacancy must be yielded body-less")
-	}
 	for _, id := range fake.detCalls {
-		if id == "104454" || id == "104097" {
+		if id == "104454" {
 			t.Errorf("vacancy page bought for %s, which needed none", id)
 		}
 	}

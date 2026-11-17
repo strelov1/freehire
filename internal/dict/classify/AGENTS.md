@@ -25,9 +25,9 @@ Read [Japanese (and the CJK boundary)](AGENT-REFERENCE.md#japanese-and-the-cjk-b
 
 Read [The two design crafts](AGENT-REFERENCE.md#the-two-design-crafts) before work involving this topic.
 
-## What the ingest filter refuses
+## No ingest filter on title
 
-Read [What the ingest filter refuses](AGENT-REFERENCE.md#what-the-ingest-filter-refuses) before work involving this topic.
+Read [No ingest filter on title](AGENT-REFERENCE.md#no-ingest-filter-on-title) before adding a broad technical alias.
 
 ## Social services, science, manufacturing
 

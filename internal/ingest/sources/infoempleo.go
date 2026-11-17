@@ -109,7 +109,7 @@ func (s infoempleo) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 
 // FetchNewGated walks the whole listing, refreshes the postings already stored, and reads up to
 // maxNewPerRun of the rest, newest id first. A posting the pipeline will discard anyway — its
-// employer already covered by a non-aggregator source, or its title rejected — is judged on its
+// employer already covered by a non-aggregator source — is judged on its
 // card and yielded body-less without a request. A posting whose page cannot be read is not
 // yielded; a later run tries again.
 func (s infoempleo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
@@ -135,7 +135,7 @@ func (s infoempleo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[c.company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[c.company] {
 			jobs = append(jobs, base)
 			continue
 		}

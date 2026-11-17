@@ -119,9 +119,8 @@ func (s turijobs) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 }
 
 // FetchNewGated lists the sitemap, refreshes the postings already stored, and reads up to
-// maxNewPerRun of the rest, newest id first. A posting whose title the catalogue filter will
-// reject is yielded body-less without a request; the coverage half of the gate cannot be asked,
-// since nothing before the page names the employer. A posting whose page cannot be read is not
+// maxNewPerRun of the rest, newest id first. The coverage gate cannot be asked before the page,
+// since nothing there names the employer. A posting whose page cannot be read is not
 // yielded; a later run tries again.
 func (s turijobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	postings, err := s.list(ctx)
@@ -135,10 +134,6 @@ func (s turijobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 		base := Job{ExternalID: p.externalID(), URL: p.url, Title: p.title}
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if gate.Rejected != nil && gate.Rejected(base) {
 			jobs = append(jobs, base)
 			continue
 		}

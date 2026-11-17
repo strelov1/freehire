@@ -369,11 +369,9 @@ func TestDevGlobalJobsCoverageGated(t *testing.T) {
 	gate := DetailGate{
 		Covered: func(companies []string) map[string]bool {
 			return map[string]bool{
-				"OpenAI": true,
+				"OpenAI":       true,
+				"Local Bistro": true,
 			}
-		},
-		Rejected: func(j Job) bool {
-			return j.Title == "Chef"
 		},
 	}
 
@@ -391,12 +389,12 @@ func TestDevGlobalJobsCoverageGated(t *testing.T) {
 		t.Errorf("unexpected job 0: %+v", jobs[0])
 	}
 
-	// 102 (Chef) was rejected by filter: yielded body-less (uses excerpt, no detail fetch called)
+	// 102 (Local Bistro) was covered too: yielded body-less (uses excerpt, no detail fetch called)
 	if jobs[1].Company != "Local Bistro" || jobs[1].Description != "Bistro excerpt" {
 		t.Errorf("unexpected job 1: %+v", jobs[1])
 	}
 
-	// 103 (UncoveredStartup) was neither covered nor rejected: detail fetch was called!
+	// 103 (UncoveredStartup) was not covered: detail fetch was called!
 	if jobs[2].Company != "UncoveredStartup" || jobs[2].Description != "<p>Hydrated full body for uncovered startup</p>" {
 		t.Errorf("unexpected job 2: %+v", jobs[2])
 	}

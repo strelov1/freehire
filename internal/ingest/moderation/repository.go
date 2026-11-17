@@ -37,7 +37,7 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool, targetVersion int32
 // The search enqueue is unconditional. cmd/ingest gates its own on "inserted or changed"
 // because it replays millions of rows a pass; a moderator write is one deliberate row, and
 // ClaimSearchOutboxBatch already skips an entry whose job has since closed or become a
-// non-canonical repost. cmd/search-drain applies the CategoryUnresolved/DescriptionMissing
+// non-canonical repost. cmd/search-drain applies search.Withheld (DescriptionMissing, unseen)
 // rules on the way out, so nothing is gated here that is not gated there.
 func (r *QueriesRepository) Create(ctx context.Context, f job.Fields, actorID int64, owner EmployerOwner) (job.Job, job.Extras, error) {
 	tx, err := r.pool.Begin(ctx)

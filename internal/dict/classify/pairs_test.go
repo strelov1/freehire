@@ -62,7 +62,7 @@ func TestBothSpellingsOfACraftResolveTheSame(t *testing.T) {
 	// This test exists because of what the gap costs. A title the dictionary cannot read
 	// gets no category AND no is_tech; EnqueuePendingJobs gates enrichment on
 	// `is_tech IS TRUE`, so the LLM never sees it and never supplies the missing
-	// category; and search.CategoryUnresolved then hides it forever rather than until
+	// category; and search then files it under "other" forever rather than until
 	// the next enrichment cycle. Measured 2026-09-16: "senior java engineer" alone was
 	// 233 open postings on the wrong side of that loop.
 	//

@@ -33,13 +33,11 @@ Three groups sit **before** the bare `designer`/`design` entries, or `design` wo
 
 A title where an alias appears but names no category ("Software Design Engineer") carries the `categoryNone` sentinel; `matchCategory` serves it as `""`. It is deliberately NOT a pre-match mask like `gradeBlindPhrases`: cutting the span exposes aliases further down (mostly business categories — "Software Design Engineer - Sales Tools" read `sales`) and is boundary-blind. Every exit translates the sentinel — `Parse`, `Categories`, `CategoryAliases` (the last two feed CV profiles and the generated web contracts).
 
-## What the ingest filter refuses
+## No ingest filter on title
 
-The ingest filter refuses a posting only through `ConfirmedNonTech`: the title names a role from the non-tech list (`nontech.go`) AND nothing places it — no technical evidence and **no category of any kind**. A resolved category, technical or not, keeps the posting under that facet with `is_tech = false`. An unfileable non-tech title is refused because search excludes it anyway (`search.CategoryUnresolved`).
+Ingest no longer refuses a posting for its title (#4412; `ConfirmedNonTech` is gone). A title no category files is stored and indexed under `other` ("Unclassified"). Growing the facets is still a dictionary change: give the role a category, then run `cmd/backfill-derive` and `cmd/reindex` (a hydrating source only `touch`es a seen posting, so its next crawl does not re-derive it).
 
-So growing the catalogue is a dictionary change: give the role a category and the next crawl admits it. Every non-tech term that names a job is filed in `categoryTable`, in blocks declared after every technical block, so earlier answers do not move. The refusal is now reached only by titles an earlier `categoryNone` pin claims. A new non-tech term with no category is a category to add, not an exception to carve out.
-
-**The hazard:** an alias harmless while the filter refused non-tech titles can now admit one into a TECHNICAL category ("Front End Cashier" resolved to `frontend` unseen, because cashiers were refused). Before adding a broad technical alias, run it against formerly refused titles — the ingest log's `rejected N/M postings as non-technical, e.g. ...` lines carry two per board.
+**The hazard:** a broad technical alias can admit a non-tech title into a TECHNICAL category ("Front End Cashier" resolved to `frontend`). Before adding one, run it against the `other` bucket's titles.
 
 ## Social services, science, manufacturing
 
@@ -67,9 +65,9 @@ Slovenian vocabulary came from 3,288 titles (#3518), curated: catch-all nouns an
 `management` was retired (~6% of the catalogue, a burger chain's Assistant Manager beside a Tax Manager — said nothing about the work); do not reintroduce it. Two axes replace it:
 
 - **The craft**, here: a manager title resolves what it manages (Restaurant `hospitality`, Tax `finance`, IT `devops`, Engineering Manager `software_engineering`; discipline-named "Mechanical/Project/Plant/... Engineering Manager" pinned to `industrial_engineering` ahead of it). These sit in the managers block at the END of the table.
-- **Whether it manages people**, in `internal/dict/roletype` (`role_type` facet). General/Assistant/Store/Branch/District/Area/Plant/Shift Manager and начальник/заведующий/директор name no craft; roletype marks them `people_manager`, search keeps postings that facet reaches (`search.CategoryUnresolved`), and `ConfirmedNonTech` vetoes refusal the same way.
+- **Whether it manages people**, in `internal/dict/roletype` (`role_type` facet). General/Assistant/Store/Branch/District/Area/Plant/Shift Manager and начальник/заведующий/директор name no craft; roletype marks them `people_manager`.
 
-There is no bare "manager"/"менеджер" alias. A manager title naming neither craft nor people marker (Case Manager, Portfolio Manager, "Senior Manager, X") resolves no category, but `NamesManager` keeps it past both catalogue gates (`search.CategoryUnresolved`, `ConfirmedNonTech`): findable by keyword, reached by no facet — ~2.9% of postings on a 2% sample at retirement. A `category=management` filter value (saved searches, old links) is answered as `role_type=people_manager` by the search filter.
+There is no bare "manager"/"менеджер" alias. A manager title naming neither craft nor people marker (Case Manager, Portfolio Manager, "Senior Manager, X") resolves no category and lands in `other` (findable by keyword) — ~2.9% of postings on a 2% sample at retirement. A `category=management` filter value (saved searches, old links) is answered as `role_type=people_manager` by the search filter.
 
 ## Public safety
 
@@ -141,7 +139,7 @@ Moved to [AGENT-REFERENCE-LANGUAGES.md](AGENT-REFERENCE-LANGUAGES.md#slovenian-g
 
 ## Serving: dict-only
 
-`jobview.FromRow` (through `FromDomain`) overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the column always wins, the LLM value is never a fallback. That column is `jobderive.Derive`'s answer: a source's structured value first, then the title dictionary, then the description. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
+`jobview.FromRow` (through `FromDomain`) overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the column always wins. The one fallback: an empty `category` column serves the category the model gave when it is a `vocab.CategoryValues` value other than `other` (#4412), so the job page, the API and search agree. That column is `jobderive.Derive`'s answer: a source's structured value first, then the title dictionary, then the description. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
 
 ## Convention
 

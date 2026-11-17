@@ -91,7 +91,7 @@ func (s idealtraits) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 	return fetchDetails(postings, defaultDetailWorkers, func(p idealtraitsPosting) (Job, bool) {
 		if seen(p.id) {
 			// Identity and the card's title only: the pipeline refreshes liveness without
-			// rewriting content, and the title is what the catalogue filter weighs on a refresh.
+			// rewriting content.
 			return Job{ExternalID: p.id, URL: p.url, Title: p.title, Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, p)

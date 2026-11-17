@@ -15,7 +15,7 @@ func render(rep serveprobe.Report) string {
 	perField(&b, "freehire_serve_probe_stored", rep, func(c serveprobe.Count) int { return c.Stored })
 	header(&b, "freehire_serve_probe_sampled", "Open postings this run sampled.")
 	fmt.Fprintf(&b, "freehire_serve_probe_sampled %d\n", rep.Sampled)
-	header(&b, "freehire_serve_probe_unindexed", "Sampled postings with no Meilisearch document, by reason: a rule search withholds them by (category_unresolved, description_missing, unseen), or missing when none does — lost by the index or still queued for the drain.")
+	header(&b, "freehire_serve_probe_unindexed", "Sampled postings with no Meilisearch document, by reason: a rule search withholds them by (description_missing, unseen), or missing when none does — lost by the index or still queued for the drain.")
 	for _, k := range serveprobe.UnindexedReasons {
 		fmt.Fprintf(&b, "freehire_serve_probe_unindexed{reason=%q} %d\n", k, rep.Unindexed[k])
 	}

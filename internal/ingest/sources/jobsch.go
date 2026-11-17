@@ -189,7 +189,7 @@ func (s jobsch) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 			continue // an anonymous posting is dropped (jobschDetail), so its page is not bought
 		}
 		base := p.card.job(p)
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}

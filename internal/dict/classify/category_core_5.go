@@ -86,7 +86,7 @@ var coreCategoryTable5 = []aliasEntry{
 	// contain "health and safety". The ampersand spelling does need one: it is a different string, not a different boundary.
 	{"health and safety", "occupational_safety"},
 	{"health & safety", "occupational_safety"},
-	// Russian. The non-tech term list (ConfirmedNonTech) already carries "охрана труда"/"охране труда". Russian titles
+	// Russian. The non-tech term list already carries "охрана труда"/"охране труда". Russian titles
 	// inflect the phrase and the matcher does not, so all three cases are listed: genitive ("Специалист в области охраны
 	// труда"), dative ("Инженер по охране труда"), nominative ("Охрана труда"). They are narrow on purpose: bare "охрана"
 	// names security guards and forest rangers ("государственный инспектор по охране леса"), so only the two-word
@@ -134,7 +134,6 @@ var coreCategoryTable5 = []aliasEntry{
 	// Manager at a burger chain, a Case Manager, a Plant Manager in one facet). The category is retired: a manager title
 	// now resolves the CRAFT it names (the "restaurant/store/plant/tax/... manager" spellings are in the managers block at
 	// the end of this table), and whether it manages PEOPLE is the `role_type` facet's question (internal/dict/roletype).
-	// Search keeps a posting either facet reaches (search.CategoryUnresolved).
 	// "analyst" fell through to `data_analytics`, which is technical, so an unrecognised analyst was DECLARED a
 	// technical data role: most had no data/analytics/BI word at all (Board Certified Behavior Analysts, investment,
 	// purchasing, risk, pricing, policy and tax analysts), yet all were eligible for the enrichment budget and shielded

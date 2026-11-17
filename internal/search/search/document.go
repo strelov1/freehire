@@ -1,16 +1,12 @@
 package search
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/aiarchetype"
-	"github.com/strelov1/freehire/internal/ai/enrich"
-	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
-	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -92,6 +88,12 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	if err != nil {
 		return JobDocument{}, err
 	}
+	// jobview serves the dictionary column, or the model's category where the column is empty.
+	// A posting neither files is indexed under the residual "other" bucket (#4412).
+	category := view.Enrichment.Category
+	if category == "" {
+		view.Enrichment.Category = "other"
+	}
 	// Cap the indexed description; the detail endpoint serves the full text from its own FromRow.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{
@@ -99,7 +101,7 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 		IsClosed:    j.ClosedAt.Valid,
 		IsDuplicate: j.DuplicateOf.Valid,
 		Job:         view,
-		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
+		AIArchetype: aiarchetype.Derive(j.Skills, category),
 		RoleType:    roletype.Derive(j.Title),
 		SourceType:  sourceType,
 		AIInterview: view.AIInterviewReports > 0,
@@ -126,44 +128,9 @@ func (d *JobDocument) AttachApplyQuestions(counts map[int64]int) {
 	}
 }
 
-// CategoryUnresolved reports whether neither the title dictionary nor the LLM resolved a job's
-// category (jobs.category empty, enrichment empty or "other"). Such jobs are kept out of the
-// index so the undifferentiated bulk of broad ATS crawls does not dilute it. It reads the raw
-// enrichment JSON because jobview's Enrichment.Category is always overwritten by the
-// dictionary column.
-//
-// Never excluded: confirmed-tech jobs (is_tech true, from the dictionary or a source hint such
-// as jobderive.Input.IsTechHint); people managers (roletype.Derive, the call FromJob uses, so
-// gate and facet agree; classify.ConfirmedNonTech applies the same veto at ingest); any title
-// naming a manager (classify.NamesManager), findable by keyword though no facet reaches them;
-// and vacancies a verified employer published here (job.EmployerSource).
-func CategoryUnresolved(j db.Job) bool {
-	if j.Category != "" || j.Source == job.EmployerSource {
-		return false
-	}
-	if j.IsTech.Valid && j.IsTech.Bool {
-		return false
-	}
-	if TitleKeepsUncategorized(j.Title) {
-		return false
-	}
-	var e enrich.Enrichment
-	if len(j.Enrichment) > 0 {
-		_ = json.Unmarshal(j.Enrichment, &e)
-	}
-	return e.Category == "" || e.Category == "other"
-}
-
-// TitleKeepsUncategorized reports whether a title alone keeps an uncategorized posting in
-// search: a role the roletype dictionary names, or a title naming a manager. Exported for
-// cmd/recount-companies, whose SQL cannot run these dictionaries.
-func TitleKeepsUncategorized(title string) bool {
-	return roletype.Derive(title) != "" || classify.NamesManager(title)
-}
-
 // DescriptionMissing reports whether a job has no visible posting body (a failed detail fetch
-// is a normal, recoverable ingest state). Such a job is excluded from the index like an
-// unresolved category and re-enters once a crawl fills the body.
+// is a normal, recoverable ingest state). Such a job is excluded from the index and re-enters
+// once a crawl fills the body.
 //
 // It tests the visible text, not the raw column: an empty rich-text field arrives as markup
 // with no words ("<p>&nbsp;</p>"), which the sanitizer keeps.

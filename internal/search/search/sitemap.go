@@ -24,9 +24,9 @@ const (
 )
 
 // jobSitemapFilter narrows the job sitemap to the postings this site vouches for: the whole
-// findable index (open, canonical, public, with a body and a resolved category, per
-// cmd/reindex's splitJobs) minus the likely-evergreen reality class. Technical and non-technical
-// categories alike are included; CategoryUnresolved already keeps the undifferentiated bulk out.
+// findable index (open, canonical, public, with a body, per cmd/reindex's splitJobs) minus the
+// likely-evergreen reality class. Technical, non-technical and uncategorized ("other", #4412)
+// postings alike are included.
 //
 // is_tech still decides spend (enrichment, embeddings, digest) and Indexing API ordering
 // (internal/job/searchping), not what the sitemap asserts.

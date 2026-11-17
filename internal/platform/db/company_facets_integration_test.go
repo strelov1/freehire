@@ -133,12 +133,9 @@ func TestRefreshCompanyFacets(t *testing.T) {
 	})
 }
 
-// TestRefreshCompanyFacetsCountsConfirmedTechnicalJobs pins that RefreshCompanyFacets'
-// category-unresolved exclusion stays in step with search.CategoryUnresolved
-// (internal/search/search/document.go) after issue #2601: a company whose only open
-// job has no resolved category (dictionary or enrichment) but is_tech confidently true
-// must still be counted, or its page would show 0 open jobs while that same job is
-// live in search.
+// TestRefreshCompanyFacetsCountsConfirmedTechnicalJobs pins issue #2601: a company whose
+// only open job has no resolved category but is_tech confidently true must still be
+// counted, or its page would show 0 open jobs while that same job is live in search.
 func TestRefreshCompanyFacetsCountsConfirmedTechnicalJobs(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

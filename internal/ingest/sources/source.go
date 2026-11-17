@@ -254,20 +254,20 @@ type RecentSource interface {
 
 // CoverageGated is a HydratingSource that can also skip a posting's detail when the pipeline is
 // going to discard that posting anyway — the aggregator-coverage gate because the employer is
-// already covered by a non-aggregator source, or the catalogue filter because the title is
-// confirmed non-technical.
+// already covered by a non-aggregator source.
 //
 // It exists because `seen` alone cannot bound the work on such a board. A discarded posting is
 // never stored, so it is never seen, so the ordinary hydrating crawl pays for its body on
 // EVERY run and throws the body away every time. That is minor on most aggregators and the
 // whole board on one that lists many already-covered postings (remote.com).
 //
-// The production pipeline supplies only catalogue rejection decisions. Its Covered callback
-// always returns no companies: another vacancy at an employer is not duplicate evidence.
+// The production pipeline supplies no decisions today: its Covered callback always returns no
+// companies (another vacancy at an employer is not duplicate evidence, #4764), and nothing is
+// refused on title (#4412), so a gated adapter hydrates like any other.
 //
-// The contract is about COST, not about the result: a posting either answer condemns is still
+// The contract is about COST, not about the result: a posting the gate condemns is still
 // yielded, just without a body. Dropping it instead would be the adapter quietly making the
-// pipeline's decision, which is the pipeline's to make and to count (Stats.Rejected).
+// pipeline's decision, which is the pipeline's to make and to count.
 type CoverageGated interface {
 	HydratingSource
 	FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error)
@@ -281,11 +281,6 @@ type DetailGate struct {
 	// already covered by a non-aggregator source, keyed by the SAME strings passed in — the
 	// adapter states company names and never has to know how freehire slugs them.
 	Covered func(companies []string) map[string]bool
-	// Rejected reports whether the catalogue filter will turn the posting away as
-	// non-technical, judged on the body-less Job the adapter built from its listing. The
-	// answer is exact, not a guess: the filter reads the title and the adapter's structured
-	// category signals, never the body (see pipeline's catalogue_fit.go).
-	Rejected func(j Job) bool
 }
 
 // CompanyDescriber is a Source that can also fetch its board's own company-level

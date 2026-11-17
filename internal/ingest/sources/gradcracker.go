@@ -242,7 +242,7 @@ func (g gradcracker) hydrate(ctx context.Context, fresh []gradcrackerCard, gate 
 	deferred := 0
 	for _, c := range fresh {
 		switch j := c.job(); {
-		case covered[c.Company] || (gate.Rejected != nil && gate.Rejected(j)):
+		case covered[c.Company]:
 			out = append(out, j)
 		case len(toHydrate) < g.maxNewPerRun:
 			toHydrate = append(toHydrate, c)

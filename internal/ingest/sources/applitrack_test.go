@@ -281,8 +281,7 @@ func TestAppliTrackFetchNewSkipsSeenDetail(t *testing.T) {
 				j.ExternalID, j.Description)
 		}
 		if j.Title == "" {
-			t.Errorf("job %s: a refresh must carry the title, so the catalogue filter can be "+
-				"re-applied to it", j.ExternalID)
+			t.Errorf("job %s: a refresh must carry the title", j.ExternalID)
 		}
 	}
 }
