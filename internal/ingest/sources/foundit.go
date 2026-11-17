@@ -2,106 +2,89 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/strelov1/freehire/internal/platform/flexjson"
 	"golang.org/x/time/rate"
 )
 
-// foundit adapts foundit.in (formerly Monster India), a general Indian job board whose postings
-// each name their own employer. It is a boardless aggregator that crawls the board's IT
-// SEARCH SLICES: the catalogue is ~210k postings of every trade, the search serves at most its
-// newest 10,000 rows per query, and its structured categories are unusable (77% of postings are
-// filed under the industry "Other"; the designation "Software Engineer/Programmer" holds sales
-// managers). A slice is therefore a keyword query over the last 30 days; the slices
-// overlap and are deduplicated by posting id within the run, and no
-// tech hint is set (the site has no reliable technical signal).
+// foundit adapts foundit.in (formerly Monster India), a general Indian job board, every trade,
+// whose postings each name their own employer. It is boardless and an aggregator: one crawl
+// covers the whole India catalogue (~211k postings on 2026-11-17), the employer read per posting.
 //
-// The listing is the JSON search the site's own web app calls (/middleware/jobsearch); a row
-// carries no body, so this is a HydratingSource that reads a posting's body from the detail
-// endpoint (/middleware/jobdetail/<id>) only when the catalogue lacks it. Both endpoints answer
-// a plain client "content negotiation failed" (HTTP 400) unless the request carries a foundit
-// Referer, and the site refuses a plain Go client's TLS fingerprint, so production reads them
-// through the Scrapling tier (scraplingtier.go). See the foundit traps in AGENTS.md.
+// The posting set comes from the site's sitemaps, because robots.txt disallows /middleware/,
+// the JSON API the web app itself calls: the nine active-jobs files list every active posting
+// and todays-jobs-sitemap the newest ones not yet in them. They carry nothing but each posting's
+// URL, so every fact is bought with the posting page's schema.org JobPosting: the adapter
+// hydrates only postings the catalogue lacks, newest id first, and refreshes the rest by
+// identity. Akamai refuses a plain client, so production reads sitemaps and pages through the
+// Scrapling tier (scraplingtier.go). See providers/foundit.md.
 type foundit struct {
-	http HeaderJSONGetter
-	// spent counts the detail requests claimed across the run.
-	spent *atomic.Int64
+	http         founditHTTP
+	limiter      waiter
+	maxNewPerRun int
+}
+
+// founditHTTP is the transport the adapter needs: the sitemaps as a raw stream (the .gz files
+// are served as bytes the adapter inflates itself) and each posting page.
+type founditHTTP interface {
+	StreamGetter
+	HTMLGetter
 }
 
 const (
-	founditBase      = "https://www.foundit.in"
-	founditSearchURL = founditBase + "/middleware/jobsearch?"
-	founditDetailURL = founditBase + "/middleware/jobdetail/%s"
+	founditBase         = "https://www.foundit.in"
+	founditSitemapIndex = founditBase + "/xmlsitemap/sitemap-index.xml"
+	// The index names ~60 files of search landing pages beside the posting ones; these two
+	// needles select the posting files (active-jobs-sitemap0..8.xml.gz and todays-jobs-sitemap.xml).
+	founditActiveNeedle = "/active-jobs-sitemap"
+	founditTodayNeedle  = "/todays-jobs-sitemap"
+	// founditMaxSitemapBytes bounds one sitemap file once inflated (a 25k-URL file is ~5 MB).
+	founditMaxSitemapBytes = 64 << 20
 
-	// founditPageSize is the most rows a search page serves (limit=100 answered 100, plus ad rows).
-	founditPageSize = 100
-	// founditWindow is the search's deepest row: start+limit past 10,000 repeats the last page
-	// instead of answering an error, so the walk must stop at it.
-	founditWindow = 10_000
-	// founditSortDate is sort=2, strictly newest first by createdAt; the default (1) is a
-	// relevance order that interleaves days.
-	founditSortDate = "2"
-	// founditFreshnessDays is the jobFreshness window. A posting lives ~45 days (the listing's
-	// closedAt on a sampled row was 44.7 days after createdAt), so the 30-day window re-lists a
-	// live posting for most of its life and founditSweepGrace covers the rest.
-	founditFreshnessDays = 30
-	// founditSweepGrace absorbs the window: a live posting older than the freshness window is
-	// not listed, and the detail endpoint is not a liveness probe the sweep can ask. 30 + 21
-	// days is past the ~45 days a posting lives, so one is closed after it expired.
-	founditSweepGrace = 21 * 24 * time.Hour
+	// founditSweepGrace absorbs the sitemaps' lag: the active files are regenerated every few
+	// days (the copy read on 2026-11-17 was generated on the 15th), so a posting can leave
+	// todays-jobs-sitemap before the active files name it and read as unseen for a while.
+	founditSweepGrace = 7 * 24 * time.Hour
 
-	// Pacing: every request of a run, search and detail alike, shares one limiter. Measured
-	// 2026-11-17 through the Scrapling tier: a detail ~0.55 s, a 30-row search ~0.6 s.
-	founditRequestInterval = 500 * time.Millisecond
-	founditRequestBurst    = 2
-	founditDetailWorkers   = 4
-	// founditDetailBudget bounds one run's detail requests (~12.5 minutes at the pace above);
-	// the backlog accretes over later runs and steady state is a few hundred new postings a run.
-	founditDetailBudget = 1500
+	// founditRequestInterval paces every request of a run, sitemap and posting page alike, at one
+	// a second — a courtesy ceiling toward a large site, not a measured limit.
+	founditRequestInterval = time.Second
+	// founditDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
+	founditDetailWorkers = 2
+	// founditMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a
+	// second is 25 minutes of the scheduler's default 2,400 s crawl budget, leaving the rest for
+	// the ~10 sitemap files and the writes after the fetch (a run that meets its deadline stores
+	// nothing). The site adds ~5,300 postings a day, so at the default two-hour cadence the 18,000
+	// a day it takes outruns the intake and drains the ~207k cold backlog in about 12 days,
+	// newest first.
+	founditMaxNewPerRun = 1500
 )
 
-// founditSlices are the keyword queries one crawl walks. Each held under 10,000 postings in the
-// 30-day window on 2026-11-17 (the broadest, "sap", 4,566), so none is truncated. They are
-// full-text queries over the body as well as the title, hence noisy; the catalogue keeps
-// non-technical postings, so the noise is stored and the slices only decide what is reachable.
-var founditSlices = []string{
-	"software engineer", "software developer", "developer", "programmer", "full stack",
-	"backend", "frontend", "java", ".net", "react", "android", "ios", "devops", "qa",
-	"data engineer", "data scientist", "machine learning", "sap", "salesforce", "embedded",
-	"network",
-}
-
-// founditHeaders: without a foundit Referer the API answers HTTP 400 "content negotiation
-// failed"; any foundit URL is accepted.
-var founditHeaders = map[string]string{"Referer": founditBase + "/"}
-
-// NewFoundit builds the foundit adapter over the given HTTP client. The registry builds one
-// adapter per process and cmd/ingest crawls one provider per process, so the adapter's detail
-// counter is the run's.
-func NewFoundit(c HeaderJSONGetter) Source {
-	return foundit{http: c, spent: new(atomic.Int64)}
-}
-
-// pacedFounditGetter holds every request of a run to one limiter.
-func pacedFounditGetter(c HeaderJSONGetter) HeaderJSONGetter {
-	return rateLimitedHeaderJSONGetter{
-		inner:   c,
-		limiter: rate.NewLimiter(rate.Every(founditRequestInterval), founditRequestBurst),
+// NewFoundit builds the foundit adapter over the given client.
+func NewFoundit(c founditHTTP) Source {
+	return foundit{
+		http:         c,
+		limiter:      rate.NewLimiter(rate.Every(founditRequestInterval), 1),
+		maxNewPerRun: founditMaxNewPerRun,
 	}
 }
 
 func (foundit) Provider() string { return "foundit" }
 
-// boardless: one crawl walks the slices above; there is no per-tenant board.
+// boardless: one crawl covers the whole national catalogue.
 func (foundit) boardless() {}
 
 // Every posting names its own employer, so foundit stays in the source facet and in the
@@ -110,356 +93,261 @@ func (foundit) aggregator() {}
 
 func (foundit) sweepGrace() time.Duration { return founditSweepGrace }
 
-// founditListing is one search row, reduced to what the adapter reads. Ad rows carry a Type
-// ("adsense", "banner") and no id.
-type founditListing struct {
-	ID                 string `json:"id"`
-	Type               string `json:"type"`
-	Title              string `json:"title"`
-	CompanyName        string `json:"companyName"`
-	HideCompanyName    int    `json:"hideCompanyName"`
-	Locations          string `json:"locations"`
-	SeoJdURL           string `json:"seoJdUrl"`
-	CreatedAt          int64  `json:"createdAt"`
-	IsJobActive        *bool  `json:"isJobActive"`
-	HideSalary         int    `json:"hideSalary"`
-	SalaryConfidential bool   `json:"jobSalaryConfidential"`
-	MinimumExperience  struct {
-		Years int `json:"years"`
-	} `json:"minimumExperience"`
-	MinimumSalary   founditMoney `json:"minimumSalary"`
-	MaximumSalary   founditMoney `json:"maximumSalary"`
-	EmploymentTypes []string     `json:"employmentTypes"`
-	JobTypes        []string     `json:"jobTypes"`
+// founditPosting is one sitemap entry: the posting's id and URL. The URL's slug spells the
+// title, employer and place run together with nothing to split them on, so none is read from it.
+type founditPosting struct {
+	id  int64
+	url string
 }
 
-type founditMoney struct {
-	Currency      string `json:"currency"`
-	AbsoluteValue int64  `json:"absoluteValue"`
+func (p founditPosting) externalID() string { return strconv.FormatInt(p.id, 10) }
+
+// founditPostingPath matches a posting URL, /job/<slug>-<id>. The slug is cosmetic.
+var founditPostingPath = regexp.MustCompile(`^/job/[^/]+-(\d+)/?$`)
+
+// founditParsePosting reads a sitemap URL, or ok=false when it is not a posting URL.
+func founditParsePosting(raw string) (founditPosting, bool) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return founditPosting{}, false
+	}
+	m := founditPostingPath.FindStringSubmatch(u.Path)
+	if m == nil {
+		return founditPosting{}, false
+	}
+	id, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil || id <= 0 {
+		return founditPosting{}, false
+	}
+	return founditPosting{id: id, url: raw}, true
 }
 
-type founditSearchPage struct {
-	Status   int `json:"jobSearchStatus"`
-	Response struct {
-		Data []founditListing `json:"data"`
-		Meta struct {
-			Paging struct {
-				Total int `json:"total"`
-			} `json:"paging"`
-		} `json:"meta"`
-	} `json:"jobSearchResponse"`
-}
-
-// founditDetail is the detail endpoint, reduced to what the search row lacks. The endpoint
-// answers HTTP 200 whatever the posting's state; the state is jobDetailStatus (404 for an
-// unknown or removed id).
-type founditDetail struct {
-	Status   int `json:"jobDetailStatus"`
-	Response struct {
-		ID          string `json:"id"`
-		Description string `json:"description"`
-		Locations   []struct {
-			City    string `json:"city"`
-			State   string `json:"state"`
-			Country string `json:"country"`
-		} `json:"locations"`
-		JobTypes        []string `json:"jobTypes"`
-		EmploymentTypes []string `json:"employmentTypes"`
-	} `json:"jobDetailResponse"`
-}
-
+// Fetch is the list-only fallback HydratingSource specifies: everything is unseen.
 func (s foundit) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-func (s foundit) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
-	return s.FetchNewGated(ctx, e, seen, DetailGate{})
-}
-
-// FetchNewGated is FetchNew that buys no body for a posting the pipeline will discard anyway: a
-// discarded posting is never stored, so without the gate newest-first hydration would buy the
-// same covered postings every run (the naukri failure of 2026-10-25).
-func (s foundit) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
-	rows, err := s.list(ctx)
+// FetchNew lists every posting the sitemaps name, refreshes the ones already stored, and reads
+// up to maxNewPerRun of the rest, newest id first. A posting whose page cannot be read is not
+// yielded; a later run tries again.
+func (s foundit) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	postings, err := s.list(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, seen, gate)
-}
-
-// list walks every slice's freshness window newest first and returns the postings once each,
-// newest first, so the detail budget buys the newest. A slice whose first page fails is logged
-// and skipped, a later page failing ends that slice with what was read; the crawl fails when
-// no slice answered at all, since "nothing listed" must not pass for a quiet source.
-func (s foundit) list(ctx context.Context) ([]founditListing, error) {
-	var out []founditListing
-	ids := map[string]bool{}
-	var firstErr error
-	answered := 0
-	for _, query := range founditSlices {
-		rows, err := s.walk(ctx, query)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			log.Printf("foundit: slice %q failed: %v", query, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		answered++
-		for _, r := range rows {
-			if ids[r.ID] {
-				continue
-			}
-			ids[r.ID] = true
-			out = append(out, r)
-		}
-	}
-	if answered == 0 {
-		return nil, firstErr
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
-}
-
-// walk reads one slice to its declared total, an empty page, or the search's window. A slice
-// past the window is read to it and logged: the window is a property of the platform.
-func (s foundit) walk(ctx context.Context, query string) ([]founditListing, error) {
-	var out []founditListing
-	for start := 0; start < founditWindow; start += founditPageSize {
-		q := url.Values{}
-		q.Set("query", query)
-		q.Set("start", strconv.Itoa(start))
-		q.Set("limit", strconv.Itoa(founditPageSize))
-		q.Set("sort", founditSortDate)
-		q.Set("jobFreshness", strconv.Itoa(founditFreshnessDays))
-		var p founditSearchPage
-		err := s.http.GetJSONWithHeaders(ctx, founditSearchURL+q.Encode(), founditHeaders, &p)
-		if err == nil && p.Status != http.StatusOK {
-			err = fmt.Errorf("search answered status %d", p.Status)
-		}
-		if err != nil {
-			return founditPageFailed(query, start, out, err)
-		}
-		jobs := 0
-		for _, r := range p.Response.Data {
-			if r.Type != "" || r.ID == "" {
-				continue // an ad slot
-			}
-			jobs++
-			out = append(out, r)
-		}
-		total := p.Response.Meta.Paging.Total
-		if jobs == 0 || start+founditPageSize >= total {
-			break
-		}
-		if start+2*founditPageSize > founditWindow {
-			log.Printf("foundit: slice %q: %d postings in the window, the search serves the newest %d", query, total, founditWindow)
-		}
-	}
-	return out, nil
-}
-
-// founditPageFailed applies the walk's rule: the first page failing fails the slice, a later
-// page ends it with what was read.
-func founditPageFailed(query string, start int, read []founditListing, err error) ([]founditListing, error) {
-	if start == 0 {
-		return nil, fmt.Errorf("foundit: slice %q: %w", query, err)
-	}
-	log.Printf("foundit: slice %q: page at %d failed; keeping %d postings read: %v", query, start, len(read), err)
-	return read, nil
-}
-
-// hydrate maps the listed rows to Jobs. A seen posting is a liveness refresh with no request,
-// a posting whose employer is already covered is yielded body-less, and every other posting costs one detail
-// request up to the run's budget. A detail that could not be read, or that the budget did not
-// reach, defers its posting to a later run rather than storing it body-less, which would never
-// be hydrated again.
-func (s foundit) hydrate(ctx context.Context, rows []founditListing, seen func(string) bool, gate DetailGate) ([]Job, error) {
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(rows))
-		for _, r := range rows {
-			companies = append(companies, strings.TrimSpace(r.CompanyName))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs, claimed []Job
+	var jobs []Job
+	var unseen []founditPosting
 	deferred := 0
-	for _, r := range rows {
-		base, ok := r.toJob()
-		if !ok {
+	for _, p := range postings {
+		if seen(p.externalID()) {
+			// The slug names no separate title or employer; the pipeline refreshes by identity.
+			jobs = append(jobs, Job{ExternalID: p.externalID(), URL: p.url, SeenRefresh: true})
 			continue
 		}
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if s.spent.Add(1) > founditDetailBudget {
+		if len(unseen) >= s.maxNewPerRun {
 			deferred++
 			continue
 		}
-		claimed = append(claimed, base)
+		unseen = append(unseen, p)
 	}
 	var answered atomic.Int64
-	jobs = append(jobs, fetchDetails(claimed, founditDetailWorkers, func(base Job) (Job, bool) {
-		job, ok, err := s.withDetail(ctx, base)
+	read := fetchDetails(unseen, founditDetailWorkers, func(p founditPosting) (Job, bool) {
+		job, ok, err := s.detail(ctx, p)
 		if err != nil {
-			log.Printf("foundit: detail %s failed; deferring: %v", base.ExternalID, err)
+			log.Printf("foundit: posting %d failed; deferring: %v", p.id, err)
 			return Job{}, false
 		}
-		answered.Add(1) // a posting the platform reports gone is an answer too
+		answered.Add(1)
 		return job, ok
-	})...)
-	// A crawl that asked for details and got no answer to any of them is broken, not quiet.
-	if len(claimed) > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("foundit: requested %d posting details and none answered", len(claimed))
+	})
+	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
+	// site reported gone.
+	if len(unseen) > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("foundit: requested %d posting pages and none answered", len(unseen))
 	}
 	if deferred > 0 {
-		log.Printf("foundit: detail budget reached (%d a run); %d new postings deferred to later runs", founditDetailBudget, deferred)
+		log.Printf("foundit: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
 	}
-	return jobs, nil
+	return append(jobs, read...), nil
 }
 
-// withDetail adds the detail endpoint's body, structured places, and work arrangement and
-// employment type. ok=false with a nil error is the platform's own answer that the posting is
-// gone; an error is the absence of an answer.
-func (s foundit) withDetail(ctx context.Context, base Job) (Job, bool, error) {
-	var d founditDetail
-	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(founditDetailURL, base.ExternalID), founditHeaders, &d); err != nil {
+// list reads every posting sitemap the index names and returns their postings, newest id first.
+// Any file failing fails the crawl: a short list would leave the postings it missed
+// un-refreshed, and the index only names files that exist.
+func (s foundit) list(ctx context.Context) ([]founditPosting, error) {
+	index, err := s.sitemap(ctx, founditSitemapIndex)
+	if err != nil {
+		return nil, fmt.Errorf("foundit: sitemap index: %w", err)
+	}
+	ids := make(map[int64]bool)
+	var out []founditPosting
+	active := 0
+	for _, sm := range index.Sitemaps {
+		isActive := strings.Contains(sm.Loc, founditActiveNeedle)
+		if !isActive && !strings.Contains(sm.Loc, founditTodayNeedle) {
+			continue
+		}
+		if isActive {
+			active++
+		}
+		doc, err := s.sitemap(ctx, sm.Loc)
+		if err != nil {
+			return nil, fmt.Errorf("foundit: sitemap %s: %w", sm.Loc, err)
+		}
+		for _, u := range doc.URLs {
+			p, ok := founditParsePosting(strings.TrimSpace(u.Loc))
+			if !ok || ids[p.id] {
+				continue
+			}
+			ids[p.id] = true
+			out = append(out, p)
+		}
+	}
+	if active == 0 {
+		return nil, fmt.Errorf("foundit: sitemap index names no %s file", founditActiveNeedle)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("foundit: the sitemaps list no posting")
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].id > out[j].id })
+	return out, nil
+}
+
+// sitemap fetches and decodes one sitemap file, plain or gzip. The body is read to EOF, so a
+// truncated gzip file fails its checksum instead of reading as a short list.
+func (s foundit) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
+	if err := s.limiter.Wait(ctx); err != nil {
+		return sitemapDoc{}, err
+	}
+	var doc sitemapDoc
+	err := s.http.GetStream(ctx, loc, "application/xml, application/x-gzip", func(r io.Reader) error {
+		body, err := io.ReadAll(io.LimitReader(r, founditMaxSitemapBytes+1))
+		if err != nil {
+			return err
+		}
+		if len(body) > founditMaxSitemapBytes {
+			return fmt.Errorf("sitemap exceeds %d bytes", founditMaxSitemapBytes)
+		}
+		doc, err = decodeSitemapBody(body)
+		return err
+	})
+	return doc, err
+}
+
+// founditLD is the part of the posting page's schema.org JobPosting the adapter reads.
+// datePosted is "16-11-2026", day first. baseSalary is a MonetaryAmount whose value reads "Not
+// disclosed" when the poster hid it, so its figures are read leniently.
+type founditLD struct {
+	Title              string `json:"title"`
+	Description        string `json:"description"`
+	DatePosted         string `json:"datePosted"`
+	EmploymentType     string `json:"employmentType"`
+	JobLocationType    string `json:"jobLocationType"`
+	HiringOrganization struct {
+		Name string `json:"name"`
+	} `json:"hiringOrganization"`
+	// JobLocation is one Place, or a list of them when a posting names several.
+	JobLocation json.RawMessage `json:"jobLocation"`
+	BaseSalary  struct {
+		Currency string `json:"currency"`
+		Value    struct {
+			UnitText string         `json:"unitText"`
+			MinValue flexjson.Float `json:"minValue"`
+			MaxValue flexjson.Float `json:"maxValue"`
+		} `json:"value"`
+	} `json:"baseSalary"`
+}
+
+// detail reads one posting page. ok=false with a nil error is the site's answer that the posting
+// is gone (404) or a page carrying no usable posting; an error is the absence of an answer
+// (Akamai's 403 included, which says nothing about the posting).
+func (s foundit) detail(ctx context.Context, p founditPosting) (Job, bool, error) {
+	if err := s.limiter.Wait(ctx); err != nil {
+		return Job{}, false, err
+	}
+	root, err := s.http.GetHTML(ctx, p.url)
+	if err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
-	switch d.Status {
-	case http.StatusOK:
-	case http.StatusNotFound, http.StatusGone:
-		return Job{}, false, nil
-	default:
-		return Job{}, false, fmt.Errorf("detail answered status %d", d.Status)
+	var ld founditLD
+	if !ldJobPosting(root, &ld) {
+		return Job{}, false, fmt.Errorf("page carries no JobPosting")
 	}
-	r := d.Response
-	if r.ID != base.ExternalID {
-		return Job{}, false, fmt.Errorf("posting answered id %q", r.ID)
-	}
-	body := sanitizeHTML(r.Description)
-	if strings.TrimSpace(body) == "" {
-		return Job{}, false, fmt.Errorf("posting carries no body")
-	}
-	base.Description = body
-	// A place naming only a country is the posting's country again when another place names a
-	// city (live: [{Noida, Uttar Pradesh, India}, {India}]), so it adds nothing beside it.
-	hasCity := false
-	for _, l := range r.Locations {
-		hasCity = hasCity || strings.TrimSpace(l.City) != ""
-	}
-	var places []string
-	seenPlace := map[string]bool{}
-	for _, l := range r.Locations {
-		if hasCity && strings.TrimSpace(l.City) == "" {
-			continue
-		}
-		p := joinNonEmpty(strings.TrimSpace(l.City), strings.TrimSpace(l.State), strings.TrimSpace(l.Country))
-		if p != "" && !seenPlace[p] {
-			seenPlace[p] = true
-			places = append(places, p)
-		}
-	}
-	if len(places) > 0 {
-		base.Location = strings.Join(places, "; ")
-	}
-	if base.EmploymentType == "" {
-		base.EmploymentType = founditEmploymentType(r.JobTypes, r.EmploymentTypes)
-	}
-	if founditHasType(r.JobTypes, "work from home") {
-		base.WorkMode, base.Remote = "remote", true
-	}
-	return base, true, nil
+	job, ok := founditJob(ld, p)
+	return job, ok, nil
 }
 
-// toJob maps a search row to a body-less Job. The row's comma-separated places stand in until
-// the detail's structured ones replace them ("Bengaluru, India" is a city and a country,
-// "Bengaluru, Chennai, Hyderabad" three cities, so the row cannot be split reliably).
-func (r founditListing) toJob() (Job, bool) {
-	title := strings.Join(strings.Fields(r.Title), " ")
-	company := strings.TrimSpace(r.CompanyName)
-	path := strings.TrimSpace(r.SeoJdURL)
-	if r.ID == "" || title == "" || company == "" || r.HideCompanyName != 0 || !strings.HasPrefix(path, "/job/") {
-		return Job{}, false
-	}
-	if r.IsJobActive != nil && !*r.IsJobActive {
+// founditJob maps a posting's JobPosting to a Job. ok is false for one with no title, employer
+// or body.
+func founditJob(ld founditLD, p founditPosting) (Job, bool) {
+	title := collapseSpace(ld.Title)
+	company := strings.TrimSpace(ld.HiringOrganization.Name)
+	body := sanitizeHTML(ld.Description)
+	if title == "" || company == "" || strings.TrimSpace(body) == "" {
 		return Job{}, false
 	}
 	j := Job{
-		ExternalID:        r.ID,
-		URL:               founditBase + path,
+		ExternalID:        p.externalID(),
+		URL:               p.url,
 		Title:             title,
 		Company:           company,
-		Location:          strings.TrimSpace(r.Locations),
+		Description:       body,
+		Location:          founditPlaces(ld.JobLocation),
 		FallbackCountries: []string{"in"},
-		EmploymentType:    founditEmploymentType(r.JobTypes, r.EmploymentTypes),
+		PostedAt:          parseLayout("02-01-2006", strings.TrimSpace(ld.DatePosted)),
 	}
-	if founditHasType(r.JobTypes, "work from home") {
+	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}
-	if r.CreatedAt > 0 {
-		t := time.UnixMilli(r.CreatedAt)
-		j.PostedAt = NotFuture(&t)
+	switch strings.ToLower(strings.TrimSpace(ld.EmploymentType)) {
+	case "full time", "full_time":
+		j.EmploymentType = "full_time"
+	case "part time", "part_time":
+		j.EmploymentType = "part_time"
+	case "contract", "contractor", "temporary":
+		j.EmploymentType = "contract"
+	case "intern", "internship":
+		j.EmploymentType = "internship"
 	}
-	if n := r.MinimumExperience.Years; n > 0 {
-		j.ExperienceYearsMin = &n
-	}
-	// absoluteValue is the annual figure whatever the display; a hidden or confidential one
-	// is not published.
-	lo, hi := r.MinimumSalary, r.MaximumSalary
-	if r.HideSalary == 0 && !r.SalaryConfidential && lo.AbsoluteValue > 0 && hi.AbsoluteValue >= lo.AbsoluteValue {
-		min, max := int(lo.AbsoluteValue), int(hi.AbsoluteValue)
-		j.SalaryMin, j.SalaryMax = &min, &max
-		j.SalaryCurrency = strings.ToUpper(firstNonEmpty(strings.TrimSpace(lo.Currency), "INR"))
+	sal := ld.BaseSalary
+	if cur := strings.TrimSpace(sal.Currency); cur != "" && strings.EqualFold(sal.Value.UnitText, "YEAR") &&
+		sal.Value.MinValue > 0 && sal.Value.MaxValue >= sal.Value.MinValue {
+		lo, hi := int(sal.Value.MinValue), int(sal.Value.MaxValue)
+		j.SalaryMin, j.SalaryMax = &lo, &hi
+		j.SalaryCurrency = strings.ToUpper(cur)
 		j.SalaryPeriod = "year"
 	}
 	return j, true
 }
 
-// founditHasType reports whether a posting's job-type list names want (case-insensitive).
-func founditHasType(types []string, want string) bool {
-	for _, t := range types {
-		if strings.EqualFold(strings.TrimSpace(t), want) {
-			return true
+// founditPlaces reads the addressLocality of a JobPosting's jobLocation, a Place or a list of
+// them ("Bengaluru / Bangalore, Karnataka, India": city, state and country in one string), and
+// joins the distinct ones.
+func founditPlaces(raw json.RawMessage) string {
+	type place struct {
+		Address struct {
+			Locality string `json:"addressLocality"`
+		} `json:"address"`
+	}
+	var many []place
+	if err := json.Unmarshal(raw, &many); err != nil {
+		var one place
+		if json.Unmarshal(raw, &one) != nil {
+			return ""
+		}
+		many = []place{one}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, pl := range many {
+		if loc := collapseSpace(pl.Address.Locality); loc != "" && !seen[loc] {
+			seen[loc] = true
+			out = append(out, loc)
 		}
 	}
-	return false
-}
-
-// founditEmploymentType maps the job types ("Contract Job", "Internship", "Permanent Job") and
-// the schedule ("Full time", "Part time"). A contract or internship type wins over the
-// schedule, which is "Full time" for 99% of postings whatever their nature.
-func founditEmploymentType(jobTypes, schedules []string) string {
-	for _, t := range jobTypes {
-		t = strings.ToLower(strings.TrimSpace(t))
-		switch {
-		case strings.Contains(t, "intern"):
-			return "internship"
-		case strings.Contains(t, "contract"):
-			return "contract"
-		}
-	}
-	for _, s := range schedules {
-		switch strings.ToLower(strings.TrimSpace(s)) {
-		case "full time":
-			return "full_time"
-		case "part time":
-			return "part_time"
-		}
-	}
-	return ""
+	return strings.Join(out, "; ")
 }

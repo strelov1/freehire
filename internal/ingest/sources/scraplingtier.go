@@ -226,13 +226,14 @@ var scraplingProviders = map[string]scraplingProvider{
 	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewClearedJobs(f)
 	}},
-	// 403 to a plain client's TLS fingerprint (the SRP and robots.txt included). The
-	// impersonating fetcher is served from a residential IP with no proxy (2026-11-17, ~0.55 s a
-	// request), but from the crawl host's datacenter IP it draws a 403 without the proxy and is
-	// served through it (measured the same day on the prod service), hence the proxy. Both JSON
-	// endpoints answer 400 without a foundit Referer, which the adapter sends.
+	// Akamai answers 403 to a plain client on every path, the sitemaps and robots.txt included.
+	// From the prod crawl host the impersonating fetcher is refused without the proxy and served
+	// through it (the search page, measured 2026-11-17). The posting PAGES through the proxy are
+	// UNMEASURED: from a residential IP with no proxy the same fetcher drew 403 on every page and
+	// a headless browser passed about one in three. Re-measure the first live run and move the
+	// row to the browser if the pages stay refused.
 	"foundit": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
-		return NewFoundit(pacedFounditGetter(f))
+		return NewFoundit(f)
 	}},
 	// The search gateway answers an HTML 403 to a plain client on the posting API, and the
 	// impersonating fetcher is served on both it and the search (measured 2026-11-17 from a
