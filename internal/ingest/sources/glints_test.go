@@ -159,6 +159,7 @@ func (f *glintsFake) askedFor(url string) int {
 }
 
 func newGlintsFake(t *testing.T) *glintsFake {
+	t.Helper()
 	return &glintsFake{
 		xmls: map[string]string{
 			glintsSitemapIndex:                        glintsIndex,

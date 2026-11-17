@@ -59,7 +59,9 @@ func (f *diceFake) GetHTML(_ context.Context, raw string) (*html.Node, error) {
 		q := u.Query()
 		page := 1
 		if p := q.Get("page"); p != "" {
-			fmt.Sscan(p, &page)
+			if _, err := fmt.Sscan(p, &page); err != nil {
+				return nil, err
+			}
 		}
 		q.Del("page")
 		body, err := f.search(q, page)
@@ -447,7 +449,7 @@ func TestDiceUnreadablePostingsAreDeferredNotStoredBodyless(t *testing.T) {
 }
 
 func TestDiceIsABoardlessAggregatorWithItsOwnSweepGrace(t *testing.T) {
-	var s Source = NewDice(&diceFake{})
+	s := NewDice(&diceFake{})
 	if _, ok := s.(interface{ boardless() }); !ok {
 		t.Error("not boardless")
 	}

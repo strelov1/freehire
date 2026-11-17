@@ -113,18 +113,18 @@ func (foundit) sweepGrace() time.Duration { return founditSweepGrace }
 // founditListing is one search row, reduced to what the adapter reads. Ad rows carry a Type
 // ("adsense", "banner") and no id.
 type founditListing struct {
-	ID                string `json:"id"`
-	Type              string `json:"type"`
-	Title             string `json:"title"`
-	CompanyName       string `json:"companyName"`
-	HideCompanyName   int    `json:"hideCompanyName"`
-	Locations         string `json:"locations"`
-	SeoJdURL          string `json:"seoJdUrl"`
-	CreatedAt         int64  `json:"createdAt"`
-	IsJobActive       *bool  `json:"isJobActive"`
-	HideSalary        int    `json:"hideSalary"`
-	SalaryConfidental bool   `json:"jobSalaryConfidential"`
-	MinimumExperience struct {
+	ID                 string `json:"id"`
+	Type               string `json:"type"`
+	Title              string `json:"title"`
+	CompanyName        string `json:"companyName"`
+	HideCompanyName    int    `json:"hideCompanyName"`
+	Locations          string `json:"locations"`
+	SeoJdURL           string `json:"seoJdUrl"`
+	CreatedAt          int64  `json:"createdAt"`
+	IsJobActive        *bool  `json:"isJobActive"`
+	HideSalary         int    `json:"hideSalary"`
+	SalaryConfidential bool   `json:"jobSalaryConfidential"`
+	MinimumExperience  struct {
 		Years int `json:"years"`
 	} `json:"minimumExperience"`
 	MinimumSalary   founditMoney `json:"minimumSalary"`
@@ -421,7 +421,7 @@ func (r founditListing) toJob() (Job, bool) {
 	// absoluteValue is the annual figure whatever the display; a hidden or confidential one
 	// is not published.
 	lo, hi := r.MinimumSalary, r.MaximumSalary
-	if r.HideSalary == 0 && !r.SalaryConfidental && lo.AbsoluteValue > 0 && hi.AbsoluteValue >= lo.AbsoluteValue {
+	if r.HideSalary == 0 && !r.SalaryConfidential && lo.AbsoluteValue > 0 && hi.AbsoluteValue >= lo.AbsoluteValue {
 		min, max := int(lo.AbsoluteValue), int(hi.AbsoluteValue)
 		j.SalaryMin, j.SalaryMax = &min, &max
 		j.SalaryCurrency = strings.ToUpper(firstNonEmpty(strings.TrimSpace(lo.Currency), "INR"))

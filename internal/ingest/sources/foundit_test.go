@@ -377,7 +377,7 @@ func TestFounditHidesAConfidentialSalary(t *testing.T) {
 	if j, ok := r.toJob(); !ok || j.SalaryMin != nil {
 		t.Errorf("hideSalary=1 must not publish a salary: %+v", j)
 	}
-	r.HideSalary, r.SalaryConfidental = 0, true
+	r.HideSalary, r.SalaryConfidential = 0, true
 	if j, _ := r.toJob(); j.SalaryMin != nil {
 		t.Errorf("a confidential salary must not be published: %+v", j)
 	}
