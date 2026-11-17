@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -189,13 +190,13 @@ func TestLinkedInEasyApplyFilterIsNotProofOfOnsiteApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := map[string]ApplicationMethod{}
 	for _, j := range jobs {
-		switch {
-		case j.ExternalID == "2" && j.ApplyMethod == ApplyOnSite:
-			t.Errorf("an Easy Apply card with an off-site detail was classified on-site: %+v", j)
-		case j.ExternalID == "1" && j.ApplyMethod != ApplyOnSite:
-			t.Errorf("an on-site detail lost its classification: %+v", j)
-		}
+		got[j.ExternalID] = j.ApplyMethod
+	}
+	want := map[string]ApplicationMethod{"1": ApplyOnSite, "2": ApplyExternal}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("application methods = %v, want exactly %v: the detail page alone decides, never f_AL", got, want)
 	}
 }
 
