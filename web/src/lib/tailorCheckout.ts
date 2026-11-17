@@ -85,15 +85,17 @@ export function readTailorContext(userId: number | undefined, store: Store, now 
 
 /** Remembers the task, then asks the provider for a checkout session at `price` and returns
  *  its URL. The record is written first and survives a failure, so the candidate can retry or
- *  come back to the task; a storage failure is swallowed. The event carries no identifiers. */
+ *  come back to the task; a storage failure is swallowed. The event names the `surface` that
+ *  started the checkout and carries no identifiers. */
 export async function startTailorCheckout(
   userId: number | undefined,
   ctx: TailorContext,
   price: PublicPrice,
+  surface: 'confirm_tailor' | 'checkout_resume',
   store: Store | null = browserStore(),
 ): Promise<string> {
   if (store && userId !== undefined) saveTailorContext(userId, ctx, store);
-  track('contextual_pro_checkout_start', { surface: 'confirm_tailor', interval: price.interval });
+  track('contextual_pro_checkout_start', { surface, interval: price.interval });
   const { url } = await api.billingCheckout(price.id);
   return url;
 }

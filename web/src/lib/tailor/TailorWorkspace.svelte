@@ -357,10 +357,12 @@
   const snapshot = () => JSON.stringify({ title, templateId, doc });
 
   // The save in flight, so a flush (agent turn, PDF export) can wait for it: the timer is already
-  // cleared by then, and the server would still hold the old document.
+  // cleared by then, and the server would still hold the old document. Saves queue behind it
+  // rather than overlap: two writes on the wire can land out of order and leave the older
+  // document on the server while the page says saved. write() never rejects.
   let inflight: Promise<void> | null = null;
   function persist() {
-    const p: Promise<void> = write().finally(() => {
+    const p: Promise<void> = (inflight ?? Promise.resolve()).then(write).finally(() => {
       if (inflight === p) inflight = null;
     });
     inflight = p;
@@ -401,7 +403,9 @@
   onDestroy(() => {
     if (saveTimer) clearTimeout(saveTimer);
     if (cvLoaded && snapshot() !== lastSnapshot) {
-      void api.updateCv(cvId, { title, template_id: templateId, document: doc }).catch(() => {});
+      const body = { title, template_id: templateId, document: doc };
+      // Behind any save still in flight, for the same reason persist() queues.
+      void (inflight ?? Promise.resolve()).then(() => api.updateCv(cvId, body)).catch(() => {});
     }
   });
 

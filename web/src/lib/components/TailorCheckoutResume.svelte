@@ -157,7 +157,7 @@
       const price = proMonthlyPrice(await api.plans());
       if (userId !== owner) return;
       if (!price) throw new Error('no price');
-      const url = await startTailorCheckout(owner, target, price);
+      const url = await startTailorCheckout(owner, target, price, 'checkout_resume');
       if (userId === owner) window.location.href = url;
     } catch {
       if (userId === owner) failed = 'checkout';
