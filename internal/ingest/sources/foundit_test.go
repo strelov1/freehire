@@ -119,14 +119,6 @@ func withFounditSlices(t *testing.T, slices ...string) {
 	t.Cleanup(func() { founditSlices = old })
 }
 
-func jobsByID(jobs []Job) map[string]Job {
-	m := map[string]Job{}
-	for _, j := range jobs {
-		m[j.ExternalID] = j
-	}
-	return m
-}
-
 func TestFounditReadsNewPostingsFromTheirDetailAndDedupsSlices(t *testing.T) {
 	withFounditSlices(t, "java", "developer")
 	f := newFounditFake(t)
