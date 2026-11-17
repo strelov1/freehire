@@ -1,12 +1,10 @@
 package search
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/aiarchetype"
-	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/dict/roletype"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/job/jobview"
@@ -90,15 +88,10 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	if err != nil {
 		return JobDocument{}, err
 	}
-	// jobview serves the dictionary column, which SetJobEnrichment never writes, so an LLM
-	// category reaches the document only from the raw JSON. A posting neither resolves is
-	// indexed under the residual "other" bucket (#4412); a resolved category is never overwritten.
+	// jobview serves the dictionary column, or the model's category where the column is empty.
+	// A posting neither files is indexed under the residual "other" bucket (#4412).
 	if view.Enrichment.Category == "" {
 		view.Enrichment.Category = "other"
-		var e enrich.Enrichment
-		if json.Unmarshal(j.Enrichment, &e) == nil && e.Category != "" {
-			view.Enrichment.Category = e.Category
-		}
 	}
 	// Cap the indexed description; the detail endpoint serves the full text from its own FromRow.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)

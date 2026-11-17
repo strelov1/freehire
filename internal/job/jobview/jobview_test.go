@@ -215,8 +215,12 @@ func TestFromRow_DictSilentFacetsAreEmptyNotLLM(t *testing.T) {
 	if view.WorkMode != "" {
 		t.Errorf("WorkMode = %q, want empty (dict silent, LLM ignored)", view.WorkMode)
 	}
-	if view.Enrichment.Seniority != "" || view.Enrichment.Category != "" {
-		t.Errorf("seniority/category should be empty, got {%q, %q}", view.Enrichment.Seniority, view.Enrichment.Category)
+	if view.Enrichment.Seniority != "" {
+		t.Errorf("seniority should be empty, got %q", view.Enrichment.Seniority)
+	}
+	// Category is the other exception (#4412): dict silent → the model's in-vocabulary category.
+	if view.Enrichment.Category != "backend" {
+		t.Errorf("category = %q, want backend (LLM fallback when dict silent)", view.Enrichment.Category)
 	}
 	// Geography is the hybrid exception: dict silent → LLM countries/regions fill in.
 	if len(view.Countries) != 1 || view.Countries[0] != "fr" {

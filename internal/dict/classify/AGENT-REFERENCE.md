@@ -139,7 +139,7 @@ Moved to [AGENT-REFERENCE-LANGUAGES.md](AGENT-REFERENCE-LANGUAGES.md#slovenian-g
 
 ## Serving: dict-only
 
-`jobview.FromRow` (through `FromDomain`) overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the column always wins, the LLM value is never a fallback. That column is `jobderive.Derive`'s answer: a source's structured value first, then the title dictionary, then the description. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
+`jobview.FromRow` (through `FromDomain`) overwrites nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the column always wins. The one fallback: an empty `category` column serves the category the model gave when it is a `vocab.CategoryValues` value other than `other` (#4412), so the job page, the API and search agree. That column is `jobderive.Derive`'s answer: a source's structured value first, then the title dictionary, then the description. They stay **nested under `enrichment`** so search facets, SPA and generated contracts are unchanged.
 
 ## Convention
 
