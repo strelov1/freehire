@@ -13,10 +13,14 @@ import (
 
 // kariyernetFake serves responses shaped like the ones the search gateway answered on
 // 2026-11-17 (rows and the Franklin Electric posting trimmed to the fields the adapter reads).
-// pages maps a currentPage to a search response; details maps a posting id to a /job response,
-// and a missing id answers 404 as the gateway does.
+// The unfiltered request answers the filter list (areas, default the one work area "78"); a
+// request for a work area is answered from byArea[area], or from pages when byArea is unset.
+// pages and byArea map a currentPage to a search response; details maps a posting id to a /job
+// response, and a missing id answers 404 as the gateway does.
 type kariyernetFake struct {
+	areas   []string
 	pages   map[int]string
+	byArea  map[string]map[int]string
 	details map[string]string
 
 	mu       sync.Mutex
@@ -32,7 +36,21 @@ func (f *kariyernetFake) PostJSON(_ context.Context, url string, body, v any) er
 	f.mu.Lock()
 	f.searches = append(f.searches, req)
 	f.mu.Unlock()
-	raw, ok := f.pages[req["currentPage"].(int)]
+	pages := f.pages
+	if depts, ok := req["departments"].([]string); !ok {
+		areas := f.areas
+		if areas == nil {
+			areas = []string{"78"}
+		}
+		var items []string
+		for _, a := range areas {
+			items = append(items, fmt.Sprintf(`{"value":%q}`, a))
+		}
+		return json.Unmarshal([]byte(fmt.Sprintf(`{"data":{"totalJobCount":1,"filters":{"workAreas":{"items":[%s]}}}}`, strings.Join(items, ","))), v)
+	} else if f.byArea != nil {
+		pages = f.byArea[depts[0]]
+	}
+	raw, ok := pages[req["currentPage"].(int)]
 	if !ok {
 		return fmt.Errorf("kariyernetFake: no search page %v", req["currentPage"])
 	}
@@ -139,7 +157,7 @@ func TestKariyerNetMapsAPosting(t *testing.T) {
 	}
 }
 
-func TestKariyerNetAsksForTheITSliceNewestFirst(t *testing.T) {
+func TestKariyerNetAsksForEachWorkAreaNewestFirst(t *testing.T) {
 	f := &kariyernetFake{
 		pages:   map[int]string{1: kariyernetPage(1, kariyernetRow(4597170, "x", "Franklin Electric", false))},
 		details: map[string]string{"4597170": kariyernetFranklin},
@@ -147,8 +165,11 @@ func TestKariyerNetAsksForTheITSliceNewestFirst(t *testing.T) {
 	if _, err := NewKariyerNet(f).Fetch(context.Background(), CompanyEntry{}); err != nil {
 		t.Fatal(err)
 	}
-	req := f.searches[0]
-	if got := fmt.Sprint(req["departments"]); got != "[78 5 55 60 54]" {
+	if len(f.searches) != 2 || f.searches[0]["departments"] != nil {
+		t.Fatalf("searches = %v, want the unfiltered filter-list request, then one per area", f.searches)
+	}
+	req := f.searches[1]
+	if got := fmt.Sprint(req["departments"]); got != "[78]" {
 		t.Errorf("departments = %s", got)
 	}
 	if req["size"] != kariyernetPageSize || req["sortType"] != "SortByDate" || req["sortDirection"] != "Descending" {
@@ -177,8 +198,8 @@ func TestKariyerNetWalksPagesAndDedupsSponsoredRows(t *testing.T) {
 	if len(jobs) != 3 {
 		t.Errorf("got %d jobs, want 3 distinct", len(jobs))
 	}
-	if len(f.searches) != 2 {
-		t.Errorf("%d searches, want 2: the walk ends once the listed total is collected", len(f.searches))
+	if len(f.searches) != 3 {
+		t.Errorf("%d searches, want 3: the filter list, then two pages, the walk ending once the listed total is collected", len(f.searches))
 	}
 }
 
@@ -283,11 +304,15 @@ func TestKariyerNetFailsWhenItReadsNoneOfWhatItListed(t *testing.T) {
 func TestKariyerNetFailsOnAnEmptyOrBrokenListing(t *testing.T) {
 	empty := &kariyernetFake{pages: map[int]string{1: kariyernetPage(0)}}
 	if _, err := NewKariyerNet(empty).Fetch(context.Background(), CompanyEntry{}); err == nil {
-		t.Error("a first page with no posting must fail, not read as an empty market")
+		t.Error("a catalogue with no posting at all must fail, not read as an empty market")
 	}
 	second := &kariyernetFake{pages: map[int]string{1: kariyernetPage(9, kariyernetRow(1, "a", "Acme", false))}}
 	if _, err := NewKariyerNet(second).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Error("a later page failing must fail the crawl")
+	}
+	noAreas := &kariyernetFake{areas: []string{}}
+	if _, err := NewKariyerNet(noAreas).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Error("a search naming no work area cannot be read whole and must fail")
 	}
 	var se *StatusError
 	failing := kariyernetFailingAPI{err: &StatusError{Method: "POST", Code: 403, URL: kariyernetSearchURL}}
@@ -312,5 +337,56 @@ func TestKariyerNetWorkModeFallsBackToTheRemoteFlag(t *testing.T) {
 	j, ok := detail.toJob("7")
 	if !ok || j.WorkMode != "remote" || !j.Remote {
 		t.Errorf("job = %+v ok = %v", j, ok)
+	}
+}
+
+// The catalogue is read one work area at a time, the IT areas first so the detail budget reaches
+// them; a posting listed under two areas is read once, an area holding nothing is fine, and each
+// area is walked to its own end.
+func TestKariyerNetReadsEveryWorkAreaITFirst(t *testing.T) {
+	a, b, c := kariyernetRow(1, "Cashier", "Shop", false), kariyernetRow(2, "Developer", "Soft", false), kariyernetRow(3, "Nurse", "Clinic", false)
+	f := &kariyernetFake{
+		areas: []string{"36", "45", "78", "5"},
+		byArea: map[string]map[int]string{
+			"36": {1: kariyernetPage(2, a, c)},
+			"45": {1: kariyernetPage(0)},
+			"78": {1: kariyernetPage(1, b)},
+			"5":  {1: kariyernetPage(2, b, c)},
+		},
+		details: map[string]string{"1": kariyernetDetailFor(1, nil), "2": kariyernetDetailFor(2, nil), "3": kariyernetDetailFor(3, nil)},
+	}
+	jobs, err := NewKariyerNet(f).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 3 {
+		t.Errorf("got %d jobs, want the 3 distinct postings of the 4 areas", len(jobs))
+	}
+	var order []string
+	for _, s := range f.searches[1:] {
+		order = append(order, s["departments"].([]string)[0])
+	}
+	if got := strings.Join(order, ","); got != "78,5,36,45" {
+		t.Errorf("areas walked %s, want the IT areas (78, 5) first, the rest in the filter's order", got)
+	}
+	// The IT areas come first, so the postings they hold are the first the budget reaches.
+	f.read = nil
+	one, err := kariyernet{api: f, detailBudget: 1}.Fetch(context.Background(), CompanyEntry{})
+	if err != nil || len(one) != 1 || one[0].ExternalID != "2" {
+		t.Errorf("a budget of one read %v (err %v), want the IT posting 2", one, err)
+	}
+}
+
+// An area whose walk reaches the search's deepest page without a page that adds nothing has not
+// been read whole, and the crawl fails rather than storing a part of the catalogue as all of it.
+func TestKariyerNetFailsWhenAnAreaNeverEnds(t *testing.T) {
+	pages := map[int]string{}
+	for p := 1; p <= kariyernetMaxPages; p++ {
+		pages[p] = kariyernetPage(1_000_000, kariyernetRow(p, "t", "Acme", false))
+	}
+	f := &kariyernetFake{pages: pages}
+	_, err := NewKariyerNet(f).Fetch(context.Background(), CompanyEntry{})
+	if err == nil || !strings.Contains(err.Error(), "end was not reached") {
+		t.Errorf("err = %v, want the unfinished area to fail the crawl", err)
 	}
 }
