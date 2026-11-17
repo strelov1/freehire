@@ -444,12 +444,15 @@
 
   // Write a pending human edit NOW rather than 800ms from now. Anything that changes the CV
   // server-side has to do this first, or the debounce fires afterwards and overwrites it.
+  // The pending edit is queued before the wait, not after it: a debounce left running would
+  // queue its save during the wait and the flush would return before that save landed.
   async function flushPendingSave() {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      if (snapshot() !== lastSnapshot) void persist();
+    }
     await cvSavesSettled();
-    if (!saveTimer) return;
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    if (snapshot() !== lastSnapshot) await persist();
   }
 
   // The PDF is rendered from the saved CV, so a save that failed must stop the export rather
