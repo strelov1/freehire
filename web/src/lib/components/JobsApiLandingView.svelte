@@ -21,10 +21,10 @@
     HardDrive,
     History,
     LayoutList,
+    ListChecks,
     ListTree,
     MapPin,
     Minus,
-    Sparkles,
     SquareTerminal,
     Users,
   } from '@lucide/svelte';
@@ -100,7 +100,7 @@
     { icon: Banknote, name: 'Pay', body: 'salary range, currency and period when the posting states it' },
     { icon: Building2, name: 'Company', body: 'name, slug, industry, size, headquarters, founding year, YC batch' },
     {
-      icon: Sparkles,
+      icon: ListChecks,
       name: 'Enrichment',
       body: 'a one-line summary, the requirements split into required and preferred, years of experience',
     },
@@ -261,7 +261,7 @@
   <!-- Hero: the pitch on the left, a live request on the right. The reader this page is for
        decides by the payload, so trying it is the first thing on offer. -->
   <section class="grid-bg relative -mx-4 px-4 pb-14 pt-12 sm:pt-16">
-    <div class="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div class="grid items-center gap-12 lg:grid-cols-2">
       <div>
         <h1 class="text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
           Millions of open jobs, one API, one flat price.
@@ -392,7 +392,7 @@
       mirroring a catalogue of millions runs to thousands. Here the bill does not move with how much you read.
     </p>
     <div class="mt-10 overflow-x-auto rounded-xl border border-border">
-      <table class="w-full min-w-[44rem] text-left text-sm">
+      <table class="w-full min-w-2xl text-left text-sm">
         <thead>
           <tr class="border-b border-border">
             <th scope="col" class="w-1/4 p-4 font-medium text-muted-foreground"><span class="sr-only">Feature</span></th
@@ -508,7 +508,7 @@
   </section>
 
   <section class="border-t border-border py-14 sm:py-16">
-    <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    <div class="grid gap-10 lg:grid-cols-3">
       <div>
         <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Before you ask.</h2>
         <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
@@ -519,7 +519,7 @@
           — we add features on request.
         </p>
       </div>
-      <div class="flex flex-col divide-y divide-border border-y border-border">
+      <div class="flex flex-col divide-y divide-border border-y border-border lg:col-span-2">
         {#each JOBS_API_FAQ as item (item.question)}
           <details class="group py-4">
             <summary
