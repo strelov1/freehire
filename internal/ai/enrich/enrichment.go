@@ -167,6 +167,13 @@ func (e *Enrichment) Sanitize() {
 		}
 	}
 
+	// category is asked now (#4412) and search reads it where the dictionary column is empty, so
+	// an out-of-vocabulary answer (a gateway that does not enforce the schema) is dropped here.
+	// Validate still lets it through: a bad category must not fail the whole enrichment.
+	if e.Category != "" && !slices.Contains(vocab.CategoryValues, e.Category) {
+		e.Category = ""
+	}
+
 	// regions is a discovery facet, left raw.
 	e.Domains = keepKnown(e.Domains, vocab.DomainValues)
 

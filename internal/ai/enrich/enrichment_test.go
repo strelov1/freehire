@@ -217,7 +217,6 @@ func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 		CompanyType: "product",                    // SERVED valid -> kept
 		Domains:     []string{"fintech", "bogus"}, // SERVED multi -> keep only known
 		// Discovery facets are captured raw (unserved):
-		Category:       "astrology",      // kept
 		Seniority:      "staff_plus",     // kept
 		Regions:        []string{"nope"}, // kept
 		EmploymentType: "freelance",      // kept
@@ -236,9 +235,6 @@ func TestSanitizeDropsOutOfVocabValues(t *testing.T) {
 		t.Errorf("Domains = %v, want [fintech] (served multi filtered)", e.Domains)
 	}
 	// Discovery facets survive untouched.
-	if e.Category != "astrology" {
-		t.Errorf("Category = %q, want kept raw (discovery)", e.Category)
-	}
 	if e.Seniority != "staff_plus" {
 		t.Errorf("Seniority = %q, want kept raw (discovery)", e.Seniority)
 	}
@@ -506,4 +502,19 @@ func TestSanitizeCapsImplausibleExperienceYears(t *testing.T) {
 			t.Errorf("ExperienceYearsMin = %d, want nil", *e.ExperienceYearsMin)
 		}
 	})
+}
+
+// An out-of-vocabulary category never reaches storage: search reads it where the dictionary
+// column is empty (#4412). A known one survives.
+func TestSanitizeDropsUnknownCategory(t *testing.T) {
+	e := Enrichment{Category: "ml_platform"}
+	e.Sanitize()
+	if e.Category != "" {
+		t.Errorf("category = %q, want dropped", e.Category)
+	}
+	e = Enrichment{Category: "logistics"}
+	e.Sanitize()
+	if e.Category != "logistics" {
+		t.Errorf("category = %q, want logistics kept", e.Category)
+	}
 }

@@ -9,13 +9,18 @@
 -- so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
 -- identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
 -- target_version), so running this every command invocation never duplicates work.
+--
+-- include_non_tech (ENRICH_INCLUDE_NON_TECH, off by default) lifts the is_tech gate for this
+-- backfill only, so every open posting with a body is enriched and its category asked of the
+-- model (#4412). The ingest-time EnqueueJobEnrichment stays tech-only: it is the fast path for
+-- a new technical posting, and the next enrich run's backfill picks up the rest.
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, sqlc.arg(target_version)::int
 FROM jobs
 WHERE closed_at IS NULL
   AND duplicate_of IS NULL
   AND (enriched_at IS NULL OR enrichment_version < sqlc.arg(target_version)::int)
-  AND is_tech IS TRUE
+  AND (is_tech IS TRUE OR sqlc.arg(include_non_tech)::boolean)
   AND description <> ''
 ON CONFLICT (job_id, target_version) DO NOTHING;
 
