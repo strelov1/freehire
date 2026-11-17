@@ -41,3 +41,10 @@ Recorded the transaction-scoped gate for each native LinkedIn posting before leg
 lookup and writes. A production-candidate integration run exposed a competing public-slug
 unique check before the ordinary upsert conflict branch. This is a write correctness rule;
 provider request pacing and unrelated posting writes keep their existing behavior.
+
+## LinkedIn throttle retries — 2026-11-17
+
+The first 80-search harvest run (2026-11-17) logged ten detail 429s in 25 minutes through the
+Scrapling proxy; each ended its search after 7-64 of ~100 listed postings while neighbouring
+requests were served. The adapter now retries a 429 twice after growing pauses before treating
+it as a refusal. 403/999 and a persistent 429 still stop the board; pacing is unchanged.
