@@ -141,7 +141,7 @@ for (const action of ['Save to board', 'Hide this job']) {
     const card = page.getByTestId('job-card').first();
     await card.hover();
     await card.getByRole('button', { name: action, exact: true }).click();
-    await expect(page).toHaveURL(/\/signin\?returnTo=%2Fjobs&mode=login/);
+    await expect(page).toHaveURL(/\/onboarding\?returnTo=%2Fjobs$/);
   });
 }
 
