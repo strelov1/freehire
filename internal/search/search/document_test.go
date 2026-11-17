@@ -412,3 +412,18 @@ func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
 		}
 	}
 }
+
+// The archetype follows the category the document publishes: a posting the model filed under
+// an AI category, with an empty dictionary column, still gets its archetype (#4412).
+func TestFromJobDerivesArchetypeFromThePublishedCategory(t *testing.T) {
+	doc, err := FromJob(db.Job{
+		Skills:     []string{"pytorch", "tensorflow"},
+		Enrichment: []byte(`{"category":"ai_engineering"}`),
+	}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.AIArchetype != "ml_trainer_researcher" {
+		t.Errorf("archetype = %q, want ml_trainer_researcher", doc.AIArchetype)
+	}
+}

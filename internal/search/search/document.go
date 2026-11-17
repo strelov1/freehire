@@ -90,7 +90,8 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	}
 	// jobview serves the dictionary column, or the model's category where the column is empty.
 	// A posting neither files is indexed under the residual "other" bucket (#4412).
-	if view.Enrichment.Category == "" {
+	category := view.Enrichment.Category
+	if category == "" {
 		view.Enrichment.Category = "other"
 	}
 	// Cap the indexed description; the detail endpoint serves the full text from its own FromRow.
@@ -100,7 +101,7 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 		IsClosed:    j.ClosedAt.Valid,
 		IsDuplicate: j.DuplicateOf.Valid,
 		Job:         view,
-		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
+		AIArchetype: aiarchetype.Derive(j.Skills, category),
 		RoleType:    roletype.Derive(j.Title),
 		SourceType:  sourceType,
 		AIInterview: view.AIInterviewReports > 0,
