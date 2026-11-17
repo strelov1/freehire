@@ -72,5 +72,7 @@ func pushViewCounts(ctx context.Context, q *db.Queries, idx viewCountSetter, del
 			}
 		}
 	}
-	return pushed, flush()
+	// Two statements: Go leaves the order of reading pushed and calling flush unspecified.
+	err := flush()
+	return pushed, err
 }
