@@ -122,7 +122,7 @@ const maxFencedAttempts = 3
 // Edited, closed and absent postings take the full write. A fenced match must be retried in a
 // fresh transaction before either path can run again.
 func persist(ctx context.Context, tx pgx.Tx, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
-	p, err := job.ResolveUpsertIdentity(ctx, qtx, p)
+	p, err := job.ResolveUpsertIdentity(ctx, tx, p)
 	if err != nil {
 		return written{}, err
 	}

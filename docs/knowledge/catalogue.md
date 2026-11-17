@@ -4,8 +4,10 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T23:25:00+00:00
+  at: 2026-11-16T23:59:30+00:00
 sources:
+  - resource: ../../internal/job/job/upsert.go
+  - resource: ../../internal/platform/db/queries/jobs_linkedin_identity.sql
   - resource: ../../cmd/harvest-linkedin/register.go
   - resource: ../../harvest/linkedin-queries.yml
   - resource: ../../internal/ingest/sources/linkedin_search_options.go
@@ -76,7 +78,9 @@ Posting-level duplicate matching remains in place. See the
 New LinkedIn catalogue rows use the numeric posting id across search keywords and regions.
 The shared writer preserves an existing public legacy row's id, slug and saved history by
 its exact normalized native URL, including closed rows subject to ordinary rediscovery
-policy. A LinkedIn-only URL index covers that closed history.
+policy. A LinkedIn-only URL index covers that closed history. The shared transaction
+serializes writes for the same numeric LinkedIn posting before resolving its legacy key;
+concurrent discoveries therefore preserve one identity and its original public slug.
 
 A completed bounded search may supplement its primary results with at most twenty
 first-level recommendations from one verified public posting page. Each candidate is read
