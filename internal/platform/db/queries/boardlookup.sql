@@ -8,8 +8,17 @@
 -- Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 -- a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 -- over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
+-- Lever shares board slugs across US/EU API residencies: only the matching native
+-- URL host proves coverage. A vacancy's geographic countries are not its API residency.
 SELECT EXISTS (
     SELECT 1 FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern)
+      AND (
+          source <> 'lever'
+          OR url ~* CASE WHEN sqlc.arg(region)::text = 'eu'
+              THEN '^https?://(www[.])?(jobs|api)[.]eu[.]lever[.]co/'
+              ELSE '^https?://(www[.])?(jobs|api)[.]lever[.]co/'
+          END
+      )
 ) AS exists;
 
 -- name: BoardByGreenhouseJobID :one
@@ -38,4 +47,21 @@ LIMIT 1;
 -- index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
 SELECT company, company_slug FROM jobs
 WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND company_slug <> ''
+      AND (
+          source <> 'lever'
+          OR url ~* CASE WHEN sqlc.arg(region)::text = 'eu'
+              THEN '^https?://(www[.])?(jobs|api)[.]eu[.]lever[.]co/'
+              ELSE '^https?://(www[.])?(jobs|api)[.]lever[.]co/'
+          END
+      )
+LIMIT 1;
+
+-- name: GetBoardForResolveInRegion :one
+-- Preserve the requested API residency when a provider shares a board slug across regions.
+SELECT * FROM boards
+WHERE provider = sqlc.arg(provider)
+  AND lower(board) = lower(sqlc.arg(board))
+  AND region = sqlc.arg(region)
+  AND status IN ('pending', 'active', 'retired')
+ORDER BY status = 'retired', id DESC
 LIMIT 1;

@@ -30,12 +30,28 @@ type destinationCatalog struct {
 	fallback sources.CompanyEntry
 }
 
-func (c destinationCatalog) Entry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
-	if c.stored != nil {
-		e, found, err := c.stored.Entry(ctx, source, board)
-		if err != nil || found {
-			return e, found, err
+func (c destinationCatalog) storedEntry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
+	if c.stored == nil {
+		return sources.CompanyEntry{}, false, nil
+	}
+	if source == "lever" {
+		if regional, ok := c.stored.(interface {
+			EntryForRegion(context.Context, string, string, string) (sources.CompanyEntry, bool, error)
+		}); ok {
+			return regional.EntryForRegion(ctx, source, board, c.fallback.Region)
 		}
+	}
+	e, found, err := c.stored.Entry(ctx, source, board)
+	if source == "lever" && (e.Region == "eu") != (c.fallback.Region == "eu") {
+		found = false
+	}
+	return e, found, err
+}
+
+func (c destinationCatalog) Entry(ctx context.Context, source, board string) (sources.CompanyEntry, bool, error) {
+	e, found, err := c.storedEntry(ctx, source, board)
+	if err != nil || found {
+		return e, found, err
 	}
 	return c.fallback, true, nil
 }
@@ -60,22 +76,18 @@ func (im *Importer) ResolveNative(ctx context.Context, row db.Job, raw, employer
 			return NativeDestination{}, fmt.Errorf("native provider %s is disabled by its operator", source)
 		}
 	}
-	known := false
-	if catalog != nil {
-		var err error
-		_, known, err = catalog.Entry(ctx, source, board)
-		if err != nil {
-			return NativeDestination{}, err
-		}
+	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
+	_, known, err := c.storedEntry(ctx, source, board)
+	if err != nil {
+		return NativeDestination{}, err
 	}
 	if !known {
-		var err error
-		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, employerWebsite)
+		employerWebsite, err = im.verifyEmployerBoard(ctx, row, source, board, c.fallback.Region, employerWebsite)
 		if err != nil {
 			return NativeDestination{}, err
 		}
 	}
-	c := destinationCatalog{stored: catalog, fallback: sources.CompanyEntry{Provider: source, Board: board, Company: row.Company, Region: atsboard.Region(canonical)}}
+
 	e, _, err := c.Entry(ctx, source, board)
 	if err != nil {
 		return NativeDestination{}, err

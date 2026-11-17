@@ -35,9 +35,9 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 // external_id is "<board>:…"). It matches with a LIKE-prefix served by the
 // (source, external_id text_pattern_ops) index; the board's LIKE metacharacters are escaped
 // so a slug with % or _ cannot widen the match. Reads `jobs`, unaffected by the
-// board-catalog migration.
-func (r *QueriesRepository) BoardTracked(ctx context.Context, source, board string) (bool, error) {
-	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPattern: externalid.BoardPattern(board)})
+// board-catalog migration. Lever additionally requires its explicit data-residency host.
+func (r *QueriesRepository) BoardTracked(ctx context.Context, source, board, region string) (bool, error) {
+	return r.q.JobsExistForBoard(ctx, db.JobsExistForBoardParams{Source: source, BoardPattern: externalid.BoardPattern(board), Region: region})
 }
 
 // BoardByGreenhouseJobID returns the greenhouse board already carrying a job with the given
@@ -69,8 +69,8 @@ func (r *QueriesRepository) BoardByAshbyJobID(ctx context.Context, jobID string)
 // CompanyForBoard returns the company name + slug already tracked on the board, or ok=false
 // when the board has no job with a resolved company. Reads `jobs`/`companies`, unaffected
 // by the board-catalog migration.
-func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error) {
-	row, err := r.q.CompanyForBoard(ctx, db.CompanyForBoardParams{Source: source, BoardPattern: externalid.BoardPattern(board)})
+func (r *QueriesRepository) CompanyForBoard(ctx context.Context, source, board, region string) (name, slug string, ok bool, err error) {
+	row, err := r.q.CompanyForBoard(ctx, db.CompanyForBoardParams{Source: source, BoardPattern: externalid.BoardPattern(board), Region: region})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", false, nil
 	}

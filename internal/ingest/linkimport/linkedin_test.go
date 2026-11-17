@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 type linkedInTestSource struct {
@@ -99,5 +100,79 @@ func TestPrepareLinkedInRefusesUnreadableRemovedAndMismatchedPostings(t *testing
 				t.Fatalf("unsafe posting imported: ok=%v err=%v", ok, err)
 			}
 		})
+	}
+}
+
+// A region lookup must retain the stored crawl entry rather than borrowing a
+// same-slug board from another API residency or replacing its metadata.
+type linkedInRegionCatalog map[string]sources.CompanyEntry
+
+func (c linkedInRegionCatalog) Entry(_ context.Context, _, _ string) (sources.CompanyEntry, bool, error) {
+	e, found := c[""]
+	return e, found, nil
+}
+func (c linkedInRegionCatalog) EntryForRegion(_ context.Context, _, _, region string) (sources.CompanyEntry, bool, error) {
+	e, found := c[region]
+	return e, found, nil
+}
+
+type linkedInLeverSource struct{}
+
+func (linkedInLeverSource) Provider() string { return "lever" }
+func (linkedInLeverSource) Fetch(_ context.Context, entry sources.CompanyEntry) ([]sources.Job, error) {
+	id, host := "22222222-2222-4222-8222-222222222222", "jobs.lever.co"
+	if entry.Region == "eu" {
+		id, host = "11111111-1111-4111-8111-111111111111", "jobs.eu.lever.co"
+	}
+	return []sources.Job{{ExternalID: id, URL: "https://" + host + "/acme/" + id, Title: "Engineer", Company: entry.Company, Description: "Build services."}}, nil
+}
+
+type linkedInLeverProof struct{ region string }
+
+func (linkedInLeverProof) Resolve(context.Context, string) (string, string, string, bool) {
+	return "", "", "", false
+}
+func (p linkedInLeverProof) ResolveCompany(context.Context, string) (string, string, string, bool) {
+	host := "jobs.lever.co"
+	if p.region == "eu" {
+		host = "jobs.eu.lever.co"
+	}
+	return "lever", "acme", "https://" + host + "/acme", true
+}
+
+func TestLinkedInNativeResolutionKeepsCatalogRegion(t *testing.T) {
+	const raw = "https://jobs.eu.lever.co/acme/11111111-1111-4111-8111-111111111111"
+	eu := sources.CompanyEntry{Provider: "lever", Board: "acme", Region: "eu", Company: "Acme Europe", Hub: true, Tenants: map[string]string{"keep": "stored"}}
+	catalog := linkedInRegionCatalog{"": {Provider: "lever", Board: "acme", Company: "Acme US"}, "eu": eu}
+	im := &Importer{ingest: map[string]sources.Source{"lever": linkedInLeverSource{}}, catalog: catalog}
+	got, err := im.ResolveNative(context.Background(), db.Job{Source: "linkedin", Company: eu.Company, Title: "Engineer"}, raw, "")
+	if err != nil || got.Entry.Region != "eu" || got.Entry.Company != eu.Company || !got.Entry.Hub || got.Entry.Tenants["keep"] != "stored" {
+		t.Fatalf("regional catalogue metadata=%+v error=%v", got, err)
+	}
+}
+
+func TestLinkedInNativeResolutionRejectsAnotherWebsiteRegion(t *testing.T) {
+	const raw = "https://jobs.eu.lever.co/acme/11111111-1111-4111-8111-111111111111"
+	for _, region := range []string{"", "eu"} {
+		t.Run(region, func(t *testing.T) {
+			im := &Importer{ingest: map[string]sources.Source{"lever": linkedInLeverSource{}}, boards: linkedInLeverProof{region: region}}
+			got, err := im.ResolveNative(context.Background(), db.Job{Source: "linkedin", Company: "Acme Europe", Title: "Engineer"}, raw, "https://acme.example")
+			if region != "eu" {
+				if err == nil || got.Entry.Provider != "" || got.Job.ExternalID != "" {
+					t.Fatalf("another residency proved the employer: %+v error=%v", got, err)
+				}
+			} else if err != nil || got.Entry.Region != "eu" || got.Job.ExternalID == "" {
+				t.Fatalf("matching residency refused: %+v error=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestLinkedInUnverifiedNativeReturnsNoTrustedMetadata(t *testing.T) {
+	raw := "https://unrelated.mua.hrdepartment.com/hrsmart/ats/Posting/view/3735"
+	im := &Importer{ingest: map[string]sources.Source{"hrsmart": nativeTestSource{}}}
+	got, err := im.ResolveNative(context.Background(), db.Job{Source: "linkedin", Company: "Gist Limited", Title: "Engineer"}, raw, "")
+	if err == nil || got.Entry.Provider != "" || got.Job.ExternalID != "" {
+		t.Fatalf("unverified employer returned trusted metadata: %+v error=%v", got, err)
 	}
 }

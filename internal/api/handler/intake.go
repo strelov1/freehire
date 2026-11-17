@@ -158,7 +158,7 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 	case err == nil:
 		return "", res.Rewardable && res.Contribution.Status == contribution.StatusPending, nil
 	case errors.Is(err, contribution.ErrBoardAlreadyTracked):
-		_, slug, _ := s.contribution.CompanyForBoard(ctx, intake.Source, intake.Board)
+		_, slug, _ := s.contribution.CompanyForBoard(ctx, intake.Source, intake.Board, intake.Region)
 		return slug, false, nil
 	case errors.Is(err, contribution.ErrBoardAlreadyContributed),
 		errors.Is(err, contribution.ErrUnsupportedATS):

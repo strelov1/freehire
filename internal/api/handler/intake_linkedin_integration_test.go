@@ -182,6 +182,13 @@ func TestLinkedInIntakePreservesDiscoveredEuropeanBoardRegion(t *testing.T) {
 			if err := pool.QueryRow(ctx, "INSERT INTO users(email) VALUES('eu-board-contributor@example.test') RETURNING id").Scan(&userID); err != nil {
 				t.Fatal(err)
 			}
+			if _, err := pool.Exec(ctx, "INSERT INTO boards(provider,board,region,company,status) VALUES('lever','acme-eu','','Acme US','active')"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO jobs(source,external_id,url,title,company,company_slug,public_slug)
+				VALUES('lever','acme-eu:22222222-2222-4222-8222-222222222222','https://jobs.lever.co/acme-eu/22222222-2222-4222-8222-222222222222','Engineer','Acme US','acme-us','lever-us-control')`); err != nil {
+				t.Fatal(err)
+			}
 			posting := sources.Job{ExternalID: "123", Title: "Java Engineer", Company: "Acme EU", Description: "Build Java services.", ApplyMethod: sources.ApplyExternal, CompanyWebsite: "https://acme.example"}
 			wantStatus := outcomeQueued
 			if readable {
@@ -199,21 +206,37 @@ func TestLinkedInIntakePreservesDiscoveredEuropeanBoardRegion(t *testing.T) {
 			}
 			var region string
 			var owner int64
-			if err := pool.QueryRow(ctx, "SELECT region,submitted_by FROM boards WHERE provider='lever' AND board='acme-eu'").Scan(&region, &owner); err != nil || region != "eu" || owner != userID {
+			if err := pool.QueryRow(ctx, "SELECT region,submitted_by FROM boards WHERE provider='lever' AND board='acme-eu' AND region='eu'").Scan(&region, &owner); err != nil || region != "eu" || owner != userID {
 				t.Fatalf("contributed board region=%q owner=%d error=%v", region, owner, err)
 			}
 			var count int
-			if err := pool.QueryRow(ctx, "SELECT count(*) FROM boards WHERE provider='lever' AND board='acme-eu'").Scan(&count); err != nil || count != 1 {
-				t.Fatalf("regional board duplicated: count=%d error=%v", count, err)
+			if err := pool.QueryRow(ctx, "SELECT count(*) FROM boards WHERE provider='lever' AND board='acme-eu'").Scan(&count); err != nil || count != 2 {
+				t.Fatalf("regional board not separated: count=%d error=%v", count, err)
+			}
+			if readable {
+				if _, err := pool.Exec(ctx, `UPDATE boards SET hub=true,tenants='{"keep":"stored"}'::jsonb WHERE provider='lever' AND board='acme-eu' AND region='eu'`); err != nil {
+					t.Fatal(err)
+				}
+				verified, err := intake.imports.PrepareLinkedIn(ctx, "https://www.linkedin.com/jobs/view/123/")
+				if err != nil || verified.Native == nil || !verified.Native.Entry.Hub || verified.Native.Entry.Tenants["keep"] != "stored" {
+					t.Fatalf("stored EU configuration was replaced: %+v error=%v", verified, err)
+				}
+			}
+			var controlCompany string
+			if err := pool.QueryRow(ctx, "SELECT company FROM jobs WHERE public_slug='lever-us-control'").Scan(&controlCompany); err != nil || controlCompany != "Acme US" {
+				t.Fatalf("other residency was changed: company=%q error=%v", controlCompany, err)
 			}
 		})
 	}
 }
 
-type intakeVanityICIMSSource struct{}
+type intakeVanityICIMSSource struct{ unavailable bool }
 
 func (intakeVanityICIMSSource) Provider() string { return "icims" }
-func (intakeVanityICIMSSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+func (s intakeVanityICIMSSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	if s.unavailable {
+		return nil, fmt.Errorf("native posting unavailable")
+	}
 	return []sources.Job{{ExternalID: "1234", URL: "https://careers.peraton.com/jobs/1234/job", Title: "Java Engineer", Company: "Peraton", Description: "Build Java services."}}, nil
 }
 
@@ -227,24 +250,46 @@ func (intakeVanityProof) ResolveCompany(context.Context, string) (string, string
 }
 
 func TestLinkedInIntakeAttributesVerifiedVanityNativeBoard(t *testing.T) {
-	pool, ctx := startPostgres(t), context.Background()
-	q := db.New(pool)
-	var userID int64
-	if err := pool.QueryRow(ctx, "INSERT INTO users(email) VALUES('vanity-contributor@example.test') RETURNING id").Scan(&userID); err != nil {
-		t.Fatal(err)
-	}
-	posting := sources.Job{ExternalID: "123", Title: "Java Engineer", Company: "Peraton", Description: "Build Java services.", ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://careers.peraton.com/jobs/1234/job", CompanyWebsite: "https://www.peraton.com"}
-	registry := map[string]sources.Source{"linkedin": intakeLinkedInSource{posting: posting}, "icims": intakeVanityICIMSSource{}}
-	svc := contribution.New(contribution.NewQueriesRepository(q), nil)
-	intake := &intakeService{queries: q, contribution: svc, imports: linkimport.New(pool, q, nil, nil, registry, intakeVanityProof{})}
-	out, err := intake.Resolve(ctx, userID, "https://www.linkedin.com/jobs/view/123/", contribution.SurfaceExtension)
-	if err != nil || out.Status != outcomeImported {
-		t.Fatalf("vanity outcome=%+v error=%v", out, err)
-	}
-	var owner int64
-	var surface string
-	if err := pool.QueryRow(ctx, "SELECT submitted_by,surface FROM boards WHERE provider='icims' AND board='careers-peraton.icims.com'").Scan(&owner, &surface); err != nil || owner != userID || surface != contribution.SurfaceExtension {
-		t.Fatalf("vanity board owner=%d surface=%q error=%v", owner, surface, err)
+	for _, unavailable := range []bool{false, true} {
+		t.Run(fmt.Sprint(unavailable), func(t *testing.T) {
+			pool, ctx := startPostgres(t), context.Background()
+			q := db.New(pool)
+			var userID int64
+			if err := pool.QueryRow(ctx, "INSERT INTO users(email) VALUES('vanity-contributor@example.test') RETURNING id").Scan(&userID); err != nil {
+				t.Fatal(err)
+			}
+			posting := sources.Job{ExternalID: "123", Title: "Java Engineer", Company: "Peraton", Description: "Build Java services.", ApplyMethod: sources.ApplyExternal, ExternalApplyURL: "https://careers.peraton.com/jobs/1234/job", CompanyWebsite: "https://www.peraton.com"}
+			registry := map[string]sources.Source{"linkedin": intakeLinkedInSource{posting: posting}, "icims": intakeVanityICIMSSource{unavailable: unavailable}}
+			svc := contribution.New(contribution.NewQueriesRepository(q), nil)
+			intake := &intakeService{queries: q, contribution: svc, imports: linkimport.New(pool, q, nil, nil, registry, intakeVanityProof{})}
+			out, err := intake.Resolve(ctx, userID, "https://www.linkedin.com/jobs/view/123/", contribution.SurfaceExtension)
+			wantStatus := outcomeImported
+			if unavailable {
+				wantStatus = outcomeQueued
+			}
+			if err != nil || out.Status != wantStatus || out.Board != "careers-peraton.icims.com" {
+				t.Fatalf("vanity outcome=%+v error=%v", out, err)
+			}
+			var owner int64
+			var surface string
+			if err := pool.QueryRow(ctx, "SELECT submitted_by,surface FROM boards WHERE provider='icims' AND board='careers-peraton.icims.com'").Scan(&owner, &surface); err != nil || owner != userID || surface != contribution.SurfaceExtension {
+				t.Fatalf("vanity board owner=%d surface=%q error=%v", owner, surface, err)
+			}
+			cfg, err := q.GetIngestSchedule(ctx, "icims")
+			if err != nil || !cfg.Enabled || !cfg.Managed {
+				t.Fatalf("verified vanity board not scheduled: %+v error=%v", cfg, err)
+			}
+			if unavailable {
+				var company string
+				if err := pool.QueryRow(ctx, "SELECT company FROM boards WHERE provider='icims'").Scan(&company); err != nil || company != "Peraton" {
+					t.Fatalf("verified vanity employer=%q error=%v", company, err)
+				}
+				var jobs int
+				if err := pool.QueryRow(ctx, "SELECT count(*) FROM jobs").Scan(&jobs); err != nil || jobs != 0 {
+					t.Fatalf("unreadable vanity posting published: rows=%d error=%v", jobs, err)
+				}
+			}
+		})
 	}
 }
 

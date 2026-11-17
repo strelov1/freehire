@@ -2849,6 +2849,8 @@ type Querier interface {
 	// the employer of the postings crawled under it, so it answers too, after a live one;
 	// 'rejected' never does, since no crawl ever read it. Case-insensitive like the identity key.
 	GetBoardForResolve(ctx context.Context, arg GetBoardForResolveParams) (Board, error)
+	// Preserve the requested API residency when a provider shares a board slug across regions.
+	GetBoardForResolveInRegion(ctx context.Context, arg GetBoardForResolveInRegionParams) (Board, error)
 	// The member behind a handle, active or left.
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.
@@ -3877,6 +3879,8 @@ type Querier interface {
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
+	// Lever shares board slugs across US/EU API residencies: only the matching native
+	// URL host proves coverage. A vacancy's geographic countries are not its API residency.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
 	// Opt a member in to the interview-buddies network, or bring a returning one back. A first
 	// join stores the handle the caller minted; a rejoin (the user_id conflict) clears left_at

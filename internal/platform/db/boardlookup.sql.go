@@ -48,12 +48,20 @@ func (q *Queries) BoardByGreenhouseJobID(ctx context.Context, jobID string) (str
 const companyForBoard = `-- name: CompanyForBoard :one
 SELECT company, company_slug FROM jobs
 WHERE source = $1 AND external_id LIKE $2 AND company_slug <> ''
+      AND (
+          source <> 'lever'
+          OR url ~* CASE WHEN $3::text = 'eu'
+              THEN '^https?://(www[.])?(jobs|api)[.]eu[.]lever[.]co/'
+              ELSE '^https?://(www[.])?(jobs|api)[.]lever[.]co/'
+          END
+      )
 LIMIT 1
 `
 
 type CompanyForBoardParams struct {
 	Source       string `json:"source"`
 	BoardPattern string `json:"board_pattern"`
+	Region       string `json:"region"`
 }
 
 type CompanyForBoardRow struct {
@@ -65,9 +73,48 @@ type CompanyForBoardRow struct {
 // slug so the bot/UI can link to /companies/<slug>. board_pattern is "<escaped board>:%" (same
 // index-backed LIKE as JobsExistForBoard). Only rows with a resolved company_slug qualify.
 func (q *Queries) CompanyForBoard(ctx context.Context, arg CompanyForBoardParams) (CompanyForBoardRow, error) {
-	row := q.db.QueryRow(ctx, companyForBoard, arg.Source, arg.BoardPattern)
+	row := q.db.QueryRow(ctx, companyForBoard, arg.Source, arg.BoardPattern, arg.Region)
 	var i CompanyForBoardRow
 	err := row.Scan(&i.Company, &i.CompanySlug)
+	return i, err
+}
+
+const getBoardForResolveInRegion = `-- name: GetBoardForResolveInRegion :one
+SELECT id, provider, board, region, company, hub, tenants, url, status, submitted_by, surface, rejected_reason, created_at, activated_at FROM boards
+WHERE provider = $1
+  AND lower(board) = lower($2)
+  AND region = $3
+  AND status IN ('pending', 'active', 'retired')
+ORDER BY status = 'retired', id DESC
+LIMIT 1
+`
+
+type GetBoardForResolveInRegionParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+// Preserve the requested API residency when a provider shares a board slug across regions.
+func (q *Queries) GetBoardForResolveInRegion(ctx context.Context, arg GetBoardForResolveInRegionParams) (Board, error) {
+	row := q.db.QueryRow(ctx, getBoardForResolveInRegion, arg.Provider, arg.Board, arg.Region)
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.Board,
+		&i.Region,
+		&i.Company,
+		&i.Hub,
+		&i.Tenants,
+		&i.URL,
+		&i.Status,
+		&i.SubmittedBy,
+		&i.Surface,
+		&i.RejectedReason,
+		&i.CreatedAt,
+		&i.ActivatedAt,
+	)
 	return i, err
 }
 
@@ -75,12 +122,20 @@ const jobsExistForBoard = `-- name: JobsExistForBoard :one
 
 SELECT EXISTS (
     SELECT 1 FROM jobs WHERE source = $1 AND external_id LIKE $2
+      AND (
+          source <> 'lever'
+          OR url ~* CASE WHEN $3::text = 'eu'
+              THEN '^https?://(www[.])?(jobs|api)[.]eu[.]lever[.]co/'
+              ELSE '^https?://(www[.])?(jobs|api)[.]lever[.]co/'
+          END
+      )
 ) AS exists
 `
 
 type JobsExistForBoardParams struct {
 	Source       string `json:"source"`
 	BoardPattern string `json:"board_pattern"`
+	Region       string `json:"region"`
 }
 
 // Board lookups behind the "contribute a board" flow: does the catalogue already crawl
@@ -91,8 +146,10 @@ type JobsExistForBoardParams struct {
 // Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 // a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 // over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
+// Lever shares board slugs across US/EU API residencies: only the matching native
+// URL host proves coverage. A vacancy's geographic countries are not its API residency.
 func (q *Queries) JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error) {
-	row := q.db.QueryRow(ctx, jobsExistForBoard, arg.Source, arg.BoardPattern)
+	row := q.db.QueryRow(ctx, jobsExistForBoard, arg.Source, arg.BoardPattern, arg.Region)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

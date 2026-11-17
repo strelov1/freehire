@@ -95,8 +95,8 @@ type RecordInput struct {
 // Repository is the persistence contract, expressed in package domain types. Record inserts
 // the contribution, mapping a duplicate board to ErrBoardAlreadyContributed.
 type Repository interface {
-	BoardTracked(ctx context.Context, source, board string) (bool, error)
-	CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool, err error)
+	BoardTracked(ctx context.Context, source, board, region string) (bool, error)
+	CompanyForBoard(ctx context.Context, source, board, region string) (name, slug string, ok bool, err error)
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	BoardByAshbyJobID(ctx context.Context, jobID string) (board string, ok bool, err error)
 	Record(ctx context.Context, in RecordInput) (Contribution, error)
@@ -177,7 +177,7 @@ func (s *Service) InspectResolved(ctx context.Context, it Intake) (Intake, error
 	if it.Source == "" || it.Board == "" {
 		return Intake{}, nil
 	}
-	tracked, err := s.repo.BoardTracked(ctx, it.Source, it.Board)
+	tracked, err := s.repo.BoardTracked(ctx, it.Source, it.Board, it.Region)
 	if err != nil {
 		return Intake{}, err
 	}
@@ -264,10 +264,10 @@ func logUnrecognized(submittedBy int64, rawURL string) {
 
 // CompanyForBoard resolves the company already tracked on a (source, board) — for the "we
 // already cover this" reply, so the caller can link to the company page. ok=false when the
-// board has no resolved company. The (source, board) come from Submit, so no re-recognition
+// board has no resolved company. The (source, board, region) come from Submit, so no re-recognition
 // (or re-fetch, for a resolved vanity domain) is needed.
-func (s *Service) CompanyForBoard(ctx context.Context, source, board string) (name, slug string, ok bool) {
-	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board)
+func (s *Service) CompanyForBoard(ctx context.Context, source, board, region string) (name, slug string, ok bool) {
+	name, slug, found, err := s.repo.CompanyForBoard(ctx, source, board, region)
 	if err != nil || !found {
 		return "", "", false
 	}

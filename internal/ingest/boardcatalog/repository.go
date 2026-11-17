@@ -274,6 +274,16 @@ func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider 
 // such board. It satisfies linksource.BoardCatalog.
 func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
 	row, err := r.q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
+	return resolvedBoardEntry(row, err)
+}
+
+// EntryForRegion retains the exact catalogue identity for ATS API residencies.
+func (r *QueriesRepository) EntryForRegion(ctx context.Context, provider, board, region string) (sources.CompanyEntry, bool, error) {
+	row, err := r.q.GetBoardForResolveInRegion(ctx, db.GetBoardForResolveInRegionParams{Provider: provider, Board: board, Region: region})
+	return resolvedBoardEntry(row, err)
+}
+
+func resolvedBoardEntry(row db.Board, err error) (sources.CompanyEntry, bool, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return sources.CompanyEntry{}, false, nil
 	}

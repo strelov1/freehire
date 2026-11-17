@@ -165,13 +165,13 @@ func TestBoardTracked(t *testing.T) {
 
 	insertJob(t, pool, "greenhouse", "acme:100")
 
-	if ok, err := repo.BoardTracked(ctx, "greenhouse", "acme"); err != nil || !ok {
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "acme", ""); err != nil || !ok {
 		t.Errorf("BoardTracked(acme) = %v,%v, want true", ok, err)
 	}
-	if ok, err := repo.BoardTracked(ctx, "greenhouse", "globex"); err != nil || ok {
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "globex", ""); err != nil || ok {
 		t.Errorf("BoardTracked(globex) = %v,%v, want false", ok, err)
 	}
-	if ok, err := repo.BoardTracked(ctx, "greenhouse", "ac_e"); err != nil || ok {
+	if ok, err := repo.BoardTracked(ctx, "greenhouse", "ac_e", ""); err != nil || ok {
 		t.Errorf("BoardTracked(ac_e) = %v,%v, want false — '_' must be escaped, not a wildcard", ok, err)
 	}
 }
@@ -287,5 +287,76 @@ func TestListByUserIsScopedToTheCaller(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].Board != "a" {
 		t.Fatalf("ListByUser(alice) = %+v, want only alice's board", rows)
+	}
+}
+
+func TestInspectLeverBoardDoesNotConfuseDataResidencies(t *testing.T) {
+	for _, tc := range []struct{ name, existingURL, incomingURL, wantRegion string }{
+		{"US does not cover EU", "https://jobs.lever.co/acme/old-us", "https://jobs.eu.lever.co/acme/new-eu", "eu"},
+		{"EU does not cover US", "https://jobs.eu.lever.co/acme/old-eu", "https://jobs.lever.co/acme/new-us", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := startPostgres(t)
+			ctx := context.Background()
+			userID := insertUser(t, pool, "residency-contributor@example.test")
+			var originalID int64
+			if err := pool.QueryRow(ctx, `INSERT INTO jobs(source,external_id,url,title,public_slug) VALUES('lever','acme:old-role',$1,'Existing engineer','original-lever-role') RETURNING id`, tc.existingURL).Scan(&originalID); err != nil {
+				t.Fatal(err)
+			}
+			svc := New(NewQueriesRepository(db.New(pool)), nil)
+			same, err := svc.Inspect(ctx, tc.existingURL)
+			if err != nil || !same.Tracked {
+				t.Fatalf("same-residency posting stopped proving coverage: %+v,%v", same, err)
+			}
+			inspected, err := svc.Inspect(ctx, tc.incomingURL)
+			if err != nil || !inspected.Recognized || inspected.Tracked || inspected.Region != tc.wantRegion {
+				t.Fatalf("another Lever residency incorrectly covers incoming board: %+v,%v", inspected, err)
+			}
+			result, err := svc.RecordIntake(ctx, SubmitInput{SubmittedBy: userID, URL: tc.incomingURL, Surface: SurfaceWeb}, inspected)
+			if err != nil || !result.Rewardable {
+				t.Fatalf("new residency was not contributed: %+v,%v", result, err)
+			}
+			var region string
+			var owner int64
+			if err := pool.QueryRow(ctx, `SELECT region,submitted_by FROM boards WHERE provider='lever' AND board='acme'`).Scan(&region, &owner); err != nil || region != tc.wantRegion || owner != userID {
+				t.Fatalf("wrong board registration: region=%q owner=%d error=%v", region, owner, err)
+			}
+			var keptURL, keptSlug string
+			var count int
+			if err := pool.QueryRow(ctx, `SELECT url,public_slug FROM jobs WHERE id=$1`, originalID).Scan(&keptURL, &keptSlug); err != nil || keptURL != tc.existingURL || keptSlug != "original-lever-role" {
+				t.Fatalf("prior residency job was rewritten: URL=%s slug=%s error=%v", keptURL, keptSlug, err)
+			}
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE source='lever'`).Scan(&count); err != nil || count != 1 {
+				t.Fatalf("board contribution unexpectedly changed jobs: count=%d error=%v", count, err)
+			}
+		})
+	}
+}
+
+func TestCompanyForLeverBoardDoesNotNameAnotherResidencysEmployer(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `INSERT INTO companies(slug,name) VALUES('acme-us','Acme US'),('acme-eu','Acme EU')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO jobs(source,external_id,url,title,public_slug,company,company_slug) VALUES('lever','acme:us-role','https://jobs.lever.co/acme/us-role','US engineer','us-lever-role','Acme US','acme-us')`); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(NewQueriesRepository(db.New(pool)), nil)
+	eu, err := svc.Inspect(ctx, "https://jobs.eu.lever.co/acme/new-eu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name, slug, found := svc.CompanyForBoard(ctx, eu.Source, eu.Board, eu.Region); found {
+		t.Fatalf("EU intake names unrelated US employer: %q/%q", name, slug)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO jobs(source,external_id,url,title,public_slug,company,company_slug) VALUES('lever','acme:eu-role','https://jobs.eu.lever.co/acme/eu-role','EU engineer','eu-lever-role','Acme EU','acme-eu')`); err != nil {
+		t.Fatal(err)
+	}
+	if name, slug, found := svc.CompanyForBoard(ctx, eu.Source, eu.Board, eu.Region); !found || name != "Acme EU" || slug != "acme-eu" {
+		t.Fatalf("EU intake lost its own employer: %q/%q found=%v", name, slug, found)
+	}
+	if name, slug, found := svc.CompanyForBoard(ctx, "lever", "acme", ""); !found || name != "Acme US" || slug != "acme-us" {
+		t.Fatalf("US intake lost its own employer: %q/%q found=%v", name, slug, found)
 	}
 }

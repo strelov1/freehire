@@ -28,11 +28,11 @@ type fakeRepo struct {
 	ashbyIDBoard  string // BoardByAshbyJobID returns this (ok when non-empty)
 }
 
-func (f *fakeRepo) BoardTracked(_ context.Context, _, _ string) (bool, error) {
+func (f *fakeRepo) BoardTracked(_ context.Context, _, _, _ string) (bool, error) {
 	return f.boardTracked, nil
 }
 
-func (f *fakeRepo) CompanyForBoard(_ context.Context, _, _ string) (string, string, bool, error) {
+func (f *fakeRepo) CompanyForBoard(_ context.Context, _, _, _ string) (string, string, bool, error) {
 	return f.companyName, f.companySlug, f.companyName != "" || f.companySlug != "", nil
 }
 
@@ -321,12 +321,12 @@ func TestSubmitResolvesAshbyJobIDForEmbeddedVanity(t *testing.T) {
 
 func TestCompanyForBoard(t *testing.T) {
 	repo := &fakeRepo{companyName: "Acme Corp", companySlug: "acme"}
-	name, slug, ok := newService(repo).CompanyForBoard(context.Background(), "greenhouse", "acme")
+	name, slug, ok := newService(repo).CompanyForBoard(context.Background(), "greenhouse", "acme", "")
 	if !ok || name != "Acme Corp" || slug != "acme" {
 		t.Errorf("CompanyForBoard = (%q,%q,%v), want (Acme Corp, acme, true)", name, slug, ok)
 	}
 	// No company on the board → not ok.
-	if _, _, ok := newService(&fakeRepo{}).CompanyForBoard(context.Background(), "greenhouse", "empty"); ok {
+	if _, _, ok := newService(&fakeRepo{}).CompanyForBoard(context.Background(), "greenhouse", "empty", ""); ok {
 		t.Error("CompanyForBoard(no company) ok = true, want false")
 	}
 }

@@ -11,6 +11,8 @@ sources:
   - resource: ../../internal/ingest/sources/providers/linkedin.md
   - resource: ../../internal/ingest/linkimport/native_write.go
   - resource: ../../internal/ingest/linkimport/native_resolve.go
+  - resource: ../../internal/ingest/linkimport/native_employer.go
+  - resource: ../../internal/ingest/boardcatalog/repository.go
   - resource: ../../internal/ingest/linkimport/linkedin.go
   - resource: ../../internal/api/handler/intake_linkedin.go
   - resource: ../../internal/api/handler/intake_sources.go
