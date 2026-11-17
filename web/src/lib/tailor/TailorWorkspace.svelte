@@ -38,6 +38,9 @@
   import { CvRevisions } from './cvRevisions.svelte';
   import LeftPanelBar from './LeftPanelBar.svelte';
   import { workspaceOpenError } from './workspaceOpenError';
+  import { openWorkspace } from './openWorkspace';
+  import { PdfExport } from './pdfExport.svelte';
+  import { TailorOutcomes } from './outcome';
   import PanelSplitter from './PanelSplitter.svelte';
   import PreviewToolbar from './PreviewToolbar.svelte';
   import TailorMobileTabs from './TailorMobileTabs.svelte';
@@ -163,7 +166,6 @@
   const placeholders = $derived(findPlaceholders(doc));
   let placeholdersShown = $state(false);
   const showingPlaceholders = $derived(placeholdersShown && placeholders.length > 0);
-  let confirmDownloadOpen = $state(false);
   let previewScroller = $state<HTMLElement | null>(null);
 
   // Each press of the gap chip goes to the next slot, in reading order, and wraps — so a CV
@@ -185,11 +187,12 @@
     revealGap(gap, previewScroller, leftPanelEl, `Gap ${gapCursor} of ${placeholders.length}: ${gap.token}`);
   }
 
-  function guardDownload(e: MouseEvent) {
-    if (placeholders.length === 0) return;
-    e.preventDefault();
-    confirmDownloadOpen = true;
-  }
+  const pdf = new PdfExport({
+    url: () => pdfUrl,
+    flush: () => flushPendingSave(),
+    onExported: () => outcomes.pdfExported(),
+    hasGaps: () => placeholders.length > 0,
+  });
 
   // The member's headshot, for the templates that print one (see Headshot).
   const headshot = new Headshot();
@@ -211,6 +214,14 @@
     cvLoaded = true;
   }
   const loadCv = async () => hydrate(await api.getCv(cvId));
+
+  // First-result analytics: a completed turn that changed the saved CV; a PDF that arrived.
+  const outcomes = new TailorOutcomes({
+    cvId: () => cvId,
+    slug: () => (baseMode ? undefined : slug),
+    document: () => doc,
+    emit: track,
+  });
 
   // The two scores, re-read after every change that moves them (see workspaceReads.ts).
   async function refreshAtsDelta() {
@@ -255,53 +266,15 @@
 
   onMount(async () => {
     try {
-      if (baseCvId !== undefined) {
-        // BASE mode: the CV is the address, there is no vacancy to fetch and nothing to tailor.
-        // The conversation is opened here and costs nothing (see StartBaseSession): a free
-        // account still edits by hand, and the chat answers its first message with the same
-        // upgrade state the tailoring workspace shows.
-        cvId = baseCvId;
-        resuming = true;
-        const [rec, base] = await Promise.all([api.getCv(baseCvId), api.startBaseSession(baseCvId)]);
-        hydrate(rec);
-        sessionId = base.session_id;
-      } else if (cvParam) {
-        // Resume an existing tailored CV. If it already has a bound session, re-attach it with
-        // no kickoff. If it has none (a CV created before session binding), mint a fresh
-        // tailoring session for it and let the kickoff orient the agent.
-        const existing = cvParam;
-        const [j, fit] = await Promise.all([api.getJob(slug), api.getMatchAnalysis(slug).catch(() => null)]);
-        job = j;
-        cvId = existing;
-        analysis = fit?.analysis ?? null;
-        const rec = await api.getCv(existing);
-        hydrate(rec); // reuse the same record we fetched for the session id
-        if (rec.agent_session_id) {
-          resuming = true;
-          sessionId = rec.agent_session_id;
-          // Resume with an existing session never hits POST /me/cvs/tailor, which is what
-          // places the vacancy on the Tracking board. Re-run bootstrap for that side effect
-          // only (idempotent: same CV, no second debit). Fire-and-forget so a slow tracking
-          // write cannot block the workspace.
-          void api.tailorCv(slug, baseParam).catch(() => {});
-        } else {
-          // A CV created before session binding: the backend mints a tailoring
-          // conversation bound to it and stores it on the CV (and places the vacancy
-          // on the board).
-          const s = await api.startTailorSession(existing);
-          sessionId = s.session_id;
-        }
-      } else {
-        // Bootstrap: reach the tailored CV for this vacancy (the backend returns the existing
-        // one when there is one) and the conversation bound to it.
-        // Only the bootstrap is tracked as a run: it is the path that mints a tailored
-        // CV and spends one of the day's sessions. Re-opening an existing one
-        // (startTailorSession above) costs nothing and would inflate the count on every
-        // revisit.
-        track('tailor_run', { slug });
-        const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug, baseParam)]);
-        job = j;
-        await applyTailorResult(tailor);
+      const o = await openWorkspace({ slug, baseCvId, cvParam, baseParam });
+      resuming = o.resuming;
+      job = o.job ?? null;
+      if (o.tailor) await applyTailorResult(o.tailor);
+      else if (o.cv) {
+        cvId = o.cvId;
+        analysis = o.analysis ?? null;
+        sessionId = o.sessionId;
+        hydrate(o.cv);
       }
       finishReady();
     } catch (e) {
@@ -426,6 +399,7 @@
   // than onTurnComplete: the accessory reads (ATS delta, job match, history.list) stay end-of-turn
   // only, or a 30-step run would fire ten of each.
   async function onDocumentEdited() {
+    outcomes.documentEdited();
     try {
       await loadCv();
       pdfVersion += 1;
@@ -436,10 +410,12 @@
 
   // After an agent turn the CV may have changed server-side: flush any pending human edit, then
   // refetch and replace the shared document so the Editor and preview reflect it.
-  async function onTurnComplete() {
+  async function onTurnComplete(turn: { completed: boolean }) {
     await flushPendingSave();
     try {
       await loadCv();
+      // Judged on the document just re-read from the server.
+      outcomes.turnEnded(turn.completed);
       pdfVersion += 1;
       void history.load(true);
       void refreshAtsDelta();
@@ -452,6 +428,7 @@
         analysis = (await api.getMatchAnalysis(slug).catch(() => null))?.analysis ?? null;
       }
     } catch {
+      outcomes.turnEnded(false); // saved document unconfirmed
       /* best-effort refresh; the next edit or reload will reconcile */
     }
   }
@@ -559,7 +536,7 @@
               {onTurnComplete}
               {onDocumentEdited}
               onRunStateChange={(running) => (runActive = running)}
-              onTurnStateChange={(active) => (turnActive = active)}
+              onTurnStateChange={(active) => ((turnActive = active), outcomes.turnState(active))}
               beforeTurn={flushPendingSave}
             />
           </div>
@@ -582,7 +559,7 @@
           onzoomin={() => preview.zoomIn()}
           onzoomout={() => preview.zoomOut()}
           ongap={() => goToGap()}
-          ondownload={guardDownload}
+          {pdf}
         />
         <div bind:this={previewScroller} bind:clientWidth={preview.width} class="min-h-0 flex-1 overflow-auto p-6">
           <CvHtmlPreview
@@ -638,11 +615,11 @@
 <ResetCvDialog bind:open={confirmResetOpen} {baseMode} onConfirm={applyReseed} />
 
 <GapsDownloadDialog
-  bind:open={confirmDownloadOpen}
+  bind:open={pdf.confirmOpen}
   {placeholders}
-  {pdfUrl}
+  onConfirm={pdf.run}
   onFix={() => {
-    confirmDownloadOpen = false;
+    pdf.confirmOpen = false;
     void goToGap(0);
   }}
 />

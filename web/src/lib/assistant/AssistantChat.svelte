@@ -85,9 +85,8 @@
   // disables the composer and list while a session load is in flight.
   let sessions = $state<SessionItem[]>([]);
   let activeId = $state<string | null>(null);
-  // A plain chat with nothing to resume opens blank, with no session behind it yet: the first
-  // message creates one. Minting it on page open left most chat sessions empty — new accounts
-  // land here and leave without typing (2026-11-09: 143 of 152 a week).
+  // A plain chat with nothing to resume opens blank, with no session yet: the first message
+  // creates one (minting on open left most sessions empty).
   let deferredNew = $state(false);
   // The open conversation's preset, as the SERVER records it — not the one this arrival
   // asked for. A rehearsal is reached by its own address as often as it is created, and
@@ -436,7 +435,7 @@
   }
 
   // End the current turn and drain the next queued message, if any.
-  function endTurn() {
+  function endTurn(completed = false) {
     turnActive = false;
     turn = null;
     onTurnStateChange?.(false);
@@ -445,7 +444,7 @@
       onRunStateChange?.(false);
     }
     // A completed turn may have edited an artifact (e.g. the tailored CV) — let the host refresh.
-    onTurnComplete?.();
+    onTurnComplete?.({ completed });
     drainQueue();
   }
 
@@ -459,9 +458,8 @@
     if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
   }
 
-  /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here. The
-   *  backend no longer infers the first from the second — it could not tell a deliberate stop
-   *  apart from a phone locking its screen. */
+  /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here (the
+   *  backend cannot tell a deliberate stop from a phone locking its screen). */
   function cancelTurn() {
     turn?.cancel();
     turn = null;
@@ -482,7 +480,7 @@
     }
     chat = reduceTurnEvent(chat, event);
     if (event.type === 'result') {
-      endTurn();
+      endTurn(event.stop_reason === 'end_turn' && !event.is_error);
     }
     void follow.toBottom();
   }
