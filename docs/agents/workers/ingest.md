@@ -11,7 +11,12 @@ Part of the [worker index](../workers.md): what each `cmd/<name>` worker does, w
   existing live identities and preserves operator labels and limits. Registration-only
   `--pages=10 --jobage=30` overrides budgets for newly registered searches; omitted
   or zero flags keep the worklist values. `pages` and `jobage`
-  are stored explicitly in each new board's provider options: the harvest loader's
+  are stored explicitly in each new board's provider options, and `--easyapply-pages=40`
+  adds the optional `easyapply_pages` (omitted at 0; see providers/linkedin.md). Registration
+  never changes an existing board, so existing searches get it from the operator, once:
+  `UPDATE boards SET tenants = tenants || '{"easyapply_pages":"40"}'::jsonb WHERE provider='linkedin' AND status IN ('pending','active');`
+  (`boards.tenants` is jsonb of string values).
+  Pages and jobage are stored explicitly because the harvest loader's
   omitted page count defaults to one, while an adapter entry without options retains
   ten pages. Normal `ingest linkedin` and its existing scheduler then collect complete
   postings and discover native ATS boards. Registration itself creates no jobs and

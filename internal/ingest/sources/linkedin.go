@@ -27,6 +27,8 @@ type linkedIn struct {
 	configErr error
 }
 
+var errLinkedInEmptyFirstListing = errors.New("linkedin: first listing has no recognizable postings")
+
 const linkedInSearchURL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 
 // NewLinkedIn shares one request budget across all boards and their detail requests.
@@ -193,7 +195,7 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
-	pageLimit, jobAgeDays, err := linkedInSearchOptions(e.Tenants)
+	pageLimit, jobAgeDays, easyPages, err := linkedInSearchOptions(e.Tenants)
 	if err != nil {
 		return nil, err
 	}
@@ -210,69 +212,93 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 		}
 		return jobs, err
 	}
-	offset := 0
-	for page := 0; page < pageLimit; page++ {
-		params := url.Values{"keywords": {e.Board}, "location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(jobAgeDays*24*60*60)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
-		root, final, err := s.get(ctx, linkedInSearchURL+"?"+params.Encode())
-		if err != nil {
-			return stop(fmt.Errorf("linkedin: listing: %w", err))
-		}
-		resolved, err := url.Parse(final)
-		if err != nil || resolved.Host != "www.linkedin.com" || resolved.Path != "/jobs-guest/jobs/api/seeMoreJobPostings/search" {
-			return stop(fmt.Errorf("linkedin: search redirected away from listing"))
-		}
-		var cards []Job
-		pageSize := 0
-		walk(root, func(n *html.Node) bool {
-			urn := Attr(n, "data-entity-urn")
-			if !strings.HasPrefix(urn, "urn:li:jobPosting:") {
-				return true
+	// pass pages one listing: the primary search, or the same search narrowed by f_AL. The
+	// filter is only a hint for where to spend detail requests; every card goes through the
+	// same path and the detail page alone decides the application method.
+	pass := func(extra url.Values, limit int, emptyOK bool) error {
+		offset := 0
+		for page := 0; page < limit; page++ {
+			params := url.Values{"keywords": {e.Board}, "location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(jobAgeDays*24*60*60)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
+			for k, v := range extra {
+				params[k] = v
 			}
-			id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
-			pageSize++
-			if id == "" || LinkedInPostingID(LinkedInPostingURL(id)) != id || ids[id] {
-				return false
-			}
-			title, company := firstByClass(n, "base-search-card__title"), firstByClass(n, "base-search-card__subtitle")
-			if title == nil || company == nil {
-				return false
-			}
-			j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
-			if j.Title != "" && j.Company != "" {
-				ids[id] = true
-				cards = append(cards, j)
-			}
-			return false
-		})
-		offset += pageSize
-		if len(cards) == 0 {
-			if page == 0 {
-				return nil, fmt.Errorf("linkedin: first listing has no recognizable postings")
-			}
-			break
-		}
-		for _, card := range cards {
-			listed++
-			if seen != nil && seen(card.ExternalID) {
-				card.SeenRefresh = true
-				refreshed++
-				jobs = append(jobs, card)
-				continue
-			}
-			j, err := s.Posting(ctx, card.URL)
-			var status *StatusError
-			if errors.As(err, &status) && (status.Code == 403 || status.Code == 429 || status.Code == 999) {
-				return stop(fmt.Errorf("linkedin: detail refused: %w", err))
-			}
+			root, final, err := s.get(ctx, linkedInSearchURL+"?"+params.Encode())
 			if err != nil {
-				card.Unreadable = true
-				jobs = append(jobs, card)
-				continue
+				return fmt.Errorf("linkedin: listing: %w", err)
 			}
-			read++
-			if !j.Removed {
-				jobs = append(jobs, j)
+			resolved, err := url.Parse(final)
+			if err != nil || resolved.Host != "www.linkedin.com" || resolved.Path != "/jobs-guest/jobs/api/seeMoreJobPostings/search" {
+				return fmt.Errorf("linkedin: search redirected away from listing")
 			}
+			var cards []Job
+			pageSize := 0
+			walk(root, func(n *html.Node) bool {
+				urn := Attr(n, "data-entity-urn")
+				if !strings.HasPrefix(urn, "urn:li:jobPosting:") {
+					return true
+				}
+				id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
+				pageSize++
+				if id == "" || LinkedInPostingID(LinkedInPostingURL(id)) != id || ids[id] {
+					return false
+				}
+				title, company := firstByClass(n, "base-search-card__title"), firstByClass(n, "base-search-card__subtitle")
+				if title == nil || company == nil {
+					return false
+				}
+				j := Job{ExternalID: id, URL: LinkedInPostingURL(id), Title: strings.TrimSpace(textContent(title)), Company: strings.TrimSpace(textContent(company))}
+				if j.Title != "" && j.Company != "" {
+					ids[id] = true
+					cards = append(cards, j)
+				}
+				return false
+			})
+			offset += pageSize
+			if len(cards) == 0 {
+				if page == 0 && !emptyOK {
+					return errLinkedInEmptyFirstListing
+				}
+				break
+			}
+			for _, card := range cards {
+				listed++
+				if seen != nil && seen(card.ExternalID) {
+					card.SeenRefresh = true
+					refreshed++
+					jobs = append(jobs, card)
+					continue
+				}
+				j, err := s.Posting(ctx, card.URL)
+				var status *StatusError
+				if errors.As(err, &status) && (status.Code == 403 || status.Code == 429 || status.Code == 999) {
+					return fmt.Errorf("linkedin: detail refused: %w", err)
+				}
+				if err != nil {
+					card.Unreadable = true
+					jobs = append(jobs, card)
+					continue
+				}
+				read++
+				if !j.Removed {
+					jobs = append(jobs, j)
+				}
+			}
+		}
+		return nil
+	}
+	if err := pass(nil, pageLimit, false); err != nil {
+		if errors.Is(err, errLinkedInEmptyFirstListing) {
+			return nil, err
+		}
+		return stop(err)
+	}
+	easyListed := 0
+	if easyPages > 0 {
+		before := listed
+		err := pass(url.Values{"f_AL": {"true"}}, easyPages, true)
+		easyListed = listed - before
+		if err != nil {
+			return stop(err)
 		}
 	}
 	if listed > 0 && read+refreshed == 0 {
@@ -283,6 +309,6 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 		jobs = slices.DeleteFunc(jobs, func(j Job) bool { return j.SeenRefresh && j.ExternalID == closedSeed })
 	}
 	jobs = append(jobs, recs...)
-	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, listed, read, refreshed, len(jobs))
+	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d easyapply_pages=%d easyapply_listed=%d listed=%d read=%d refreshed=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, easyPages, easyListed, listed, read, refreshed, len(jobs))
 	return jobs, nil
 }

@@ -35,6 +35,8 @@ type query struct {
 	Location string `yaml:"location"`
 	JobAge   int    `yaml:"jobage"`
 	Pages    int    `yaml:"pages"`
+	// EasyApplyPages is set by --easyapply-pages only, never by the worklist: 0 omits the option.
+	EasyApplyPages int `yaml:"-"`
 }
 
 // UnmarshalYAML checks scalar types before decoding: yaml.v3 otherwise truncates

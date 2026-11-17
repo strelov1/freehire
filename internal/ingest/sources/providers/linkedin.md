@@ -6,6 +6,14 @@
   window and at most ten pages. Catalogue `tenants.pages` accepts 1..100 and `tenants.jobage`
   accepts 1..30 days. Explicit values must be unsigned decimal integers within these ranges;
   invalid options fail before any request. Missing keys retain ten pages and seven days.
+  Optional `tenants.easyapply_pages` (0..100, default 0 = off, same strict validation) adds
+  a second listing of the same search with `f_AL=true` (Easy Apply) after the primary
+  pages, with its own offset, deduplicated against every id already listed. Its cards take
+  exactly the primary path (seen-set, then detail read): `f_AL` is only a hint for where to
+  spend detail requests, and the detail page alone decides the application method. Measured
+  2026-11-17 on the live guest API: with `f_AL=true` 6 of 6 cards had the on-site apply
+  control, without it 1 of 8 (7 off-site). An empty first Easy Apply page is not an error and
+  a refusal keeps earlier progress. 40 pages is recommended. The completion line logs `easyapply_listed`.
   Raw card counts advance
   the listing offset, so a page limit is not a fixed posting count. Each completed search
   logs its configured page limit/age, primary listed/read counts and returned count including
