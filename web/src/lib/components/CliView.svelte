@@ -407,8 +407,9 @@
           with their slash commands.
         </p>
       </div>
-      <div class="flex items-start gap-3 rounded-lg border border-border bg-secondary/60 p-3">
-        <pre class="overflow-x-auto font-mono text-sm leading-relaxed">/plugin marketplace add strelov1/freehire-cli
+      <div class="flex min-w-0 items-start gap-3 rounded-lg border border-border bg-secondary/60 p-3">
+        <pre
+          class="min-w-0 overflow-x-auto font-mono text-sm leading-relaxed">/plugin marketplace add strelov1/freehire-cli
 /plugin install freehire@freehire-cli</pre>
         {@render copyButton(
           '/plugin marketplace add strelov1/freehire-cli\n/plugin install freehire@freehire-cli',
