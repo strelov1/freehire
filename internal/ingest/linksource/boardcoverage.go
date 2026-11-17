@@ -272,7 +272,7 @@ func queryMatches(raw, posting string, linkMustCarry bool) bool {
 // points at, besides the utm_ family trackingParam matches by prefix. A stored posting URL can
 // carry them too (micro1 stores its utm_ referral values), so they must never veto a match.
 //
-// The database repeats this vocabulary in normalize_job_url (migration 0283), which drops
+// The database repeats this vocabulary in normalize_job_url (migration 0284), which drops
 // these parameters from both sides of /jobs/find's URL comparison; an integration test in
 // internal/api/handler holds the two together, so a key added here fails it until the
 // function is migrated too. Keys are lower case: trackingParam lowercases before looking up.

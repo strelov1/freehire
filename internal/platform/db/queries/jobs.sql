@@ -188,7 +188,7 @@ WHERE source = $1 AND external_id = $2;
 -- name: FindOpenJobByURL :one
 -- Resolve a job page URL to the posting stored under it — the second tier of
 -- /api/v1/jobs/find, used when no (source, external_id) identity can be read out of the
--- URL. Both sides go through normalize_job_url (migrations 0042, 0283), so a link differing
+-- URL. Both sides go through normalize_job_url (migrations 0042, 0284), so a link differing
 -- only by scheme, www., tracking parameters, query-parameter order, fragment, case or
 -- trailing slash still matches, while one whose identifying query names another posting
 -- (Njoyn's ?Jobid=) does not; the same expression backs jobs_normalized_url_open_idx, so
