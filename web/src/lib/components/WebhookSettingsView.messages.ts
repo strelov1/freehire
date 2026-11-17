@@ -31,7 +31,7 @@ export const messages = defineMessages(
     deleteDialogTitle: 'Delete webhook?',
     deleteDialogDescription: 'Saved searches subscribed to this channel stop delivering immediately.',
     firstSaveHint:
-      'Saving sends a signed webhook.test delivery to the URL. Your endpoint does not know the secret yet, so answer that event with a 2xx without checking the signature, then configure the secret shown here.',
+      'Saving sends a signed webhook.test delivery to the URL. Your endpoint does not know the secret yet, so answer that event with a 2xx without checking the signature and without acting on it, then configure the secret shown here.',
     secretLabel: 'Signing secret',
     secretHint:
       'Every delivery is signed: X-Freehire-Signature is v1= plus the hex HMAC-SHA256 of the X-Freehire-Timestamp header, a dot and the raw body, keyed with this secret.',
@@ -67,7 +67,7 @@ export const messages = defineMessages(
       deleteDialogTitle: 'Удалить вебхук?',
       deleteDialogDescription: 'Сохранённые поиски, подписанные на этот канал, сразу перестанут получать уведомления.',
       firstSaveHint:
-        'При сохранении на адрес придёт подписанное событие webhook.test. Секрет вашему обработчику ещё неизвестен: ответьте на это событие 2xx без проверки подписи, затем настройте секрет, который появится здесь.',
+        'При сохранении на адрес придёт подписанное событие webhook.test. Секрет вашему обработчику ещё неизвестен: ответьте на это событие 2xx без проверки подписи и ничего по нему не делайте, затем настройте секрет, который появится здесь.',
       secretLabel: 'Секрет подписи',
       secretHint:
         'Каждая доставка подписана: X-Freehire-Signature — это v1= и hex HMAC-SHA256 от заголовка X-Freehire-Timestamp, точки и тела запроса с этим секретом.',
