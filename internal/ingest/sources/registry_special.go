@@ -198,6 +198,16 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	} else {
 		registry["instahyre"] = pacedInstahyre(c, c)
 	}
+	// foundit.in (formerly Monster India): a general Indian board, crawled as keyword slices of
+	// the JSON search its web app calls, hydrating each new posting's body from the detail
+	// endpoint. It refuses a plain client, so the crawl is really served once
+	// ApplyScraplingEgress rebuilds it over the fetch service (scraplingtier.go); this plain
+	// build is what runs without one. See foundit.go.
+	if c == nil {
+		registry["foundit"] = NewFoundit(nil)
+	} else {
+		registry["foundit"] = NewFoundit(pacedFounditGetter(c))
+	}
 	// hirist.tech and iimjobs.com: one Indian job platform on two sites, enumerated by category
 	// (board) through the API their web app calls, hydrating each new posting's body from the
 	// posting API. Every request of a run is paced to one a second. See hirist.go.
