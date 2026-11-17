@@ -357,10 +357,10 @@
   let lastSnapshot = '';
   const snapshot = () => JSON.stringify({ title, templateId, doc });
 
-  // Saves go through the tab-wide queue (see cvSaveQueue), so a flush (agent turn, PDF export)
+  // Saves go through this CV's queue (see cvSaveQueue), so a flush (agent turn, PDF export)
   // can wait for the one in flight: the timer is already cleared by then, and the server would
   // still hold the old document. write() never rejects.
-  const persist = () => queueCvSave(write);
+  const persist = () => queueCvSave(cvId, write);
 
   async function write() {
     const snap = snapshot(); // capture NOW; edits during the round-trip re-trigger the effect
@@ -397,7 +397,7 @@
     if (saveTimer) clearTimeout(saveTimer);
     if (cvLoaded && snapshot() !== lastSnapshot) {
       const body = { title, template_id: templateId, document: doc };
-      void queueCvSave(() => api.updateCv(cvId, body)).catch(() => {});
+      void queueCvSave(cvId, () => api.updateCv(cvId, body)).catch(() => {});
     }
   });
 
@@ -452,7 +452,7 @@
       saveTimer = null;
       if (snapshot() !== lastSnapshot) void persist();
     }
-    await cvSavesSettled();
+    await cvSavesSettled(cvId);
   }
 
   // The PDF is rendered from the saved CV, so a save that failed must stop the export rather
