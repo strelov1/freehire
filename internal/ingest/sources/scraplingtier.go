@@ -209,6 +209,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"viterbit": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewViterbit(f)
 	}},
+	// 403 to a plain request; the impersonating fetcher is served, ~1-2 s a page, sitemaps and
+	// posting pages alike (measured 2026-11-17 from a residential IP with no proxy — the crawl
+	// host's datacenter range is unmeasured).
+	"glints": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewGlints(f)
+	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
 	}},
