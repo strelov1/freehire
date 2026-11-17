@@ -90,14 +90,14 @@ func (r *QueriesRepository) GetByUserID(ctx context.Context, userID int64) (Acco
 	}, nil
 }
 
-func (r *QueriesRepository) ListPending(ctx context.Context) ([]Account, error) {
+func (r *QueriesRepository) ListPending(ctx context.Context) ([]PendingClaim, error) {
 	rows, err := r.q.ListPendingCompanyAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Account, len(rows))
+	out := make([]PendingClaim, len(rows))
 	for i, row := range rows {
-		out[i] = fromRow(row)
+		out[i] = PendingClaim{Account: fromRow(row.CompanyAccount), Website: row.Website}
 	}
 	return out, nil
 }

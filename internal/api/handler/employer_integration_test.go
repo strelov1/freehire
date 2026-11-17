@@ -295,14 +295,19 @@ func TestEmployerEndToEnd(t *testing.T) {
 			t.Fatalf("queue status = %d, want 200", resp.StatusCode)
 		}
 		var rows []struct {
-			CompanySlug string `json:"company_slug"`
-			Status      string `json:"status"`
+			CompanySlug  string `json:"company_slug"`
+			Status       string `json:"status"`
+			Website      string `json:"website"`
+			ReviewReason string `json:"review_reason"`
 		}
 		decodeData(t, resp, &rows)
 		found := false
 		for _, r := range rows {
 			if r.CompanySlug == "bravo" && r.Status == "pending" {
 				found = true
+				if r.Website != "" || r.ReviewReason != "unknown_website" {
+					t.Errorf("review details = %+v, want an unknown website", r)
+				}
 			}
 		}
 		if !found {

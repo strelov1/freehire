@@ -48,6 +48,22 @@ model EmployerCompany {
   subindustry?: string;
 }
 
+enum EmployerClaimReviewReason {
+  unknown_website,
+  domain_mismatch,
+  academic_domain,
+  manual_review,
+}
+
+/** A pending claim with the current domain check, not a stored historical failure reason. */
+model EmployerPendingClaim {
+  ...EmployerAccount;
+  /** The catalogue's current website, empty when unknown. */
+  website: string;
+  /** manual_review means the domains now match but the claim still awaits a moderator. */
+  review_reason: EmployerClaimReviewReason;
+}
+
 model EmployerClaim {
   company_name?: string;
   work_email?: string;
@@ -185,7 +201,7 @@ op reopenEmployerVacancy(@path slug: string): Data<EmployerClosed> | Problem;
 @tag("Employer")
 @route("/employer/claims")
 @get
-op listEmployerPendingClaims(): Data<EmployerAccount[]> | Problem;
+op listEmployerPendingClaims(): Data<EmployerPendingClaim[]> | Problem;
 
 /** Moderators only. The user id travels as a string so a non-number keeps its 400. */
 @extension("x-audience", "moderator")

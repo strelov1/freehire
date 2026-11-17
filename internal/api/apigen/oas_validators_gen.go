@@ -2789,6 +2789,21 @@ func (s *EmployerApplicationsPage) Validate() error {
 	return nil
 }
 
+func (s EmployerClaimReviewReason) Validate() error {
+	switch s {
+	case "unknown_website":
+		return nil
+	case "domain_mismatch":
+		return nil
+	case "academic_domain":
+		return nil
+	case "manual_review":
+		return nil
+	default:
+		return errors.Errorf("invalid value: %v", s)
+	}
+}
+
 func (s *EmployerCompany) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
@@ -2833,6 +2848,40 @@ func (s *EmployerCompanyPatch) Validate() error {
 	}(); err != nil {
 		failures = append(failures, validate.FieldError{
 			Name:  "industries",
+			Error: err,
+		})
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+	return nil
+}
+
+func (s *EmployerPendingClaim) Validate() error {
+	if s == nil {
+		return validate.ErrNilPointer
+	}
+
+	var failures []validate.FieldError
+	if err := func() error {
+		if err := s.Status.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "status",
+			Error: err,
+		})
+	}
+	if err := func() error {
+		if err := s.ReviewReason.Validate(); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		failures = append(failures, validate.FieldError{
+			Name:  "review_reason",
 			Error: err,
 		})
 	}

@@ -1,6 +1,7 @@
 import type { Http } from '../api-core';
 import type {
   EmployerAccount,
+  EmployerPendingClaim,
   EmployerApplication,
   EmployerApplicationMoved,
   EmployerApplicationsPage,
@@ -181,8 +182,8 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   }
 
   /** The moderator review queue: employer claims that could not auto-activate. */
-  async function listPendingEmployerClaims(): Promise<EmployerAccount[]> {
-    return requestData<EmployerAccount[]>('/api/v1/employer/claims');
+  async function listPendingEmployerClaims(): Promise<EmployerPendingClaim[]> {
+    return requestData<EmployerPendingClaim[]>('/api/v1/employer/claims');
   }
 
   /** Activate a pending claim and, when the company's website was still blank, seed it
