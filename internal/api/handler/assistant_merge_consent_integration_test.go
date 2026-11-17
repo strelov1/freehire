@@ -73,6 +73,16 @@ func TestMergeRequiresApprovalInItsOwnSession(t *testing.T) {
 	if _, err := tool.Run(ctx, other, args); err == nil {
 		t.Fatal("foreign caller reached the merge")
 	}
+	foreignSess, err := h.store.CreateSession(ctx, other, assistant.PresetProfile, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.experienceMergeTool(foreignSess.ID).Run(ctx, owner, args); err == nil {
+		t.Fatal("merge ran against another user's session")
+	}
+	if _, err := h.experience.GetAtom(ctx, b.ID, owner); err != nil {
+		t.Fatal("foreign session merged the owner's achievements")
+	}
 	if _, err := tool.Run(ctx, owner, args); err != nil {
 		t.Fatal(err)
 	}

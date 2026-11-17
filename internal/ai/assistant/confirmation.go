@@ -28,6 +28,7 @@ func UserConfirmed(transcript []Message, claim string) bool {
 			return false
 		}
 		var pending []string
+		laterQuestion := false // a question asked after the confirmation is what the yes answers
 		for j := i - 1; j >= 0 && transcript[j].Role != RoleUser; j-- {
 			if transcript[j].Role != RoleAssistant {
 				continue
@@ -47,6 +48,12 @@ func UserConfirmed(transcript []Message, claim string) bool {
 					return false
 				}
 				pending = append(pending, strings.TrimSpace(request.Claim))
+				if laterQuestion {
+					pending = append(pending, "")
+				}
+			}
+			if strings.Contains(content.Text, "?") {
+				laterQuestion = true
 			}
 		}
 		return len(pending) == 1 && pending[0] == claim

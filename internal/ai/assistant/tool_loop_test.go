@@ -71,3 +71,23 @@ func TestFailedCallCanBeCorrectedOrRetriedAfterStateChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestReorderedNestedArgumentsCountAsTheSameRejectedCall(t *testing.T) {
+	calls := 0
+	reg := NewRegistry(Tool{Name: "cv_edit", Run: func(context.Context, int64, json.RawMessage) (any, error) {
+		calls++
+		return nil, errors.New("path not found")
+	}})
+	model := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("cv_edit", `{"ops":[{"path":"/summary","value":"x"}]}`),
+		callReply("cv_edit", `{"ops":[{"value":"x","path":"/summary"}]}`),
+		textReply("Stopped."),
+	}}
+	events, err := collect(t, testRunner(model, &fakeQueries{}), Session{ID: sessionID, UserID: 3}, reg, "edit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || lastResult(t, events).StopReason != "tool_loop" {
+		t.Fatalf("calls = %d, stop = %q; want 1, tool_loop", calls, lastResult(t, events).StopReason)
+	}
+}

@@ -32,6 +32,10 @@ func TestUserConfirmedRequiresTheCurrentUnambiguousAnswer(t *testing.T) {
 	if UserConfirmed([]Message{ask, other, answer}, claim) {
 		t.Fatal("one yes must not approve multiple pending claims")
 	}
+	later, _ := EncodeAssistant("Before merging, do you want to add missing metrics?", nil)
+	if UserConfirmed([]Message{ask, later, answer}, claim) {
+		t.Fatal("a yes to a later question must not approve the merge")
+	}
 	approved, _ := EncodeUser(claim)
 	changedTopic, _ := EncodeUser("find jobs instead")
 	if UserConfirmed([]Message{ask, approved, changedTopic}, claim) {
@@ -47,6 +51,10 @@ func TestUserSaidAcceptsYesOnlyForOneMatchingConfirmation(t *testing.T) {
 	yes, _ := EncodeUser("yes")
 	if !UserSaid([]Message{ask, yes}, claim) {
 		t.Fatal("a clear answer to one confirmation should establish the candidate's claim")
+	}
+	next, _ := EncodeUser("now tailor my CV")
+	if !UserSaid([]Message{ask, yes, next}, claim) {
+		t.Fatal("a confirmed claim must stay said after a later turn")
 	}
 	if UserSaid([]Message{yes}, claim) {
 		t.Fatal("yes alone must not establish an arbitrary claim")

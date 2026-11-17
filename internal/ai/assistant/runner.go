@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -430,8 +431,11 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 }
 
 func rejectedCallKey(name string, args []byte) string {
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(args, &fields) != nil {
+	// Decoding into any sorts nested object keys on re-marshal; UseNumber keeps numbers exact.
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.UseNumber()
+	var fields map[string]any
+	if dec.Decode(&fields) != nil {
 		return name + "\x00" + string(args)
 	}
 	if name == "cv_edit" {

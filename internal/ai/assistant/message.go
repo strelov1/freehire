@@ -202,8 +202,11 @@ func UserSaid(transcript []Message, quote string) bool {
 	if quote == "" || len(strings.Fields(quote)) < minQuoteWords {
 		return false
 	}
-	if UserConfirmed(transcript, original) {
-		return true
+	// A confirmed fact stays said after later turns; only merge consent is current-turn-only.
+	for i := range transcript {
+		if transcript[i].Role == RoleUser && UserConfirmed(transcript[:i+1], original) {
+			return true
+		}
 	}
 	for _, m := range transcript {
 		if m.Role != RoleUser {
