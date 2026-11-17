@@ -121,7 +121,9 @@ console.log(meta.total, data.map((j) => j.title));`;
   function pretty(value: unknown): string {
     return JSON.stringify(value, null, 2).replace(
       /\[\s*([^[\]{}]*?)\s*\]/g,
-      (_, inner: string) => `[${inner.split(/,\s*/).join(', ')}]`,
+      // Only the newlines and indentation JSON.stringify put between elements are folded;
+      // a newline inside a string value is always escaped, so string contents stay intact.
+      (_, inner: string) => `[${inner.replace(/,\n\s*/g, ', ')}]`,
     );
   }
 

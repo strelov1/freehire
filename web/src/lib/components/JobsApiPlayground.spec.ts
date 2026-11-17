@@ -27,6 +27,7 @@ describe('JobsApiPlayground', () => {
               source: 'greenhouse',
               url: 'https://x',
               skills: ['go', 'grpc'],
+              cities: ['Berlin,Mitte'],
               description: 'long body',
             },
           ],
@@ -44,6 +45,7 @@ describe('JobsApiPlayground', () => {
     expect(screen.getByText(/"Go Engineer"/)).toBeTruthy();
     expect(screen.queryByText(/long body/)).toBeNull();
     expect(screen.getByText(/"skills": \["go", "grpc"\]/)).toBeTruthy();
+    expect(screen.getByText(/"cities": \["Berlin,Mitte"\]/)).toBeTruthy();
   });
 
   it('says so when the keyless budget is spent', async () => {
