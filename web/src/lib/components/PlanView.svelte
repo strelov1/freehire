@@ -69,7 +69,6 @@
 
   // A return marker is intent to verify, never proof that money moved.
   $effect(() => {
-    const userId = currentUser()?.id;
     if (!userId || page.url.searchParams.get('checkout') !== 'success') return;
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -17,6 +17,7 @@ const { myPlan, plans, billingCheckout, track, goto, invalidateAll, account } = 
   };
 });
 vi.mock('$app/navigation', () => ({ goto, invalidateAll }));
+vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({
   resolve: (p: string, params?: Record<string, string>) => p.replace('[slug]', params?.slug ?? ''),
 }));

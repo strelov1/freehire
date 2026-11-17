@@ -3,8 +3,8 @@
   // (see tailorCheckout.ts). Three honest states, none of which trusts the address or
   // browser storage as proof of anything:
   //   - Pro is verified on a fresh read of the server's plan → an explicit "Continue
-  //     tailoring" to the same vacancy and base. Nothing is started on the way: the
-  //     workspace asks again before any model call.
+  //     tailoring" to the same vacancy and base. Opening the workspace starts one of the
+  //     day's tailoring sessions, and the copy says so.
   //   - The candidate came back from checkout but Pro has not shown up (a slow webhook) →
   //     keep checking for a short while, then say so and offer another check.
   //   - They came back without buying (cancelled, or just walked away) → the task is still
@@ -25,6 +25,9 @@
   import { tailorHref } from '#lib/tailorHref.js';
   import type { PlanState } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { messages } from './TailorCheckoutResume.messages';
 
   const {
     plan,
@@ -39,6 +42,7 @@
     onPlan: (p: PlanState) => void;
   } = $props();
 
+  const s = $derived(t(messages, locale()));
   const POLLS = 6;
   const POLL_MS = 2000;
   type Tier = 'pro' | 'ultra';
@@ -177,47 +181,45 @@
     {#if tier}
       <div class="flex flex-col gap-0.5">
         <h2 id="tailor-resume-title" class="text-sm font-semibold">
-          {tier === 'ultra' ? 'Ultra' : 'Pro'} is active on your account
+          {format(s.active, { tier: tier === 'ultra' ? 'Ultra' : 'Pro' })}
         </h2>
         <p class="text-xs text-muted-foreground">
-          Pick up where you left off: the same role and the same CV. Nothing runs until you confirm in the workspace.
+          {s.pickUp}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <Button variant="cta" size="sm" disabled={busy} onclick={resume}>Continue tailoring</Button>
-        <Button variant="ghost" size="sm" onclick={dismiss}>Not now</Button>
+        <Button variant="cta" size="sm" disabled={busy} onclick={resume}>{s.continue}</Button>
+        <Button variant="ghost" size="sm" onclick={dismiss}>{s.notNow}</Button>
       </div>
       {#if failed === 'workspace'}
         <p class="text-xs text-destructive" role="alert">
-          Couldn't open the workspace. Your task is saved — try again.
+          {s.workspaceFailed}
         </p>
       {/if}
     {:else if checking}
       <div class="flex flex-col gap-0.5" role="status">
-        <h2 id="tailor-resume-title" class="text-sm font-semibold">Checking your plan…</h2>
-        <p class="text-xs text-muted-foreground">This can take a minute after you pay. Your tailoring task is saved.</p>
+        <h2 id="tailor-resume-title" class="text-sm font-semibold">{s.checkingTitle}</h2>
+        <p class="text-xs text-muted-foreground">{s.checkingBody}</p>
       </div>
     {:else}
       <div class="flex flex-col gap-0.5">
-        <h2 id="tailor-resume-title" class="text-sm font-semibold">Your tailoring task is saved</h2>
+        <h2 id="tailor-resume-title" class="text-sm font-semibold">{s.savedTitle}</h2>
         <p class="text-xs text-muted-foreground">
-          {waiting
-            ? "Pro isn't showing on your account yet. If you just paid, check again in a moment."
-            : 'No Pro plan is active on your account. You can try again or go back to the role.'}
+          {waiting ? s.notYet : s.noPlan}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         {#if waiting}
-          <Button variant="cta" size="sm" onclick={() => attempt++}>Check again</Button>
+          <Button variant="cta" size="sm" onclick={() => attempt++}>{s.checkAgain}</Button>
         {:else}
-          <Button variant="cta" size="sm" disabled={busy} onclick={retry}>Try Pro again</Button>
+          <Button variant="cta" size="sm" disabled={busy} onclick={retry}>{s.tryAgain}</Button>
         {/if}
-        <Button href={resolve('/jobs/[slug]', { slug: ctx.slug })} variant="outline" size="sm">Back to the role</Button>
-        <Button variant="ghost" size="sm" onclick={dismiss}>Dismiss</Button>
+        <Button href={resolve('/jobs/[slug]', { slug: ctx.slug })} variant="outline" size="sm">{s.backToRole}</Button>
+        <Button variant="ghost" size="sm" onclick={dismiss}>{s.dismiss}</Button>
       </div>
       {#if failed === 'checkout'}
         <p class="text-xs text-destructive" role="alert">
-          Checkout is not available right now. Please try again in a moment.
+          {s.checkoutFailed}
         </p>
       {/if}
     {/if}
