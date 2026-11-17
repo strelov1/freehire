@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION public.company_site_host(info jsonb) RETURNS text
             regexp_replace(
             regexp_replace(
             regexp_replace(
-                lower(COALESCE(NULLIF(regexp_replace(info ->> 'website', '^\s+|\s+$', '', 'g'), ''), NULLIF(regexp_replace(info ->> 'homepage', '^\s+|\s+$', '', 'g'), ''), '')),
+                lower(COALESCE(NULLIF(regexp_replace(info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')),
                 '^[a-z][a-z0-9+.-]*://', ''),
                 '[/?#].*$', ''),
                 '^.*@', ''),

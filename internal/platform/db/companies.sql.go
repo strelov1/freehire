@@ -456,7 +456,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 const listCompaniesBySiteHost = `-- name: ListCompaniesBySiteHost :many
 SELECT company_site_host(company_info)::text AS domain,
        slug, name, job_count,
-       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^\s+|\s+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^\s+|\s+$', '', 'g'), ''))::text AS website
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''))::text AS website
 FROM companies
 WHERE company_site_host(company_info) = ANY($1::text[])
 ORDER BY domain, job_count DESC, slug

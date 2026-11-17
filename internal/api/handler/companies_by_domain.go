@@ -13,6 +13,9 @@ import (
 // maxCompanyDomains caps one by-domain lookup.
 const maxCompanyDomains = 100
 
+// siteSpace is the ASCII whitespace both sides trim; spelled out because the SQL `\s` class depends on the collation.
+const siteSpace = " \t\n\v\f\r"
+
 // The steps mirror public.company_site_host (migration 0283), in the same order.
 var (
 	siteSchemeRe = regexp.MustCompile(`^[a-z][a-z0-9+.-]*://`)
@@ -25,7 +28,7 @@ var (
 // normalizeSiteHost reduces a bare domain or URL to its lowercase host without scheme, userinfo, port, path,
 // trailing dot or leading www. "" when nothing is left. Keep in agreement with public.company_site_host.
 func normalizeSiteHost(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ToLower(strings.Trim(s, siteSpace))
 	s = siteSchemeRe.ReplaceAllString(s, "")
 	s = sitePathRe.ReplaceAllString(s, "")
 	s = siteUserRe.ReplaceAllString(s, "")
