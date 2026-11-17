@@ -111,6 +111,15 @@ var scraplingProviders = map[string]scraplingProvider{
 	"cleverstaff": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCleverstaff(f)
 	}},
+	// Cloudflare answers 403 to a plain client for the posting pages and the API. The sitemap and
+	// RSS answered 200 plain from a residential IP, but they share the protected host and the
+	// datacenter IP is unmeasured, so the one sitemap request rides the tier too. The
+	// impersonating fetcher without a proxy served 48 of 50 posting pages (the other two were the
+	// site's own 404s), measured 2026-11-17 from a RESIDENTIAL IP and NOT from the crawl host: if
+	// it draws challenges there, the next step is the proxy, then the browser mode.
+	"cryptojobslist": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewCryptoJobsList(f, f)
+	}},
 	// Only the posting pages: Akamai bot management holds a plain request open without
 	// answering, and the impersonating fetcher is served from the crawl host's own IP. The
 	// active-offers sitemap is not behind it and stays on a plain client.

@@ -30,6 +30,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   weworkremotely: 'We Work Remotely',
   hackernews: 'Hacker News',
   cryptocurrencyjobs: 'Cryptocurrency Jobs',
+  cryptojobslist: 'CryptoJobsList',
   landingjobs: 'Landing.Jobs',
   getonbrd: 'Get on Board',
   mycareersfuture: 'My Careers Future',
