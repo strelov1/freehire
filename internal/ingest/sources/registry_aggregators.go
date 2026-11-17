@@ -380,6 +380,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// window is walked; posting pages carry a schema.org JobPosting. Coverage-gated and
 		// paced, see builtinRequestInterval.
 		NewBuiltIn(pacedHTMLGetter(c, builtinRequestInterval, builtinRequestBurst)),
+		// Dice: US job board over many employers. The last-24h window of its own search page is
+		// cut into slices under the search's 750-result ceiling; posting pages carry a schema.org
+		// JobPosting. Coverage-gated and paced, see diceRequestInterval and dice.go.
+		NewDice(pacedHTMLGetter(c, diceRequestInterval, diceRequestBurst)),
 		// EDJOIN: California's K-12 education board, multi-company aggregator enumerated by
 		// job type (board) over one central index, hydrating bodies from each posting page's
 		// schema.org block. The board is a job type and not a district on purpose — see
