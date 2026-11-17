@@ -220,10 +220,10 @@ var scraplingProviders = map[string]scraplingProvider{
 	}},
 	// 403 to a plain Go client on every path, sitemap and robots.txt included; the impersonating
 	// fetcher is served 200, sitemap, newest-postings page and posting pages alike (measured
-	// 2026-11-17, ~1.9 s a posting page, 39 of 39 pages answered). Measured from a residential IP
-	// with NO proxy; the crawl host is a datacenter IP and has not been measured, so if its egress is
-	// refused the first lever is the proxy (`true`), then the browser.
-	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+	// 2026-11-17, ~1.9 s a posting page, 39 of 39 pages answered from a residential IP). From the
+	// crawl host the first production run drew 403 on 295 posting pages without the proxy; the same
+	// pages through it answered 8 of 8 (measured the same day), hence the proxy.
+	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewClearedJobs(f)
 	}},
 	// Akamai answers 403 to a plain client on every path, the sitemaps and robots.txt included.

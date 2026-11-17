@@ -110,7 +110,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"epreselec":      {scraplingfetch.ModeHTTP, true},
 		"turijobs":       {scraplingfetch.ModeHTTP, false},
 		"cadremploi":     {scraplingfetch.ModeHTTP, false},
-		"clearedjobs":    {scraplingfetch.ModeHTTP, false},
+		"clearedjobs":    {scraplingfetch.ModeHTTP, true},
 		"pracuj":         {scraplingfetch.ModeHTTP, false},
 		"jobteaser":      {scraplingfetch.ModeBrowser, false},
 		"viterbit":       {scraplingfetch.ModeHTTP, false},
