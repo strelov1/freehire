@@ -61,6 +61,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		NewNoDesk(c),
 		NewCryptocurrencyJobs(c),
 		NewJobspresso(c),
+		NewJustRemote(c),
 		NewStartupAndVC(c),
 		// Hacker News "Ask HN: Who is hiring?": the two newest monthly threads, read whole
 		// through the Algolia HN API — one global feed, company per comment.
