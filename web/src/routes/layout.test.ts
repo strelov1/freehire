@@ -67,3 +67,12 @@ describe('root layout onboarding gate', () => {
     expect(SOURCE).not.toContain('onboarding_completed_at != null');
   });
 });
+
+describe('root layout sign-out reset', () => {
+  it('clears the guest skip mark only on a signed-in to signed-out transition', () => {
+    const at = SOURCE.indexOf('let wasAuthenticated');
+    const block = SOURCE.slice(at, SOURCE.indexOf('});', at));
+    expect(block).toContain('if (wasAuthenticated) onboardingGate.reset();');
+    expect(block).not.toMatch(/if \(!authenticated\) \{\s*resetUserStores\(\);\s*onboardingGate\.reset\(\)/);
+  });
+});

@@ -33,6 +33,9 @@ export class TailorOutcomes {
   readonly #d: OutcomeDeps;
   #before: string | null = null;
   #edited = false;
+  // Turns that ended and await their turnEnded(): the host's end handler is async, and a queued
+  // message can start the next turn before it runs, resetting the live fields above.
+  readonly #ended: { before: string | null; edited: boolean }[] = [];
 
   constructor(deps: OutcomeDeps) {
     this.#d = { store: browserStore(), ...deps };
@@ -41,6 +44,7 @@ export class TailorOutcomes {
   /** The chat's turn-active signal: a turn beginning is where the baseline is taken. */
   turnState(active: boolean) {
     if (active) this.turnStarted();
+    else this.#ended.push({ before: this.#before, edited: this.#edited });
   }
 
   /** An agent turn began: remember the document it started from. */
@@ -58,8 +62,7 @@ export class TailorOutcomes {
    *  for a turn the server finished cleanly (not cut off, refused, errored or only caught up on
    *  after a dropped stream). Emits `tailor_result` at most once per CV. */
   turnEnded(completed: boolean) {
-    const before = this.#before;
-    const edited = this.#edited;
+    const { before, edited } = this.#ended.shift() ?? { before: this.#before, edited: this.#edited };
     this.#before = null;
     this.#edited = false;
     const slug = this.#d.slug();

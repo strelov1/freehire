@@ -1,5 +1,5 @@
 import { ApiError } from './api';
-import { promptSignIn } from './signin';
+import { promptLogin } from './signin';
 
 /** Maps a thread/reply submit failure to the message to show under the form. On a
  *  401 (the session lapsed between the gate check and this submit) it sends the
@@ -13,7 +13,7 @@ import { promptSignIn } from './signin';
  *  so they handle failures identically. */
 export function communityFormError(err: unknown): string | null {
   if (err instanceof ApiError && err.status === 401) {
-    promptSignIn();
+    promptLogin();
     return null;
   }
   if (err instanceof ApiError) {

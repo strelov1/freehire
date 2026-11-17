@@ -154,11 +154,16 @@
   // a new per-user store participates automatically (no list here to forget). Fired
   // from the always-mounted root layout so it covers every route; idempotent while
   // signed out.
+  // The guest's skip mark is cleared only on a real sign-out: a guest moving from /onboarding to
+  // /signin re-runs this effect while signed out, and must keep the mark for the new account.
+  let wasAuthenticated = false;
   $effect(() => {
-    if (!isAuthenticated()) {
+    const authenticated = isAuthenticated();
+    if (!authenticated) {
       resetUserStores();
-      onboardingGate.reset();
+      if (wasAuthenticated) onboardingGate.reset();
     }
+    wasAuthenticated = authenticated;
   });
 
   // A tab open across a deploy still holds the old build's route manifest, naming

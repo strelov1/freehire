@@ -58,6 +58,20 @@ describe('TailorOutcomes tailoring result', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it('still counts a turn whose end is handled after a queued message started the next turn', () => {
+    const { outcomes, emit, cv } = setup();
+    outcomes.turnState(true);
+    outcomes.documentEdited();
+    cv.doc = { summary: 'tailored to the vacancy' };
+    outcomes.turnState(false);
+    outcomes.turnState(true); // drainQueue() runs before the host's async end handler
+    outcomes.turnEnded(true);
+    expect(emit).toHaveBeenCalledExactlyOnceWith('tailor_result', { slug: 'acme-engineer' });
+    outcomes.turnState(false);
+    outcomes.turnEnded(true); // the second turn made no edit
+    expect(emit).toHaveBeenCalledTimes(1);
+  });
+
   it('stays silent for a turn end that never saw its start (catch-up after a reload)', () => {
     const { outcomes, emit, cv } = setup();
     outcomes.documentEdited();
