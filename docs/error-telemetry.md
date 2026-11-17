@@ -125,7 +125,9 @@ curl --fail --silent --show-error --max-time 30 \
 
 Normalized fields include `service`, `environment`, `version`, `origin`,
 `exception_type`, `message`, `stacktrace`, `error_source` and `event_name`.
-Go events can additionally carry a route template, method, worker and exit code.
+Go events can additionally carry a route template, method, worker and exit code;
+browser events can additionally carry a sanitized page URL (origin and path,
+no query) and user agent.
 Use `origin:server` for server alerts and `origin:client` for browser/extension
 alerts. Do not use an arbitrary user-controlled URL as a stream identity.
 

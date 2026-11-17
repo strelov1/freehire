@@ -47,7 +47,8 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         'deployment.environment.name': options.environment || 'development',
       }),
       logRecordLimits: {
-        attributeCountLimit: 8,
+        // Five base fields plus route, method, errorId, url and user agent.
+        attributeCountLimit: 12,
         attributeValueLengthLimit: 8192,
       },
       processors: [
@@ -105,6 +106,17 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         }
         const route = context.route ? sanitize(context.route, 256) : '';
         const method = context.method ? sanitize(context.method, 16) : '';
+        // Browser provenance for messages the app cannot attribute any other way (the
+        // same DOM error from an injected script and from app code reads identically).
+        // sanitize() keeps a URL's origin and path only — the query (ref codes, tokens)
+        // never survives. Node (SSR) also exposes navigator.userAgent, so window is the
+        // gate; without it both fields stay absent.
+        const url =
+          typeof window !== 'undefined' && typeof location !== 'undefined' ? sanitize(location.href, 256) : '';
+        const userAgent =
+          typeof window !== 'undefined' && typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string'
+            ? sanitize(navigator.userAgent, 256)
+            : '';
         const message = sanitize(rawMessage, 1024);
         const stack = sanitize(error instanceof Error ? error.stack || '' : '', 8192);
         // Preserve a sanitized local copy before delivery bounds can drop an event.
@@ -135,6 +147,8 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             'exception.stacktrace': stack,
             ...(route && { 'http.route': route }),
             ...(method && { 'http.request.method': method }),
+            ...(url && { url }),
+            ...(userAgent && { user_agent: userAgent }),
             ...(context.errorId && { 'error.id': sanitize(context.errorId, 64) }),
           },
         });

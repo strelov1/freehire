@@ -69,6 +69,45 @@ describe('error telemetry', () => {
   it('is inert without configuration', () => {
     expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
   });
+  it('tags browser events with the sanitized page URL and user agent', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({
+      endpoint: 'http://localhost/v1/logs',
+      service: 'freehire-web',
+      exporter,
+    });
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('location', new URL('https://freehire.me/jobs?q=secret&ref=token-private'));
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0' });
+    try {
+      telemetry?.capture(new Error('appendChild defect'));
+      await telemetry?.flush();
+      const [record] = exporter.getFinishedLogRecords();
+      if (!record) throw new Error('Expected one exported exception');
+      expect(record.attributes).toMatchObject({
+        url: 'https://freehire.me/jobs',
+        user_agent: 'Mozilla/5.0 (test-agent) Chrome ExtensionBot/1.0',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      await telemetry?.shutdown();
+    }
+  });
+  it('omits browser fields where no window exists (SSR)', async () => {
+    const exporter = new InMemoryLogRecordExporter();
+    const telemetry = createErrorTelemetry({
+      endpoint: 'http://localhost/v1/logs',
+      service: 'freehire-web-ssr',
+      exporter,
+    });
+    telemetry?.capture(new Error('ssr defect'));
+    await telemetry?.flush();
+    const [record] = exporter.getFinishedLogRecords();
+    if (!record) throw new Error('Expected one exported exception');
+    expect(record.attributes).not.toHaveProperty('url');
+    expect(record.attributes).not.toHaveProperty('user_agent');
+    await telemetry?.shutdown();
+  });
 });
 
 it.each(['absolute', 'same-origin'])('exports protobuf over HTTP to a %s receiver URL', async (endpointKind) => {
