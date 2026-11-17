@@ -132,7 +132,7 @@ func recognizeRest(u *url.URL, host, src, mode, apex string) (source, board, can
 		// recognizable posting segment shifts the board along; any other shape falls through to
 		// the first segment, so an unknown URL shape can't invent a board.
 		board = segmentBeforePosting(u, smartrecruitersPosting)
-		if board == "" {
+		if board == "" || smartrecruitersPortalPaths[board] {
 			return "", "", "", false
 		}
 		u.RawQuery, u.Fragment = "", ""
@@ -140,7 +140,7 @@ func recognizeRest(u *url.URL, host, src, mode, apex string) (source, board, can
 
 	case modeICIMS:
 		board = icimsBoardFromHost(host)
-		if board == "" {
+		if board == "" || platformHost(host, apex) {
 			return "", "", "", false
 		}
 		u.RawQuery, u.Fragment, u.Path = "", "", ""
