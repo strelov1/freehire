@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -436,6 +437,9 @@ func rejectedCallKey(name string, args []byte) string {
 	dec.UseNumber()
 	var fields map[string]any
 	if dec.Decode(&fields) != nil {
+		return name + "\x00" + string(args)
+	}
+	if _, err := dec.Token(); err != io.EOF { // trailing data: key by raw bytes
 		return name + "\x00" + string(args)
 	}
 	if name == "cv_edit" {

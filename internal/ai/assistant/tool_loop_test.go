@@ -91,3 +91,27 @@ func TestReorderedNestedArgumentsCountAsTheSameRejectedCall(t *testing.T) {
 		t.Fatalf("calls = %d, stop = %q; want 1, tool_loop", calls, lastResult(t, events).StopReason)
 	}
 }
+
+func TestCorrectedCallAfterTrailingDataIsExecuted(t *testing.T) {
+	calls := 0
+	reg := NewRegistry(Tool{Name: "cv_edit", Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
+		calls++
+		var v any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return nil, err
+		}
+		return "applied", nil
+	}})
+	model := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("cv_edit", `{"ops":[{"path":"/summary"}]}{}`),
+		callReply("cv_edit", `{"ops":[{"path":"/summary"}]}`),
+		textReply("Done."),
+	}}
+	events, err := collect(t, testRunner(model, &fakeQueries{}), Session{ID: sessionID, UserID: 3}, reg, "edit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || lastResult(t, events).StopReason == "tool_loop" {
+		t.Fatalf("calls = %d, stop = %q; corrected call must run", calls, lastResult(t, events).StopReason)
+	}
+}
