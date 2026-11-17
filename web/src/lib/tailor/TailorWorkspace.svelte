@@ -460,7 +460,9 @@
   // than let it download the old one. Ordinary autosave failures keep showing in the save state.
   async function flushForExport() {
     await flushPendingSave();
-    if (saveState === 'error') throw new Error(saveError);
+    // A failed or overtaken save leaves the document unsaved: write it again before the fetch.
+    if (snapshot() !== lastSnapshot) await persist();
+    if (snapshot() !== lastSnapshot) throw new Error(saveError);
   }
 
   // A template switch is persisted by the gallery via setCvTemplate; mirror the new id into the

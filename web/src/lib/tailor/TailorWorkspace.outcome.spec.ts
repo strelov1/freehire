@@ -328,3 +328,22 @@ it('stops the export with its error when the save it waited on failed', async ()
   expect(savedPdf).not.toHaveBeenCalled();
   expect(outcomeCalls()).toEqual([]);
 });
+
+it('retries the unsaved CV on the next export once saving works again', async () => {
+  let fail = true;
+  mocks.updateCv = async () => {
+    if (fail) throw new Error('save failed');
+  };
+  const fetcher = vi.fn(async () => pdfResponse());
+  vi.stubGlobal('fetch', fetcher);
+  const { getByText, findAllByRole } = await open();
+  await typeAndFireAutosave();
+  await fireEvent.click(getByText('Download PDF'));
+  await findAllByRole('alert');
+  expect(fetcher).not.toHaveBeenCalled();
+
+  fail = false;
+  await fireEvent.click(getByText('Download PDF'));
+  await waitFor(() => expect(outcomeCalls()).toHaveLength(1));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
