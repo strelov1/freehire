@@ -53,12 +53,14 @@ const (
 	// glintsShardAttempts is how often one sitemap shard is asked for before the crawl fails: the
 	// listing is the whole catalogue or an error, and ~870 shards make a single refusal likely.
 	glintsShardAttempts = 3
-	// glintsMaxNewPerRun bounds how many unseen postings one run hydrates: 3000 pages at two a
-	// second is ~25 minutes beside the ~7 minutes the shards take. The first runs face the whole
+	// glintsMaxNewPerRun bounds how many unseen postings one run hydrates. Through the Scrapling
+	// tier a page took ~2.4 s on the crawl host (the first production run, 2026-11-17, read 1,076
+	// pages before its 60-minute deadline), so 1200 pages are ~48 minutes with the ~7 minutes the
+	// shards take, inside the unit's hour. The first runs face the whole
 	// ~80k catalogue, taken in slices; the pipeline stores every posting it is handed, so what is
 	// hydrated leaves the unseen set. The backlog lane (see hydrationLanes) is only for pages
 	// that failed to read, which would otherwise sit at the head of the queue.
-	glintsMaxNewPerRun = 3000
+	glintsMaxNewPerRun = 1200
 	glintsBacklogLane  = 500
 	// glintsITCategory is the id of Glints' own top-level category "Computer & Software", the
 	// one structured statement of IT-ness a posting carries.
