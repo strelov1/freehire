@@ -103,3 +103,15 @@ func (q *Queries) FindLinkedInJobByURL(ctx context.Context, url string) (Job, er
 	)
 	return i, err
 }
+
+const lockLinkedInPostingIdentity = `-- name: LockLinkedInPostingIdentity :exec
+SELECT pg_advisory_xact_lock(hashtextextended('linkedin_posting:' || $1::text, 0))
+`
+
+// Hold through the caller's transaction, before identity lookup or any posting lock.
+// Concurrent inserts can otherwise fail the public-slug unique check before the
+// (source, external_id) ON CONFLICT branch can select their shared posting.
+func (q *Queries) LockLinkedInPostingIdentity(ctx context.Context, postingID string) error {
+	_, err := q.db.Exec(ctx, lockLinkedInPostingIdentity, postingID)
+	return err
+}

@@ -22,7 +22,7 @@ import (
 // locked before the activity row (the one global lock order).
 func Upsert(ctx context.Context, tx pgx.Tx, p db.UpsertJobParams) (db.UpsertJobRow, error) {
 	q := db.New(tx)
-	p, err := ResolveUpsertIdentity(ctx, q, p)
+	p, err := ResolveUpsertIdentity(ctx, tx, p)
 	if err != nil {
 		return db.UpsertJobRow{}, err
 	}
@@ -62,7 +62,8 @@ func Observe(ctx context.Context, tx pgx.Tx, jobID int64, bodyRead, resetStrikes
 // The URL lookup includes closed public history, leaving reopening and expiry to
 // the ordinary upsert. A caller with a cheap refresh resolves identity before that
 // refresh too, so a legacy row does not force a full rewrite on every crawl.
-func ResolveUpsertIdentity(ctx context.Context, q *db.Queries, p db.UpsertJobParams) (db.UpsertJobParams, error) {
+// The transaction holds the posting's identity lock through lookup and commit.
+func ResolveUpsertIdentity(ctx context.Context, tx pgx.Tx, p db.UpsertJobParams) (db.UpsertJobParams, error) {
 	if p.Source != "linkedin" {
 		return p, nil
 	}
@@ -80,6 +81,10 @@ func ResolveUpsertIdentity(ctx context.Context, q *db.Queries, p db.UpsertJobPar
 		return p, fmt.Errorf("linkedin: posting ID does not match its URL")
 	}
 	p.URL, p.ExternalID = "https://www.linkedin.com/jobs/view/"+id+"/", id
+	q := db.New(tx)
+	if err := q.LockLinkedInPostingIdentity(ctx, id); err != nil {
+		return p, err
+	}
 	existing, err := q.FindLinkedInJobByURL(ctx, p.URL)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return p, err

@@ -120,6 +120,10 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if strings.TrimSpace(e.Board) == "" || strings.TrimSpace(e.Region) == "" {
 		return nil, fmt.Errorf("linkedin: board keyword and region location are required")
 	}
+	pageLimit, jobAgeDays, err := linkedInSearchOptions(e.Tenants)
+	if err != nil {
+		return nil, err
+	}
 	var jobs []Job
 	ids := make(map[string]bool)
 	listed, read := 0, 0
@@ -134,8 +138,8 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return jobs, err
 	}
 	offset := 0
-	for page := 0; page < 10; page++ {
-		params := url.Values{"keywords": {e.Board}, "location": {e.Region}, "f_TPR": {"r604800"}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
+	for page := 0; page < pageLimit; page++ {
+		params := url.Values{"keywords": {e.Board}, "location": {e.Region}, "f_TPR": {"r" + strconv.Itoa(jobAgeDays*24*60*60)}, "sortBy": {"DD"}, "start": {strconv.Itoa(offset)}}
 		root, final, err := s.get(ctx, linkedInSearchURL+"?"+params.Encode())
 		if err != nil {
 			return stop(fmt.Errorf("linkedin: listing: %w", err))
@@ -196,5 +200,6 @@ func (s linkedIn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return jobs, fmt.Errorf("linkedin: none of %d listed postings could be read", listed)
 	}
 	jobs = append(jobs, s.related(ctx, jobs, ids)...)
+	log.Printf("linkedin: search keyword=%q region=%q page_limit=%d jobage_days=%d listed=%d read=%d returned=%d", e.Board, e.Region, pageLimit, jobAgeDays, listed, read, len(jobs))
 	return jobs, nil
 }

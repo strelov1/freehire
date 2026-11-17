@@ -2,8 +2,15 @@
 
 - Board is a search keyword (e.g. `software engineer`), Region is a required search location
   (e.g. `United Kingdom`); Company is a catalog label, never the posting's employer.
-  The adapter reads the guest listing, recent seven-day window, newest first, at most ten
-  pages. One limiter across the adapter's boards and both request paths allows one request
+  The adapter reads the guest listing newest first, defaulting to the recent seven-day
+  window and at most ten pages. Catalogue `tenants.pages` accepts 1..100 and `tenants.jobage`
+  accepts 1..30 days. Explicit values must be unsigned decimal integers within these ranges;
+  invalid options fail before any request. Missing keys retain ten pages and seven days.
+  Raw card counts advance
+  the listing offset, so a page limit is not a fixed posting count. Each completed search
+  logs its configured page limit/age, primary listed/read counts and returned count including
+  bounded recommendations; these are not publication or unique-growth figures.
+  One limiter across the adapter's boards and both request paths allows one request
   every two seconds. This is an initial conservative budget, not a measured sustained limit.
 - Listing URNs identify postings; `/jobs-guest/jobs/api/jobPosting/<id>` supplies employer, title, location and
   sanitized body (verified 2026-11-14; canonical numeric URLs returned 999). Every listed posting is re-read, including previously seen identities: its application method can change. Missing details emit
@@ -59,6 +66,9 @@
 - New catalogue identities use the numeric LinkedIn posting id, independent of keyword or
   country. The shared job upsert reuses any existing public keyword-scoped
   row with the exact normalized native URL, preserving its id, public slug and history.
+  A transaction-scoped lock for that numeric posting is taken before identity lookup or
+  posting/activity locks, so concurrent worker and contribution writes cannot race the
+  public-slug unique index. Different posting ids do not share this gate.
   Cheap refresh and ATS-coverage retirement map numeric discoveries to those legacy keys.
 
 

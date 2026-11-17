@@ -4,8 +4,13 @@ title: Catalogue and search flow
 description: Locate ingestion, enrichment and search ownership without guessing runtime state.
 generated:
   by: codex
-  at: 2026-11-16T23:17:31+00:00
+  at: 2026-11-17T00:30:07+00:00
 sources:
+  - resource: ../../internal/job/job/upsert.go
+  - resource: ../../internal/platform/db/queries/jobs_linkedin_identity.sql
+  - resource: ../../cmd/harvest-linkedin/register.go
+  - resource: ../../harvest/linkedin-queries.yml
+  - resource: ../../internal/ingest/sources/linkedin_search_options.go
   - resource: ../../internal/ingest/sources/wantapply.go
   - resource: ../../internal/ingest/pipeline/pipeline_write.go
   - resource: ../../internal/ingest/sources/providers/linkedin.md
@@ -87,7 +92,9 @@ Posting-level duplicate matching remains in place. See the
 New LinkedIn catalogue rows use the numeric posting id across search keywords and regions.
 The shared writer preserves an existing public legacy row's id, slug and saved history by
 its exact normalized native URL, including closed rows subject to ordinary rediscovery
-policy. A LinkedIn-only URL index covers that closed history.
+policy. A LinkedIn-only URL index covers that closed history. The shared transaction
+serializes writes for the same numeric LinkedIn posting before resolving its legacy key;
+concurrent discoveries therefore preserve one identity and its original public slug.
 
 A completed bounded search may supplement its primary results with at most twenty
 first-level recommendations from one verified public posting page. Each candidate is read
@@ -97,3 +104,12 @@ reference records the bounded access probes and their limits.
 
 Ownership reconciliation accepts both numeric LinkedIn posting keys and legacy
 keyword-scoped keys, so a later external-application transition can reach its native ATS.
+
+## Recurring LinkedIn harvest
+
+`harvest-linkedin --register-searches harvest/linkedin-queries.yml` previews the existing
+keyword/market worklist; `--apply` registers pending search boards. The regular ingest
+scheduler then owns those searches, using the existing oldest-run-first admission when a
+run cannot reach every board. Worklist page/depth and age settings travel with each board; registration can explicitly
+override these budgets for new searches using `--pages` and `--jobage`. Repeated registration preserves existing live operator settings. See the
+[worker reference](../agents/workers/ingest.md).
