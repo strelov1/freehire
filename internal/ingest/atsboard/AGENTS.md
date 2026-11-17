@@ -50,7 +50,10 @@ nothing but the URL. No network, no database.
   decimal id an IdealTraits career site carries base64-encoded in `/<slug>/<id>/careers`; its
   posting links carry no id, so they are declined and left to `boardresolve`), `hostsite`
   (`<host>/<site>` from `<host>/co/<site>/…`, lower-cased, for Paradox, whose career sites
-  each live on one of several `*.paradox.ai` instance hosts), `pathpattern` (the one capture
+  each live on one of several `*.paradox.ai` instance hosts), `njoyn` (`<tenant>/<site>/<clid>`,
+  lower-cased, from `<tenant>.njoyn.com/<site>/xweb/xweb.asp?clid=<digits>` — one classic-ASP
+  script serves every page, so the subdomain, the site segment and the case-blind `clid`
+  parameter together name the board, and a link missing any of them is declined), `pathpattern` (the one capture
   group of a per-host path pattern in `pathPatternBoards`, which fixes the board's position AND
   its shape behind the platform's own words — Comeet's `/jobs/<slug>/<uid>`, NEOGOV's
   `/careers/<agency>` prefixed with its domain, Paycom's `/v4/ats/web.php/portal/<key>` with a
