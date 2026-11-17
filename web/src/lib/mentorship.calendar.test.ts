@@ -1,17 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { slot } from './mentorshipTestUtils';
-import {
-  addMonths,
-  daysInMonth,
-  daysWithSlots,
-  monthGrid,
-  monthOf,
-  slotWindowForMonth,
-  todayIn,
-  groupSlotsByLocalDay,
-  slotLocalDay,
-  slotLocalTime,
-} from './mentorship';
+import { daysWithSlots, slotWindowForMonth, groupSlotsByLocalDay, slotLocalDay, slotLocalTime } from './mentorship';
+import { addMonths, daysInMonth, monthGrid, monthOf, todayIn } from './mentorshipCalendar';
 
 describe('reading a slot in the viewer zone', () => {
   // THE trap this whole module exists to avoid. `local_start` is already in the viewer's
