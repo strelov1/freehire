@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import type { EmployerAccount } from '#lib/types.js';
+  import type { EmployerAccount, EmployerPendingClaim } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
@@ -11,7 +11,13 @@
   // Company claims that could not auto-activate (an unknown or mismatched work-email
   // domain — see internal/ingest/employer/AGENTS.md). Keyed by user_id, the account's own
   // primary key and the id the approve/reject endpoints address.
-  const pending = new AsyncData<EmployerAccount[]>([]);
+  const pending = new AsyncData<EmployerPendingClaim[]>([]);
+  const reviewMessages = {
+    unknown_website: 'Company website is unknown.',
+    domain_mismatch: 'Work email domain does not match the company website.',
+    academic_domain: 'Academic email domains require manual review.',
+    manual_review: 'Domains currently match; this claim still needs manual review.',
+  } satisfies Record<EmployerPendingClaim['review_reason'], string>;
   let busy = $state<number | null>(null);
 
   onMount(() => void pending.run(() => api.listPendingEmployerClaims()));
@@ -65,6 +71,10 @@
           <span class="truncate text-xs text-muted-foreground">
             {acc.work_email} · claimed {timeAgo(acc.created_at, locale())}
           </span>
+          <span class="break-words text-xs text-muted-foreground">
+            Known website: {acc.website || 'Not recorded'}
+          </span>
+          <span class="text-xs">{reviewMessages[acc.review_reason]}</span>
         </div>
         <div class="flex shrink-0 gap-2">
           <Button variant="primary" size="sm" disabled={busy === acc.user_id} onclick={() => approve(acc)}>
@@ -78,8 +88,8 @@
     {/each}
   </ul>
   <p class="mt-4 text-xs text-muted-foreground">
-    Approving checks the work email is plausibly this company's own and, if the company's website was unknown, records
-    the confirmed domain.
+    Explanations reflect the current company website and work email. Approving checks the work email is plausibly this
+    company's own and, if the company's website was unknown, records the confirmed domain.
   </p>
 {/if}
 

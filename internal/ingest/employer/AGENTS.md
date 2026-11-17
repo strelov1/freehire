@@ -40,6 +40,10 @@ for the full design record.
   it, 3 of the 4 pending claims on prod had never entered a code and Approve would have
   activated them. `ResendClaimCode` exists for the same reason: without it an expired code
   stranded the claim forever, since a user may hold only one account.
+- **Queue explanations describe the current check, not its history.** `ListPending`
+  joins the current company website, retaining claims without a company row.
+  `ListPendingClaims` uses the same domain check as `ConfirmClaim`; if the domains now
+  match, `manual_review` keeps the pending claim visible without activating it on a read.
 - **An academic domain never auto-activates** (`isAcademicDomain`): every student holds an
   address on the university's domain, so a match there proves enrolment, not the authority
   to hire. Subdomains are deliberately NOT treated as a match for the same reason —

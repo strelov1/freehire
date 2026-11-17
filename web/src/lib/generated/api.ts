@@ -7665,6 +7665,8 @@ export interface components {
             company_name?: string;
             work_email?: string;
         };
+        /** @enum {string} */
+        EmployerClaimReviewReason: "unknown_website" | "domain_mismatch" | "academic_domain" | "manual_review";
         EmployerClosed: {
             closed: boolean;
         };
@@ -7708,6 +7710,27 @@ export interface components {
         };
         EmployerConfirm: {
             code?: string;
+        };
+        /** @description A pending claim with the current domain check, not a stored historical failure reason. */
+        EmployerPendingClaim: {
+            /** Format: int64 */
+            user_id: number;
+            company_slug: string;
+            company_name: string;
+            work_email: string;
+            status: components["schemas"]["EmployerAccountStatus"];
+            /** Format: date-time */
+            verified_at?: string;
+            /** @description Whether the claimant still owes the mailed code or is waiting on a moderator. */
+            email_confirmed: boolean;
+            /** @description True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own. */
+            member: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The catalogue's current website, empty when unknown. */
+            website: string;
+            /** @description manual_review means the domains now match but the claim still awaits a moderator. */
+            review_reason: components["schemas"]["EmployerClaimReviewReason"];
         };
         /** @description `type` is "text", "boolean" or "select"; `options` are a select's choices. */
         EmployerQuestion: {
@@ -12579,7 +12602,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["EmployerAccount"][];
+                        data: components["schemas"]["EmployerPendingClaim"][];
                     };
                 };
             };

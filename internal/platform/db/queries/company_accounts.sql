@@ -16,10 +16,11 @@ RETURNING *;
 -- mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 -- whose code was never entered is not reviewable — nobody has shown they can read that
 -- address — so it stays out of the queue (migration 0181).
-SELECT *
-FROM company_accounts
-WHERE status = 'pending' AND email_confirmed_at IS NOT NULL
-ORDER BY created_at;
+SELECT sqlc.embed(ca), COALESCE(c.company_info->>'website', '')::text AS website
+FROM company_accounts ca
+LEFT JOIN companies c ON c.slug = ca.company_slug
+WHERE ca.status = 'pending' AND ca.email_confirmed_at IS NOT NULL
+ORDER BY ca.created_at;
 
 -- name: ConfirmCompanyAccountEmail :one
 -- Records that the claimant consumed the code mailed to work_email. COALESCE keeps the

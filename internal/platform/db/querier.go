@@ -5303,7 +5303,7 @@ type Querier interface {
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
 	// address — so it stays out of the queue (migration 0181).
-	ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error)
+	ListPendingCompanyAccounts(ctx context.Context) ([]ListPendingCompanyAccountsRow, error)
 	// The moderator queue, oldest first, with both companies' current names and open-job counts
 	// so the decision can be made without opening two pages. LEFT JOIN because a company may have
 	// lost its last posting since the proposal. The approval then refuses it, and the queue

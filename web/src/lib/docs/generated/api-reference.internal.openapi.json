@@ -1765,7 +1765,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/EmployerAccount"
+                        "$ref": "#/components/schemas/EmployerPendingClaim"
                       }
                     }
                   },
@@ -13636,6 +13636,15 @@
           }
         }
       },
+      "EmployerClaimReviewReason": {
+        "type": "string",
+        "enum": [
+          "unknown_website",
+          "domain_mismatch",
+          "academic_domain",
+          "manual_review"
+        ]
+      },
       "EmployerClosed": {
         "type": "object",
         "required": [
@@ -13824,6 +13833,66 @@
             "type": "string"
           }
         }
+      },
+      "EmployerPendingClaim": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "company_slug",
+          "company_name",
+          "work_email",
+          "status",
+          "email_confirmed",
+          "member",
+          "created_at",
+          "website",
+          "review_reason"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "company_slug": {
+            "type": "string"
+          },
+          "company_name": {
+            "type": "string"
+          },
+          "work_email": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmployerAccountStatus"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "email_confirmed": {
+            "type": "boolean",
+            "description": "Whether the claimant still owes the mailed code or is waiting on a moderator."
+          },
+          "member": {
+            "type": "boolean",
+            "description": "True when the caller acts for the company as a member of its team rather than as its claimant; `work_email` is then the caller's own."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "x-ogen-time-format": "2006-01-02T15:04:05.999999999Z07:00"
+          },
+          "website": {
+            "type": "string",
+            "description": "The catalogue's current website, empty when unknown."
+          },
+          "review_reason": {
+            "$ref": "#/components/schemas/EmployerClaimReviewReason",
+            "description": "manual_review means the domains now match but the claim still awaits a moderator."
+          }
+        },
+        "description": "A pending claim with the current domain check, not a stored historical failure reason."
       },
       "EmployerQuestion": {
         "type": "object",

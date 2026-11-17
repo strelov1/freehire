@@ -48,11 +48,11 @@ func (r *fakeRepo) GetByUserID(_ context.Context, userID int64) (Account, error)
 	return acc, nil
 }
 
-func (r *fakeRepo) ListPending(_ context.Context) ([]Account, error) {
-	var out []Account
+func (r *fakeRepo) ListPending(_ context.Context) ([]PendingClaim, error) {
+	var out []PendingClaim
 	for _, acc := range r.accounts {
 		if acc.Status == StatusPending && acc.EmailConfirmed() {
-			out = append(out, acc)
+			out = append(out, PendingClaim{Account: acc, Website: r.companies[acc.CompanySlug].website})
 		}
 	}
 	return out, nil

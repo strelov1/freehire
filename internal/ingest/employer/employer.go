@@ -91,7 +91,7 @@ type Repository interface {
 	GetByUserID(ctx context.Context, userID int64) (Account, error)
 	// ListPending is the moderator review queue, oldest first: pending claims whose work
 	// email is confirmed.
-	ListPending(ctx context.Context) ([]Account, error)
+	ListPending(ctx context.Context) ([]PendingClaim, error)
 	// ConfirmEmail records that the claimant consumed the work-email code.
 	// ErrClaimNotPending when the account is missing or not pending.
 	ConfirmEmail(ctx context.Context, userID int64) (Account, error)

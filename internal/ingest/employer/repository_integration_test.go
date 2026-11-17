@@ -21,6 +21,42 @@ import (
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
+func TestListPending_IncludesCurrentWebsiteAndKeepsUnknownCompanies(t *testing.T) {
+	pool := testdb.Pool(t)
+	repo := employer.NewQueriesRepository(db.New(pool), pool)
+	ctx := context.Background()
+	for _, tc := range []struct{ slug, website string }{
+		{"known", "https://known.test"},
+		{"unknown", ""},
+	} {
+		id := seedUser(t, pool, "hr@"+tc.slug+".test")
+		if _, err := repo.InsertPending(ctx, id, tc.slug, tc.slug, "hr@"+tc.slug+".test"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.ConfirmEmail(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		if tc.website != "" {
+			if err := repo.SeedCompanyWebsite(ctx, tc.slug, tc.slug, tc.website); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	claims, err := repo.ListPending(ctx)
+	if err != nil || len(claims) != 2 {
+		t.Fatalf("claims = %+v, err = %v", claims, err)
+	}
+	for _, claim := range claims {
+		want := ""
+		if claim.CompanySlug == "known" {
+			want = "https://known.test"
+		}
+		if claim.Website != want {
+			t.Errorf("%s website = %q, want %q", claim.CompanySlug, claim.Website, want)
+		}
+	}
+}
+
 func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	t.Helper()
 	var id int64
