@@ -1,0 +1,134 @@
+{
+ "jobSearchStatus": 200,
+ "jobSearchResponse": {
+  "data": [
+   {
+    "id": "69831550",
+    "title": "C&S Technology Business Management Sr. Director",
+    "companyName": "NTT Data",
+    "hideCompanyName": 0,
+    "locations": "Bengaluru, India",
+    "seoJdUrl": "/job/cs-technology-business-management-sr-director-ntt-data-bengaluru-bangalore-india-69831550",
+    "createdAt": 1794882757000,
+    "isJobActive": true,
+    "hideSalary": 0,
+    "jobSalaryConfidential": false,
+    "minimumExperience": {
+     "years": 0
+    },
+    "minimumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "maximumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "employmentTypes": [
+     "Full time"
+    ],
+    "jobTypes": []
+   },
+   {
+    "type": "adsense"
+   },
+   {
+    "id": "69831543",
+    "title": "Systems Engineering Advisor - Patching M365 - Infrastructure Engineer",
+    "companyName": "NTT Data",
+    "hideCompanyName": 0,
+    "locations": "Noida, India",
+    "seoJdUrl": "/job/systems-engineering-advisor-patching-m365-infrastructure-engineer-ntt-data-noida-india-69831543",
+    "createdAt": 1794882732000,
+    "isJobActive": true,
+    "hideSalary": 0,
+    "jobSalaryConfidential": false,
+    "minimumExperience": {
+     "years": 0
+    },
+    "minimumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "maximumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "employmentTypes": [
+     "Full time"
+    ],
+    "jobTypes": []
+   },
+   {
+    "id": "69831553",
+    "title": "Industry Consulting Snr. Consultant",
+    "companyName": "NTT Data",
+    "hideCompanyName": 0,
+    "locations": "Bengaluru, India",
+    "seoJdUrl": "/job/industry-consulting-snr-consultant-ntt-data-bengaluru-bangalore-india-69831553",
+    "createdAt": 1794882765000,
+    "isJobActive": true,
+    "hideSalary": 0,
+    "jobSalaryConfidential": false,
+    "minimumExperience": {
+     "years": 0
+    },
+    "minimumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "maximumSalary": {
+     "currency": "INR",
+     "absoluteValue": 0,
+     "absoluteMonthlyValue": 0
+    },
+    "employmentTypes": [
+     "Full time"
+    ],
+    "jobTypes": []
+   },
+   {
+    "id": "69831999",
+    "title": "Senior Java Developer",
+    "companyName": "Acme",
+    "hideCompanyName": 0,
+    "locations": "Bengaluru, India",
+    "seoJdUrl": "/job/senior-java-developer-acme-pune-india-69831999",
+    "createdAt": 1794882774000,
+    "isJobActive": true,
+    "hideSalary": 0,
+    "jobSalaryConfidential": false,
+    "minimumExperience": {
+     "years": 4
+    },
+    "minimumSalary": {
+     "currency": "INR",
+     "absoluteValue": 2100000,
+     "absoluteMonthlyValue": 175000
+    },
+    "maximumSalary": {
+     "currency": "INR",
+     "absoluteValue": 2800000,
+     "absoluteMonthlyValue": 233333
+    },
+    "employmentTypes": [
+     "Full time"
+    ],
+    "jobTypes": [
+     "Contract Job"
+    ]
+   }
+  ],
+  "meta": {
+   "paging": {
+    "total": 4,
+    "limit": 100
+   }
+  }
+ }
+}

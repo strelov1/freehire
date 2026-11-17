@@ -1,0 +1,26 @@
+{
+ "jobDetailStatus": 200,
+ "jobDetailResponse": {
+  "id": "69831543",
+  "title": "Systems Engineering Advisor - Patching M365 - Infrastructure Engineer",
+  "description": "<div><span><p>NTT DATA strives to hire exceptional, innovative and passionate individuals.</p><ul><li>Patch Microsoft 365 endpoints</li><li>Manage vulnerabilities</li></ul></span></div>",
+  "locations": [
+   {
+    "city": "Noida",
+    "state": "Uttar Pradesh",
+    "country": "India"
+   },
+   {
+    "city": null,
+    "state": null,
+    "country": "India"
+   }
+  ],
+  "jobTypes": [
+   "Work From Home"
+  ],
+  "employmentTypes": [
+   "Full time"
+  ]
+ }
+}
