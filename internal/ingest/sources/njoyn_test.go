@@ -20,6 +20,9 @@ import (
 //   - cgi_detail_closed: the notice served for a posting id that is gone.
 //   - cgi_refused: the whole body the site served every request once it refused the client,
 //     with a documentation address in place of the client's IP.
+//   - radware_block: Radware's bot wall (validate.perfdrive.com), where a datacenter IP is
+//     redirected, recorded from the crawl host 2026-11-17 and cut to its title and CAPTCHA
+//     notice, without the per-request tokens and the client's address.
 func njoynFixture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile("testdata/njoyn/" + name)
@@ -41,7 +44,7 @@ func njoynParse(t *testing.T, name string) *html.Node {
 var cgiEntry = CompanyEntry{Company: "CGI", Provider: "njoyn", Board: "cgi/corp/21001"}
 
 // testNjoyn is the adapter without its request pacing.
-func testNjoyn(c HTMLGetter) njoyn { return njoyn{http: c} }
+func testNjoyn(c HTMLGetter) njoyn { return njoyn{http: c, maxNewPerBoard: njoynMaxNewPerBoard} }
 
 // cgiBoard routes the two listing pages.
 func cgiBoard(t *testing.T) *routedHTTP {
@@ -59,6 +62,9 @@ func TestNjoynProvider(t *testing.T) {
 	}
 	if _, ok := NewNjoyn(nil).(fullBoardListing); !ok {
 		t.Error("njoyn must carry the fullBoardListing marker")
+	}
+	if _, ok := proxiedProviders["njoyn"]; !ok {
+		t.Error("njoyn must be in proxiedProviders (Radware walls the prod datacenter IP)")
 	}
 }
 
@@ -98,8 +104,10 @@ func TestNjoynListingPageRejectsANonListing(t *testing.T) {
 	if _, _, _, err := njoynListingPage(njoynParse(t, "cgi_detail_J1126-1603.html")); err == nil {
 		t.Error("a posting page was read as a listing")
 	}
-	if _, _, _, err := njoynListingPage(njoynParse(t, "cgi_refused.html")); !errors.Is(err, errNjoynRefused) {
-		t.Errorf("the refusal read as %v, want errNjoynRefused", err)
+	for _, page := range []string{"cgi_refused.html", "radware_block.html"} {
+		if _, _, _, err := njoynListingPage(njoynParse(t, page)); !errors.Is(err, errNjoynRefused) {
+			t.Errorf("%s read as %v, want errNjoynRefused", page, err)
+		}
 	}
 }
 
@@ -147,10 +155,10 @@ func TestNjoynFetchNewFailsOnARefusedListingPage(t *testing.T) {
 func TestNjoynDetailEnglish(t *testing.T) {
 	fake := (&routedHTTP{}).route("Jobid=J1126-1603", njoynFixture(t, "cgi_detail_J1126-1603.html"))
 	b, _ := parseNjoynBoard(cgiEntry.Board)
-	j, ok := njoynDetail(context.Background(), fake, cgiEntry, b,
+	j, err := njoynDetail(context.Background(), fake, cgiEntry, b,
 		njoynRow{id: "J1126-1603", brid: "1350470", title: "IT Service Transition Consultant", city: "Montréal", country: "Canada"})
-	if !ok {
-		t.Fatal("detail not read")
+	if err != nil {
+		t.Fatal(err)
 	}
 	if j.Location != "Montréal, QC, CA" || len(j.Countries) != 1 || j.Countries[0] != "ca" {
 		t.Errorf("Location = %q, Countries = %v", j.Location, j.Countries)
@@ -178,10 +186,10 @@ func TestNjoynDetailEnglish(t *testing.T) {
 func TestNjoynDetailFrench(t *testing.T) {
 	fake := (&routedHTTP{}).route("Jobid=J1126-1479", njoynFixture(t, "cgi_detail_J1126-1479_fr.html"))
 	b, _ := parseNjoynBoard(cgiEntry.Board)
-	j, ok := njoynDetail(context.Background(), fake, cgiEntry, b,
+	j, err := njoynDetail(context.Background(), fake, cgiEntry, b,
 		njoynRow{id: "J1126-1479", brid: "1350158", title: "Développeur(se) Back-End C – Systèmes critiques", city: "Montréal", country: "Canada"})
-	if !ok {
-		t.Fatal("detail not read")
+	if err != nil {
+		t.Fatal(err)
 	}
 	if j.Title != "Développeur(se) Back-End C – Systèmes critiques" || j.Location != "Montréal, QC, CA" {
 		t.Errorf("job = %q in %q", j.Title, j.Location)
@@ -193,11 +201,76 @@ func TestNjoynDetailFrench(t *testing.T) {
 
 func TestNjoynDetailDefersAPostingItCannotRead(t *testing.T) {
 	b, _ := parseNjoynBoard(cgiEntry.Board)
-	for _, page := range []string{"cgi_detail_closed.html", "cgi_refused.html"} {
+	for page, want := range map[string]error{
+		"cgi_detail_closed.html": errNjoynNoPosting,
+		"cgi_refused.html":       errNjoynRefused,
+		"radware_block.html":     errNjoynRefused,
+	} {
 		fake := (&routedHTTP{}).route("Jobid=J0000-0001", njoynFixture(t, page))
-		if j, ok := njoynDetail(context.Background(), fake, cgiEntry, b, njoynRow{id: "J0000-0001", title: "x"}); ok {
-			t.Errorf("%s: read as %+v, want the posting deferred", page, j)
+		if j, err := njoynDetail(context.Background(), fake, cgiEntry, b, njoynRow{id: "J0000-0001", title: "x"}); !errors.Is(err, want) {
+			t.Errorf("%s: read as %+v, %v; want the posting deferred with %v", page, j, err, want)
 		}
+	}
+}
+
+func TestNjoynFetchNewHydratesTheNewestPostingsUpToTheBound(t *testing.T) {
+	detail := njoynFixture(t, "cgi_detail_J1126-1603.html")
+	// Only the two newest ids are routed: asking for any other posting page fails the request.
+	fake := cgiBoard(t).route("Jobid=J1126-1603", detail).route("Jobid=J1126-1490", detail)
+	s := testNjoyn(fake)
+	s.maxNewPerBoard = 2
+	jobs, err := s.FetchNew(context.Background(), cgiEntry, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.calls != 2+2 {
+		t.Errorf("made %d requests, want two listing pages and the bound's two posting pages", fake.calls)
+	}
+	if len(jobs) != 2 {
+		t.Errorf("got %d jobs, want the two hydrated: a posting past the bound waits for a later run", len(jobs))
+	}
+}
+
+func TestNjoynNewestFirstOrdersByTheMonthTheIDNames(t *testing.T) {
+	rows := []njoynRow{{id: "J0925-1760"}, {id: "odd"}, {id: "J1126-1490"}, {id: "J1225-0712"}, {id: "J0626-0094"}, {id: "J1126-1603"}}
+	sortNjoynNewestFirst(rows)
+	var got []string
+	for _, r := range rows {
+		got = append(got, r.id)
+	}
+	if want := "J1126-1603 J1126-1490 J0626-0094 J1225-0712 J0925-1760 odd"; strings.Join(got, " ") != want {
+		t.Errorf("order = %v, want %s", got, want)
+	}
+}
+
+func TestNjoynFetchNewStopsAskingOnceRefused(t *testing.T) {
+	fake := cgiBoard(t).route("Page=JobDetails", njoynFixture(t, "cgi_refused.html"))
+	_, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(string) bool { return false })
+	if err == nil || !strings.Contains(err.Error(), "read none") {
+		t.Errorf("err = %v, want a failed crawl", err)
+	}
+	if fake.calls != 2+1 {
+		t.Errorf("made %d requests, want two listing pages and the one refused posting page", fake.calls)
+	}
+}
+
+func TestNjoynFetchNewKeepsWhatItReadBeforeARefusal(t *testing.T) {
+	fake := cgiBoard(t).
+		route("Jobid=J1126-1603", njoynFixture(t, "cgi_detail_J1126-1603.html")).
+		route("Page=JobDetails", njoynFixture(t, "cgi_refused.html"))
+	jobs, err := testNjoyn(fake).FetchNew(context.Background(), cgiEntry, func(id string) bool { return id == "J0925-1760" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.calls != 2+2 {
+		t.Errorf("made %d requests, want two listing pages, the read posting and the refused one", fake.calls)
+	}
+	var ids []string
+	for _, j := range jobs {
+		ids = append(ids, j.ExternalID)
+	}
+	if strings.Join(ids, " ") != "J1126-1603 J0925-1760" {
+		t.Errorf("jobs = %v, want the read posting and the seen one", ids)
 	}
 }
 

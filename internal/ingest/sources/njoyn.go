@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -34,24 +35,30 @@ import (
 //     posting page that cannot be read (an error, or a 200 without its JobPosting, which is
 //     also what a removed posting's id answers) defers that new posting to the next crawl;
 //     a crawl that had new postings to read and read none of them fails.
-//   - The site refuses a client it has decided is crawling too fast with a bare 200 body,
-//     "Invalid request XWP10022 <the client's IP>", on every page. That is a refusal, never
-//     an empty or vanished board, and fails the crawl (njoynRefused).
+//   - The site refuses a client in two ways, both answered 200: one it has decided is crawling
+//     too fast gets a bare body, "Invalid request XWP10022 <the client's IP>", on every page;
+//     a datacenter IP is redirected to Radware's bot wall (validate.perfdrive.com, a CAPTCHA
+//     page titled "Radware Block Page") before it is served anything, so the crawl egresses
+//     through the proxy (proxiedProviders). Either is a refusal, never an empty or vanished
+//     board, and fails the crawl (njoynRefused).
 //   - There is no robots.txt. Requests are paced to one every njoynRequestInterval per board,
 //     because the refusal above was drawn at a slower pace than one a second (what was
 //     measured is in providers/njoyn.md).
 //
 // A steady-state crawl is one listing request per 50 postings plus a posting page only for a
-// posting the catalogue has not seen (HydratingSource). The first crawl of a board reads every
-// posting page.
+// posting the catalogue has not seen (HydratingSource), at most njoynMaxNewPerBoard a run.
 type njoyn struct {
 	http HTMLGetter
 	// interval spaces the requests of one board's crawl; zero disables pacing (tests).
 	interval time.Duration
+	// maxNewPerBoard bounds how many new postings one run hydrates on a board.
+	maxNewPerBoard int
 }
 
 // NewNjoyn builds the Njoyn adapter over the given HTTP client.
-func NewNjoyn(c HTMLGetter) Source { return njoyn{http: c, interval: njoynRequestInterval} }
+func NewNjoyn(c HTMLGetter) Source {
+	return njoyn{http: c, interval: njoynRequestInterval, maxNewPerBoard: njoynMaxNewPerBoard}
+}
 
 func (njoyn) Provider() string { return "njoyn" }
 
@@ -64,6 +71,11 @@ const (
 	// njoynMaxPages bounds the listing walk (50 rows a page). Reaching it before the pager's
 	// last page FAILS the crawl, never a silent end.
 	njoynMaxPages = 200
+	// njoynMaxNewPerBoard bounds the posting pages one run reads on a board: 500 at the pace is
+	// ~42 minutes. The bound is per board because the pace is — every tenant is its own host. A
+	// cold board converges over runs (CGI's ~3,000 postings in six) instead of spending one run
+	// past its deadline on pages it then cannot save.
+	njoynMaxNewPerBoard = 500
 )
 
 // njoynBoard is a parsed "<tenant>/<site>/<clid>" board.
@@ -108,8 +120,15 @@ func (s njoyn) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return s.FetchNew(ctx, e, func(string) bool { return false })
 }
 
-// FetchNew opens a posting page only for a posting the catalogue does not already have. A seen
-// posting yields its listing row alone, flagged SeenRefresh.
+// FetchNew opens a posting page only for a posting the catalogue does not already have, and for
+// at most maxNewPerBoard of those a run, newest first. A seen posting yields its listing row
+// alone, flagged SeenRefresh; a new posting past the bound is left for a later run.
+//
+// The posting pages are read one at a time: the pace allows one request in flight anyway. Once
+// the site refuses this client, no further page is asked for — every one would be refused too,
+// and asking keeps the refusal in force. What was read before it is kept (the listing was
+// whole, so nothing it named is lost), and a refusal before any page was read fails the crawl
+// like any crawl that read none of its new postings.
 func (s njoyn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	b, err := parseNjoynBoard(e.Board)
 	if err != nil {
@@ -120,24 +139,68 @@ func (s njoyn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	if err != nil {
 		return nil, fmt.Errorf("njoyn: listing %s: %w", e.Board, err)
 	}
-	var wanted, read atomic.Int64
-	jobs := fetchDetails(rows, defaultDetailWorkers, func(r njoynRow) (Job, bool) {
+	var unseen []njoynRow
+	var refreshed []Job
+	for _, r := range rows {
 		if seen(r.id) {
 			j := r.job(e, b)
 			j.SeenRefresh = true
-			return j, true
+			refreshed = append(refreshed, j)
+			continue
 		}
-		wanted.Add(1)
-		j, ok := njoynDetail(ctx, get, e, b, r)
-		if ok {
-			read.Add(1)
-		}
-		return j, ok
-	})
-	if wanted.Load() > 0 && read.Load() == 0 {
-		return nil, fmt.Errorf("njoyn: %s: listed %d new postings and read none of their pages", e.Board, wanted.Load())
+		unseen = append(unseen, r)
 	}
-	return jobs, nil
+	sortNjoynNewestFirst(unseen)
+	if len(unseen) > s.maxNewPerBoard {
+		log.Printf("njoyn: %s: %d new postings, hydrating the newest %d this run", e.Board, len(unseen), s.maxNewPerBoard)
+		unseen = unseen[:s.maxNewPerBoard]
+	}
+	var refused atomic.Bool
+	jobs := fetchDetails(unseen, 1, func(r njoynRow) (Job, bool) {
+		if refused.Load() {
+			return Job{}, false
+		}
+		j, err := njoynDetail(ctx, get, e, b, r)
+		if errors.Is(err, errNjoynRefused) {
+			refused.Store(true)
+		}
+		if err != nil {
+			log.Printf("njoyn: %s: posting %s: %v; deferring", e.Board, r.id, err)
+			return Job{}, false
+		}
+		return j, true
+	})
+	if len(unseen) > 0 && len(jobs) == 0 {
+		return nil, fmt.Errorf("njoyn: %s: listed %d new postings and read none of their pages", e.Board, len(unseen))
+	}
+	if refused.Load() {
+		log.Printf("njoyn: %s: refused after %d of %d posting pages; the rest wait for a later run", e.Board, len(jobs), len(unseen))
+	}
+	return append(jobs, refreshed...), nil
+}
+
+// njoynIDPattern is a posting id as CGI's site spells it, J<MMYY>-<sequence> ("J1126-1603"): the
+// month it was opened and a counter.
+var njoynIDPattern = regexp.MustCompile(`^J(\d{2})(\d{2})-(\d+)$`)
+
+// njoynIDKey orders posting ids by when they were opened: year, month, then sequence. An id of
+// any other shape keys as zero and sorts after every recognised one, in listing order.
+func njoynIDKey(id string) int64 {
+	m := njoynIDPattern.FindStringSubmatch(id)
+	if m == nil {
+		return 0
+	}
+	month, _ := strconv.ParseInt(m[1], 10, 64)
+	year, _ := strconv.ParseInt(m[2], 10, 64)
+	seq, _ := strconv.ParseInt(m[3], 10, 64)
+	return (year*100+month)*1_000_000 + seq
+}
+
+// sortNjoynNewestFirst orders new postings so the hydration bound spends itself on the freshest:
+// a backlog of old postings never delays one opened today. The listing's own order is not by
+// date (its first rows are months old).
+func sortNjoynNewestFirst(rows []njoynRow) {
+	sort.SliceStable(rows, func(i, j int) bool { return njoynIDKey(rows[i].id) > njoynIDKey(rows[j].id) })
 }
 
 // njoynList walks the listing to the last page its pager states. A page that fails, a page
@@ -277,26 +340,26 @@ type njoynPosting struct {
 	JobLocation    schemaPlaces `json:"jobLocation"`
 }
 
-// njoynDetail opens one posting page and fills the listing row's job from it. It reports
-// ok=false, deferring this new posting to the next crawl, when the page cannot be read, is
-// refused, or carries no JobPosting or no body: the listing, not this page, says whether the
-// posting exists.
-func njoynDetail(ctx context.Context, get HTMLGetter, e CompanyEntry, b njoynBoard, r njoynRow) (Job, bool) {
-	link := b.detailURL(r.id, r.brid)
-	root, err := get.GetHTML(ctx, link)
+// njoynDetail opens one posting page and fills the listing row's job from it. Any error defers
+// this new posting to the next crawl — the listing, not this page, says whether the posting
+// exists: the page could not be fetched, it is the site's refusal (errNjoynRefused), or it
+// carries no JobPosting or no body (which is also what a removed posting's id answers).
+func njoynDetail(ctx context.Context, get HTMLGetter, e CompanyEntry, b njoynBoard, r njoynRow) (Job, error) {
+	root, err := get.GetHTML(ctx, b.detailURL(r.id, r.brid))
 	if err != nil {
-		log.Printf("njoyn: %s: %v; deferring", link, err)
-		return Job{}, false
+		return Job{}, err
+	}
+	if njoynRefused(root) {
+		return Job{}, errNjoynRefused
 	}
 	var ld njoynPosting
 	content := firstByClass(root, "job-posting-content")
-	if njoynRefused(root) || !ldJobPosting(root, &ld) || content == nil {
-		log.Printf("njoyn: %s carries no posting; deferring", link)
-		return Job{}, false
+	if !ldJobPosting(root, &ld) || content == nil {
+		return Job{}, errNjoynNoPosting
 	}
 	description := sanitizeHTML(innerHTML(content))
 	if description == "" {
-		return Job{}, false
+		return Job{}, errNjoynNoPosting
 	}
 	j := r.job(e, b)
 	if places, countries := njoynPlaces(ld.JobLocation); places != "" {
@@ -310,7 +373,7 @@ func njoynDetail(ctx context.Context, get HTMLGetter, e CompanyEntry, b njoynBoa
 		j.ApplicationDeadline = &d
 	}
 	j.EmploymentType = schemaEmploymentType(ld.EmploymentType)
-	return j, true
+	return j, nil
 }
 
 // njoynPlaces renders each jobLocation as "City, Region, Country" (several joined by "; ") and
@@ -331,12 +394,18 @@ func njoynPlaces(places schemaPlaces) (string, []string) {
 	return strings.Join(parts, "; "), countriesFromCodes(codes)
 }
 
-// errNjoynRefused is the site's refusal of this client (see the type comment).
-var errNjoynRefused = errors.New("the site refused this client (Invalid request XWP10022)")
+var (
+	// errNjoynRefused is the site's refusal of this client (see the type comment).
+	errNjoynRefused = errors.New("the site refused this client (XWP10022 or Radware's bot wall)")
+	// errNjoynNoPosting is a posting page with no JobPosting or no body.
+	errNjoynNoPosting = errors.New("the page carries no posting")
+)
 
-// njoynRefused reports whether a page is the site's refusal rather than a page of the site.
+// njoynRefused reports whether a page is the site's refusal rather than a page of the site:
+// its own rate-limit notice, or Radware's block page the client was redirected to.
 func njoynRefused(root *html.Node) bool {
-	return strings.Contains(textContent(root), "XWP10022")
+	text := textContent(root)
+	return strings.Contains(text, "XWP10022") || strings.Contains(text, "Radware Block Page")
 }
 
 // job maps a listing row onto the identity every path shares: the shape a SeenRefresh carries
