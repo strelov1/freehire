@@ -170,7 +170,7 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex. The
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
-<div class="mb-6 flex flex-col gap-1">
+<div class="mb-4 flex flex-col gap-1 lg:mb-6">
   <div class="flex items-center gap-3">
     <AccountPageHeading class="min-w-0 flex-1">{s.title}</AccountPageHeading>
     <PlanBadge tier={currentUser()?.tier} />

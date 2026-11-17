@@ -15,7 +15,7 @@
 </script>
 
 <!-- The account shell (my/+layout) owns the container, auth gate and noindex. -->
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-4 lg:gap-6">
   <div class="flex flex-col gap-1">
     <AccountPageHeading>Mentorship</AccountPageHeading>
     <p class="text-muted-foreground text-sm max-lg:sr-only">
