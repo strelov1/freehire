@@ -154,6 +154,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   cadremploi: 'Cadremploi',
   pracuj: 'Pracuj.pl',
   jobteaser: 'JobTeaser',
+  kariyernet: 'Kariyer.net',
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
   mojedelo: 'MojeDelo',
