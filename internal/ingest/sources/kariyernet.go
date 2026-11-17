@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -14,18 +15,19 @@ import (
 )
 
 // kariyernet adapts Kariyer.net (kariyer.net), Turkey's largest job board, whose postings each
-// name their own employer. Boardless aggregator: one crawl reads the IT slice of the catalogue.
-// The board is general (24.6k open postings on 2026-11-17, most of them retail, logistics and
-// industry), so the crawl is scoped to the site's own "work area" filter for information
-// technology (kariyernetITAreas) rather than walking everything and leaving the classifier to
-// discard 98%.
+// name their own employer. Boardless aggregator: one crawl reads the whole catalogue (24,968 open
+// postings on 2026-11-17, across every profession). The search stops at page 100 — 20,000 rows
+// at 200 a page, fewer than the catalogue — so it is read as one slice per "work area" (the
+// site's own department filter, 97 values that together state 24,965 of the 24,968 postings, the
+// largest 4,015). Every slice is walked to its natural end; the IT areas come first so the
+// detail budget reaches the technical postings first.
 //
 // The listing is the JSON search the site's own app calls (POST /search on the search gateway),
 // 200 rows a page, newest first. It carries no body, so this is a HydratingSource that reads a
 // posting's JSON from the same gateway (GET /job) only when the catalogue lacks it, up to
 // kariyernetDetailBudget a run. The gateway answers a plain client an HTML 403 on /job and passes
 // the Scrapling tier's impersonating fetcher (scraplingtier.go), so both requests go through it.
-// See the Kariyer.net traps in AGENTS.md.
+// See providers/kariyernet.md.
 type kariyernet struct {
 	api kariyernetAPI
 	// detailBudget bounds one run's detail reads; non-positive takes kariyernetDetailBudget.
@@ -48,9 +50,11 @@ const (
 	// kariyernetMaxPages is the search's own deepest page: any currentPage above 100 is answered
 	// with page 100 again. A walk that reaches it has not seen the end of the slice and fails.
 	kariyernetMaxPages = 100
-	// kariyernetDetailBudget bounds one run's detail reads. The IT slice held 437 postings on
-	// 2026-11-17, so a cold start fits one run at the pace below (~8 minutes).
-	kariyernetDetailBudget   = 500
+	// kariyernetDetailBudget bounds one run's detail reads: 1,500 at one a second is ~25 minutes,
+	// beside the ~200 listing requests (~3.5 minutes) inside the scheduler's 2,400 s crawl budget.
+	// The catalogue holds ~24.6k postings and a cold start reads them over ~17 runs, newest and
+	// technical first; a day's new postings are a few thousand at most.
+	kariyernetDetailBudget   = 1500
 	kariyernetDetailWorkers  = 2
 	kariyernetRequestPeriod  = time.Second
 	kariyernetRequestBurst   = 1
@@ -59,8 +63,9 @@ const (
 
 // kariyernetITAreas are the site's "work area" (departments) filter values that mean
 // information technology: "Bilgi Teknolojileri / IT" (78), "Bilgi İşlem" (5), "Teknoloji" (55),
-// "Sistem" (60) and "Program" (54). The areas are the employer's own pick, so the slice also
-// holds the odd receptionist (see the traps) and no posting is hinted technical.
+// "Sistem" (60) and "Program" (54). They are walked first, so the detail budget reaches them
+// before the rest. The areas are the employer's own pick (a receptionist is filed under them),
+// so no posting is hinted technical.
 var kariyernetITAreas = []string{"78", "5", "55", "60", "54"}
 
 // NewKariyerNet builds the Kariyer.net adapter over api, which must reach the search gateway.
@@ -113,7 +118,12 @@ type kariyernetItem struct {
 type kariyernetSearchResponse struct {
 	Data struct {
 		TotalJobCount int `json:"totalJobCount"`
-		Jobs          struct {
+		Filters       struct {
+			WorkAreas struct {
+				Items []kariyernetFilterItem `json:"items"`
+			} `json:"workAreas"`
+		} `json:"filters"`
+		Jobs struct {
 			Items []kariyernetItem `json:"items"`
 		} `json:"jobs"`
 	} `json:"data"`
@@ -131,10 +141,66 @@ func (s kariyernet) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exte
 	return s.hydrate(ctx, items, seen)
 }
 
-// list walks the slice newest first until a page adds no new row. The search prepends sponsored
-// rows to every page, so a page past the end is not empty but empty of NEW ids, and a page's row
-// count runs a few above its size.
+// list reads the whole catalogue as one slice per work area, the IT areas first. An area holds
+// at most ~4,000 postings, far under the search's 20,000-row reach, and the areas overlap by
+// nothing but a few sponsored rows, so the union is deduplicated by id.
 func (s kariyernet) list(ctx context.Context) ([]kariyernetItem, error) {
+	var head kariyernetSearchResponse
+	if err := s.api.PostJSON(ctx, kariyernetSearchURL, map[string]any{"currentPage": 1, "size": 1}, &head); err != nil {
+		return nil, fmt.Errorf("kariyernet: search: %w", err)
+	}
+	areas := kariyernetAreaOrder(head.Data.Filters.WorkAreas.Items)
+	if len(areas) == 0 {
+		// The filter list is how the catalogue is enumerated; without it nothing can be read whole.
+		return nil, fmt.Errorf("kariyernet: the search names no work area")
+	}
+	var out []kariyernetItem
+	byID := map[int64]bool{}
+	for _, area := range areas {
+		items, err := s.listArea(ctx, area)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range items {
+			if !byID[it.ID] {
+				byID[it.ID] = true
+				out = append(out, it)
+			}
+		}
+	}
+	// The catalogue is never empty; a listing that read nothing is a changed response or a
+	// refusal page.
+	if len(out) == 0 {
+		return nil, fmt.Errorf("kariyernet: the search carries no postings")
+	}
+	return out, nil
+}
+
+// kariyernetFilterItem is one value of a search filter.
+type kariyernetFilterItem struct {
+	Value string `json:"value"`
+}
+
+// kariyernetAreaOrder lists the work area values, the IT areas first and the rest in the filter's
+// own order.
+func kariyernetAreaOrder(items []kariyernetFilterItem) []string {
+	var first, rest []string
+	for _, it := range items {
+		if slices.Contains(kariyernetITAreas, it.Value) {
+			first = append(first, it.Value)
+		} else if it.Value != "" {
+			rest = append(rest, it.Value)
+		}
+	}
+	return append(first, rest...)
+}
+
+// listArea walks one work area newest first until a page adds no new row. The search prepends
+// sponsored rows to every page and states a total a row or two above what its pages carry (6 of
+// 97 areas on 2026-11-17), so a page past the end is not empty but empty of NEW ids, and that is
+// the end. Reaching the search's deepest page without it fails the crawl. An area holding no
+// posting is fine.
+func (s kariyernet) listArea(ctx context.Context, area string) ([]kariyernetItem, error) {
 	var out []kariyernetItem
 	byID := map[int64]bool{}
 	for page := 1; page <= kariyernetMaxPages; page++ {
@@ -142,15 +208,12 @@ func (s kariyernet) list(ctx context.Context) ([]kariyernetItem, error) {
 		body := map[string]any{
 			"currentPage":   page,
 			"size":          kariyernetPageSize,
-			"departments":   kariyernetITAreas,
+			"departments":   []string{area},
 			"sortType":      "SortByDate",
 			"sortDirection": "Descending",
 		}
 		if err := s.api.PostJSON(ctx, kariyernetSearchURL, body, &resp); err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("kariyernet: search: %w", err)
-			}
-			return nil, fmt.Errorf("kariyernet: search page %d: %w", page, err)
+			return nil, fmt.Errorf("kariyernet: work area %s page %d: %w", area, page, err)
 		}
 		fresh := 0
 		for _, it := range resp.Data.Jobs.Items {
@@ -161,16 +224,11 @@ func (s kariyernet) list(ctx context.Context) ([]kariyernetItem, error) {
 			out = append(out, it)
 			fresh++
 		}
-		if page == 1 && fresh == 0 {
-			// The slice always holds postings; a first page without a row is a changed
-			// response or a refusal page, never an empty market.
-			return nil, fmt.Errorf("kariyernet: search page 1 carries no postings")
-		}
 		if fresh == 0 || len(out) >= resp.Data.TotalJobCount {
 			return out, nil
 		}
 	}
-	return nil, fmt.Errorf("kariyernet: search still returned postings at page %d; the end of the slice was not reached", kariyernetMaxPages)
+	return nil, fmt.Errorf("kariyernet: work area %s still returned postings at page %d; the end was not reached", area, kariyernetMaxPages)
 }
 
 // hydrate buys the posting JSON only for a posting the catalogue lacks, up to the budget taken in
