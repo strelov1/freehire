@@ -20,6 +20,10 @@ type Enrich struct {
 	// IncludeNonTech lifts the is_tech gate on the backfill enqueue (ENRICH_INCLUDE_NON_TECH=true),
 	// so non-technical and unfiled postings are enriched too. Off by default: it multiplies LLM
 	// spend, so it is switched on only after a sample run measured its yield (#4412).
+	//
+	// Raise ENRICH_UPSTREAM_GRACE_DAYS above the expected drain time when switching it on: the
+	// grace clock counts queue age, so a multi-week backlog would dead-letter its oldest entries
+	// on their first upstream failure.
 	IncludeNonTech bool
 }
 
