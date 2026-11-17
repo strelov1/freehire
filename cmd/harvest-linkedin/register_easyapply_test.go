@@ -37,6 +37,20 @@ func TestRegistrationPreviewAppliesEasyApplyFlag(t *testing.T) {
 	}
 }
 
+func TestEasyApplyFlagReachesMatrixExpandedSearches(t *testing.T) {
+	path := writeTemp(t, "queries:\n  - keywords: go\n    location: UK\nmatrix:\n  - keywords: [rust, java]\n    locations: [Germany, France]\n")
+	var output bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	if exit := runArgs([]string{"--register-searches", "--easyapply-pages=40", path}); exit != 0 {
+		t.Fatalf("preview exit=%d, log=%s", exit, output.String())
+	}
+	if got := strings.Count(output.String(), "easyapply_pages=40"); got != 5 {
+		t.Fatalf("%d of 5 previewed searches carry the option: %s", got, output.String())
+	}
+}
+
 func TestEasyApplyFlagRejectsWrongScopeOrBoundsBeforeReadingTheWorklist(t *testing.T) {
 	for _, args := range [][]string{
 		{"--easyapply-pages=40"},
