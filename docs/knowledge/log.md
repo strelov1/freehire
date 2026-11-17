@@ -2,6 +2,10 @@
 
 ## 2026-11-17
 
+Documented the optional LinkedIn Easy Apply listing pass (`tenants.easyapply_pages`). Evidence is a
+live guest-API measurement today: 6 of 6 Easy Apply cards had an on-site apply control against 1 of
+8 without the filter; the detail page still decides publication. No production rollout is asserted.
+
 Documented the LinkedIn non-native read cache (`linkedin_postings_read`): external and unknown
 postings are re-read only after the body-refresh window. Evidence is the implementation and its
 tests; no production rollout is asserted.
