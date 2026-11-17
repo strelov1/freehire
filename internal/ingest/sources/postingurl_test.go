@@ -173,3 +173,27 @@ func TestCanonicalPostingURL_LeavesEverythingElseAlone(t *testing.T) {
 		}
 	}
 }
+
+func TestRefFromURL_Njoyn(t *testing.T) {
+	for _, tc := range []struct{ name, url string }{
+		// The adapter's own permalink (njoynBoard.detailURL), which is what the catalogue stores.
+		{"posting page with BRID and lang", "https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=JobDetails&Jobid=J1126-1603&BRID=1350470&lang=1"},
+		{"keys and site in the other case", "https://cgi.njoyn.com/CORP/xweb/xweb.asp?CLID=21001&page=JobDetails&JobID=J1126-1603&lang=2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ref, ok := sources.RefFromURL(tc.url)
+			if !ok || ref.Source != "njoyn" || ref.ExternalID != "cgi/corp/21001:J1126-1603" {
+				t.Errorf("RefFromURL(%q) = %+v, %v; want njoyn cgi/corp/21001:J1126-1603", tc.url, ref, ok)
+			}
+		})
+	}
+	for _, url := range []string{
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp?NTKN=c&clid=21001&Page=joblisting&lang=1",
+		"https://cgi.njoyn.com/corp/xweb/xweb.asp?Page=JobDetails&Jobid=J1126-1603",
+		"https://cgi.njoyn.com/corp/careers?clid=21001&Jobid=J1126-1603",
+	} {
+		if ref, ok := sources.RefFromURL(url); ok {
+			t.Errorf("RefFromURL(%q) = %+v, want unresolved: no posting or no client", url, ref)
+		}
+	}
+}
