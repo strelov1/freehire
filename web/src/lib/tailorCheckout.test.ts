@@ -119,7 +119,7 @@ describe('startTailorCheckout', () => {
       expect(readTailorContext(7, store)).toEqual({ slug: 'a-1', baseCvId: 'b-1' });
       return { url: 'https://checkout.example/s' };
     });
-    const url = await startTailorCheckout(7, { slug: 'a-1', baseCvId: 'b-1' }, price, store);
+    const url = await startTailorCheckout(7, { slug: 'a-1', baseCvId: 'b-1' }, price, 'confirm_tailor', store);
     expect(url).toBe('https://checkout.example/s');
     expect(billingCheckout).toHaveBeenCalledWith('price_m');
     expect(track).toHaveBeenCalledWith('contextual_pro_checkout_start', {
@@ -129,9 +129,18 @@ describe('startTailorCheckout', () => {
     expect(JSON.stringify(track.mock.calls)).not.toMatch(/a-1|b-1/);
   });
 
+  it('reports the surface that started the checkout', async () => {
+    billingCheckout.mockResolvedValue({ url: 'https://checkout.example/s' });
+    await startTailorCheckout(7, { slug: 'a-1' }, price, 'checkout_resume', storage());
+    expect(track).toHaveBeenCalledWith('contextual_pro_checkout_start', {
+      surface: 'checkout_resume',
+      interval: 'month',
+    });
+  });
+
   it('still sends a user to checkout when storage is unavailable', async () => {
     billingCheckout.mockResolvedValue({ url: 'https://checkout.example/s' });
-    await expect(startTailorCheckout(7, { slug: 'a-1' }, price, brokenStore)).resolves.toBe(
+    await expect(startTailorCheckout(7, { slug: 'a-1' }, price, 'confirm_tailor', brokenStore)).resolves.toBe(
       'https://checkout.example/s',
     );
   });
@@ -139,14 +148,14 @@ describe('startTailorCheckout', () => {
   it('keeps the context for a retry when the session cannot be created', async () => {
     const store = storage();
     billingCheckout.mockRejectedValue(new Error('down'));
-    await expect(startTailorCheckout(7, { slug: 'a-1' }, price, store)).rejects.toThrow('down');
+    await expect(startTailorCheckout(7, { slug: 'a-1' }, price, 'confirm_tailor', store)).rejects.toThrow('down');
     expect(readTailorContext(7, store)).toEqual({ slug: 'a-1' });
   });
 
   it('does not store a context for an unknown account', async () => {
     const store = storage();
     billingCheckout.mockResolvedValue({ url: 'https://checkout.example/s' });
-    await startTailorCheckout(undefined, { slug: 'a-1' }, price, store);
+    await startTailorCheckout(undefined, { slug: 'a-1' }, price, 'confirm_tailor', store);
     expect(store.values.size).toBe(0);
   });
 });

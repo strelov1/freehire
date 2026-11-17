@@ -89,7 +89,12 @@
     try {
       // The base is sent along even when it is the only one: resuming must land on exactly it.
       const baseCvId = confirmTailorDialog.baseCvId || undefined;
-      const url = await startTailorCheckout(currentUser()?.id, { slug: confirmTailorDialog.slug, baseCvId }, offer);
+      const url = await startTailorCheckout(
+        currentUser()?.id,
+        { slug: confirmTailorDialog.slug, baseCvId },
+        offer,
+        'confirm_tailor',
+      );
       if (attempt === checkoutAttempt) window.location.href = url;
     } catch {
       if (attempt !== checkoutAttempt) return;

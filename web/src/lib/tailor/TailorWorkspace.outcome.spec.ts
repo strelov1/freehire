@@ -347,3 +347,21 @@ it('retries the unsaved CV on the next export once saving works again', async ()
   await waitFor(() => expect(outcomeCalls()).toHaveLength(1));
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+it('starts the next autosave only after the one in flight has landed', async () => {
+  let finish!: () => void;
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish = resolve));
+  await open();
+  await typeAndFireAutosave();
+
+  // A second edit whose timer fires while the first save is still on the wire.
+  if (!mocks.style) throw new Error('the style control was not rendered');
+  mocks.style.style = { ...mocks.style.style, font_size: 13 };
+  await tick();
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(mocks.order).toEqual(['save']);
+
+  mocks.updateCv = async () => {};
+  finish();
+  await waitFor(() => expect(mocks.order).toEqual(['save', 'save']));
+});
