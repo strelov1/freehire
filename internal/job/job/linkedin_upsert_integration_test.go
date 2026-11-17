@@ -6,6 +6,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -75,13 +76,25 @@ func TestUpsert_LinkedInExpiredLegacyRowKeepsOrdinaryExpiryPolicy(t *testing.T) 
 	}
 }
 
-func TestUpsert_LinkedInConcurrentNumericIdentityCreatesOneRow(t *testing.T) {
+func TestUpsert_LinkedInConcurrentDiscoveriesCreateOneRow(t *testing.T) {
+	for name, identities := range map[string][]string{
+		"numeric":     {"4490679811", "4490679811", "4490679811", "4490679811"},
+		"search_keys": {"4490679811", "software engineer:4490679811", "data engineer:4490679811", "developer:4490679811"},
+	} {
+		t.Run(name, func(t *testing.T) { assertConcurrentLinkedInUpserts(t, identities) })
+	}
+}
+
+func assertConcurrentLinkedInUpserts(t *testing.T, identities []string) {
+	t.Helper()
 	pool, ctx := testdb.Pool(t), context.Background()
-	params := linkedinParams(t, "4490679811")
 	var wg sync.WaitGroup
-	errors := make(chan error, 4)
-	for range 4 {
+	errors := make(chan error, len(identities))
+	start := make(chan struct{})
+	for _, id := range identities {
+		params := linkedinParams(t, id)
 		wg.Go(func() {
+			<-start
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				errors <- err
@@ -94,6 +107,7 @@ func TestUpsert_LinkedInConcurrentNumericIdentityCreatesOneRow(t *testing.T) {
 			errors <- err
 		})
 	}
+	close(start)
 	wg.Wait()
 	close(errors)
 	for err := range errors {
@@ -104,6 +118,42 @@ func TestUpsert_LinkedInConcurrentNumericIdentityCreatesOneRow(t *testing.T) {
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE source='linkedin'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("LinkedIn rows=%d error=%v, want exactly one", count, err)
+	}
+}
+
+func TestUpsert_DifferentLinkedInPostingsDoNotWaitForEachOther(t *testing.T) {
+	pool, ctx := testdb.Pool(t), context.Background()
+	first, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Rollback(ctx)
+	one, err := job.Upsert(ctx, first, linkedinParams(t, "4490679811"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The first posting remains uncommitted while an unrelated employer's posting
+	// completes. Serializing all LinkedIn writes would block until this deadline.
+	other := linkedinParams(t, "4490679812")
+	other.URL = "https://www.linkedin.com/jobs/view/4490679812/"
+	other.Company, other.CompanySlug = "Other Acme", "other-acme"
+	secondCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	second, err := pool.Begin(secondCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Rollback(ctx)
+	two, err := job.Upsert(secondCtx, second, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Commit(secondCtx); err != nil {
+		t.Fatal(err)
+	}
+	if one.ID == two.ID {
+		t.Fatal("different LinkedIn postings share an identity")
 	}
 }
 

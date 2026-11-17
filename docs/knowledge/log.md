@@ -34,3 +34,10 @@ production rollout is verified separately.
 Added provenance for registering the existing hiring-market worklist into the normal
 board catalogue and for bounded per-search page/date options. Runtime yield is measured
 separately; the worklist is not evidence of complete LinkedIn coverage.
+
+## Concurrent LinkedIn posting writes — 2026-11-16
+
+Recorded the transaction-scoped gate for each native LinkedIn posting before legacy identity
+lookup and writes. A production-candidate integration run exposed a competing public-slug
+unique check before the ordinary upsert conflict branch. This is a write correctness rule;
+provider request pacing and unrelated posting writes keep their existing behavior.

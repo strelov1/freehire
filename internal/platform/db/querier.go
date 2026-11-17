@@ -5930,6 +5930,10 @@ type Querier interface {
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
 	// until the next uncontended vote. Called first in the vote transaction.
 	LockJobForVote(ctx context.Context, id int64) error
+	// Hold through the caller's transaction, before identity lookup or any posting lock.
+	// Concurrent inserts can otherwise fail the public-slug unique check before the
+	// (source, external_id) ON CONFLICT branch can select their shared posting.
+	LockLinkedInPostingIdentity(ctx context.Context, postingID string) error
 	// Serializes one user's CV pointer writes (uploads and deletes) for the transaction, so a
 	// first-CV-only upload's presence check and pointer write are one step. Never held across
 	// the object upload itself.

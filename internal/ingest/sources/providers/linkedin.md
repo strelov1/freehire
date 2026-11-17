@@ -66,6 +66,9 @@
 - New catalogue identities use the numeric LinkedIn posting id, independent of keyword or
   country. The shared job upsert reuses any existing public keyword-scoped
   row with the exact normalized native URL, preserving its id, public slug and history.
+  A transaction-scoped lock for that numeric posting is taken before identity lookup or
+  posting/activity locks, so concurrent worker and contribution writes cannot race the
+  public-slug unique index. Different posting ids do not share this gate.
   Cheap refresh and ATS-coverage retirement map numeric discoveries to those legacy keys.
 
 
