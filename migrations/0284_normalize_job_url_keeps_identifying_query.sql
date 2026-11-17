@@ -26,12 +26,21 @@
 -- The aggregate sorts under COLLATE "C" so the key does not depend on the database's
 -- collation (or a glibc upgrade changing it), which an expression index must not.
 --
+-- The key is bounded. A B-tree entry must fit about a third of a page (~2.7 kB), and a
+-- kept query can be long (a signed token, a serialized search state); one oversized key
+-- would fail this file's REINDEX and then every write of that posting. A key over 2000
+-- bytes becomes its first 500 characters (at most 2000 bytes even in 4-byte UTF-8) plus
+-- the md5 of the whole key: still exact for equality, since both sides go through it.
+--
 -- Equality on this key is exact: a page carrying a non-tracking parameter its stored url
 -- lacks (or the reverse) no longer matches. That miss is the intended trade — the lookup
 -- answers exactly or not at all.
 CREATE OR REPLACE FUNCTION public.normalize_job_url(text) RETURNS text
     LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
     AS $$
+        SELECT CASE WHEN octet_length(k.key) <= 2000 THEN k.key
+                    ELSE left(k.key, 500) || '#' || md5(k.key) END
+        FROM (
         SELECT regexp_replace(regexp_replace(split_part(s.u, '?', 1), '^https?://(www\.)?', ''), '/+$', '')
             || COALESCE('?' || (
                    SELECT string_agg(p, '&' ORDER BY p COLLATE "C")
@@ -44,13 +53,19 @@ CREATE OR REPLACE FUNCTION public.normalize_job_url(text) RETURNS text
                          'refid', 'source', 'src', 'trackingid', 'trk', 'ttclid', 'yclid'
                      ])
                ), '')
+               AS key
         FROM (SELECT replace(lower(regexp_replace($1, '#.*$', '')), '&amp;', '&') AS u) AS s
+        ) AS k
     $$;
 
 -- Every index over the function holds keys computed by the old body, so each is rebuilt.
--- Until a rebuild finishes, a lookup whose key now carries a query misses the rows still
--- indexed under the old, query-less key — a miss, never a wrong match. A URL with no
--- identifying query keys alike under both bodies.
+-- An index scan does not recompute the expression, so until a rebuild finishes, rows still
+-- indexed under their old, query-less key behave as before this file: a query-bearing
+-- lookup misses them, and a lookup whose new key happens to equal an old one (the bare
+-- `xweb.asp` against a stored `xweb.asp?jobid=...`) still matches them — the #4821 bug,
+-- lingering until the rebuild replaces the index. A rebuild that fails leaves the old index
+-- serving; re-running the file is the recovery. A URL with no identifying query keys alike
+-- under both bodies.
 --
 -- CONCURRENTLY, hence the marker: jobs is written by every ingest run. The file is
 -- idempotent (the function is replaced with the same body, the indexes rebuilt again).

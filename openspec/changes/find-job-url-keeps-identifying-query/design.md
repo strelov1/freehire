@@ -27,9 +27,17 @@ added to the Go list, which only widens what may not veto a link match there.
 
 **Replace in place + `REINDEX CONCURRENTLY`, not a `_v2` function.** Index names and the
 query stay as they are and there is no follow-up migration to retire a v1. During the
-reindex, rows indexed under the old key make a query-bearing lookup miss (never match
-wrongly: an old key has no query, a new requested key has one); a URL with no
-identifying query keys the same under both versions. The file is idempotent — a re-run
+reindex, rows still indexed under the old, query-less key behave as before the change:
+a query-bearing lookup misses them, and a lookup whose new key equals an old one (a bare
+path against a stored query-identified URL) still matches them — the old bug lingers on
+that index until its rebuild finishes, since an index scan does not recompute the
+expression. A failed rebuild leaves the old index serving; re-running the file recovers.
+A URL with no identifying query keys the same under both versions.
+
+**Bounded key.** A kept query can be long (signed tokens), and a B-tree entry must fit
+~2.7 kB; one oversized key would fail the REINDEX and every later write of that posting.
+A key over 2000 bytes becomes `left(key, 500) || '#' || md5(key)` — bounded even in
+4-byte UTF-8, and still exact for equality because both sides go through it. The file is idempotent — a re-run
 replaces the same body and rebuilds again. A killed `REINDEX CONCURRENTLY` leaves a
 `*_ccnew` carcass that must be dropped by hand; the statement fails loudly, so the version
 is not recorded.

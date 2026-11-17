@@ -4,10 +4,11 @@
 
 The system SHALL resolve the URL of a job page to a catalog posting when no source
 identity can be recovered from the URL, by comparing the URL to `jobs.url` in a normalized
-form. Only open, canonical postings (`closed_at IS NULL` and `duplicate_of IS NULL`) are
-eligible. When several eligible postings share a normalized URL, the system SHALL answer
-with the most recently seen one (`last_seen_at DESC`, then `id DESC`), and SHALL answer
-with exactly one posting.
+form. Only open postings (`closed_at IS NULL`) are eligible. A matched duplicate SHALL be
+answered with the posting it duplicates while that posting is open, and with its own slug
+otherwise. When several eligible postings share a normalized URL, the system SHALL prefer
+a canonical one, then the most recently seen (`last_seen_at DESC`), then `id DESC`, and
+SHALL answer with exactly one posting.
 
 The normalized form of a URL is: lowercased, with the `http://` or `https://` scheme and a
 leading `www.` removed, with the fragment removed, with trailing slashes removed from the
@@ -38,9 +39,12 @@ stored URL and to the requested URL.
 
 #### Scenario: A closed or duplicate posting is not resolved
 
-- **WHEN** the only postings matching the normalized URL are closed (`closed_at` set) or
-  suppressed (`duplicate_of` set)
+- **WHEN** the only postings matching the normalized URL are closed (`closed_at` set)
 - **THEN** the response is `{"data": null}`
+- **WHEN** the only open posting matching is a duplicate (`duplicate_of` set) of an open
+  posting
+- **THEN** the duplicate itself is not answered: the response carries the duplicated
+  posting's `public_slug` (or the duplicate's own when the duplicated posting is closed)
 
 #### Scenario: An unknown page stays unresolved
 

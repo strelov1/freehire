@@ -362,3 +362,33 @@ func TestNormalizeJobURL_QueryEdgeCases(t *testing.T) {
 		}
 	}
 }
+
+// A kept query can be long; the key must still fit a B-tree entry, or the rebuild and every
+// write of the posting fail. Oversized keys are hashed, and equality stays exact.
+func TestNormalizeJobURL_BoundsALongKey(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	long := himalayasPosting + "?token=" + strings.Repeat("ab12", 3000)
+	key := normalize(t, pool, long)
+	if len(key) > 2000 {
+		t.Errorf("key is %d bytes, want at most 2000", len(key))
+	}
+	if normalize(t, pool, long+"&utm_source=x") != key {
+		t.Error("a tracking tag changed a bounded key")
+	}
+	if normalize(t, pool, long+"0") == key {
+		t.Error("two different long URLs share a bounded key")
+	}
+	// Cyrillic is two bytes a character: the bound is in bytes, not characters.
+	if k := normalize(t, pool, "https://hh.ru/vacancy?q="+strings.Repeat("я", 3000)); len(k) > 2000 {
+		t.Errorf("multibyte key is %d bytes, want at most 2000", len(k))
+	}
+
+	// The posting is writable through every index over the function, and still found.
+	mustUpsert(t, q, urlJob("himalayas:long", long))
+	if slug, err := findByURL(t, q, long); err != nil || slug != "pslug-himalayas:long" {
+		t.Errorf("long URL resolved to %q (err %v)", slug, err)
+	}
+}
