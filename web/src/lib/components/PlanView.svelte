@@ -14,6 +14,7 @@
   import { messages } from './PlanView.messages';
   import States from './States.svelte';
   import PaymentHistory from './PaymentHistory.svelte';
+  import TailorCheckoutResume from './TailorCheckoutResume.svelte';
 
   const s = $derived(t(messages, locale()));
 
@@ -25,6 +26,8 @@
   // balance said "you own 12 of something", this says "1 of today's 3 analyses". Nothing
   // here accumulates and nothing is a currency.
   let plan = $state<PlanState | null>(null);
+  const userId = $derived(currentUser()?.id);
+  let planReadVersion = 0;
 
   // The plan's own name, from the strings rather than from a ternary that can only know two
   // of them. A tier the strings have no label for falls back to what the API called it,
@@ -185,22 +188,37 @@
   const money = formatMinorUnits;
 
   function load() {
+    const owner = userId;
+    const version = ++planReadVersion;
+    plan = null;
+    history = [];
     status = 'loading';
     Promise.all([api.myPlan(), api.myPlanHistory()])
       .then(([p, h]) => {
-        plan = p;
+        if (userId !== owner) return;
+        if (version === planReadVersion) plan = p;
         history = h;
         status = 'ready';
       })
       .catch(() => {
-        status = 'error';
+        if (userId === owner) status = 'error';
       });
   }
 
   $effect(() => {
-    if (!isAuthenticated()) return;
+    if (userId === undefined) {
+      plan = null;
+      history = [];
+      return;
+    }
     load();
   });
+
+  function acceptFreshPlan(fresh: PlanState) {
+    // The checkout poll may finish before an older plan read waiting on usage history.
+    ++planReadVersion;
+    plan = fresh;
+  }
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -217,6 +235,14 @@
       <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
       <p class="text-sm text-muted-foreground">{s.description}</p>
     </div>
+
+    <!-- A tailoring task left for the purchase. Its own fresh reads decide whether it may
+         continue; the return marker only tells it to look harder. -->
+    <TailorCheckoutResume
+      {plan}
+      returned={page.url.searchParams.get('checkout') === 'success'}
+      onPlan={acceptFreshPlan}
+    />
 
     {#if plan}
       <!-- The plan strip. On Pro it states when the subscription runs to; on Free it offers

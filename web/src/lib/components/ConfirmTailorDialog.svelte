@@ -14,8 +14,13 @@
     refreshConfirmTailorAllowance,
     settleConfirmTailorDialog,
   } from '#lib/confirmTailorDialog.svelte.js';
+  import { resolve } from '$app/paths';
+  import { track } from '#lib/analytics.js';
+  import { currentUser } from '#lib/auth.svelte.js';
+  import { priceLabel } from '#lib/proPrice.js';
+  import { startTailorCheckout } from '#lib/tailorCheckout.js';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '#lib/jobMatch.js';
-  import { ConfirmDialog } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import BasePicker from './cv/BasePicker.svelte';
   import SkillIcon from './SkillIcon.svelte';
   import PlanLimitLink from './PlanLimitLink.svelte';
@@ -48,6 +53,48 @@
   const allowance = $derived(confirmTailorDialog.allowance);
   const refused = $derived(refuses(allowance));
   const left = $derived(remaining(allowance));
+
+  // Pro, offered right where the refusal is: the candidate chose a vacancy and a base, and
+  // the purchase carries both through the provider and back (tailorCheckout.ts). Always the
+  // monthly price, said as a monthly subscription, with the yearly choices one link away.
+  const offer = $derived(refused && notInPlan(allowance) ? confirmTailorDialog.proOffer : null);
+  let buying = $state(false);
+  let buyError = $state(false);
+
+  // Once per ask, however many times the plan is re-read when the tab regains focus.
+  let viewedFor = '';
+  $effect(() => {
+    if (!offer || !confirmTailorDialog.open) return;
+    const ask = confirmTailorDialog.slug;
+    if (viewedFor === ask) return;
+    viewedFor = ask;
+    track('contextual_pro_offer_view', { surface: 'confirm_tailor' });
+  });
+  $effect(() => {
+    if (!confirmTailorDialog.open) {
+      viewedFor = '';
+      buying = false;
+      buyError = false;
+    }
+  });
+
+  async function buy() {
+    if (!offer || buying) return;
+    buying = true;
+    buyError = false;
+    try {
+      // The base is sent along even when it is the only one: resuming must land on exactly it.
+      const baseCvId = confirmTailorDialog.baseCvId || undefined;
+      window.location.href = await startTailorCheckout(
+        currentUser()?.id,
+        { slug: confirmTailorDialog.slug, baseCvId },
+        offer,
+      );
+    } catch {
+      buyError = true;
+      buying = false;
+    }
+  }
 
   // The upgrade link opens /my/plan in a new tab; coming back after paying should find
   // the confirm already available, not a refusal the candidate just paid to lift.
@@ -146,7 +193,30 @@
          here that cannot help them. -->
     <p class="mt-4 text-sm font-medium">Your plan doesn't include CV editing sessions.</p>
     <p class="text-xs text-muted-foreground">Upgrade to rewrite your CV against this role, line by line.</p>
-    <div class="mt-1"><PlanLimitLink /></div>
+    {#if offer}
+      <div class="mt-2 flex flex-col items-start gap-1.5">
+        <Button variant="cta" size="sm" disabled={buying} onclick={buy}>
+          Upgrade to Pro — {priceLabel(offer)}/month
+        </Button>
+        <p class="text-xs text-muted-foreground">
+          Monthly subscription, renews until you cancel. You come back here to continue — nothing starts on its own.
+          <a class="underline underline-offset-2" href={resolve('/pricing')} target="_blank" rel="noopener noreferrer"
+            >Yearly plans</a
+          >
+          ·
+          <a class="underline underline-offset-2" href={resolve('/terms')} target="_blank" rel="noopener noreferrer"
+            >Terms</a
+          >
+        </p>
+        {#if buyError}
+          <p class="text-xs text-destructive" role="alert">
+            Checkout is not available right now. Please try again in a moment.
+          </p>
+        {/if}
+      </div>
+    {:else}
+      <div class="mt-1"><PlanLimitLink /></div>
+    {/if}
   {:else if refused}
     <p class="mt-4 text-sm font-medium">You've used today's CV editing sessions.</p>
     <p class="text-xs text-muted-foreground">
