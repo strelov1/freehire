@@ -426,6 +426,10 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 		for _, r := range rows {
 			set[r.ExternalID] = r.IsTech.Valid && r.IsTech.Bool
 		}
+		if source == "linkedin" {
+			// Non-native postings are never stored; the read cache is their seen-set.
+			s.addLinkedInReads(ctx, set)
+		}
 		return set, nil
 	}
 	// The pattern is escaped by externalid.BoardPattern: board names may contain LIKE syntax (workday names carry underscores).

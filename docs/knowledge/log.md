@@ -2,6 +2,10 @@
 
 ## 2026-11-17
 
+Documented the LinkedIn non-native read cache (`linkedin_postings_read`): external and unknown
+postings are re-read only after the body-refresh window. Evidence is the implementation and its
+tests; no production rollout is asserted.
+
 Documented that the LinkedIn adapter re-reads a stored posting only every `BODY_REFRESH_DAYS`
 through the seen-set (provider-wide, keyed by bare posting id), and that a liveness touch never
 reopens a `native_source_pending` row. Evidence is the implementation and its tests; the

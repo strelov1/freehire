@@ -122,6 +122,7 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			}
 		}
 		t.st.Discovered++
+		r.recordNonNativeRead(ctx, e, j)
 		return
 	}
 	// A HydratingSource marks an already-ingested posting it re-listed but did not
@@ -144,6 +145,29 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		return
 	}
 	r.saveOne(ctx, e, j, canon, t)
+}
+
+// recordNonNativeRead remembers a LinkedIn posting whose detail was read and is not on-site, so
+// the seen-set stops the next crawls re-reading it until the body-refresh window passes. It runs
+// only AFTER native resolution succeeded: a failed resolution leaves the posting unrecorded and
+// therefore retried by the next crawl. The record is best-effort: a failure costs one repeated
+// read, never the posting, so it is logged rather than counted as a skip.
+func (r Runner) recordNonNativeRead(ctx context.Context, e sources.CompanyEntry, j sources.Job) {
+	rec, ok := r.Store.(PostingReadRecorder)
+	if !ok {
+		return
+	}
+	_, id := jobIdentity(e, j)
+	if id == "" {
+		return
+	}
+	method := string(j.ApplyMethod)
+	if method == "" {
+		method = "unknown"
+	}
+	if err := rec.RecordLinkedInRead(ctx, id, method); err != nil {
+		log.Printf("ingest: linkedin %s: recording non-native read: %v", id, err)
+	}
 }
 
 // saveOne normalizes one posting and saves it, tallying the outcome into t and keeping the first error for the board's

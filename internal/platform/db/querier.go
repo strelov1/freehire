@@ -3980,6 +3980,9 @@ type Querier interface {
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)
+	// Postings read and found non-native since the cutoff: the negative half of the LinkedIn
+	// seen-set. An older row is not returned, so the posting is read again.
+	LinkedInPostingsReadSince(ctx context.Context, readSince pgtype.Timestamptz) ([]string, error)
 	// A user's API keys, newest first. Metadata only — never the token_hash. scope is
 	// included so a user can see what each credential is allowed to do.
 	ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAPIKeysByUserRow, error)
@@ -6531,6 +6534,8 @@ type Querier interface {
 	// Drops snapshot rows older than the retention window (~26 weeks), keeping
 	// the table bounded.
 	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
+	// Drop rows no seen-set can use any more; the caller passes a cutoff well past the window.
+	PruneLinkedInPostingsRead(ctx context.Context, olderThan pgtype.Timestamptz) error
 	// Claims only matter for the day they were taken; a week of them is kept for the
 	// one-letter-a-day report and the rest is dropped.
 	PruneMailDayClaims(ctx context.Context) (int64, error)
@@ -8814,6 +8819,9 @@ type Querier interface {
 	// same transaction via RecountJobVotes; a CTE cannot, since a data-modifying CTE's
 	// effect is invisible to sibling sub-statements.
 	UpsertJobVote(ctx context.Context, arg UpsertJobVoteParams) (int16, error)
+	// Record that a LinkedIn posting's detail was just read and was not on-site (see migration
+	// 0283). Idempotent: a re-read moves read_at forward and may change the method.
+	UpsertLinkedInPostingRead(ctx context.Context, arg UpsertLinkedInPostingReadParams) error
 	// Moderator-authored write: the hand-curated analogue of UpsertJob. source is the
 	// posting's real origin (e.g. 'workatastartup'), supplied by the moderator and
 	// defaulting to 'manual'; the dedup key is (source, external_id = url), so re-POSTing
