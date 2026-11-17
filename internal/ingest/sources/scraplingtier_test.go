@@ -118,7 +118,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"levtech":        {scraplingfetch.ModeHTTP, true},
 		"foundit":        {scraplingfetch.ModeHTTP, true},
 		"glints":         {scraplingfetch.ModeHTTP, false},
-		"kariyernet":     {scraplingfetch.ModeHTTP, false},
+		"kariyernet":     {scraplingfetch.ModeHTTP, true},
 		"job104":         {scraplingfetch.ModeHTTP, true},
 	}
 	for name, p := range scraplingProviders {

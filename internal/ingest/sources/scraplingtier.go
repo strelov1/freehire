@@ -235,12 +235,13 @@ var scraplingProviders = map[string]scraplingProvider{
 	"foundit": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewFoundit(f)
 	}},
-	// The search gateway answers an HTML 403 to a plain client on the posting API, and the
-	// impersonating fetcher is served on both it and the search (measured 2026-11-17 from a
-	// residential IP through the local service, no proxy). The crawl host is a datacenter IP and
-	// was not measured: the proxy decision is open until the first live run.
-	"kariyernet": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
-		return pacedKariyerNet(f)
+	// Only the posting pages. The first live run (2026-11-17, crawl host) was refused 1,460 of 1,500
+	// reads of the gateway's /job on every route (the Scrapling fetcher with and without the
+	// proxy, plain, plain over the proxy), while the posting page answers 200 through the fetcher
+	// over the proxy and 403 without it; the page carries the same posting in its server-rendered
+	// state. The search answers a plain client, so it stays on one.
+	"kariyernet": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return pacedKariyerNet(NewClient(), f)
 	}},
 }
 

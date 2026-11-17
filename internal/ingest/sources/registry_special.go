@@ -190,14 +190,14 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 		registry["naukri"] = NewNaukri(pacedNaukriGetter(withUserAgent(c, naukriUserAgent)))
 	}
 	// Kariyer.net: Turkey's largest general job board, read whole, one work area at a time, through the
-	// JSON search and posting API its web app calls. The gateway answers a plain client an HTML
-	// 403 on the posting API, so the crawl is really served once ApplyScraplingEgress rebuilds it
-	// over the fetch service (scraplingtier.go); this plain build is what runs without one.
+	// JSON search its web app calls and the posting pages. The pages sit behind a bot wall, so the
+	// crawl is really served once ApplyScraplingEgress rebuilds it over the fetch service
+	// (scraplingtier.go); this plain build is what runs without one.
 	// See kariyernet.go.
 	if c == nil {
 		registry["kariyernet"] = NewKariyerNet(nil)
 	} else {
-		registry["kariyernet"] = pacedKariyerNet(c)
+		registry["kariyernet"] = pacedKariyerNet(c, c)
 	}
 	// Instahyre: an Indian technical-hiring platform, enumerated by company-size bucket (board)
 	// through its JSON search, each new posting's body read from its public page. The pages sit
