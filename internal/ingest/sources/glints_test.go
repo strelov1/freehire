@@ -19,11 +19,12 @@ import (
 // __NEXT_DATA__ carries the structured fields and whose ld+json carries the HTML body.
 
 const (
-	glintsITID    = "96770699-c989-4cea-9c33-ab0d2d12c888"
-	glintsOtherID = "d135e40f-d2af-421c-b7ff-c14f24a4dbcc"
-	glintsVNID    = "5a1c2e43-0b6f-4d0e-8a57-0a8d0f3a9b11"
-	glintsITURL   = "https://glints.com/id/opportunities/jobs/software-developer/" + glintsITID
-	glintsVNURL   = "https://glints.com/vn/opportunities/jobs/backend-developer/" + glintsVNID
+	glintsITID       = "96770699-c989-4cea-9c33-ab0d2d12c888"
+	glintsOtherID    = "d135e40f-d2af-421c-b7ff-c14f24a4dbcc"
+	glintsVNID       = "5a1c2e43-0b6f-4d0e-8a57-0a8d0f3a9b11"
+	glintsITURL      = "https://glints.com/id/opportunities/jobs/software-developer/" + glintsITID
+	glintsKitchenURL = "https://glints.com/id/opportunities/jobs/kitchen/" + glintsOtherID
+	glintsVNURL      = "https://glints.com/vn/opportunities/jobs/backend-developer/" + glintsVNID
 )
 
 // glintsShard renders a job shard the way the site does: every posting twice, the English locale
@@ -163,11 +164,15 @@ func newGlintsFake(t *testing.T) *glintsFake {
 	return &glintsFake{
 		xmls: map[string]string{
 			glintsSitemapIndex:                        glintsIndex,
-			"https://glints.com/sitemap_job_id_1.xml": glintsShard(glintsITURL, "https://glints.com/id/opportunities/jobs/kitchen/"+glintsOtherID),
+			"https://glints.com/sitemap_job_id_1.xml": glintsShard(glintsITURL, glintsKitchenURL),
 			"https://glints.com/sitemap_job_vn_1.xml": glintsShard(glintsVNURL),
 		},
 		pages: map[string]string{
 			glintsITURL: glintsPageHTML(t, glintsITID, nil),
+			glintsKitchenURL: glintsPageHTML(t, glintsOtherID, func(d map[string]any) {
+				d["title"] = "Kitchen"
+				d["hierarchicalJobCategory"] = map[string]any{"id": "c56dbdd9-0000-4000-8000-000000000000", "level": 3}
+			}),
 			glintsVNURL: glintsPageHTML(t, glintsVNID, func(d map[string]any) {
 				d["title"] = "Backend Developer"
 				d["country"] = map[string]any{"code": "VN", "name": "Vietnam"}
@@ -191,21 +196,22 @@ func glintsByID(jobs []Job) map[string]Job {
 	return m
 }
 
-func TestGlintsReadsTheTechnicalPostingsOfEveryCountryShard(t *testing.T) {
+func TestGlintsReadsEveryPostingOfEveryCountryShard(t *testing.T) {
 	f := newGlintsFake(t)
 	jobs, err := newTestGlints(f).Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	got := glintsByID(jobs)
-	if len(jobs) != 2 || got[glintsITID].ExternalID == "" || got[glintsVNID].ExternalID == "" {
-		t.Fatalf("jobs = %+v, want the Indonesian and the Vietnamese developer once each", jobs)
+	if len(jobs) != 3 || got[glintsITID].ExternalID == "" || got[glintsVNID].ExternalID == "" || got[glintsOtherID].ExternalID == "" {
+		t.Fatalf("jobs = %+v, want the Indonesian developer, the kitchen posting and the Vietnamese developer once each", jobs)
+	}
+	if !got[glintsITID].IsTechHint || got[glintsOtherID].IsTechHint {
+		t.Errorf("IsTechHint = %v / %v, want it only where Glints files the posting under Computer & Software",
+			got[glintsITID].IsTechHint, got[glintsOtherID].IsTechHint)
 	}
 	if n := f.askedFor("https://glints.com/sitemap_sourced_job_id_1.xml"); n != 0 {
 		t.Errorf("the sourced-job shard (JobStreet copies) was read %d times", n)
-	}
-	if n := f.askedFor("https://glints.com/id/opportunities/jobs/kitchen/" + glintsOtherID); n != 0 {
-		t.Errorf("a non-technical posting's page was bought %d times", n)
 	}
 }
 
@@ -345,13 +351,8 @@ func TestGlintsRetriesAShardBeforeFailingTheCrawl(t *testing.T) {
 	}
 }
 
-func TestGlintsFailsAListingWithNothingTechnicalOrAnEmptyShard(t *testing.T) {
+func TestGlintsFailsAListingWithAnEmptyShard(t *testing.T) {
 	f := newGlintsFake(t)
-	f.xmls["https://glints.com/sitemap_job_id_1.xml"] = glintsShard("https://glints.com/id/opportunities/jobs/kitchen/" + glintsOtherID)
-	f.xmls["https://glints.com/sitemap_job_vn_1.xml"] = glintsShard("https://glints.com/vn/opportunities/jobs/waiter/" + glintsVNID)
-	if _, err := newTestGlints(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
-		t.Error("a listing with no technical posting must fail, not report a quiet source")
-	}
 	f.xmls["https://glints.com/sitemap_job_vn_1.xml"] = `<urlset></urlset>`
 	if _, err := newTestGlints(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Error("a shard listing no posting is a challenge page, not an empty slice of the site")
