@@ -23,7 +23,7 @@ func TestRecordWebhookDeliveryFailure_DisablesAtThreshold(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	uid := insertUser(t, pool, "webhook-threshold@example.test")
-	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook"}); err != nil {
+	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook", Secret: "whsec_test"}); err != nil {
 		t.Fatalf("seed webhook config: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestRecordWebhookDeliveryFailure_SuccessResetsStreak(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	uid := insertUser(t, pool, "webhook-reset@example.test")
-	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook"}); err != nil {
+	if _, err := q.UpsertWebhookConfig(ctx, UpsertWebhookConfigParams{UserID: uid, URL: "https://example.test/hook", Secret: "whsec_test"}); err != nil {
 		t.Fatalf("seed webhook config: %v", err)
 	}
 

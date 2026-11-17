@@ -30,6 +30,9 @@ export const messages = defineMessages(
     delete: 'Delete',
     deleteDialogTitle: 'Delete webhook?',
     deleteDialogDescription: 'Saved searches subscribed to this channel stop delivering immediately.',
+    secretLabel: 'Signing secret',
+    secretHint:
+      'Every delivery is signed: X-Freehire-Signature is v1= plus the hex HMAC-SHA256 of the X-Freehire-Timestamp header, a dot and the raw body, keyed with this secret.',
   },
   {
     ru: {
@@ -61,6 +64,9 @@ export const messages = defineMessages(
       delete: 'Удалить',
       deleteDialogTitle: 'Удалить вебхук?',
       deleteDialogDescription: 'Сохранённые поиски, подписанные на этот канал, сразу перестанут получать уведомления.',
+      secretLabel: 'Секрет подписи',
+      secretHint:
+        'Каждая доставка подписана: X-Freehire-Signature — это v1= и hex HMAC-SHA256 от заголовка X-Freehire-Timestamp, точки и тела запроса с этим секретом.',
     },
   },
 );

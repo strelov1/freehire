@@ -266,7 +266,7 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 		return
 	}
 
-	msg := Message{UserID: info.UserID, Digests: make([]Digest, len(parts))}
+	msg := Message{UserID: info.UserID, WebhookSecret: info.WebhookSecret.String, Digests: make([]Digest, len(parts))}
 	for i, p := range parts {
 		msg.Digests[i] = p.digest
 	}

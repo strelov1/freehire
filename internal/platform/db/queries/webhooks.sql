@@ -2,7 +2,7 @@
 -- The user's webhook destination, if any. No row means the user has never
 -- configured one — the caller (both the settings API and delivery's recipient
 -- resolution) treats absence as "not configured" rather than an error.
-SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures
+SELECT user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret
 FROM webhook_configs
 WHERE user_id = $1;
 
@@ -13,16 +13,17 @@ WHERE user_id = $1;
 -- disabled_at, since submitting the form is an explicit re-commitment to
 -- the endpoint. consecutive_failures resets too: a new URL (or the same one
 -- re-saved) gets a fresh run at the auto-disable threshold, not whatever
--- count the old destination left behind.
-INSERT INTO webhook_configs (user_id, url, enabled, updated_at, disabled_at)
-VALUES ($1, $2, true, now(), NULL)
+-- count the old destination left behind. The secret is set only on insert: changing
+-- the URL keeps the secret the receiver already verifies with.
+INSERT INTO webhook_configs (user_id, url, enabled, updated_at, disabled_at, secret)
+VALUES ($1, $2, true, now(), NULL, $3)
 ON CONFLICT (user_id) DO UPDATE
 SET url = EXCLUDED.url,
     enabled = true,
     disabled_at = NULL,
     consecutive_failures = 0,
     updated_at = now()
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures;
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret;
 
 -- name: EnableWebhookConfig :one
 -- Re-enables a user-disabled (or auto-disabled) webhook destination without
@@ -35,7 +36,7 @@ SET enabled = true,
     consecutive_failures = 0,
     updated_at = now()
 WHERE user_id = $1
-RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures;
+RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret;
 
 -- name: DisableWebhookConfig :execrows
 -- Disables the destination, stamping disabled_at. Used both by the settings

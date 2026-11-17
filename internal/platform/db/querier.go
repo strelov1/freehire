@@ -3330,7 +3330,7 @@ type Querier interface {
 	// the user has at least one registered push device (the push channel's live
 	// deliverability check, same soft-skip role as the Telegram link), the user's
 	// webhook destination (URL, NULL or disabled → the worker soft-skips webhook
-	// delivery the same way), and the delivery-timing context
+	// delivery the same way; its secret signs the delivery), and the delivery-timing context
 	// (live, not snapshotted, same as the channel checks above) — the account's
 	// timezone and its saved-search digest frequency settings, read via
 	// internal/application/deliverywindow before a digest is sent.
@@ -8930,7 +8930,8 @@ type Querier interface {
 	// disabled_at, since submitting the form is an explicit re-commitment to
 	// the endpoint. consecutive_failures resets too: a new URL (or the same one
 	// re-saved) gets a fresh run at the auto-disable threshold, not whatever
-	// count the old destination left behind.
+	// count the old destination left behind. The secret is set only on insert: changing
+	// the URL keeps the secret the receiver already verifies with.
 	UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

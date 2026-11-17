@@ -2138,4 +2138,5 @@ type WebhookConfig struct {
 	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
 	DisabledAt          pgtype.Timestamptz `json:"disabled_at"`
 	ConsecutiveFailures int64              `json:"consecutive_failures"`
+	Secret              string             `json:"secret"`
 }

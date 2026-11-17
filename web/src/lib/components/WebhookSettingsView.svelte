@@ -170,6 +170,11 @@
             <Button variant="ghost" size="sm" onclick={() => (confirmDeleteOpen = true)}>{s.delete}</Button>
           </div>
         </div>
+        <div class="flex flex-col gap-1 rounded-lg border border-border px-4 py-3">
+          <span class="text-sm font-medium">{s.secretLabel}</span>
+          <code class="font-mono text-sm break-all select-all">{webhook.secret}</code>
+          <span class="text-xs text-muted-foreground">{s.secretHint}</span>
+        </div>
       {/if}
     {/if}
   </div>

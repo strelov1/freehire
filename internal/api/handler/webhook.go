@@ -15,16 +15,16 @@ import (
 )
 
 // webhookHandlers serves the account's single saved-search webhook destination.
-// Deliveries are plain, unsigned POSTs; there is no secret to manage.
+// Deliveries are signed with the destination's secret, which the owner reads here.
 type webhookHandlers struct {
 	queries *db.Queries
 	tester  webhookTester
 }
 
-// webhookTester sends a sample delivery to a URL and reports whether it was accepted
-// (webhooknotify.Notifier in production).
+// webhookTester sends a sample delivery signed with secret to a URL and reports whether it was
+// accepted (webhooknotify.Notifier in production).
 type webhookTester interface {
-	Test(ctx context.Context, url string) error
+	Test(ctx context.Context, url, secret string) error
 }
 
 func newWebhookHandlers(queries *db.Queries, tester webhookTester) *webhookHandlers {
@@ -42,7 +42,10 @@ func (h *webhookHandlers) register(api fiber.Router, mw middleware) {
 
 // webhookResponse is the public shape of a webhook destination.
 type webhookResponse struct {
-	URL           string     `json:"url"`
+	URL string `json:"url"`
+	// Secret signs every delivery; the owner verifies X-Freehire-Signature with it. Shown on
+	// every read: management is cookie-only, so only the owner sees it.
+	Secret        string     `json:"secret"`
 	Enabled       bool       `json:"enabled"`
 	CreatedAt     *time.Time `json:"created_at"`
 	LastSuccessAt *time.Time `json:"last_success_at"`
@@ -52,6 +55,7 @@ type webhookResponse struct {
 func toWebhookResponse(w db.WebhookConfig) webhookResponse {
 	return webhookResponse{
 		URL:           w.URL,
+		Secret:        w.Secret,
 		Enabled:       w.Enabled,
 		CreatedAt:     pgconv.TimePtr(w.CreatedAt),
 		LastSuccessAt: pgconv.TimePtr(w.LastSuccessAt),
@@ -93,15 +97,22 @@ func (h *webhookHandlers) CreateOrUpdateWebhook(c *fiber.Ctx) error {
 	if err := validateWebhookURL(in.URL); err != nil {
 		return err
 	}
+	// The probe is signed with the secret the destination will have: the existing one (an
+	// update keeps it), else a new one, which the upsert stores only on insert.
+	secret, err := h.secretFor(c.Context(), userID)
+	if err != nil {
+		return err
+	}
 	// Prove the destination accepts our payload before storing it: a URL that only fails at
 	// the first real digest gets disabled later with nobody watching (e.g. Discord URLs, which want a different body).
-	if err := h.probe(c.Context(), in.URL); err != nil {
+	if err := h.probe(c.Context(), in.URL, secret); err != nil {
 		return err
 	}
 
 	if _, err := h.queries.UpsertWebhookConfig(c.Context(), db.UpsertWebhookConfigParams{
 		UserID: userID,
 		URL:    in.URL,
+		Secret: secret,
 	}); err != nil {
 		return err
 	}
@@ -128,7 +139,7 @@ func (h *webhookHandlers) TestWebhook(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if err := h.probe(c.Context(), row.URL); err != nil {
+	if err := h.probe(c.Context(), row.URL, row.Secret); err != nil {
 		return err
 	}
 	if row, err = h.recordProbeSuccess(c.Context(), userID); err != nil {
@@ -137,9 +148,18 @@ func (h *webhookHandlers) TestWebhook(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toWebhookResponse(row)})
 }
 
+// secretFor is the account's existing destination secret, or a new one when it has none.
+func (h *webhookHandlers) secretFor(ctx context.Context, userID int64) (string, error) {
+	row, err := h.queries.GetWebhookConfig(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return newWebhookSecret()
+	}
+	return row.Secret, err
+}
+
 // probe runs the tester against url and turns a refusal into an actionable 422, without the transport's package prefix.
-func (h *webhookHandlers) probe(ctx context.Context, url string) error {
-	if err := h.tester.Test(ctx, url); err != nil {
+func (h *webhookHandlers) probe(ctx context.Context, url, secret string) error {
+	if err := h.tester.Test(ctx, url, secret); err != nil {
 		reason := strings.TrimPrefix(err.Error(), "webhooknotify: ")
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "webhook test failed: "+reason)
 	}
