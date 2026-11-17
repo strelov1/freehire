@@ -323,7 +323,8 @@ func TestWTTJFetchNewSkipsSeenAndCovered(t *testing.T) {
 		t.Errorf("covered posting = %+v, want yielded body-less for the gate", j)
 	}
 	want := []string{"syspertec-group/vp-engineering-h-f_saint-cloud", "plain-concepts/agentic-detection-response-specialist_es_iri2qklj"}
-	if !slices.Equal(f.detailsAsked, want) {
+	// Details are fetched concurrently, so compare them as a set.
+	if got := slices.Sorted(slices.Values(f.detailsAsked)); !slices.Equal(got, slices.Sorted(slices.Values(want))) {
 		t.Errorf("detail requests = %v, want only the new uncovered postings", f.detailsAsked)
 	}
 }

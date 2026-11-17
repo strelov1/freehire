@@ -262,7 +262,12 @@ func TestPosaoHRGateSparesThePostingPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.postingRequests(); len(got) != 2 || !strings.HasSuffix(got[1], "/"+phBent+"/") {
+	// Two detail workers fetch concurrently, so the requests arrive in either order.
+	got := f.postingRequests()
+	saw := func(id string) bool {
+		return slices.ContainsFunc(got, func(u string) bool { return strings.HasSuffix(u, "/"+id+"/") })
+	}
+	if len(got) != 2 || !saw(phBent) || !saw(phHSM) {
 		t.Errorf("posting requests = %v, want HSM's and Bent's", got)
 	}
 	byID := phByID(t, jobs)

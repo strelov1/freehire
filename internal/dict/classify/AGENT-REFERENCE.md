@@ -35,7 +35,7 @@ A title where an alias appears but names no category ("Software Design Engineer"
 
 ## No ingest filter on title
 
-Ingest no longer refuses a posting for its title (#4412; `ConfirmedNonTech` is gone). A title no category files is stored and indexed under `other` ("Unclassified"). Growing the facets is still a dictionary change: give the role a category and the next crawl files it.
+Ingest no longer refuses a posting for its title (#4412; `ConfirmedNonTech` is gone). A title no category files is stored and indexed under `other` ("Unclassified"). Growing the facets is still a dictionary change: give the role a category, then run `cmd/backfill-derive` and `cmd/reindex` (a hydrating source only `touch`es a seen posting, so its next crawl does not re-derive it).
 
 **The hazard:** a broad technical alias can admit a non-tech title into a TECHNICAL category ("Front End Cashier" resolved to `frontend`). Before adding one, run it against the `other` bucket's titles.
 
