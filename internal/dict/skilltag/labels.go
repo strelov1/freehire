@@ -33,6 +33,8 @@ var displayNames = map[string]string{
 	"sop-development": "SOP Development",
 	"pos-terminals":   "POS Terminals",
 	"cctv":            "CCTV",
+	"rfx":             "RFx (RFQ/RFP/RFI)",
+	"mrp":             "MRP",
 	// Industrial maintenance: acronyms and module names.
 	"sap-pm":                           "SAP PM",
 	"reliability-centered-maintenance": "Reliability-Centered Maintenance (RCM)",

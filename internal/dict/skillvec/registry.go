@@ -1158,4 +1158,13 @@ var registry = []string{
 	"sourcegraph",
 	"structured-cabling",
 	"system-integration",
+	"category-management",
+	"excel",
+	"inventory-management",
+	"mrp",
+	"purchase-order-management",
+	"rfx",
+	"spend-analysis",
+	"strategic-sourcing",
+	"supply-chain-management",
 }
