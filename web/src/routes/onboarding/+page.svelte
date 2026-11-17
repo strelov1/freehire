@@ -365,10 +365,12 @@
   }
 
   /** Leaving the flow at any step goes where the visitor was headed. */
-  function skip() {
+  async function skip() {
     left = true; // a save still in flight must not navigate after this
     onboardingGate.dismiss();
-    void gotoPath(returnTo ?? resolve('/'));
+    // Queued after any save in flight, and awaited: a full-page navigation would unload first.
+    await onboardingDraft.clear();
+    await gotoPath(returnTo ?? resolve('/'));
   }
 
   /** A guest who wants an account without a CV (to save a job, tailor, follow) goes straight to
@@ -387,9 +389,7 @@
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    // Left mid-save (skipped or navigated away): drop the mark so no later sign-up carries it.
-    if (left) await onboardingDraft.clear();
-    else await gotoPath(signinUrl({ returnTo: here }));
+    if (!left) await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {
@@ -635,7 +635,7 @@
   {#if phase !== 'carrying'}
     <button
       type="button"
-      onclick={skip}
+      onclick={() => void skip()}
       class="self-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
     >
       Skip for now
