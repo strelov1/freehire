@@ -23,6 +23,9 @@ SET url = EXCLUDED.url,
     disabled_at = NULL,
     consecutive_failures = 0,
     updated_at = now()
+-- Only onto the row whose secret signed the caller's probe: a destination deleted and
+-- recreated (or created twice at once) in between has another secret, and then no row comes back.
+WHERE webhook_configs.secret = EXCLUDED.secret
 RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret;
 
 -- name: EnableWebhookConfig :one

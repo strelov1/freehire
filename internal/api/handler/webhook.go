@@ -109,11 +109,16 @@ func (h *webhookHandlers) CreateOrUpdateWebhook(c *fiber.Ctx) error {
 		return err
 	}
 
-	if _, err := h.queries.UpsertWebhookConfig(c.Context(), db.UpsertWebhookConfigParams{
+	_, err = h.queries.UpsertWebhookConfig(c.Context(), db.UpsertWebhookConfigParams{
 		UserID: userID,
 		URL:    in.URL,
 		Secret: secret,
-	}); err != nil {
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The stored secret changed under the probe (a concurrent save or delete).
+		return fiber.NewError(fiber.StatusConflict, "webhook destination changed while saving; try again")
+	}
+	if err != nil {
 		return err
 	}
 	row, err := h.recordProbeSuccess(c.Context(), userID)

@@ -160,6 +160,7 @@ SET url = EXCLUDED.url,
     disabled_at = NULL,
     consecutive_failures = 0,
     updated_at = now()
+WHERE webhook_configs.secret = EXCLUDED.secret
 RETURNING user_id, url, enabled, created_at, updated_at, last_success_at, disabled_at, consecutive_failures, secret
 `
 
@@ -177,6 +178,8 @@ type UpsertWebhookConfigParams struct {
 // re-saved) gets a fresh run at the auto-disable threshold, not whatever
 // count the old destination left behind. The secret is set only on insert: changing
 // the URL keeps the secret the receiver already verifies with.
+// Only onto the row whose secret signed the caller's probe: a destination deleted and
+// recreated (or created twice at once) in between has another secret, and then no row comes back.
 func (q *Queries) UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error) {
 	row := q.db.QueryRow(ctx, upsertWebhookConfig, arg.UserID, arg.URL, arg.Secret)
 	var i WebhookConfig

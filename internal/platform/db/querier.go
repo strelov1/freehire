@@ -8932,6 +8932,8 @@ type Querier interface {
 	// re-saved) gets a fresh run at the auto-disable threshold, not whatever
 	// count the old destination left behind. The secret is set only on insert: changing
 	// the URL keeps the secret the receiver already verifies with.
+	// Only onto the row whose secret signed the caller's probe: a destination deleted and
+	// recreated (or created twice at once) in between has another secret, and then no row comes back.
 	UpsertWebhookConfig(ctx context.Context, arg UpsertWebhookConfigParams) (WebhookConfig, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

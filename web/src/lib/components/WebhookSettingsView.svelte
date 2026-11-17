@@ -139,6 +139,10 @@
         </Button>
       </form>
 
+      {#if !webhook}
+        <p class="text-xs text-muted-foreground">{s.firstSaveHint}</p>
+      {/if}
+
       {#if formError}
         <p class="text-sm text-destructive">{formError}</p>
       {:else if testPassed}
