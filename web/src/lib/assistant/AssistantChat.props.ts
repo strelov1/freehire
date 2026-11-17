@@ -10,9 +10,8 @@ export interface AssistantChatProps {
   kickoff?: string;
   /** Name the session in the rail until its first message names it. */
   sessionLabel?: string;
-  /** Told when a turn ends, however it ended. `completed` is true only for a clean finish
-   *  (the server's `end_turn`, no error): not a cut-off, refusal, failure or a dropped stream. */
-  onTurnComplete?: (turn: { completed: boolean }) => void;
+  /** Called when a turn finishes (the tailor host refreshes the CV preview). */
+  onTurnComplete?: () => void;
   /** Told after each successful `cv_edit` tool call resolves — not just at the end of the
    *  turn — so the tailoring host can refresh the CV preview as a run writes it instead of
    *  only once the whole turn finishes. `onTurnComplete` still fires at turn end regardless

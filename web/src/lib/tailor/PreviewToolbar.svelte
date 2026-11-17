@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Check, Download, TriangleAlert, ZoomIn, ZoomOut } from '@lucide/svelte';
-  import type { PdfExport } from './pdfExport.svelte';
 
   // The tailoring workspace's preview toolbar: zoom (`zoomPct`, or fit to width while
   // `fitMode`), the rendered page count, the gaps still left in the CV (`placeholders`, the
@@ -11,10 +10,10 @@
     pageCount,
     placeholders,
     pdfUrl,
-    pdf,
     onzoomin,
     onzoomout,
     ongap,
+    ondownload,
   }: {
     zoomPct: number;
     fitMode: boolean;
@@ -24,8 +23,7 @@
     onzoomin: () => void;
     onzoomout: () => void;
     ongap: () => void;
-    /** The PDF download: its click handling, in-flight state and failure message. */
-    pdf: PdfExport;
+    ondownload: (e: MouseEvent) => void;
   } = $props();
 </script>
 
@@ -99,18 +97,11 @@
       href={pdfUrl}
       target="_blank"
       rel="noopener"
-      onclick={pdf.guard}
-      aria-busy={pdf.busy}
-      class={[
-        'inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted',
-        pdf.busy && 'pointer-events-none opacity-60',
-      ]}
+      onclick={ondownload}
+      class="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
     >
       <!-- eslint-enable svelte/no-navigation-without-resolve -->
       <Download class="size-4" /> Download PDF
     </a>
   </div>
 </div>
-{#if pdf.error}
-  <p role="alert" class="border-b border-border bg-background px-3 py-1.5 text-xs text-destructive">{pdf.error}</p>
-{/if}
