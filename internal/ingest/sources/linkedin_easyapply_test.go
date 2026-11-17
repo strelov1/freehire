@@ -221,3 +221,44 @@ func TestLinkedInEasyApplyCardsUseTheSeenSet(t *testing.T) {
 		t.Errorf("seen Easy Apply card not emitted as SeenRefresh: %+v", jobs)
 	}
 }
+
+// The newest Easy Apply cards are mostly in the primary listing: a page made only of
+// already-listed ids must not end the pass.
+func TestLinkedInEasyApplyPassContinuesPastAnAllDuplicatePage(t *testing.T) {
+	f := &easyApplyFake{
+		primary: map[string]string{"0": linkedInRelatedListing("1") + linkedInRelatedListing("2")},
+		easy: map[string]string{
+			"0": linkedInRelatedListing("1") + linkedInRelatedListing("2"),
+			"2": linkedInRelatedListing("3"),
+		},
+	}
+	jobs, err := easyApplyFetch(t, f, map[string]string{"pages": "1", "easyapply_pages": "3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"1", "2", "3"}; !slices.Equal(jobIDs(jobs), want) {
+		t.Errorf("jobs = %v, want the new id behind the duplicate page %v", jobIDs(jobs), want)
+	}
+	if !slices.Contains(f.detailReads, "3") {
+		t.Errorf("new Easy Apply id not read: %v", f.detailReads)
+	}
+	if want := []string{"primary:0", "easy:0", "easy:2", "easy:3"}; !slices.Equal(f.searches, want) {
+		t.Errorf("searches = %v, want %v (offset advances over the duplicates; the empty page ends the pass)", f.searches, want)
+	}
+}
+
+// Only duplicates, then nothing: not an error, and the primary's rule for an unrecognizable
+// first page is unchanged.
+func TestLinkedInEasyApplyAllDuplicateListingIsNotAnError(t *testing.T) {
+	f := &easyApplyFake{
+		primary: map[string]string{"0": linkedInRelatedListing("1")},
+		easy:    map[string]string{"0": linkedInRelatedListing("1")},
+	}
+	if jobs, err := easyApplyFetch(t, f, map[string]string{"pages": "1", "easyapply_pages": "2"}); err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs=%d err=%v", len(jobs), err)
+	}
+	unrecognizable := &easyApplyFake{primary: map[string]string{"0": `<li data-entity-urn="urn:li:jobPosting:5"></li>`}}
+	if _, err := easyApplyFetch(t, unrecognizable, map[string]string{"pages": "1"}); err == nil {
+		t.Fatal("a primary first page with unrecognizable cards no longer fails")
+	}
+}

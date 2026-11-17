@@ -231,7 +231,7 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 				return fmt.Errorf("linkedin: search redirected away from listing")
 			}
 			var cards []Job
-			pageSize := 0
+			pageSize, duplicates := 0, 0
 			walk(root, func(n *html.Node) bool {
 				urn := Attr(n, "data-entity-urn")
 				if !strings.HasPrefix(urn, "urn:li:jobPosting:") {
@@ -239,7 +239,11 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 				}
 				id := strings.TrimPrefix(urn, "urn:li:jobPosting:")
 				pageSize++
-				if id == "" || LinkedInPostingID(LinkedInPostingURL(id)) != id || ids[id] {
+				if id == "" || LinkedInPostingID(LinkedInPostingURL(id)) != id {
+					return false
+				}
+				if ids[id] {
+					duplicates++
 					return false
 				}
 				title, company := firstByClass(n, "base-search-card__title"), firstByClass(n, "base-search-card__subtitle")
@@ -254,6 +258,12 @@ func (s linkedIn) fetch(ctx context.Context, e CompanyEntry, seen func(externalI
 				return false
 			})
 			offset += pageSize
+			// A page whose cards were all listed by an earlier pass (the Easy Apply pass's newest
+			// cards are mostly in the primary listing) is not the end; only a page with nothing
+			// recognizable ends the listing, and the page limit bounds the loop.
+			if len(cards) == 0 && duplicates > 0 {
+				continue
+			}
 			if len(cards) == 0 {
 				if page == 0 && !emptyOK {
 					return errLinkedInEmptyFirstListing
