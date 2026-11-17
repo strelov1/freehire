@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Bookmark, FileText, Lock } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -9,7 +7,7 @@
   import SourceBadge from './SourceBadge.svelte';
   import { api } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn, signinUrl } from '#lib/signin.js';
+  import { promptLogin, promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
   import { cardTags, cardTagsFromCard, formatSalary, regionLabel, workArrangement } from '#lib/enrichment.js';
   import { computeClientMatch, resolveMatchState } from '#lib/jobMatch.js';
@@ -341,15 +339,13 @@
 
   function signUpFromApplyGate() {
     showApplyGate = false;
-    // Register, then come back to this list; the layout routes a new account through
-    // /onboarding once, and that page can skip straight back here.
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo: page.url.pathname + page.url.search }));
+    // Onboarding first, then back to this list; that page can skip straight to the sign-up form.
+    promptSignIn();
   }
 
   function signInFromApplyGate() {
     showApplyGate = false;
-    promptSignIn();
+    promptLogin();
   }
 
   function viewApplyWithoutSigningIn() {

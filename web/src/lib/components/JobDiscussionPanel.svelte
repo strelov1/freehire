@@ -1,9 +1,8 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { signinUrl } from '#lib/signin.js';
+  import { promptSignInFor } from '#lib/signin.js';
   import type { CommunityThread } from '#lib/types.js';
   import { Button, EmptyState, Skeleton } from '#lib/ui/index.js';
   import DiscussionIndex from './community/DiscussionIndex.svelte';
@@ -24,9 +23,7 @@
 
   // Back to this tab after sign-in, not to the job's Description.
   function signInHere() {
-    const returnTo = `${resolve('/jobs/[slug]', { slug })}?tab=discussion`;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo, mode: 'login' }));
+    promptSignInFor(`${resolve('/jobs/[slug]', { slug })}?tab=discussion`);
   }
 
   function retry() {

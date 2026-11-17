@@ -49,16 +49,14 @@ describe('root layout onboarding gate', () => {
   const gateAt = SOURCE.indexOf('const needsOnboarding');
   const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
 
-  it('leaves /signin to finish its own navigation', () => {
-    expect(gate).toContain("path !== '/signin'");
-  });
-
-  it('routes only a signed-in account that has not been through the flow, once per visit', () => {
+  // The rules themselves (the /signin and /onboarding guards, once per visit, a guest's skip)
+  // are behaviour of routeAccount, exercised in onboardingGate.spec.ts; the layout only has to
+  // hand it a signed-in account's path and need.
+  it('hands only a signed-in account, with its need, to the onboarding gate', () => {
     expect(SOURCE).toContain('const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null)');
-    expect(gate).toContain('isAuthenticated() &&');
-    expect(gate).toContain('needsOnboarding &&');
-    expect(gate).toContain('!onboardingGate.dismissed');
-    expect(gate).toContain("path !== '/onboarding'");
+    expect(gate).toContain('if (isAuthenticated()) {');
+    expect(gate).toContain('routeAccount(page.url.pathname, page.url.search, needsOnboarding');
+    expect(gate).not.toContain("path !== '/signin'"); // not re-listed beside the rule that owns it
   });
 
   it('never bounces anybody away from /onboarding', () => {

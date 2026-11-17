@@ -6,9 +6,9 @@
   let {
     open = $bindable(),
     placeholders,
-    pdfUrl,
+    onConfirm,
     onFix,
-  }: { open: boolean; placeholders: Placeholder[]; pdfUrl: string; onFix: () => void } = $props();
+  }: { open: boolean; placeholders: Placeholder[]; onConfirm: () => void; onFix: () => void } = $props();
 
   const tokens = $derived([...new Set(placeholders.map((p) => p.token))]);
 </script>
@@ -19,9 +19,7 @@
   description="These bracketed slots will print in the PDF exactly as written."
   confirmLabel="Download anyway"
   cancelLabel="Keep editing"
-  onConfirm={() => {
-    window.open(pdfUrl, '_blank', 'noopener');
-  }}
+  {onConfirm}
 >
   <ul class="flex flex-wrap gap-1.5">
     {#each tokens as token (token)}

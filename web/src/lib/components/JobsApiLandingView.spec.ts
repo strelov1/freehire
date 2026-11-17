@@ -5,7 +5,7 @@ import type { PlansMatrix } from '#lib/types.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => false }));
-vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
+vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn(), promptLogin: vi.fn() }));
 vi.mock('#lib/api.js', () => ({ api: { billingCheckout: vi.fn() } }));
 
 const plans: PlansMatrix = {

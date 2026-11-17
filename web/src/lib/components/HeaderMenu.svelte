@@ -5,7 +5,7 @@
   import { toPath } from '#lib/pathname.js';
   import { Menu, X, Sun, Moon, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
+  import { promptLogin } from '#lib/signin.js';
   import { themeStore } from '#lib/theme.svelte.js';
   import { lockScroll, unlockScroll } from '#lib/ui/index.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
@@ -132,7 +132,7 @@
 
   function signIn() {
     open = false;
-    promptSignIn();
+    promptLogin();
   }
 
   function logout() {

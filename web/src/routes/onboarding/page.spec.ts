@@ -140,6 +140,7 @@ beforeEach(() => {
   auth.createdAt = null;
   pageState.url = new URL('http://localhost/onboarding');
   onboardingGate.reset();
+  sessionStorage.clear();
   h.api.onboardingParseCv.mockResolvedValue(parse);
   h.api.facetCounts.mockResolvedValue({ total: 900, facets: { category: { backend: 600, devops: 300 } }, stats: {} });
   h.api.updateSurvey.mockResolvedValue({});
@@ -295,6 +296,51 @@ describe('/onboarding', () => {
     expect(screen.getByText('Nothing was posted in the last 7 days, so these are from the last 30.')).toBeTruthy();
     const [, wide] = h.api.onboardingMatches.mock.calls[1] as [string[], string];
     expect(new URLSearchParams(wide).get('posted_within_days')).toBe('30');
+  });
+
+  it('lets a guest skip the CV and create an account, returning to where they were headed', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.pathname).toBe('/signin');
+    expect(target.searchParams.get('returnTo')).toBe('/jobs/job-1');
+    expect(target.searchParams.get('mode')).toBeNull(); // the register form, not the login one
+    expect(h.draft.save).not.toHaveBeenCalled();
+  });
+
+  it('marks the skip so the new account is not sent back into onboarding', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    expect(onboardingGate.takeGuestSkip()).toBe(true); // what survives an OAuth round trip
+  });
+
+  it('skips to the home page when no destination was given', async () => {
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.searchParams.get('returnTo')).toBe('/');
+  });
+
+  it('keeps the existing-account sign-in direct, returning to the destination, and marks it too', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
+    render(Page);
+    const link = screen.getByRole('link', { name: 'Sign in' });
+    const url = new URL(link.getAttribute('href') ?? '', 'http://x');
+    expect(url.pathname).toBe('/signin');
+    expect(url.searchParams.get('mode')).toBe('login');
+    expect(url.searchParams.get('returnTo')).toBe('/jobs/job-1');
+    await fireEvent.click(link);
+    expect(onboardingGate.takeGuestSkip()).toBe(true);
+  });
+
+  it('drops an unsafe destination instead of following it out of the site', async () => {
+    pageState.url = new URL('http://localhost/onboarding?returnTo=https%3A%2F%2Fevil.example%2F');
+    render(Page);
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip the CV and create an account' }));
+    const target = new URL(h.gotoPath.mock.calls.at(-1)?.[0] as string, 'http://x');
+    expect(target.searchParams.get('returnTo')).toBe('/');
   });
 
   it('says the daily limit is reached and offers sign-in on a 429', async () => {
