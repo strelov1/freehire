@@ -198,6 +198,14 @@ var scraplingProviders = map[string]scraplingProvider{
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
 	}},
+	// 403 to a plain Go client on every path, sitemap and robots.txt included; the impersonating
+	// fetcher is served 200, sitemap, newest-postings page and posting pages alike (measured
+	// 2026-11-17, ~1.9 s a posting page, 39 of 39 pages answered). Measured from a residential IP
+	// with NO proxy; the crawl host is a datacenter IP and has not been measured, so if its egress is
+	// refused the first lever is the proxy (`true`), then the browser.
+	"clearedjobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewClearedJobs(f)
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page can take ~110 s, and the service
