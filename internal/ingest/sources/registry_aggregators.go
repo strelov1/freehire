@@ -171,6 +171,10 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// rate-paced (pacedHTMLGetter, see energyjoblineRequestInterval); the sitemap does
 		// not, so it stays on the shared client.
 		NewEnergyJobline(c, pacedHTMLGetter(newCrawlerUAClient(), energyjoblineRequestInterval, energyjoblineRequestBurst)),
+		// Dynamite Jobs: remote-only, every function. The listing API is robots-disallowed, so
+		// the sitemaps enumerate postings and each page's JobPosting ld+json carries the body.
+		// Pages are rate-paced; the sitemaps stay on the shared client. See dynamitejobs.go.
+		NewDynamiteJobs(c, pacedHTMLGetter(c, dynamitejobsRequestInterval, dynamitejobsRequestBurst)),
 		// JettyCloud: its postings exist only on its own careers site — the employer runs no
 		// ATS a crawl can reach, so this adapter is the only way the catalogue can carry it.
 		NewJettyCloud(c),
