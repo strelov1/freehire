@@ -299,6 +299,11 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// are refused by Cloudflare, so production reaches it through the Scrapling tier
 		// (scraplingtier.go). See job104.go.
 		NewJob104(c, c),
+		// Glints: the Southeast Asian job platform (Indonesia, Vietnam, Singapore, Malaysia),
+		// enumerated from its job sitemaps and scoped to the technical postings by title; each new
+		// posting's page carries the rest. The site refuses a plain client, so production reaches
+		// it through the Scrapling tier (scraplingtier.go). See glints.go.
+		NewGlints(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
