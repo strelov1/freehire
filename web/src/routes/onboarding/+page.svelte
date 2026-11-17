@@ -364,7 +364,7 @@
     await gotoPath(`${resolve('/jobs')}${query ? `?${query}` : ''}`);
   }
 
-  /** A signed-in visitor who has nothing to drop goes where they were headed. */
+  /** Leaving the flow at any step goes where the visitor was headed. */
   function skip() {
     onboardingGate.dismiss();
     void gotoPath(returnTo ?? resolve('/'));
@@ -489,15 +489,7 @@
             {/if}
           </div>
         {/if}
-        {#if isAuthenticated()}
-          <button
-            type="button"
-            onclick={skip}
-            class="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Skip for now
-          </button>
-        {:else}
+        {#if !isAuthenticated()}
           <!-- Someone who already has an account came to sign in, not to be onboarded: their
                profile and CV are already stored, so the flow has nothing to add for them. -->
           <p class="text-sm text-muted-foreground">
@@ -636,4 +628,14 @@
       {/if}
     {/if}
   </Card>
+
+  {#if phase !== 'carrying'}
+    <button
+      type="button"
+      onclick={skip}
+      class="self-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    >
+      Skip for now
+    </button>
+  {/if}
 </div>

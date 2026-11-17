@@ -502,6 +502,13 @@ describe('/onboarding', () => {
     expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1');
   });
 
+  it('lets a guest skip from a later step', async () => {
+    render(Page);
+    await dropCv();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Skip for now' }));
+    expect(h.gotoPath).toHaveBeenCalledWith('/');
+  });
+
   it('goes back where the visitor was headed after saving', async () => {
     session.set('id', 7);
     pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
