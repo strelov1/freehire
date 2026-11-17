@@ -366,6 +366,7 @@
 
   /** Leaving the flow at any step goes where the visitor was headed. */
   function skip() {
+    left = true; // a save still in flight must not navigate after this
     onboardingGate.dismiss();
     void gotoPath(returnTo ?? resolve('/'));
   }
@@ -386,7 +387,7 @@
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    await gotoPath(signinUrl({ returnTo: here }));
+    if (!left) await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {

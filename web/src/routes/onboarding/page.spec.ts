@@ -509,6 +509,19 @@ describe('/onboarding', () => {
     expect(h.gotoPath).toHaveBeenCalledWith('/');
   });
 
+  it('does not go to sign-in when the guest skips while the draft is saving', async () => {
+    let finish: (v: unknown) => void = () => {};
+    render(Page);
+    await dropCv();
+    await answerAll();
+    h.draft.save.mockReturnValue(new Promise((r) => (finish = r)));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    finish(undefined);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.gotoPath.mock.calls.map((c) => c[0])).toEqual(['/']);
+  });
+
   it('goes back where the visitor was headed after saving', async () => {
     session.set('id', 7);
     pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
