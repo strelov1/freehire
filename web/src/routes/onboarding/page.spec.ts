@@ -499,7 +499,43 @@ describe('/onboarding', () => {
     pageState.url = new URL('http://localhost/onboarding?returnTo=%2Fjobs%2Fjob-1');
     render(Page);
     await fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
-    expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1');
+    await waitFor(() => expect(h.gotoPath).toHaveBeenCalledWith('/jobs/job-1'));
+  });
+
+  it('lets a guest skip from a later step', async () => {
+    render(Page);
+    await dropCv();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Skip for now' }));
+    await waitFor(() => expect(h.gotoPath).toHaveBeenCalledWith('/'));
+  });
+
+  it('does not go to sign-in when the guest skips while the draft is saving', async () => {
+    let finish: (v: unknown) => void = () => {};
+    render(Page);
+    await dropCv();
+    await answerAll();
+    h.draft.save.mockReturnValue(new Promise((r) => (finish = r)));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save my matches' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    finish(undefined);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.gotoPath.mock.calls.map((c) => c[0])).toEqual(['/']);
+    expect(h.draft.clear).toHaveBeenCalled();
+  });
+
+  it('keeps the draft when "Save my matches" is clicked twice', async () => {
+    let finish: (v: unknown) => void = () => {};
+    const { unmount } = render(Page);
+    await dropCv();
+    await answerAll();
+    h.draft.save.mockReturnValue(new Promise((r) => (finish = r)));
+    h.gotoPath.mockImplementationOnce(async () => unmount()); // the sign-in page replaces this one
+    const save = await screen.findByRole('button', { name: 'Save my matches' });
+    await fireEvent.click(save);
+    await fireEvent.click(save);
+    finish(undefined);
+    await waitFor(() => expect(h.gotoPath).toHaveBeenCalled());
+    expect(h.draft.clear).not.toHaveBeenCalled();
   });
 
   it('goes back where the visitor was headed after saving', async () => {

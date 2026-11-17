@@ -364,10 +364,13 @@
     await gotoPath(`${resolve('/jobs')}${query ? `?${query}` : ''}`);
   }
 
-  /** A signed-in visitor who has nothing to drop goes where they were headed. */
-  function skip() {
+  /** Leaving the flow at any step goes where the visitor was headed. */
+  async function skip() {
+    left = true; // a save still in flight must not navigate after this
     onboardingGate.dismiss();
-    void gotoPath(returnTo ?? resolve('/'));
+    // Queued after any save in flight, and awaited: a full-page navigation would unload first.
+    await onboardingDraft.clear();
+    await gotoPath(returnTo ?? resolve('/'));
   }
 
   /** A guest who wants an account without a CV (to save a job, tailor, follow) goes straight to
@@ -386,7 +389,7 @@
    *  never started a sign-up from here never carries one (see `arrivalAction`). */
   async function signUp() {
     await persist(Date.now());
-    await gotoPath(signinUrl({ returnTo: here }));
+    if (!left) await gotoPath(signinUrl({ returnTo: here }));
   }
 
   async function startOver() {
@@ -489,15 +492,7 @@
             {/if}
           </div>
         {/if}
-        {#if isAuthenticated()}
-          <button
-            type="button"
-            onclick={skip}
-            class="self-start text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-          >
-            Skip for now
-          </button>
-        {:else}
+        {#if !isAuthenticated()}
           <!-- Someone who already has an account came to sign in, not to be onboarded: their
                profile and CV are already stored, so the flow has nothing to add for them. -->
           <p class="text-sm text-muted-foreground">
@@ -636,4 +631,14 @@
       {/if}
     {/if}
   </Card>
+
+  {#if phase !== 'carrying'}
+    <button
+      type="button"
+      onclick={() => void skip()}
+      class="self-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    >
+      Skip for now
+    </button>
+  {/if}
 </div>
