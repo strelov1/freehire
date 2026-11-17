@@ -60875,6 +60875,10 @@ func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 		e.Str(s.DigestFrequency)
 	}
 	{
+		e.FieldStart("faster_alerts_available")
+		e.Bool(s.FasterAlertsAvailable)
+	}
+	{
 		e.FieldStart("digest_time")
 		s.DigestTime.Encode(e)
 	}
@@ -60892,16 +60896,17 @@ func (s *NotificationSettings) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfNotificationSettings = [9]string{
+var jsonFieldsNameOfNotificationSettings = [10]string{
 	0: "application_digest_enabled",
 	1: "inbox_digest_enabled",
 	2: "enabled",
 	3: "channels",
 	4: "digest_frequency",
-	5: "digest_time",
-	6: "digest_interval_hours",
-	7: "quiet_hours_start",
-	8: "quiet_hours_end",
+	5: "faster_alerts_available",
+	6: "digest_time",
+	7: "digest_interval_hours",
+	8: "quiet_hours_start",
+	9: "quiet_hours_end",
 }
 
 // Decode decodes NotificationSettings from json.
@@ -60981,8 +60986,20 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"digest_frequency\"")
 			}
-		case "digest_time":
+		case "faster_alerts_available":
 			requiredBitSet[0] |= 1 << 5
+			if err := func() error {
+				v, err := d.Bool()
+				s.FasterAlertsAvailable = bool(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"faster_alerts_available\"")
+			}
+		case "digest_time":
+			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
 				if err := s.DigestTime.Decode(d); err != nil {
 					return err
@@ -60992,7 +61009,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_time\"")
 			}
 		case "digest_interval_hours":
-			requiredBitSet[0] |= 1 << 6
+			requiredBitSet[0] |= 1 << 7
 			if err := func() error {
 				v, err := d.Int64()
 				s.DigestIntervalHours = int64(v)
@@ -61004,7 +61021,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"digest_interval_hours\"")
 			}
 		case "quiet_hours_start":
-			requiredBitSet[0] |= 1 << 7
+			requiredBitSet[1] |= 1 << 0
 			if err := func() error {
 				if err := s.QuietHoursStart.Decode(d); err != nil {
 					return err
@@ -61014,7 +61031,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"quiet_hours_start\"")
 			}
 		case "quiet_hours_end":
-			requiredBitSet[1] |= 1 << 0
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				if err := s.QuietHoursEnd.Decode(d); err != nil {
 					return err
@@ -61034,7 +61051,7 @@ func (s *NotificationSettings) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b11111111,
-		0b00000001,
+		0b00000011,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

@@ -22,7 +22,9 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency, -- effective, see ListActiveSubscriptions
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,
@@ -57,7 +59,9 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        (u.banned_at IS NULL AND EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id))::boolean AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency, -- effective, see ListActiveSubscriptions
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,

@@ -82,7 +82,14 @@ WHERE id = $1 AND user_id = $2;
 SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query, ss.query_revision,
        s.last_digest_sent_at, s.last_searched_at,
        u.timezone AS timezone,
-       COALESCE(ns.digest_frequency, 'daily')::text AS digest_frequency,
+       -- EFFECTIVE frequency, not the stored one: faster than daily is a paid benefit (a live
+       -- pro_until or ultra_until, whichever source granted it), so a Free account reads as
+       -- 'daily' at its stored time whatever it kept or had before an entitlement expired.
+       -- A webhook is a program's endpoint, not a person's digest, and keeps the stored value.
+       -- The same expression gates ClaimSubscriptionMatches; the three must agree.
+       (CASE WHEN s.channel = 'webhook'
+                  OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+             THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END)::text AS digest_frequency,
        COALESCE(ns.digest_interval_hours, 1)::int AS digest_interval_hours,
        COALESCE(ns.digest_time, '09:00'::time) AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
@@ -183,6 +190,7 @@ WITH claimable AS (
     SELECT m.subscription_id, m.job_id, s.user_id, s.channel, pl.last_sent AS person_last_sent_at
     FROM subscriptions s
     JOIN saved_searches ss ON ss.id = s.saved_search_id
+    JOIN users u ON u.id = s.user_id
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
     -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
@@ -245,7 +253,13 @@ WITH claimable AS (
       -- subscription (no stamp yet) from firing on its own between the hourly mails.
       -- A webhook is sent one subscription at a time (its receiver is a program reading
       -- one saved search), so it keeps its own stamp.
-      AND (COALESCE(ns.digest_frequency, 'daily') <> 'interval'
+      --
+      -- The frequency is the EFFECTIVE one (see ListActiveSubscriptions): a Free account is
+      -- daily, which Go times before the claim, so an interval preference that outlived its
+      -- entitlement is not gated here and cannot be claimed hourly.
+      AND ((CASE WHEN s.channel = 'webhook'
+                      OR COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false)
+                 THEN COALESCE(ns.digest_frequency, 'daily') ELSE 'daily' END) <> 'interval'
            OR COALESCE(pl.last_sent, '-infinity')
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what

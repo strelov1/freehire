@@ -260,7 +260,7 @@ func TestUpdateSettings_DailyWithDigestTimeAccepted(t *testing.T) {
 }
 
 func TestUpdateSettings_InstantDefaultAccepted(t *testing.T) {
-	svc := newService(&fakeRepo{})
+	svc := newService(&fakeRepo{paid: true}) // faster than daily is a paid choice
 	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: "instant"})
 	if err != nil {
 		t.Errorf("want no error, got %v", err)
@@ -361,7 +361,7 @@ func TestUpdateSettings_IntervalBounds(t *testing.T) {
 		{hours: 24, wantErr: true}, // a full day is "daily", which also picks the hour
 		{hours: -1, wantErr: true},
 	} {
-		svc := newService(&fakeRepo{})
+		svc := newService(&fakeRepo{paid: true}) // interval is a paid choice
 		got, err := svc.UpdateSettings(context.Background(), 1,
 			Settings{DigestFrequency: notify.FrequencyInterval, DigestIntervalHours: tc.hours})
 		if tc.wantErr {

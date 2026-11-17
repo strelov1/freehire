@@ -19907,7 +19907,12 @@ type NotificationSettings struct {
 	InboxDigestEnabled bool     `json:"inbox_digest_enabled"`
 	Enabled            bool     `json:"enabled"`
 	Channels           []string `json:"channels"`
-	DigestFrequency    string   `json:"digest_frequency"`
+	// The saved preference. A Free account that kept `instant` or `interval` is sent a daily digest
+	// regardless (see `faster_alerts_available`); the preference is kept so a renewal restores it.
+	DigestFrequency string `json:"digest_frequency"`
+	// Whether the account may choose saved-search alerts faster than daily: a live Pro or Ultra plan. When
+	// false only `daily` takes effect, and asking for another frequency is refused with 402.
+	FasterAlertsAvailable bool `json:"faster_alerts_available"`
 	// `HH:MM`.
 	DigestTime          NilString `json:"digest_time"`
 	DigestIntervalHours int64     `json:"digest_interval_hours"`
@@ -19938,6 +19943,11 @@ func (s *NotificationSettings) GetChannels() []string {
 // GetDigestFrequency returns the value of DigestFrequency.
 func (s *NotificationSettings) GetDigestFrequency() string {
 	return s.DigestFrequency
+}
+
+// GetFasterAlertsAvailable returns the value of FasterAlertsAvailable.
+func (s *NotificationSettings) GetFasterAlertsAvailable() bool {
+	return s.FasterAlertsAvailable
 }
 
 // GetDigestTime returns the value of DigestTime.
@@ -19983,6 +19993,11 @@ func (s *NotificationSettings) SetChannels(val []string) {
 // SetDigestFrequency sets the value of DigestFrequency.
 func (s *NotificationSettings) SetDigestFrequency(val string) {
 	s.DigestFrequency = val
+}
+
+// SetFasterAlertsAvailable sets the value of FasterAlertsAvailable.
+func (s *NotificationSettings) SetFasterAlertsAvailable(val bool) {
+	s.FasterAlertsAvailable = val
 }
 
 // SetDigestTime sets the value of DigestTime.

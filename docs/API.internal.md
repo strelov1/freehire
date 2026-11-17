@@ -746,6 +746,7 @@ curl "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
       "email"
     ],
     "digest_frequency": "daily",
+    "faster_alerts_available": false,
     "digest_time": null,
     "digest_interval_hours": 1,
     "quiet_hours_start": null,
@@ -790,6 +791,7 @@ curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
       "email"
     ],
     "digest_frequency": "daily",
+    "faster_alerts_available": false,
     "digest_time": null,
     "digest_interval_hours": 1,
     "quiet_hours_start": null,

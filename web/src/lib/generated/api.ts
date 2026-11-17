@@ -8983,7 +8983,17 @@ export interface components {
             inbox_digest_enabled: boolean;
             enabled: boolean;
             channels: string[];
+            /**
+             * @description The saved preference. A Free account that kept `instant` or `interval` is sent a daily
+             *     digest regardless (see `faster_alerts_available`); the preference is kept so a renewal restores it.
+             */
             digest_frequency: string;
+            /**
+             * @description Whether the account may choose saved-search alerts faster than daily: a live Pro or Ultra
+             *     plan. When false only `daily` takes effect, and asking for another frequency is refused
+             *     with 402.
+             */
+            faster_alerts_available: boolean;
             /** @description `HH:MM`. */
             digest_time: string | null;
             /** Format: int64 */
@@ -21120,6 +21130,7 @@ export interface operations {
                      *           "email"
                      *         ],
                      *         "digest_frequency": "daily",
+                     *         "faster_alerts_available": false,
                      *         "digest_time": null,
                      *         "digest_interval_hours": 1,
                      *         "quiet_hours_start": null,
@@ -21172,6 +21183,7 @@ export interface operations {
                      *           "email"
                      *         ],
                      *         "digest_frequency": "daily",
+                     *         "faster_alerts_available": false,
                      *         "digest_time": null,
                      *         "digest_interval_hours": 1,
                      *         "quiet_hours_start": null,

@@ -83,7 +83,7 @@
   type Perk = { text: string; href: string };
   const FREE_FEATURES: Perk[] = [
     { text: 'Every job, every filter, and AI search', href: resolve('/features/advanced-search') },
-    { text: 'Alerts by email, Telegram and push', href: resolve('/features/notifications') },
+    { text: 'Daily saved-search alerts by email, Telegram and push', href: resolve('/features/notifications') },
     { text: 'Application tracking board', href: resolve('/features/tracking') },
     { text: 'Inbox that sorts employer replies into your applications', href: resolve('/features/inbox') },
     { text: 'Ghost-job warnings on every posting', href: resolve('/features/ghost-jobs') },

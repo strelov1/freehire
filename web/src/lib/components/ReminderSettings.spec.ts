@@ -36,6 +36,7 @@ const settings = {
   enabled: true,
   channels: ['email'],
   digest_frequency: 'interval',
+  faster_alerts_available: true,
   digest_time: '09:00',
   digest_interval_hours: 1,
   quiet_hours_start: null,
@@ -184,5 +185,69 @@ describe('Weekly application summary settings', () => {
     expect((await screen.findByRole('switch', { name: 'Weekly application summary' })).hasAttribute('disabled')).toBe(
       true,
     );
+  });
+});
+
+describe('Search alert frequency', () => {
+  const freeWithHistoricalInstant = { ...settings, digest_frequency: 'instant', faster_alerts_available: false };
+
+  it('shows a free account its real daily schedule and keeps the stored preference on unrelated edits', async () => {
+    backend.myPlan.mockResolvedValue({ plan: 'free' });
+    backend.getNotificationSettings.mockResolvedValue({ ...freeWithHistoricalInstant });
+    render(ReminderSettings);
+    const daily = await screen.findByRole('button', { name: 'Daily digest' });
+    expect(daily.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: /Instant/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByLabelText('Daily digest time')).toBeTruthy();
+    expect(screen.getByText(/Free accounts get new matches in one daily digest/)).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('switch', { name: 'Enable quiet hours' }));
+    await vi.waitFor(() =>
+      expect(backend.updateNotificationSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ digest_frequency: 'instant', digest_time: '09:00' }),
+      ),
+    );
+  });
+
+  it('sends a free account to the plans for a faster frequency without saving anything', async () => {
+    backend.myPlan.mockResolvedValue({ plan: 'free' });
+    backend.getNotificationSettings.mockResolvedValue({
+      ...settings,
+      digest_frequency: 'daily',
+      faster_alerts_available: false,
+    });
+    render(ReminderSettings);
+    for (const name of [/Instant/, /Batched/]) {
+      await fireEvent.click(await screen.findByRole('button', { name }));
+    }
+    expect(navigation.goto).toHaveBeenCalledTimes(2);
+    expect(navigation.goto).toHaveBeenCalledWith('/pricing');
+    expect(screen.getByRole('button', { name: 'Daily digest' }).getAttribute('aria-pressed')).toBe('true');
+    await new Promise((resolve) => setTimeout(resolve, 450)); // past the autosave debounce
+    expect(backend.updateNotificationSettings).not.toHaveBeenCalled();
+  });
+
+  it('lets a free account choose daily explicitly', async () => {
+    backend.getNotificationSettings.mockResolvedValue({ ...freeWithHistoricalInstant });
+    render(ReminderSettings);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Daily digest' }));
+    await vi.waitFor(() =>
+      expect(backend.updateNotificationSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ digest_frequency: 'daily' }),
+      ),
+    );
+  });
+
+  it('lets a paid account choose and keep a faster frequency', async () => {
+    backend.getNotificationSettings.mockResolvedValue({ ...settings, digest_frequency: 'daily' });
+    render(ReminderSettings);
+    await fireEvent.click(await screen.findByRole('button', { name: /Instant/ }));
+    await vi.waitFor(() =>
+      expect(backend.updateNotificationSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ digest_frequency: 'instant' }),
+      ),
+    );
+    expect(navigation.goto).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Free accounts get new matches/)).toBeNull();
   });
 });
