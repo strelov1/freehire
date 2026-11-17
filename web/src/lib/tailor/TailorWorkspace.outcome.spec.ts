@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   document: { summary: 'seed' } as Record<string, unknown>,
   style: null as null | { style: { font_size: number } },
   order: [] as string[],
+  // The Design tab's font size each save request carried, in the order the requests started.
+  fonts: [] as unknown[],
   updateCv: (async () => {}) as () => Promise<unknown>,
 }));
 
@@ -50,8 +52,9 @@ vi.mock('#lib/api.js', () => {
       getCvJobMatch: async () => null,
       listCvRevisions: async () => [],
       listCvFonts: async () => [],
-      updateCv: async () => {
+      updateCv: async (_id: string, body: { document?: { style?: { font_size?: number } } }) => {
         mocks.order.push('save');
+        mocks.fonts.push(body.document?.style?.font_size);
         await mocks.updateCv();
         return {};
       },
@@ -96,6 +99,7 @@ beforeEach(() => {
   mocks.chat = null;
   mocks.style = null;
   mocks.order.length = 0;
+  mocks.fonts.length = 0;
   mocks.updateCv = async () => {};
   mocks.dialogs.length = 0;
   mocks.document = { summary: 'seed' };
@@ -190,6 +194,7 @@ it('reports a PDF export only after the file arrived and was handed to the brows
   await fireEvent.click(getByText('Download PDF'));
   expect(outcomeCalls()).toEqual([]); // the click alone is not a result
 
+  await waitFor(() => expect(deliver).toBeTypeOf('function')); // the export waits on the save queue first
   deliver(pdfResponse());
   await waitFor(() => expect(outcomeCalls()).toEqual([['cv_pdf_export', { kind: 'tailored', slug: 'acme-engineer' }]]));
   expect(savedPdf).toHaveBeenCalledWith('cv.pdf');
@@ -286,6 +291,11 @@ it('holds a PDF with unfilled gaps behind the confirmation and reports only afte
   await waitFor(() => expect(outcomeCalls()).toHaveLength(1));
 });
 
+function setFontSize(size: number) {
+  if (!mocks.style) throw new Error('the style control was not rendered');
+  mocks.style.style = { ...mocks.style.style, font_size: size };
+}
+
 /** Types into the Design tab and lets the 800ms autosave timer fire, so the save is in flight. */
 async function typeAndFireAutosave() {
   if (!mocks.style) throw new Error('the style control was not rendered');
@@ -364,4 +374,61 @@ it('starts the next autosave only after the one in flight has landed', async () 
   mocks.updateCv = async () => {};
   finish();
   await waitFor(() => expect(mocks.order).toEqual(['save', 'save']));
+});
+
+it('lands the save a closed workspace left behind before the reopened one saves', async () => {
+  let finish12!: () => void;
+  let finish13!: () => void;
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish12 = resolve));
+  const first = await open();
+  await typeAndFireAutosave();
+  // Leave with that save on the wire and one more edit still on the timer.
+  setFontSize(13);
+  await tick();
+  first.unmount();
+
+  await open();
+  setFontSize(14);
+  await tick();
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(mocks.fonts).toEqual([12]);
+
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish13 = resolve));
+  finish12();
+  await waitFor(() => expect(mocks.fonts).toEqual([12, 13]));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(mocks.fonts).toEqual([12, 13]); // 14 waits for the teardown save to settle
+
+  mocks.updateCv = async () => {};
+  finish13();
+  await waitFor(() => expect(mocks.fonts).toEqual([12, 13, 14]));
+});
+
+it('does not end a turn before an edit made while an older save was pending has landed', async () => {
+  let finish12!: () => void;
+  let finish14!: () => void;
+  mocks.updateCv = () => new Promise<void>((resolve) => (finish12 = resolve));
+  const first = await open();
+  await typeAndFireAutosave();
+  first.unmount();
+
+  await open();
+  setFontSize(14);
+  await tick();
+  let ended = false;
+  void Promise.resolve(chatProps().onTurnComplete({ completed: true })).then(() => (ended = true));
+  // Longer than the debounce: a timer left running would fire during the turn's wait.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  // The closed workspace's own teardown save (still 12, as its save had not landed) goes
+  // first and lands at once; the reopened one's 14 then stays on the wire.
+  let calls = 0;
+  mocks.updateCv = () => (++calls === 1 ? Promise.resolve() : new Promise<void>((resolve) => (finish14 = resolve)));
+  finish12();
+  await waitFor(() => expect(mocks.fonts).toEqual([12, 12, 14]));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(ended).toBe(false);
+
+  finish14();
+  await waitFor(() => expect(ended).toBe(true));
 });
