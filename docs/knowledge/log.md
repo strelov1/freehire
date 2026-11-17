@@ -1,5 +1,12 @@
 # Knowledge update history
 
+## 2026-11-17
+
+Documented that the LinkedIn adapter re-reads a stored posting only every `BODY_REFRESH_DAYS`
+through the seen-set (provider-wide, keyed by bare posting id), and that a liveness touch never
+reopens a `native_source_pending` row. Evidence is the implementation and its tests; the
+`ingest-env/linkedin.env` setting is applied separately.
+
 ## 2026-11-16
 
 Documented independent WantApply global/Cyprus inventories and the original-postings

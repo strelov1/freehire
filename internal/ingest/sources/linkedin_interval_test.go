@@ -35,5 +35,8 @@ func TestLinkedInRejectsAnUnsafeRequestInterval(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), linkedInIntervalEnv) {
 			t.Errorf("%s=%q crawled instead of failing: %v", linkedInIntervalEnv, env, err)
 		}
+		if _, err := s.FetchNew(context.Background(), CompanyEntry{Board: "Go", Region: "London"}, func(string) bool { return false }); err == nil || !strings.Contains(err.Error(), linkedInIntervalEnv) {
+			t.Errorf("%s=%q: FetchNew crawled instead of failing: %v", linkedInIntervalEnv, env, err)
+		}
 	}
 }
