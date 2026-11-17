@@ -10,7 +10,7 @@ type Store = Pick<Storage, 'getItem' | 'setItem'>;
 
 /** localStorage, or undefined where the browser blocks it (the result then cannot be
  *  deduplicated, so it is not counted). */
-export function browserStore(): Store | undefined {
+function browserStore(): Store | undefined {
   try {
     return localStorage;
   } catch {
