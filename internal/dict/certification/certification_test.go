@@ -78,8 +78,13 @@ func TestCanonicalize_OccupationalSafetyCredentials(t *testing.T) {
 }
 
 func TestCanonicalizeProcurementCredential(t *testing.T) {
-	got := Canonicalize([]string{"CIPS", "Chartered Institute of Procurement and Supply", "CIPS Certified", "CPSM"})
-	if want := []string{"cips"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("Canonicalize = %v, want %v (CPSM is not in the dictionary)", got, want)
+	// One alias per call, so deduplication cannot hide a missing or wrong mapping.
+	for _, alias := range []string{"CIPS", "Chartered Institute of Procurement and Supply", "CIPS Certified"} {
+		if got := Canonicalize([]string{alias}); !reflect.DeepEqual(got, []string{"cips"}) {
+			t.Errorf("Canonicalize(%q) = %v, want [cips]", alias, got)
+		}
+	}
+	if got := Canonicalize([]string{"CPSM"}); len(got) != 0 {
+		t.Errorf("Canonicalize(CPSM) = %v, want none (not in the dictionary)", got)
 	}
 }
