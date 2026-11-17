@@ -5,17 +5,26 @@
 // once — see ConfirmTailorDialog.svelte, mounted in the root layout beside
 // CvRefreshDialog.
 
+import { notInPlan } from './allowance';
 import { api } from './api';
 import type { CvBaseItem } from './cv';
-import type { Allowance, JobMatchResult } from './types';
+import { proMonthlyPrice } from './proPrice';
+import type { Allowance, JobMatchResult, PublicPrice } from './types';
 
 let open = $state(false);
+let slug = $state('');
 let jobLabel = $state('');
 let match = $state.raw<JobMatchResult | null>(null);
 let allowance = $state.raw<Allowance | null>(null);
 let loading = $state(false);
 let bases = $state.raw<CvBaseItem[]>([]);
 let baseCvId = $state('');
+let proOffer = $state.raw<PublicPrice | null>(null);
+// Bumped by every ask, so a plan or price read that outlives its ask cannot offer a
+// purchase to the next one.
+let askId = 0;
+// Bumped by every plan read, so only the newest one may set the allowance or the offer.
+let refreshSeq = 0;
 let resolver: ((value: TailorChoice | null) => void) | null = null;
 
 /** What the candidate confirmed. `baseCvId` is set only when they had a choice to make (two or
@@ -27,6 +36,10 @@ export interface TailorChoice {
 export const confirmTailorDialog = {
   get open() {
     return open;
+  },
+  /** The vacancy being tailored for — what a purchase made from here must come back to. */
+  get slug() {
+    return slug;
   },
   get jobLabel() {
     return jobLabel;
@@ -51,6 +64,11 @@ export const confirmTailorDialog = {
   get baseCvId() {
     return baseCvId;
   },
+  /** The monthly Pro price, offered only to an account KNOWN to be on Free whose plan has no
+   *  tailoring sessions; null for a paid account, an unread plan or a price not on sale. */
+  get proOffer() {
+    return proOffer;
+  },
 };
 
 /** Ask the candidate to confirm tailoring their CV for `slug`, after showing the
@@ -60,16 +78,19 @@ export const confirmTailorDialog = {
  *  title where the caller already has it cheaply — omitted, the dialog falls back to
  *  generic copy rather than forcing every call site to fetch the job just for a
  *  heading. */
-export function askConfirmTailor(slug: string, label?: string): Promise<TailorChoice | null> {
+export function askConfirmTailor(forSlug: string, label?: string): Promise<TailorChoice | null> {
+  askId++;
+  slug = forSlug;
   jobLabel = label ?? '';
   bases = [];
   baseCvId = '';
   match = null;
   allowance = null;
+  proOffer = null;
   loading = true;
   open = true;
   api
-    .getJobMatch(slug)
+    .getJobMatch(forSlug)
     .then((m) => {
       match = m;
     })
@@ -104,13 +125,25 @@ export function askConfirmTailor(slug: string, label?: string): Promise<TailorCh
  *  back to the tab — the upgrade link opens /my/plan in a new one, so a purchase made
  *  there should turn this dialog's refusal into a working confirm without a reload. */
 export function refreshConfirmTailorAllowance() {
+  const mine = askId;
+  const seq = ++refreshSeq;
+  const latest = () => seq === refreshSeq && mine === askId;
   api
     .myPlan()
-    .then((p) => {
+    .then(async (p) => {
+      if (!latest()) return;
       allowance = p.allowances.find((a) => a.feature === 'tailor') ?? null;
+      // The server's own answer decides who may be offered Pro, never the cached session tier.
+      if (p.plan !== 'free' || !notInPlan(allowance)) {
+        proOffer = null;
+        return;
+      }
+      if (proOffer) return;
+      const price = proMonthlyPrice(await api.plans().catch(() => null));
+      if (latest()) proOffer = price;
     })
     .catch(() => {
-      allowance = null;
+      if (latest()) allowance = null;
     });
 }
 

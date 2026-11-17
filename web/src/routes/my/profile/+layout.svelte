@@ -7,7 +7,7 @@
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import { activeRouteTab } from '#lib/routeTabs.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
@@ -15,6 +15,7 @@
   import { resumeStore } from '#lib/resume.svelte.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
+  import PlanBadge from '#lib/components/PlanBadge.svelte';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import States from '#lib/components/States.svelte';
@@ -170,7 +171,10 @@
      heading sits above the gate so the section is titled while it is still loading and
      whether or not a profile exists yet, the way every other /my section titles itself. -->
 <div class="mb-6 flex flex-col gap-1">
-  <AccountPageHeading>{s.title}</AccountPageHeading>
+  <div class="flex items-center gap-3">
+    <AccountPageHeading class="min-w-0 flex-1">{s.title}</AccountPageHeading>
+    <PlanBadge tier={currentUser()?.tier} />
+  </div>
   <p class="text-sm text-muted-foreground max-lg:sr-only">{s.description}</p>
 </div>
 

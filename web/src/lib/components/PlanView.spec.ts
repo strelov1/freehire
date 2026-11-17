@@ -1,30 +1,52 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Allowance, PlanState } from '#lib/types.js';
 import PlanView from './PlanView.svelte';
 import { page } from '$app/state';
 import { track } from '#lib/analytics.js';
 import { beginCheckoutTracking } from '#lib/purchaseTracking.js';
+import { saveTailorContext } from '#lib/tailorCheckout.js';
+import { tick } from 'svelte';
 
-vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('$app/navigation', () => ({ replaceState: vi.fn() }));
+const account = await vi.hoisted(async () => {
+  const { SvelteMap } = await import('svelte/reactivity');
+  return new SvelteMap([['id', 7]]);
+});
+
+vi.mock('$app/paths', () => ({
+  resolve: (p: string, params?: Record<string, string>) => p.replace('[slug]', params?.slug ?? ''),
+  base: '',
+  assets: '',
+}));
+vi.mock('$app/navigation', () => ({
+  replaceState: vi.fn(),
+  goto: vi.fn(),
+  invalidateAll: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/my/plan'), state: {} } }));
 vi.mock('#lib/analytics.js', () => ({ track: vi.fn() }));
 vi.mock('#lib/i18n/currentLocale.svelte.js', () => ({ locale: () => 'en' }));
 vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => true,
-  currentUser: () => ({ id: 7, beta_tester: false }),
+  currentUser: () => ({ id: account.get('id'), beta_tester: false }),
 }));
-const { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts } = vi.hoisted(() => ({
-  myPlan: vi.fn(),
-  myPlanHistory: vi.fn(),
-  getApiPlan: vi.fn(),
-  billingManageUrl: vi.fn(),
-  billingAttempts: vi.fn(),
+const { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts, billingSubscription, plans } = vi.hoisted(
+  () => ({
+    myPlan: vi.fn(),
+    myPlanHistory: vi.fn(),
+    getApiPlan: vi.fn(),
+    billingManageUrl: vi.fn(),
+    billingAttempts: vi.fn(),
+    billingSubscription: vi.fn().mockRejectedValue(new Error('none')),
+    plans: vi.fn().mockResolvedValue({ prices: [] }),
+  }),
+);
+vi.mock('#lib/api.js', () => ({
+  api: { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts, billingSubscription, plans },
 }));
-vi.mock('#lib/api.js', () => ({ api: { myPlan, myPlanHistory, getApiPlan, billingManageUrl, billingAttempts } }));
 
 beforeEach(() => {
+  account.set('id', 7);
   billingAttempts.mockResolvedValue([]);
   page.url = new URL('http://localhost/my/plan');
 });
@@ -137,5 +159,85 @@ describe('PlanView purchase confirmation', () => {
     await vi.waitFor(() => expect(billingAttempts).toHaveBeenCalled());
     expect(track).not.toHaveBeenCalledWith('subscribe', expect.anything());
     page.url = new URL('http://localhost/my/plan');
+  });
+});
+
+describe('PlanView contextual tailoring continuation', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    myPlanHistory.mockResolvedValue([]);
+    getApiPlan.mockResolvedValue({ tier: '' });
+    billingAttempts.mockResolvedValue([]);
+    saveTailorContext(7, { slug: 'senior-go-acme-1', baseCvId: 'base-b' }, sessionStorage);
+  });
+
+  it('offers to continue only after a fresh read shows a paid plan, though the page itself loaded Free', async () => {
+    page.url = new URL('http://localhost/my/plan?checkout=success');
+    myPlan.mockResolvedValueOnce(freePlan([])).mockResolvedValue({ ...freePlan([]), plan: 'pro' });
+    render(PlanView);
+    expect(await screen.findByRole('button', { name: 'Continue tailoring' }, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByText('Pro')).toBeTruthy();
+  });
+
+  it('does not treat an API-only plan as Pro', async () => {
+    page.url = new URL('http://localhost/my/plan');
+    myPlan.mockResolvedValue(freePlan([]));
+    getApiPlan.mockResolvedValue({ tier: 'api' });
+    render(PlanView);
+    expect(await screen.findByText('Your tailoring task is saved')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Continue tailoring' })).toBeNull();
+  });
+
+  it('shows nothing extra for a user with no saved task', async () => {
+    sessionStorage.clear();
+    page.url = new URL('http://localhost/my/plan');
+    myPlan.mockResolvedValue(freePlan([]));
+    render(PlanView);
+    await screen.findByText('Your plan');
+    expect(screen.queryByText('Your tailoring task is saved')).toBeNull();
+  });
+
+  it('clears the previous account plan before the new account read finishes', async () => {
+    const next = Promise.withResolvers<PlanState>();
+    myPlan.mockResolvedValueOnce({ ...freePlan([]), plan: 'pro' }).mockReturnValue(next.promise);
+    render(PlanView);
+    await screen.findByRole('button', { name: 'Continue tailoring' });
+    saveTailorContext(8, { slug: 'other-role-2' }, sessionStorage);
+    account.set('id', 8);
+    await tick();
+    expect(screen.queryByRole('button', { name: 'Continue tailoring' })).toBeNull();
+    next.resolve(freePlan([]));
+    await screen.findByText('Your tailoring task is saved');
+    expect(screen.queryByRole('button', { name: 'Continue tailoring' })).toBeNull();
+  });
+
+  it('ignores the previous account late plan response', async () => {
+    const previous = Promise.withResolvers<PlanState>();
+    myPlan.mockReturnValueOnce(previous.promise).mockResolvedValue(freePlan([]));
+    render(PlanView);
+    await tick();
+    saveTailorContext(8, { slug: 'other-role-2' }, sessionStorage);
+    account.set('id', 8);
+    await screen.findByText('Your tailoring task is saved');
+    previous.resolve({ ...freePlan([]), plan: 'pro' });
+    await previous.promise;
+    await tick();
+    expect(screen.queryByRole('button', { name: 'Continue tailoring' })).toBeNull();
+  });
+
+  it('does not replace newly verified Pro with an older Free read waiting for history', async () => {
+    const history = Promise.withResolvers<[]>();
+    myPlanHistory.mockReturnValueOnce(history.promise);
+    page.url = new URL('http://localhost/my/plan?checkout=success');
+    myPlan
+      .mockResolvedValueOnce(freePlan([]))
+      .mockResolvedValueOnce(freePlan([]))
+      .mockResolvedValue({ ...freePlan([]), plan: 'pro' });
+    render(PlanView);
+    await screen.findByRole('button', { name: 'Continue tailoring' }, { timeout: 5000 });
+    history.resolve([]);
+    await history.promise;
+    await tick();
+    await waitFor(() => expect(screen.queryByText('Pro')).toBeTruthy());
   });
 });
