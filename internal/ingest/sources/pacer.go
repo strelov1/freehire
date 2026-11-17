@@ -117,6 +117,15 @@ const (
 	energyjoblineRequestBurst    = 1
 )
 
+// dynamitejobs.com's robots.txt declares no Crawl-delay and disallows only /api/ and the account
+// areas. The first run reads every posting page once (~500, measured 2026-11-17) and later runs
+// only the new ones, so a gentle 1 req/s costs ~10 minutes once. Chosen for politeness, not a
+// measured block threshold - none appeared over 60 sequential requests at 0.5s.
+const (
+	dynamitejobsRequestInterval = time.Second
+	dynamitejobsRequestBurst    = 1
+)
+
 // airswift.com 429s detail pages only under sustained volume, and the penalty outlives the burst
 // (cleared after ~15 minutes idle). Short samples at 2s and 5s per request looked clean, yet real
 // paced crawls at both still 429'd every request: the budget is metered over a window longer than
