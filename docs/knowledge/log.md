@@ -6,6 +6,9 @@ Documented independent WantApply global/Cyprus inventories and the original-post
 exception to company-wide coverage. Evidence is the adapter, coverage implementation,
 and regression tests; production recovery is checked separately.
 
+Linked assistant merge consent and requirement-report ownership to their current package
+references. Evidence is the local working tree and regression tests, not a production rollout.
+
 Documented native ATS ownership for external LinkedIn discoveries, identity-preserving
 transfer, board discovery and scheduler ownership. Evidence is the implementation and
 public Gist HRsmart sample; deployment is verified separately.

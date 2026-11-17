@@ -84,6 +84,8 @@ export function statusMeta(status: AutopilotStatus): StatusMeta {
       return { label: 'From what you told me', tone: 'closed' };
     case 'open':
       return { label: 'Nothing on file yet', tone: 'open' };
+    case 'partial':
+      return { label: 'Partially supported', tone: 'open' };
     case 'not_reached':
       return { label: 'Not reached', tone: 'skipped' };
     default:

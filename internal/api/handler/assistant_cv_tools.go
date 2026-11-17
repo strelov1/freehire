@@ -16,8 +16,6 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/cvmatch"
 	"github.com/strelov1/freehire/internal/candidate/experience"
-	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
-	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 )
 
 // opBatch is an edit batch as it arrives from a model: either the array the schema asks for, or a
@@ -101,7 +99,7 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID *int64, batch
 func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
 	return assistant.Tool{
 		Name: "request_confirmation",
-		Description: "Ask the candidate to confirm a claim before it can be written into the CV, instead of " +
+		Description: "Ask the candidate to confirm an experience claim or a proposed achievement merge, instead of " +
 			"asking in free text. Pass the exact claim text — the candidate sees it with Yes/No buttons, and " +
 			"Yes replays that exact text as their next message, which is what makes it citable.",
 		Schema: map[string]any{
@@ -168,8 +166,9 @@ func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
 							"status": map[string]any{
 								"type": "string",
 								"enum": cv.AutopilotStatuses,
-								"description": "closed_bank: the experience bank had evidence and you rewrote the CV around it. " +
-									"closed_candidate: the candidate confirmed it in conversation, you banked their words and cited them. " +
+								"description": "closed_bank: bank evidence fully supports this entire requirement, including named tools and duration. " +
+									"closed_candidate: the candidate confirmed the entire requirement and their words were banked. " +
+									"partial: related evidence exists, but some part remains unverified; name it in unverified. " +
 									"open: the bank holds nothing — this is what to ask about. " +
 									"not_reached: the run ended before you got to it.",
 							},
@@ -177,8 +176,12 @@ func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
 								"type":        "string",
 								"description": "One short line: what you changed, or why it is still open.",
 							},
+							"unverified": map[string]any{
+								"type":        "string",
+								"description": "What evidence is still missing for the FULL requirement: named technology, duration, scope, or responsibility. Empty only when no part remains unverified. Related experience is not proof of a specific tool or duration.",
+							},
 						},
-						"required":             []string{"requirement", "status"},
+						"required":             []string{"requirement", "status", "unverified"},
 						"additionalProperties": false,
 					},
 				},
@@ -192,10 +195,22 @@ func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			if err := h.cv.cvStore.SetAutopilotReport(ctx, cvID, userID, in.Items); err != nil {
+			clean, err := cv.SanitizeAutopilotReport(in.Items)
+			if err != nil {
+				return nil, err
+			}
+			if err := h.cv.cvStore.SetAutopilotReport(ctx, cvID, userID, clean); err != nil {
 				return nil, cvToolError(err)
 			}
-			return map[string]any{"saved": len(in.Items)}, nil
+			counts := map[string]int{"saved": len(clean), "closed": 0, "partial": 0, "open": 0, "not_reached": 0}
+			for _, entry := range clean {
+				if entry.Status == cv.AutopilotClosedBank || entry.Status == cv.AutopilotClosedCandidate {
+					counts["closed"]++
+				} else {
+					counts[string(entry.Status)]++
+				}
+			}
+			return counts, nil
 		},
 	}
 }
@@ -356,81 +371,6 @@ func (h *assistantHandlers) cvEvidenceFidelityTool() assistant.Tool {
 	}
 }
 
-// evidencedRequirement is a requirement plus what the candidate's bank already holds for it. The
-// evidence is named, not inlined: the agent needs the id to cite, and tool results are replayed every turn.
-type evidencedRequirement struct {
-	matchanalysis.Requirement
-	Evidence []requirementEvidence `json:"evidence"`
-}
-
-type requirementEvidence struct {
-	ID           string `json:"id"`
-	Claim        string `json:"claim"`
-	CanWriteCV   bool   `json:"can_write_cv"`
-	NeedsContext bool   `json:"needs_context,omitempty"`
-	NeedsMetrics bool   `json:"needs_metrics,omitempty"`
-}
-
-// agentTailorContext is the tailoring context as the AGENT reads it, deliberately narrower than what
-// the endpoint serves the page. Dimension comments, strengths, gaps and recommendation are left out:
-// the agent cannot edit a CV from them, restating the verdict is what it is told not to do, and the
-// candidate already sees them in the panel. The agent gets the vacancy, the score in one line for tone,
-// and the requirements with the bank's answer attached.
-type agentTailorContext struct {
-	Job          fitanalysis.TailoringJob `json:"job"`
-	Verdict      string                   `json:"verdict"`
-	OverallScore int                      `json:"overall_score"`
-	MissingHave  []evidencedRequirement   `json:"missing_have"`
-	MissingGap   []evidencedRequirement   `json:"missing_gap"`
-}
-
-// evidencePerRequirement bounds what one requirement may carry: enough to write a bullet from and to
-// see the bank is not empty; the rest is one experience_search away.
-const evidencePerRequirement = 3
-
-// withBankEvidence answers, for every requirement, the question the agent would otherwise spend a tool
-// round on: does the bank hold anything for this? Retrieval is a linear scan over the caller's own
-// atoms with no model call, cheaper than the round it replaces. A bank that cannot be read degrades to
-// no evidence rather than an error: the requirements are worth reading either way.
-func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, base fitanalysis.TailoringContext) agentTailorContext {
-	return agentTailorContext{
-		Job:          base.Job,
-		Verdict:      base.Verdict,
-		OverallScore: base.OverallScore,
-		MissingHave:  h.evidenceFor(ctx, userID, base.MissingHave),
-		MissingGap:   h.evidenceFor(ctx, userID, base.MissingGap),
-	}
-}
-
-func (h *assistantHandlers) evidenceFor(ctx context.Context, userID int64, reqs []matchanalysis.Requirement) []evidencedRequirement {
-	out := make([]evidencedRequirement, 0, len(reqs))
-	for _, r := range reqs {
-		// Always a list, never nil: "looked and found nothing" decides whether to ask the candidate, and an
-		// absent field reads as "did not look".
-		found := []requirementEvidence{}
-		if h.experience != nil {
-			matches, err := h.experience.Retrieve(ctx, userID,
-				experience.Query{Text: r.Text}, evidencePerRequirement)
-			if err != nil {
-				log.Printf("assistant: bank retrieval for %q: %v", r.Text, err)
-			}
-			for _, m := range matches {
-				nc, nm := experience.Richness(m.Atom)
-				found = append(found, requirementEvidence{
-					ID:           m.Atom.ID.String(),
-					Claim:        m.Atom.Claim,
-					CanWriteCV:   m.Atom.Provenance.Publishable(),
-					NeedsContext: nc,
-					NeedsMetrics: nm,
-				})
-			}
-		}
-		out = append(out, evidencedRequirement{Requirement: r, Evidence: found})
-	}
-	return out
-}
-
-// cvGetTool reads the tailored CV document the session is editing, minus the contact block: this
 // result goes into a model's context, and that model reads attacker-controlled text in the same turn.
 func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
@@ -518,6 +458,7 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			"properties": map[string]any{
 				"ops": map[string]any{
 					"type":        "array",
+					"minItems":    1,
 					"description": "The edits, applied in order. If any one of them is refused, none is applied.",
 					"items":       cvOpSchema,
 				},
@@ -534,8 +475,12 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 				},
 				"requirement_status": map[string]any{
 					"type":        "string",
-					"enum":        []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate)},
-					"description": "closed_bank if the bank already had evidence; closed_candidate if the candidate just confirmed it in this conversation. Required when requirement is set.",
+					"enum":        []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate), string(cv.AutopilotPartial)},
+					"description": "closed_bank or closed_candidate only when evidence supports the FULL requirement. Use partial and unverified for related evidence that leaves a gap. Required when requirement is set.",
+				},
+				"unverified": map[string]any{
+					"type":        "string",
+					"description": "Any part of the requirement this edit does not establish, including a specific tool, duration or responsibility. A nonempty value prevents marking it closed.",
 				},
 			},
 			"required": []string{"ops"},
@@ -546,6 +491,7 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 				Note              string  `json:"note"`
 				Requirement       string  `json:"requirement"`
 				RequirementStatus string  `json:"requirement_status"`
+				Unverified        string  `json:"unverified"`
 				// EvidenceID is not part of this call: it belongs on the op whose claim it backs. It is read here so
 				// the mistake can be answered rather than met with DecodeArgs's `unknown field "evidence_id"`, which
 				// names the field and not the place (the model re-sent the identical call). The mistake is reasonable:
@@ -555,14 +501,26 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			if len(in.Ops) == 0 {
+				return nil, errors.New("ops must contain at least one edit; use tailor_report to record open or unsupported requirements without changing the CV")
+			}
 			if err := adoptCallLevelEvidence(in.Ops, in.EvidenceID); err != nil {
 				return nil, err
 			}
 			requirement := strings.TrimSpace(in.Requirement)
 			status := cv.AutopilotStatus(in.RequirementStatus)
-			if requirement != "" && status != cv.AutopilotClosedBank && status != cv.AutopilotClosedCandidate {
-				return nil, fmt.Errorf("requirement_status must be %q or %q when requirement is set",
-					cv.AutopilotClosedBank, cv.AutopilotClosedCandidate)
+			entry := cv.AutopilotEntry{
+				Requirement: requirement, Status: status, Note: in.Note, Unverified: in.Unverified,
+			}
+			if requirement != "" {
+				if status != cv.AutopilotClosedBank && status != cv.AutopilotClosedCandidate && status != cv.AutopilotPartial {
+					return nil, errors.New("requirement_status must be closed_bank, closed_candidate or partial; use tailor_report for open requirements")
+				}
+				clean, err := cv.SanitizeAutopilotReport([]cv.AutopilotEntry{entry})
+				if err != nil {
+					return nil, err
+				}
+				entry = clean[0]
 			}
 			// A model names the positions it SAW: it read the document once and wrote every index against that
 			// reading, so applied in sequence the addresses shift (a batch removing two lines of one list would
@@ -582,16 +540,19 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			// was closed. After Commit it is best-effort: failing the call would tell the model the edit never
 			// happened, inviting a retry that reapplies ops Commit cannot dedup.
 			if requirement != "" {
-				if err := h.cv.cvStore.MergeAutopilotEntry(ctx, cvID, userID, cv.AutopilotEntry{
-					Requirement: requirement,
-					Status:      status,
-					Note:        in.Note,
-				}); err != nil {
+				if err := h.cv.cvStore.MergeAutopilotEntry(ctx, cvID, userID, entry); err != nil {
 					log.Printf("assistant: recording autopilot entry for requirement %q: %v", requirement, err)
 				}
 			}
 			// A receipt, not the document: tool results are replayed into the context on every later turn.
-			return map[string]any{"updated_at": meta.UpdatedAt, "applied": len(rev.Ops), "recorded_as": rev.Title}, nil
+			outcome := "applied"
+			if len(rev.Ops) == 0 {
+				outcome = "unchanged"
+			}
+			return map[string]any{
+				"status": outcome, "updated_at": meta.UpdatedAt,
+				"applied": len(rev.Ops), "recorded_as": rev.Title,
+			}, nil
 		},
 	}
 }

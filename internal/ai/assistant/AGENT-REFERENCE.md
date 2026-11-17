@@ -15,7 +15,10 @@ built from the same services the HTTP handlers use.
 - **A tool failure is not a turn failure.** `Registry.Call` never returns a Go
   error — an unknown tool, malformed arguments and a failing service all come
   back as `{"error": "..."}` for the model to read and correct within the same
-  turn. Only a model/transport failure ends a turn as errored.
+  turn. Repeating a failed call with the same arguments ends the loop with
+  `tool_loop`; changing only a `cv_edit` note does not count as a correction. A successful
+  intervening tool clears this guard because it may change the state behind the refusal.
+  Only a model/transport failure ends a turn as errored.
 - **Every turn ends with exactly one `result` event.** A client that receives no
   terminal event waits forever, so the loop emits one on every path: an answer,
   the step cap, cancellation, and failure — including a turn that dies BEFORE the
@@ -110,7 +113,17 @@ batch (`UndoCVRevisionBatch` → `cvedit.RevertBatch`), newest first. The method
 second implementation — the rhythm changes, the rules do not, and `cv_edit` still
 refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
-rather than an echo (a tool result is replayed into context on every later turn).
+rather than an echo (a tool result is replayed into context on every later turn). Its counts
+come from the sanitized entries. A named `unverified` part demotes a closed outcome to
+`partial`, which the UI counts among remaining gaps. The model still judges semantic coverage;
+the server does not infer missing evidence from free-text notes. `cv_edit` distinguishes
+`applied` from `unchanged` and refuses empty batches with guidance to use `tailor_report`.
+
+**Merge consent.** `experience_merge` first returns an exact confirmation claim without
+mutating the bank. It executes only when the latest user message in the owned session
+approves that claim. A plain yes is accepted only after one matching `request_confirmation`
+call since the previous user message; a topic change supersedes an earlier approval. The same
+unambiguous confirmation rule lets `experience_add` bank an answer to a confirmation card.
 
 **Presets.** A session records `chat`, `tailor`, `base`, `profile`, `browse`, `interview`, `debrief`, `apply` or `support`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a

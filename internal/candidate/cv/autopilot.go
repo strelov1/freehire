@@ -12,6 +12,8 @@ const (
 	// AutopilotClosedCandidate: the candidate confirmed it in conversation after the
 	// run, their words were banked, and the bullet cites that record.
 	AutopilotClosedCandidate AutopilotStatus = "closed_candidate"
+	// AutopilotPartial means related evidence exists, but part of the requirement is unverified.
+	AutopilotPartial AutopilotStatus = "partial"
 	// AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
 	AutopilotOpen AutopilotStatus = "open"
 	// AutopilotNotReached: the run ended (step cap, cancellation) before reaching it.
@@ -22,6 +24,7 @@ const (
 var AutopilotStatuses = []string{
 	string(AutopilotClosedBank),
 	string(AutopilotClosedCandidate),
+	string(AutopilotPartial),
 	string(AutopilotOpen),
 	string(AutopilotNotReached),
 }
@@ -31,4 +34,5 @@ type AutopilotEntry struct {
 	Requirement string          `json:"requirement"`
 	Status      AutopilotStatus `json:"status"`
 	Note        string          `json:"note,omitempty"`
+	Unverified  string          `json:"unverified,omitempty"`
 }
