@@ -14,6 +14,7 @@ import {
   askConfirmTailor,
   chooseConfirmTailorBase,
   confirmTailorDialog,
+  refreshConfirmTailorAllowance,
   settleConfirmTailorDialog,
 } from './confirmTailorDialog.svelte';
 
@@ -76,6 +77,24 @@ describe('askConfirmTailor base choice', () => {
 describe('askConfirmTailor Pro offer', () => {
   const monthly = { id: 'price_m', tier: 'pro', interval: 'month', amount_cents: 500, currency: 'usd' };
   const yearly = { ...monthly, id: 'price_y', interval: 'year', amount_cents: 4800 };
+
+  it('keeps a newer plan read when an older one fails later', async () => {
+    const tailor = { feature: 'tailor', used: 0, unlimited: false };
+    let failOld!: (e: Error) => void;
+    myPlan
+      .mockReturnValueOnce(new Promise((_, j) => (failOld = j)))
+      .mockResolvedValueOnce({ plan: 'free', allowances: [tailor] });
+    plans.mockResolvedValue({ prices: [monthly] });
+    listBaseCvs.mockResolvedValue([base('a', true)]);
+    const result = askConfirmTailor('senior-go-acme-1');
+    refreshConfirmTailorAllowance();
+    await flush();
+    failOld(new Error('stale'));
+    await flush();
+    expect(confirmTailorDialog.allowance).toEqual(tailor);
+    settleConfirmTailorDialog(false);
+    await result;
+  });
 
   it('offers the monthly Pro price to a free account whose plan has no tailoring sessions', async () => {
     myPlan.mockResolvedValue({ plan: 'free', allowances: [{ feature: 'tailor', used: 0, unlimited: false }] });

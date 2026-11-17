@@ -99,6 +99,33 @@ describe('ConfirmTailorDialog contextual Pro checkout', () => {
     await answer;
   });
 
+  it('ignores a checkout answer that lands after the dialog was closed', async () => {
+    let finish!: (v: { url: string }) => void;
+    let fail!: (e: Error) => void;
+    billingCheckout
+      .mockReturnValueOnce(new Promise((r) => (finish = r)))
+      .mockReturnValueOnce(new Promise((_, j) => (fail = j)));
+    const first = open();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Upgrade to Pro — $5/month' }));
+    settleConfirmTailorDialog(false);
+    await first;
+    finish({ url: 'https://checkout.example/late' });
+
+    const second = askConfirmTailor('senior-go-acme-1', 'Go dev at Acme');
+    await fireEvent.click(await screen.findByRole('button', { name: 'Upgrade to Pro — $5/month' }));
+    settleConfirmTailorDialog(false);
+    await second;
+    fail(new Error('late'));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(navigated).toBe('');
+    const third = askConfirmTailor('senior-go-acme-1', 'Go dev at Acme');
+    await screen.findByRole('button', { name: 'Upgrade to Pro — $5/month' });
+    expect(screen.queryByRole('alert')).toBeNull();
+    settleConfirmTailorDialog(false);
+    await third;
+  });
+
   it('offers nothing to an account that already has Pro', async () => {
     const answer = open({ plan: 'pro', allowances: [{ feature: 'tailor', used: 0, limit: 5, unlimited: false }] });
     await screen.findByText(/CV editing session/);

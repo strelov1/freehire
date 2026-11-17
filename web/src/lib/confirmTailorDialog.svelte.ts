@@ -143,7 +143,7 @@ export function refreshConfirmTailorAllowance() {
       if (latest()) proOffer = price;
     })
     .catch(() => {
-      allowance = null;
+      if (latest()) allowance = null;
     });
 }
 
